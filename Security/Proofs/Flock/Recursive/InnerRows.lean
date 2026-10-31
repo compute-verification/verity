@@ -116,20 +116,38 @@ theorem site_commit {T : Model.Statement} (a : HiddenExec.AcceptedH T)
         (Hm.bytesOf (Hm.blockBit T z o) (2 * a.st.c.ports[q]!.words) (Typed.msgCol a.st.c g q)))
       (Hm.bytesOf (Hm.blockBit T z o) 192 (Hm.saltCol a.st.c g q)) =
       (Layout.bcChunk a.st.c a.st.pub o.val g q).data.toList := by
-  have hcom := HiddenExec.bc_site_commitH a (Hidden.setupHidden_upv_pos a.ht a.h) hrf hz o hg hq
-  rw [HiddenExec.ofFn_siteH a z o _ _ (fun b _ t ht => Layout.msgCol_lt_of_parse a.parse hg hq b t ht),
+  obtain ⟨hty, ⟨ls, hls⟩, -⟩ := Hidden.Committed.check a.ht a.committed
+  have hcom := HiddenExec.bc_site_commitH a (Hidden.check_upv_pos hty hls) hrf hz o hg hq
+  rw [HiddenExec.ofFn_siteH a z o _ _ (fun b _ t ht => Hidden.Committed.msgCol_lt a.ht a.committed hg hq b t ht),
     HiddenExec.bytesAt_siteH a z o 192 _ (fun b hb t ht => Hm.saltCol_lt a.rowRanges hg hq hb ht)] at hcom
   rw [← hcom]
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
-  dsimp only at hregs hrf hg hq hsz ⊢
-  have s := Hidden.setupHidden_spec' h
-  have P := parse_facts (Hidden.parse_untyped ht s.parse).1
-  obtain ⟨ls, hls⟩ := P.check
-  have hg2 := Layout.vu_lt_pow2_of (check_facts P.typed hls) hg
-  obtain ⟨hrsz, hreg⟩ := Hidden.regions_get s.regions
+  dsimp only at hregs hrf hg hq hsz hty hls ⊢
+  have hg2 := Layout.vu_lt_pow2_of (check_facts hty hls) hg
+  obtain ⟨hrsz, hreg⟩ := Hidden.regions_get h.self.regions
   have hpr : q < st.regions.size := hrsz ▸ hq
-  exact Hidden.bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hreg _ hpr) hsz
+  exact Hidden.bc_pinned' (st := Hidden.unpin st) L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr)
+    (hreg _ hpr) hsz
+
+/-- **`unpin st` is `st` where no output is pinned**: Δ is `HmRow.delta`'s, then `outPairs`
+(`Hidden.hidden_delta_unpinned`). -/
+theorem unpin_self {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb : st.db = (HmOut.delta st.c st.pin).2)
+    (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Hidden.unpin st = st := by
+  rw [Hidden.hidden_delta_unpinned hpin] at hda hdb
+  cases st
+  dsimp only at hda hdb
+  subst hda hdb
+  rfl
+
+/-- A layout's model reads only its statement: layouts of equal statements, at the same regions, have one model. -/
+theorem model_congr {s s' : Stmt} (e : s' = s) (L : FlockSoundness.Layout s) (L' : FlockSoundness.Layout s')
+    (regs : List (Model.Region s.c.kLog (s.m - s.c.kLog)))
+    (regs' : List (Model.Region s'.c.kLog (s'.m - s'.c.kLog))) (hr : HEq regs' regs) :
+    L'.model regs' = L.model regs := by
+  subst e
+  cases hr
+  rfl
 
 /-- **Unit `i`'s row `q` commits its `b ‖ c`**: at an accepted untyped hidden-output statement whose rows are each fit or
 `sha512/row-seg/v1` (`hrf`), in a satisfying witness `z` of its block R1CS whose bits in block `i / g` are `f`'s, the
@@ -145,10 +163,12 @@ theorem unit_commit {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
         (Hm.bytesOf f (2 * st.c.ports[q]!.words) (Typed.msgCol st.c (i % st.c.g) q)))
       (Hm.bytesOf f 192 (Hm.saltCol st.c (i % st.c.g) q)) = (st.pub.digest i q st.c.ports.size).data.toList := by
   have s := Hidden.setupHidden_spec' hd
-  have hp := (Hidden.parse_untyped ht s.parse).1
-  have P := parse_facts hp
-  obtain ⟨ls, hls⟩ := P.check
-  have hgpos : 0 < st.c.g := Hidden.check_g_pos P.typed hls
+  have hC := (Hidden.setupHidden_specCC hd).committed
+  obtain ⟨hty, ⟨ls, hls⟩, -⟩ := Hidden.Committed.check ht hC
+  have hgpos : 0 < st.c.g := Hidden.check_g_pos hty hls
+  have hu : Hidden.unpin st = st := unpin_self s.da s.db (Hidden.setupHidden_unpinned ht hd hrf.1.1)
+  have hT : (Hidden.unpin_layout ht hd).model (Refine.regionsOf st) = L.model (Refine.regionsOf st) :=
+    model_congr hu L _ _ _ HEq.rfl
   have hob : i / st.c.g < 2 ^ (L.model (Refine.regionsOf st)).nbl := by
     show i / st.c.g < 2 ^ (st.m - st.c.kLog)
     rw [s.m, Nat.add_sub_cancel_left, s.nbl, s.blocksReal, s.n]
@@ -169,15 +189,17 @@ theorem unit_commit {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
       (Hm.bytesOf (Hm.blockBit (L.model (Refine.regionsOf st)) z ⟨i / st.c.g, hob⟩) 192
         (Hm.saltCol st.c (i % st.c.g) q)) =
       (Layout.bcChunk st.c st.pub (i / st.c.g) (i % st.c.g) q).data.toList :=
-    site_commit ⟨_, _, _, _, _, _, _, _, st, ht, hd, L, HiddenExec.unitRowsFlat ht hd hrf.1, Refine.regionsOf st, rfl⟩
+    site_commit ⟨_, _, _, _, _, _, _, _, st, ht, Hidden.setupHidden_specCC hd, Hidden.unpin_layout ht hd,
+        HiddenExec.unitRowsFlat_unpin ht hd hrf.1.toP, Refine.regionsOf st, hT⟩
       (fun r hr => List.mem_map_of_mem hr) hrf hz ⟨i / st.c.g, hob⟩ hg hq fun g' hg' => by
         show (Layout.bcChunk st.c st.pub (i / st.c.g) g' q).size = 128
         rw [hchunk g' hg']
         exact pub_digest_size hd (hin g' hg') hq
   have hR : Hm.RowRanges st.c := HiddenExec.AcceptedH.rowRanges
-    ⟨_, _, _, _, _, _, _, _, st, ht, hd, L, HiddenExec.unitRowsFlat ht hd hrf.1, Refine.regionsOf st, rfl⟩
+    ⟨_, _, _, _, _, _, _, _, st, ht, Hidden.setupHidden_specCC hd, Hidden.unpin_layout ht hd,
+      HiddenExec.unitRowsFlat_unpin ht hd hrf.1.toP, Refine.regionsOf st, hT⟩
   rw [hchunk _ le_rfl, hdm,
-    bytesOf_congr (N := 2 * st.c.ports[q]!.words) (fun b _ t h8 => Layout.msgCol_lt_of_parse hp hg hq b t h8)
+    bytesOf_congr (N := 2 * st.c.ports[q]!.words) (fun b _ t h8 => Hidden.Committed.msgCol_lt ht hC hg hq b t h8)
       (hf hob),
     bytesOf_congr (N := 192) (fun b hb t h8 => Hm.saltCol_lt hR hg hq hb h8) (hf hob)] at key
   exact key
@@ -189,7 +211,7 @@ theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (h
     {j i q : ℕ} (hj : j < p.sts.size) (hi : i < p.sts[j].pub.n) (hq : q < p.sts[j].c.ports.size) :
     Hm96.Default512.commitString (Sha512.hash ⟨(rowBytes p w j i q).toArray⟩) (salt p w j i q) =
       p.sts[j].pub.digest i q p.sts[j].c.ports.size := by
-  obtain ⟨hRu, c0, -, hc0, -, -, -, hok⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
+  obtain ⟨hRu, c0, -, hc0, -, -, hok⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
   have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hRu.2.2.2.2.2])
   have ht : p.tags.typed = false := hRu.2.1
   obtain ⟨spec, hset⟩ := setup_of_tablesOf (tablesOf_of_parses hP)
@@ -209,23 +231,35 @@ theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (h
   generalize hst : p.sts[j] = st at hd hi hq ⊢
   intro hf hsat
   have s := Hidden.setupHidden_spec' hd
-  have hcst : HmOut.parse p.tags p.I.circuitFile p.I.tables = .ok st.c :=
-    (parseH_tagsAt ht _ _ _ _).symm.trans s.parse
+  have hcst : HmOut.parseCommit p.tags p.I.circuitFile p.I.tables = .ok st.c :=
+    (parseCommit_tagsAt ht _ _ _ _).symm.trans s.parse
   have hc0' : c0 = st.c := by
     unfold ProvedScope.circuitOf at hc0
     rw [hh] at hc0
     simp only [↓reduceIte] at hc0
     exact Except.ok.inj (hc0.symm.trans hcst)
-  rw [hh] at hok
-  simp only [↓reduceIte] at hok
-  rw [hc0', FailClosed.scopeOkI_eq] at hok
+  rw [hc0'] at hok
   have hrows : (Layout.v1Ports st.c || Layout.bitRows st.c) = true := by
-    unfold Layout.scopeOkI at hok
-    simp only [Bool.and_eq_true] at hok
-    exact hok.2
-  have hpu := Hidden.parse_untyped ht' s.parse
-  have hrf : Hidden.Any.RowsFitS st.c := HiddenExec.rowsFit_of_rows hpu.1 hpu.2 hrows
-  have L : FlockSoundness.Layout st := Hidden.hidden_layout ht' hd (Hidden.setupHidden_unpinned ht' hd hrf.1.1)
+    unfold FormOk at hok
+    split at hok
+    · unfold ProvedScope.scopeOkT at hok
+      simp only [Bool.and_eq_true] at hok
+      have e : ProvedScope.v2Row = Layout.v2Row := rfl
+      have e' : ProvedScope.segRow = Layout.segRow := rfl
+      have hr := hok.2
+      simp only [ProvedScope.v1Ports, Layout.v1Ports, ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned,
+        Layout.unpinned, ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e'] at hr ⊢
+      exact hr
+    · rw [hh] at hok
+      simp only [↓reduceIte] at hok
+      rw [FailClosed.scopeOkI_eq] at hok
+      unfold Layout.scopeOkI at hok
+      simp only [Bool.and_eq_true] at hok
+      exact hok.2.2
+  have hC := (Hidden.setupHidden_specCC hd).committed
+  have hrf : Hidden.Any.RowsFitS st.c := HiddenExec.rowsFit_of_committed ht' hC hrows
+  have L : FlockSoundness.Layout st :=
+    (Hidden.setupHidden_specCC hd).layout ht' (Hidden.setupHidden_unpinned ht' hd hrf.1.1)
   refine eq_of_data ((commitString_data _ _).symm.trans ?_)
   have hk : p.sts[j]!.c.kLog = st.c.kLog := by rw [e!, hst]
   refine unit_commit ht' hd hrf L hsat hi hq fun h y hy => ?_
@@ -250,7 +284,7 @@ theorem outRows_le {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.
   unfold HiddenExec.setupOne at hd
   rw [tagsAt_hiddenOutputs, hh] at hd
   simp only [↓reduceIte] at hd
-  exact HiddenExec.checkRows_le (Hidden.parse_untyped ht' (Hidden.setupHidden_spec' hd).parse).2
+  exact HiddenExec.checkRows_le (Hidden.Committed.check ht' (Hidden.setupHidden_specCC hd).committed).2.2
 
 /-- **A unit's rows, read off the inner witness**: at a statement the verifier parsed and kept in scope, with hidden
 outputs, every witness of the deployed relation commits row `q` of unit `i` of table `j` as the public file publishes it:
