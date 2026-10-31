@@ -672,7 +672,7 @@ def test_a_two_demos_code_lean_change_lands_on_its_verdict_and_another_waits(wor
 
 
 def test_a_spec_or_lock_change_waits_for_its_lean_check_whatever_its_title_and_two_demos_proofs_do_not(world, monkeypatch):
-    """The spec (Lean under `Security/Definitions/` or `Security/Models/`, which the guarantees' statements read) and every
+    """The spec (Lean under `Security/Definitions/`, and `Security/Models.lean`: what the guarantees' statements read) and every
     lock wait for a Lean check in a two-demos PR too: landed unchecked, they leave the records stale for the after-landing
     lean-audit (`--no-regenerate`), with no regenerated lock commit after them.  Proofs alone wait in no PR."""
     h = Review(world, monkeypatch)

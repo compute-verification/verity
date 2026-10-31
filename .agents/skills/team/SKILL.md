@@ -60,7 +60,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
   moves reviewed members below those awaiting a verdict (above any Lean check's prefix), so a PR waiting for review holds only itself; a
   held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
-  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/` or `Security/Models/`) or to Lean that runs as code
+  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, and `Security/Models.lean`) or to Lean that runs as code
   (a `.lean` outside `Security/`) also waits for a `lean-audit` that passed at or above it, whatever its title; Lean proofs
   alone land on the verdict, and so does code Lean touching no lock in a PR titled "two demos". A PR whose merge onto `checked` changes nothing drive.toml's
   `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,

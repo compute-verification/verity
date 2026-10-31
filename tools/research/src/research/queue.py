@@ -822,7 +822,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 LEAN_PROOFS_TREE = "Security/"
 #: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions and Models libraries.  A change to it, like a
 #: lock's, waits for its Lean check whatever its PR's title says (`lean_spec`)
-LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/Models/", "Security/Models.lean")
+LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/Models.lean")
 
 
 def _spec(files: Iterable[str]) -> bool:
