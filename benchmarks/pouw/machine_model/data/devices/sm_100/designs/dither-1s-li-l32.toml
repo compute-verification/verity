@@ -27,11 +27,11 @@ IMAD = 0.5
 
 [skip.served]
 eps = 0.125
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 4.035 SMSP-cycles a 4096-MAC MMA on DC-100; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 0.479%; QKᵀ's one-sided strip 11.7%; P·V's peel 0.334%: its tail 0.177%, the sums DG, S and X(0) 0.131%, the served epilogue 0.0249%. With P·V's served output checked it is 12.4% (8B) / 9.17% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (decision 91) and served epilogue at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, on sm_120's instruction counts for the same kernel source, on this device's Π; the clean lm_head skips nothing, its words are ♭'s"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 4.035 SMSP-cycles a 4096-MAC MMA on DC-100; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 0.479%; QKᵀ's one-sided strip 11.7%; P·V's peel 0.334%: its tail 0.177%, the sums DG, S and X(0) 0.131%, the served epilogue 0.0249%. With P·V's served output checked it is 12.4% (8B) / 9.17% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold and served epilogue at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, on sm_120's instruction counts for the same kernel source, on this device's Π; the clean lm_head skips nothing, its words are ♭'s"
 
 [mand.fold]
 eps = 0.0
-source = "named assumptions: LI at 1 lane instruction a word is the cheapest implementation of the fold (FOLD-OPT); LI's binding rests on KLI₂₄ (decision 65), (RT), (G₃) and (HO_U) (decision 59; (HO) itself fails in serving)"
+source = "named assumptions: LI at 1 lane instruction a word is the cheapest implementation of the fold (FOLD-OPT); LI's binding rests on KLI₂₄, (RT), (G₃) and (HO_U) ((HO) itself fails in serving)"
 
 [clock]
 eps = 0.0
