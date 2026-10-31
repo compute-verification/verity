@@ -43,7 +43,7 @@ theorem length_zip_finRange_le {α : Type} (k : ℕ) (l : List α) : ((List.finR
   exact min_le_left _ _
 
 /-- `checkRevealed`'s own calls: the commitment's checks of each opening, under its roots. -/
-theorem ownLog_checkRevealed_length {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+theorem ownLog_checkRevealed_length {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) :
     (ownLog H run (checkRevealed (R := R) Cm rs)).length = (rs.map fun p => ((Cm.opens p.1 p.2).eval H).2.length).sum := by
   unfold checkRevealed

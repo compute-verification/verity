@@ -46,7 +46,7 @@ def Lowers (Cp : Claims.Sampling.Prog) (r : Claims.Sampling.RU) (φ : ℕ → Fi
 /-- **The witness's openings agree with the registration's** at game unit `u`: every opening family that opens `u`'s
 registered commit strings on its committed wires has, at each non-constant gate of `need` that `r` reads from outside or
 commits, a wire of `P.io u` whose opened bit is the witness's opened value. -/
-def Binds (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (s : Claims.Sampling.AuditStatement)
+def Binds (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement)
     (w : Claims.Sampling.Wit) (r : Claims.Sampling.RU)
     (φ : ℕ → Fin C.N) (R : Reg) (u : Fin n) : Prop :=
   ∀ op : vb.Pos → vb.Opening, (∀ g ∈ P.io u, vb.com (op (vb.pos g)) = vb.cs R (vb.pos g)) →
@@ -57,7 +57,7 @@ def Binds (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool)
 variable {A P planZ tab vb}
 
 /-- **A unit right on the registration has its slot not faulty**, at the interior that is the circuit's evaluation. -/
-theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool}
+theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.CommitmentScheme Bool}
     {s : Claims.Sampling.AuditStatement}
     {Pc : Claims.Sampling.Partition} {w : Claims.Sampling.Wit} {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n} {v : ℕ}
     {r : Claims.Sampling.RU} {φ : ℕ → Fin C.N}
@@ -79,7 +79,7 @@ theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sam
 /-- **At most as many slots are faulty as game units are wrong on the registration**: every slot is some unit's
 (`slot`), and at each unit its slot's replay unit lowers to it (`Lowers`) and the witness's openings agree with the
 registration's (`Binds`). -/
-theorem faulty_card_le_wrongRegZ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool)
+theorem faulty_card_le_wrongRegZ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (s : Claims.Sampling.AuditStatement)
     (Pc : Claims.Sampling.Partition) (w : Claims.Sampling.Wit) (R : Reg) (Xv : Fin C.N → Bool) (slot : Fin n → ℕ)
     (r : Fin n → Claims.Sampling.RU) (φ : ℕ → Fin C.N)

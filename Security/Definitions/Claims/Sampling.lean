@@ -29,13 +29,13 @@ the code side's.
    `Complete` hold on it, and it excludes every design whose `P_a` is not its draw's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
    `num > den`. That the verifier refuses what is out of it is `ScopeMatches`, open.
-5. **Named pieces**: the commitment (`Commitment`, `Commitment.Binds`, and its published leaf layer `Commitment.layer`);
-   the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal unit (`PrivateCircuit`,
-   `Universal`), a fact about the programs private circuits run as; the acceptance probabilities (`OneStage.Pa`,
-   `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second stage, in
-   each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the parameters
-   (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the masked deployment `ZkDeploy`: the
-   reference prover's tape as a finite nonce and rest, and the simulator).
+5. **Named pieces**: the commitment scheme (`CommitmentScheme`, `CommitmentScheme.Binds`, and its published leaf layer
+   `CommitmentScheme.layer`); the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal
+   unit (`PrivateCircuit`, `Universal`), a fact about the programs private circuits run as; the acceptance probabilities
+   (`OneStage.Pa`, `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the
+   second stage, in each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the
+   parameters (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the masked deployment
+   `ZkDeploy`: the reference prover's tape as a finite nonce and rest, and the simulator).
 6. **Claims**, on the statements in scope: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at
    the units' sessions and `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`;
    `Complete`; `ScopeMatches`; `ZK`, of the masked deployment's reference prover and simulator, relative to the trace's
@@ -57,7 +57,7 @@ reads every claim here: the lock records each one's text under `reads`, so a cha
 
 namespace Claims.Sampling
 
-/-! ## The commitment -/
+/-! ## The commitment scheme -/
 
 /-- Two different inputs with one output in a log of `H` calls. -/
 def LogColl (l : List (Msg × Msg)) : Prop := ∃ p ∈ l, ∃ p' ∈ l, p.1 ≠ p'.1 ∧ p.2 = p'.2
@@ -68,21 +68,21 @@ structure Opening (α : Type) where
   val : α
   data : Msg
 
-/-- **The commitment**, a named primitive: a hiding commitment to values at positions under public roots, with its
-opening check `opens` and its published leaf layer: `layer H roots os`, the leaves under `roots` of the values the
+/-- **The commitment scheme**, a named primitive: a hiding commitment to values at positions under public roots, with
+its opening check `opens` and its published leaf layer: `layer H roots os`, the leaves under `roots` of the values the
 openings `os` open. The deployed instance is hm96 leaves in frame-v3-sha512 trees, its layer every hm96 leaf under the
 roots in tree order; its storage layout is behind `opens`. -/
-structure Commitment (α : Type) where
+structure CommitmentScheme (α : Type) where
   opens : List Msg → Opening α → OC Bool
   layer : (Msg → Msg) → List Msg → List (Opening α) → List Msg
 
 /-- Whether `o` opens under `roots`. -/
-def Commitment.Opens {α : Type} (H : Msg → Msg) (Cm : Commitment α) (roots : List Msg) (o : Opening α) : Bool :=
+def CommitmentScheme.Opens {α : Type} (H : Msg → Msg) (Cm : CommitmentScheme α) (roots : List Msg) (o : Opening α) : Bool :=
   ((Cm.opens roots o).eval H).1
 
 /-- **Binding, as a collision reduction**: two openings that pass at one position under the same roots, of different
 values, make `H` calls that collide. -/
-def Commitment.Binds {α : Type} (H : Msg → Msg) (Cm : Commitment α) : Prop :=
+def CommitmentScheme.Binds {α : Type} (H : Msg → Msg) (Cm : CommitmentScheme α) : Prop :=
   ∀ (roots : List Msg) (o o' : Opening α), o.pos = o'.pos → o.val ≠ o'.val → Cm.Opens H roots o = true →
     Cm.Opens H roots o' = true → LogColl (((Cm.opens roots o).eval H).2 ++ ((Cm.opens roots o').eval H).2)
 
@@ -368,42 +368,42 @@ structure Wit where
 /-! ## 3. Relation -/
 
 /-- The committed value `w` opens at gate `g`'s position: its first opening there that passes. -/
-def Wit.val (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (w : Wit) (g : ℕ) : Option Bool :=
+def Wit.val (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) (g : ℕ) : Option Bool :=
   (w.vals.find? fun o => o.pos == g && Cm.Opens H s.roots o).map (·.val)
 
 /-- **A faulty unit** at slot `v` of the partition `P` under `w`: unless some interior values make every proof unit of
 the replay unit there correct on its committed values. For a proof unit (one-stage) that is its committed outputs
 differing from its gates applied to its committed inputs, or a value it reads or writes unopened. -/
-def Faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
+def Faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
   ¬ ∃ r, P.rus[v]? = some r ∧ ∃ ι : ℕ → Bool, ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) ι) u
 
 /-- **A faulty unit, on the boundary trace** (the glossary's form): the replay unit's committed boundary outputs differ
 from its gates applied to its committed boundary inputs. -/
-def BoundaryFaulty (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
+def BoundaryFaulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
   ¬ ∃ r, P.rus[v]? = some r ∧ s.prog.Correct (w.val H Cm s) (RU.gates r)
 
 open Classical in
 /-- **The faulty set** of the trace `w`'s openings define. -/
-noncomputable def faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) : Finset ℕ :=
+noncomputable def faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) : Finset ℕ :=
   (Finset.range P.rus.length).filter (Faulty H Cm s P w)
 
 /-- **The sampling relation** at `δ`, on a parsed statement and its partition: the faulty set is in `M_δ`. -/
-def RelS (H : Msg → Msg) (Cm : Commitment Bool) (δ : ℝ) (s : AuditStatement) (P : Partition) (w : Wit) : Prop :=
+def RelS (H : Msg → Msg) (Cm : CommitmentScheme Bool) (δ : ℝ) (s : AuditStatement) (P : Partition) (w : Wit) : Prop :=
   faulty H Cm s P w ∈ s.design.M P δ
 
 /-- **The sampling relation** at `δ`, on the statement's bytes: it parses (`parse`, the verifier's own), its query
 evaluates on its program, descriptor and gates (`partition`, the verifier's own), and `RelS` holds. -/
-def R (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
+def R (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
     (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w
 
 /-- The count form: fewer than `t` units are faulty. -/
-def RCount (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement)
+def RCount (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
     (partition : AuditStatement → Option Partition) (t : ℕ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ (faulty H Cm s P w).card < t
 
 /-- The honest relation: no unit is faulty. -/
-def Rhon (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement)
+def Rhon (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
     (partition : AuditStatement → Option Partition) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ faulty H Cm s P w = ∅
 
@@ -464,7 +464,7 @@ structure Deploy (Coin Col T : Type) where
   parse : Msg → Option AuditStatement
   scopeCheck : Msg → Bool
   partition : AuditStatement → Option Partition
-  commit : Commitment Bool
+  commit : CommitmentScheme Bool
   universal : SizeClass → Prog
   flock : Flock.Deploy Coin Col T
   stage2 : (x : Msg) → Finset (Fin (V.k x))
@@ -559,7 +559,7 @@ abbrev Deploy.UnitCoins (D : Deploy Coin Col T) (x : Msg) := Fin (D.innerWaits x
 
 /-- What passes its opening check among `rs`, each checked by the commitment under its roots, its `H` calls the
 extractor's own. -/
-def checkRevealed {R : Type} (Cm : Commitment Bool) :
+def checkRevealed {R : Type} (Cm : CommitmentScheme Bool) :
     List (List Msg × Opening Bool) → RP R (List (List Msg × Opening Bool)) :=
   flatMapRP fun p => (ofOC (Cm.opens p.1 p.2)).bind fun ok => .ret (if ok then [p] else [])
 
@@ -686,7 +686,7 @@ def SimLeak.given (S : SimLeak) (l : Msg → List Msg) : Simulator where
 
 /-- **The published leaf layer** at `(x, w)`: the leaves under the statement's roots of the values `w` opens, empty on a
 statement that doesn't parse. A fixed function of `(x, w)`. -/
-def leafLayer (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (x : Msg) (w : Wit) : List Msg :=
+def leafLayer (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (x : Msg) (w : Wit) : List Msg :=
   match parse x with
   | some s => Cm.layer H s.roots w.vals
   | none => []
@@ -787,7 +787,7 @@ def Universal (D : Deploy Coin Col T) : Prop :=
 units are disjoint sets of its gates is faulty exactly when its committed boundary outputs differ from its gates applied
 to its committed boundary inputs. -/
 def FaultyBoundary : Prop :=
-  ∀ (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) (r : RU),
+  ∀ (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) (r : RU),
     s.prog.Topological → P.rus[v]? = some r → (RU.gates r).Nodup → (∀ g ∈ RU.gates r, g < s.prog.gates.length) →
     (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 
