@@ -126,8 +126,8 @@ private def logRecord (j : Json) : V Json := do
   return j
 
 /-- The parameters, their program the one `S` has loaded that `program` names, else its descriptor's
-(`Loaded.Store.parse`); with nothing loaded, always the descriptor's (`Loaded.parse_empty`). -/
-def paramsOfJson (j : Json) (S : Loaded.Store := #[]) : V Params := do
+(`Loaded.Programs.parse`); with nothing loaded, always the descriptor's (`Loaded.parse_empty`). -/
+def paramsOfJson (j : Json) (S : Loaded.Programs := #[]) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys

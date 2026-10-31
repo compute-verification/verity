@@ -7,7 +7,7 @@ import SampledProofs
 canonical text (`Flock.canon`, then `Core.canonicalJson`: parse and canonical check); the program's canonical text and
 its two decodings (`Flock.TemplateQuery.Desc.parse`, `Flock.Program.decode`); `OneStage.paramsOfJson`, which decodes the
 program again; and `Registration.check`. Then the whole request (`Difftest.respond` on the verifier's pieces), the
-program loaded once (`Loaded.Store.load`), and the same request naming the loaded program by digest and annotations
+program loaded once (`Loaded.Programs.load`), and the same request naming the loaded program by digest and annotations
 (`Difftest.respond` on `Pieces.At.verifier`), whose answer must be the whole request's (exit 1 otherwise). One
 `PHASE {json}` line each on stdout. `calls.sh` builds it against the checkout's verifier and runs it; it is a
 measurement, not a verifier.
@@ -73,7 +73,7 @@ def main (args : List String) : IO UInt32 := do
   let (out, ms) ← timed (fun t => if t == 0 then "" else Difftest.respond table line) (·.length)
   row "respond" ms [("answer", Json.str out)]
   let pIn := getD (getD input "params") "program"
-  let (loaded, ms) ← timed (fun t => if t == 0 then .error "" else Loaded.Store.load #[] pIn) ok
+  let (loaded, ms) ← timed (fun t => if t == 0 then .error "" else Loaded.Programs.load #[] pIn) ok
   let (S, h) ← IO.ofExcept loaded
   row "load" ms [("sha512", Json.str h)]
   let named := Json.mkObj [("annotations", getD pIn "annotations"), ("loaded", Json.str h)]

@@ -5,8 +5,8 @@ import SampledProofs.Pieces
 # `sampled-proofs-verifier`: the verifier of record, and the challenger's coins
 
 The verifier's functions behind `Difftest.respond`'s line protocol, at the programs the process has loaded
-(`Pieces.At.verifier`): `{"fn": "program", "input": DESCRIPTOR}` loads one (`Loaded.Store.load`) and answers its digest,
-`{"output": HEX}`, or refuses it as a piece would. From then on a piece may name that program by
+(`Pieces.At.verifier`): `{"fn": "program", "input": DESCRIPTOR}` loads one (`Loaded.Programs.load`) and answers
+its digest, `{"output": HEX}`, or refuses it as a piece would. From then on a piece may name that program by
 `{"annotations": A, "loaded": HEX}` (`Loaded.ref?`) and reads the program loaded, the one it would read from that
 descriptor (`Loaded.parse_ref`), until the process's input ends; a reference to a program the process hasn't loaded is
 refused. One more request,
@@ -34,14 +34,14 @@ def coins (input : Json) : IO String := do
   | .error _ => return "{\"reject\":" ++ Flock.canonStr "coins: the input is a number of bytes" ++ "}"
 
 /-- The answer to `program` with input `input` at the programs loaded `S`, and the programs loaded after it. -/
-def program (S : Loaded.Store) (input : Json) : String × Loaded.Store :=
+def program (S : Loaded.Programs) (input : Json) : String × Loaded.Programs :=
   match S.load input with
   | .ok (S', h) => ("{\"output\":" ++ Flock.canonStr h ++ "}", S')
   | .error e => ("{\"reject\":" ++ Flock.canonStr e ++ "}", S)
 
 /-- The response line to one request line at the programs loaded `S`, and the programs loaded after it: `coins`,
 `program`, or the verifier's (`Difftest.respond` on `Pieces.At.verifier S`). -/
-def respond (S : Loaded.Store) (request : String) : IO (String × Loaded.Store) :=
+def respond (S : Loaded.Programs) (request : String) : IO (String × Loaded.Programs) :=
   match Json.parse request with
   | .ok req =>
     match req.getObjValAs? String "fn", req.getObjVal? "input" with
@@ -56,7 +56,7 @@ end SampledProofs.VerifierMain
 def main : IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
-  let mut S : SampledProofs.Loaded.Store := #[]
+  let mut S : SampledProofs.Loaded.Programs := #[]
   repeat
     let request ← stdin.getLine
     if request.isEmpty then break

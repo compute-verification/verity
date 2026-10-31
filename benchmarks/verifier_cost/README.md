@@ -131,7 +131,7 @@ the request line carrying the descriptor, C calls through one `sampled-proofs-ve
 program, `{"fn": "program"}`; the rest name it by digest and annotations), one call carrying the descriptor whole, and C
 whole `check`s. `calls/Main.lean`, built in a scratch Lake package against the checkout's verifier, times what the server
 does with the whole request line (its parse, the parameters' canonical round trip, the program's two decodings,
-`OneStage.paramsOfJson`, `Registration.check`, `Difftest.respond`), then the load (`Loaded.Store.load`) and the request
+`OneStage.paramsOfJson`, `Registration.check`, `Difftest.respond`), then the load (`Loaded.Programs.load`) and a request
 naming the loaded program (`Pieces.At.verifier`), and fails where the two answers differ. `$OUT` gets calls.jsonl and
 lean.jsonl, one row per step (seconds or milliseconds, peak RSS, and the Lean server's current RSS).
 

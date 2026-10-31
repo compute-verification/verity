@@ -55,7 +55,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
-* `loaded`: a verifier's function at the programs it loads first (`At.verifier`, `Loaded.Store.load`), with their
+* `loaded`: a verifier's function at the programs it loads first (`At.verifier`, `Loaded.Programs.load`), with their
   digests: what `sampled-proofs-verifier` answers once it has loaded them, where a piece may name a program by its
   digest and annotations rather than carry its descriptor.
 
@@ -64,7 +64,7 @@ process has loaded; `verifier` at none): `registration`, `matches_public`, `sele
 hands it the bytes of the challenger's coins), `check_draw`, `check_proved`, `record`, `check_public`, `check_verdicts`,
 `run` (`Stream.outcome` holds its outcome to it), `hello`, `stream` (each of `service.Stream`'s ops) and `fleet` (each of
 `service.Fleet`'s). Of those, `registration`, `select` and `run` read a program: `At.registration S`, `At.select S` and
-`At.run S` read it through `S` (`Loaded.Store.parse`), and each piece is its `At` at the empty store, which reads it from
+`At.run S` read it through `S` (`Loaded.Programs.parse`), each piece its `At` at the empty store, which reads it from
 its descriptor as the piece always has (`Loaded.parse_empty`).
 -/
 import SampledProofs.OneStage
@@ -87,7 +87,7 @@ namespace SampledProofs.Pieces
 open Lean (Json)
 open Flock (V)
 
-private def paramsAt (S : Loaded.Store) (j : Json) : V OneStage.Params := do
+private def paramsAt (S : Loaded.Programs) (j : Json) : V OneStage.Params := do
   OneStage.paramsOfJson (← Core.canonicalJson (← Flock.canon j).toUTF8) S
 
 private def params (j : Json) : V OneStage.Params := paramsAt #[] j
@@ -144,7 +144,7 @@ def committedBits (j : Json) : V Json := do
 
 namespace At
 
-variable (S : Loaded.Store)
+variable (S : Loaded.Programs)
 
 /-- `{"params", "record"}` to R1–R7's codes. -/
 def registration (j : Json) : V Json := do
@@ -248,7 +248,7 @@ def draw (j : Json) : V Json := do
 
 namespace At
 
-variable (S : Loaded.Store)
+variable (S : Loaded.Programs)
 
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's draw
 (`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
@@ -556,7 +556,7 @@ private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
 
 namespace At
 
-variable (S : Loaded.Store)
+variable (S : Loaded.Programs)
 
 /-- `{"params", "record", "rule", "values", "public", "challenger", "received", "source", "closure", "sessions",
 "verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots", "coin_source",
@@ -619,12 +619,12 @@ end At
 def run : Json → V Json := At.run #[]
 
 /-- `{"programs", "fn", "input"}` to `{"loaded", "output"}`: the descriptors `programs` loaded in order into a store of
-their own (`Loaded.Store.load`, refused where it refuses), with their digests, and the verifier's piece `fn` on `input`
+their own (`Loaded.Programs.load`, refused as it refuses), with their digests, and the verifier's piece `fn` on `input`
 at that store (`At.verifier`), refused where it refuses. -/
 def loaded (j : Json) : V Json := do
   let .arr ds := getD j "programs" | throw "programs is not a list"
-  let (S, hs) ← ds.foldlM (init := ((#[] : Loaded.Store), (#[] : Array Json))) fun (S, hs) d => do
-    let (S, h) ← Loaded.Store.load S d
+  let (S, hs) ← ds.foldlM (init := ((#[] : Loaded.Programs), (#[] : Array Json))) fun (S, hs) d => do
+    let (S, h) ← Loaded.Programs.load S d
     pure (S, hs.push (Json.str h))
   let .str name := getD j "fn" | throw "fn is not a string"
   let some f := (At.verifier S).lookup name | throw s!"{name} is not the verifier's"
