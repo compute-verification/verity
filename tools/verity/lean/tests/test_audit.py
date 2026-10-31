@@ -247,7 +247,8 @@ def test_a_guarantee_reading_its_prover_s_path_dependency_outside_its_spec_fails
     pol = {"roots": ["S"], "proved_in": ["../p"], "layers": {"S.Defs": {"imports": []}}, "meaning": ["S", "V"]}
     home = A.reads_home(s, pol)
     assert home == {"S.Defs": ["S.Defs"], "SP.Main": [], "V.Bytes": []}
-    reads = lambda m: {"pins": {"S.t": {"kind": "theorem", "outside": [], "reads": [{"name": f"{m}.x", "module": m}]}}}
+    def reads(m):
+        return {"pins": {"S.t": {"kind": "theorem", "outside": [], "reads": [{"name": f"{m}.x", "module": m}]}}}
     assert A.spec_reads(pol, reads("V.Bytes"), home)[0].startswith(
         "reads: S.t read V.Bytes.x in V.Bytes, outside the spec (none: no `layers`)")
     assert A.spec_reads(pol | {"reads_exempt": {"V": "until its spec is extracted"}}, reads("V.Bytes"), home) == []
@@ -684,8 +685,10 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     pol = unclaimed(A.load(pkg))
     A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Moves": {"imports": []}},
                        "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.a", "Control.b", "Control.c")}})
-    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    audit = lambda **kw: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    def audit(**kw):
+        return A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
     build()
     assert unshaped(audit()) == []
     before = (pkg / A.POLICY).read_text()
@@ -759,8 +762,10 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
         "theorem w (n : Nat) : double n = n + n := by unfold double; omega\n"
         "end Control\n")
     A.dump(pkg, unclaimed(A.load(pkg)) | {"guarantees": {f"Control.{n}": {"owner": "@lean"} for n in ("main_thm", *"pqrstvw")}})
-    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    audit = lambda: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    def audit():
+        return A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
     build()
     assert unshaped(audit()) == []
     before = A.load(pkg)
@@ -838,8 +843,10 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
         "@[simp] private instance (priority := low)\n    : ToString Box := ⟨fun b => toString b.n⟩\n"
         "local instance : Inhabited Nat := ⟨7⟩\ninstance : Inhabited (Fin 3) := ⟨0⟩\n"
         "instance instNoBox : Inhabited (List Box) := ⟨[]⟩\nend Control\n")
-    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    def audit(**kw):
+        return A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
     build()
     assert audit(update=True)["failures"] == [
         f"instance: Control/Inst.lean:{line} declares an instance without a name, which Lean names Control.{n} from its type "
@@ -848,7 +855,8 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
         for line, n in ((6, "instInhabitedBox"), (7, "instToStringBox"), (9, "instInhabitedNat_control"),
                         (10, "instInhabitedFinOfNatNat_control"))]
     record = (pkg / A.POLICY).read_text()
-    facts = lambda: sorted(i["name"] for i in json.loads((tmp_path / "out" / "audit-control" / "facts.json").read_text())["instances"])
+    def facts():
+        return sorted(i["name"] for i in json.loads((tmp_path / "out" / "audit-control" / "facts.json").read_text())["instances"])
     names = facts()
     named = audit(name=True)
     assert len(named["named_instances"]) == 4
@@ -985,7 +993,8 @@ def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it
     (root / "Root.lean").write_text("import Dep\nimport DepTest\ndef root : Nat := dep + depTest\n")
     for d in (dep, root):
         (d / "lean-toolchain").write_text(toolchain)
-    lake = lambda *a: subprocess.run(["lake", *a], cwd=root, capture_output=True, text=True, env=A.lake_env())
+    def lake(*a):
+        return subprocess.run(["lake", *a], cwd=root, capture_output=True, text=True, env=A.lake_env())
     (root / ".lake" / "packages").mkdir(parents=True)
     (root / ".lake" / "packages" / "Dep").symlink_to(dep)
     assert A.plugin_targets(root) == ["@Dep/Plug:shared"]
@@ -1143,7 +1152,8 @@ def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_
     hyp = {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "6" * 32, "own": []}
     pol = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}}}
     now = facts(pins={"P.t": fact(reads=[enc, mk, cases, g, hyp])})
-    sha_ = lambda *rs: A.digest([{**r, "sha256": sha(r["hash"])} for r in rs])
+    def sha_(*rs):
+        return A.digest([{**r, "sha256": sha(r["hash"])} for r in rs])
     by_parent = {"P.Enc": sha_(enc, mk, cases), "P.g": sha_(g)}
     first = A.judge(pol, now, FILES, update=True)[1]
     old = first | {"reads": first["reads"] | {"P.Defs": {"digest": A.module_digest(by_parent), "definitions": by_parent,
@@ -1476,8 +1486,9 @@ def test_aliases_of_listed_assumptions_pass_and_aliases_hiding_others_fail_on_a_
     policy["assumptions"] = policy["assumptions"] | {"Control.A": {"owner": "@lean"}, "Control.B": {"owner": "@lean"}}
     f = A.facts_of(pkg, policy, tmp_path)
     files = A.lean_modules(pkg)
-    new = lambda fails: sorted(x.split(" ")[1] for x in fails if x.code in ("assumptions.unlisted-premise",
-                                                                           "guarantees.unnamed-hypothesis"))
+    def new(fails):
+        return sorted(x.split(" ")[1] for x in fails if x.code in ("assumptions.unlisted-premise",
+                                                                  "guarantees.unnamed-hypothesis"))
     assert new(A.judge(policy, f, files)[0]) == ["Control.Absurd", "Control.Hidden", "Control.Rec", "Control.Sneaky"]
     fails, pol = A.judge(policy, f, files, update=True)
     assert new(fails) == [] and sorted(set(pol["assumptions"]) - set(policy["assumptions"])) == [
@@ -1494,8 +1505,9 @@ def test_a_premise_no_reads_record_holds_is_digested_with_what_it_reads():
     pin = fact(signature="P.t (n : Nat) (h : P.Leaves n) : P.f n = n", hyps=[])
     pin["premises"] = [{"binder": "h", "head": "P.Leaves", "module": "P.Thms"}]
     graph = {"P.Thms": {"imports": ["Init"], "olean": "/r/Security/Proofs/.lake/build/lib/lean/P/Thms.olean"}}
-    walk = lambda bound: {"P.Leaves": [{"name": "P.Leaves", "module": "P.Thms", "kind": "def", "sha256": sha("leaves")},
-                                       {"name": "P.bound", "module": "P.Thms", "kind": "def", "sha256": sha(bound)}]}
+    def walk(bound):
+        return {"P.Leaves": [{"name": "P.Leaves", "module": "P.Thms", "kind": "def", "sha256": sha("leaves")},
+                             {"name": "P.bound", "module": "P.Thms", "kind": "def", "sha256": sha(bound)}]}
     f = facts(pins={"P.t": pin}, graph=graph, assumption_reads=walk("n + 1"))
     fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
     assert fails == [] and pol["assumptions"] == {"P.Leaves": {"owner": "@lean", "digest": A.digest(walk("n + 1")["P.Leaves"])}}
@@ -1536,8 +1548,10 @@ def test_a_premise_outside_meaning_changes_its_record_when_it_or_what_it_reads_c
     A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
                        "reads_exempt": {"Control.Leaves": "the premise outside `meaning` this test digests"},
                        "guarantees": pol["guarantees"] | {"Control.leaf": {"owner": "@lean"}}})
-    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    audit = lambda update: A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    def audit(update):
+        return A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)
     build()
     assert unshaped(audit(True)) == []
     first = (pkg / A.POLICY).read_text()
@@ -2384,7 +2398,8 @@ def test_dependency_digests_cover_every_part_of_the_imported_modules_only(tmp_pa
     for rel, text in (("D.olean", "a"), ("D/E.olean", "b"), ("D/E.olean.private", "c"), ("D/E.ilean", "d")):
         (lib / rel).write_text(text)
     loaded = [str(lib / "D.olean"), str(lib / "D" / "E.olean"), str(tmp_path / "p" / ".lake" / "build" / "lib" / "P.olean")]
-    digests = lambda: A.dependency_digests(tmp_path / "p", "none/none:none", loaded)
+    def digests():
+        return A.dependency_digests(tmp_path / "p", "none/none:none", loaded)
     before = digests()
     assert list(before) == ["dep"]
     (lib / "D" / "E.ilean").write_text("changed")
@@ -2721,7 +2736,8 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
              SPEC | {"roots": roots, "proved_in": ["../proofs"]})
     _package(proofs, {"CoreProofs.lean": PROOFS}, 'name = "proofs"\ndefaultTargets = ["CoreProofs"]\n[[require]]\n'
              'name = "spec"\npath = "../spec"\n[[lean_lib]]\nname = "CoreProofs"\n', {"roots": ["CoreProofs"]})
-    build = lambda d: subprocess.run(["lake", "build"], cwd=d, check=True, capture_output=True, env=A.lake_env())
+    def build(d):
+        return subprocess.run(["lake", "build"], cwd=d, check=True, capture_output=True, env=A.lake_env())
     for d in (one, spec, proofs):
         build(d)
     for d in (one, proofs):
@@ -2891,8 +2907,10 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     modules the kernel accepted (`Control`, which imports the bad one) and never the rejected one, which fails again."""
     pkg, cache = tmp_path / "control", tmp_path / "replay-cache"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
-    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    audit = lambda: A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache)
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    def audit():
+        return A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache)
     build()
     rep = audit()
     assert rep["failures"] == [] and counts(rep) == (4, 0)
@@ -2956,9 +2974,11 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     second audit checks none of them, and a change to an own module checks only it and what imports it."""
     pkg, cache = tmp_path / "control", tmp_path / "replay-cache"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
-    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    audit = lambda: A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache,
-                            closure=True)
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    def audit():
+        return A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache,
+                       closure=True)
     build()
     rep = audit()
     c = rep["replay"]["closure"]
@@ -3147,10 +3167,14 @@ def test_a_statement_in_another_order_or_with_a_shared_field_fits_as_its_restate
     what the acceptance reads, one whose proof a kept binder mentions, a structure's fields, a probability statement's
     hypotheses, and any statement whose facts don't say what each binder mentions are judged as written."""
     entry = {"function": "P.check", "outcome": "accept"}
-    acc = lambda name, at, uses: hyp(name, at, ["P.check"]) | {"uses": uses}
-    q = lambda name, at, uses, **kw: hyp(name, at, ["P.Q"]) | {"uses": uses} | kw
-    inputs = lambda *ns: [{"name": n, "at": a, "head": None, "uses": []} for n, a in ns]
-    names = lambda got: [w.split(" : ")[0] for w in A.refusals(entry, [got], [])]
+    def acc(name, at, uses):
+        return hyp(name, at, ["P.check"]) | {"uses": uses}
+    def q(name, at, uses, **kw):
+        return hyp(name, at, ["P.Q"]) | {"uses": uses} | kw
+    def inputs(*ns):
+        return [{"name": n, "at": a, "head": None, "uses": []} for n, a in ns]
+    def names(got):
+        return [w.split(" : ")[0] for w in A.refusals(entry, [got], [])]
     # ∀ m m' w k, check m → check m' → EpochRoot m w k → EpochRoot m' w k → ∃ …, P m w k
     one_pair = {"inputs": inputs(("m", 0), ("m'", 1), ("w", 2), ("k", 3)), "conclusion": ["P.Good"], "uses": [0, 1, 2, 3],
                 "hypotheses": [acc("h", 4, [0]), acc("h'", 5, [1]), q("e", 6, [0, 2, 3]), q("e'", 7, [1, 2, 3])]}
@@ -3219,8 +3243,10 @@ def test_a_probability_statement_has_its_acceptance_in_the_event():
     read, and one with a conjunct before its last that isn't an acceptance (a hypothesis inside the event), one whose
     acceptance holds under a hypothesis, or one with no conjunct after its acceptance, is refused."""
     entry, prob = {"function": ["P.check", "P.verify"], "outcome": "accept"}, ["G.prob"]
-    c = lambda applies, guarded=False: {"applies": applies, "guarded": guarded}
-    event = lambda *cs, head="G.prob": {"head": head, "conjuncts": list(cs)}
+    def c(applies, guarded=False):
+        return {"applies": applies, "guarded": guarded}
+    def event(*cs, head="G.prob"):
+        return {"head": head, "conjuncts": list(cs)}
     held = part([hyp("hA3", 0, ["W.Uniform"], module="W.Premises"), hyp("hk", 2, ["LE.le"]),
                  hyp("zr.hown", 1, ["P.check"], source="field"), ACCEPTS], inputs=[("zr", 1), ("k", 2)])
     fits = held | {"events": [event(c(["P.check", "P.Accepts"]), c(["P.verify"]), c(["Not", "P.holds"])),
@@ -3242,7 +3268,8 @@ def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink(
     an entry needs a reason and a guarantee or unstated statement of this package, an unfrozen misfit fails, as does a
     guarantee whose shape `Facts.lean` couldn't compute, and a package with no `shape` section is checked all the same."""
     entries = {"P.a": {"function": "P.check", "outcome": "accept"}, "P.b": {"function": "P.check", "outcome": "accept"}}
-    pol = lambda frozen: {"guarantees": {"P.a": {}, "P.b": {}}, "shape": {"premises": [], "properties": entries, "frozen": frozen}}
+    def pol(frozen):
+        return {"guarantees": {"P.a": {}, "P.b": {}}, "shape": {"premises": [], "properties": entries, "frozen": frozen}}
     good, bad = [part([ACCEPTS], inputs=[("x", 0)])], [part(inputs=[("x", 0)])]
     facts = {"pins": {"P.a": {"shape": good}, "P.b": {"shape": bad}}}
     assert A.shape(pol({"P.b": "restatable: split the iff."}), facts) == []
@@ -3288,10 +3315,11 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
     conjecture names its falsification test, and every entry is a named assumption with a reason."""
     entry = {"function": "P.check", "outcome": "accept"}
     rests = part([ACCEPTS, hyp("c", 2, ["P.Conj"]) | {"head": "P.Conj"}], inputs=[("x", 0)])
-    pol = lambda status, frozen=None, rests_on=("P.Conj",): {
-        "assumptions": {"P.Conj": {}}, "guarantees": {"P.a": {}},
-        "shape": {"properties": {"P.a": entry | {"rests_on": list(rests_on)}}, "frozen": frozen or {},
-                  "conjectures": {"P.Conj": {"status": status, "test": "tests/test_conj.py", "why": "open since Oct 8"}}}}
+    def pol(status, frozen=None, rests_on=("P.Conj",)):
+        return {
+            "assumptions": {"P.Conj": {}}, "guarantees": {"P.a": {}},
+            "shape": {"properties": {"P.a": entry | {"rests_on": list(rests_on)}}, "frozen": frozen or {},
+                      "conjectures": {"P.Conj": {"status": status, "test": "tests/test_conj.py", "why": "open since Oct 8"}}}}
     facts = {"pins": {"P.a": {"shape": [rests]}}}
     assert A.shape(pol("open"), facts) == []
     assert "but its entry's `rests_on` lists none" in A.shape(pol("open", rests_on=()), facts)[0]
