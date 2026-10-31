@@ -24,9 +24,9 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
                                       refs.build, refs.match  (commit_summary.json and the finalize board are retired);
                                       a config run (`config` verdict line) decides in config_record.json instead, at TP1 and TP
     replay  -> vllm-verdict/v1        config_record.json beside the rewritten Commit record (a TP row that is not a config run decides in
-                                      commit/summary.json, as tp-commit-replay folded it); and one vllm-replay-slim/v1 per slim keep
-                                      (`replay_slim_p<pair>`: commit/replay_slim_p<pair>/ whole, planes included; meta = its slim.json's
-                                      pair, run_root, program_digest, picked, bytes, dump_sha256, commit_pass).  Never a replay bundle.
+                                      commit/summary.json, as tp-commit-replay folded it).  Never a replay bundle or a slim keep
+                                      (`cpu_replay.keep`): both hold clear values (committed values with their salts, the requests
+                                      and served tokens, opened weights), so they stay on the node, prover-side.
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
@@ -61,10 +61,8 @@ NEVER = ("instances.json.gz", "log.jsonl.gz")
 PLANE_SUFFIXES = (".npy", ".npz", ".pt", ".bin", ".safetensors")
 
 KINDS = {"build": "vllm-build/v1", "plan": "vllm-commit-plan/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1", "replay": "vllm-verdict/v1"}
-SLIM_KIND = "vllm-replay-slim/v1"
-#: never in a stage's account files: the replay bundles (never published) and the slim keeps (published whole, as their own entries)
+#: never in a stage's outputs: the replay bundles and the slim keeps, which hold clear values
 KEPT_APART = ("replay_bundle_p", "replay_slim_p")
-SLIM_META = ("pair", "run_root", "program_digest", "picked", "bytes", "dump_sha256", "commit_pass")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",
@@ -194,28 +192,6 @@ def _entry(name: str, kind: str, meta: dict[str, Any], run_dir: Path, d: Path, p
     return {"name": name, "kind": kind, "meta": meta, "tree": f"outputs/{name}", "refs": refs or {}, "staged": n}
 
 
-def slim_outputs(d: Path, row: str, stage: str, run_dir: Path) -> list[dict[str, Any]]:
-    """One `vllm-replay-slim/v1` entry per slim keep a decided replay left (`commit/replay_slim_p<pair>/`, `cpu_replay.keep`): every
-    file, the .bin planes and their sizes included, linked into the run dir (copied where a link can't be made)."""
-    out = []
-    for k in sorted((d / "commit").glob("replay_slim_p*")):
-        doc = _read_json(k / "slim.json")
-        if not k.is_dir() or k.name.endswith(".partial") or not isinstance(doc, dict):
-            continue
-        into = run_dir / "outputs" / k.name
-        for f in sorted(x for x in k.rglob("*") if x.is_file() and not x.is_symlink()):
-            dst = into / f.relative_to(k)
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            if not dst.exists():
-                try:
-                    os.link(f, dst)
-                except OSError:
-                    shutil.copy2(f, dst)
-        out.append({"name": k.name, "kind": SLIM_KIND, "tree": f"outputs/{k.name}", "refs": {},
-                    "meta": {"row": row, "stage": stage, **{x: doc.get(x) for x in SLIM_META}, "evidence_dir": str(d)}})
-    return out
-
-
 def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str, str]) -> dict[str, Any]:
     v = verdicts(d / "stages.txt")
     status = v.get(stage, (None, ""))[0]
@@ -292,8 +268,6 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         raise ValueError(f"unknown stage {stage!r}")
     if e is not None:
         entries.append(e)
-    if stage == "replay":
-        entries.extend(slim_outputs(d, row, stage, run_dir))
     present, skipped = _collect(d, EVIDENCE_FILES)
     e = _entry("evidence", "execution-evidence/v1", {"row": row, "stage": stage, "stage_status": status}, run_dir, d, present, skipped, optional=True)
     if e is not None:
