@@ -64,6 +64,7 @@ from . import protocol as pous_protocol
 from . import run as R
 from . import setup
 from .schemes import p2 as P2
+from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity/pous/p2/v4/run"
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_challenger.TEST_PREFIX` + it."""
@@ -191,7 +192,7 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
     """The setup's own inputs from its case's `commitment` and `evidence`, read as `SetupProtocol`'s decoders read them
     (each count at most a quarter of the bytes left, nothing after the last segment); `ValueError` on bytes they refuse."""
     c, b = bytes.fromhex(setup_of["commitment"]), bytes.fromhex(setup_of["evidence"])
-    if len(c) < 64:
+    if len(c) < DIGEST_BYTES:
         raise ValueError(f"the commitment to W is 64 bytes, then the salt; {len(c)} bytes is too short")
     pos = 0
 
@@ -211,7 +212,7 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
     store = [[take(int.from_bytes(take(4), "big")) for _ in range(count())] for _ in range(count())]
     if pos != len(b):
         raise ValueError(f"{len(b) - pos} bytes follow the last segment")
-    return c[:64], c[64:], store
+    return c[:DIGEST_BYTES], c[DIGEST_BYTES:], store
 
 
 type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]

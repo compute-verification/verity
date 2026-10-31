@@ -306,17 +306,6 @@ abbrev WIPE_MONITORING_PERIOD : String := "verity/wipe-monitoring-period/v1"
 abbrev WIPE_PROTOCOL : String := "verity/wipe/v0"
 abbrev WIPE_EGRESS : String := "wipe-egress/v1"
 
--- Not yet read from here: the bandwidth audit
-abbrev GF31_POLY : String := "gf31-poly/v1"
-abbrev RO_BLAKE3 : String := "ro-blake3/v1"
-abbrev RO_SHA512 : String := "ro-sha512/v1"
-abbrev BANDWIDTH_CHALLENGER_STATE : String := "verity/bandwidth/challenger-state/v1"
-abbrev BANDWIDTH_OPENINGS : String := "verity/bandwidth/openings/v1"
-abbrev BANDWIDTH_SALT : String := "verity/bandwidth/salt/v2"
-abbrev BANDWIDTH_TAG_LEAF : String := "verity/bandwidth/tag-leaf/v1"
-abbrev BANDWIDTH_TAG : String := "verity/bandwidth/tag/v1"
-abbrev BANDWIDTH_PERIOD : String := "verity/bandwidth/window/v2"
-
 -- Not yet read from here: the remote bandwidth audit
 abbrev REMOTE_BANDWIDTH_P2_BLOCK4 : String := "p2-unit4/v0"
 abbrev STORE_ORDER : String := "store-order/v0"
