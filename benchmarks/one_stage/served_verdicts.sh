@@ -33,14 +33,18 @@
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
 #     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) and verdict lines that count no window's requests. The advice registration's published copies
-#     ($OUT/registration-w$K.json, the records audit's served-records) carry the advice's length padded to its compiler's
+#     control compares to) and verdict lines that name no window and count none of a window's own: no window's number, no
+#     count of the windows closed, sealed or refused, no engine step, request count or user of one. Each line goes out
+#     through `served_verdicts.py public-lines`, in full to the serve dir's private/verdicts.txt, and once the run is
+#     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
+#     that names or counts a window, its public form in its place. The advice registration's published copies
+#     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
 #     them.
-#  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; its
-#     WINDOW line gives its engine steps and whether its requests filled the SLOTS slots, and CLASSES the window circuit's
-#     classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
+#  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
+#     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
+#     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
 #     --pins` the registration, and PIN's NAME=ROOT if set), its registered and free input bits at those
@@ -136,7 +140,7 @@
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
-# public records and every log.
+# public records and every log, each in its public form.
 set -uo pipefail
 if [ -n "${SETTINGS:-}" ]; then
   [ -f "$SETTINGS" ] && [ -r "$SETTINGS" ] || { echo "PREFLIGHT: SETTINGS=$SETTINGS is not a readable file" >&2; exit 3; }
@@ -183,7 +187,12 @@ export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
+# Every verdict line goes out in its published form, naming no window and counting none of a window's own, and in full to
+# the serve dir's private/verdicts.txt (`served_verdicts.py public-lines`), under the node's python3, the venv's absent
+SV=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/served_verdicts.py SAY_PY=$(command -v python3 || echo "$PY")
+publish_lines() { "$SAY_PY" "$SV" public-lines --private "$D/private/verdicts.txt" | tee -a "$OUT/verdicts.txt"; }
+say() { printf '%s\n' "$*" | publish_lines; }
+keep() { [ -d "$D" ] && (umask 077; mkdir -p "$D/private" && printf '%s\n' "$*" >> "$D/private/verdicts.txt"); }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 case ${LOAD:=varied} in varied | fixed | front) ;; *) say "PREFLIGHT: LOAD is varied, fixed or front, not $LOAD"; exit 3 ;; esac
@@ -221,17 +230,19 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
     --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --out "$VW/window") \
-    > "$OUT/window-commit-$vtag.json" 2> "$OUT/window-commit-$vtag.err"
+    > "$D/window-commit-$vtag.json" 2> "$OUT/window-commit-$vtag.err"
   local rc=$?
-  if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
+  if   [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
     say "WINDOW-COMMIT class $V3C timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
     return 1
   elif [ "$rc" != 0 ]; then
     say "WINDOW-COMMIT class $V3C refused (exit $rc): $(grep -v '^ ' "$OUT/window-commit-$vtag.err" | tail -2 | cut -c1-800)"
     return 1
   fi
-  say "WINDOW-COMMIT class $V3C: $(cut -c1-1500 "$OUT/window-commit-$vtag.json")"
-  "$PY" - "$D/window-circuit-w$K-$vtag.json" "$VW/window/circuit.json" "$V3C" <<'EOF' 2>&1 | tee -a "$OUT/verdicts.txt"
+  # the commit's population and sources count the window's own values: they stay in the serve dir
+  say "WINDOW-COMMIT class $V3C: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); print(json.dumps({k: c[k] for k in ("run", "circuit", "registration") if k in c}, sort_keys=True))' \
+    "$D/window-commit-$vtag.json" 2>&1 | cut -c1-1500)"
+  "$PY" - "$D/window-circuit-w$K-$vtag.json" "$VW/window/circuit.json" "$V3C" <<'EOF' 2>&1 | publish_lines
 import json, sys
 from verity.ml.windows import interface as IF
 mine, theirs = (json.load(open(f)) for f in sys.argv[1:3])
@@ -248,7 +259,7 @@ EOF
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
   local run leanb m0 rc
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
-    "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for window $K in windows.jsonl"; return 1; }
+    "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
   leanb=$TREE/verity/core/service/flock/.lake/build/bin
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/integrations/vllm
   mkdir -p "$OUT/v3c-audit"
@@ -364,7 +375,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
       --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
-    say "REQUESTS (exit $rc, release run $release): $(tail -1 "$D/load.log" | sed -E 's/, prompts .*//' | cut -c1-300)"
+    local sent all
+    sent=$(tail -1 "$D/load.log" | grep -oE '[0-9]+/[0-9]+ ok' | head -1) all=${sent#*/}
+    keep "REQUESTS: $sent"
+    say "REQUESTS (exit $rc, release run $release): $([ -n "$sent" ] && [ "${sent%%/*}" = "${all% ok}" ] && echo "every request answered" \
+      || echo "not every request answered (the serve dir's load.log, on the node)")"
     [ -f "$D/load.timings.json" ] || say "TIMINGS: no $D/load.timings.json"
   fi
   c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
@@ -378,7 +393,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
-  say "SERVE stopped (exit $?): $c window(s) closed, $s sealed"
+  local stopped=$?
+  keep "SERVE stopped (exit $stopped): $c window(s) closed, $s sealed"
+  if [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]; then say "SERVE stopped (exit $stopped): every closed window sealed"
+  elif [ "$c" = 0 ]; then say "SERVE stopped (exit $stopped): no window closed"
+  else say "SERVE stopped (exit $stopped): not every closed window sealed (the serve dir's private/verdicts.txt)"; fi
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
   # a front's exit is the certifier's verdict (CERTIFIER-FRONT, and its piece reads the session), not the load's
   { [ "$LOAD" = front ] || [ "$rc" = 0 ]; } && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
@@ -454,6 +473,11 @@ if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; cir
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
 
+# $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
+# held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`)
+trap 'rc=$?; "$SAY_PY" "$SV" publish "$OUT" --private "$D/private/out" || echo "PUBLISH failed (exit $?): $OUT may name a window"; exit $rc' EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
   | tee "$OUT/machine.txt"
@@ -467,6 +491,7 @@ if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split
   SPLIT=1
 fi
 mkdir -p "$D" "$ROOT/cache" "$FW"
+(umask 077; mkdir -p "$D/private")
 KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
 { "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
   || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
@@ -517,7 +542,7 @@ if [ -n "$H1_GATE" ]; then
     export MAIN_FILE=$OUT/main.txt
   fi
   "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$H1_GATE" --lane "${H1_LANE:-vllm}" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
-    | tee -a "$OUT/verdicts.txt"
+    | publish_lines
   [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
   H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run under the lane's development key: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
@@ -550,20 +575,28 @@ GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-composed} gpu-lease 1 --wait --max-min "${LE
   -- bash "$TREE/benchmarks/one_stage/served_verdicts.sh" serve
 rc=$?
 [ "$rc" = 0 ] || stop serve "$rc"
-"$PY" - "$D" "$PRED" <<'EOF' 2>&1 | tee -a "$OUT/verdicts.txt"
-import json, sys
+# each sealed window's lines (its number, its bundle's files) go to the serve dir's private/seal.txt; the verdict says only
+# whether every one passed, and why not
+"$PY" - "$D" "$PRED" "$D/private/seal.txt" <<'EOF' 2>&1 | publish_lines
+import json, os, sys
 from pathlib import Path
 from verity_vllm.pipeline import deferred_rows as DR
-d, pred = Path(sys.argv[1]), Path(sys.argv[2])
+d, pred, held = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 b_of_record = (str((pred / "manifest.json").resolve()), json.loads((pred / "predicted.json").read_text())["program_digest"])
 serve = json.loads((d / "serve.json").read_text())
 seals = [json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip()] if (d / "seals.jsonl").exists() else []
-ok = bool(seals) and serve.get("scheme") == "rows-sha512"
+sealed_ok = bound_ok = bool(seals)
+lines, why, committers = [], set(), set()
+if not seals:
+    why.add("no window sealed")
+if serve.get("scheme") != "rows-sha512":
+    why.add("the serve's scheme isn't rows-sha512")
 for s in seals:
     k = s["window"]
     if "error" in s:
-        print(f"WINDOW w{k}: SEAL FAILED {s['error']}"[:600])
-        ok = False
+        lines.append(f"WINDOW w{k}: SEAL FAILED {s['error']}"[:600])
+        why.add("a seal failed")
+        sealed_ok = bound_ok = False
         continue
     w = d / "windows" / f"w{k}"
     v = json.loads((w / "commit" / "verdict.json").read_text())
@@ -577,14 +610,27 @@ for s in seals:
     good = good and v.get("commit_scheme") == c.get("commit_scheme") == store == "rows-sha512" and len(rr) == 128
     bound = r.ctx["served_window"].get("required_manifest", {}) if good else {}
     b = (bound.get("path"), bound.get("program_digest")) == b_of_record
-    ok &= good and b
-    print(f"WINDOW w{k}: commit_scheme {v.get('commit_scheme')}, committer {c.get('committer')}, run root {rr[:16]}… "
-          f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
+    sealed_ok &= good
+    bound_ok &= b
+    committers.add(str(c.get("committer")))
+    if not good:
+        why.add("a sealed window's bundle didn't open as a rows-sha512 commitment with a 64-byte run root")
+    if not b:
+        why.add("a sealed record binds another Build than predict row's")
+    lines.append(f"WINDOW w{k}: commit_scheme {v.get('commit_scheme')}, committer {c.get('committer')}, run root {rr[:16]}… "
+                 f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
     whose = "predict row's Build of record (its predicted.json's)" if b else f"not predict row's {b_of_record[0]}"
-    print(f"B-OF-RECORD w{k}: the sealed record binds {bound.get('path')}, program digest {str(bound.get('program_digest'))[:16]}…: "
-          f"{whose}: {'PASS' if b else 'FAIL'}")
-print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} ({len(seals)} sealed window(s), scheme {serve.get('scheme')}, "
-      f"precision {serve.get('precision')})")
+    lines.append(f"B-OF-RECORD w{k}: the sealed record binds {bound.get('path')}, program digest "
+                 f"{str(bound.get('program_digest'))[:16]}…: {whose}: {'PASS' if b else 'FAIL'}")
+ok = sealed_ok and bound_ok and serve.get("scheme") == "rows-sha512"
+os.umask(0o077)
+held.write_text("".join(x + "\n" for x in lines))
+print(f"SEALED: every closed window's row dir committed under rows-sha512 (committer {', '.join(sorted(committers)) or 'none'}) "
+      f"and its replay bundle opened: {'PASS' if sealed_ok else 'FAIL'}")
+print(f"B-OF-RECORD: every sealed record binds predict row's Build of record ({b_of_record[0]}, program digest "
+      f"{b_of_record[1][:16]}…): {'PASS' if bound_ok else 'FAIL'}")
+print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} (scheme {serve.get('scheme')}, precision {serve.get('precision')}"
+      + (f"; {'; '.join(sorted(why))}" if why else "") + "; each window's lines in the serve dir's private/seal.txt)")
 sys.exit(0 if ok else 1)
 EOF
 [ "${PIPESTATUS[0]}" = 0 ] || stop seal 11
@@ -603,10 +649,12 @@ else
 fi
 
 # 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
-PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")
-[ -n "$PICK" ] || { say "WINDOW refused: $(cut -c1-600 "$OUT/window.err")"; stop window 12; }
+# the pick (its number, steps, requests and users, and each window refused and why) stays in the serve dir's private/
+PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$D/private/window.err")
+[ -n "$PICK" ] || { say "WINDOW refused: no sealed window qualifies (why, by window, in the serve dir's private/window.err)"; stop window 12; }
+(umask 077; echo "$PICK" > "$D/private/window.json")
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
-say "WINDOW $PICK"
+say "WINDOW: $([ -n "${WINDOW:-}" ] && echo "the one WINDOW names" || echo "the sealed one with the most requests"), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
 say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 CERT=
 if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
@@ -632,14 +680,14 @@ for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in o
 done
 # the advice and compile logs name the request Programs by their prompt lengths and count the window's requests, which
 # are values: they stay in the serve dir
-[ -f "$D/advice/w$K/registration.json" ] || { say "ADVICE w$K: none written (the serve dir's advice.log, on the node)"; stop advice 14; }
-"$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration-w$K.json" \
-  || { say "ADVICE w$K: its registration has no public form"; stop advice 14; }
+[ -f "$D/advice/w$K/registration.json" ] || { say "ADVICE: none written (the serve dir's advice.log, on the node)"; stop advice 14; }
+"$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
+  || { say "ADVICE: its registration has no public form"; stop advice 14; }
 "$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
-say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits padded to the cap")' \
+say "ADVICE: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits padded to the cap")' \
   "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
-  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", the serve dir's compile_w$K.log on the node")"
+  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", its log in the serve dir, on the node")"
 [ "$rc" = 0 ] || stop compile 15
 cd "$TREE" || exit 9
 wc_ok=0
@@ -673,12 +721,12 @@ fi
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
 TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" ${CERT:+--skip certifier} \
-  2>&1 | tee -a "$OUT/verdicts.txt"
-[ -z "$CERT" ] || { wait "$CERT"; tee -a "$OUT/verdicts.txt" < "$OUT/pieces-certifier.txt"; }
+  2>&1 | publish_lines
+[ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
 
 # 5. one record of every verdict
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
-  --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | tee -a "$OUT/verdicts.txt"
+  --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
 private_pieces
 comp=0
