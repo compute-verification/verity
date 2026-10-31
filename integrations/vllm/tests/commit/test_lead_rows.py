@@ -1,7 +1,8 @@
 """``verity_vllm.commit.lead_rows`` commits what the lead's kernel exports: its committed stream equals a twin built word by word
 from the export's layout (``ssn.cu``'s ``word_at``) and ``layout.h``'s padding, on random words and ragged calls; each stream
 tile is Lean's ``tileOf``; the chunks and segments cut where the layout says, the last short; the leaves are core's inline
-frame-v3-sha512 leaves, distinct at every position for equal values; and the hashing meets ``CommitL1w``'s credited blocks."""
+frame-v3-sha512 leaves, distinct at every position for equal values; the hashing meets ``CommitL1w``'s credited blocks; and a
+words top keyed by ``WindowKeying.words_top`` is ``words_root``'s d, refused when given twice, out of order or unlike the CPU's."""
 from __future__ import annotations
 
 import hashlib
@@ -236,11 +237,11 @@ def test_window_reproduces_the_keyed_vectors():
     a = _label("a", 4096)
     assert w.a_root(3, 5, a).hex() == ("3bf65c529446a801fb137bc9eae0bae2c005c7d79fc48cd7b1a33b48e4dbf64a059f7100b300cb6f52d1d8ad39278e800c9"
                                        "4f2d0c5b010af31d49817ec11f4c1")
+    assert w.a_root(3, 7, a[:1024]).hex() == ("21ea90132419867d07995334c4021454dfcfe7ca594854e590049bca06089ed7618b6b94bd53c5c0cabdf425308480"
+                                              "f464f1a22b8919e6e6a062514c74ecc12e")
     words = [_label("words/0", 655360), _label("words/1", 4096)]
     assert w.words_root(3, words).hex() == ("d6776c42b1346f3ace17242764e08fcb23621d8adc544d190e197266a069f51d933b859b783b990cba2a1d3ee4226a"
                                             "92f8298acb94ec3caa003e4dbaae93b9d3")
-    assert w.a_root(3, 7, a[:1024]).hex() == ("21ea90132419867d07995334c4021454dfcfe7ca594854e590049bca06089ed7618b6b94bd53c5c0cabdf425308480"
-                                              "f464f1a22b8919e6e6a062514c74ecc12e")
 
 
 def test_window_refuses_a_second_digest_at_a_position():
@@ -251,10 +252,10 @@ def test_window_refuses_a_second_digest_at_a_position():
     for again in (lambda: w.a_root(0, 1, b"\x01" * 2048), lambda: w.a_root(0, 1, b"\x02" * 64)):
         with pytest.raises(Refused):
             again()
+    assert w.a_root(0, 2, b"\x01" * 2048) != first
     w.words_root(0, [b"\x03" * 512])
     with pytest.raises(Refused):
         w.words_root(0, [b"\x04" * 512])
-    assert w.a_root(0, 2, b"\x01" * 2048) != first
 
 
 def test_window_refuses_positions_outside_its_injective_map():
@@ -320,3 +321,81 @@ def test_instance_domains():
     for bad in ((0, 64, 64), (-1, 64, 0), (1 << 57, 64, 0)):
         with pytest.raises(ValueError):
             L.a_position(*bad)
+
+
+def _cpu_top(salt_w: bytes, forward: int, calls: list[bytes]) -> tuple[int, bytes]:
+    """A words instance's leaf count and its top as `DeviceWords.top` hands it, from the CPU's subtree."""
+    values = L.words_values(calls)
+    sub = L.subtree(L.instance_domain(salt_w, L.words_position(forward), len(values)), L.WORDS_LEAF_TAG, values)
+    return len(values), values[0] if sub.depth == 0 else b"".join(sub.levels[sub.depth - 1])
+
+
+def _opened(calls: int = 64) -> L.WindowKeying:
+    w = _window(calls)
+    w.register(WEIGHTS)
+    w.open(SALT_W)
+    return w
+
+
+@pytest.mark.parametrize("sizes", [(4096,), (4 * L.CHUNK_WORDS,), (655360, 4096), (8 * L.CHUNK_WORDS, 512, 4 * L.CHUNK_WORDS + 8),
+                                   (1048576, 1048576, 512, 262144, 2048)])
+def test_a_top_keys_the_cpus_words_root(sizes):
+    """A top keyed through `words_top` is `words_root`'s d, at one chunk, at whole and ragged last chunks, with and without
+    pads, and in check mode."""
+    rng = random.Random(sum(sizes))
+    calls = [rng.randbytes(s) for s in sizes]
+    count, top = _cpu_top(SALT_W, 3, calls)
+    assert count == len(L.words_values(calls)) == sum(-(-s // (4 * L.CHUNK_WORDS)) for s in sizes)
+    assert _opened().words_top(3, count, top) == _opened().words_top(3, count, top, check=calls) == _opened().words_root(3, calls)
+
+
+def test_chunk_count_is_the_streams_chunks():
+    for m, n, S in ((1, 128, 3), (17, 136, 3), (64, 2048, 74), (80, 16384, 64), (100, 300, 2), (1, 8, 1)):
+        words = L.pad_rows(m) * L.pad_cols(n) * S
+        assert L.chunk_count(m, n, S) == len(L.chunks(bytes(4 * words)))
+
+
+def test_words_domain_is_the_instances_and_binds_its_count():
+    w = _opened()
+    assert w.words_domain(2, 5) == L.instance_domain(SALT_W, L.words_position(2), 5) != w.words_domain(2, 6)
+    for f, count in ((2, 0), (2, 1 << 32), (2, 2.0), (-1, 5)):
+        with pytest.raises(Refused):
+            w.words_domain(f, count)
+
+
+def test_a_top_given_twice_or_out_of_order_is_refused():
+    calls = [b"\x09" * 655360, b"\x0a" * 4096]
+    count, top = _cpu_top(SALT_W, 0, calls)
+    w = _window()
+    for early in (lambda: w.words_top(0, count, top), lambda: w.words_domain(0, count)):
+        with pytest.raises(Refused):
+            early()
+    w.register(WEIGHTS)
+    with pytest.raises(Refused):
+        w.words_top(0, count, top)
+    w.open(SALT_W)
+    w.a_root(0, 0, b"\x0b" * 2048)
+    d = w.words_top(0, count, top)
+    for late in (lambda: w.words_top(0, count, top), lambda: w.words_root(0, calls), lambda: w.words_domain(0, count),
+                 lambda: w.a_root(0, 1, b"\x0b" * 2048)):
+        with pytest.raises(Refused):
+            late()
+    w2 = _opened()
+    w2.words_root(0, calls)
+    with pytest.raises(Refused):
+        w2.words_top(0, count, top)
+    assert w.a_root(1, 1, b"\x0b" * 2048) and d == _opened().words_root(0, calls)
+
+
+def test_a_top_the_cpu_disagrees_with_is_refused():
+    calls = [b"\x0c" * 655360, b"\x0d" * 4096]
+    count, top = _cpu_top(SALT_W, 0, calls)
+    flipped = bytes([top[0] ^ 1]) + top[1:]
+    for args, check in (((0, count, flipped), calls), ((0, count + 1, top), calls), ((0, count, top), calls[:1]),
+                        ((0, count, top), [calls[0], b"\x0e" * 4096]), ((0, count, top[:64]), None),
+                        ((0, count, top + bytes(8)), None), ((0, 1, b""), None), ((0, 1, bytes(4 * L.CHUNK_WORDS + 8)), None),
+                        ((0, count, top), calls * 33)):
+        w = _opened()
+        with pytest.raises(Refused):
+            w.words_top(*args, check=check)
+        assert w.words_top(0, count, top, check=calls) == _opened().words_root(0, calls)
