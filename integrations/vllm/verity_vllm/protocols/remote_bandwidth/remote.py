@@ -1,6 +1,6 @@
 """The remote bandwidth session over the node's `Store`, inside the prover's process (the Commit's, or the serve
-driver's): `StoreBackend` is the backend `benchmarks/remote_session`'s `ProverSide` drives, the role `device.Device`
-and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
+driver's): `StoreBackend` is the backend `benchmarks/remote_session`'s `ProverSide` drives, the role
+`device.GpuBackend` and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
 `config.CommitConfig.remote_verifier`).
 
 ~~~text
