@@ -104,18 +104,6 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
         run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
 
 
-def test_a_period_draw_on_coins_other_than_the_challengers_is_refused(tmp_path):
-    """The verifier has no coins of its own: a draw of K windows on a callable that isn't the challenger's coins
-    (`ChallengerCoins`), however it would draw, is refused before anything is committed or read."""
-    run = Run(tmp_path)
-    openings = committed(run)
-    read = []
-    for own in (lambda n: read.append(n) or b"\x5a" * n, OwnRandomness(lambda n: b"\x5a" * n), None):
-        with pytest.raises(ValueError, match="challenger's coins"):
-            run.lw.period_draw(run.stream, roots(run, openings), 2, own)
-    assert read == [] and not run.stream.log
-
-
 def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
     """K = n leaves nothing to sample: no coin is read, no Lean draw runs, and the sample of record is every window."""
     run, coins = Run(tmp_path), Coins()
@@ -195,6 +183,18 @@ def test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name(tmp_pat
             assert why["lean"] == other["units"] and verdict["selection"]["by"] == "lean"
         else:
             assert "refused" in why["lean"] and why["why"] and verdict["selection"]["by"] is None
+
+
+def test_a_period_draw_on_coins_other_than_the_challengers_is_refused(tmp_path):
+    """The verifier has no coins of its own: a draw of K windows on a callable that isn't the challenger's coins
+    (`ChallengerCoins`), however it would draw, is refused before anything is committed or read."""
+    run = Run(tmp_path)
+    openings = committed(run)
+    read = []
+    for own in (lambda n: read.append(n) or b"\x5a" * n, OwnRandomness(lambda n: b"\x5a" * n), None):
+        with pytest.raises(ValueError, match="challenger's coins"):
+            run.lw.period_draw(run.stream, roots(run, openings), 2, own)
+    assert read == [] and not run.stream.log
 
 
 def test_lean_draw_runs_flock_verify_draw_on_the_coins(tmp_path, monkeypatch):
