@@ -230,7 +230,7 @@ def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
 
 
 def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit | None = None
-           ) -> tuple[torch.Tensor | None, S.Store, dict]:
+           ) -> tuple[torch.Tensor | None, S.EncodedRows, dict]:
     """`t`'s rows onto the device and decoded into a fresh buffer: the buffer (None if refused), the store and timings.
     With `audit`, the rows are of whole units and the decode sketches them."""
     t0 = time.perf_counter()
@@ -238,7 +238,7 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     rows = segs.rows(r)
     sync()
     rows_s = time.perf_counter() - t0
-    store = S.Store(lay, rows, r.start, args.lib, chunk=args.chunk)
+    store = S.EncodedRows(lay, rows, r.start, args.lib, chunk=args.chunk)
     store.sketch = audit.P if audit else None
     w = torch.empty(t.n, t.k, dtype=torch.int8, device=DEVICE)
     S.flat(w).fill_(0xA5)
@@ -252,7 +252,7 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     return w, store, rec
 
 
-def sketched(store: S.Store, sk, layer: int, name: str, w: torch.Tensor) -> None:
+def sketched(store: S.EncodedRows, sk, layer: int, name: str, w: torch.Tensor) -> None:
     store.sketch = sk
     S.decode_matrix(store, layer, name, w)
 
