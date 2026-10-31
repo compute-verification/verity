@@ -24,11 +24,11 @@
 # the outputs stay in the hold, out of the record, and the job fails. PY is the guard's interpreter (python3).
 #
 # 1700 requests, the gate's most (`auditor.WARDEN_REQUESTS`), on the gate's most prompts, 400 (`WARDEN_PROMPTS`; request
-# j sends the (j mod n)-th), are 1064 link-windows at its fixed seed (`warden_serve.prompt_traffic`): 3404.8 s from the
-# session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures a link-window
-# they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700 takes
-# 400 requests at most, 259 link-windows: give it REQUESTS=400 HEIGHT=12 MINUTES=20. A wipe whose [t0, t1) lies within
-# [origin + 1 s, origin + 3403.8 s) is covered; then
+# j sends the (j mod n)-th), are 1064 execution phases at its fixed seed (`warden_serve.prompt_traffic`): 3404.8 s from
+# the session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures an execution
+# phase they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700
+# takes 400 requests at most, 259 execution phases: give it REQUESTS=400 HEIGHT=12 MINUTES=20. A wipe whose [t0, t1)
+# lies within [origin + 1 s, origin + 3403.8 s) is covered; then
 #
 #   python benchmarks/network_traces/wipe_egress.py $OUT/bundle.tgz --t0-ns T0 --t1-ns T1 --out egress.json
 #

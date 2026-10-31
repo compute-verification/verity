@@ -187,7 +187,7 @@ theorem rows_holdAll (C : Prog) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay
 
 /-! ### The count -/
 
-/-- The committed gates of the units at the slots `F`. -/
+/-- The committed gates of the proof blocks at the slots `F`. -/
 def faultyGateSet (C : Prog) (P : Partition) (F : Finset ℕ) : Finset ℕ :=
   F.biUnion fun v => ((P.blocks.getD v []).filter fun g => C.Boundary (P.blocks.getD v []) g).toFinset
 

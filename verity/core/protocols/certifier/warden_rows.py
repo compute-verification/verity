@@ -1,24 +1,25 @@
 """The warden's cells as the rows a proof block reads (design v3: the transfer gates are the cells' bits). Each
-link-window's cells are committed one `hm96-sha512/row/v2` row a bucket, each under a hiding salt, in a frame-v3-sha512
-tree. The warden signs a head that names the root and a salted digest of the link-window's wiring with the certifier's
-signer (`certificate.Issuer.sign`, LMS n = 64). A unit opens a cell's row as its output port (the sender's) or its input
-port (the receiver's) by the Lean verifier's registered reads (`flock-verify --registered`,
-`Flock.Registered.checkPort`): the port's table row is the unit's row committed under the row's salt, and it must climb
-its path to the signed root at the row the verifier reads for the unit. The verifier derives that row from the unit's
-(connection, cell) and the warden's wiring (`port`). No gate of the unit hashes the row, and the verifier receives no
-row and no salt.
+execution phase's cells are committed one `hm96-sha512/row/v2` row a bucket, each under a hiding salt, in a
+frame-v3-sha512 tree. The warden signs a head that names the root and a salted digest of the execution phase's wiring
+with the certifier's signer (`certificate.Issuer.sign`, LMS n = 64). A proof block opens a cell's row as its output port
+(the sender's) or its input port (the receiver's) by the Lean verifier's registered reads (`flock-verify --registered`,
+`Flock.Registered.checkPort`): the port's table row is the proof block's row committed under the row's salt, and it must
+climb its path to the signed root at the row the verifier reads for the proof block. The verifier derives that row from
+the proof block's (connection, cell) and the warden's wiring (`port`). No gate of the proof block hashes the row, and
+the verifier receives no row and no salt.
 
-**The rows** (`window_rows`). A link-window w of the warden's schedule (`WardenParams`: T buckets of S = lanes·r slots
-of B-byte cells) is T rows of S·B bytes. Row t − w·T is bucket t, slot j at bytes j·B to (j + 1)·B (words j·B/2
+**The rows** (`window_rows`). An execution phase w of the warden's schedule (`WardenParams`: T buckets of S = lanes·r
+slots of B-byte cells) is T rows of S·B bytes. Row t − w·T is bucket t, slot j at bytes j·B to (j + 1)·B (words j·B/2
 onward), in the grid's order: a bucket's cells sorted by stream (the connection's ordinal), a connection's r cells
 together and in order, and a slot no connection holds B zero bytes. So T and a row's size are the schedule's, whatever
 the load. A row's 8·S·B bits are its bytes, bit 8k + i of the row bit i of byte k: the `hm96-sha512/row/v2` bit row of
-its S·B/2 little-endian u16 words (`words`), which the unit's port carries.
+its S·B/2 little-endian u16 words (`words`), which the proof block's port carries.
 
 **The wiring** (`Wiring`, read off the record by `wiring`) says which connection holds which slots. Connection q, live
 in `cells`/r rows from row `first`, holds slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live
-connections; its cell k of the link-window (k = 0 … cells − 1) is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r)
-(`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it samples for the link-window:
+connections; its cell k of the execution phase (k = 0 … cells − 1) is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r)
+(`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it samples for the execution
+phase:
 
     wiring = tagged_sha512(WIRING_TAG, salt ‖ u32be count ‖ (u32be q ‖ u32be first ‖ u32be cells) by q)
 
@@ -31,9 +32,9 @@ connections; its cell k of the link-window (k = 0 … cells − 1) is in row fir
     domain = CommitmentDomain(identity_digest_sha512(DOMAIN_TAG, {parameters, session, link, direction, window,
              cell_bytes, slots, rows, row_schema}), -1, RangeIndexedDomain(0, T), hash="sha512")
 
-so a root opens under one link-window of one session's schedule alone. salt_k is 192 bytes the warden draws from the
-operating system for each row, never for another. The opening (`Cells`: the rows, their salts and the wiring with its
-salt) is witness, which the warden hands to the prover alone (`Cells.witness`: the salts, since the rows and the
+so a root opens under one execution phase of one session's schedule alone. salt_k is 192 bytes the warden samples from
+the operating system for each row, never for another. The opening (`Cells`: the rows, their salts and the wiring with
+its salt) is witness, which the warden hands to the prover alone (`Cells.witness`: the salts, since the rows and the
 wiring are the record's).
 
 **The signed head** (`CellsHead`) is public, as a hiding root is:
@@ -42,9 +43,9 @@ wiring are the record's).
       ‖ wiring (64 bytes) ‖ domain (64 bytes) ‖ root (64 bytes)
     cells digest = tagged_sha512(CELLS_TAG, H)
 
-and its certificate is `Issuer.sign`'s of the cells digest: the certifier's message for the link-window in its session
-(`certificate.certificate_message`). The wire record's certificate of the same link-window signs its salted record
-digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
+and its certificate is `Issuer.sign`'s of the cells digest: the certifier's message for the execution phase in its
+session (`certificate.certificate_message`). The wire record's certificate of the same execution phase signs its salted
+record digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
 
 **The registration** (`registration`) is the head and its certificate as one public JSON object:
 
@@ -54,27 +55,28 @@ digest instead, so neither verifies as the other (each would need a SHA-512 prei
 
 `value` is the registered value's name (`<link>/<direction>/<window>`), `words` and `word_bits` a row's S·B/2 leaves of
 16 bits, and `layout` the rows' order: row t − first_bucket is bucket t, of `slots` slots, `connection_slots` = r a
-connection. `check_registration` is the verifier's read of it: the head is the link-window's, its domain, rows, row
+connection. `check_registration` is the verifier's read of it: the head is the execution phase's, its domain, rows, row
 format and layout are the ones the schedule's parameters give, and its certificate verifies under the warden's key in
 the session over the head's digest.
 
-**How a unit reads it** (`port`). The verifier's own `--registered` port (`verity/registered-reads/v1`) names the value,
-root, leaves, words, word bits, domain and row schema, and `reads`: unit `reads_from + i` opens the row of its read
-(q, k), connection q's cell k of the link-window. The verifier takes the wiring only when it is the one the head names
-and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections a row), and
-refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read opens. So a
-read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a cell twice.
-The unit's cell is at its slot's words of the row (`Wiring.place`). A population of one unit a bucket (the I/O tie's)
-reads whole rows instead (`bucket_port`): unit `reads_from + t` opens row t, every slot held or not, and no wiring.
+**How a proof block reads it** (`port`). The verifier's own `--registered` port (`verity/registered-reads/v1`) names the
+value, root, leaves, words, word bits, domain and row schema, and `reads`: proof block `reads_from + i` opens the row of
+its read (q, k), connection q's cell k of the execution phase. The verifier takes the wiring only when it is the one the
+head names and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections a
+row), and refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read
+opens. So a read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a
+cell twice. The proof block's cell is at its slot's words of the row (`Wiring.place`). A population of one proof block a
+bucket (the I/O tie's) reads whole rows instead (`bucket_port`): proof block `reads_from + t` opens row t, every slot
+held or not, and no wiring.
 
-**The units' wiring is the Program's** (`Units`): which cell each unit reads is pinned with the Program, from public
-structure alone (the schedule, the ordinals and the signed wiring, never the cells' bytes), so it is never the
-prover's. The port's value names its digest, `<link>/<direction>/<window>/units/<digest>`, and the Lean verifier
+**The proof blocks' wiring is the Program's** (`Units`): which cell each proof block reads is pinned with the Program,
+from public structure alone (the schedule, the ordinals and the signed wiring, never the cells' bytes), so it is never
+the prover's. The port's value names its digest, `<link>/<direction>/<window>/units/<digest>`, and the Lean verifier
 refuses a statement whose header names another value (`Flock.Registered.entry`), so a statement made for any other
-units' wiring is refused even where its rows are the same: a pad opened where the Program reads a data cell of the
-same row, say. A bare sequence of reads binds nothing (the value is the head's alone): it is a5_warden's form until
-it states `Units`. `bucket_port` names the head's value too, and needs no `Units`: its unit t reads row t whole, so a
-statement's positions are all it can vary, and Lean's registered reads hold each to its unit's row.
+proof blocks' wiring is refused even where its rows are the same: a pad opened where the Program reads a data cell of
+the same row, say. A bare sequence of reads binds nothing (the value is the head's alone): it is a5_warden's form until
+it states `Units`. `bucket_port` names the head's value too, and needs no `Units`: its proof block t reads row t whole,
+so a statement's positions are all it can vary, and Lean's registered reads hold each to its proof block's row.
 
 **The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
 connection's first row and cells. q is the cells' stream field, the warden's ordinal: the k-th connection to reach it,
@@ -117,7 +119,7 @@ WIRING_SALT_BYTES = DIGEST_BYTES
 
 
 def rows_of(params: WardenParams) -> int:
-    """A link-window's rows: one a bucket, T."""
+    """An execution phase's rows: one a bucket, T."""
     return params.window
 
 
@@ -137,9 +139,9 @@ def window_rows(record: Record, params: WardenParams) -> list[bytes]:
 
 @dataclass(frozen=True)
 class Wiring:
-    """Which connection holds which slots of a link-window's rows (the module docstring's "The wiring"):
-    `connections` is each connection's (ordinal q, first row, cells in the link-window), by q, and `salt` the 64 bytes
-    that hide them. Witness; the signed head names its `digest`."""
+    """Which connection holds which slots of an execution phase's rows (the module docstring's "The wiring"):
+    `connections` is each connection's (ordinal q, first row, cells in the execution phase), by q, and `salt` the 64
+    bytes that hide them. Witness; the signed head names its `digest`."""
 
     connections: tuple[tuple[int, int, int], ...]
     salt: bytes
@@ -179,9 +181,9 @@ class Wiring:
         return rows
 
     def place(self, params: WardenParams, reads: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
-        """The (row, slot) of each read (q, k), connection q's cell k of the link-window: the row its bucket's, the cell
-        at the slot's words j·B/2 … (j + 1)·B/2 − 1. ValueError for a wiring that isn't the schedule's (`live`), or a
-        read of a connection the wiring doesn't hold, of a cell past its cells, or of a cell another read opens."""
+        """The (row, slot) of each read (q, k), connection q's cell k of the execution phase: the row its bucket's, the
+        cell at the slot's words j·B/2 … (j + 1)·B/2 − 1. ValueError for a wiring that isn't the schedule's (`live`), or
+        a read of a connection the wiring doesn't hold, of a cell past its cells, or of a cell another read opens."""
         rows, r = self.live(params), params.slots
         held = {q: (first, cells) for q, first, cells in self.connections}
         out: list[tuple[int, int]] = []
@@ -223,9 +225,9 @@ def wiring(record: Record, params: WardenParams, salt: bytes | None = None) -> W
 
 @dataclass(frozen=True)
 class Units:
-    """The units' wiring, as the Program pins it (the module docstring's "The units' wiring is the Program's"): unit
-    `reads_from + i` of the population reads `cells[i]` = (q, k), connection q's cell k of the link-window. Public, and
-    fixed from public structure alone, never from the cells' bytes."""
+    """The proof blocks' wiring, as the Program pins it (the module docstring's "The proof blocks' wiring is the
+    Program's"): proof block `reads_from + i` of the population reads `cells[i]` = (q, k), connection q's cell k of the
+    execution phase. Public, and fixed from public structure alone, never from the cells' bytes."""
 
     cells: tuple[tuple[int, int], ...]
 
@@ -239,7 +241,7 @@ class Units:
 
     @classmethod
     def span(cls, q: int, first: int, n: int) -> Units:
-        """n units reading connection q's cells first … first + n − 1 in order."""
+        """n proof blocks reading connection q's cells first … first + n − 1 in order."""
         return cls(tuple((q, first + i) for i in range(n)))
 
     def encode(self) -> bytes:
@@ -249,7 +251,7 @@ class Units:
         return tagged_sha512(UNITS_TAG, self.encode())
 
     def value(self, head: CellsHead) -> str:
-        """The name the port and the statement give `head`'s rows read under this units' wiring."""
+        """The name the port and the statement give `head`'s rows read under this proof blocks' wiring."""
         return f"{head.value}/units/{self.digest().hex()}"
 
 
@@ -261,7 +263,7 @@ def words(row: bytes) -> list[int]:
 
 
 def domain(params: WardenParams, session: bytes, link: str, direction: Direction, window: int) -> CommitmentDomain:
-    """The frame-v3-sha512 domain of one link-window's rows in one session of one schedule."""
+    """The frame-v3-sha512 domain of one execution phase's rows in one session of one schedule."""
     binding = identity_digest_sha512(DOMAIN_TAG, {
         "parameters": params.digest.hex(), "session": session.hex(), "link": link, "direction": direction.value,
         "window": window, "cell_bytes": params.cell_bytes, "slots": params.grid.allocation, "rows": rows_of(params),
@@ -286,7 +288,7 @@ def opens(dom: CommitmentDomain, root: bytes, position: int, bc_: bytes, path: b
 
 @dataclass(frozen=True, slots=True)
 class CellsHead:
-    """What the warden signs for a link-window's rows: public, since its root and wiring digest are hiding."""
+    """What the warden signs for an execution phase's rows: public, since its root and wiring digest are hiding."""
 
     link: str
     direction: Direction
@@ -318,7 +320,7 @@ class CellsHead:
 
 @dataclass(frozen=True)
 class Cells:
-    """The warden's opening of one link-window's rows, witness: the rows, their salts and the wiring, and what they
+    """The warden's opening of one execution phase's rows, witness: the rows, their salts and the wiring, and what they
     commit to."""
 
     link: str
@@ -333,7 +335,7 @@ class Cells:
     @classmethod
     def commit(cls, link: str, direction: Direction, window: int, rows: Sequence[bytes], wiring: Wiring,
                params: WardenParams, session: bytes, salts: Sequence[bytes] | None = None) -> Cells:
-        """`rows` and `wiring` as the link-window's (`of` reads both off a record). `salts`: one a row, sampled once
+        """`rows` and `wiring` as the execution phase's (`of` reads both off a record). `salts`: one a row, sampled once
         (default: fresh from the operating system) and never for another row."""
         rows = tuple(bytes(r) for r in rows)
         if len(rows) != rows_of(params) or any(len(r) != row_bytes(params) for r in rows):
@@ -349,7 +351,7 @@ class Cells:
     @classmethod
     def of(cls, link: str, direction: Direction, record: Record, params: WardenParams, session: bytes,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> Cells:
-        """`record`'s rows and wiring committed as `link`'s link-window in `direction`."""
+        """`record`'s rows and wiring committed as `link`'s execution phase in `direction`."""
         return cls.commit(link, direction, record.window, window_rows(record, params),
                           wiring(record, params, wiring_salt), params, session, salts)
 
@@ -419,7 +421,8 @@ def read_witness(blob: bytes) -> tuple[list[bytes], bytes]:
 
 def attest(issuer: Issuer, record: Record, params: WardenParams, direction: Direction,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> tuple[Cells, Certificate | None]:
-    """The link-window's rows and wiring committed and their head signed by `issuer` (None when its signer refuses)."""
+    """The execution phase's rows and wiring committed and their head signed by `issuer` (None when its signer
+    refuses)."""
     cells = Cells.of(record.link, direction, record, params, issuer.session, salts, wiring_salt)
     return cells, issuer.sign(record.link, direction, record.window, cells.head.digest())
 
@@ -430,7 +433,8 @@ def _layout(params: WardenParams, window: int) -> dict[str, int]:
 
 
 def registration(head: CellsHead, certificate: Certificate, params: WardenParams) -> dict[str, Any]:
-    """The public record a unit's registered port reads: the head, the rows' format and order, and the certificate."""
+    """The public record a proof block's registered port reads: the head, the rows' format and order, and the
+    certificate."""
     return {"format": REGISTRATION, "value": head.value, "link": head.link, "direction": head.direction.value,
             "window": head.window, "parameters": head.parameters.hex(), "cell_bytes": head.cell_bytes,
             "rows": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
@@ -442,8 +446,8 @@ def registration(head: CellsHead, certificate: Certificate, params: WardenParams
 
 def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: WardenParams, link: str,
                        direction: Direction, window: int) -> tuple[CellsHead, CommitmentDomain]:
-    """The verifier's read of a registration for the link-window it expects, under the warden's key and session and the
-    schedule's parameters: the head and the domain the verifier derived, or ValueError naming what fails."""
+    """The verifier's read of a registration for the execution phase it expects, under the warden's key and session and
+    the schedule's parameters: the head and the domain the verifier derived, or ValueError naming what fails."""
     B, S, T = params.cell_bytes, params.grid.allocation, rows_of(params)
     dom = domain(params, session, link, direction, window)
     want = {"format": REGISTRATION, "value": value_name(link, direction, window), "link": link,
@@ -486,9 +490,9 @@ def _port(head: CellsHead, value: str, rows: Sequence[int], reads_from: int) -> 
 
 def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | Sequence[tuple[int, int]],
          reads_from: int = 0) -> dict[str, Any]:
-    """The verifier's own `--registered` port of a unit population that opens the head's rows: unit `reads_from + i`
-    opens the row of its read (q, k), connection q's cell k of the link-window, under the warden's wiring
-    (`Wiring.place`, which refuses what no honest read is). `reads` is the Program's `Units`, whose value
+    """The verifier's own `--registered` port of a proof block population that opens the head's rows: proof block
+    `reads_from + i` opens the row of its read (q, k), connection q's cell k of the execution phase, under the warden's
+    wiring (`Wiring.place`, which refuses what no honest read is). `reads` is the Program's `Units`, whose value
     (`Units.value`) the port names, so a statement must name it too; a bare sequence of reads binds nothing, and the
     port names the head's value (a5_warden's form until it states `Units`). ValueError for a wiring the head doesn't
     name."""
@@ -501,10 +505,10 @@ def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | 
 
 
 def bucket_port(head: CellsHead, params: WardenParams, reads_from: int = 0) -> dict[str, Any]:
-    """The verifier's own `--registered` port of a population of one unit a bucket (`IoTieBucket`): unit
+    """The verifier's own `--registered` port of a population of one proof block a bucket (`IoTieBucket`): proof block
     `reads_from + t` opens row t, its bucket's every slot, held or not. It names no connection, so it reads no
-    wiring, and the head's rows alone fix its reads, so there is no units' wiring to name: the port names the head's
-    value."""
+    wiring, and the head's rows alone fix its reads, so there is no proof blocks' wiring to name: the port names the
+    head's value."""
     _schedules(head, params)
     return _port(head, head.value, list(range(head.rows)), reads_from)
 
@@ -512,10 +516,10 @@ def bucket_port(head: CellsHead, params: WardenParams, reads_from: int = 0) -> d
 def refusal(port_: Mapping[str, Any], dom: CommitmentDomain, entry: Mapping[str, Any],
             bcs: Sequence[bytes]) -> str | None:
     """The host's read of a statement's registered `entry` (its header's) against the verifier's `port_`, as the Lean
-    verifier's registered reads make it, in its order (`Flock.Registered.checkPort`), when instance i is unit
+    verifier's registered reads make it, in its order (`Flock.Registered.checkPort`), when instance i is proof block
     `reads_from + i` and reads table row i, whose `b ‖ c` is `bcs[i]`: None when they accept, else why not. The entry
     must name the port's value, each row must climb its path to the root at its position under `dom`, and row i must
-    be at the position the port reads for its unit."""
+    be at the position the port reads for its proof block."""
     if (port_.get("domain"), port_.get("leaves")) != (dom.domain_id.hex(), dom.count):
         raise ValueError("the port names another domain or leaf count than `dom`, and the Lean verifier climbs the port's")
     if entry.get("value") != port_["value"]:
