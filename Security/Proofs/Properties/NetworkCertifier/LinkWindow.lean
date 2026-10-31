@@ -16,7 +16,7 @@ Its two lemmas:
   verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_warden`, that on a warden
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
-  completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof service's:
+  completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
   the findings of its run of C-Flock's verifier (`WindowProved`) and the statement's public file holding the drawn
   unit's row commitments (`WindowOpened`, whose header line `commitments` reads through `Json.parse`, which the kernel
   doesn't evaluate, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
