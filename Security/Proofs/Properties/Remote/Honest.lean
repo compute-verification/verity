@@ -49,22 +49,47 @@ theorem canonical_text {b : ByteArray} {j : Json} (h : canonicalJson b = .ok j) 
         · simp [hp, hc, Bind.bind, Except.bind, pure, Except.pure, ht, throw, throwThe, MonadExceptOf.throw] at h
           split at h <;> simp [Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
 
-/-- The policy's commitment: the record its bytes are, and its digest, SHA-512 of the record's format tag and its
-canonical text. -/
+/-- A record's own tag (`Flock.WindowRecord.tagOf`) is the one the policy's digest takes: both read its `format` field
+as a string. -/
+theorem tagOf_eq (j : Json) : Flock.WindowRecord.tagOf j =
+    if NciCheck.Baseline.strAt j "format" == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
+    else Flock.WindowRecord.FORMAT := by
+  have hv : (j.getObjValAs? String "format").toOption = NciCheck.Baseline.strAt j "format" := by
+    show (Lean.fromJson? (j.getObjValD "format") : Except String String).toOption =
+      NciCheck.Baseline.strOf? (j.getObjValD "format")
+    cases j.getObjValD "format" <;> rfl
+  unfold Flock.WindowRecord.tagOf
+  rw [hv]
+
+theorem push_zero (x : ByteArray) : x.push 0 = x ++ ByteArray.mk #[0] := by
+  apply ByteArray.ext
+  simp [ByteArray.data_push, ByteArray.data_append]
+
+/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `NciCheck.Baseline.digest` is that
+function, or else tags the record by its `format` as `Flock.WindowRecord.tagOf` does and hashes its canonical text as
+`Flock.WindowRecord.digest` does, and either form is proved here. -/
+theorem baseline_digest (rec : Json) : NciCheck.Baseline.digest rec = Flock.WindowRecord.digestHex rec := by
+  first
+    | rfl
+    | (unfold NciCheck.Baseline.digest Flock.WindowRecord.digestHex Flock.WindowRecord.digest
+       rw [tagOf_eq]
+       cases Flock.canon rec with
+       | error e => rfl
+       | ok s => simp only [Bind.bind, Except.bind, pure, Except.pure, Flock.WindowRecord.digestOf, push_zero] <;> rfl)
+
+/-- The policy's commitment: the record its bytes are, and its digest, the window record's digest of that record. -/
 theorem policy_of {b : ByteArray} {c : NciCheck.Protocol.Commitment} (h : NciCheck.Protocol.commitmentOf b = .ok c) :
-    canonicalJson b = .ok c.record ∧ ∃ s, Flock.canon c.record = .ok s ∧
-      c.digest = Flock.Sha512.hash ((if NciCheck.Baseline.strAt c.record "format" == some NciCheck.Baseline.FORMAT_V2
-        then NciCheck.Baseline.FORMAT_V2 else NciCheck.Baseline.FORMAT).toUTF8.push 0 ++ s.toUTF8) := by
+    canonicalJson b = .ok c.record ∧ Flock.WindowRecord.digest c.record = .ok c.digest := by
   unfold NciCheck.Protocol.commitmentOf at h
+  simp only [baseline_digest, Flock.WindowRecord.digestHex] at h
   rcases hj : canonicalJson b with e | j
   · simp [hj, Bind.bind, Except.bind] at h
-  rcases hc : Flock.canon j with e | s
-  · cases j <;> simp [hj, hc, Bind.bind, Except.bind, NciCheck.Baseline.digest, pure, Except.pure, throw, throwThe,
-      MonadExceptOf.throw] at h
-  cases j <;> simp [hj, hc, Bind.bind, Except.bind, NciCheck.Baseline.digest, pure, Except.pure, throw, throwThe,
-      MonadExceptOf.throw, FlockComplete.JsonRT.unhex_hexOf] at h
+  rcases hd : Flock.WindowRecord.digest j with e | d
+  · cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw,
+    FlockComplete.JsonRT.unhex_hexOf] at h
   subst h
-  exact ⟨rfl, s, hc, by simp⟩
+  exact ⟨rfl, hd⟩
 
 /-- The one-stage audit's commitment: the record its bytes are, and `Registration.digest` of it. -/
 theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
@@ -98,62 +123,42 @@ theorem pouw_of {b : ByteArray} {c : PouwCheck.Registration} (h : PouwCheck.regi
 theorem pouw_get (j : Json) (k : String) : PouwCheck.get j k = NciCheck.Baseline.getD j k := by
   cases j <;> rfl
 
-theorem push_zero (x : ByteArray) : x.push 0 = x ++ ByteArray.mk #[0] := by
-  apply ByteArray.ext
-  simp [ByteArray.data_push, ByteArray.data_append]
-
 /-- **One record, one digest**: bytes that the three subprotocols' commitment decoders all accept decode to one digest
 under each of them. -/
 theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cW : PouwCheck.Registration}
     {cS : SampledProofs.OneStage.Commitment} (hI : NciCheck.Protocol.commitmentOf b = .ok cI)
     (hW : PouwCheck.registrationOf b = .ok cW) (hS : SampledProofs.OneStage.commitmentOf b = .ok cS) :
     cW.digest = cI.digest ∧ cS.digest = cI.digest := by
-  obtain ⟨hjI, s, hs, hdI⟩ := policy_of hI
+  obtain ⟨hjI, hdI⟩ := policy_of hI
   obtain ⟨j, hjW, hf, hbytes⟩ := pouw_of hW
   obtain ⟨hjS, hdS⟩ := stage_of hS
   have e1 : cI.record = j := by rw [hjI] at hjW; exact Except.ok.inj hjW
   have e2 : cS.record = j := by rw [hjS] at hjW; exact Except.ok.inj hjW
-  rw [e1] at hs hdI
+  rw [e1] at hdI
   rw [e2] at hdS
-  have hsb : s.toUTF8 = b := by
-    obtain ⟨s', hs', hb'⟩ := canonical_text hjW
-    rw [hs] at hs'
-    cases hs'
-    exact hb'
+  refine ⟨?_, Except.ok.inj (hdS.symm.trans hdI)⟩
+  obtain ⟨s, hs, hsb⟩ := canonical_text hjW
+  unfold Flock.WindowRecord.digest at hdI
+  simp only [hs, Bind.bind, Except.bind, pure, Except.pure] at hdI
+  have hdI' := Except.ok.inj hdI
   simp only [Option.filter_eq_some_iff] at hf
   obtain ⟨hstr, hmem⟩ := hf
   have hget : NciCheck.Baseline.getD j "format" = .str cW.format := by
     rw [← pouw_get]
     revert hstr
     cases PouwCheck.get j "format" <;> simp [PouwCheck.str?]
-  have hN : NciCheck.Baseline.strAt j "format" = some cW.format := by
-    simp [NciCheck.Baseline.strAt, hget, NciCheck.Baseline.strOf?]
-  unfold SampledProofs.Registration.digest at hdS
-  simp only [hs, Bind.bind, Except.bind, pure, Except.pure] at hdS
-  have hdS' := (Except.ok.inj hdS).symm
-  have hT : Flock.WindowRecord.tagOf j =
-      if some cW.format == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
-      else Flock.WindowRecord.FORMAT := by
+  have hT : Flock.WindowRecord.tagOf j = cW.format := by
     have hv : j.getObjValAs? String "format" = .ok cW.format := by
       unfold Lean.Json.getObjValAs?
       rw [show j.getObjValD "format" = .str cW.format from hget]
       rfl
+    have hfm : cW.format = Flock.WindowRecord.FORMAT ∨ cW.format = Flock.WindowRecord.FORMAT_V2 := by
+      simpa [PouwCheck.formats, Flock.WindowRecord.FORMAT, Flock.WindowRecord.FORMAT_V2] using hmem
     unfold Flock.WindowRecord.tagOf
     rw [hv]
-    rfl
+    rcases hfm with h | h <;> rw [h] <;> decide +kernel
   unfold PouwCheck.Registration.digest
-  rw [hdI, hdS', hN, hbytes, ← hsb, hT]
-  have hfm : cW.format = NciCheck.Baseline.FORMAT ∨ cW.format = NciCheck.Baseline.FORMAT_V2 := by
-    simpa [PouwCheck.formats, NciCheck.Baseline.FORMAT, NciCheck.Baseline.FORMAT_V2] using hmem
-  have hS2 : Flock.WindowRecord.FORMAT_V2 = NciCheck.Baseline.FORMAT_V2 := rfl
-  have hS1 : Flock.WindowRecord.FORMAT = NciCheck.Baseline.FORMAT := rfl
-  rw [hS2, hS1]
-  rcases hfm with h1 | h2
-  · have hne : (some NciCheck.Baseline.FORMAT == some NciCheck.Baseline.FORMAT_V2) = false := by decide +kernel
-    rw [h1, hne]
-    simp [Flock.WindowRecord.digestOf, push_zero]
-  · rw [h2]
-    simp [Flock.WindowRecord.digestOf, push_zero]
+  rw [← hdI', hbytes, ← hsb, hT]
 
 /-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): three cases committing
 to one record's bytes, which the three subprotocols' commitment decoders accept, leave no stray among the components
