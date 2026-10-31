@@ -107,6 +107,18 @@ def test_the_certificate_at_the_challengers_reads() -> None:
     assert W.gaps(past, 0) == [f"k = {W.MAX_READS + 1}: the certificate is computed for at most {W.MAX_READS} reads"]
 
 
+def test_a_wipe_of_no_reads_bounds_nothing() -> None:
+    """`WipeParams` refuses `k = 0`, so neither a commitment nor the challenger's side (`--reads 0`) holds it; past that
+    refusal `gaps` names it and the certificate is vacuous, as `MemoryChallenger.WipeProtocol.gaps`' guard has it."""
+    with pytest.raises(ValueError, match="1 <= batch <= k"):
+        WP.params_of(WP.request_of("n0", W.params_for()), 0)
+    zero = W.params_for()
+    object.__setattr__(zero, "k", 0)
+    assert W.gaps(zero, 0) == ["k = 0: a session of no timed reads bounds nothing"]
+    assert W.certify(zero, 0) == {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": M, "k": 0,
+                                  "memory_bits": M, "r": 1}
+
+
 def test_the_challenger_chooses_the_reads(tmp_path) -> None:
     """The request carries the fill, the deadline and the tiers; `k` is the challenger's (`--reads`), and a request
     naming it is refused."""
