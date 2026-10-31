@@ -3380,6 +3380,18 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
+  "Accounting.SecurityProofs.AccelAdditive": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AccelAdditive : Accounting.Guarantees.AccelAdditive"],
+   "assumptions": [],
+   "type_hash": "d40d7bc6a40c0afeb4793787bda1f439b2855b67e79a509cad8645dc792f7a5d"
+  },
+  "Accounting.SecurityProofs.AccelRate": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AccelRate : Accounting.Guarantees.AccelRate"],
+   "assumptions": [],
+   "type_hash": "ceb44afb1f12b9cd4607f52406ddb1ef61e0e2441adec746f17aa50a268d8cbb"
+  },
   "Accounting.SecurityProofs.Actual.DampenerWindowsCap": {
    "owner": "@lean",
    "signature": [
@@ -13691,7 +13703,9 @@
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance.",
    "Nci.SecurityProofs.OperandCapSeparateNontrivial": "completeness: OperandCapSeparate's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most one bit each, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapSeparate's conclusion is not a tautology and needs its premise on Q.",
-   "Nci.SecurityProofs.OperandCapJointNontrivial": "completeness: OperandCapJoint's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most two bits together, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapJoint's conclusion is not a tautology and needs its premise on Q."
+   "Nci.SecurityProofs.OperandCapJointNontrivial": "completeness: OperandCapJoint's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most two bits together, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapJoint's conclusion is not a tautology and needs its premise on Q.",
+   "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their seconds summed, not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16357,6 +16371,22 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
+  "Definitions.Accounting.Additive": {
+   "digest": "7396ef7fe7b9b62015b2cc6b00c9f8f5bdcc31b55e6fd0914421db9cd8f68faf",
+   "definitions": {
+    "Accounting.AccelRun": "f279de16b6c41143c893725ca545d914aa321ebea362f2486254f318bcbbb6d5",
+    "Accounting.AccelRun.P": "17b464782f5599a89fe4521ecb08b3773e03fa5ae516d1945677eb53609b6bb6",
+    "Accounting.AccelRun.T": "f42cf17d8b08923d1632a0e326b4f525fac0edc75941f8da09ef5ed6b2960cb8",
+    "Accounting.AccelRun.instrs": "b63ff684c27c4f17575210d654c68c0633d0c0d3b4c53e9110157e2eac910529",
+    "Accounting.AccelRun.sched": "9fda0915608c094a5779452f939ce8eab409979641091e625a204331c2b90bdf",
+    "Accounting.AccelRun.σ": "3effbf1d37705a31b05dce5f793f9eceef07a635c78faf08d508ea169a71d825",
+    "Accounting.issued": "12e3bf0ac0f77ad86c8071d4e530708558d52f6dc1c1995e48b3cb16d368a5ad",
+    "Accounting.occUse": "411c2145daa505f37a4762afa2666855d594e72643e9653efb4648bac702c726",
+    "Accounting.periodSeconds": "8d8f54dfe0c99b0d3dd527af4096aa6d008ded51be4a7d58845185ebdaf8fcd8",
+    "Accounting.stream": "42102635b13346d903f55e3f30b69edb7ca888e3f62eb1b6b3eaea9649e4751b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.AccelAdditive", "Accounting.SecurityProofs.AccelRate"]
+  },
   "Definitions.Accounting.Assumptions.Compose": {
    "digest": "92174b9279ae651025b5472d0fb208a506f3957b2df520e2820d63c3d352f86a",
    "definitions": {
@@ -17809,6 +17839,14 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots"
    ]
+  },
+  "Definitions.Accounting.Guarantees.Additive": {
+   "digest": "a4b353f1da122175b5d4a014b094fbb3bb32b2f845091de1e5fa9541b56ed6c6",
+   "definitions": {
+    "Accounting.Guarantees.AccelAdditive": "9ababa0abe19fd8c18a2c8a267794d3565a96612fdb801cc3625b57c625067b1",
+    "Accounting.Guarantees.AccelRate": "c43f322d7e638689821bb5ffb14c5f17f8237a2b907e9d9f426ae1d47c7bf9dc"
+   },
+   "guarantees": ["Accounting.SecurityProofs.AccelAdditive", "Accounting.SecurityProofs.AccelRate"]
   },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "digest": "6c1c75ddbe1763710d0b9bd4f8025c0610684cc46fb93a5566ff59a129649c2a",
@@ -22151,6 +22189,8 @@
     "Verity.Accel.slot": "dac00a5a5cb9083968389b4dd810676595c991b1697202df0b0635172ed70d3b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
@@ -22300,6 +22340,8 @@
     "Verity.Accel.selSp": "df78a815e60b0b7dab710091978a0c36f75748003309efe7216133b020134864"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
@@ -22347,6 +22389,8 @@
     "Verity.Accel.Machine.units": "7a95d03de9f53bf0b9da53424ed895d9205e99b055e536fdc737d646208984cb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
@@ -38797,7 +38841,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "6362b1e1be8967a59bb05e0fd8fb43f48aaaecf1e9dcce64f2db20e1bc323cea",
+   "digest": "ca87dfb2ba69b9e89f5375b3b98961234f6b62ca7f5afbb7fa4ce802254ff64b",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -38823,8 +38867,10 @@
     "Flock.HmLinks.checkUnit": "e3eddb50e371062bb91323a0240ec03ab0c3c8bea0d01da42c587cc520d85963",
     "Flock.HmLinks.nodes": "acaf71fb35384bcdee20761533d524428afa5cd8ae1950dbe58d7725f0fe30ef",
     "Flock.HmLinks.outGates": "4563decd71db435dda9331914bf32888a9b2e5b7a185676d9a163797342e38de",
+    "Flock.HmLinks.owner": "3e07ff7b6700cdfa380613201ad3c1152fdfbccf6a6f7264c3b334ad3dfc9dc6",
     "Flock.HmLinks.parse": "8cf4f21597bf6e6345b2565ee1c502501d21cffa2af0dea49024950f025e8f68",
     "Flock.HmLinks.readersOf": "94e8e166862be1f6db0938a0c50f53bf7551cfee15891e78cbe8aa5725a1410c",
+    "Flock.HmLinks.units": "2183e2c819d868883dcac2198a85a462e54dcb5025f9a13ec2d3e65b9b6dc142",
     "Flock.HmOut.checkPinned": "be695fb6208f54d0549abc4562a07a5a6a0e9141cdbfec833fc24bcee6fc732b",
     "Flock.HmOut.checkPublic": "2adeefd817818e4305440a2fe4b13fac2f3b0809948a4944f110a07052092c0c",
     "Flock.HmOut.checkRows": "098f24c4033c2c7f98461e63d948ae97698a038872521e9bb334da3a4d1926a0",
