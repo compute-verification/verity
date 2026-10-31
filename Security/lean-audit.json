@@ -6888,6 +6888,12 @@
    "assumptions": [],
    "type_hash": "51fdb43d2d2c86a0bb2d3ed41009b87a28fe7df24e6e6337b87129d9ba20d475"
   },
+  "Flock.SecurityProofs.RecursiveKSDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.RecursiveKSDeployed : Flock.Guarantees.RecursiveKSDeployed"],
+   "assumptions": [],
+   "type_hash": "a593b5f16de693fd90b73a64aabe94764151f7633be9ae62bffeb85d6b825bb2"
+  },
   "Flock.SecurityProofs.RecursiveRanRegistered": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered"],
@@ -13838,7 +13844,8 @@
    "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), the one-gate guess, costing 1, below min(Lc, Tmax) = 2, reaches the target on half the coins, a positive probability, above η = 0, where coverage fails, so CapabilityFloor's conclusion is not a tautology.",
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance."
+   "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
+   "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -21323,8 +21330,13 @@
    ]
   },
   "Definitions.Claims": {
-   "digest": "b973dd3045d852539f5ff1773a38d5e6848cf1495c72076d58ce5dd46593bf64",
+   "digest": "c574a41016bec202f91d569be3b67cad86413512f74a2c6759312111e6079e1f",
    "definitions": {
+    "Claims.Circuit": "494cf92a56a53d3c98c75c5a0fe807740665b14f25d502419a6a503eb6ed4c60",
+    "Claims.Circuit.eval": "b1f6ef4dd75f7c2e715585c472fe3dc2738c7328d82991b15cec169da9291dc9",
+    "Claims.Circuit.gates": "4e81a83705dd6146e0b0469bb8126e2a336532e831b6236a85361873c11ff269",
+    "Claims.Circuit.outs": "1705a77b16b689aceee74f743004da62a7fe5be6b596df9bd4119221c5c1e350",
+    "Claims.Circuit.wires": "f8708ac3ad38967a4248946a259ff63e30df7d1d730160a15a61e761c9d9f289",
     "Claims.Flock.Bits": "06b06a1b65925cd175908cde1663dea4936a5fe3aea6885fa5afa0c8823fc327",
     "Claims.Flock.Complete": "0f29b9f0e8aa75b300f06a9a5928be3b675bb4d7f34208899a28cd1ee75aa92a",
     "Claims.Flock.Deploy": "7f685acce787b1991532cb7712776ceb0fcca2512d2373d64c10c3996aaf7465",
@@ -21417,7 +21429,12 @@
     "Claims.Flock.wordLen": "7e39e8483b14231e3c6a019c5ae0b1abca5c784f436a302226c030ced250a14d",
     "Claims.Flock.zkTableCap": "b377c56994dbf27375118042976f3fa03984157ebfd7c36ae74dbd1d03d9ad51",
     "Claims.Flock.γ": "d2b7c6c21ec62bda4b5cfad87088517df1a3ffd7c93b4eb0e86ad3c236534be2",
-    "Claims.Flock.κ": "f3cc58cf23b84fd79377a9f5ba0e27e400337a08c7910addc716f52b1d292be0"
+    "Claims.Flock.κ": "f3cc58cf23b84fd79377a9f5ba0e27e400337a08c7910addc716f52b1d292be0",
+    "Claims.Gate": "a4401747b38a92c96f4b89618d97fe4d7821da41c6cfeca359c8a9349b6d2d45",
+    "Claims.Gate.and": "5bf80556ced536fb9314a9af16e44a42fd98093ab8196cdae2dd4d3ec72f85c6",
+    "Claims.Gate.casesOn": "cd98b0c8053164c9bf9dc167546161f9c17d6b092a7534453081f4bbf1f5593e",
+    "Claims.Gate.rec": "a15061e5b2a5a52399814954bd106bae71f25dbfeb152b1c6f93a3458ec97bbb",
+    "Claims.Gate.xor": "d15893d9ce85e9dc2195d4c1ef22a02b7bb293b8f15f0e5b01e01349725ee065"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
@@ -21498,6 +21515,7 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
@@ -21519,7 +21537,8 @@
     "Claims.Witness.Recursion.ZKStop_fails",
     "Claims.Witness.Recursion.ZK_fails",
     "Flock.SecurityProofs.ClaimsStated",
-    "Flock.SecurityProofs.RecursionClaimsStated"
+    "Flock.SecurityProofs.RecursionClaimsStated",
+    "Flock.SecurityProofs.RecursiveKSDeployed"
    ]
   },
   "Definitions.Claims.IndexedTapes": {
@@ -21567,7 +21586,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "deee750884e2a1ff6572b042fb8242a2668dfe8c53932f4b6f33db7ab5f5c924",
+   "digest": "4dd3351537711596d6d4bf667edb17719403b5e05817e3fd384125f539bddec8",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
@@ -21712,6 +21731,12 @@
     "Claims.Recursion.ScopeMatches": "12159a1f946bf3cd1cbc2acaaa30cbd0288b8be013f7551df5037e14603b72c5",
     "Claims.Recursion.Sim": "23d324e55d9b3473d5628e35630b2ec1c6b54466579356baffb2b889e8687c48",
     "Claims.Recursion.SimStop": "a85a598ec4cca04bebb9ba04267a8ade2cd36d163cae53248343c14f89b4daff",
+    "Claims.Recursion.Stmt": "b4417f5b264fa9f5a787e1f79aaffde9244924c0ecd9b8f213ecf07305d21afb",
+    "Claims.Recursion.Stmt.circ": "386c9c6e17d2d2b28e1fd9f4452496b25a8461888919b3fac92576df76bbd47d",
+    "Claims.Recursion.Stmt.draws": "da92efcb236679456c1a66801d7d0895752f5af5d522f6e2dbc9112c89f8343f",
+    "Claims.Recursion.Stmt.form": "03c3ae9baea4445629de62656489124345e174ead6601ef9939e78e9bf9c7f73",
+    "Claims.Recursion.Stmt.inner": "3f8cb0802cb9e9b2e47a7529077c8daee315a6d0bc0ae05923ad724ae0f7fa47",
+    "Claims.Recursion.Stmt.innerDims": "dc46d5b4aa594cc9a810f1d7d1ccae3546f0f49d46162844f6546b67100763a8",
     "Claims.Recursion.StopDeploy": "5cb057f1660333ae00d5680c2e8bc9fe7e6029b7092d1e4ae38a1bfdfd77fd1b",
     "Claims.Recursion.StopDeploy.halted": "1e4f38c4b3d499353b59de0ba385c4bd8beb13282361b0302431e2c142917bcd",
     "Claims.Recursion.StopDeploy.innerMsg": "f19f57baab9ec9c33896a1561e4f904b607788047f30f625212a308592340ef2",
@@ -21811,6 +21836,7 @@
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -21885,6 +21911,7 @@
     "Claims.Witness.Recursion.KSLin_fails",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
@@ -24620,6 +24647,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -24822,6 +24850,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -24950,6 +24979,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -25074,6 +25104,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -25414,6 +25445,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -26556,6 +26588,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -36482,6 +36515,7 @@
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
@@ -36616,6 +36650,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -36825,6 +36860,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -36997,6 +37033,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -37127,6 +37164,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -37269,6 +37307,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -37385,6 +37424,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -37575,6 +37615,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -37732,6 +37773,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -37966,6 +38008,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -38099,6 +38142,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -38389,6 +38433,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -38565,6 +38610,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -38709,6 +38755,7 @@
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
@@ -38865,6 +38912,7 @@
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
@@ -39083,6 +39131,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -39378,6 +39427,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -39415,6 +39465,19 @@
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
+  },
+  "Flock.Keccak": {
+   "digest": "565957974cae416a313bab0e59d716a90c9c16f1e31f657d41eec4012e1258fd",
+   "definitions": {
+    "Flock.Keccak.RATE": "173ec90bb58571003c07712a2dabdb29e5fe7896d79c89e2d1f814cea4938977",
+    "Flock.Keccak.RC": "cda370604250d6721e09bc011f7b4ce9d678de9c763df60fde5295e2636006a2",
+    "Flock.Keccak.ROT": "5d947171f7dc0eccfbb248d14ea852974eb8c025e7507db88361e2eb0a45da30",
+    "Flock.Keccak.lane": "14619de148843a7eb94c55e992345734e2b9f41ba79cdfa21c2228071653466d",
+    "Flock.Keccak.permute": "6e69a297b8e107a9f6718de2e2efe26306fe56a8c63e36542d45ff5612335ded",
+    "Flock.Keccak.rotl": "8be1f846fbfba34d198b97bbae71cf63d96d8159ab059f92cf6da5eaba9ec1a1",
+    "Flock.Keccak.shake256": "eba2f20c1d29f2ceb0c1a79158fd005a73d098c1f3788b183958c905437bb5b3"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveKSDeployed"]
   },
   "Flock.KnownRead": {
    "digest": "c664906d615fc1d6bc1b3fc90ada58efafa5d0e63aac75f0fc296affc5f21194",
@@ -39593,6 +39656,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -39716,6 +39780,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -39878,6 +39943,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -40126,6 +40192,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -40259,6 +40326,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -40426,6 +40494,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -40564,6 +40633,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -40685,6 +40755,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -40806,6 +40877,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -40963,6 +41035,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -41114,6 +41187,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -41467,6 +41541,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -41662,6 +41737,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -41791,6 +41867,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SampledKSLiveV5Honest",
@@ -41894,6 +41971,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -42075,6 +42153,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -42207,6 +42286,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -42559,6 +42639,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -42815,6 +42896,7 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43136,6 +43218,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -43287,6 +43370,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -43405,6 +43489,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43533,6 +43618,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -43637,6 +43723,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43770,6 +43857,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -43809,7 +43897,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "b9ed40f7808fee9cc3c3764abd305f28981ab4a7e4090e23dd08f4c0a8271f9d",
+   "digest": "856665776aef035f55f189536858abea0adc0e88f7e9623219c197480f4f997d",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -43851,6 +43939,7 @@
     "Flock.RecVStar.LinkShape.UB": "e55fb1185b6c32e8e87c208d5475b688f98795b4987282aad3ca986b70ec8260",
     "Flock.RecVStar.LinkShape.rows": "2472f184e89bad93cafe22a18ac6777fd6708222b3b348422a01ef19c2d1b315",
     "Flock.RecVStar.PAD_TO": "21bd458977144f54451a78ed77490d95d4e65d151eb396dc2a79964403f487ab",
+    "Flock.RecVStar.REGISTRATION_FORMAT": "455d7c4860331c98c5ea13a48f9ddc89588a0e1400afe916623746787a109c17",
     "Flock.RecVStar.SPARSE": "884ca0b7ffc07e894d4cb071facc5817453e8c8fc3755760c2baea9efdb9f7c6",
     "Flock.RecVStar.SPARSE_KEY": "965f563ddf1ad7181e776b204410006c071b9d2d12da9838b60b81110ace689a",
     "Flock.RecVStar.STACKED": "d4aa182a43e7e9728723e5f71d1c6cb589ec1581822b9f5baae35097e1ed610d",
@@ -43903,6 +43992,7 @@
     "Flock.RecVStar.checkOpeningShape": "72cd792f3f66f1cebda2a556ca99a9e5c530191650429c4f9ed19f843c5e78b6",
     "Flock.RecVStar.checkOwn": "c28596d89612209625d3eee35b662d12581db87e46b2f30ebbacc66882641aac",
     "Flock.RecVStar.checkOwnBindings": "ad28948caf14e13a8a967cdeb9119951cfa5357bea51f3bc4652db2744613a27",
+    "Flock.RecVStar.checkOwnBindings._sparseCasesOn_3": "b34af140f0b48801762d540c7186d39a2f42a3e25d1179ece5789df6802dbeb0",
     "Flock.RecVStar.checkParsed": "e6d3b73699fb8bb1b48b38560379c2fd426b9171dec58413a41d1ba9ebf7927e",
     "Flock.RecVStar.checkPart": "5c4416d63af56dbaeb089282242bd701d42dab2dfbe4395d83d69c83d71ebae1",
     "Flock.RecVStar.checkPubRows": "811eadfee32ba65232e45371ba6ebd9afaecb75624b24cb3b0759612c0af07ad",
@@ -43968,6 +44058,7 @@
     "Flock.RecVStar.rLevelUnder": "bf31419e8d3c7ae097296d0b05e16931cf8ee739486b34c2be495ab4ddce19f3",
     "Flock.RecVStar.refused": "433c0358c0382ad1c9958b8a66f5fe6f01c0184244e47098d2313ad4a150534f",
     "Flock.RecVStar.registration": "d80156b05f0739a4c455e8c728f14263a2b388ddc3ba12df0f6df726b0088bc1",
+    "Flock.RecVStar.registrationDigest": "1a852850976f66059599db6afc3b2a516327a448f5477a47eeeedd7e3f43e867",
     "Flock.RecVStar.repCoins": "97e9cefb9ea0f5f3af73da75fb0f6000b4fff4c5235459e9b7216e6d82669d61",
     "Flock.RecVStar.repRounds": "88a1197d665ba0d98a8caea04e876e983889a9617ab3cb4e864ee9484e7f1f02",
     "Flock.RecVStar.roundListed": "8ff1e7473317d0a8e68c3e42f6a55d50fd7a8845895f041046d2e57dc652e467",
@@ -44043,6 +44134,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
@@ -44164,6 +44256,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -44243,6 +44336,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44266,8 +44360,9 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "89e129deb22d9f38dd7dede6e63f27c40cb553c2c6510fe2d3396dbcaf731dc8",
+   "digest": "0c213a5ca9f1eb3e9382694470510f4cd3fc6bd89c6e65be44ebd8b8dde07ac1",
    "definitions": {
+    "Flock.Registered.COMPLETE_KEY": "1e8b83345448089f0b9bbbaadd6b8f707757fe7ad2be919ac116f2c367d70951",
     "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
     "Flock.Registered.FORMAT_V0": "a02a26231dce59059028ce6c558c2f565745e91e21315fc60525e82cb6c8aefc",
@@ -44300,6 +44395,8 @@
     "Flock.Registered.checkFull": "e3a6414dd877943aa7fc52e1296b9c07a664caf7015e951300a0d72c0c643524",
     "Flock.Registered.checkPort": "6c81cc69fafc2d93753eeaaa6980543dc6ceef1c94ed62a7821309410b6fe8dd",
     "Flock.Registered.checkPort._sparseCasesOn_1": "b8246ea527260928106879482836f843f36ca8b1c9c84cb9b9a1d20231ed7048",
+    "Flock.Registered.climb": "409e735c27b6bbb1fbec2014a3beb48e70858eeff6e95502f99f10f95e6f56f3",
+    "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
     "Flock.Registered.complete": "fc4ad4af389395741337b9b56e83854ea866157305a8bb2410cf64bf3e4bd30d",
     "Flock.Registered.derived": "0751ce4385fd006c40af04446d935a4b7c9662e4b00d77c14606451776ffcac6",
     "Flock.Registered.domain": "6b7a33fcaa3a1e513ec58845d192a740233d3126543af6653c93abb8f450ac69",
@@ -44312,7 +44409,9 @@
     "Flock.Registered.instInhabitedPort.default": "9bf8a5e0c3e39041c99b2160cc6ab0289d8ea966366e62cb515dddadac343955",
     "Flock.Registered.keysIn": "25c074d0df1e6356015a94c9f355d2d4a274faeefa8d64647a53c2de5fbec16d",
     "Flock.Registered.keysIn._sparseCasesOn_3": "cbe3b3a3b00374a42eb01f8ae0f77bdc942b7bc58fb2a3fccd3d8d622f4b46b2",
+    "Flock.Registered.leafAs": "a7fc4cfe446fe2cffc2c9cb01a9a0a0b9efd6894c75e872799b4fece18667eaf",
     "Flock.Registered.namesOnce": "7a588c11b1ea404c16d493ea2337f7b305bd1d378d32fe302e3195febe82fe61",
+    "Flock.Registered.node": "41c6d6d90c4fbfc4f762607cc2052780c452b0365f95f22323ff6d93f35d6bb1",
     "Flock.Registered.ofJson": "a88cf43173bb37dd96fb3bfc7f98d34db5a07d1417561ab987bf9d0d2af633ae",
     "Flock.Registered.ofJson._sparseCasesOn_1": "f93620c13bc5edf09956e0dc96e0807e4fa959b3ea280747b3c947e4b13d5c44",
     "Flock.Registered.ofJson._sparseCasesOn_4": "71d2496b3ee1c691577d6e05c650757e1887094dd0b5ccc84def23a591cc4fc2",
@@ -44325,6 +44424,7 @@
     "Flock.Registered.roundNamed": "ab9273f8c20940a61ed85607bbb018a46a3790c1feeff88e4f8d5c0f31de60f2",
     "Flock.Registered.rowLeaf": "09ceb544a5a4910cbbfa21ac341e5fdcf6b3fd232451f5f63fb7d9ff9ea64cde",
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b",
+    "Flock.Registered.sibs": "b434bb6941f9571a60856e1147aa3dae7ad6ff6fef41efb6677b956aa8e4b147",
     "Flock.Registered.tableRow": "d282b834f17e1c68b1a02f3e11d6eccad176108d6236f9ee3bd6bf55eb99b8ec",
     "Flock.Registered.unitIndices": "4f5d727b9688ad178fa4bdc618244d345d29ab47a0bc03ef4d00419ba6494a22",
     "Flock.checkRegistered": "0e719446b17e9bcc4c8f92af31727d9bc9ef56fcd6433a2f1f6818a2034ced39",
@@ -44379,6 +44479,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -44485,6 +44586,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -44619,6 +44721,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -44797,6 +44900,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -44911,6 +45015,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -44947,7 +45052,7 @@
    ]
   },
   "Flock.Tags": {
-   "digest": "f3cca42dfd211118b5aa2fd33af11d671ac2e7b631f3c7c41f77284ed9f7b55a",
+   "digest": "fd1835a5480c5053fea2516f6d2b7148b94543c3d4208ed18e064221821eb982",
    "definitions": {
     "Flock.TablesTags": "616e6a1133659aca6313acb08b641dbdb15f03279404705add3efd103a55fd45",
     "Flock.TablesTags.domainPrefix": "58ccbc9ce507eb6dde62a067432ef3c853a3ec9ab55ec5910f0fd9cdda2dc3c1",
@@ -44964,7 +45069,9 @@
     "Flock.Tags.circuit967b8d06": "3db70babf27b6f9c3fd32c2b6361b16e622b58683eb3966e81659ff3f6219ff4",
     "Flock.Tags.circuit967b8d06Selftest": "9ce14dbb60dc3ac6d3b62e50aef537c866ac934c3cd6ccc7c8f5687061510180",
     "Flock.Tags.circuitB3727bd9": "72453b941aea5fe19e7d54f3987495833faa1bf1c49c42e10d0f8e4ba13a739e",
+    "Flock.Tags.circuitB3727bd9Selftest": "f02e951849fdbb2cbbf7c2e04a74056aa4c2b3ccb6ac90d920c9fe054f5d22e3",
     "Flock.Tags.circuitCec3e347": "686b3e7d8e9c3fa7fb39e89b0722578ece7e04f8448f95743e9189e39618e05f",
+    "Flock.Tags.circuitCec3e347Selftest": "5f7869229c1605adbe22ec3e5945d8d78afb827263d1f5d140ba5594dd2ca63b",
     "Flock.Tags.circuitE51e2b86": "e7fd2a4157e86b5b82b7a80d97af2bce5ebc0e8ce3a2caadf99c2666df597a61",
     "Flock.Tags.circuitE51e2b86Selftest": "af9efd0a05d4f20d8026a488b944e8491d594bf0e08ede49c0e821a0dd104161",
     "Flock.Tags.circuitEb90718f": "874fd49965478c34172f19d03aa946af0b5fca6b2814ac49fc06bc41ba44e6dc",
@@ -45108,6 +45215,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -45262,6 +45370,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -45430,6 +45539,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -45549,6 +45659,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -45675,6 +45786,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -45804,6 +45916,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -45946,6 +46059,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -46086,6 +46200,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -46233,6 +46348,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -46338,6 +46454,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -46481,6 +46598,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -46630,6 +46748,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -46761,6 +46880,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -46872,6 +46992,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46904,6 +47025,7 @@
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47005,6 +47127,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47065,6 +47188,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47126,6 +47250,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47180,6 +47305,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47205,6 +47331,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLiveV5Honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
@@ -47359,6 +47486,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -47487,6 +47615,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -47623,6 +47752,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -48243,6 +48373,49 @@
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
+  "Proofs.Flock.Claims.Bridge.Committed": {
+   "digest": "16e865f50d9cfb1d563667b87171a341c49d98811bcc5c4d48512feaa02d292c",
+   "definitions": {
+    "Claims.Bridge.CProver": "c8031863f318503c02ff40f48efcd3b1c40a38bab97b0384f730120ff089c8e3",
+    "Claims.Bridge.CProver.next": "b73aadb83254a917f57c638f9f2ac2cf6922211dd77a28f708e73dc03611074c",
+    "Claims.Bridge.CoinTree": "47321a7adf33db428c695d7d555c82a0cb04d8858cc01f0b966d3e0c51c72167",
+    "Claims.Bridge.CoinTree.hello": "39985a8f221a1ac45d7fd60addd0d29fe574b35e724e54690486efaec4bf6bf2",
+    "Claims.Bridge.CoinTree.opn": "2edae9b41f8535914ad3ffbb60e50730d5176c40126ef8dd4863d1e499bd1eeb",
+    "Claims.Bridge.OnlineSim": "614edbbd37f8cb38d96bb241d6282608803c7991f230e83ede87cebe6f2c3298",
+    "Claims.Bridge.OnlineSim.Tape": "a5a39cb0666ff7ecdb99e1cf018a8a56b24817373091892b0d31f754adc7733a",
+    "Claims.Bridge.OnlineSim.fin": "73b9585299a9767da8100d6125f8d31168f92f102464cefb21150a82f55c5b0d",
+    "Claims.Bridge.OnlineSim.hello": "3e2793fe46c102ebd997fb8014429d833209e9a9c1c5a42f767708df12938ef8",
+    "Claims.Bridge.OnlineSim.instFintypeTape": "6fd4c28036b7c739dc62e84907fb4932cbc7c6e6f16d8bc2f7e433d817b01cce",
+    "Claims.Bridge.OnlineSim.opn": "2b40dca63abf3e32f632be26aa3a26c614982192a9113483a0112cd0a4e18422",
+    "Claims.Bridge.openSeq": "51b5eb1e0a56741c2d5ca71bc6164e734877b1820720da7b7f1bc6de7bb500a9"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveKSDeployed"]
+  },
+  "Proofs.Flock.Claims.Bridge.CommittedNil": {
+   "digest": "5c5c5f5924736236492777223e6868f26c0ee8a063b4d93cd3825b1e213a1412",
+   "definitions": {
+    "Claims.Bridge.CProver.atM": "9fece1a52e7c6f2eb2c19b3138d5446b4bab2470249cad0b0d4e0e7e7cf794c1",
+    "Claims.Bridge.maskOpen": "778c6c45dd9ba63d9a50f279f42ade685a63e7f951d6595e5d7e806197175c07",
+    "Claims.Bridge.runCM": "56d5fe80ae20f7ff0929757930befb499a1ce34ef88662fe688274026a975de9",
+    "Claims.Bridge.simProverM": "d2aced197cdb96896607dcfa0541610f47bcd219dc3687a96f525be0e06dad46"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveKSDeployed"]
+  },
+  "Proofs.Flock.Claims.Bridge.Hm96Tree": {
+   "digest": "0e2ad6bbf9981a5a049d6573d793629055558b53708a30b34fec3a7d522e01c6",
+   "definitions": {
+    "Claims.Bridge.Hm96Tree": "3fb8ebbc81965f45274389cd6d47dbecef89469c58a23d79539d441b0a083bbc",
+    "Claims.Bridge.Hm96Tree.My": "08198e6f10b619ccb8f9387e293224214c42b3f0da4161ea68f012bc50e8090e",
+    "Claims.Bridge.Hm96Tree.cs": "1cdb06f08130c4015b11d93a5f370e5faef0d8972c4ac14d5f7f50a0178149ee",
+    "Claims.Bridge.Hm96Tree.dig": "eba81ff251c90799457980e2ee57d0d839592b6f607d1cf760effd645990c9be",
+    "Claims.Bridge.Hm96Tree.leaf": "173221812fd147a66d88f91cd35b0d0cf5731f100d638cf8bc02c3e5e6017443",
+    "Claims.Bridge.Hm96Tree.leaves": "85e301a3aa523c31be5ad8caf7fe7e49646ad634a08eb0a277ac7cd432d74962",
+    "Claims.Bridge.Hm96Tree.opening": "2937f79367e2c8995295bb6f44b3fbbea98836d9cb8f966eeb0d84757d094b14",
+    "Claims.Bridge.Hm96Tree.root": "285b8e3d48aaa4e442cc60c9f401534d19e3a3354abf58c2651b4eb27eebfbe8",
+    "Claims.Bridge.Hm96Tree.tree": "a882cc9c48ee51f0dd7586d481317b477dd21ecd8c692a3993e501b3466c4a21"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveKSDeployed"]
+  },
   "Proofs.Flock.Claims.Complete.Honest": {
    "digest": "e973ae5c258ffa62757b4c9d7ccf409ec4478f61a1bfe171320a60ea996158f7",
    "definitions": {
@@ -48307,6 +48480,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48332,6 +48506,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -48412,6 +48587,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48473,6 +48649,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48526,6 +48703,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48582,6 +48760,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48640,6 +48819,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48705,6 +48885,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48741,6 +48922,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -48772,6 +48954,7 @@
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48785,6 +48968,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -48800,6 +48984,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48845,6 +49030,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48889,6 +49075,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48932,6 +49119,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48971,6 +49159,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49013,6 +49202,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49069,6 +49259,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49110,6 +49301,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -49146,6 +49338,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -49204,6 +49397,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49251,6 +49445,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49279,6 +49474,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49372,6 +49568,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49443,6 +49640,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49542,6 +49740,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49594,6 +49793,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49653,6 +49853,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49700,6 +49901,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49760,6 +49962,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49809,6 +50012,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49860,6 +50064,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49924,6 +50129,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49984,6 +50190,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50032,6 +50239,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50065,6 +50273,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50115,6 +50324,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50161,6 +50371,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50271,6 +50482,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50290,6 +50502,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
@@ -50301,6 +50514,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50314,6 +50528,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50326,6 +50541,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
@@ -50338,6 +50554,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
@@ -50350,6 +50567,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50363,6 +50581,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
@@ -50383,6 +50602,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
@@ -50429,6 +50649,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50491,6 +50712,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50538,6 +50760,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50585,6 +50808,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50623,6 +50847,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50643,6 +50868,7 @@
     "Claims.Witness.Recursion.KSPrivBound_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50653,7 +50879,11 @@
    "definitions": {
     "RecDeploy.DenseAt": "dc8cfde2fd1b6c2269a4a3384efe5c336a57689d7c83068e3e8819582e3467e2"
    },
-   "guarantees": ["Flock.Guarantees.recursiveKS_nontrivial", "Flock.SecurityProofs.RecursiveKS"]
+   "guarantees": [
+    "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed"
+   ]
   },
   "Proofs.Flock.Claims.Recursion.BoundWeight": {
    "digest": "7082b8fc5ce26f15ab790eb60f2db6b6d862bb30d994f1b4104b282ae3b3272a",
@@ -50665,6 +50895,7 @@
     "Claims.Witness.Recursion.KSPrivBound_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50679,6 +50910,7 @@
     "Claims.Witness.Recursion.KSPrivBound_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50814,6 +51046,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50827,6 +51060,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50899,6 +51133,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50919,6 +51154,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -50949,6 +51185,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50992,6 +51229,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51037,6 +51275,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51054,6 +51293,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51092,6 +51332,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51101,6 +51342,14 @@
     "Claims.Recursion.KSLin2On": "6e7a1d08ba15a7f329d840649fe79912c16142250ac1616e44d59ef92dda9ac1"
    },
    "guarantees": ["Flock.Guarantees.recursiveKS_nontrivial", "Flock.SecurityProofs.RecursiveKS"]
+  },
+  "Proofs.Flock.Claims.Recursion.KSLin2Committed": {
+   "digest": "67ba0201479ac8b44f3730a65edbc1440d147c53fddd5c67ca203c7d66c9bd77",
+   "definitions": {
+    "Claims.Recursion.KSLin2OnC": "ea821231bef1ba23d228b5aacea77700e0bbcc804aa5643a46453378332b4712",
+    "Claims.Recursion.lin2Rhs": "39daef28077bf6f7026f561000b70a0357825f7ce8c4b3d5735bfef0ee1a6666"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveKSDeployed"]
   },
   "Proofs.Flock.Claims.Recursion.LamDeployed": {
    "digest": "c9a575438089b152338874e8972ac157a0efc5c5334c67a77120b5e7a965a135",
@@ -51130,6 +51379,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51145,6 +51395,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51168,6 +51419,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51190,6 +51442,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51220,6 +51473,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51238,6 +51492,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51255,6 +51510,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51310,6 +51566,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51326,6 +51583,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51340,6 +51598,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51351,6 +51610,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51377,6 +51637,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51411,6 +51672,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51429,6 +51691,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51445,6 +51708,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51485,6 +51749,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51501,6 +51766,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51537,6 +51803,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51655,6 +51922,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -51706,6 +51974,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51755,6 +52024,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51816,6 +52086,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51981,6 +52252,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -52054,6 +52326,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -52090,6 +52363,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -52119,6 +52393,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -52154,6 +52429,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -52806,6 +53082,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -52859,6 +53136,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -52920,6 +53198,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -53350,6 +53629,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -53457,6 +53737,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -53548,6 +53829,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -53638,6 +53920,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -53735,6 +54018,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -53844,6 +54128,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -53940,6 +54225,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -54029,6 +54315,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -54118,6 +54405,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -54214,6 +54502,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -54320,6 +54609,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -54661,6 +54951,14 @@
     "Flock.Guarantees.zpRound": "13c765fd61b89c748725893af5cf000e8a5d80d82ccd2084ef4cb3088a78d238"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
+  },
+  "Proofs.Flock.Recursive.KSCoinTreeStatement": {
+   "digest": "f116c20960bf27f77fd33817a7996b6ae978c02a3c5c39489a9f08a02d7b37d1",
+   "definitions": {
+    "Flock.Guarantees.RecursiveKSDeployed": "831b0ad9adf5ad9c12bff6fd9f613e1374d37233a20b6e379a2e12caa7ed18b4",
+    "Flock.Guarantees.RecursiveKSDeployedAt": "908b6782f43b792771ea9e26bdd02ab140ceff57e3bdef83618d9724302f0daa"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveKSDeployed"]
   },
   "Proofs.Flock.Recursive.KSNontrivial": {
    "digest": "d6083baa63bbfe9ff0b2e00a6016d847ab2f079ab63745189e6b91af64bc38ac",
@@ -55112,6 +55410,7 @@
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -55210,6 +55509,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -56218,6 +56518,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -56343,6 +56644,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
@@ -56835,6 +57137,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
@@ -57071,6 +57374,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -57169,6 +57473,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -57256,6 +57561,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -57270,6 +57576,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -60320,6 +60627,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLiveHonest",
@@ -62058,6 +62366,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62499,6 +62808,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -62802,6 +63112,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62909,6 +63220,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -63013,6 +63325,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -63269,6 +63582,7 @@
     "Flock.SecurityProofs.RanRegisteredRun",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -63327,6 +63641,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -63359,6 +63674,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
@@ -63504,6 +63820,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -64053,6 +64370,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -64266,6 +64584,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -64808,6 +65127,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -64868,6 +65188,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -64884,6 +65205,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -64987,6 +65309,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65049,6 +65372,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65178,6 +65502,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65233,6 +65558,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65365,6 +65691,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65417,6 +65744,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65482,6 +65810,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65567,6 +65896,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65626,6 +65956,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65702,6 +66033,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65768,6 +66100,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -65867,6 +66200,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.RecursiveKSDeployed",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
