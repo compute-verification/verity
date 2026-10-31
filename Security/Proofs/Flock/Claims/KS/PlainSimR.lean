@@ -472,7 +472,7 @@ end SchedR
 /-- **The simulator submits `repRounds` rounds on rep 0 first** at a plain statement of one table whose schedule has
 at least two levels. -/
 theorem plainSimR_schedL (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec}
-    {st : Stmt} (hset : setupOf false x = some (ins, spec, #[st])) {sch : Accounting.Schedule}
+    {st : Stmt} (hset : setupOf false x = some (ins, spec, #[st])) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x) (pts : Fin 2 → Fin spec.mPts → 𝔽) :
     SchedL (plainDg spec)

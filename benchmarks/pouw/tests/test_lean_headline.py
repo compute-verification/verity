@@ -34,7 +34,7 @@ FOLDS = {
     "menu": {"IMAD": 2, "ALU": 2},                       # IMAD, LOP3, IMAD, LEA.HI
     "funnel rotate": {"IMAD": 2, "ALU": 3},              # z' = SHF.L.W(u, u, r), then IADD3 with y'
     "shift rotate": {"IMAD": 3, "ALU": 3},               # IMAD.SHL u·2^r, SHF u >> (32 − r), IADD3 of both and y'
-    "IMAD rotate": {"IMAD": 4, "ALU": 1},                # IMAD u·2^r + y', IMAD.HI ⌊u·2^r/2^32⌋ on it (RT2-LOGIC-1)
+    "IMAD rotate": {"IMAD": 4, "ALU": 1},                # IMAD u·2^r + y', IMAD.HI ⌊u·2^r/2^32⌋ on it
     "wide rotate": {"IMAD": 2, "IMADW": 1, "ALU": 2},    # IMAD.WIDE.U32 u·2^r, IADD3 of its halves and y'
     "wide multiply": {"IMAD": 1, "IMADW": 1, "ALU": 2},  # d' or y' as IMAD.WIDE's low word
     "wide multiplies": {"IMADW": 2, "ALU": 2},
@@ -83,7 +83,7 @@ def test_the_instance_meets_the_headline():
 
 
 def test_the_catch_all_takes_its_issue_slot_alone():
-    """A2's catch-all (RT2-HOPPER-2): the census counts MOV in NOROW, and DS-120 prices NOROW at one issue slot and on
+    """A2's catch-all: the census counts MOV in NOROW, and DS-120 prices NOROW at one issue slot and on
     no other row, so an instruction no other class names, counted there, is never free; `instance` refuses a class off
     one slot on DS_issue, so counting it there moves no bound."""
     i = H.instance()
@@ -111,7 +111,7 @@ def test_no_census_program_beats_the_measured_vector():
     """No program of the census runs VF3s-16's joint issue rows were fitted on loads one of the measured headline's
     vector's rows above 1: a measured program above 1 on a row ran faster than the row allows, and the headline's
     FacetCeilings would price it below what it ran. VF3r-16, model.toml's `current`, is refused: bit-exact programs
-    load its π* JI3s_0 at up to 1.0383, and at 1.0107 in honest's IMMA16832 form (RT2-LOGIC-9)."""
+    load its π* JI3s_0 at up to 1.0383, and at 1.0107 in honest's IMMA16832 form."""
     assert beaten(H.VECTOR) == []
     old = beaten("VF3r-16")
     at = {(run, probe): u for u, r, run, probe in old if r == "JI3s_0"}
@@ -160,13 +160,12 @@ def bulk_fold(i, loop: dict) -> dict[str, Fraction]:
 
 
 def test_bulk_folds_meet_fold_opt_at_pi_star():
-    """RT4-SHEET-1: fold_bulk.cu's whole-block folds, fx1's fold with its XOR on the bulk engine (bit-exact on sm_120,
-    r20261019-234605-a812), each cost at least N_w φ* a unit at π*. At DS_issue alone, with each bulk reduction one
-    uniform instruction, fbw4096_K4_BT256 cost 15.7656 against the menu's 16, and its full-work run 0.982 of ♭. A5b
-    counts its 1024 B of shared-memory source a unit on DS_smem, 32 SMSP-cycles beside STS.128's 4, and π*'s DS_smem
-    weight prices it above N_w φ*, and so the full-work run with any of them above `1 − ε` of ♭. The bulk-reduction
-    floors (`BULK_FLOORS`), each kernel's route at its widest forms, cost at least N_w φ*, the STS.128 one exactly:
-    it sets π*'s weight."""
+    """fold_bulk.cu's whole-block folds, fx1's fold with its XOR on the bulk engine (bit-exact on sm_120), each cost at
+    least N_w φ* a unit at π*. At DS_issue alone, with each bulk reduction one uniform instruction, fbw4096_K4_BT256
+    cost 15.7656 against the menu's 16, and its full-work run 0.982 of ♭. A5b counts its 1024 B of shared-memory source
+    a unit on DS_smem, 32 SMSP-cycles beside STS.128's 4, and π*'s DS_smem weight prices it above N_w φ*, and so the
+    full-work run with any of them above `1 − ε` of ♭. The bulk-reduction floors (`BULK_FLOORS`), each kernel's route at
+    its widest forms, cost at least N_w φ*, the STS.128 one exactly: it sets π*'s weight."""
     i = H.instance()
     w, phi = H.stars(i, i.cert, i.writers, i.folds)
     loops = json.loads(FOLD_BULK.read_text())["loops"]

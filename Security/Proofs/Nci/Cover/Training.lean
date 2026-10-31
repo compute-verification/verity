@@ -3,6 +3,7 @@ import Proofs.Nci.Pull
 import Proofs.Nci.Cover.Area
 import Proofs.Nci.Cover.Bits
 import Proofs.Nci.Cover.Sum
+import Proofs.Nci.Rate
 
 /-!
 # The cover theorem on a declaration that complies with the NCI policy, proved
@@ -22,7 +23,7 @@ open Finset
 
 /-- **The counted products are finished by the pieces' blocks**: every counted product's output bit is computed by the
 block of the piece that holds its gate. -/
-theorem card_P_le_sum_finished {c d : Verity.Declaration} (M : Verity.Containment c.D d.D) {n : ℕ}
+theorem card_P_le_sum_finished {c d : Verity.RegisteredCircuit} (M : Verity.Containment c.D d.D) {n : ℕ}
     (P : Verity.Partition d.D n) {J L : Type} [DecidableEq J] [DecidableEq L]
     (Mb : MulBlocks (Circuit.ofDecl c) J L) :
     Mb.P.card ≤ ∑ u, (Mb.finished (block c ((Nci.SecurityProofs.pull M P).gates u))).card := by
@@ -44,10 +45,10 @@ theorem card_P_le_sum_finished {c d : Verity.Declaration} (M : Verity.Containmen
 /-- **The per-block bounds summed over a compliant division pulled back to `c`**: if the block of every set of `c`'s
 gates, when it has at most `s` bits and is handed `k < b D` bits outside the free bits, finishes at most `(k² + e k) / e`
 counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTraining` is this at `e = b`, from `intensity`. -/
-theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.Declaration} (M : Verity.Containment c.D d.D)
+theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.RegisteredCircuit} (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L) {s D w₀ : ℕ}
-    (he : 0 ≤ e) (hα : 0 ≤ α) (hC : Nci.Complies Γ α d)
-    (hB : Nci.Assumptions.BaselineRegistered c d (Nci.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
+    (he : 0 ≤ e) (hα : 0 ≤ α) (hC : Nci.CompliesRate Γ α d)
+    (hB : Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
     (hw : ∀ g, c.D.w g ≤ w₀) (hs : w₀ * Γ + α * Γ + c.D.width c.θ ≤ s)
     (hα₀ : α₀ * c.D.size c.D.computed ≤ Mb.P.card)
     (hblk : ∀ R : Finset (Fin c.D.N), (block c R).card ≤ s →
@@ -97,9 +98,36 @@ theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.De
     _ ≤ e * ∑ u, ((Mb.finished (block c (R u))).card : ℝ) := mul_le_mul_of_nonneg_left hPcard he
     _ ≤ (α * α * Γ + e * α) * d.D.size d.D.computed := hsum
 
-theorem CoverTraining : Guarantees.CoverTraining := by
+theorem CoverTraining_rate :
+    ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.RegisteredCircuit) (M : Verity.Containment c.D d.D)
+      {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
+      (A : J → Finset (Fin (Circuit.ofDecl c).N)) (s D w₀ : ℕ),
+      0 < b → 0 ≤ α → Nci.CompliesRate Γ α d →
+      Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
+      Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → α * Γ < b * D →
+      (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
+      α₀ * c.D.size c.D.computed ≤ Mb.P.card →
+        α₀ * b * c.D.size c.D.computed ≤ (α * α * Γ + b * α) * d.D.size d.D.computed := by
   intro Γ α b α₀ c d M J L _ _ Mb A s D w₀ hb hα hC hB hH hU hk hw hs hα₀
   exact training_of_block_bound M Mb hb.le hα hC hB hk hw hs hα₀ fun R hR hkR =>
     intensity Mb A hb hH hU hkR (I := block c R) ⟨hR, le_rfl⟩
+
+/-- **Training through a compliant declaration pays the cover theorem's factor**, at `(c, k)`: `CoverTraining_rate` at
+the rate `k / c`, multiplied out by `c`. -/
+theorem CoverTraining : Guarantees.CoverTraining := by
+  intro c k b α₀ r d M J L _ _ Mb A s D w₀ hb hC hB hH hU hk hw hα₀
+  rcases Nat.eq_zero_or_pos c with rfl | hc
+  · simp only [Nat.cast_zero, mul_zero, zero_mul]
+    exact mul_nonneg (add_nonneg (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+      (mul_nonneg hb.le (Nat.cast_nonneg _))) (Nat.cast_nonneg _)
+  have h := CoverTraining_rate c (k / c) b α₀ r d M Mb A s D w₀ hb (by positivity)
+    (Nci.SecurityProofs.compliesRate_of_complies hC) hB hH hU
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact hk) hw.1
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hw.2) hα₀
+  calc α₀ * b * c * r.D.size r.D.computed = α₀ * b * r.D.size r.D.computed * c := by ring
+    _ ≤ (k / c * (k / c) * c + b * (k / c)) * d.D.size d.D.computed * c :=
+        mul_le_mul_of_nonneg_right h (Nat.cast_nonneg _)
+    _ = (k / c * c * (k / c * c) + b * (k / c * c)) * d.D.size d.D.computed := by ring
+    _ = (k * k + b * k) * d.D.size d.D.computed := by rw [Nci.SecurityProofs.rate_mul _ hc]
 
 end Nci.Cover.SecurityProofs

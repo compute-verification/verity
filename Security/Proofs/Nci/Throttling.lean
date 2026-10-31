@@ -1,6 +1,7 @@
 import Proofs.Nci.Chain
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
+import Proofs.Nci.Rate
 
 /-!
 # Updated matrix multiplications are throttled
@@ -179,7 +180,12 @@ end Counting
 open Classical in
 /-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
 multiplications"). -/
-theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
+theorem UpdatedMatMul_rate :
+    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : RegisteredCircuit) (c : Chain D.D) (d : ℕ),
+      0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) → CompliesRate Γ α D →
+      Assumptions.ActivationsIncompressible D c Γ (α * Γ) b_w b_a →
+      Assumptions.PartialSumsIncompressible D c Γ (α * Γ) b_w b_a →
+        F α (α * Γ) b_w b_a d * (2 * c.G) ≤ D.D.size D.D.computed := by
   intro Γ α b_w b_a D c d hα hw ha hd ⟨n, P, hP⟩ hA hPS
   have hcap : ∀ u, (novelReads D (P.gates u) : ℝ) ≤ α * Γ := fun u =>
     (hP u).2.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα.le)
@@ -267,6 +273,13 @@ theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
       _ = D.D.size D.D.computed / (2 * c.G) := by
           field_simp
   rwa [le_div_iff₀ (by positivity)] at hle
+
+/-- **Updated matrix multiplications are throttled** at `(c, k)`: `UpdatedMatMul_rate` at the rate `k / c`. -/
+theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
+  intro c k b_w b_a D ch d hc hk hw ha hd hD hA hP
+  have h := UpdatedMatMul_rate c (k / c) b_w b_a D ch d (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc)) hw ha hd
+    (compliesRate_of_complies hD) (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
+  rwa [rate_mul _ hc] at h
 
 /-- **Frontier training is throttled** (the draft, "From updated matrix multiplications to training"). -/
 theorem Training : Guarantees.Training :=
