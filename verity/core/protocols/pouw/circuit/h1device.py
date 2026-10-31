@@ -5,12 +5,12 @@ record's s8 binding and refuses a contraction outside the record's domain.
 * **The step.** Each record names the s8 tensor-core step its kernels' MMAs compute (a `silicon.integer.IntegerMma`, PINNED
   in `silicon.instructions`) and binds it with `ops.boolean.gemm.s8_gemm`, which gives the registered
   `BlackwellS8ImmaDot32_v2` for every card whose step is that function and refuses any other. sm_90's step,
-  `HOPPER_SM90_S8_K32`, is sm_120's under Hopper's name (the H200's ``wgmma`` m64nNk32 and ``mma.sync`` m16n8k32, run
-  r20261019-043020-f267, 0 mismatches), so an sm_90 window's Program is the sm_120 one's, byte for byte, and a served
+  `HOPPER_SM90_S8_K32`, is sm_120's under Hopper's name (the H200's ``wgmma`` m64nNk32 and ``mma.sync`` m16n8k32 agree
+  with it word for word on the H200), so an sm_90 window's Program is the sm_120 one's, byte for byte, and a served
   path registers the same trees on either card.
 * **The domain** is the contractions the record's kernels serve, beyond what the Definitions refuse themselves (32 | K and
   K < 2^17, `ops.gemm.S8_K_LIMIT`). sm_90's is Dither's h1u units (`benchmarks/hash/dither/h1u.cu`, gated on an H200 at
-  GLM-5.3 int8 v3's shapes in run r20261023-195535-8920): 512 | K, as h1u reads each noise block as 16 segments' bits
+  GLM-5.3 int8 v3's shapes): 512 | K, as h1u reads each noise block as 16 segments' bits
   (``kh_unit``: ``K % 512`` refused), and K >= 384, `h1zy.LEAST_K`, the least K whose leaf's combine is proved, so the least
   K served is 512. On that domain m = `segment.n_digits`(K / 32) is 2 or 3, the digits h1u's one stream recombines. h1u
   issues ``mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32`` without ``.satfinite``; below 2^17 no partial sum of s8 x s8

@@ -91,7 +91,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
 
 
 def test_the_roots_witness_no_longer_cancels_the_noise():
-    """The red team's roots witness fixes roots r0 and sets A = -b(seed(salt, position, r0)), so X = A + b is zero and the
+    """The roots witness fixes roots r0 and sets A = -b(seed(salt, position, r0)), so X = A + b is zero and the
     receipt is the same at every B. With `pouw.roots` the roots the operands open (here x's root a function of A, standing in
     for its frame-v3 root), the noise is seeded from A's own commitment: X is not zero, and the receipt moves with B."""
     r, c_, k, pos = 4, 8, 64, 0
@@ -110,7 +110,7 @@ def test_the_roots_witness_no_longer_cancels_the_noise():
 
 
 def test_the_replay_witness_gets_no_second_receipt():
-    """The red team's replay witness serves one A and B twice at one position under one salt, and the second receipt is a
+    """The replay witness serves one A and B twice at one position under one salt, and the second receipt is a
     copy of the first. With the verifier's positions and salts, the second serving is a later record of the log (its
     positions after the first's population), another window (its own salt), or the same window in another stream or for
     another prover (whose log starts its positions over, but whose salt is bound to it): each time another seed, a fresh

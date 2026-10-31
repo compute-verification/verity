@@ -1,31 +1,30 @@
-"""Dither's served unit (CMP-176, CMP-172): the Definitions a sampled proof block's proof passes, the layout of a call's
+"""Dither's served unit: the Definitions a sampled proof block's proof passes, the layout of a call's
 committed values, and the CPU reference a units kernel's values and hiding leaves are checked against on sampled cells.
-The protocol is Dither v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md`), as V31-GPU's prover implements it
-(`benchmarks/pouw/accel_v31/v31.py`, CMP-159); the guarantee it instantiates is `Pouw.Guarantees.Dither.WorkSoundNoFold`.
+The protocol is Dither v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md`), as the v31 prover implements it
+(`benchmarks/pouw/accel_v31/v31.py`); the guarantee it instantiates is `Pouw.Guarantees.Dither.WorkSoundNoFold`.
 
 **A call** is O = (A + d_A)(B + d_B)ᵀ over the integers: A (m × K int8) is the call's activations, committed in the call's
 operand root (`operand_tree`), and B (n × K int8) a published checkpoint's s8 weights, which registration pins by the
-checkpoint's digest (`checkpoint_digest`, NOFOLD-OPT's condition "B pinned"). Its noised operands are
+checkpoint's digest (`checkpoint_digest`: B is pinned). Its noised operands are
 X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), τ = k div L′, and per cell (i, j) its values are
 
     T_s = sum over k < min(s L, K) of X_ik W′_jk  mod 2^16   (s = 1 .. S = ceil(K / L)),   O_ij mod 2^32,
 
-with L = t L′ (by default NOFOLD-OPT's pick, L = 1,024 and L′ = 128, t = 8: `Shape`). It commits T_1 .. T_{S−1} and O:
-T_S is implied by O (compute-research's ruling, CMP-172 3a09d300), and at L ≥ K a cell commits O alone. A filler call
+with L = t L′ (by default L = 1,024 and L′ = 128, t = 8: `Shape`). It commits T_1 .. T_{S−1} and O:
+T_S is implied by O, and at L ≥ K a cell commits O alone. A filler call
 may take its A from the per-call pad instead (`fill_seeds`, `pad_rows`); it commits no O, so it commits T_S (`Shape.o`).
 
 **The coins** are each stream's 512-bit seed, expanded as v31 expands them:
 ``prg(seed, x, idx) = SHA-512(seed ‖ x ‖ be64(idx))``, x NUL-padded to 8 bytes. A served call's seeds come from the
 challenger's raw coin opened after its operand roots (`seeds`): seed_x = SHA-512(`SEEDS_TAG` ‖ coin ‖ operand-root
-receipt ‖ be64(call) ‖ x), the receipt being the digest of the certifier's signed receipt of the block's operand roots
-(CMP-172 3a09d300 and c7c9c6aa).
+receipt ‖ be64(call) ‖ x), the receipt being the digest of the certifier's signed receipt of the block's operand roots.
 
 * ``dA``, ``dB``: d[i, k] is bit k mod 512 (least significant first) of block i ceil(K / 512) + k div 512.
 * ``V``, ``U``: row r's entry c is ((w 161) >> 32) - 80 for w the little-endian u32 word r L′ + c of the stream.
 * ``P``: π_τ is Fisher–Yates over L′ with words τ L′ + c: c from L′ - 1 down to 1, x = (w (c + 1)) >> 32, swap c and x.
 * ``pad`` (a filler's only): seed_x = SHA-512(`FILL_SEEDS_TAG` ‖ window salt ‖ call coin ‖ x) for every stream, and
   A[i, k] is byte k of the pad stream's blocks i ceil(K / 64) .., as an int8. A fixed public pad lets a prover table A's
-  subset sums once a period (FOLD-SHAPES, CMP-172 8adac603).
+  subset sums once a period.
 
 A proof block reads the noise per inner index k: ``na = d_A + V[k mod L′]`` and ``nb = d_B + U[π_τ(k mod L′)]``, each in
 [-80, 81] (`noise_a`, `noise_b`), public inputs the verifier computes from the coins, so no circuit holds a permutation.
@@ -46,8 +45,8 @@ A proof block reads the noise per inner index k: ``na = d_A + V[k mod L′]`` an
 Every row is private but the coins' (na, nb, da, db), and the only output is the pass bit. The X W′ᵀ sums run 32 entries
 a step through `segment.PouwSegDot0_v2` and `PouwSegDot_v2`, the s8 tensor-core step on each card (`DEVICES`, `dot_steps`).
 
-**The leaves** (`Shape`) are the layout compute-research pinned for kernels (#4993's "The value root's layout"):
-V31-GPU's at 16 KiB rows, without segment S's rows. Output tiles of 128 × 128 cells (tile tm (n / 128) + tn), a tile's
+**The leaves** (`Shape`) are the value root's layout the kernels write:
+v31's at 16 KiB rows, without segment S's rows. Output tiles of 128 × 128 cells (tile tm (n / 128) + tn), a tile's
 cells row-major (c = 128 r + col); per tile, its tile-segments' 16,384 T_s for s = 1 .. S − 1 as little-endian u16
 (32 KiB each) and then its O as little-endian u32 (64 KiB), cut into rows of `row` bytes, so a tile is `Shape.lpt`
 consecutive leaves. Each row is an ``hm96-sha512/row/v2`` leaf (`leaf_h`) in one binary frame-v3-sha512 tree a call,
@@ -551,8 +550,8 @@ def out_at(sh: Shape, rows: Mapping[int, bytes], i: int, j: int) -> int:
 # -- the devices -----------------------------------------------------------------------------------------------------------------
 
 #: each card's s8 tensor-core step (`silicon.integer`, PINNED in `silicon.instructions`): sm_120's IMMA m16n8k32 without
-#: .satfinite, which `PouwSegDot_v2` is bound to, and the H200's (``wgmma`` m64nNk32 and ``mma.sync`` m16n8k32, run
-#: r20261019-043020-f267), the same step with .satfinite
+#: .satfinite, which `PouwSegDot_v2` is bound to, and the H200's (``wgmma`` m64nNk32 and ``mma.sync`` m16n8k32),
+#: the same step with .satfinite
 DEVICES: dict[str, IntegerMma] = {"sm_120": BLACKWELL_SM120_S8_M16N8K32_WRAP, "sm_90": HOPPER_SM90_S8_K32}
 
 
