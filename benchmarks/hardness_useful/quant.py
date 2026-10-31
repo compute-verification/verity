@@ -10,6 +10,9 @@ least the target; a matrix already at or above it keeps absmax.
 bf16, fp32 accumulation and the scale applied in fp32; the backward passes the gradient to the latent fp32 weight inside
 the clip and zero outside. The scale is recomputed from the
 latent weight on every training forward (no gradient), and frozen with the codes in eval mode.
+
+With rotate, each linear's latent weight is W·R and its input x·R (`rotation.py`: a random-sign Hadamard rotation, exact
+in real arithmetic), so the codes quantize a near-Gaussian row and the clip a target needs spares the outliers.
 """
 
 from __future__ import annotations
@@ -17,6 +20,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+import rotation
 
 PROJ = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
 S_V = [[1, 0, 0, 1], [1, 0, 0, 0], [0, 1, 0, -1], [-1, 0, 1, 0], [0, 0, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1]]
@@ -92,12 +97,29 @@ class _FQ(torch.autograd.Function):
         return g.float() * mask / s[:, None], None
 
 
+class Rotation(nn.Module):
+    """x ↦ x·R over the last dimension (`rotation.py`), in the input's dtype."""
+
+    def __init__(self, k: int):
+        super().__init__()
+        self.a, self.b = rotation.factors(k)
+        self.register_buffer("d", torch.from_numpy(rotation.signs(k)).float())
+        self.register_buffer("ha", torch.from_numpy(rotation.hadamard(self.a)).float())
+        self.register_buffer("hb", torch.from_numpy(rotation.hadamard(self.b)).float())
+
+    def forward(self, x):
+        shape = x.shape
+        u = (x * self.d.to(x.dtype)).reshape(*shape[:-1], self.a, self.b)
+        return (torch.matmul(self.ha.to(u.dtype), u) @ self.hb.to(u.dtype)).reshape(shape)
+
+
 class QLinear(nn.Module):
-    def __init__(self, lin: nn.Linear, c: float | None):
+    def __init__(self, lin: nn.Linear, c: float | None, rot: Rotation | None = None):
         super().__init__()
         assert lin.bias is None
         self.weight = lin.weight
         self.c = c
+        self.rot = rot
         self._frozen = None
 
     def train(self, mode: bool = True):
@@ -117,7 +139,10 @@ class QLinear(nn.Module):
             q = _FQ.apply(self.weight.float(), s)
         else:
             q, s = self.frozen()
-        return F.linear(x.to(torch.bfloat16), q).float() * s
+        x = x.to(torch.bfloat16)
+        if self.rot is not None:
+            x = self.rot(x)
+        return F.linear(x, q).float() * s
 
 
 def block_linears(model) -> list[tuple[str, nn.Module, str]]:
@@ -132,15 +157,22 @@ def block_linears(model) -> list[tuple[str, nn.Module, str]]:
     return out
 
 
-def wrap(model, target: float | None, log=print) -> dict[str, dict]:
-    """Replace every block linear by a QLinear calibrated to target; returns per matrix its c and overflow."""
-    info = {}
+def wrap(model, target: float | None, rotate: bool = False, log=print) -> dict[str, dict]:
+    """Replace every block linear by a QLinear calibrated to target (its weight rotated first with rotate); returns per
+    matrix its c and overflow."""
+    info, rots = {}, {}
     for name, parent, attr in block_linears(model):
         lin = getattr(parent, attr)
+        rot = None
+        if rotate:
+            k = lin.weight.shape[1]
+            rot = rots.setdefault(k, Rotation(k).to(lin.weight.device))
+            with torch.no_grad():
+                lin.weight.copy_(torch.from_numpy(rotation.rotate(lin.weight.detach().cpu().numpy())))
         c, ov = calibrate(lin.weight, target)
-        setattr(parent, attr, QLinear(lin, c))
+        setattr(parent, attr, QLinear(lin, c, rot))
         info[name] = {"c": c, "strassen1": ov}
-    log(f"wrap: {len(info)} linears, target {target}, strassen1 median "
+    log(f"wrap: {len(info)} linears, target {target}, rotate {rotate}, strassen1 median "
         f"{sorted(v['strassen1'] for v in info.values())[len(info) // 2]:.4%}")
     return info
 

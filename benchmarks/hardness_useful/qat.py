@@ -2,9 +2,10 @@
 target Strassen overflow rate, then its quality and its exported codes.
 
 The student is the model with every block linear a `quant.QLinear` calibrated to --target (a Strassen level-1 overflow
-rate; `absmax` is stock per-channel int8, `bf16` evaluates the unquantized model and trains nothing). The teacher is the
-same model in bf16, frozen. The loss is the forward KL(teacher ‖ student) at temperature 1 over every position, on
-FineWeb-Edu packed into --seq windows in file order (`prep.py`); every arm reads the same tokens in the same order.
+rate; `absmax` is stock per-channel int8, `bf16` evaluates the unquantized model and trains nothing). With --rotate
+each linear quantizes W·R and reads x·R (`rotation.py`). The teacher is the same model in bf16, frozen. The loss is the
+forward KL(teacher ‖ student) at temperature 1 over every position, on FineWeb-Edu packed into --seq windows in file
+order (`prep.py`); every arm reads the same tokens in the same order.
 AdamW (0.9, 0.95), no weight decay, linear warmup then cosine to 0, gradients clipped at 1. Every --recal steps each
 matrix's c is solved again, so the overflow stays at the target as the weights move.
 
@@ -126,7 +127,7 @@ def evaluate(model, tok, wt_ids, val_ids, args, zs: bool) -> dict:
     ev = {"wikitext2": perplexity(model, wt_ids, args.seq),
           "fineweb_val": perplexity(model, val_ids, args.seq, max_windows=args.val_tokens // args.seq)}
     log("eval", json.dumps({k: round(v["ppl"], 4) for k, v in ev.items()}), f"{time.time() - t0:.0f}s")
-    if zs:
+    if zs and args.tasks:
         ev["zeroshot"] = zeroshot(model, tok, args.tasks.split(","), args.zs_batch, args.zs_limit)
     return ev
 
@@ -148,6 +149,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", default="unsloth/Llama-3.2-1B")
     ap.add_argument("--target", required=True, help="bf16, absmax or a Strassen level-1 overflow rate (0.02 = 2%%)")
+    ap.add_argument("--rotate", action="store_true", help="quantize W·R and feed x·R (`rotation.py`)")
     ap.add_argument("--tokens", type=int, default=100_000_000, help="training tokens; 0 = no training")
     ap.add_argument("--seq", type=int, default=2048)
     ap.add_argument("--batch", type=int, default=64, help="sequences a step")
@@ -158,7 +160,7 @@ def main(argv=None) -> int:
     ap.add_argument("--eval-every", type=int, default=100)
     ap.add_argument("--val-tokens", type=int, default=1_048_576)
     ap.add_argument("--data", type=Path, default=Path(os.environ.get("HU_DATA", "data")))
-    ap.add_argument("--tasks", default=TASKS)
+    ap.add_argument("--tasks", default=TASKS, help="lm-eval tasks, comma-separated; empty for perplexity only")
     ap.add_argument("--zs-batch", type=int, default=64)
     ap.add_argument("--zs-limit", type=int, default=None)
     ap.add_argument("--no-zs-before", action="store_true", help="skip zero-shot before training")
@@ -195,7 +197,7 @@ def main(argv=None) -> int:
     assert steps * args.batch * args.seq <= len(train_ids), \
         f"{steps} steps need {steps * args.batch * args.seq} tokens, {args.data} has {len(train_ids)}: prep more shards"
     if args.target != "bf16":
-        res["calibration_before"] = quant.wrap(model, target, log)
+        res["calibration_before"] = quant.wrap(model, target, args.rotate, log)
         res["matrices_before"] = quant.stats(model)
     res["eval_before"] = evaluate(model, tok, wt_ids, val_ids, args, zs=steps == 0 or not args.no_zs_before)
     (args.out / "result.json").write_text(json.dumps(res, indent=1))

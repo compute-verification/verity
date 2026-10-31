@@ -3,7 +3,8 @@ whose int8 codes were spread to a target Strassen overflow rate (HT-USEFUL).
 
 The codes come from `qat.py`'s export (--codes FILE: `NAME.q` int8 per matrix) or, for the post-training sweep, from the
 Hugging Face weights quantized here (--hf REPO --target T: the same per-row scale as `quant.py`, s = min(c·σ_row,
-absmax_row)/127 with c solved by bisection on the Strassen level-1 overflow; `absmax` is HT-PUBLIC's quantization).
+absmax_row)/127 with c solved by bisection on the Strassen level-1 overflow; `absmax` is HT-PUBLIC's quantization;
+--rotate quantizes W·R, `rotation.py`).
 
 Each matrix's W-forms are built once to --depth and priced by `natural.Natural` for every chip, reading and correction
 price in --alus (NAME=BITS:WRITES,...; a noise form of b bits takes the cheapest price listed at b or more, as
@@ -30,6 +31,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "pouw" / "theory" / "hardness_premise"))
 import natural as nat  # noqa: E402
+
+sys.path.insert(0, str(HERE))
+import rotation  # noqa: E402
 
 ALUS = "0.84=8:0.84 width=2:0.84,8:2.36 2.36=8:2.36 h200est=2:3.33,8:9.36"
 PROJ = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
@@ -126,8 +130,9 @@ def work(job) -> dict:
             q = f.get_tensor(name[: -len(".weight")] + ".q").astype(np.int16)
         c = None
     else:
-        _kind, url, base, entry, target = src
-        c, q = np_calibrate(nat.load_tensor(url, base, entry), target)
+        _kind, url, base, entry, target, rotate = src
+        w = nat.load_tensor(url, base, entry)
+        c, q = np_calibrate(rotation.rotate(w) if rotate else w, target)
     rec = {"tensor": name, "shape": list(q.shape), "macs_per_token": int(q.size), "c": c,
            "sigma_q": float(q.astype(np.float64).std()), "saturated": float((np.abs(q) == 127).mean()),
            "overflow": nat.overflow_profile(q, 2)}
@@ -142,7 +147,7 @@ def work(job) -> dict:
     return rec
 
 
-def hf_jobs(repo: str, target: float | None):
+def hf_jobs(repo: str, target: float | None, rotate: bool):
     cfg = json.loads(nat.fetch(f"{nat.HF}/{repo}/resolve/main/config.json"))
     try:
         idx = json.loads(nat.fetch(f"{nat.HF}/{repo}/resolve/main/model.safetensors.index.json"))["weight_map"]
@@ -156,7 +161,7 @@ def hf_jobs(repo: str, target: float | None):
     for t in names:
         f = idx[t] if idx else "model.safetensors"
         base, h = headers[f]
-        out.append((t, ("hf", f"{nat.HF}/{repo}/resolve/main/{f}", base, h[t], target)))
+        out.append((t, ("hf", f"{nat.HF}/{repo}/resolve/main/{f}", base, h[t], target, rotate)))
     return out
 
 
@@ -165,6 +170,7 @@ def main(argv=None) -> int:
     ap.add_argument("--codes", type=Path)
     ap.add_argument("--hf", help="a Hugging Face repo, quantized here at --target")
     ap.add_argument("--target", default="absmax")
+    ap.add_argument("--rotate", action="store_true", help="with --hf: quantize W·R (`rotation.py`), as qat.py --rotate")
     ap.add_argument("--layers", default=None, help="comma-separated layer indices (default every layer)")
     ap.add_argument("--depth", type=int, default=4)
     ap.add_argument("-a", type=int, default=4)
@@ -188,7 +194,7 @@ def main(argv=None) -> int:
             names = sorted({k[: -len(".q")] + ".weight" for k in f.keys() if k.endswith(".q")})
         jobs = [(n, ("codes", str(args.codes))) for n in names]
     else:
-        jobs = hf_jobs(args.hf, None if args.target == "absmax" else float(args.target))
+        jobs = hf_jobs(args.hf, None if args.target == "absmax" else float(args.target), args.rotate)
     if args.layers:
         keep = {f"model.layers.{i}." for i in args.layers.split(",")}
         jobs = [j for j in jobs if any(j[0].startswith(k) for k in keep)]
