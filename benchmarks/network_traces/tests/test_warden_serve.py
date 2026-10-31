@@ -174,6 +174,35 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
         assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
+def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_schedule_ki_and_ko(tmp_path, capsys):
+    """Each class `warden-rehearse --scan --prompts --scan-class` takes (`auditor.SCAN_CLASSES`, the class of record
+    `scan_zk.W63`'s by default) is `scan_zk.SETUPS`' of its name: the gate's network certifier runs at its schedule (`scan_zk.py
+    schedule --class`, the one `scan_zk.py prove --class --warden-run` refuses any other of), which its class serves
+    and which is the class of record's but for its egress cells, so the gate's group windows hold at it; and the gate
+    bounds a prompt by its KI and the tokens by its KO. w63k4's class refuses the class of record's schedule (65
+    egress cells past its KO + 1 = 5), so a w63k4 run needs its own."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    assert A.SCAN_CLASS == sz.W63.name and set(A.SCAN_CLASSES) == {"w63", "w63k4"} <= set(sz.SETUPS)
+    (tmp_path / A.PROMPTS).write_text("[[1]]")
+    for name in A.SCAN_CLASSES:
+        s = sz.SETUPS[name]
+        assert sz.main(["schedule", "--class", name]) == 0
+        assert capsys.readouterr().out.split() == list(A.scan_schedule(scan_class=name)), name
+        req = {"device": "warden", "requests": 4, "scan": True, "prompts": {"count": 1, "ids": 1}, "scan_class": name}
+        args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+        params = ws._params(args)
+        assert params == s.params == dataclasses.replace(sz.PARAMS, egress_cells=s.params.egress_cells), name
+        s.cls.serves(params)
+        assert A.scan_bounds(name) == ((1, s.cls.KI), (1, s.cls.KO)), name
+        assert [ws.group_windows(params, t) for t in range(1, s.cls.KO + 1)] == \
+            [A.scan_group_windows(t) for t in range(1, s.cls.KO + 1)], name
+    with pytest.raises(ValueError, match="egress_cells"):
+        sz.W63K4.cls.serves(sz.PARAMS)
+
+
 def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows_which_its_key_signs(tmp_path):
     """The gate sizes a network certifier rehearsal's key on `warden_windows` of its requests (`warden_height`), so for
     every request count it takes, those are at least the execution phases `rehearse` runs (its traffic's last arrival
