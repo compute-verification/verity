@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.DeployInputs
+import Flock.RecBudget
 import Flock.RecLinkPart
 
 /-!
@@ -22,9 +23,10 @@ other format, `flock-verify-rec-statement/v2` (no inner program) among them.
 (`innerMetaRegistration`, from the header's first nine lines, `metaOf`), `recTranscriptInput`'s commits
 (`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
 on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's draw with those inputs and no
-`--identifier`, in its order: `RecSetup.checkInner`, `RecLinkPart.checkShape` (the link table the inner shape's), the
-session's statement (`Stmt.setupTables`) with each table's registered reads and the identifier's absence,
-`Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`,
+`--identifier`, in its order: `RecSetup.checkInner`, `RecLinkPart.checkShape` (the link table the inner shape's),
+`RecBudget.regs`, `RecBudget.statements`, the session's statement (`Stmt.setupTables`) with each table's registered
+reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`, `RecBudget.table`,
+`Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
 (through `checkOpenTops` and `checkLevelTopReads`), `RecLinkPart.check` (the link table's part against the table and
 the inner statement), `RecVStar.checkLabels` and the draw's law.
@@ -264,6 +266,8 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
     throw s!"{r.tags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
   RecSetup.checkInner s.inner s.src s.bound
   RecLinkPart.checkShape s.inner s.links
+  RecBudget.regs s.inner s.base.registered
+  RecBudget.statements s.inner
   let (spec, sts) ← r.setup
   for st in sts do
     checkRegistered st s.base.registered
@@ -272,6 +276,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   RecSetup.checks s.inner s.commits s.base.stmtTags r.I.tables sts r.I.circuitFile r.I.partition r.I.program
     s.base.registered s.part s.bindings s.rows
   RecSetup.oneFull s.inner sts
+  RecBudget.table s.inner sts
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits)
     (RecSetup.c3 s.inner s.commits))
