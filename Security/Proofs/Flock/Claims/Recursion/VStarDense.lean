@@ -16,9 +16,8 @@ part's (`AlgInFits`) and a cap's (`capIn` accepting).
 
 `IrShaped Ir x w ρ hist` is what the stager reads of the inner prover's `rest` at one run: both reps have an opening, and
 at each level part `.recOpen l L H n` the level's openings number `n`, each of `L` lanes and `H` siblings, and each one's
-top node is among the level's tops wherever they are read. No Lean `InnerRec` is the deployed inner prover (its `rest` is
-`rec_vstage`'s, `rec_vstar`'s and `verifier_rows`' output), so this is witnessed outside Lean, at the deployed builder's
-run, as `HonestRunAccepted` is. `hok_shaped` is the stager accepting every part of a dense statement from it, given the
+top node is among the level's tops wherever they are read. It holds at the deployed inner prover `IrDep` (`IrDep`,
+`irShaped_dep`). `hok_shaped` is the stager accepting every part of a dense statement from it, given the
 level tops being read (`topsAt`), each algebra port being `acc0`, `acc1` or a schedule's `m<i>`, and each cap's `capIn`.
 -/
 
@@ -80,8 +79,8 @@ theorem hok_dense {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} 
 /-- **The inner prover's openings fit V\*'s levels at a run**: in `rest` at the inner witness `w`, its tape `ρ` and the
 inner rounds `hist`, both reps have an opening, and at each level part `.recOpen l L H n` of `x`, level `l`'s openings
 number `n`, each of `L` lanes and `H` siblings, and where the level's tops are read at the stager's inputs (`srcOf`,
-`topsAt`), each opening's top node is among them. `(Ir.fit x).rest` is `Ir.rest`. Witnessed outside Lean, at the
-deployed builder's run. -/
+`topsAt`), each opening's top node is among them. `(Ir.fit x).rest` is `Ir.rest`. Proved at the deployed inner prover
+(`irShaped_dep`). -/
 def IrShaped (Ir : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : (Ir.fit x).Tape) (hist : List (Msg × Msg)) :
     Prop :=
   (∃ o ∈ ((Ir.fit x).rest w ρ.1 hist).openings, o.rep = 0) ∧
