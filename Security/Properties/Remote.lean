@@ -25,8 +25,9 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
   blocks `d.𝓘` its owners are; on every such parse, `program`, `Γ` and `α = num / den` are the policy's parameters
   (`VerifierOwn`), and every such registered circuit's inference blocks meet the policy (`PolicyMet`): every one has
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
-  (`Nci.Complies Γ α`), and it has a padded `(Γ, ⌊αΓ⌋)`-partition when Boolean, its bit-level expansion a padded
-  `(ΓW, ⌊αΓW⌋)`-partition when its gates are 1 to `W` bits wide; and the record the one-stage audit's case commits to names, by its SHA-512, the program the audit
+  (`Nci.Complies Γ α`), and it has a padded
+  `(Γ, ⌊αΓ⌋)`-partition when Boolean, its bit-level expansion a padded `(ΓW, ⌊αΓW⌋)`-partition when its gates are 1 to
+  `W` bits wide; and the record the one-stage audit's case commits to names, by its SHA-512, the program the audit
   verifies the sessions against (`StageHeld`). With one digest for the two records, the registered circuit the policy
   checked and the program the one-stage audit verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.Complies Γ α d` from
