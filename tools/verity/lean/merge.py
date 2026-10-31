@@ -29,7 +29,10 @@ premise of a guarantee, so two sides that each add or drop premises of one guara
 revision, a policy entry (a layer's field, a `compile_time` digest). A `shape.inline` premise one side dropped while the
 other has it as the base had it stays, while the merged record lists its guarantee (`held`): a side whose `--update` ran on
 an older tree drops a text the other side's tree still prints, and the Lean check fails on a missing entry but not on one
-whose premise no longer offends, which the next `--update` drops.
+whose premise no longer offends, which the next `--update` drops. An `unwitnessed` or `witnesses` entry the sides
+changed differently, or one removed and the other changed, is theirs' (`JUDGED`): its value follows the statement as each
+side's tree builds it (a type hash, the witnesses a form needs), so the incoming side's, the newer tree's when drive stacks
+a PR, stands as a candidate, which the Lean check of the merged commit judges.
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
@@ -93,6 +96,8 @@ NESTED = {"upstream", "shape", "claims", "trees"}
 #: nested maps whose entries are maps merged one level deeper still: `shape.inline`'s guarantees, each {premise: why} merged
 #: premise by premise, a guarantee left with none dropped (the check refuses an empty one, and `--update` drops it)
 DEEPER = {"shape[inline]"}
+#: the witness rule's sections, merged entry by entry with theirs' value where the sides disagree (`judged`)
+JUDGED = {"unwitnessed", "witnesses"}
 MISSING = object()
 
 
@@ -136,6 +141,22 @@ def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1
             v = items([] if x is MISSING else x, y, z)
         else:
             v = one(f"{path}[{k}]", x, y, z, why)
+        if v is not MISSING:
+            out[k] = v
+    return out
+
+
+def judged(section: str, o: dict, a: dict, b: dict, candidate: list[str]) -> dict:
+    """A `JUDGED` section merged entry by entry: a side's change applies, and an entry the sides changed differently (or
+    one removed, the other changed) is theirs', named in ``candidate``."""
+    out = {}
+    for k in keys(section, a, b):
+        x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
+        why: list[str] = []
+        v = one(f"{section}[{k}]", x, y, z, why)
+        if why:
+            v = z
+            candidate.append(f"{section}[{k}] (theirs)")
         if v is not MISSING:
             out[k] = v
     return out
@@ -370,6 +391,8 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
         elif k == "assumptions" and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
             v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate)
             v = MISSING if not v and MISSING in (a, b) else v
+        elif k in JUDGED and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
+            v = judged(k, {} if o is MISSING else o, a, b, candidate)
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = layers({} if o is MISSING else o, a, b, why)
         elif names(o, a, b):

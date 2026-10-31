@@ -759,6 +759,22 @@ def test_lists_of_names_merge_where_both_sides_append_one():
     assert why and "x" in why[0], "a value both sides changed still refuses"
 
 
+def test_a_witness_entry_the_sides_disagree_on_is_theirs_as_a_candidate():
+    """An `unwitnessed` hash both sides changed (each tree builds the statement differently), and a `witnesses` entry one side
+    removed while the other changed it, merge as theirs', named as candidates; an entry only one side changed is that side's,
+    as before."""
+    base = {"unwitnessed": {"G": "h0", "H": "k0"}, "witnesses": {"W": {"honest": ["W_h"], "nontrivial": "W_n"}}}
+    ours = {"unwitnessed": {"G": "h1", "H": "k1"}, "witnesses": {}}
+    theirs = {"unwitnessed": {"G": "h2", "H": "k0"},
+              "witnesses": {"W": {"honest": ["W_h"], "nontrivial": "W_n", "kind": "exclusion"}}}
+    candidate: list[str] = []
+    merged, why = M.merge(base, ours, theirs, candidate)
+    assert why == []
+    assert merged["unwitnessed"] == {"G": "h2", "H": "k1"}
+    assert merged["witnesses"] == {"W": {"honest": ["W_h"], "nontrivial": "W_n", "kind": "exclusion"}}
+    assert candidate == ["unwitnessed[G] (theirs)", "witnesses[W] (theirs)"]
+
+
 SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/core/service/flock", "verity/core/protocols/pous"
 
 
