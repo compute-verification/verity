@@ -237,7 +237,7 @@ def test_the_lift_is_a_function_of_the_manifest_and_refuses_by_name(component, l
         L.lift_request_component(component.fn, (), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)
     with pytest.raises(L.BoundaryFailure):
         L.lift_request_component(component.fn, (L.enc_bot(32),), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)  # ⊥ is not an EOS id
-    with pytest.raises(TypeError, match="not a GP-01 request component"):
+    with pytest.raises(TypeError, match="not a workload request component"):
         L.lift_request_component(b1.serve_v2(TINY, LP, D_MAX), (17,), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)
     with pytest.raises(ValueError, match="no TokenSelect_v1 node"):
         L.lift_request_component(component.fn, (17,), max_tokens=CAP, lag=0)  # Serve_v2's root has no TokenSelect at root: the derived body's boundary is not here
