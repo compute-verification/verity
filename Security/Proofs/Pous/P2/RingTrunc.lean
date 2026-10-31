@@ -63,7 +63,7 @@ noncomputable def pick (p t : ℕ) (h : Bits (w - t)) (r₀ r₁ r₂ : List (Bi
   then cand t h (Classical.choose hx) else fun _ => false
 
 /-- **The search**: block `i`'s two keys, then two rounds of `2^t` multiplications each. -/
-noncomputable def truncProg (t : ℕ) (i : Fin B) (h : Bits (w - t)) : Prog (ringRO B w p) (Bits w) :=
+noncomputable def truncProg (t : ℕ) (i : Fin B) (h : Bits (w - t)) : OracleAlgorithm (ringRO B w p) (Bits w) :=
   .round [RingQry.key i .mask, RingQry.key i .offset] fun r₀ =>
     .round (sqQs t h) fun r₁ =>
       .round (sqQs₂ (B := B) p t h r₀ r₁) fun r₂ =>
@@ -200,7 +200,7 @@ noncomputable def truncPre (t : ℕ) {m S : ℕ} (hm : m ≤ B) : Preprocessor (
 open Classical in
 /-- Search a kept block, and answer zeros for any other index. -/
 noncomputable def truncStep (t : ℕ) {m S : ℕ} (hS : m * (w - t) ≤ S) (σ : Bits S) (i : Fin B) :
-    Prog (ringRO B w p) (Bits w) :=
+    OracleAlgorithm (ringRO B w p) (Bits w) :=
   if hi : (i : ℕ) < m then truncProg t i ((codeEquiv m (w - t)).symm (Pous.trunc hS σ) ⟨i, hi⟩)
   else .ret fun _ => false
 
