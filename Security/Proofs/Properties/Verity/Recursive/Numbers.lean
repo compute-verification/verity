@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+import Proofs.Flock.Claims.Recursion.NumsFixedR
 import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
@@ -236,26 +237,7 @@ theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)
   have hC := RecIns.setup_checks hset
   rw [hinner, insO_staged_part hins] at hC
   have hck := checks_stmt hC 0 (by omega)
-  have hname := ResLower.checkStmt_name hck
-  obtain ⟨⟨nm, hf⟩, coins, hI⟩ := ResLower.insO_tags hins
-  have hf' := hf
-  unfold Flock.Tags.find? at hf'
-  have hnm : nm = Flock.Tags.circuit.name := by
-    have h2 : i.base.stmtTags.name = nm := by simpa using List.find?_some hf'
-    rw [← h2, hname]
-  subst hnm
-  rw [FlockSoundness.Discharge.Recursion.find?_circuit] at hf
-  have hT : i.base.stmtTags = Flock.Tags.circuit := (Option.some.inj hf).symm
-  have hI' : i.base.read.I.tags.hiddenOutputs = true := by
-    rw [hI, hT]
-    unfold Flock.Tags.withCoins
-    split <;> rfl
-  have hh : i.base.read.tags.hiddenOutputs = true := by
-    unfold Flock.Readable.Read.tags
-    split
-    · rw [FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs]
-      exact hI'
-    · exact hI'
+  have hh := (RecDeploy.NumsFix.staged_one hins hset).2
   obtain ⟨j, f, sv, hj, -, hc⟩ := checkStmt_circuit hck
   cases hj
   obtain ⟨hck', -⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hc
