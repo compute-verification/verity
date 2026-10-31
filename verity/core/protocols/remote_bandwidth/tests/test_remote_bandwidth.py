@@ -120,7 +120,7 @@ def params_of(st: audit.Store, **kw) -> Params:
     return params(receipt=st.registration.receipt, bind=st.registration.bind, rows=st.registration.rows, **kw)
 
 
-def challenger(store, p: Params, label: bytes = b"coins", session: int = 0) -> coins.Coins:
+def challenger(store, p: Params, label: bytes = b"coins", session: int = 0) -> coins.SessionCoins:
     return coins.local(store.registration.digest, session, p.windows, Entropy(label), appends=APPENDS)
 
 
