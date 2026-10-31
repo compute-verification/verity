@@ -9,32 +9,42 @@ Daniel, 31 Oct 4:01 PM PDT. The core, core, core spec:
 expected, (2) outweighs that." The trace needn't be cheap to *check*. Unpredictability can come from the protocol
 (live coins); it needn't be hardware-enforced.
 
-## Statement (coordinator's formalization, for MARGIN to tighten)
+## Statement (MARGIN's tightening, note:compute-research/20261031T2339Z-report-spec-margin; supersedes the coordinator's first draft)
 
-- **Honest cost:** C_H(W) is the cost of doing declared work W and producing its transcript T(W).
-- **Dishonest cost:** C_D(W, U) is the least cost of any strategy that produces a T(W) the verifier accepts while doing
-  undeclared work U (U ≥ 0, and U = 0 covers forging credit).
-- **The spec, with margin m:** C_D(W, U) ≥ C_H*(W) + cost(U) + m·C_H*(W) for all U. C_H*(W) is a *floor*, the cheapest
-  any implementation could produce T(W) honestly, and m must exceed our uncertainty in that floor (e.g. 10%).
-- **Equivalently:** the cheapest dishonest route is at least (1 + m)× the fastest honest route, so a faster honest
-  implementation can't buy room for U.
+- **m is the premium for hiding.** It's the extra a cheater pays to do undeclared work u alongside an accepted
+  transcript, beyond the cost of u itself. Hidden work is then at most (s − m)·C_H*, where C_H* is the floor (the
+  fastest honest production of the transcript) and s is how far the auditor's honest-cost figure overestimates it.
+- **Key fact:** whenever acceptance ignores what else the device computes, the cheater makes the transcript the
+  cheapest way and then does u separately, so **m ≤ 0**, and every faster honest implementation is free room. A
+  margin exists only where undeclared work changes what the verifier sees.
+- The coordinator's first form ("C_D ≥ C_H* + cost(U) + m·C_H*") was false at U = 0 for any m > 0, and its
+  "equivalently" dropped cost(U).
 
-## Where a margin can come from
+## Where a margin comes from (corrected)
 
-- **(a) Placement (silicon).** Honest hashing happens in line, on data already at the write port, at about 0.3 a MAC
-  (FT). Any other route to the same transcript must move or recompute the data and hash it off the path, at about
-  127.5 a MAC in software: m ≈ 400.
-  - **With a keyed absorb under a hidden live coin** (GOV-HW), the off-path route is *impossible*, not just expensive:
-    only the chip's unit knows the coin.
-  - **With always-on logging,** U is in the honest transcript anyway.
-  - What remains is physical: a bypass, or a leak of the coin. That's inspection.
-- **(b) Resource competition (software, stock GPUs).** Honest and dishonest provers run the same instructions, so
-  there is no structural asymmetry. The only margin is that undeclared work must displace transcript production,
-  which is exactly the slack between calibration and the fastest implementation: the 10% Daniel worries about. No
-  multiplicative m.
-- **(c) Floors instead of estimates (the lead).** Credit only what a premised lower bound (H32, ShaWrites) says any
-  implementation must spend. Then "10% faster than expected" is ruled out by premise, not outweighed, at the price of
-  a premise that must hold for the fastest possible code. That gives m ≈ 0, with a gap of about 0.13%.
+- **The lead:** m ≈ 0, never positive.
+  - G bounds *forged credit*, not hidden work.
+  - "10% faster" is excluded only by premises (H32, ShaWrites) that must be exact to about 0.008%. A SHA-512 10%
+    cheaper than ShaWrites' count would over-credit 9% of the credit.
+- **Design U:** the only margin is the 5–14% by which the best known shortcut is slower than stock. A faster honest
+  matmul is the same thing as a cheaper cheat, so it fails at 1.1× or is marginal, and fails at 2×.
+- **FT silicon:**
+  - The forging margin is M − 1 = 2.75 (W1) or 0.90 (sm_120 prices). The coordinator's "m ≈ 400" compared the lead's
+    SHA-512 of every word with FT; the off-path route to *FT's* transcript is FT's Keccak chain in software.
+  - FT stops forged credit. Only **the lock** turns it into a margin on hidden work: m = M − 1 inside a session, and at
+    most (1 − O_W)/m beyond the visible idle share.
+- **Always-on logging with the hidden coin:** detection, not price. Secret work is visible, not expensive. The residual
+  is 2.3–4.0% of fleet capacity (host CPUs, a missed bypass), and nothing in it scales with s.
+- **Software-only on stock GPUs:** no multiplicative margin from any candidate.
+  - Data movement: the cheater hashes in the same registers.
+  - Register-file state: it can be saved, at about 3.2 µs.
+  - Deadlines: they bind only the saturated pipe, and a co-resident kernel took 47–75% of the tensor bound.
+  - Coin-dependence: both provers compute the same product after the same coin.
+  - Idle-slot interleaving: the cheater gets the same benefit.
+  - Idle pipes also run undeclared work concurrently, beyond the slack.
+- **The smallest silicon change for m ≥ 1:** FT with a Keccak round every 60 or fewer words, plus the lock: 1.56% of an
+  s8 MAC, about 0.04% of an H200 die, against the operator only. Against the chip designer it takes GOV-HW's tap on
+  every register-file write: 0.88% of the die.
 
 ## Lane MARGIN (note `lanes/compute-research/<ts>-report-spec-margin.md`, due Sun 1 Nov 03:00Z)
 
