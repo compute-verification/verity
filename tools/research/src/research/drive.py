@@ -31,8 +31,9 @@ syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), t
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `checked` (`_land`); once `main` reaches it, `merge.caught_up`
 (the spec DM, node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and the sweep (`_on_main`).
 A `main` pushed outside drive (a pure move, on its own check) is merged into `checked` (`_absorb`).  Two gates cut the prefix
-first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
-of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked by the
+first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, the spec, `Security/`'s Definitions and
+Models and its package's Lake files, or a Lean source outside `Security/` of a package that has one, Lean that runs as code:
+`queue.lean_change`, whatever its PR's title; Lean proofs alone land on the verdict, checked by the
 after-landing run) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
 check (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it), or any
 recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
@@ -158,8 +159,6 @@ LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lak
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
-#: a PR whose title holds this lands on its land verdict without a Lean check first (`Driver._lean_change`)
-TWO_DEMOS = "two demos"
 #: the steps of a check (`tools/verity/check/check.py`)
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
@@ -2452,23 +2451,12 @@ class Driver:
         return {m.owner, self._owner(m), self.ready_by(m.pr, m.head)}
 
     def _lean_change(self, m: Member) -> bool:
-        """Whether ``m`` waits for a Lean check before it lands: its own change is a Lean change (`queue.lean_change`) and its
-        title doesn't say ``two demos`` (`TWO_DEMOS`).  A two-demos PR's Lean is checked by the after-landing run's
-        lean-audit instead, which reverts it if it fails; its ready mark already passed the records gate."""
+        """Whether ``m`` waits for a Lean check before it lands: its own change is a Lean change (`queue.lean_change`), whatever
+        its PR's title says, since Lean that runs as code, a lock or the spec landed unchecked leaves a record the after-landing
+        lean-audit (`--no-regenerate`) finds stale."""
         if m.commit not in self._lean_of:
-            self._lean_of[m.commit] = lean_change(self.repo, m.commit) and not self._two_demos(m)
+            self._lean_of[m.commit] = lean_change(self.repo, m.commit)
         return self._lean_of[m.commit]
-
-    def _two_demos(self, m: Member) -> bool:
-        """Whether ``m``'s PR is titled for the two demos now (a PR retitled after its merge onto `next` counts), else as its
-        merge commit's subject has it."""
-        if self._prs is None:
-            self._prs = {p.number: p for p in self.q.github.open_prs()}
-        if m.pr in self._prs:
-            return TWO_DEMOS in self._prs[m.pr].title.lower()
-        subject = subprocess.run(["git", "log", "-1", "--format=%s", m.commit], cwd=self.repo, capture_output=True, text=True,
-                                 check=False).stdout
-        return TWO_DEMOS in subject.lower()
 
     def _lean_gate(self, drive: dict, chain: list[Member], k: int, dry_run: bool, reviewed: int | None = None) -> tuple[int, str]:
         """(the highest index of ``chain[:k]`` that may land, the Lean check whose regenerated locks land with it or another that
