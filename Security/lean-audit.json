@@ -836,51 +836,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "423796ebcfac7c2663f9f6e740b579340af6045e57a481b8c633b12b4298ed12"
+   "digest": "320f9a15aa98f16772c89e3d6cc3c694162b9e35f38d6bd2350dcdd6d2af0b3e"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "dddac7aa66d6d264227d917e7447bac5ea990b1c83ece572c99ef3bd704497b7"
+   "digest": "992c8b7e172aea000d6891b9a45659733d9b2d0d5dfa576b616f2ccb239215c8"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "897322d9e3499f0c5d1dfc0d64e0f13bf80937fc271895ffcc45226c2405e761"
+   "digest": "62a30b7d575662c7b7f5eedbaf252f82f6d6a56fa45993443411cf9b6c6b9e2a"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "22f53c618aad8b38a77efd68d63b6c1d75a293dee10435f7f509bc75f6c56cbe"
+   "digest": "3881377e089d7e58af30c379f0d4e1467dd3b3cea2d6ebaf161bc9b7244ad733"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "c13b7c2c6ced119ed4b0170005d530abd959d1496bb1f8908c14a52970f85d7d"
+   "digest": "7ab6d144d6a5e392e39904b3af2088a41c9828bd7d8424105be15b8b3eaeaf3b"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "40e68c261d133058ec4e8ab052baf2a855ecabe429ec19cf33cfdf28286547f4"
+   "digest": "b3bf9034910df2a716b5900134a39af8bf7d5263766fca7d0ae6d5fb48e38321"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "fea52280b34a843ee10bc6c16998984455f67766ea6243e51c72e2315cb3a872"
+   "digest": "b1f02a812138439cf9edab135b3d3067116300d1fe77490a25891f32ab2c4aeb"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "9e4b6320af2bb2e5b2d7ce2980c236bc26e2ca152798763f10e43cd16c8f0cf3"
+   "digest": "f0d7031608ca0575be1f8accc3ed0002f7c3d0acd750175107459efd7a9a4eab"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "eb8ab8fbdf0621b447308111483b5087464f83d814b54ecd141b7b264345a066"
+   "digest": "ec1d54e28c9f5c3f8e49feab9201a51b617c1b4ace6941577dddd52c61473c10"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "8f390e6ecfd6e0d24defbea6b8946067d5f3db6037a67f42f92cbb20b3ae1b36"
+   "digest": "51c1b3a5d00573de1cc71088f9b200c015b1dc7623396924c646ce1254843635"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "9a1b7dbdb646be6a20eef893d608b2fb11604201d0484fe85e6c9a435c5fb216"
+   "digest": "db00d7201422f8c9baa9ce1472966bc01ab847e16ec3c82faa0a1a54d89bbafe"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "33060b3c34ce9f8c9f6a089a54be6c1fc98c5ce02aa635b29d11a32a712c57d7"
+   "digest": "39e3492ff08ccffd2d382c8a53dd84e82ed997eacd053f4c6190ac0c848176da"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -916,7 +916,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "de2d084f26b4d981d8bfdbc9f18d3a5e57b442a590246b2132cf0bf2d8f81bbd"
+   "digest": "2b3694e00e3ee554cc994e062c0ce8789babb0b816234bf1d3e992289bd1bcc4"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -940,35 +940,35 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "575f18e4fabe11c99041fc391135b30be461a789616fbcfb657384b3f3da8b7a"
+   "digest": "279a509ec8f7b128c3cc74ba41f80376594cb5485a946d3755f1be05a5f4ac6f"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "a5925ad4f93b0ae271df7d6e7b2c6ba407844527c2b60a909ef2b9e08d7c89b8"
+   "digest": "2a39508b2a711a6f4953e48ff6d6bde52437e13044b10c728ee44c2ef52bdf4b"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
-   "digest": "465ffb2d0c3a8b0fbf2e4e6a69e1b5c7342c472016b8070c9b6f9bb077ba2931"
+   "digest": "3259e8130e9a2a7aec64573c73eb87e9d4924b4c7001fdaf4db488fce59098e0"
   },
   "Flock.SoundAtBridge.RelOfRows": {
    "owner": "@proofs",
-   "digest": "ac1189245dd3f1b0a318fec2a4ad2d121b2756269066c83e587b1933b0256228"
+   "digest": "9202ba08f959034833d0f5384b618c8c4cf93b4cc24df9339256f7b2349b1d94"
   },
   "Flock.SoundAtBridge.RowsSession.CR": {
    "owner": "@proofs",
-   "digest": "8f0f96370f1f2f5793004ea2747d5613b15fbd904b7ef48bfcd68eb3cfff9883"
+   "digest": "c6a577e281b13735a77cb31eefd1ac6904d82bdb6da0d9f7943dfe542d232290"
   },
   "Flock.SoundAtBridge.RowsSession.RowsAt": {
    "owner": "@proofs",
-   "digest": "3c3a021b93db41dbaab9bc811a915dc232e595230ca2b40a8df8dcea38559937"
+   "digest": "31285ece8e90e8c22ec720b80b37955d25d67672c4ff1cac2fb3929b2ac482e7"
   },
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
-   "digest": "44aa3868162c39d9a24a69f88ba9d07f1c7fe7fd771da91dad3b035c8b28aab1"
+   "digest": "a9811ddd7123277026edf3731bb3297931cd062b455446b8e2504a1f01a7c2e6"
   },
   "Flock.SoundAtBridge.WindowLaw": {
    "owner": "@proofs",
-   "digest": "3b6cd14a1c73c3e4e8d3b636a705ad6f27410dc97fb82b7d3673bd0c80c5583b"
+   "digest": "f3469504387e920878b3d06dcd2b55029a2da291344dbb30ec050050d5b89a7c"
   },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs",
@@ -2541,76 +2541,6 @@
    "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class",
    "Claims.Sampling.CommitmentScheme.Binds": "a helper the claims read: a commitment scheme's binding, which `Binding` reads",
    "Claims.Json.Ascii": "a helper the claims read: a text of ASCII without DEL, which `JsonSpec` reads"
-  }
- },
- "witnesses": {
-  "Flock.SecurityProofs.RecursiveKS": {
-   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
-   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
-  },
-  "Nci.SecurityProofs.CapabilityFloor": {
-   "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
-   "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
-  },
-  "Nci.SecurityProofs.HeldBudget": {
-   "honest": ["Nci.SecurityProofs.HeldBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.HeldBudgetNontrivial"
-  },
-  "Nci.SecurityProofs.ImportOrRecompute": {
-   "honest": ["Nci.SecurityProofs.ImportOrRecomputeHonest"],
-   "nontrivial": "Nci.SecurityProofs.ImportOrRecomputeNontrivial"
-  },
-  "Nci.SecurityProofs.IncidenceCap": {
-   "honest": ["Nci.SecurityProofs.IncidenceCapHonest"],
-   "nontrivial": "Nci.SecurityProofs.IncidenceCapNontrivial"
-  },
-  "Nci.SecurityProofs.OperandCapJoint": {
-   "honest": ["Nci.SecurityProofs.OperandCapJointHonest"],
-   "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
-  },
-  "Nci.SecurityProofs.OperandCapSeparate": {
-   "honest": ["Nci.SecurityProofs.OperandCapSeparateHonest"],
-   "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
-  },
-  "Nci.SecurityProofs.RecomputeByGates": {
-   "honest": ["Nci.SecurityProofs.RecomputeByGatesHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecomputeByGatesNontrivial"
-  },
-  "Nci.SecurityProofs.RecomputeByState": {
-   "honest": ["Nci.SecurityProofs.RecomputeByStateHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecomputeByStateNontrivial"
-  },
-  "Nci.SecurityProofs.RecoveredBudget": {
-   "honest": ["Nci.SecurityProofs.RecoveredBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecoveredBudgetNontrivial"
-  },
-  "Nci.SecurityProofs.StatHeldBudget": {
-   "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial"
-  },
-  "Nci.SecurityProofs.WeightedProductCap": {
-   "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
-   "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial"
-  },
-  "Pous.SecurityProofs.ObligationWide320": {
-   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
-   "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.FleetSound": {
-   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.WorkMoment": {
-   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.WorkSound": {
-   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
-  },
-  "Pouw.SecurityProofs.OnsiteFreed": {
-   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
-   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
   }
  },
  "layers": {
@@ -19260,14 +19190,13 @@
    ]
   },
   "Definitions.Core.Accel.Card": {
-   "digest": "8f54519a61935cb149e9503c9b1db4b8f2250bd76666a6ddf04ca4efb5a9a87d",
+   "digest": "fbd57f4c046ea41377b609673514a04f35df2d42508738dba63e17eab133dc88",
    "definitions": {
     "Verity.Accel.Card": "428e0398432b8c5785c4d2ba9d51ef7edb29b2f3dafd5f5e5334a5d202a35411",
     "Verity.Accel.Card.Exact": "f13b0004040c17242c244b1336f78520617d481e56e477b018c872f9d707bafd",
     "Verity.Accel.Card.Loc": "5ea92fb1896a39cc29338436e8db010074e95d12fbbb213f6f26c9969f81fed4",
     "Verity.Accel.Card.Mem": "bd025954710aac21d13601c5fc140b714e727b976526ff4ccfe3ba40f7f7b36b",
     "Verity.Accel.Card.exact": "6afcadb9ea74eaeaecaab20f8360209abe2ac75279862e70bbbb3e5f16d06c62",
-    "Verity.Accel.Card.machine": "a69177d09f658da87563e2a0eeeb51c6761214a2b0a7f694b3db96365ed21e97",
     "Verity.Accel.Card.size": "c30924c4ff54c3d2f36e1f5e60dce96fc961bf4051dcdda311600fca015bf168",
     "Verity.Accel.Card.text": "9022c508938b1e3bbcebe9cc8306c3874fe9959d6b7d4d4efd048e31e30893ff",
     "Verity.Accel.Card.use": "62f1b838f5a78fb00908d8b6f23b0b1e749e0963220518e472659c7ba3ec708c",
@@ -22530,9 +22459,9 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Flock.Guarantees.RecursionClaims": {
-   "digest": "1a62e47b547370dc7b810bb9ae7e991d965f9f0a9baeec15b2d68edbeca6bc8a",
+   "digest": "c199c85fa24c7b91f2e41db3eafcc9ee117261a2c413bdec0968db72e5863a19",
    "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "8f18e8f756910f940696e8402f3b721963d38cedabda4e43fa6c9785c3ed6ba7"
+    "Flock.Guarantees.RecursionClaimsStated": "4e79db28cf89e670d359e47ea661cdd6db5ef6c2e30501cae8739c3aa8e50587"
    },
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
@@ -61724,5 +61653,75 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Flock.SecurityProofs.RecursiveKS": {
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
+   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "Nci.SecurityProofs.CapabilityFloor": {
+   "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
+   "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
+  },
+  "Nci.SecurityProofs.HeldBudget": {
+   "honest": ["Nci.SecurityProofs.HeldBudgetHonest"],
+   "nontrivial": "Nci.SecurityProofs.HeldBudgetNontrivial"
+  },
+  "Nci.SecurityProofs.ImportOrRecompute": {
+   "honest": ["Nci.SecurityProofs.ImportOrRecomputeHonest"],
+   "nontrivial": "Nci.SecurityProofs.ImportOrRecomputeNontrivial"
+  },
+  "Nci.SecurityProofs.IncidenceCap": {
+   "honest": ["Nci.SecurityProofs.IncidenceCapHonest"],
+   "nontrivial": "Nci.SecurityProofs.IncidenceCapNontrivial"
+  },
+  "Nci.SecurityProofs.OperandCapJoint": {
+   "honest": ["Nci.SecurityProofs.OperandCapJointHonest"],
+   "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
+  },
+  "Nci.SecurityProofs.OperandCapSeparate": {
+   "honest": ["Nci.SecurityProofs.OperandCapSeparateHonest"],
+   "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
+  },
+  "Nci.SecurityProofs.RecomputeByGates": {
+   "honest": ["Nci.SecurityProofs.RecomputeByGatesHonest"],
+   "nontrivial": "Nci.SecurityProofs.RecomputeByGatesNontrivial"
+  },
+  "Nci.SecurityProofs.RecomputeByState": {
+   "honest": ["Nci.SecurityProofs.RecomputeByStateHonest"],
+   "nontrivial": "Nci.SecurityProofs.RecomputeByStateNontrivial"
+  },
+  "Nci.SecurityProofs.RecoveredBudget": {
+   "honest": ["Nci.SecurityProofs.RecoveredBudgetHonest"],
+   "nontrivial": "Nci.SecurityProofs.RecoveredBudgetNontrivial"
+  },
+  "Nci.SecurityProofs.StatHeldBudget": {
+   "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
+   "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial"
+  },
+  "Nci.SecurityProofs.WeightedProductCap": {
+   "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
+   "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial"
+  },
+  "Pous.SecurityProofs.ObligationWide320": {
+   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
+   "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.FleetSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkMoment": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
+  }
  }
 }

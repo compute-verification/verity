@@ -465,59 +465,6 @@
   "Properties.Core",
   "CoreProtocol.Site"
  ],
- "witnesses": {
-  "Properties.Site.refuses": {
-   "honest": ["Properties.Site.refuses_honest"],
-   "nontrivial": "Properties.Site.refuses_nontrivial"
-  },
-  "Properties.Site.entryValid": {
-   "honest": ["Properties.Site.entryValid_honest"],
-   "nontrivial": "Properties.Site.entryValid_nontrivial"
-  },
-  "Properties.Site.checks": {
-   "honest": ["Properties.Site.checks_honest"],
-   "nontrivial": "Properties.Site.checks_nontrivial"
-  },
-  "Properties.Site.refusedAt": {
-   "honest": ["Properties.Site.refusedAt_honest"],
-   "nontrivial": "Properties.Site.refusedAt_nontrivial"
-  },
-  "Verity.soundness_at_of_targets": {
-   "honest": ["Verity.soundness_at_of_targets_honest"],
-   "nontrivial": "Verity.soundness_at_of_targets_nontrivial"
-  },
-  "Verity.soundness_of_subprotocols": {
-   "honest": ["Verity.soundness_of_subprotocols_honest"],
-   "nontrivial": "Verity.soundness_of_subprotocols_nontrivial"
-  },
-  "Verity.remote_soundness_of_subprotocols": {
-   "honest": ["Verity.remote_soundness_of_subprotocols_honest"],
-   "nontrivial": "Verity.remote_soundness_of_subprotocols_nontrivial"
-  },
-  "Properties.Composition.acceptSame": {
-   "honest": ["Properties.Composition.acceptSame_honest"],
-   "nontrivial": "Properties.Composition.acceptSame_nontrivial"
-  },
-  "Properties.Composition.acceptTied": {
-   "honest": ["Properties.Composition.acceptTied_honest"],
-   "nontrivial": "Properties.Composition.acceptTied_nontrivial"
-  },
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "nontrivial": "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
-  },
-  "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
-   "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
-   "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
-  }
- },
- "unwitnessed": {
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
-   "missing": "honest",
-   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov"
-  },
-  "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64"
- },
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
@@ -6004,6 +5951,9 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
+    "Properties.Pouw.Served.SecurityProofs.servedFreed",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
@@ -10617,6 +10567,10 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Pous.Component.SecurityProofs.runAccepts",
     "Pous.Component.SecurityProofs.runAccepts_by",
@@ -10668,6 +10622,9 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
+    "Properties.Pouw.Served.SecurityProofs.servedFreed",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
@@ -12061,13 +12018,6 @@
     "Flock.Tables.refs": "0601241d9226aa8eead0d12246fc77a58b46f0cb35e82b9efbdf3979b40bc8ee"
    },
    "guarantees": [
-    "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
-    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
-    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
-    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
-    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
-    "Properties.Pouw.Served.SecurityProofs.servedFreed",
-    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -12808,6 +12758,9 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
+    "Properties.Pouw.Served.SecurityProofs.servedFreed",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -12861,7 +12814,7 @@
    ]
   },
   "Flock.TemplateQuery": {
-   "digest": "a2ebdcdd43663270963f02b80b3e15e97a00d22e16e56dfbc1348ffcdba82a00",
+   "digest": "2110bea93f288045b36c7a320f9b92778815f41015aa16dc953321e78ca06090",
    "definitions": {
     "Flock.TemplateQuery.DDef": "645f008e487ba991572c3d7659e26904c597f4992a45203064a039b8390c5c25",
     "Flock.TemplateQuery.DDef.nodes": "b1e5faa09c8fdd900e35d000003880cda625866e44f4dbade582562d61802677",
@@ -12877,7 +12830,7 @@
     "Flock.TemplateQuery.Desc.defs": "a466ca8d691807d57e076170a41ac696cafde709cdf171d5f214cd3035cb666a",
     "Flock.TemplateQuery.Desc.gates": "90ed4812c8d8ad8feea377aa03e417eddae2e141bbcde1b42d4ba94be4fa4113",
     "Flock.TemplateQuery.Desc.gatesIn": "7277f0bd54b0c17cd460853a99457fa1c8c46279ff068076d9ef5c7b97013c72",
-    "Flock.TemplateQuery.Desc.parse": "1e14d3a1fb59e9cddc8b39bb040eefc8207752b4a9be9f0702631e149bc39722",
+    "Flock.TemplateQuery.Desc.ofProg": "ca9b2d923236232dd7f5fa741b8bd3ec89d5d96eb279de359c182caf5f949c73",
     "Flock.TemplateQuery.Desc.parseWith._sparseCasesOn_16": "821c18dc4a3b4c5b5fa4cd1b65b3c4464e5e55ec1971a78fc3912b369a757238",
     "Flock.TemplateQuery.Desc.parseWith._sparseCasesOn_5": "92d43a739fcb8f26375185d8f4792a3c360176763d38954bb1b4e3ad1041f93c",
     "Flock.TemplateQuery.Desc.parseWith._sparseCasesOn_6": "34fa5698cb6f16d57b2dcca9e9d39937d7490d0358d2b268cc5a449419ee6bb3",
@@ -21269,11 +21222,11 @@
    ]
   },
   "SampledProofs.Program": {
-   "digest": "9c804bce004b30f8fcb0b8e912b37d4f9863d17582b4114a9fc125a2fc5b2e99",
+   "digest": "a2a82c753de02c31f051781c706bb99b13c2feadbef06cb9f46c1fdc6c95a271",
    "definitions": {
     "SampledProofs.Program": "31a73ce4905ce2fea0fa7c4f4074665040c84c0a93d9bae0902fc6e061a5380c",
     "SampledProofs.Program.desc": "099496f6824d125546c7a15b7d6662309dcba3ec4ae4e14be56e3d12a59d1b36",
-    "SampledProofs.Program.parse": "266b999502bc30a2be45ada226b42c733124218c919f206647bb50e351f2e36f",
+    "SampledProofs.Program.parse": "fe9cb83baf57ff624d1eac006015ab074b224ece1aebb725c4ff5a4e61982356",
     "SampledProofs.Program.prog": "30b217f2e8294faa98af57e78bf9a4da7f30f24a55ca0788d3dd9139aa27e459",
     "SampledProofs.Program.sha512": "73c772f6726f33b5783f916f1af4ffb2af65e234c4f674b30b08af6ac583b25e"
    },
@@ -21713,6 +21666,59 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Properties.Site.refuses": {
+   "honest": ["Properties.Site.refuses_honest"],
+   "nontrivial": "Properties.Site.refuses_nontrivial"
+  },
+  "Properties.Site.entryValid": {
+   "honest": ["Properties.Site.entryValid_honest"],
+   "nontrivial": "Properties.Site.entryValid_nontrivial"
+  },
+  "Properties.Site.checks": {
+   "honest": ["Properties.Site.checks_honest"],
+   "nontrivial": "Properties.Site.checks_nontrivial"
+  },
+  "Properties.Site.refusedAt": {
+   "honest": ["Properties.Site.refusedAt_honest"],
+   "nontrivial": "Properties.Site.refusedAt_nontrivial"
+  },
+  "Verity.soundness_at_of_targets": {
+   "honest": ["Verity.soundness_at_of_targets_honest"],
+   "nontrivial": "Verity.soundness_at_of_targets_nontrivial"
+  },
+  "Verity.soundness_of_subprotocols": {
+   "honest": ["Verity.soundness_of_subprotocols_honest"],
+   "nontrivial": "Verity.soundness_of_subprotocols_nontrivial"
+  },
+  "Verity.remote_soundness_of_subprotocols": {
+   "honest": ["Verity.remote_soundness_of_subprotocols_honest"],
+   "nontrivial": "Verity.remote_soundness_of_subprotocols_nontrivial"
+  },
+  "Properties.Composition.acceptSame": {
+   "honest": ["Properties.Composition.acceptSame_honest"],
+   "nontrivial": "Properties.Composition.acceptSame_nontrivial"
+  },
+  "Properties.Composition.acceptTied": {
+   "honest": ["Properties.Composition.acceptTied_honest"],
+   "nontrivial": "Properties.Composition.acceptTied_nontrivial"
+  },
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "nontrivial": "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
+   "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
+   "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
+  }
+ },
+ "unwitnessed": {
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
+   "missing": "honest",
+   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov"
+  },
+  "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64"
  },
  "guarantee_lemmas": {
   "witnesses": {
