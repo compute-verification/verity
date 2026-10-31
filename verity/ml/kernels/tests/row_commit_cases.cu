@@ -2,12 +2,15 @@
 // (`-x c++`) it runs them on the host, and built by nvcc also on the device, a thread a case.
 #include "../row_commit.cuh"
 
-namespace {
+// Named: the extern "C" entry points take its Case and Out, and nvcc gives a function whose parameter types have internal
+// linkage internal linkage too, which would hide rc_cases and rc_cases_cuda from ctypes.
+namespace rcc {
 
 using rc::u64;
 
 enum Kind { LEAF, PAD, NODE, HM96, EMPTY, LEAF_AT };
-// LEAF, PAD, NODE: 0 compile-time nb, 1 run-time nb. HM96: the table and loop of the mask, and the frame leaf's nb.
+// LEAF, PAD, NODE: 0 compile-time nb, 1 run-time nb; NODE 2 run-time through Compact. HM96: the table and loop of the
+// mask, and the frame leaf's nb.
 constexpr int HM96_FORMS = 5;
 
 struct Case {
@@ -115,7 +118,8 @@ RC_HD int run(const Case& k, const Tabs& T, rc::FrameK& F, rc::NodeK& N, Out& o)
       words(k.L, L, 8);
       words(k.R, R, 8);
       if (k.form == 0) rc::node(N, k.level, k.pos, L, R, d);
-      else rc::node_rt(N, k.level, k.pos, L, R, d);
+      else if (k.form == 1) rc::node_rt(N, k.level, k.pos, L, R, d);
+      else rc::node_rt<rc::Compact>(N, k.level, k.pos, L, R, d);
       break;
     case EMPTY:
       rc::empty_root(k.did, d);
@@ -142,6 +146,8 @@ RC_HD int run(const Case& k, const Tabs& T, rc::FrameK& F, rc::NodeK& N, Out& o)
 }
 
 }  // namespace
+
+using namespace rcc;
 
 extern "C" int rc_case_bytes() { return (int)sizeof(Case); }
 extern "C" int rc_out_bytes() { return (int)sizeof(Out); }
