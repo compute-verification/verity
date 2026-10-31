@@ -771,9 +771,8 @@ class Store:
             ys = self.receipts_at(ps, c * PER_LEAF, min((c + 1) * PER_LEAF, ps.positions))
             bb, salt = r.info.block_bytes, self.salt(ps.seed, c)
             out.append(BlockOpening(j, position, r.info.first + b, seg.region, r.info.tier, self.kind_now(seg.region, b),
-                                    r.backing.read(b * bb, bb), ys[position % PER_LEAF], tuple(ys),
-                                    self.source(seg.region, b), salt, Opening(c, rb.hidden(b"".join(ys), salt),
-                                                                              tuple(path))))
+                                    r.backing.read(b * bb, bb), ys[position % PER_LEAF], tuple(ys), self.source(seg.region, b),
+                                    salt, Opening(c, rb.hidden(b"".join(ys), salt), tuple(path))))
         return out
 
 
