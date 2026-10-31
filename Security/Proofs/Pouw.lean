@@ -205,7 +205,9 @@ import Proofs.Pouw.Writes
 /-!
 # PoUW's proofs
 
+`Writes` holds the proofs of what writing distinct words costs, one `Pouw.SecurityProofs.Writes.G` a guarantee.
+
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
-`Game`, `NCP`, `PearlC`, `Receipt`, `Writes`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
+`Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
 -/

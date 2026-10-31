@@ -9,8 +9,9 @@ The instance the honest lemma is about. These are specs of the served code, to b
 difftest names them yet.
 
 * **The commitment** (`l1wCommit`, the layout `l1w`, the served committer's): a call's A and its forward's words are
-  hm96 instances, each hiding one frame-v3 tree under its own domain (`Pouw.Assumptions.SubtreeLayout`),
-  `Hash.Tree.root` under `Hash.Hm96.leaf`.
+  hm96 instances, each hiding one frame-v3 tree under its own domain, `Hash.Tree.root` under `Hash.Hm96.leaf`. The
+  served digest is the keyed leaf over the tree's top message; this model's hm96 leaf stands in for it until the
+  instance roots are restated as keyed.
   - **Positions.** A window's instances are forward `f`'s call `j`'s A at `f · calls + j` (`aPos`), one a call, and
     forward `f`'s words at `2^63 + f` (`wordsPos`), one a forward, with `calls` the window's calls a forward.
   - **Domains.** The instance at position `p` with `count` leaves has the range-indexed domain of owner −1 over
