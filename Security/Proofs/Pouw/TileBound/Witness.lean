@@ -21,7 +21,7 @@ open Finset Pouw.PearlC.Fp4
 variable {τ : Type*} [Fintype τ] {β : Type*} [Fintype β] {γ : Type*} [Fintype γ]
 
 /-- Code 1.0 at `P[0, 0]`, every other code 0, every scale 1.0: the firing that carries `(e_(0,0), 0)`. -/
-def oneGateP : Gate where
+def oneGateP : Firing where
   p i l := if i.val = 0 ∧ l.val = 0 then 2 else 0
   ps _ _ := 0x38
   q _ _ := 0
@@ -29,7 +29,7 @@ def oneGateP : Gate where
   acc _ _ := 0
 
 /-- Code 1.0 at `Q[0, 0]`, every other code 0, every scale 1.0: the firing that carries `(0, e_(0,0))`. -/
-def oneGateQ : Gate where
+def oneGateQ : Firing where
   p _ _ := 0
   ps _ _ := 0x38
   q l j := if l.val = 0 ∧ j.val = 0 then 2 else 0
@@ -37,11 +37,11 @@ def oneGateQ : Gate where
   acc _ _ := 0
 
 theorem oneGateP_exact : oneGateP.Exact := by
-  unfold Gate.Exact
+  unfold Firing.Exact
   decide +kernel
 
 theorem oneGateQ_exact : oneGateQ.Exact := by
-  unfold Gate.Exact
+  unfold Firing.Exact
   decide +kernel
 
 theorem oneGateP_p : ∀ i l, elemValue (oneGateP.p i l) (oneGateP.ps i (scaleIdx l)) =
@@ -81,7 +81,7 @@ theorem oneGateProg_realizesAt_Q :
 honest one-gate program, with live entries `x = (0, 0)` and `y = (0, 0)`: exact `sm120Nvf4` firings realize it at
 `(e_x, e_y)`, `(e_x, 0)` and `(0, e_y)`, and output `X·Y` there. -/
 theorem oneGateProg_gates : ∀ x : Fin 16 × Fin 64, x = (0, 0) → ∀ y : Fin 64 × Fin 8, y = (0, 0) →
-    ∃ g11 g10 g01 : Fin 1 → Gate,
+    ∃ g11 g10 g01 : Fin 1 → Firing,
       oneGateProg.RealizesAt g11 (unitForm x) (unitForm y) ∧ oneGateProg.RealizesAt g10 (unitForm x) 0 ∧
         oneGateProg.RealizesAt g01 0 (unitForm y) ∧
       ∀ o, oneGateProg.outAt g11 o = matMul (unitForm x) (unitForm y) o ∧
@@ -123,7 +123,7 @@ and meets `tile_cost_ge_of_gates`' three-input hypothesis on a live pair, and th
 chain from exact `sm120Nvf4` firings to the cost bound applies to a real program. -/
 theorem tile_chain_satisfiable : ∃ P : TileProg ℚ 16 64 8 1, P.Representable (nvfp4X 16 64) ∧
     (∀ x : Fin 16 × Fin 64, x = (0, 0) → ∀ y : Fin 64 × Fin 8, y = (0, 0) →
-      ∃ g11 g10 g01 : Fin 1 → Gate,
+      ∃ g11 g10 g01 : Fin 1 → Firing,
         P.RealizesAt g11 (unitForm x) (unitForm y) ∧ P.RealizesAt g10 (unitForm x) 0 ∧
           P.RealizesAt g01 0 (unitForm y) ∧
         ∀ o, P.outAt g11 o = matMul (unitForm x) (unitForm y) o ∧ P.outAt g10 o = matMul (unitForm x) 0 o ∧

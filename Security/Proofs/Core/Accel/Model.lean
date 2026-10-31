@@ -201,7 +201,7 @@ theorem changed_writeIn (t s : Store) (x : Operand) (M₀ M : m.Mem) (w : Word) 
   · exact changed_update t M (m.loc s ((M₀ (m.loc .reg r)).toNat + off)) w
   · simp [Operand.writeIn, Operand.locIn, changed_self]
 
-theorem changed_foldl (t : Store) (o : Op m.sem) (dst : Fin o.nOut → Operand) (M₀ : m.Mem)
+theorem changed_foldl (t : Store) (o : Opcode m.sem) (dst : Fin o.nOut → Operand) (M₀ : m.Mem)
     (v : Fin o.nOut → Word) : ∀ (l : List (Fin o.nOut)) (M : m.Mem),
       (changed t M (l.foldl (fun M' i => (dst i).writeIn (o.outStore i) M₀ M' (v i)) M)).card ≤
         (l.filter fun i => o.outStore i = t).length
@@ -219,7 +219,7 @@ theorem changed_foldl (t : Store) (o : Op m.sem) (dst : Fin o.nOut → Operand) 
       rw [List.filter_cons_of_neg (by simpa using h)]
       omega
 
-theorem changed_execOp (t : Store) (o : Op m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand)
+theorem changed_execOp (t : Store) (o : Opcode m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand)
     (pred : Option (ℕ × ℕ)) (M : m.Mem) :
     (changed t M (execOp o src dst pred M)).card ≤ ((List.finRange o.nOut).filter fun i => o.outStore i = t).length := by
   simp only [execOp]
@@ -232,22 +232,22 @@ theorem port_ne_reg {t : Store} {r : Res} (h : port t r = 1) : t ≠ .reg := by
   cases r <;> simp [port] at h
 
 /-- An opcode writes at most its units of resource `r` in the store `r` prices. -/
-theorem outTo_le_use (t : Store) (r : Res) (h : port t r = 1) (o : Op m.sem) :
+theorem outTo_le_use (t : Store) (r : Res) (h : port t r = 1) (o : Opcode m.sem) :
     ((((List.finRange o.nOut).filter fun i => o.outStore i = t).length : ℕ) : ℚ≥0) ≤ m.card.use o r := by
   have ht := port_ne_reg h
   cases o with
-  | mma o sh sa sb => simp [Op.outStore, Ne.symm ht]
-  | mmaSp o sh sa sb => simp [Op.outStore, Ne.symm ht]
-  | lane o => simp [Op.outStore, Ne.symm ht]
+  | mma o sh sa sb => simp [Opcode.outStore, Ne.symm ht]
+  | mmaSp o sh sa sb => simp [Opcode.outStore, Ne.symm ht]
+  | lane o => simp [Opcode.outStore, Ne.symm ht]
   | move s t' n k =>
     by_cases e : t' = t
     · subst e
-      rw [List.filter_eq_self.mpr (fun i _ => by simp [Op.outStore]), List.length_finRange]
+      rw [List.filter_eq_self.mpr (fun i _ => by simp [Opcode.outStore]), List.length_finRange]
       show ((k * n : ℕ) : ℚ≥0) ≤ slot (((max k 1 : ℕ) : ℚ≥0) / 32) r + (n : ℚ≥0) * port s r +
         ((k * n : ℕ) : ℚ≥0) * port t' r + if s = .reg ∧ t' = .reg ∧ r = .alu then ((k * n : ℕ) : ℚ≥0) else 0
       rw [h, mul_one]
       exact le_add_right (le_add_left le_rfl)
-    · simp [Op.outStore, e]
+    · simp [Opcode.outStore, e]
   | atom s a =>
     by_cases e : s = t
     · subst e
@@ -262,13 +262,13 @@ theorem outTo_le_use (t : Store) (r : Res) (h : port t r = 1) (o : Op m.sem) :
   | red s t' n a =>
     by_cases e : t' = t
     · subst e
-      rw [List.filter_eq_self.mpr (fun i _ => by simp [Op.outStore]), List.length_finRange]
+      rw [List.filter_eq_self.mpr (fun i _ => by simp [Opcode.outStore]), List.length_finRange]
       show (n : ℚ≥0) ≤ slot (1 / 32) r + (n : ℚ≥0) * (port s r + port t' r + regWr t' r)
       rw [h]
       calc (n : ℚ≥0) = n * 1 := (mul_one _).symm
         _ ≤ n * (port s r + 1 + regWr t' r) := by gcongr; exact le_add_right (le_add_left le_rfl)
         _ ≤ _ := le_add_left le_rfl
-    · simp [Op.outStore, e]
+    · simp [Opcode.outStore, e]
 
 theorem changed_step {Θ : Type} [DecidableEq Θ] (t : Store) (r : Res) (h : port t r = 1) (P : m.Prog Θ)
     (σ : m.State Θ) (θ : Θ) :
