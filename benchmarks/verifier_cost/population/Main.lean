@@ -2,10 +2,11 @@ import SampledProofs
 
 /-!
 `population-time FILE [--no-ref]`: on one `{"descriptor", "query", "population"}` input, `Partition.unitGates` (which runs
-as `unitGatesFast`), `Slots.popOk` (the run's `population-order` check, through `Slots.layout`) and, unless `--no-ref`,
-the per-unit reference (`TemplateQuery.gates` on every unit, as `unitGates` first ran), each timed after the program is
-parsed, one `PHASE {json}` line each on stdout; exit 1 if the reference's gates differ from `unitGates`' or `popOk`
-fails. `population.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
+as `unitGatesFast`), `Slots.popOk` (the run's `population-order` check, which runs from the ranges as
+`Slots.popOkRanges`) and, unless `--no-ref`, the per-unit reference (`TemplateQuery.gates` on every unit, as `unitGates`
+first ran) and `popOk` as stated, off `Slots.layout`'s population, at the population and either side of it, each timed
+after the program is parsed, one `PHASE {json}` line each on stdout; exit 1 if the reference's gates differ from
+`unitGates`', the layout's `popOk` from the ranges', or `popOk` fails. `population.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
 -/
 
 open Lean SampledProofs
@@ -31,6 +32,12 @@ def row (fn : String) (units ms : Nat) (extra : List (String × Json)) : IO Unit
   IO.println s!"PHASE {(Json.mkObj ([("fn", Json.str fn), ("units", toJson units), ("ms", toJson ms),
     ("hwm_mb", toJson (hwm / 1024))] ++ extra)).compress}"
   (← IO.getStdout).flush
+
+/-- `Slots.popOk` as it is stated, off `Slots.layout`'s population. -/
+def popOkLayout (p : Program) (q : Json) (n : Nat) : Bool :=
+  match Slots.layout p q with
+  | .error _ => false
+  | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
 
 def main (args : List String) : IO UInt32 := do
   let (path, ref) ← match args with
@@ -60,4 +67,11 @@ def main (args : List String) : IO UInt32 := do
     if !agree then
       IO.eprintln "the per-unit reference and unitGates disagree"
       return 1
+    for m in [n, n - 1, n + 1] do
+      let (lay, ms) ← timed (fun t => t != 0 && popOkLayout p q m) fun b => if b then 1 else 0
+      let ranges := Slots.popOk p q m
+      row "popOkLayout" m ms [("ok", toJson lay), ("agree", toJson (lay == ranges))]
+      if lay != ranges then
+        IO.eprintln s!"popOk from the ranges and from the layout disagree at {m} units"
+        return 1
   return 0
