@@ -10253,6 +10253,26 @@
    "assumptions": [],
    "type_hash": "dbc16b927c72148b229641b69ab46b88b73482f6c059778c4da6c1a469627519"
   },
+  "Pouw.SecurityProofs.Lead.Tail.G_tail": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Tail.G_tail : Pouw.Guarantees.Lead.G_tail"],
+   "assumptions": []
+  },
+  "Pouw.SecurityProofs.Lead.Tail.gapFixedAt": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Tail.gapFixedAt : Pouw.Guarantees.Lead.GapFixedAt"],
+   "assumptions": []
+  },
+  "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Tail.nontrivialTail : Pouw.Guarantees.Lead.NontrivialTail"],
+   "assumptions": []
+  },
+  "Pouw.SecurityProofs.Lead.Tail.tailAt": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Tail.tailAt : Pouw.Guarantees.Lead.TailAt"],
+   "assumptions": []
+  },
   "Pouw.SecurityProofs.NCP.BiasU8Iff": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.NCP.BiasU8Iff : Pouw.Guarantees.NCP.BiasU8Iff"],
@@ -13118,6 +13138,10 @@
    "Pouw.SecurityProofs.Lead.Network.networkFwd": "lemma: a forward's network term from its bits, over the forward model of Definitions.Pouw.Lead.Forward under SerialForwards, not a property of a Lean function of the code.",
    "Pouw.SecurityProofs.Lead.Network.networkLlama": "lemma: the network term of a forward of Llama-3.2-1B's linears as a share of its calls' served stock, an evaluation over the forward model of Definitions.Pouw.Lead.Forward, not a property of a Lean function of the code.",
    "Pouw.SecurityProofs.Lead.Statement.gapAtDecode": "lemma: the gap at decode, the call committed padded to 16 rows, as a share of the one served row's stock, an evaluation of the defined function Pouw.Lead.gapServed, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Tail.G_tail": "frozen (no-function,hash): G's tail form under G's premises: the share of the certifier's entropy values at whose coins a strategy the node can run is accepted, hashes no SHA-512 collision with the honest commitment's messages and works below the honest work less the fixed gap is at most etaLead; over the strategy model of Definitions.Pouw.Lead.Model, not a Lean function of the code, so it has no acceptance to take.",
+   "Pouw.SecurityProofs.Lead.Tail.gapFixedAt": "lemma: the tail's fixed gap as a share of served stock at T 512 x 64, T 512 x 512, T 8,192 and decode for every call of n, K >= 4,096, an evaluation of the defined function Pouw.Lead.gapFixedServed, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Tail.tailAt": "lemma: etaLead at the three points and decode for calls of n, K >= 4,096 and at most 2^30 tiles, an evaluation of the defined functions Pouw.Lead.tableTail and Pouw.Lead.coinTail, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": "completeness: G_tail's nontrivial lemma: at the three points the honest work exceeds the fixed gap and etaLead < 1, so a strategy that does nothing falls in G_tail's event at every entropy value and its conclusion fails for a verifier that accepts everything.",
    "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their seconds summed, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance.",
    "Pouw.SecurityProofs.Dither.WorkMoment": "frozen (verdict): as WorkSound, before its Markov step: the per-replica moment over a quantified service verdict, which FleetSound pools (CMP-152, CMP-136).",
