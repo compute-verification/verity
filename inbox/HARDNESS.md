@@ -197,6 +197,17 @@ Everything else is engineering on parts we have.
     are below 1, so a per-matrix cheater runs the 7B at 0.987. That's a gap above 1%, so **E fails**.
   - The lead's verdict is unchanged.
 
+- **HT-SCALE Tier 1** (note:compute-research/20261031T1054Z-report-hardness-scale-125m; GPU, measured; 20M, 60M and
+  125M, D = 20N):
+  - **At κ_lin = 1/3 the penalty doesn't shrink with N.** Reservoir layers go 1.19 → 1.40 → 1.39 (P_env) and 1.11 → 1.20
+    → 1.34 (P_size). Per matrix on half the MLPs goes 1.21 → 1.37 → 1.32 and 1.13 → 1.20 → 1.29. The per-feature
+    arrangement is worst (1.34× at s50, 2.50× at s100).
+  - **u ≤ 0 at 125M:** the credited random compute is dead weight or worse in every arrangement.
+  - **350M is running.** The decision rule was written before any result: kill if P_env is above 1.49× (reservoir) or
+    1.41× (matrix). The node is needed until about 03:00Z Sun.
+  - **The coordinator's reading for the hybrid:** κ_lin = 1/3 at about 1.35× cuts the lead's hashed share by only a third,
+    so the hybrid saves little unless a far higher κ comes at a far lower P. No trend seen so far suggests it will.
+
 ## Lanes (notes: `lanes/compute-research/<ts>-report-hardness-<lane>.md`)
 
 | lane | modules | first deliverable |
