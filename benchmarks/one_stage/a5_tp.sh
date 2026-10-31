@@ -21,14 +21,14 @@
 #     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
 #     link-window with a5_warden.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
-#     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local) or the verifier's own (A5_COINS=verifier);
+#     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local);
 #     warden:altered reads one cell a bit off, and warden:pad, warden:pad-named and warden:swapped make the egress chunk's
 #     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
 #     audits that warden run instead of rehearsing one (e.g. warden_replay.py's, a served window's traffic through the
 #     warden), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_warden.py --units, default 16).
 #     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
 #     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,
-#     o_proj and down_proj at H = 2048), beside a drawn rest, on the verifier's own coins (A5_COINS=verifier); tp-gates:altered
+#     o_proj and down_proj at H = 2048), beside a drawn rest, on one local challenger session's coins (A5_CHALLENGER=local); tp-gates:altered
 #     moves a bit through rank 1's received partial, and tp-gates:swapped, tp-gates:other-collective, tp-gates:other-request
 #     and tp-gates:own make that port's statement for another read (--made-for); each is to be refused by Lean's registered
 #     reads on rank 1, rank 0 accepted.
@@ -56,9 +56,6 @@
 #   coins sized from every rank's sample, and not at all if one hasn't. The session's files, the ledger and the host's pins log are kept in
 #   $OUT/<name>/challenger/. The verifier's own copy of main's first-parent history (a5.py --main) is A5_MAIN, else this
 #   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/remote_session/auditor.sh writes it).
-# A5_COINS=verifier (instead of A5_CHALLENGER): each rank draws by its partition file's rule through its own service.Stream
-#   on the verifier's own live coins (a5.py --coins verifier: the Lean's IO.getRandomBytes, read once the stream received
-#   the rank's registration), no challenger session, so A5_JOBS takes any number of ranks. Its record says source: verifier.
 # A5_COMPOSE_CACHE=DIR: this machine's composed circuits (a5.py --compose-cache, compose_circuit.py --cache), so that the ranks
 #   audited here, in this run or another of the same tree, compose each chunked template once, and every later rank takes the
 #   kept circuit with its own partition and program (GLM-5.3's all-families draw composes ~95 min a rank without it).
@@ -161,7 +158,7 @@ audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKL
   mkdir -p $O/$1
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
     ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$1 \
-    ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_COINS:+--coins $A5_COINS} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
+    ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     ${MAIN:+--main $MAIN} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?
   grep '^A5' $O/$1/a5.log | cut -c1-4000; tail -25 $O/$1/a5.err
@@ -236,9 +233,7 @@ else
     if [ "${e%%:*}" = warden ]; then
       case $e in warden) REFUSE=();; warden:altered) REFUSE=(--altered);; warden:pad|warden:pad-named|warden:swapped) REFUSE=(--made-for ${e#warden:});;
         *) echo "STANDIN $e: warden, warden:altered, warden:pad, warden:pad-named or warden:swapped"; exit 3;; esac
-      if [ -n "${A5_COINS:-}" ]; then DRAW=(--coins $A5_COINS)
-      elif [ "${A5_CHALLENGER:-}" = local ]; then DRAW=(--challenger local --main $MAIN)
-      else echo "STANDIN $e draws through its stream: set A5_CHALLENGER=local or A5_COINS=verifier"; exit 3; fi
+      [ "${A5_CHALLENGER:-}" = local ] || { echo "STANDIN $e draws through its stream: set A5_CHALLENGER=local"; exit 3; }
       N=${e/:/-}; mkdir -p $O/$N
       if [ -n "${A5_WARDEN_RUN:-}" ] && [ ! -d $W/warden-run ]; then
         mkdir -p $O/warden-run && cp $A5_WARDEN_RUN/{deployment.json,cells.jsonl,check.json} $O/warden-run/ || exit 8
@@ -252,7 +247,7 @@ else
           $O/warden-run/check.json; exit 8; }
       fi
       $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
-        "${DRAW[@]}" "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
+        --challenger local --main $MAIN "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
       keep $N
@@ -263,9 +258,9 @@ else
         tp-gates:swapped|tp-gates:other-collective|tp-gates:other-request|tp-gates:own) REFUSE=(--made-for ${e#tp-gates:});;
         *) echo "STANDIN $e: tp-gates, tp-gates:altered, tp-gates:swapped, tp-gates:other-collective, tp-gates:other-request" \
              "or tp-gates:own"; exit 3;; esac
-      [ "${A5_COINS:-}" = verifier ] || { echo "STANDIN $e draws both ranks on the verifier's own coins: set A5_COINS=verifier"; exit 3; }
+      [ "${A5_CHALLENGER:-}" = local ] || { echo "STANDIN $e draws both ranks on one local challenger session: set A5_CHALLENGER=local"; exit 3; }
       N=${e/:/-}; mkdir -p $O/$N
-      $TIME $PY benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --coins verifier \
+      $TIME $PY benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --challenger local --main $MAIN \
         "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --compose-cache ${A5_COMPOSE_CACHE:-$W/compose}/tp-gates \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err

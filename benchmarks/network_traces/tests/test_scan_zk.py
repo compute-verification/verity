@@ -899,8 +899,9 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     assert sz.S.check_public(spec, record(want)).ok
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))
     assert not v.ok and "roots" in v.codes
-    stream = sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=lambda n: bytes(n))
-    assert stream.coin_source == "verifier"
+    with pytest.raises(ValueError, match="no coins of its own"):
+        sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=lambda n: bytes(n))
+    assert sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=sz.CC.ChallengerCoins(None)).digest
     with pytest.raises(ValueError, match="not the check's program"):
         sz.S.Stream(spec, units[::-1], budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)
     with pytest.raises(ValueError, match="generator form is over the scan's 3 templates"):

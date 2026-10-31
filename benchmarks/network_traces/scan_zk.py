@@ -1117,7 +1117,7 @@ def coins_outcome(a, coins: RC.RoundSession, spec: S.Spec, units: list, counts: 
                   negatives: bool = True) -> tuple[dict | None, dict, dict]:
     """A round's outcome of record once its challenger's session has ended (prove_path's `a5.coins_outcome`): its
     proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
-    `coin_source` challenger, its window the round's root) held to the Python's, the audit failing ``coins`` where
+    its window the round's root) held to the Python's, the audit failing ``coins`` where
     `coins.coins_reason` refuses; then, with `negatives`, each altered evidence (`a5_coins.negatives`, and the evidence
     for another window) as its own stream's outcome on the draw's bytes (`a5_coins.Replay`), refused where
     `coins_reason` refuses and the Lean's run refuses at its select. -> (the audit record, None where the stream refused
@@ -1161,7 +1161,7 @@ def coins_outcome(a, coins: RC.RoundSession, spec: S.Spec, units: list, counts: 
         neg[name] = {"refused": py is not None and accepted is False and step == AC.SELECT_COINS, "accepted": accepted,
                      "python": py, "lean": side}
     checks = (result or {}).get("checks") or {}
-    record = {"challenger": coins.challenger, "source": stream.coin_source, "window_root": root, "segment": segment,
+    record = {"challenger": coins.challenger, "source": "challenger", "window_root": root, "segment": segment,
               "read": read.hex(), "coins_reason": why, "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
     return result, neg, record
