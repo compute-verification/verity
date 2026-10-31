@@ -7,8 +7,8 @@ Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Sp
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
-        [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--draw K [--challenger local|gate:USER@HOST
-        --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
+        [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--v3c WINDOW] [--draw K [--challenger
+        local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
     python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
@@ -58,6 +58,15 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   names the scan's ``state`` tree as ``scan/state``, as an anchored Program's names the `SCAN_STATE` it reads, the tie
   the rows form checks next (`stateTied`); the stand-in reads no state, so here that tie is its registration's alone.
   Proved first; accepted, with no output opened.
+* **V3c's trees** (``--v3c WINDOW``, `v3c_trees`; a group of 1): in place of the scan's own, the trees V3c's window
+  (`prove_path.py window-commit`'s directory, at w63k4's class) committed before its coins: ``state`` its
+  `SCAN_STATE` (its registration's window activations entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
+  j's ``prog<j>`` chunk j's o0 of its `SELECT_ENTRY` template (``<descriptor id>/c<j>/o0`` in its ``roots``, the rows
+  and salts its member's prover body), each a `Held` tree at that registration's root and domain, refused by name where
+  its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
+  domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
+  audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
+  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`).
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`) in the generator form
   (`scan_root`, the form `NetworkCheck.Period`'s `scanOf` reads): the first unit (`IngressScanFirst`, bucket 0), G·T − 1
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
@@ -158,7 +167,7 @@ from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
-from typing import NamedTuple
+from typing import NamedTuple, Sequence
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -173,8 +182,10 @@ from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
 from verity.ml.circuits.types import Array, Tuple  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
-from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
+from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.ml.commitments.merkle import CommitmentDomain  # noqa: E402
 from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf,  # noqa: E402
                                            sha512_row_seg_digest)
 from verity.ml.crypto import lms  # noqa: E402
@@ -288,6 +299,11 @@ MEMBER_DEADLINE_S = 5 * 3600
 #: the format of ``answers.json`` (`answers`): the honest round's registration, the block's audit and each
 #: link-window's answer and rows
 ANSWERS = "verity/certifier/scan-answers/v2"
+#: in V3c's window directory (``--v3c``), its `SCAN_STATE`'s rows (u16 little-endian, row-major) and then their salts,
+#: prover only (`prove_path.py window-commit` writes it): its ``v<j>-private.bin`` holds only the rows its members read
+SCAN_STATE_FILE = "scan-state-private.bin"
+#: the Definition id of V3c's slot entries, whose chunk j's o0 is lane j's ``prog<j>`` (`NetworkCheck.Period`'s `wired`)
+SELECT_ENTRY = "SelectEntry_v1"
 
 
 def log(msg: str) -> None:
@@ -451,6 +467,33 @@ def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.C
     return ADV.commit([bit_row((_words(r), 16))[0] for r in rows], len(rows[0]), binding)
 
 
+class Held:
+    """A tree another registration committed, which the scan's proof blocks read in place of one of their own
+    (``--v3c``, `v3c_trees`): bit rows of ``n_bits`` under ``salts`` at ``domain``, of any owner, each leaf framed as
+    `advice` frames a row (`advice.leaf`), so its root is that registration's wherever its rows and salts are."""
+
+    def __init__(self, domain: CommitmentDomain, n_bits: int, rows: Sequence[bytes], salts: Sequence[bytes],
+                 key: bytes = ADV.INST.default_key) -> None:
+        if len(rows) != len(salts) or len(rows) != domain.count:
+            raise ValueError(f"a held tree is its domain's {domain.count} rows, a salt each")
+        self.domain, self.n_bits, self.rows, self.salts, self.key = domain, n_bits, tuple(rows), tuple(salts), key
+        self.leaves = tuple(ADV.leaf(domain, n_bits, i, r, s, key)
+                            for i, (r, s) in enumerate(zip(self.rows, self.salts)))
+        self.root = tree_scheme(self).root(ADV.PORT, self.leaves)
+
+    def open(self, i: int) -> ADV.Opening:
+        return ADV.Opening(i, self.rows[i], self.salts[i], tree_scheme(self).path(ADV.PORT, self.leaves, i))
+
+
+def tree_domain(reg: ADV.Committed | Held) -> CommitmentDomain:
+    """A tree's domain: a held tree's own, else its binding's over its rows (`advice.domain`)."""
+    return reg.domain if isinstance(reg, Held) else ADV.domain(reg.binding, len(reg.rows))
+
+
+def tree_scheme(reg: ADV.Committed | Held) -> FrameV3:
+    return FrameV3({ADV.PORT: Port(tree_domain(reg), BitRowLeaf(reg.n_bits))})
+
+
 def tree_bc(reg: ADV.Committed, i: int, bits: list[int] | None = None) -> bytes:
     """Row ``bits`` (leaf i's own row by default) committed under leaf i's salt, b‖c: as a statement's table row of it
     is, which opens leaf i only when the row is leaf i's."""
@@ -463,7 +506,7 @@ def tree_bc(reg: ADV.Committed, i: int, bits: list[int] | None = None) -> bytes:
 def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) -> dict:
     """The verifier's own ``--registered`` port of `kind`'s registration: unit ``reads_from + i`` reads leaf reads[i]."""
     n = len(reg.rows)
-    e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": ADV.domain(reg.binding, n).domain_id.hex()}
+    e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": tree_domain(reg).domain_id.hex()}
     port = produced.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
     return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})
 
@@ -483,7 +526,7 @@ def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | 
     if entry["value"] != port["value"]:
         return f"registered reads: the port reads {port['value']}, not another value ({entry['value']})"
     n, root = len(reg.rows), bytes.fromhex(port["root"])
-    d, scheme = ADV.domain(reg.binding, n), ADV._scheme(reg.binding, n, reg.n_bits)
+    d, scheme = tree_domain(reg), tree_scheme(reg)
     table: dict[int, bytes | None] = {}
     for i, r in enumerate(refs):
         table.setdefault(r, bcs[i])
@@ -668,15 +711,117 @@ def _unread(cls: IS.Class, ch, heads: list, session: bytes) -> SimpleNamespace |
     return None
 
 
-def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0) -> SimpleNamespace:
+def _u16(data: bytes) -> list[int]:
+    return [int.from_bytes(data[i:i + 2], "little") for i in range(0, len(data), 2)]
+
+
+def _v3c_refused(window: Path, why: str) -> SystemExit:
+    return SystemExit(f"--v3c {window}: {why}")
+
+
+def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
+    """V3c's `SCAN_STATE` (`ingress_scan.SCAN_STATE`): its entry in its registration's window activations (the
+    ``window`` provenance window-commit writes: ``activations.values``), its rows and salts the prover's
+    `SCAN_STATE_FILE`, under the domain that provenance gives (the window circuit's program and the window's run root,
+    `registered.domain`), held to the entry's root and domain and to the scan's ``states``."""
+    prov = rec.get("window") or {}
+    acts = prov.get("activations") or {}
+    e = (acts.get("values") or {}).get(IS.SCAN_STATE)
+    if not e or e.get("value") != IS.SCAN_STATE:
+        raise _v3c_refused(window, f"its registration's window activations register no {IS.SCAN_STATE}")
+    n, W = int(e["leaves"]), int(e["words"])
+    if n != len(states) or 16 * W != len(states[0]):
+        raise _v3c_refused(window, f"its {IS.SCAN_STATE} is {n} rows of {16 * W} bits, not the scan's {len(states)} "
+                                   f"of {len(states[0])}")
+    dom = REG.domain(acts.get("program", ""), IS.SCAN_STATE, W, n, window=prov.get("run"))
+    data = (window / SCAN_STATE_FILE).read_bytes()
+    if len(data) != n * (2 * W + ADV.INST.salt_bytes):
+        raise _v3c_refused(window, f"{SCAN_STATE_FILE} is {len(data)} bytes, not {n} rows of {W} words and their salts")
+    words, at, step = [_u16(data[2 * W * t:2 * W * (t + 1)]) for t in range(n)], 2 * W * n, ADV.INST.salt_bytes
+    held = Held(dom, 16 * W, tuple(bit_row((r, 16))[0] for r in words),
+                tuple(data[at + step * t:at + step * (t + 1)] for t in range(n)))
+    if (held.root.hex(), dom.domain_id.hex()) != (e["root"], e["domain"]):
+        raise _v3c_refused(window, f"{SCAN_STATE_FILE} under its provenance's domain isn't its registered "
+                                   f"{IS.SCAN_STATE}'s root and domain")
+    if bad := [t for t in range(n) if words[t] != _words(states[t])]:
+        raise _v3c_refused(window, f"its {IS.SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
+                                   "empty state of link-window 0): it scanned another warden run or link-window")
+    return held
+
+
+def v3c_entries(window: Path, rec: dict, win: dict, cls: IS.Class, entries: list[list[list[int]]]) -> dict[str, Held]:
+    """Each lane j's ``prog<j>``: chunk j's o0 of V3c's `SELECT_ENTRY` template, cut into one member a lane of nb
+    proof blocks (``<descriptor id>/c<j>``, block b slot j·nb + b's entry, the window's slots lane-major), its rows and
+    salts that member's prover body ``m<k>-private.bin`` (each instance's rows of its ports but the wired ones, then
+    their salts, `verity.ml.windows.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
+    its registration's ``roots`` name and to the scan's lane j ``entries``."""
+    nb, NE = len(entries[0]), IS.entry_bits(cls)
+    ms = [m for m in win.get("members") or () if str(m.get("template", "")).startswith(SELECT_ENTRY + "{")]
+    tids = sorted({m["template"] for m in ms})
+    shape = [(m["name"], m["n"]) for m in ms]
+    if len(tids) != 1 or shape != [(f"{tids[0]}/c{j}", nb) for j in range(cls.NR)]:
+        raise _v3c_refused(window, f"its {SELECT_ENTRY} members are {shape}, not one template's {cls.NR} chunks of "
+                                   f"{nb} proof blocks, a lane each")
+    roots = {r["port"]: r for r in rec.get("roots") or ()}
+    out = {}
+    for j, m in enumerate(ms):
+        if m.get("shared_rows") or m.get("value_rows"):
+            raise _v3c_refused(window, f"{m['name']} is a shared-row member, whose body lays its ports out whole")
+        wired = set(m.get("wired_rows") or ())
+        left = [(p, int(w)) for p, w in m["ports"] if p not in wired]
+        names = [p for p, _ in left]
+        width, w0 = sum(w for _, w in left), dict(left).get("o0")
+        fv, n = m["frame_v3"], int(m["n"])
+        if w0 is None or 16 * w0 != NE or fv["schemas"].get("o0") != BitRowLeaf.hiding_schema:
+            raise _v3c_refused(window, f"{m['name']}'s o0 isn't a {BitRowLeaf.hiding_schema} row of the scan's {NE}-bit "
+                                       "entries")
+        data = (window / f"m{m['k']}-private.bin").read_bytes()
+        if len(data) != n * (2 * width + ADV.INST.salt_bytes * len(left)):
+            raise _v3c_refused(window, f"m{m['k']}-private.bin is {len(data)} bytes, not {n} instances' rows of "
+                                       f"{names} and their salts")
+        off, k = sum(w for p, w in left[:names.index("o0")]), names.index("o0")
+        rows = [_u16(data[2 * (width * i + off):2 * (width * i + off + w0)]) for i in range(n)]
+        at, step = 2 * width * n, ADV.INST.salt_bytes
+        salts = tuple(data[at + step * (len(left) * i + k):at + step * (len(left) * i + k + 1)] for i in range(n))
+        dom = CommitmentDomain(bytes.fromhex(fv["bindings"]["o0"]), int(fv["owner"]), RangeIndexedDomain(0, n),
+                               hash="sha512")
+        held = Held(dom, NE, tuple(bit_row((r, 16))[0] for r in rows), salts)
+        theirs = roots.get(f"{m['name']}/o0") or {}
+        if not (held.root.hex() == fv["roots"]["o0"] == theirs.get("root")
+                and dom.domain_id.hex() == fv["domain_ids"]["o0"] == theirs.get("domain") and theirs.get("leaves") == n):
+            raise _v3c_refused(window, f"m{m['k']}-private.bin's o0 under its frame domain isn't the root and domain "
+                                       f"its registration names for {m['name']}/o0")
+        if bad := [b for b in range(n) if rows[b] != _words(entries[j][b])]:
+            raise _v3c_refused(window, f"{m['name']}'s o0 rows {bad[:4]} aren't the scan's lane {j} slot entries")
+        out[f"prog{j}"] = held
+    return out
+
+
+def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
+              entries: list[list[list[int]]]) -> dict[str, Held]:
+    """``--v3c``: the trees the scan reads of V3c's window ``window`` (`prove_path.py window-commit`'s directory), in
+    place of its own: ``state`` its `SCAN_STATE` (`v3c_state`) and each ``prog<j>`` chunk j's o0 of its
+    `SELECT_ENTRY` template (`v3c_entries`), each refused by name where it isn't the scan's."""
+    try:
+        rec = json.loads((window / "registration.json").read_text())
+        win = json.loads((window / "window.json").read_text())
+        return {"state": v3c_state(window, rec, states), **v3c_entries(window, rec, win, cls, entries)}
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise _v3c_refused(window, f"{type(e).__name__}: {e}") from None
+
+
+def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0,
+         v3c: Path | None = None) -> SimpleNamespace:
     """The run (`synthetic`, or `warden_run`'s of a warden_serve run), link-windows start … start + group − 1 of each
     link registered by the warden and read back by the verifier, the scan's chain over their rows from the empty state
     (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
     the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
-    egress link-window (`_tamper`)."""
+    egress link-window (`_tamper`). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`)."""
     t0 = time.time()
     if group < 1 or start < 0:
         raise SystemExit(f"a group is 1 or more link-windows from link-window 0 on, not {group} from {start}")
+    if v3c is not None and (group, start) != (1, 0):
+        raise SystemExit(f"--v3c: V3c's window is link-window 0's, a group of 1, not {group} from {start}")
     windows = list(range(start, start + group))
     got = synthetic(out, setup, windows) if run is None else warden_run(run, setup, windows, out)
     cls, T = setup.cls, got.params.window
@@ -699,10 +844,11 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
         raise SystemExit(f"the chain round swaps S_A and S_(A+1), state leaves A + 1 and A + 2, 1 <= A < "
                          f"{group * T - 2}")
     heads = [w.head for w in got.sides["ingress"]]
-    states = IS.window_state(cls, ch.states[1:], 0, group * T)
-    trees = {k: tree(k, rows, heads, got.session) for k, rows in (("state", states),
-                                                                 *zip(lane_kinds(cls), slot_entries(cls, ch.progs)),
+    states, entries = IS.window_state(cls, ch.states[1:], 0, group * T), slot_entries(cls, ch.progs)
+    trees = {k: tree(k, rows, heads, got.session) for k, rows in (("state", states), *zip(lane_kinds(cls), entries),
                                                                  ("view", ch.views))}
+    if v3c is not None:
+        trees.update(v3c_trees(v3c, cls, states, entries))
     swapped = list(states)
     swapped[setup.A + 1], swapped[setup.A + 2] = swapped[setup.A + 2], swapped[setup.A + 1]
     admitted: dict[int, int] = {}
@@ -717,7 +863,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
                            unread=_unread(cls, ch, heads, got.session),
                            tampered=None if void else _tamper(got, ch.egress, T, cls.B, cls.egress.R),
                            ordinals=sorted(admitted), admitted=dict(sorted(admitted.items())), void=void,
-                           failed=got.failed, failed_why=got.failed_why, run_s=round(time.time() - t0, 1))
+                           failed=got.failed, failed_why=got.failed_why, v3c=v3c, run_s=round(time.time() - t0, 1))
 
 
 def _bits(reg: ADV.Committed, i: int) -> list[int]:
@@ -835,10 +981,11 @@ def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
     """The rounds a run is proved in, each with its templates and outcome: `ROUNDS`, the unread round where a request
     is anchored in the group past bucket 0; a void run's (the warden failed a connection closed, a `FAIL` in the
     egress row it signed) the block and its honest round alone, refused by Lean's registered reads ("does not open")
-    at the egress members of its FAIL cells, where the scan renders the connection's end."""
-    if at.void:
-        return {"block": ROUNDS["block"], "honest": (TEMPLATES, "does not open")}
-    return {k: v for k, v in ROUNDS.items() if k != "unread" or at.unread is not None}
+    at the egress members of its FAIL cells, where the scan renders the connection's end. With V3c's trees
+    (``--v3c``) no block round: V3c's own audit proves its slot entries."""
+    rounds = {"block": ROUNDS["block"], "honest": (TEMPLATES, "does not open")} if at.void else \
+        {k: v for k, v in ROUNDS.items() if k != "unread" or at.unread is not None}
+    return {k: v for k, v in rounds.items() if k != "block" or at.v3c is None}
 
 
 def targets(at: SimpleNamespace, name: str) -> list[str]:
@@ -888,11 +1035,11 @@ def wired(members) -> list[str]:
 
 
 def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Setup = W63, group: int = 1,
-         start: int = 0) -> SimpleNamespace:
-    """The run (`link`'s, of `run` when given) and every round's members as the host reads them (no lowering, no
-    proof): what the test holds. A sampled draw (`draw`) changes no round: each is refused by Lean's registered reads,
-    which hold every table row, drawn or not."""
-    at = link(out, run, setup, group, start)
+         start: int = 0, v3c: Path | None = None) -> SimpleNamespace:
+    """The run (`link`'s, of `run` when given, on V3c's trees with `v3c`) and every round's members as the host reads
+    them (no lowering, no proof): what the test holds. A sample (`draw`) changes no round: each is refused by
+    Lean's registered reads, which hold every table row, sampled or not."""
+    at = link(out, run, setup, group, start, v3c)
     got = {}
     for name, (templates, outcome) in rounds_of(at).items():
         got[name] = [member(at, name, mb) for mb in members_of(templates, group, at.T,
@@ -1276,7 +1423,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             roots.append({"port": q, "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
         publics[m["name"]] = a0.sha512_file(m["dir"] / f"pub-{m['n']}.bin")
     for kind, reg in trees.items():
-        d = ADV.domain(reg.binding, len(reg.rows)).domain_id.hex()
+        d = tree_domain(reg).domain_id.hex()
         want[f"scan/{kind}"] = {"leaves": len(reg.rows), "domain": d}
         schemas[f"scan/{kind}"] = BitRowLeaf.hiding_schema
         roots.append({"port": f"scan/{kind}", "root": reg.root.hex(), "leaves": len(reg.rows), "domain": d})
@@ -1611,7 +1758,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SETUPS[a.setup]
-    h = host(out / "warden", a.warden_run, a.draw, setup, a.group)
+    h = host(out / "warden", a.warden_run, a.draw, setup, a.group, v3c=a.v3c)
     at, T, G = h.at, h.at.T, h.at.G
     ch, cls, N = at.chain, setup.cls, 2 * G * T
     if a.draw is not None and not 3 <= a.draw <= N:
@@ -1637,6 +1784,8 @@ def prove(a) -> int:
                                       "end": sum(r[s * cls.B] == W.END for r in rows for s in range(sh.R))}
                                for side, rows in (("ingress", ch.ingress), ("egress", ch.egress))},
                      "roots": {k: r.root.hex() for k, r in at.trees.items()},
+                     "v3c": at.v3c and {"window": str(at.v3c), "trees": sorted(k for k, r in at.trees.items()
+                                                                               if isinstance(r, Held))},
                      "host": {name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs} for m in ms]
                               for name, ms in h.rounds.items()}}
     void = (f" but its FAIL buckets {at.void} (void: the honest round alone, refused at {targets(at, 'honest')})"
@@ -1749,6 +1898,9 @@ def main(argv=None) -> int:
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git "
                    "rev-list --first-parent origin/main), which must hold the commit the session's host pins")
+    p.add_argument("--v3c", type=Path, metavar="WINDOW",
+                   help="V3c's window directory (prove_path.py window-commit's): the scan reads its SCAN_STATE and "
+                        "its SelectEntry_v1 chunks' o0 as its state and prog<j> trees, and proves no block round")
     s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as warden_serve.py's schedule "
                                         "flags (serve, rehearse): the network certifier runs --warden-run reads")
     s.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name)
