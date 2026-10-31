@@ -1,5 +1,5 @@
 import Lms.Hss
-import Attest.FrameV3Sha512
+import Flock.FV3
 
 /-!
 # A party's signed period root and its liveness records: the checks a period's proof and the verifier run
@@ -12,8 +12,8 @@ link, the period's index and the record count). The records, the root and its si
 witness. The party's lower key and its certificate under the device's identity (`PartyKey`) are public: every liveness
 record shows them in the clear. `checkKey` is the verifier's check of them, in the clear (`Lms.verifyCertificate`).
 `check` is what the period's proof runs on its witness: the root's signature verifies under the lower key (one LMS
-verification), and each record it reads opens to the root at its position (`FrameV3Sha512.verifyOpening`). `accepts` is
-both, the verifier's acceptance of a period. `checkLiveness` is the verifier's check, in the clear, of the party's one
+verification), and each record it reads opens to the root at its position (`Flock.FV3.Domain.verifyOpening`). `accepts`
+is both, the verifier's acceptance of a period. `checkLiveness` is the verifier's check, in the clear, of the party's one
 public liveness record per sampling block (`Lms.verifyLiveness`).
 -/
 
@@ -27,19 +27,26 @@ def PERIOD_BINDING : ByteArray := Sha512.hash "verity/period-records/v1".toUTF8
 /-- `attest.SCHEMA`: every leaf's schema. -/
 def PERIOD_SCHEMA : String := "verity/period-record/v1"
 
+/-- `CommitmentDomain(binding, owner, RangeU64Domain(0, count), hash="sha512")`, the `range-u64` kind:
+`H(frame "domain/range-u64" [binding, u64be(owner + 2), u64be 0, u64be count])` (`merkle.range_u64_domain_message`). The
+binding is 64 bytes, `owner ≥ −2` and `count < 2^64`, which the callers fix. -/
+def domainU64 (binding : ByteArray) (owner : Int) (count : Nat) : FV3.Sha512.Domain :=
+  { id := FV3.Sha512.hash "domain/range-u64" [binding, be64 (owner + 2).toNat.toUInt64, be64 0, be64 count.toUInt64],
+    count }
+
 /-- `attest.domain_id(count)`'s domain: the period tree's, over the positions `0 … count − 1`, the `range-u64` kind. -/
-def periodDomain (count : Nat) : FrameV3Sha512.Domain := FrameV3Sha512.Domain.makeU64 PERIOD_BINDING (-1) count
+def periodDomain (count : Nat) : FV3.Sha512.Domain := domainU64 PERIOD_BINDING (-1) count
 
 /-- Record `r` as leaf `r` (its rank and its position) of the tree over `records`. -/
 def leaves (records : Array ByteArray) : Array ByteArray :=
   (Array.range records.size).map fun r => (periodDomain records.size).leaf r r PERIOD_SCHEMA records[r]!
 
 /-- `attest.root(records)`: the period tree's root, the empty root for no records. -/
-def root (records : Array ByteArray) : ByteArray := FrameV3Sha512.root (periodDomain records.size) (leaves records)
+def root (records : Array ByteArray) : ByteArray := (periodDomain records.size).root (leaves records)
 
 /-- `attest.path(records, position)`: the siblings of leaf `position`, leaf side first. -/
 def path (records : Array ByteArray) (position : Nat) : Array ByteArray :=
-  FrameV3Sha512.path (FrameV3Sha512.levels (periodDomain records.size) (leaves records)) position
+  FV3.Sha512.path ((periodDomain records.size).levels (leaves records)) position
 
 /-- One record a period's proof reads: its position, its bytes and its path to the root. -/
 structure Read where
@@ -82,7 +89,7 @@ def check (p : Lms.Params) (deployment : ByteArray) (party : String) (lower : By
   if lower.size ≠ 16 + p.N then return false
   if !(← Lms.verify p lower (← s.message lower deployment party) s.signature) then return false
   pure (reads.all fun r =>
-    FrameV3Sha512.verifyOpening (periodDomain s.count) s.root s.count r.position r.record PERIOD_SCHEMA r.path)
+    (periodDomain s.count).verifyOpening s.root s.count r.position r.record PERIOD_SCHEMA r.path)
 
 /-- **The verifier's acceptance of a period**: the key check of the party's public key `k` under the device's
 `identity`, then the period check under its lower key. -/
