@@ -50,7 +50,7 @@ from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
-from verity_vllm.program.frontend.report import DeriveReport, DeriveSession
+from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
 from verity_vllm.program.prune import kept_records
 from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
@@ -502,7 +502,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.
-    `session`: a list that receives the derivation's `DeriveSession` when it succeeds (`relabel.rank_report` reads it).
+    `session`: a list that receives the derivation's `DerivationTail` when it succeeds (`relabel.rank_report` reads it).
     `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the units no output reads, each
     Definition with dead gates swapped for its version without them), and the correspondence's Calls with it."""
     if mode not in ("profile", "reference"):
@@ -528,7 +528,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
         rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free)
         if session is not None:
-            session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free))
+            session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free))
         return rep
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
@@ -1016,5 +1016,5 @@ def _no_rule(ctx: Ctx, node, reasons: list[str]) -> NoReturn:
     refuse("custom_op_without_binding", node, mp, f"Python callable {t!r} in the graph")
 
 
-__all__ = ["derive", "derive_report", "DeriveReport", "DeriveSession", "Unsupported", "Refuse", "refuse", "Ctx", "StaticIndex", "Alloc", "WeightLeaf",
+__all__ = ["derive", "derive_report", "DeriveReport", "DerivationTail", "Unsupported", "Refuse", "refuse", "Ctx", "StaticIndex", "Alloc", "WeightLeaf",
            "REASONS", "DERIVE_VERSION"]
