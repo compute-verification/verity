@@ -248,7 +248,7 @@ theorem sound_atCode_of_imp {r : PeriodRun d α C Ω} {A : Audit → ((i : I) �
 
 /-- **PoUW's refinement: its compiled component accepts only where the source game does.** At every
 value `ξ` of the period's coins where PoUW's verdict `A .pouw` holds (at the code, `Vocab.Coupling.verdict`: the
-composite's PoUW component, onsite's `PouwCheck.Period.protocol` or remote's `PouwCheck.protocol`, accepts its case in
+composite's PoUW component, `Verity.component k .pouw`, accepts its case in
 what the prover sent, every release it read is logged, and the coupling's break is absent), the source game the
 realization names (`acc`; for H1's checked credit, the play's acceptance) accepts at PoUW's coins there. -/
 def PouwRefines {r : PeriodRun d α C Ω} {c : Certificates} {p : Price} {m u bUnit : ℕ} {X : Type}
