@@ -219,18 +219,6 @@ theorem prob_eqRec {β : Type} {g g' : Game β} (h : g = g') (p : β → Prop) (
   subst h
   rfl
 
-/-- **The run is the live session**: its verdict and verifier log are `d`'s on the session's outcome, and the verifier
-reads that outcome off the run's transcript. -/
-theorem run_live (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
-    (w : (x : Msg) → Wire nMax (J x) (mPts x)) (d : (x : Msg) → LiveOutJ (J x) (mPts x) → OC Bool) (H : Msg → Msg)
-    {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (N x + 2) → LCoin nMax) :
-    (run H P (liveV nMax J mPts N dg w d) x ω r).out = toOut ((d x (liveOut J mPts N dg w H P x ω r)).eval H).1 ∧
-      (run H P (liveV nMax J mPts N dg w d) x ω r).vLog = ((d x (liveOut J mPts N dg w H P x ω r)).eval H).2 ∧
-      liveRead J mPts N dg w x (run H P (liveV nMax J mPts N dg w d) x ω r).msgs =
-        some (liveOut J mPts N dg w H P x ω r) :=
-  run_ofGame H P (fun x => N x + 2) (fun x => sessionK dg (J x) (mPts x) (N x)) (fun x => sessionIf (w x) dg (N x)) d
-    x ω r (sessionLe (w x) dg (N x) _)
-
 open Classical in
 /-- **Acceptance with an event of the outcome**: `Pr_r[run = acc ∧ Q(outcome)]` is `liveSession`'s probability that
 `d x` accepts the outcome and `Q` holds, against `liveStrat`. -/

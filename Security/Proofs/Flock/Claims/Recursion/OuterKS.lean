@@ -148,12 +148,6 @@ theorem fork_fork {Coin : Type} {k : ℕ} (o : ℕ) (r d e : Fin k → Coin) : f
   funext i
   by_cases hi : i.val < o <;> simp [fork, hi]
 
-theorem fork_fork_le {Coin : Type} {k : ℕ} {o o' : ℕ} (h : o ≤ o') (R d : Fin k → Coin) :
-    fork o' R (fork o R d) = fork o' R d := by
-  funext i
-  simp only [fork]
-  split_ifs <;> first | rfl | omega
-
 theorem fork_add_fork {Coin : Type} {k : ℕ} (o j : ℕ) (r d d' : Fin k → Coin) :
     fork o r (fork (o + j) d d') = fork (o + j) (fork o r d) d' := by
   funext i
