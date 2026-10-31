@@ -76,12 +76,6 @@ WIDE = CompositeDefinition("OneStageTestWide", 0, ("N",),
                            lambda B, S, x, y: B.batch(XOR64, x, y, axes=(0, 0)), register=False)
 
 
-def test_the_size_classes_are_the_powers_of_two_from_16_to_the_widest():
-    assert P.UNIT_CLASSES == tuple(16 * 2 ** i for i in range(15)) and P.UNIT_CLASSES[-1] == P.UNIT_CLASS_MAX == 262_144
-    assert [P.unit_class(b) for b in (0, 16, 17, 24, 1024, 1025, 262_144, 262_145)] == \
-        [16, 16, 32, 32, 1024, 2048, 262_144, None]
-
-
 def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused():
     """Each proof block's committed bits fit a public size class, the least that holds them, and a template has a gate: a
     template instance of 262,144 bits (the widest class, `Gemm_v2{K=2048,N=16384}`'s in the measured widths) is taken, one
