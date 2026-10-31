@@ -62,3 +62,5 @@ bbe4f722c18f224c7e95aeecc3ce4804df6fe1b7a5675518d5dbd3705fb33e17  ../../../../..
 58c66950dee05bce6131152a168b1910b8059fd8d7967bc78259331ff96a15a5  ../../../../../Security/Definitions/Pous/P2/Cost.lean
 820e3315c31eafa922a98a3e9ce18dd085f66a9a2948d8f35b08f8f3e2576c79  ../../../../../Security/Definitions/Pous/P2/Mutable.lean
 d8f6004051961b914e007d744f4acbef542bff8fc2a99b7ce36de33b6a9d469b  ../../../../../Security/Definitions/Pous/P2/Rounds.lean
+c7ad7427575299488d32dee98e0d83944d5c8a255645ecbde696f481058baf43  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeInfo.lean
+2da796936b69e597f43f413823aea1dd2b2719f966235a0521f95f69f6de569a  ../../../../../Security/Definitions/Pous/Model/StreamedWipeInfo.lean

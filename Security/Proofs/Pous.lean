@@ -16,6 +16,7 @@ import Proofs.Pous.Chain.FamilyRounds
 import Proofs.Pous.Continuous
 import Proofs.Pous.SecureErasure
 import Proofs.Pous.StreamedWipe
+import Proofs.Pous.StreamedWipeInfo
 import Proofs.Pous.Graded.Band
 import Proofs.Pous.P2.Margin
 import Proofs.Pous.P2.Bridge
