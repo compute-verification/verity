@@ -147,7 +147,7 @@ fixes that at about 6.7 GB of garbled circuit a draw.
 **Decisions for Daniel:**
 1. The keyed-Keccak premise. GOV recommends it; SHA-512 keeps the one-hash rule at about 2.5× the area.
 2. Port seals in both directions, the weakest premise, with no public defeat rate against a state.
-3. Sampled teardown against fab custody. Recommended: state both, and use custody plus deterrence teardowns.
+3. Sampled teardown against fab custody. Recommended: state both, and use custody plus deterrence teardowns. Custody must cover dies from wafer sort to module assembly, where a die can be edited without changing its recorded identity (GOV-INSPECT final, 22:31Z).
 4. Host CPUs as the stated floor (1.3–2.9%), or extend logging to them.
 5. Privacy: accept clear segments at the inspectors' device, or pay for the two-party check.
 
