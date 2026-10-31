@@ -138,10 +138,14 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`OneStage.coinsOf`, `Security/Properties/Challenger.lean`'s `oneStageZkReads`). The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `checkAt` at those coins.
+  Each session's coins are the challenger's too: before any verdict, the check holds every session's record to the coin
+  trees the same signed release log shows the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`,
+  `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and every round's coins that
+  tree's openings after its link's roots and each round's message, one tree a session and every tree a session's.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. It is not onsite's or remote's integrity component (`Core.Onsite`, `Core.Remote`): v1 is, until
-  onsite and remote move to v2, which takes reading the challenger's signed coins in each and then switching the
-  composite.
+  to `verify`'s. It is not onsite's or remote's integrity component (`Core.Onsite`, `Core.Remote`): v1 remains it
+  until the composites switch to v2. v2 already reads the challenger's signed coins (above), so that switch is what is
+  left.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
