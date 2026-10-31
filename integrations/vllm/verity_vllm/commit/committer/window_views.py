@@ -67,7 +67,7 @@ class WindowViews:
     """`NativeHostCommitter`'s window views (the module's docstring): its serving thread detaches each window, its worker ends it."""
 
     #: what a view shares with the committer once either has made it: one of each for the process
-    SHARED_LAZY = ("_side", "_gpu_ext", "_HG")
+    SHARED_LAZY = ("_side",)
 
     def _init_views(self) -> None:
         # the open window's view, whether the last window was detached, the windows detached (serving thread) and ended by the worker
