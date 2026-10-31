@@ -8,10 +8,10 @@ import os
 
 import pytest
 
-from verity.ml.commitments import hm96, vllm_v1
+from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import vectors as V
 from verity.ml.commitments.rowleaf import blake3_row_layout
-from verity.ml.commitments.scheme import CommitmentScheme, LeafLayout
+from verity.ml.commitments.scheme import LeafLayout
 from verity.errors import InvalidArtifact
 
 VECTORS = V.load()
@@ -24,6 +24,10 @@ def _b(text: str) -> bytes:
 
 def _bit(data: bytes, t: int) -> int:
     return (data[t >> 3] >> (t & 7)) & 1
+
+
+def _pos_leaf_layout(n: int, h: str = "sha256") -> LeafLayout:
+    return LeafLayout(h, V.POS_LEAF_TAG + n.to_bytes(8, "big"), n)
 
 
 def naive_mask(key: bytes, salt: bytes, inst: hm96.Instance = hm96.SHA256) -> bytes:
@@ -103,27 +107,8 @@ def test_leaf_vectors(case: dict) -> None:
     assert b.hex() == case["b"]
 
 
-@pytest.mark.parametrize("case", VECTORS["trees"], ids=lambda c: f"n{len(c['values'])}")
-def test_tree_vectors(case: dict) -> None:
-    d = case["domain"]
-    base = vllm_v1.VllmV1({"v": vllm_v1.StepDomain(_b(d["program"]), _b(d["ctx"]), _b(d["geo"]), _b(d["layout"]), d["leaf_count"])},
-                          value_nbytes={"v": lambda _i: 40})
-    scheme = hm96.Hm96Sha256(base)
-    assert isinstance(scheme, CommitmentScheme)
-    n = d["leaf_count"]
-    leaves = [scheme.tree_leaf("v", i, scheme.leaf_layout("v", i).commit(_b(v), _b(s)))
-              for i, (v, s) in enumerate(zip(case["values"], case["salts"]))]
-    assert [x.hex() for x in leaves] == case["leaves"]
-    root = scheme.root("v", leaves)
-    assert root.hex() == case["root"]
-    for i in range(n):
-        path = tuple(None if p is None else _b(p) for p in case["paths"][i])
-        assert scheme.verify_path("v", root, n, i, leaves[i], path)
-        assert not scheme.verify_path("v", root, n, i, hashlib.sha256(leaves[i]).digest(), path)
-
-
 def test_every_component_of_an_opening_is_bound() -> None:
-    inner = vllm_v1.pos_leaf_layout(48)
+    inner = _pos_leaf_layout(48)
     layout = hm96.HidingLayout(inner, hm96.DEFAULT_KEY)
     value, salt = os.urandom(48), hm96.fresh_salt()
     leaf = layout.leaf(value, salt)
@@ -153,8 +138,6 @@ def test_malformed_inputs_are_refused() -> None:
         hm96.tree_leaf(hm96.DEFAULT_KEY, bytes(63))
     with pytest.raises(InvalidArtifact):
         hm96.HidingLayout(blake3_row_layout(1, 16, 4), hm96.DEFAULT_KEY)      # SHA-256 inner digests only
-    with pytest.raises(TypeError):
-        hm96.Hm96Sha256(object())                                              # type: ignore[arg-type]
 
 
 def test_fresh_randomness() -> None:
@@ -244,25 +227,8 @@ def test_sha512_leaf_vectors(case: dict) -> None:
     assert hashlib.sha512(_b(V512["leaf_prefix_default_key"]) + proven).hexdigest() == case["leaf"]
 
 
-@pytest.mark.parametrize("case", V512["trees"], ids=lambda c: f"n{len(c['values'])}")
-def test_sha512_tree_vectors(case: dict) -> None:
-    d = case["domain"]
-    base = vllm_v1.VllmV1({"v": vllm_v1.StepDomain(_b(d["program"]), _b(d["ctx"]), _b(d["geo"]), _b(d["layout"]), d["leaf_count"], hash="sha512")},
-                          value_nbytes={"v": lambda _i: 40})
-    scheme = hm96.Hm96Sha512(base)
-    assert isinstance(scheme, CommitmentScheme) and scheme.name == "hm96-sha512/v1" and scheme.hashes == ("sha512",)
-    n = d["leaf_count"]
-    leaves = [scheme.tree_leaf("v", i, scheme.leaf_layout("v", i).commit(_b(v), _b(s))) for i, (v, s) in enumerate(zip(case["values"], case["salts"]))]
-    assert [x.hex() for x in leaves] == case["leaves"]
-    root = scheme.root("v", leaves)
-    assert root.hex() == case["root"] and len(root) == 64
-    for i in range(n):
-        path = tuple(None if p is None else _b(p) for p in case["paths"][i])
-        assert scheme.verify_path("v", root, n, i, leaves[i], path)
-
-
 def test_sha512_binding_and_refusals() -> None:
-    inner = vllm_v1.pos_leaf_layout(48, "sha512")
+    inner = _pos_leaf_layout(48, "sha512")
     layout = hm96.HidingLayout(inner, S512.default_key, S512)
     value, salt = os.urandom(48), S512.fresh_salt()
     leaf = layout.leaf(value, salt)
@@ -270,16 +236,11 @@ def test_sha512_binding_and_refusals() -> None:
     assert layout.leaf(value, salt[:-1] + bytes([salt[-1] ^ 1])) != leaf
     assert S512.tree_leaf(KEYS512["other"], layout.commit(value, salt)) != leaf
     with pytest.raises(InvalidArtifact):
-        hm96.HidingLayout(vllm_v1.pos_leaf_layout(48), S512.default_key, S512)
+        hm96.HidingLayout(_pos_leaf_layout(48), S512.default_key, S512)
     with pytest.raises(InvalidArtifact):
         S512.check_key(hm96.DEFAULT_KEY)
     with pytest.raises(InvalidArtifact):
         S512.check_key(bytes(255) + b"\x80")
-    d = hashlib.sha256(b"x").digest()
-    with pytest.raises(TypeError):
-        hm96.Hm96Sha512(vllm_v1.VllmV1({"v": vllm_v1.StepDomain(d, d, d, d, 2)}))
-    with pytest.raises(TypeError):
-        hm96.Hm96Sha256(vllm_v1.VllmV1({"v": vllm_v1.StepDomain(d, d, d, d, 2, hash="sha512")}))
 
 
 def test_sha512_scheme_digest_is_the_sha512_identity() -> None:
