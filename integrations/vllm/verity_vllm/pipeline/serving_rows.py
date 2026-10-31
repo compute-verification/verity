@@ -273,8 +273,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
             in_rows, _outs = CR.unit_rows(template(t))
-            outs = (("o0", 1),) if layout == "s8" else tuple((f"o{j}", -(-sum(f.leaf_widths()) // 16))
-                                                             for j, f in enumerate(CR.fields(template(t))))
+            outs = (("o0", 1),) if layout == "s8" else IF.layout(template(t).fn).outs
             schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
             out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
                               schemas=schemas)
