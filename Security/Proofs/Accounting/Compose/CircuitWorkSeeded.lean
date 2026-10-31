@@ -6,8 +6,8 @@ import Proofs.Accounting.Compose.CircuitWork
 # `CircuitWorkSeeded`: the circuit's work under seeded coins
 
 * **GRIND's premium per round** (`grind_le`): one oracle answer redrawn is an involution of (answers, answer)
-  (`redraw_redraw`), so the window's mean of `e^{θ·g q}` is the mean of its per-query moment, at most `1`
-  (`sum_redraw`); Markov at `ln(T_q/δ_g)/θ` and the union over the `T_q` queries give `δ_g`. Off it and off
+  (`resample_resample`), so the window's mean of `e^{θ·g q}` is the mean of its per-query moment, at most `1`
+  (`sum_resample`); Markov at `ln(T_q/δ_g)/θ` and the union over the `T_q` queries give `δ_g`. Off it and off
   `SeedLuckAt`'s `Break`, at the query `sq a r` names, the round's gain is at most `roundPremium` (`gain_le_premium`;
   the round's weight `roundCone` where `θ_r = 0`), and summed over the rounds (every tile's round is one, under
   `Declared.Wf`) the mode's `L − κ·U` is at most `premiumOf` (`gainSum_le`).
@@ -50,29 +50,29 @@ end Redraw
 
 variable {B : Type} {M Tq : ℕ}
 
-theorem redraw_at (a : Paths (Fin Tq → B) M) (r : Fin M) (q : Fin Tq) (b : B) : coinAt (redraw a r q b) r q = b := by
-  unfold redraw
+theorem resample_at (a : Paths (Fin Tq → B) M) (r : Fin M) (q : Fin Tq) (b : B) : coinAt (resample a r q b) r q = b := by
+  unfold resample
   rw [coinAt_setAt, Function.update_self]
 
-theorem redraw_redraw (a : Paths (Fin Tq → B) M) (r : Fin M) (q : Fin Tq) (b : B) :
-    redraw (redraw a r q b) r q (coinAt a r q) = a := by
-  unfold redraw
+theorem resample_resample (a : Paths (Fin Tq → B) M) (r : Fin M) (q : Fin Tq) (b : B) :
+    resample (resample a r q b) r q (coinAt a r q) = a := by
+  unfold resample
   rw [coinAt_setAt, setAt_setAt, Function.update_idem, Function.update_eq_self, setAt_coinAt]
 
 /-- **Summing over one answer redrawn** counts every window `|B|` times. -/
-theorem sum_redraw [Fintype B] (r : Fin M) (q : Fin Tq) (f : Paths (Fin Tq → B) M → ℝ) :
-    ∑ a, ∑ b : B, f (redraw a r q b) = Fintype.card B * ∑ a, f a := by
-  have hσ : Function.Involutive fun p : Paths (Fin Tq → B) M × B => (redraw p.1 r q p.2, coinAt p.1 r q) :=
-    fun p => by simp only [redraw_redraw, redraw_at]
-  rw [← Fintype.sum_prod_type' (f := fun a b => f (redraw a r q b)),
-    show (∑ p : Paths (Fin Tq → B) M × B, f (redraw p.1 r q p.2)) = ∑ p : Paths (Fin Tq → B) M × B, f p.1 from
+theorem sum_resample [Fintype B] (r : Fin M) (q : Fin Tq) (f : Paths (Fin Tq → B) M → ℝ) :
+    ∑ a, ∑ b : B, f (resample a r q b) = Fintype.card B * ∑ a, f a := by
+  have hσ : Function.Involutive fun p : Paths (Fin Tq → B) M × B => (resample p.1 r q p.2, coinAt p.1 r q) :=
+    fun p => by simp only [resample_resample, resample_at]
+  rw [← Fintype.sum_prod_type' (f := fun a b => f (resample a r q b)),
+    show (∑ p : Paths (Fin Tq → B) M × B, f (resample p.1 r q p.2)) = ∑ p : Paths (Fin Tq → B) M × B, f p.1 from
       Equiv.sum_comp (hσ.toPerm _) (fun p => f p.1),
     Fintype.sum_prod_type]
   simp [Finset.mul_sum]
 
 /-- **One query's tail**: a per-query moment at most `1` over its own answer puts `g ≥ t` below `e^{−θt}`. -/
 theorem tail_le [Fintype B] (r : Fin M) (q : Fin Tq) (g : Paths (Fin Tq → B) M → ℝ) (θ t : ℝ) (hθ : 0 ≤ θ)
-    (hm : ∀ a, ∑ b : B, Real.exp (θ * g (redraw a r q b)) ≤ Fintype.card B) :
+    (hm : ∀ a, ∑ b : B, Real.exp (θ * g (resample a r q b)) ≤ Fintype.card B) :
     prob (fun a => t ≤ g a) ≤ Real.exp (-(θ * t)) := by
   have hE : expect (fun a => Real.exp (θ * g a)) ≤ 1 := by
     rcases isEmpty_or_nonempty (Paths (Fin Tq → B) M) with he | hne
@@ -80,9 +80,9 @@ theorem tail_le [Fintype B] (r : Fin M) (q : Fin Tq) (g : Paths (Fin Tq → B) M
       exact zero_le_one
     have a₀ : Paths (Fin Tq → B) M := Classical.choice hne
     have hB : (0 : ℝ) < Fintype.card B := Nat.cast_pos.mpr (Fintype.card_pos_iff.mpr ⟨coinAt a₀ r q⟩)
-    have hle : ∑ a, ∑ b : B, Real.exp (θ * g (redraw a r q b)) ≤
+    have hle : ∑ a, ∑ b : B, Real.exp (θ * g (resample a r q b)) ≤
         ∑ _a : Paths (Fin Tq → B) M, (Fintype.card B : ℝ) := Finset.sum_le_sum fun a _ => hm a
-    rw [sum_redraw r q (fun a => Real.exp (θ * g a)), Finset.sum_const, Finset.card_univ, nsmul_eq_mul,
+    rw [sum_resample r q (fun a => Real.exp (θ * g a)), Finset.sum_const, Finset.card_univ, nsmul_eq_mul,
       mul_comm (Fintype.card (Paths (Fin Tq → B) M) : ℝ)] at hle
     unfold expect
     rw [div_le_one (Nat.cast_pos.mpr Fintype.card_pos)]
@@ -99,7 +99,7 @@ theorem tail_le [Fintype B] (r : Fin M) (q : Fin Tq) (g : Paths (Fin Tq → B) M
 /-- **GRIND's premium**: over the `T_q` queries, some query's gain reaches `ln(T_q/δ_g)/θ` with probability at most
 `δ_g`. -/
 theorem grind_le [Fintype B] (r : Fin M) (g : Fin Tq → Paths (Fin Tq → B) M → ℝ) (θ δg : ℝ) (hθ : 0 < θ)
-    (hδ : 0 < δg) (hm : ∀ q a, ∑ b : B, Real.exp (θ * g q (redraw a r q b)) ≤ Fintype.card B) :
+    (hδ : 0 < δg) (hm : ∀ q a, ∑ b : B, Real.exp (θ * g q (resample a r q b)) ≤ Fintype.card B) :
     prob (fun a => ∃ q, Real.log (Tq / δg) / θ ≤ g q a) ≤ δg := by
   have hsum : ∑ _q : Fin Tq, Real.exp (-(θ * (Real.log (Tq / δg) / θ))) ≤ δg := by
     rcases Nat.eq_zero_or_pos Tq with h0 | hT
@@ -118,7 +118,7 @@ theorem grind_le [Fintype B] (r : Fin M) (g : Fin Tq → Paths (Fin Tq → B) M 
 
 /-- A round's bad event: `Break`, or (at `θ > 0`) some query's gain at GRIND's threshold. -/
 theorem bad_le [Fintype B] (r : Fin M) (g : Fin Tq → Paths (Fin Tq → B) M → ℝ) (Br : Paths (Fin Tq → B) M → Prop)
-    (θ δb δg : ℝ) (hδg : 0 < δg) (hm : ∀ q a, ∑ b : B, Real.exp (θ * g q (redraw a r q b)) ≤ Fintype.card B)
+    (θ δb δg : ℝ) (hδg : 0 < δg) (hm : ∀ q a, ∑ b : B, Real.exp (θ * g q (resample a r q b)) ≤ Fintype.card B)
     (hB : prob Br ≤ δb) :
     prob (fun a => Br a ∨ (0 < θ ∧ ∃ q, Real.log (Tq / δg) / θ ≤ g q a)) ≤ δb + δg := by
   refine (prob_or_le _ _).trans (add_le_add hB ?_)
