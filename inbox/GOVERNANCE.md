@@ -71,3 +71,10 @@ layout.
 
 **Rules:** mark everything read, argued, estimated or measured. No Slack, Linear or PR. The coordinator synthesizes for
 Daniel by 05:00Z Sun (10 PM PDT).
+
+## Facts feeding the lanes
+
+- **OCC-RATE measured** (sm_120) that real GEMMs leave 13–43% of the tensor pipe idle at prefill and nearly all of it at
+  decode, and a co-resident kernel can use it while every deadline holds. Always-on logging sidesteps this: undeclared
+  work in idle cycles is in the transcript, so it must be explained. The GOV lanes should state that advantage over
+  the lock and deadline designs, and its premise: every tensor issue is logged.

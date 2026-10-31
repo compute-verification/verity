@@ -139,3 +139,16 @@ references bit for bit, and LPs matched to their closed forms), OCC-STATE and OC
 3. **The real-operand GEMM rate** on sm_120 is being measured (OCC-RATE round 2, 01:30Z).
 4. Everything here is synthesis and LPs on CPU; there's no silicon or simulation. The time claim is separate from
    §2a's work credit.
+
+- **OCC-RATE round 2, measured** (RTX PRO 6000 on vy-nebius-2, runs r20261031-203805-edaa (int8) and
+  r20261031-205829-45fc (FP8); `benchmarks/gemm_idle/` on `cursor/compute-research-occ-gemm-ea24`):
+  - **Real-GEMM tensor utilization** at the 2092 MHz lock, for Llama 1B and 8B linears, the best of cuBLASLt and
+    CUTLASS: decode 0.001–0.11; T 512 median 0.57; T 2,048 median 0.71–0.74; T 8,192 median 0.83–0.87.
+  - **A co-resident register-only tensor kernel** takes up to 47% of the bound at prefill and 75% at decode, while the
+    GEMM keeps at least 96% of its rate.
+  - **So V1 for useful work floors at 1 − ρ:** 7–32% at T 8,192, and 89–99.9% at decode. V3's lock is needed, at a
+    factor of 1.37–2.95 at these rates, and gives nothing at decode.
+  - Library gaps of up to 10.6% and a 1.1% drift at the power cap bear on `calibration-optimal`.
+  - The lead kernel (#6630, wgmma) doesn't build for sm_120. The H200 is unmeasured.
+  - **The coordinator's reading:** under GOVERNANCE's always-on logging, idle cycles stop mattering. Undeclared work in
+    them is logged, so it must be explained. The occupancy problem exists only when undeclared work goes unlogged.
