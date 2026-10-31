@@ -216,7 +216,7 @@ def firstFailure (rules : List (Bool × String)) : Option String := (rules.find?
 
 def refusal (why : String) : String := s!"refused: {why}: a statement form the soundness proof does not cover"
 
-/-- The legacy statements (PROTOCOL.md §16.3, §16.4, §16.9): upstream's recorded cells whose checks evaluate part of the
+/-- The legacy statements: upstream's recorded cells whose checks evaluate part of the
 computation natively and make intermediate values public. None is a statement `verify` sets up (`Tags.all`,
 `Tags.templated`), and `verify` refuses every session of one (`legacyWhy`). -/
 def legacyStatements : List String :=

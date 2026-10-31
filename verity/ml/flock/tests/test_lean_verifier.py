@@ -1640,7 +1640,7 @@ def test_net_parser_refuses_rows_out_of_order(tmp_path):
         assert got[name]["ok"] == (why is None) and (why is None or why in got[name]["error"]), (name, got[name])
 
 
-#: the legacy statements (PROTOCOL.md §16.9, `ProvedScope.legacyStatements`), by the family `vectors.json`'s honest cells name
+#: the legacy statements (`ProvedScope.legacyStatements`), by the family `vectors.json`'s honest cells name
 LEGACY = {"flock-pure-block": ["verity/flock-pure-block/v2"],
           "flock-ir-frame": ["verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3"],
           "flock-ir-sampling": ["verity/flock-ir-sampling/v1"], "flock-ir-block": ["verity/flock-ir-block/v1"],
