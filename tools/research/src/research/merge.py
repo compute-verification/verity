@@ -192,10 +192,9 @@ def unlike(argv, command) -> str | None:
 SHARD_KIND = "check-shard/v1"
 
 
-def declared_jobs(repo: Path, commit: str) -> list[str] | str:
-    """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` puts on the merge gate (every job but those with
-    `gate = false`), or why they can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's
-    after-landing run, whose red reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+def declared(repo: Path, commit: str) -> list[dict] | None:
+    """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
+    `after`, `gate` when it has them), or None when it can't be read."""
     import tomllib
 
     from .store import tools_registry
@@ -204,11 +203,20 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
                                   lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
     r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
     try:
-        jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", []) if t.get("gate", True) is not False] \
-            if r.returncode == 0 else None
-    except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
+        jobs = tomllib.loads(r.stdout).get("job", []) if r.returncode == 0 else None
+    except (tomllib.TOMLDecodeError, TypeError, AttributeError):
         jobs = None
-    if not jobs or not all(isinstance(j, str) for j in jobs):
+    if not isinstance(jobs, list) or not all(isinstance(t, dict) and isinstance(t.get("name"), str) for t in jobs):
+        return None
+    return jobs
+
+
+def declared_jobs(repo: Path, commit: str) -> list[str] | str:
+    """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` puts on the merge gate (every job but those with
+    `gate = false`), or why they can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's
+    after-landing run, whose red reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    jobs = [t["name"] for t in declared(repo, commit) or () if t.get("gate", True) is not False]
+    if not jobs:
         return f"{commit[:12]}'s tools/verity/check/ci.toml can't be read for the jobs a check runs"
     return jobs
 
