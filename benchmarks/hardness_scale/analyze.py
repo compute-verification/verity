@@ -12,6 +12,8 @@ For a run of size N (the dense model's non-embedding parameters) on D tokens rea
   reach L, read off its token ladder in (log D, L). It leaves out how far N is from compute-optimal.
 - ``P_fit``: C / C*(L) on the frontier of L(N, D) = E + A/N^α + B/D^β fitted to each size's seed-0 ladder at its lr*
   with D ≥ 10N, with C*(L) minimized over the width of the 12-block shape at its own FLOPs a token.
+- ``P_dead``: 1/(1 − κ), P_env if the credited MACs bought nothing (dead weight), and ``u`` = 1 − (1 − 1/P_env)/κ, the
+  share of credited compute that acts as baseline compute: 1 is free, 0 dead weight, below 0 worse than dead weight.
 - ``best``: with --best, each arm's lr variants fold into the arm, keeping its lowest loss.
 """
 
@@ -161,6 +163,10 @@ def analyze(runs, best_lr=False):
                 row["P_env"] = r["train_flops_dense"] / math.exp(x)
                 row["P_env_real"] = r["train_flops"] / math.exp(x)
                 row["P_env_ext"] = ext
+        if r["kappa"] > 0:
+            row["P_dead"] = 1 / (1 - r["kappa"])
+            if "P_env" in row:
+                row["u"] = 1 - (1 - 1 / row["P_env"]) / r["kappa"]
         if f:
             cs = c_star(f, L0)
             if math.isfinite(cs):
@@ -190,7 +196,8 @@ def fmt(v, nd=3):
 
 
 def table(res):
-    cols = ["name", "kappa", "kappa_lin", "val", "gap", "P_size", "P_env", "P_env_real", "P_fit", "d_perm", "d_removed"]
+    cols = ["name", "kappa", "kappa_lin", "val", "gap", "P_size", "P_env", "P_env_real", "P_fit", "P_dead", "u", "d_perm",
+            "d_removed"]
     out = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     for r in sorted(res["rows"], key=lambda r: (int(r["size"][:-1]), not r["base"], r["arm"], r["name"])):
         cells = []
@@ -198,7 +205,7 @@ def table(res):
             v = r.get(k)
             if k in ("P_size", "P_env", "P_env_real") and v is not None:
                 v = f"{v:.2f}" + ("*" if r.get(k.replace("_real", "") + "_ext") else "")
-            elif k == "P_fit" and v is not None:
+            elif k in ("P_fit", "P_dead", "u") and v is not None:
                 v = f"{v:.2f}"
             cells.append(fmt(v))
         out.append("| " + " | ".join(cells) + " |")
@@ -213,7 +220,8 @@ def pivot(res, key="P_env"):
             continue
         v = r.get(key)
         cells[r["arm"]][r["size"]] = (f"κ {r['kappa']:.2f}: {r['gap']:+.3f} / "
-                                      + (f"{v:.2f}×" + ("*" if r.get("P_env_ext") else "") if v else "-"))
+                                      + (f"{v:.2f}×" + ("*" if r.get("P_env_ext") else "") if v else "-")
+                                      + (f" (u {r['u']:+.2f})" if "u" in r and key == "P_env" else ""))
     out = ["| arm | " + " | ".join(sizes) + " |", "|---|" + "---|" * len(sizes)]
     for arm in sorted(cells):
         out.append(f"| {arm} | " + " | ".join(cells[arm].get(s, "") for s in sizes) + " |")
