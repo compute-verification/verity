@@ -9,7 +9,9 @@
      issue-coupled   1 - g - s M z            (a pipe sharing issue slots with forging at issue share s)
      uncoupled       1 - g
    Each LP optimum is checked against its closed form.
-2. Occupancy numbers on the H200: decode and prefill ceilings, and the support-op slack.
+2. The same tensor bound when O_W is normalized by the declared kernel's calibrated genuine rate rho (an L2-bound GEMM)
+   instead of the tensor peak, and on sm_120 (M = 4, IDP4A at R = 4).
+3. Occupancy numbers on the H200: decode and prefill ceilings, and the support-op slack.
 
     uv run --no-project --with scipy --with numpy python occ_bounds.py
 """
@@ -182,6 +184,82 @@ def budget_table(M: float = 3.75, R: float = 16.0) -> dict:
     return out
 
 
+def lp_tensor_rho(ow_cal: float, M: float, R: float, rho: float, precompute: bool) -> float:
+    """Max undeclared tensor capacity when the declared kernel's best genuine rate is rho of the tensor peak (an
+    L2-bound GEMM) and the verifier normalizes by it: O_W' = W_d / (rho r_u N T) = ow_cal. Genuine credit cg <= rho g;
+    words computed in the window (tensor or IDP4A) need the same operand traffic, so zt + zi <= rho f.
+    Columns: g, cg, f, zt, zi, zp."""
+    names = "g cg f zt zi zp".split()
+    def row(**kw):
+        r = np.zeros(6)
+        for k, v in kw.items():
+            r[names.index(k)] = v
+        return r
+    c = row(g=1, zt=1)
+    A = [row(g=1, f=1), row(cg=1, g=-rho), row(f=-rho, zt=1, zi=1),
+         row(f=-1, zt=M, zi=M, zp=M), row(f=-1, zi=R),
+         row(f=-1, zt=0.5 * M, zi=0.5 * M + 0.5 * R, zp=0.5 * M)]
+    bounds = [(0, None)] * 6
+    if not precompute:
+        bounds[5] = (0, 0)
+    r = linprog(c, A_ub=np.array(A), b_ub=np.array([1, 0, 0, 0, 0, 0]),
+                A_eq=np.array([row(cg=1, zt=1, zi=1, zp=1)]), b_eq=[ow_cal * rho], bounds=bounds, method="highs")
+    assert r.status == 0, r.message
+    return 1 - r.fun
+
+
+def rho_closed(x: float, M: float, R: float, rho: float, precompute: bool) -> float:
+    """lp_tensor_rho's optimum. Once rho x > 1/M every forged unit of credit costs M of time against 1/rho genuine, so
+    the window fills with genuine and forged time and the factor is M rho/(M rho - 1) (precomputable words) or
+    rho (M - 1 + M/max(M, R))/(M rho - 1) (coin-dependent). Below that, forging alone carries the credit."""
+    if rho * x <= 1 / M:
+        return 1.0 if precompute else 1 - max(0.0, rho * x - 1 / max(M, R))
+    F = M * rho / (M * rho - 1) if precompute else rho * (M - 1 + M / max(M, R)) / (M * rho - 1)
+    return min(1.0, F * (1 - x))
+
+
+def rho_table(M: float = 3.75, R: float = 16.0) -> dict:
+    out = {}
+    for rho in (0.143, 0.25, 0.4, 0.52, 0.75, 1.0):
+        for pre in (False, True):
+            out[f"rho={rho} {'precomputable' if pre else 'coin-dependent'}"] = {
+                f"O_W'={x}": round(lp_tensor_rho(x, M, R, rho, pre), 4) for x in (0.5, 0.8, 0.95, 1.0)}
+            if M * rho > 1:
+                out[f"rho={rho} {'precomputable' if pre else 'coin-dependent'}"]["factor"] = round(
+                    M * rho / (M * rho - 1) if pre else rho * (M - 1 + M / max(M, R)) / (M * rho - 1), 4)
+    worst = 0.0
+    for rho in np.linspace(0.1, 1.0, 19):
+        for x in np.linspace(0.0, 1.0, 21):
+            for pre in (False, True):
+                worst = max(worst, abs(lp_tensor_rho(x, M, R, rho, pre) - rho_closed(x, M, R, rho, pre)))
+    assert worst < 1e-7, worst
+    for x in (0.5, 0.8, 0.95):
+        for pre in (False, True):
+            assert abs(lp_tensor_rho(x, M, R, 1.0, pre) - lp_pipes("tensor", x, M, R, pre)) < 1e-7
+    out["checks"] = f"rho = 1 equals lp_pipes' tensor row; max |LP - rho_closed| over rho, O_W' grids {worst:.1e}"
+    out["note"] = ("undeclared tensor share of the window; the honest prover at its calibrated rate has O_W' = 1; "
+                   "rho = 0.143 is decode at m = 32 (OCC-RATE), 0.52-0.75 OCC-STATE's L2-bound GEMM")
+    return out
+
+
+def sm120(M: float = 4.0, R: float = 4.0) -> dict:
+    """The lock's tensor bound on sm_120: SILICON's margin M = 4.0, IDP4A at 256 MACs/SM-clock = 1/4 of int8 (OCC-RATE,
+    measured), so R = 4. For O_W >= 1/M the coin-dependent factor is 1 + M/(max(M, R)(M - 1)): when R <= M the ALU,
+    not the IDP4A rate, bounds forged credit and the words never need the tensor."""
+    out = {}
+    worst = 0.0
+    for pre in (False, True):
+        f = M / (M - 1) if pre else 1 + M / (max(M, R) * (M - 1))
+        for ow in np.linspace(1 / M, 1.0, 41):
+            worst = max(worst, abs(lp_pipes("tensor", ow, M, R, pre) - min(1.0, f * (1 - ow))))
+        out[f"{'precomputable' if pre else 'coin-dependent'} factor"] = round(f, 4)
+        out[f"{'precomputable' if pre else 'coin-dependent'} tensor"] = {
+            f"O_W={ow}": round(lp_pipes("tensor", ow, M, R, pre), 4) for ow in (0.5, 0.72, 0.85)}
+    assert worst < 1e-7, worst
+    out["max |LP - closed| over O_W in [1/M, 1]"] = worst
+    return out
+
+
 def h200() -> dict:
     n_sm, macs = 132, 4096
     sheet = n_sm * macs * 1980e6            # origin/main Accel.H200 tensor rate (1980 MHz)
@@ -218,7 +296,8 @@ def h200() -> dict:
 
 
 def main() -> int:
-    res = {"lp": check_lp(), "pipes_h200": pipes_table(), "budget_h200": budget_table(), "h200": h200()}
+    res = {"lp": check_lp(), "pipes_h200": pipes_table(), "budget_h200": budget_table(), "rho_h200": rho_table(),
+           "sm120_tensor_factor": sm120(), "h200": h200()}
     print(json.dumps(res, indent=1))
     return 0
 
