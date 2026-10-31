@@ -1,9 +1,9 @@
 """The integration's registry, every module loaded: the one registry each consumer of a Program reads, and the one loader of
 Verity's Definitions by package.
 
-GP-01, the Match, the query views and the manifest with its word check all resolve Definitions and primitives through `load`, so a
-Definition or primitive a new registry module registers resolves everywhere, not only where someone imported its module.  A reader
-of Definitions beyond the registry names their packages as `load`'s scope (`SCOPES`).
+The workload Program's driver, the Match, the query views and the manifest with its word check all resolve Definitions and
+primitives through `load`, so a Definition or primitive a new registry module registers resolves everywhere, not only where someone
+imported its module.  A reader of Definitions beyond the registry names their packages as `load`'s scope (`SCOPES`).
 """
 from __future__ import annotations
 
