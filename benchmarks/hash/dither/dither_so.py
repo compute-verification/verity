@@ -169,7 +169,7 @@ UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each ca
 # rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
 # units hash a column tile once in each row tile
 # they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
-# --j10r, H1U_JSWZ 32: T 2048 step 287.1 -> 233.1 ms, T 512 71.9 -> 59.8 ms; T 64 M 32 5.11 -> 7.16 ms unswizzled)
+# --j10r, H1U_JSWZ 32: faster at T 2048 and 512, slower at T 64, M 32 unswizzled)
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
 # J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
 J10R_M_ENV = "DITHER_SO_J10R_M"
@@ -193,7 +193,7 @@ ZSIDE_ENV = "DITHER_SO_ZSIDE"
 # DO.A_STEP_ENV's tables' level schedule (`H1C.set`'s lvf: their levels from L up in one block a table, on an H1C_HB
 # build).  A K a table makes a step's tables few and deep (Llama-8B at T = 64: 2 tables of 2^13 leaves), so the build's
 # H1C_LVF = 2 would run 11 of their levels on two blocks of the GPU.  Unset: from depth - A_LVF_TOP (at least 0), the
-# level of 128 nodes a table (n1, RTX PRO 6000, T = 64: L = 4 to 7 within 0.01 ms, 0.16 ms under L = 2); "L": from L;
+# level of 128 nodes a table (on the RTX PRO 6000 at T = 64, L = 4 to 7 time alike and beat L = 2); "L": from L;
 # "": the build's H1C_LVF, as every other set.  The roots are the same at every L
 A_LVF_ENV = "DITHER_A_LVF"
 A_LVF_TOP = 8
