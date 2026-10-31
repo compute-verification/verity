@@ -877,9 +877,9 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
       rw [hpb]; exact mapM_some_ok hpbj
     have hnone : ∀ {α β : Type} (f : α → Except String β), (none : Option α).mapM f = .ok none := fun _ => rfl
     subst hSp hd2 hPc
-    simp only [FlockDeploy.Raw.ins, partRaw, hst, htags, hzk, hplain, hos, hcnt, htab, hwk, hwt, hcl, hpi, hstr,
-      hPprog, hd1, hpm, hreg', hnone, ok_bind, Bool.and_false, Bool.and_true, Bool.false_eq_true, ite_false,
-      ite_true]
+    simp only [FlockDeploy.Raw.ins, partRaw, hst, Tags.byName?_of_find? htags, hzk, hplain, hos, hcnt, htab, hwk, hwt,
+      hcl, hpi, hstr, hPprog, hd1, hpm, hreg', hnone, ok_bind, Bool.and_false, Bool.and_true, Bool.false_eq_true,
+      ite_false, ite_true]
     rfl
   have h2 : (partRaw r st x ms s q).recInner.mapM (fun b => do RecVStar.Inner.ofJson (← jsonOf "rec-inner" b)) =
       .ok (some h.shape) := mapM_some_ok hIshape
