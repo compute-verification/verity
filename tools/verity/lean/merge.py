@@ -754,21 +754,26 @@ def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
     each cap's line stands as one placeholder (`HEAD{}`) on every side, so the count never conflicts with the comment above
     it, and a conflict whose sides differ only in comment lines takes theirs' (`_comments`); the merged counts then replace
     the placeholders.  So two branches that each move a cap and reword its comment merge, whatever the bases git's
-    recursive merge combines (it runs this driver on them too).  Where a side's caps can't be read whole (a cap's line twice,
-    the sides holding different caps) or a count would go below 0, the conflicts merge one by one instead: one whose sides
-    are only cap lines as counters (`_caps`), one that differs only in comments as theirs'.  Any other conflict is left as
-    git writes it."""
+    recursive merge combines (it runs this driver on them too).  A cap both sides hold and the base lacks (both brought the
+    file's caps, from a base before them) merges key by key as the larger count, since counters would add the same entries
+    twice.  Where a side's caps can't be read whole (a cap's line twice, the sides holding different caps) or a count would
+    go below 0, the conflicts merge one by one instead: one whose sides are only cap lines as counters (`_caps`), one that
+    differs only in comments as theirs'.  Any other conflict is left as git writes it."""
     def one_by_one():
         return lean(base, ours, theirs, (_caps, _comments))
 
     texts = [p.read_text() for p in (base, ours, theirs)]
     found = [_file_caps(t) for t in texts]
-    if None in found or not found[1] or not set(found[0]) == set(found[1]) == set(found[2]):
+    if None in found or not found[1] or not set(found[1]) == set(found[2]) or not set(found[0]) <= set(found[1]):
         return one_by_one()
     merged: dict[str, str] = {}
     for head, (line, counts) in found[1].items():
         if found[2][head][0] == line:
             merged[head] = line.rstrip("\n")
+        elif head not in found[0]:
+            other = found[2][head][1]
+            merged[head] = _cap_line(head, {k: max(counts.get(k, 0), other.get(k, 0))
+                                            for k in items([], list(counts), list(other))}, "")
         elif (n := _counted(found[0][head][1], counts, found[2][head][1])) is not None:
             merged[head] = _cap_line(head, n, "")
         else:
