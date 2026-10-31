@@ -116,9 +116,9 @@ inductive Ty
 
 /-- A1, f_max: 1965 MHz. Grade: measured only (the driver's maximum). Source: no NVIDIA document read states a B200
 clock (Blackwell Architecture Technical Brief V2.1, the Lenovo HGX B200 Product Guide, nvidia.com's HGX page); the
-driver's maximum at default clocks on the deployed B200 is 1965 MHz (sm_100/table.toml, EPS1 DC), and the tensor and
-clock probes saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM
-clock over 148 SMs puts the FP64 clock at 1927 to 1980 MHz. -/
+driver's maximum at default clocks on the deployed B200 is 1965 MHz (sm_100/table.toml), and the tensor and clock probes
+saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock over 148
+SMs puts the FP64 clock at 1927 to 1980 MHz. -/
 def fmaxMHz : ℝ := 1965
 
 /-- The SMs A3's per-SM peaks multiply: 148. Grade: measured only. Source: no NVIDIA document read gives the B200's SM
@@ -130,8 +130,7 @@ def smCount : ℝ := 148
 figures are quoted: 1854 MHz. Grade: none (derived: no document states it). Source: the clock at which every per-clock
 peak below reproduces the Technical Brief's dense figure to within half its last digit, which holds from 1835 to 1855
 MHz, and the Lenovo guide's FP16 2.25 too from 1852 MHz; 111 MHz under f_max, as the H200's tensor clock is 150 MHz
-under its f_max (open premise B200-PEAK-PER-CLOCK: the per-clock peaks are measured, the clock they are quoted at is
-nowhere). -/
+under its f_max (an open premise: the per-clock peaks are measured, the clock they are quoted at is nowhere). -/
 def impliedMHz : ℝ := 1854
 
 /-- The FP64 clock (no document states one), at which the f64 figure is quoted: 1965 MHz. Grade: none (derived: no
@@ -241,7 +240,7 @@ def widthShfl : ℝ := 32
 
 /-- A4, the uniform pipe: 65.3965 results an SM clock, 1.95729 SMSP-cycles a warp instruction. Grade: measured only (no
 vendor document states the uniform datapath's rate). Source: Nsight Compute §2.3.6 defines the uniform pipe ('a scalar
-unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest form alone (uz_128x) at 0.5009
+unit') with no rate; the census's UP line (rows.csv): dc/probes/uniform.cuh, the fastest form alone (uz_128x) at 0.5009
 uniform instructions a SMSP-cycle, at a 2% margin 1.9572915 SMSP-cycles each (five runs); the width counts a uniform
 instruction as a warp instruction's 32 results, as the pipe row reads a width. -/
 def widthUniform : ℝ := 256000000 / 3914583
