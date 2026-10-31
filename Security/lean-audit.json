@@ -9615,6 +9615,12 @@
    "assumptions": [],
    "type_hash": "fdfab1c44d76caa6294c61288540dfde050ca2359206918637a50e713c6b9185"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits : NetTiming.Guarantees.EncardAccSeqsLeAdviceBits"],
+   "assumptions": [],
+   "type_hash": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72"
+  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -13817,7 +13823,8 @@
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest": "completeness: the honest lemma of OverlapFloorKPerProver and OverlapFloorKOneSidedPerProver: as StagedFloorPerProverHonest on one round of one draw over one cell-block, ServiceSoundOverlapPerProver at the fork finders with zero break terms, KScopeOverlapAffine, KScopeOverlapOneSided and ChargeVF3j16Overlap at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest": "completeness: the honest lemma of StagedFloorKOneSidedJ10RPerProver: as StagedFloorPerProverHonest on one round of one call over one cell-block of J10-R's call design (n = L = B = n' = 1), ServiceSoundStagedJ10RPerProver at the fork finders with zero break terms, KScopeOneSidedJ10R and ChargeVF3j16J10R at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest": "completeness: the honest lemma of OverlapFloorKOneSidedJ10RPerProver: as StagedFloorJ10RPerProverHonest on one round of one call draw over one cell-block, ServiceSoundOverlapJ10RPerProver at the fork finders with zero break terms, KScopeOverlapOneSidedJ10R and ChargeVF3j16OverlapJ10R at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
-   "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial": "completeness: the nontrivial lemma of the six floors per prover: for every HashedService whose verifier accepts everything, every coin map, sha, kz and positive floor F, ServiceFloorPerProver at breakPr with the floors' luck 2^-40 and zero break terms fails in funMachine (a constant adversary is accepted at every seed and charged nothing, while its error is 2^-40). Each floor per prover concludes ServiceFloorPerProver at that breakPr, at its own F."
+   "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial": "completeness: the nontrivial lemma of the six floors per prover: for every HashedService whose verifier accepts everything, every coin map, sha, kz and positive floor F, ServiceFloorPerProver at breakPr with the floors' luck 2^-40 and zero break terms fails in funMachine (a constant adversary is accepted at every seed and charged nothing, while its error is 2^-40). Each floor per prover concludes ServiceFloorPerProver at that breakPr, at its own F.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -26007,6 +26014,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.CardLeftPacked",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
@@ -26033,11 +26041,12 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees": {
-   "digest": "dbfe70f1e65020cbafdd88fe6372a2f53e385dc2c62a7a320d332ab9e3950db8",
+   "digest": "4d0cd2180eb25ef93b4f3ea5370cd3fd94d2f646f13a21c2b51df51d683905da",
    "definitions": {
     "NetTiming.Guarantees.CardCountsEqLe": "76cfdb78cd7740508d7036e568b2d06e1e8477270445c6b7d9d0c5ce450f39db",
     "NetTiming.Guarantees.CardFree": "95b62a6bd671c7766718290c0a9171f73ee9bc36bd85a95cf1e9dda413ca4153",
     "NetTiming.Guarantees.CardLeftPacked": "7653fe84ff0e09e8dd01c62937ace68f14424dde4e07900acc3b0d869a96d99c",
+    "NetTiming.Guarantees.EncardAccSeqsLeAdviceBits": "e05d06541f46ca580fe09a73b731e824003bfd2895dee3fb81b2f5a2b4735ea6",
     "NetTiming.Guarantees.EncardAccSeqsLeConstantRate": "b519169913a7015c8d7e76a91676d4f5c4e31d9008d1b93ccfa1ddc38fc78919",
     "NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock": "93c31cd95d771eafd5f2ccf4647668f221401ecd830cf894831cbf44df253e69",
     "NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow": "4730efb16d53a0ce553deff4de3eea25bfe57e4fa506fbfa8f992385f177f481",
@@ -26060,6 +26069,7 @@
     "NetTiming.SecurityProofs.CardCountsEqLe",
     "NetTiming.SecurityProofs.CardFree",
     "NetTiming.SecurityProofs.CardLeftPacked",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
@@ -26195,6 +26205,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
