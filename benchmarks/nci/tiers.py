@@ -29,12 +29,12 @@ proved.
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
   reads 2 b_p bits, and the developer relays only as many partial sums as buy more registered work than the relay's gates
   would train directly.
-* The verdict lag: from its first faulty proof block until the halt (a window plus the verdict delay), a developer can skip
+* The verdict lag: from its first incorrect proof block until the halt (a window plus the verdict delay), a developer can skip
   all registered work, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
-* chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
+* chi, the cheating share: with sampled proofs at a budget, the incorrect proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
-  (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns faulty outputs into skipped work. A block that
+  (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns incorrect outputs into skipped work. A block that
   injects a chosen output fails its proof whenever it is sampled, so luck doesn't multiply those: ln(1/delta) / q of them
   inject their output bits into the inference block that holds them (the width form needs no bits for where), each bit
   worth at most ``chord``, the steepest secant from K of one inference block's thread bound.

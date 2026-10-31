@@ -1,7 +1,7 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
 A semantically meaningful part of the registered or actual circuit is a block, always named with a prefix
-(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
-proof block. The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
+(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
+proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
 Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
 line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the retired-terms table
@@ -10,7 +10,8 @@ record or a digest (``ALLOWED``, one reason each; an entry that matches nothing 
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
-"block" is reserved for parts of circuits, the subprotocols go by their names, and "leg", the dampener and NCI are retired). Their code
+"block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
+their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """
@@ -21,7 +22,7 @@ import re
 from test_repository import ROOT, _tracked
 
 #: Each retired term and what to write instead.
-TERMS = {"proof unit": "proof block", "faulty unit": "faulty proof block", "proof service": "proof system"}
+TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system"}
 _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b", re.I)
 
@@ -32,7 +33,8 @@ RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "dec
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
-    "wrong unit, incorrect unit": "faulty proof block",
+    "wrong unit, incorrect unit": "incorrect proof block",
+    "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
     "isolation unit, IU": "isolation block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
@@ -67,6 +69,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
+                       rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
@@ -332,3 +335,14 @@ def test_the_doc_scan_reads_the_training_terms():
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "dampener"), ("a.md", 1, "Dampeners"), ("a.md", 1, "NCI"), ("a.md", 1, "novel communication intensity")]
+
+
+def test_the_doc_scan_reads_the_incorrect_terms():
+    """Incorrect proof blocks and the incorrect set, on toy files: a faulty node, link, device or hardware stays."""
+    docs = {
+        "a.md": "Two faulty proof blocks, a faulty\nproof block, the faulty-block bound and the faulty set.\n"
+                "A faulty node, a faulty link, a faulty device, faulty hardware and an incorrect proof block stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "faulty proof blocks"), ("a.md", 1, "faulty proof block"), ("a.md", 2, "faulty-block"),
+        ("a.md", 2, "faulty set")]
