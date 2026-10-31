@@ -12,7 +12,14 @@ a landed PR's head hears once that its base landed and to merge `main` (`_stacke
 What a sync leaves out of `next` is told once per root cause instead of once per PR and head: the PR that didn't merge or isn't
 admitted, why, and every marked PR it takes out, their owners tagged once, and again only when that changes (`tell_out`).
 
-Review landing, the only landing.  `main` holds only fully checked commits: PRs land on a review onto the
+The low-risk lane (drive.toml's `lowrisk_lane`, `land_lowrisk`): after the reviewed prefix, a tick lands up to `lowrisk_per_tick`
+members of `next`, in its order, onto `checked` on their ready mark alone, with no land verdict, no Lean check and no wait in
+`next`, each whose merge onto `checked`'s tip changes no file `lowrisk_excludes` names (`queue.lowrisk`: no Lean, lock or
+soundness-path Python), merges with no conflict, contains no PR not landed, and passes the landing gates and the compile gate.
+The after-landing run checks them with the rest, and `main` follows only a checked commit; never with `land_into = "main"`.
+
+Review landing, of every change the low-risk lane (above) doesn't take.  `main` holds only fully checked commits: PRs land
+on a review onto the
 landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs the full check on its tip, and `main` is
 fast-forwarded only to a commit of it whose after-landing run passed every step on the merge gate (`_promote`: not
 circuit-check, ci.toml's `gate = false`, whose red reverts its culprit on `checked`); with `land_into = "main"` they
@@ -688,6 +695,19 @@ def touches(files: set[str], paths: set[str]) -> set[str]:
     return {f for f in files for p in paths if p == f or ("/" in f and p.startswith("/") and p.endswith("/" + f))}
 
 
+def py_errors(repo: Path, base: str, top: str) -> list[tuple[str, str]]:
+    """Each .py file ``base``..``top`` changes that doesn't compile at ``top``, as `python -m py_compile` compiles it, with why."""
+    bad = []
+    for f in sorted(changed(repo, base, top)):
+        if not f.endswith(".py") or (r := _git(repo, "show", f"{top}:{f}", check=False)).returncode:
+            continue
+        try:
+            compile(r.stdout, f, "exec", dont_inherit=True)
+        except (SyntaxError, ValueError) as e:
+            bad.append((f, f"{type(e).__name__}: {e}"))
+    return bad
+
+
 def lean_cut(chain: list[Member], lo: int, top: int, is_lean: Callable[[Member], bool], slots: int) -> int:
     """The index in ``chain`` to check the Lean changes (``is_lean``) of ``chain[lo:top + 1]`` up to, when ``slots`` Lean checks
     may share them: just below the Lean change after the first ceil(n / ``slots``) of its n, or ``top``.  Spaced cut points
@@ -724,8 +744,11 @@ class Driver:
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
                  ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
-                 after_landing_shards: int = 1):
+                 after_landing_shards: int = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
+                 lowrisk_excludes: tuple[str, ...] = ()):
         self.q, self.on = q, on
+        #: drive.toml's low-risk lane (`land_lowrisk`): on, its most landings a tick, and what keeps a change off it (`lowrisk`)
+        self.lowrisk_lane, self.lowrisk_per_tick, self.lowrisk_excludes = lowrisk_lane, lowrisk_per_tick, lowrisk_excludes
         #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each (`start_postland`)
         self.after_landing_shards = after_landing_shards
         #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
@@ -1854,7 +1877,8 @@ class Driver:
     #    "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
-        """One tick of the review landing: move `main` to a fully checked `checked` (`_promote`) and bring a `main` pushed
+        """One tick of the review landing, its low-risk lane after it (`land_lowrisk`): move `main` to a fully checked `checked`
+        (`_promote`) and bring a `main` pushed
         outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`, its reviewed ones
         above what a Lean check keeps to its bottom: `_lift`; held on its base
         while a Lean check of it runs, drive's or a hand one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
@@ -1878,6 +1902,7 @@ class Driver:
         waits = next((c for c, rec in drive["lean"].items()
                       if not rec.get("stacked") and (c in running or rec.get("ended") == drive["tick"])
                       if any(not q.ready(n, h) for n, h in rec.get("members") or ())), None)
+        entries: dict[int, Entry] | None = None
         if why := hold(self.repo, q.branch, lambda c, base: c in running, q.base):
             what.append(why)
         elif waits:
@@ -1896,11 +1921,14 @@ class Driver:
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
             self.tell_out(drive, entries, state)
-        landed, why = None, self._unbaselined(drive)
+        landed, why, lane = None, self._unbaselined(drive), []
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
             self._stack_lean(drive, dry_run)
+            lane = self.land_lowrisk(drive, entries, running, dry_run)
         what.insert(0, f"landed #{landed.pr}" if landed else why)
+        if lane:
+            what.append(f"landed {' '.join(f'#{m.pr}' for m in lane)} on the low-risk lane")
         self._sweep(drive, dry_run)
         self._stale(drive, dry_run)
         self.start_postland(drive)
@@ -2159,6 +2187,121 @@ class Driver:
         if got and (lock := _out(self.repo, "rev-parse", q.base)) != m.commit and chain[t + 1:]:
             self._carry(drive, chain, t, lock)
         return got, "" if got else f"{prs} reviewed but not landed (see above)" + (f"; {stop}" if stop else "")
+
+    def land_lowrisk(self, drive: dict, entries: dict[int, Entry] | None, running: set[str], dry_run: bool) -> list[Member]:
+        """The low-risk lane (drive.toml's `lowrisk_lane`): after the reviewed prefix lands, or when nothing does, land up to
+        `lowrisk_per_tick` members of `next`, in its order, onto `checked`'s tip (never `main`) on their ready mark alone, each
+        as one `Queue: #N` merge, when the files that merge changes against that tip are `lowrisk`.  Each still needs its ready
+        mark at its PR's head, no hold label or hold verdict, no red circuit-check on its inputs (`_circuit_held`), a merge
+        with no conflict at all, every PR whose commits it contains (`Entry.after`) on the tip, the landing gates
+        (`landing_gates`) and every .py file the landing leaves compiling (`py_errors`); each is judged on the tip the one
+        before it left.  The after-landing run of `checked` checks them as it checks reviewed landings, and a red one reverts
+        its culprit (`_red`); the next sync rebuilds `next` without them.  A landing off `next` rebuilds all of `next`, so the
+        lane waits while a Lean check of `next` runs or awaits its landing (`drive["lean"]`, `_running_lean`), and while no
+        sync ran this tick (no ``entries``).  The landed members."""
+        from .merge import CHECKED
+        from .queue import _message, gate_refusal, gates_at, lowrisk
+
+        q = self.q
+        if not (self.lowrisk_lane and self.lowrisk_excludes) or q.into != CHECKED:
+            return []
+        if busy := sorted(running | {c for c, rec in drive.get("lean", {}).items() if rec.get("state") in (None, "passed")}):
+            q.log(f"research queue drive: low-risk lane waits: a landing off `{q.branch}` would rebuild it under the Lean "
+                  f"check of {', '.join(c[:12] for c in busy)}")
+            return []
+        if entries is None:
+            return []
+        start = tip = _out(self.repo, "rev-parse", q.base)
+        gates = gates_at(self.repo, tip)
+        hold_label = q.rules().hold_label
+        landed: list[tuple[Member, str]] = []
+        skipped: list[str] = []
+        for m in self._chain()[1]:
+            if len(landed) >= self.lowrisk_per_tick:
+                break
+            if not lowrisk(self._own(m), self.lowrisk_excludes) or self._ancestor(m.head, tip):
+                continue
+            if why := self._lowrisk_held(m, entries, hold_label, tip):
+                skipped.append(f"#{m.pr} ({why})")
+                continue
+            p = self._open()[m.pr]
+            tree, why = self._clean_merge(tip, m.head)
+            if tree is None:
+                skipped.append(f"#{m.pr} ({why})")
+                continue
+            files = set(_out(self.repo, "diff", "--name-only", "--no-renames", tip, tree).split())
+            if not lowrisk(files, self.lowrisk_excludes):
+                skipped.append(f"#{m.pr} (its merge onto `{q.into}`'s tip is no low-risk change)")
+                continue
+            commit = _git(self.repo, "commit-tree", tree, "-p", tip, "-p", m.head, "-m", _message(p), env=IDENTITY).stdout.strip()
+            refused, unjudged = gate_refusal(self.repo, tip, commit, gates, onto=q.into) if gates else ([], [])
+            if refused or unjudged:
+                skipped.append(f"#{m.pr} (landing gate: {' | '.join(refused + unjudged)[:300]})")
+                continue
+            if bad := py_errors(self.repo, tip, commit):
+                skipped.append(f"#{m.pr} (compile: {'; '.join(f'{f}: {e}' for f, e in bad)[:300]})")
+                continue
+            landed.append((m, commit))
+            tip = commit
+        if skipped:
+            q.log(f"research queue drive: low-risk lane skipped {', '.join(skipped)}")
+        if not landed:
+            return []
+        if dry_run or q.shadow:
+            for m, commit in landed:
+                q.log(f"research queue drive: would land #{m.pr} on `{q.into}` (low-risk lane: no Lean, lock or soundness-path "
+                      "change)" + (" [shadow]" if q.shadow else ""))
+            return []
+        q._drive_only(q.into, "once", False)
+        if (r := q._remote(self.repo, "push", "-q", "--no-verify", "origin", f"{tip}:refs/heads/{q.into}", ok=None)).returncode:
+            q.log(f"research queue drive: low-risk lane: pushing `{q.into}` was refused ({r.stderr.strip()[-200:]}); the next "
+                  "tick tries again")
+            return []
+        _git(self.repo, "update-ref", q.base, tip)
+        below = start
+        for m, commit in landed:
+            q.log(f"research queue drive: landed #{m.pr} on `{q.into}` at {commit[:12]} (low-risk lane: no Lean, lock or "
+                  "soundness-path change)")
+            self._after_landing(drive, commit, below)
+            below = commit
+        return [m for m, _ in landed]
+
+    def _lowrisk_held(self, m: Member, entries: dict[int, Entry], hold_label: str, tip: str) -> str | None:
+        """Why the low-risk lane doesn't land ``m`` onto ``tip`` before merging it, or None: its PR closed or pushed past the head
+        `next` merged, a hold label, no ready mark at that head (`marked_after`'s), a hold verdict there, a red circuit-check on
+        its inputs, or a PR whose commits it contains (`Entry.after`) that isn't on ``tip``."""
+        p = self._open().get(m.pr)
+        if p is None or (e := entries.get(m.pr)) is None:
+            return "not open"
+        if p.head != m.head:
+            return f"pushed to {p.head[:8]} since `{self.q.branch}` merged {m.head[:8]}"
+        if hold_label in p.labels:
+            return f"`{hold_label}` label"
+        try:
+            if not self.q.ready(m.pr, m.head):
+                return f"no ready mark at {m.head[:8]}"
+            if (why := unreviewed(self.reviews(m.pr, m.head), ())) and why.startswith("held"):
+                return why
+        except QueueError as e:
+            return f"its labels can't be read: {e}"
+        if why := self._circuit_held(m):
+            return why
+        if unlanded := [a for a in e.after if not self._ancestor(e.held[a], tip)]:
+            return f"contains {e.contains(unlanded[0])}, which isn't landed"
+        return None
+
+    def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
+        """(the tree of ``head`` merged onto ``tip``, "") when it merges with no conflict at all, as `Queue._merge` merges with
+        ``tip``'s merge drivers, else (None, why).  A git without `--attr-source` merges without them, which conflicts more."""
+        args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
+        r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
+        if r.returncode == 129 and "attr-source" in r.stderr:
+            r = _git(self.repo, *args, check=False)
+        if r.returncode == 1:
+            return None, f"conflict in {', '.join(dict.fromkeys(r.stdout.splitlines()[1:])) or 'a file'}"
+        if r.returncode:
+            return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
+        return r.stdout.split()[0], ""
 
     def _reviewed(self, chain: list[Member]) -> tuple[int, str | None]:
         """(how many members at the bottom of ``chain`` land on their verdicts, why the next one doesn't): each has its ready mark
@@ -2642,15 +2785,7 @@ class Driver:
         `python -m py_compile` does.  The member that last changed a file that doesn't is ejected (`_eject`), and what's below
         it lands."""
         top = chain[t].commit
-        bad = []
-        for f in sorted(changed(self.repo, base, top)):
-            if not f.endswith(".py") or (r := _git(self.repo, "show", f"{top}:{f}", check=False)).returncode:
-                continue
-            try:
-                compile(r.stdout, f, "exec", dont_inherit=True)
-            except (SyntaxError, ValueError) as e:
-                bad.append((f, f"{type(e).__name__}: {e}"))
-        if not bad:
+        if not (bad := py_errors(self.repo, base, top)):
             return t
         by: dict[int, list[str]] = {}
         for f, err in bad:
