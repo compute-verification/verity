@@ -13,10 +13,10 @@ its parts, each ``nbytes`` bytes at ``offset`` of the slot's bytes in the group'
   :data:`UNIT_MAX_BITS`, an empty unit or row, a part outside its tensor. Equal groups become one object, as a layout's
   layers are, so each is checked and indexed once.
 - :func:`to_json` writes it back, ``_layout_json``'s output.
-- :attr:`Layout.json_digest` is what a deployment file binds: ``identity_digest_sha512(JSON_TAG, to_json(layout))``, the
+- :attr:`RowsPerSlot.json_digest` is what a deployment file binds: ``identity_digest_sha512(JSON_TAG, to_json(layout))``, the
   parts included (``slots``' own ``layout_digest`` binds only the rows' sizes, which the unit domains need).
 - :func:`check_shared` refuses a layout that isn't shared-row: a row of more than :data:`MAX_PARTS` parts, a
-  tensor byte in no row or in two, or a producer's output that isn't a window of one row (:meth:`Layout.window`).
+  tensor byte in no row or in two, or a producer's output that isn't a window of one row (:meth:`RowsPerSlot.window`).
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from verity.errors import InvalidArtifact
 
 from .identity import tagged_sha512_prefix
 
-__all__ = ["JSON_TAG", "MAX_PARTS", "UNIT_MAX_BITS", "Group", "Layout", "Part", "Row", "check_shared", "load", "of_json",
+__all__ = ["JSON_TAG", "MAX_PARTS", "UNIT_MAX_BITS", "Group", "Part", "Row", "RowsPerSlot", "check_shared", "load", "of_json",
            "to_json"]
 
 JSON_TAG = "verity/commitments/layout-json/v1"
@@ -91,7 +91,7 @@ class Group:
 
 
 @dataclass(frozen=True)
-class Layout:
+class RowsPerSlot:
     """A step's rows a slot, the same for every slot: its groups in order (a repeated group one object); ``name`` names it."""
 
     name: str
@@ -180,7 +180,7 @@ def _canonical(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def to_json(layout: Layout) -> dict[str, Any]:
+def to_json(layout: RowsPerSlot) -> dict[str, Any]:
     """``slots._layout_json(layout)``. A repeated group's object is one object: copy it before editing one."""
     memo: dict[int, dict[str, Any]] = {}
     for g in layout.groups:
@@ -213,7 +213,7 @@ def _group(i: int, sources: list[Any], units: list[Any]) -> Group:
         raise InvalidArtifact(f"group {i} {e}") from None
 
 
-def of_json(doc: Any) -> Layout:
+def of_json(doc: Any) -> RowsPerSlot:
     """The layout ``doc`` is (``slots._layout_json``'s form), refusing anything else; equal groups become one object."""
     if type(doc) is not dict or doc.keys() != {"name", "groups"}:
         raise InvalidArtifact('a layout is {"name", "groups"}')
@@ -233,7 +233,7 @@ def of_json(doc: Any) -> Layout:
         if key not in seen:
             seen[key] = _group(i, g["sources"], g["units"])
         groups.append(seen[key])
-    return Layout(doc["name"], tuple(groups))
+    return RowsPerSlot(doc["name"], tuple(groups))
 
 
 def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -243,7 +243,7 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def load(path: str | os.PathLike[str]) -> Layout:
+def load(path: str | os.PathLike[str]) -> RowsPerSlot:
     """The layout in the Layout JSON file ``path``."""
     with open(path, "rb") as f:
         raw = f.read()
@@ -254,7 +254,7 @@ def load(path: str | os.PathLike[str]) -> Layout:
     return of_json(doc)
 
 
-def check_shared(layout: Layout, outputs: Iterable[tuple[int, int, int, int]] = ()) -> None:
+def check_shared(layout: RowsPerSlot, outputs: Iterable[tuple[int, int, int, int]] = ()) -> None:
     """Refuse ``layout`` unless it is shared-row: every row at most :data:`MAX_PARTS` parts; in each group every byte
     of every tensor in exactly one row, except a tensor each row reading it reads whole (a quantizer's f32 scale, beside each
     of its chunks' codes); and each producer output in ``outputs``, (group, tensor, offset, bytes), a window of one row."""
