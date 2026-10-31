@@ -33,6 +33,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "")        # nor does a merge's push reach node 1's bare repository
     monkeypatch.setenv("RESEARCH_LEAN_PUBLISH", "")        # nor start the control pod's Lean cache publish
     monkeypatch.setenv("RESEARCH_DRIVE", "1")              # a test pushes main and next as drive does; the refusal's tests unset it
+    monkeypatch.setenv("RESEARCH_AT_CHECKOUT", "1")        # a `research` a test starts runs the code under test, not origin/main's
     # ... nor the public export: an empty URL is no public source (unset, as the clear above leaves it, would mean fetchset.PUBLIC_URL)
     monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
     # ... nor the machine's hard deadline: lease.sh defaults to /etc/research/deadline, which a Nebius host has
