@@ -92,6 +92,10 @@ def _rounds():
     return LiveRecord(Wd.live_challenger(0, 4, random.Random(0).randbytes), Wd.ROUND, clock=lambda: float(next(clock)))
 
 
+def _draw():
+    return LiveRecord(Wd.draw_challenger(0, random.Random(1).randbytes), Wd.DRAW)
+
+
 def _so(*new, running=None):
     reqs = [SimpleNamespace(req_id=i, prompt_token_ids=p, sampling_params=SimpleNamespace(max_tokens=c)) for i, p, c in new]
     scheduled = dict(running or {}) | {i: len(p or ()) for i, p, _c in new}
@@ -114,7 +118,7 @@ def _whole(salt=SALT, modules=MODULES):
     """One process serving every linear (PP = 1): `pouw_h1_hooks.wire` on the runner and the layers."""
     layers, runner, h = _layers(), Runner(), Hooks(tag="pp1")
     run = PH.H1Run("t", salt, modules, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
-    run.draw = LiveRecord(run.rounds.challenger, Wd.DRAW)
+    run.draw = _draw()
     PHK.wire(run, h, layers, runner, 32)
     for i, so in enumerate(STEPS):
         runner.execute_model(so)
@@ -139,7 +143,7 @@ def _staged(rows_of=None):
         hooks.append((layers[lo:hi], h))
     executor = Executor(workers)
     run = PH.H1Run("t", SALT, MODULES, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
-    run.draw = LiveRecord(run.rounds.challenger, Wd.DRAW)
+    run.draw = _draw()
     holder = PHR.Holder(run, executor, [{"decode_query_len": 1}], Hooks(tag="holder"))
     holder._push()
     holder.hooks.wrap(executor, "execute_model", holder.admitting)
@@ -232,6 +236,6 @@ def test_install_lays_tensor_parallel_ranks_out_rank_major_and_commits_one_windo
     assert run.static() and [c.index for c in run.calls] == list(range(4 * len(SHAPES)))
     assert [c.summary() for c in run.calls] == [c.summary() for c in whole.calls]
     assert run.round_log == whole.round_log and run.calls_root() == whole.calls_root()
-    assert run.commits["draw"] == whole.commits["draw"]
+    assert {**run.commits["draw"], "coin": None} == {**whole.commits["draw"], "coin": None}
     assert run.details["ranks"] == {"0": {"refused": 0, "order_ok": True}, "2": {"refused": 0, "order_ok": True}}
     assert all(w._h1rank is None for w in workers)

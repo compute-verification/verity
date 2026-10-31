@@ -42,10 +42,12 @@ for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("te
 cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_cases", "test_circuit_h1window"))
 
 SEEDS = range(3)
+#: a draw root no withheld session opened on: its draw coin was never drawn after it
+NO_DRAW_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window"
 
 #: each `_credited` mutation's refusal: its code and its reason's start
 CREDIT_EXPECT = {
-    "changed": ("draw", Cr.CHANGED), "withdrawn": ("draw", Cr.CHANGED), "row-changed": ("draw", Cr.CHANGED),
+    "changed": ("coin", NO_DRAW_SESSION), "withdrawn": ("coin", NO_DRAW_SESSION), "row-changed": ("coin", NO_DRAW_SESSION),
     "stale-root": ("draw", Cr.DRAW_ROOT), "no-bit": ("credit", "manifest row "), "bit-form": ("credit", "manifest row "),
     "no-z": ("credit", "call "), "index": ("manifest", "manifest row "), "row-form": ("manifest", "manifest row "),
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
@@ -53,9 +55,11 @@ CREDIT_EXPECT = {
     "draw-form": ("draw", Cr.DRAW_FORM),
     "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the draw coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
-    "forged-ledger": ("coin", "the challenger's session is not trusted"),
-    "unpinned": ("coin", "the challenger's session is not trusted: session s-1 ran commit "),
-    "branch-pin": ("coin", "the challenger's session is not trusted: session s-1 ran commit "),
+    "forged-ledger": ("coin", "the draw's session is not trusted: "),
+    "unpinned": ("coin", "the draw's session is not trusted: session "),
+    "branch-pin": ("coin", "the draw's session is not trusted: session "),
+    "unwithheld": ("coin", Ch.WITHHELD), "draw-elsewhere": ("coin", NO_DRAW_SESSION),
+    "draw-session": ("coin", "the draw's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
 }
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
@@ -102,8 +106,8 @@ WINDOW_EXPECT = {
     "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
     "alt-layout": ("layout", Cr.BODY), "tile-k": ("tile-k", TILE_K),
-    "credit-changed": ("draw", Cr.CHANGED), "credit-no-draw": ("draw", Cr.NO_DRAW),
-    "credit-forged-ledger": ("coin", "the challenger's session is not trusted"),
+    "credit-changed": ("coin", NO_DRAW_SESSION), "credit-no-draw": ("draw", Cr.NO_DRAW),
+    "credit-forged-ledger": ("coin", "the draw's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
     "never-received": ("rounds", NOT_RECEIVED), "round-coin": ("coin", "coin was not opened after"),
@@ -160,8 +164,8 @@ WINDOW_EXPECT = {
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
     "missing": ("missing", "present them all, in the close's order"),
-    "order": ("order", "in the order its close lists them"), "extra": ("period", "only its close's windows count"),
-    "foreign": ("period", "only the windows its close lists count"), "unopened": ("period", "opens no period"),
+    "order": ("order", "in the order its close lists them"), "extra": ("period", "only its close's sessions count"),
+    "foreign": ("period", "only the sessions its close lists count"), "unopened": ("period", "opens no period"),
     "name": ("period", "the period is not named"), "window-refused": ("window", "so the period earns nothing"),
     "windows-form": ("period", Cr.WINDOWS_FORM), "forged-ledger": ("coin", "the auditor's ledger is not trusted"),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
@@ -281,12 +285,15 @@ def test_honest_window_credits_its_bits(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_credit_bit_changed_after_draw_is_refused(seed):
-    """A verdict withdrawn (or granted) after the draw coin, the draw root recomputed over the new bits,
-    is not the root the challenger's log shows the draw followed."""
+    """A verdict withdrawn (or granted) after the draw coin, the draw root recomputed over the new bits, is no root the
+    ledger opened a withheld draw session on; a draw coin opened after another root than the draw root is not the one
+    the challenger's log shows the draw followed."""
     for name in ("withdrawn", "changed"):
         _, (got, refused) = _credited(name, seed)
-        assert got is None and refused == ("draw", Cr.CHANGED)
-        assert "Commit every call's credit bit in its manifest row, and the Commit record, before the draw root" in refused[1]
+        assert got is None and refused == ("coin", NO_DRAW_SESSION)
+    _, (got, refused) = _credited("draw-after-other", seed)
+    assert got is None and refused == ("draw", Cr.CHANGED)
+    assert "Commit every call's credit bit in its manifest row, and the Commit record, before the draw root" in refused[1]
 
 
 @pytest.mark.parametrize("seed", SEEDS)
