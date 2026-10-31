@@ -764,8 +764,8 @@ def test_the_io_tie_refuses_each_negative_it_reads_by_its_part():
     kept root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified cell of
     another id, a dropped cell, and the map of a length or missing advice negative fail the content; an extra
     request, which no connection carries, and a release the warden didn't make fail the map; start and chunk, whose
-    outputs and buckets are honest's, pass, leaving them to the step unit. Two lanes of r = 2 slots hold r0 and r1
-    live together; one lane can't."""
+    outputs and buckets are honest's, pass, leaving them to the step proof block. Two lanes of r = 2 slots hold r0 and
+    r1 live together; one lane can't."""
     pytest.importorskip(NG.IO_TIE_MODULE)
     rows = NG.tie_suite(_advice(), IDS, T=8)
     assert rows["honest"]["ok"] and rows["honest"]["shape"] == {"B": 256, "T": 8, "R": 4, "P": 3, "S": 3, "DS": 3,

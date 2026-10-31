@@ -1,9 +1,9 @@
-"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the warden's own ingress: the unit a
-bucket row that binds each request's prompt_len and arrival ordinal to the warden's certified ingress cells, its
+"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the warden's own ingress: the proof
+block a bucket row that binds each request's prompt_len and arrival ordinal to the warden's certified ingress cells, its
 reference in the clear and the Boolean Definitions it is built from. Nothing here is in a Spec or proved.
 
 **The cells are the warden's** (`warden.Warden._ingress`, its rows as `warden_rows` registers them, a row a bucket).
-A link-window's ingress is T rows, row t bucket t's L·R slots of B bytes, R the warden's r. A bucket's live
+An execution phase's ingress is T rows, row t bucket t's L·R slots of B bytes, R the warden's r. A bucket's live
 connections, admitted and not past their ingress `END`, hold R slots each, ranked by ordinal (lane ρ: slots ρ·R …
 ρ·R + R − 1), and a slot no connection holds is B zero bytes. Connection q's cells are its client's bytes cut as
 `warden.cells` cuts them: byte k in its request cell ⌊k / P⌋, a `DATA` of exactly P = B − 9 bytes while more follow,
@@ -31,7 +31,7 @@ buckets it spans (a carry checked alone would accept any added count).
 ordinal, no request cell after a pad or after the request's `END`, each request cell that cell of a canonical id
 request with its header's length (P for a `DATA`, the bytes left for the `END`), leaving the carry-out with no count
 past 2^32; a lane of ordinal 0 is B zero bytes a slot. That the row is row t of the warden's registered root is the
-proof system's registered read, outside the unit (`warden_rows.bucket_port`).
+proof system's registered read, outside the proof block (`warden_rows.bucket_port`).
 
     IoTieRequestFrame{B}(cell: Array<B, Byte>, left, q: Array<32>) -> Array<68>
         pad, req, start, ended, the bytes left after it (u32) and its prompt fields (u32), LSB first
@@ -41,8 +41,8 @@ proof system's registered read, outside the unit (`warden_rows.bucket_port`).
     IoTieRequest{B, L, R}(row: Array<8·L·R·B>, lanes: Array<L, Array<160>>) -> Value<1>
         a lane: q, left, fields, left_out, fields_out, u32 each, LSB first
 
-`IoTieRequest` is the unit, one a bucket row: in each lane, one `IoTieRequestFrame` and one `IoTieRequestStep` a cell
-from the carry-in, then `IoTieRequestEnd` against the carry-out. The frame reads its cell's header (kind, ordinal
+`IoTieRequest` is the proof block, one a bucket row: in each lane, one `IoTieRequestFrame` and one `IoTieRequestStep` a
+cell from the carry-in, then `IoTieRequestEnd` against the carry-out. The frame reads its cell's header (kind, ordinal
 against q, length) and its payload against the bytes its request has left (0: the request starts here) both ways, a
 first cell's reading and a continuation's, each with its slots at fixed places and `]}` where the bytes left put it.
 The step keeps (left, fields, over, padded, ok), and a request cell after a pad or the `END` drops ok. Public: the
@@ -659,7 +659,8 @@ def frame_arguments(cells: Sequence[bytes], lefts: Sequence[int], qs: Sequence[i
 
 
 def lane_bits(lanes_: Sequence[Lane]) -> list[int]:
-    """The lanes' bits as the unit reads them, u32s least significant bit first. Raises `ValueError` past a u32."""
+    """The lanes' bits as the proof block reads them, u32s least significant bit first. Raises `ValueError` past a
+    u32."""
     if any(type(x) is not int or not 0 <= x < 1 << 32 for ln in lanes_ for x in ln):
         raise ValueError(f"a lane is five u32s, not {lanes_!r:.200}")
     return [b for ln in lanes_ for x in ln for b in HC._int_bits(x, 32)]
