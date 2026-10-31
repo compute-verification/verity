@@ -1,4 +1,4 @@
-"""The node's store: one registry of everything the prover registers for the remote bandwidth audit, the hooks that keep
+"""The node's store: one registry of everything the prover registers for PoUB, the hooks that keep
 it current while vLLM serves, and the small interface a protocol driver talks to.
 
 Terms are the design's (store, block, tier, registration, receipt, pass, window, commitment, opening):

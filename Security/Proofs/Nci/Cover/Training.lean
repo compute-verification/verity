@@ -22,7 +22,7 @@ open Finset
 
 /-- **The counted products are finished by the pieces' blocks**: every counted product's output bit is computed by the
 block of the piece that holds its gate. -/
-theorem card_P_le_sum_finished {c d : Verity.Declaration} (M : Verity.Containment c.D d.D) {n : ℕ}
+theorem card_P_le_sum_finished {c d : Verity.RegisteredCircuit} (M : Verity.Containment c.D d.D) {n : ℕ}
     (P : Verity.Partition d.D n) {J L : Type} [DecidableEq J] [DecidableEq L]
     (Mb : MulBlocks (Circuit.ofDecl c) J L) :
     Mb.P.card ≤ ∑ u, (Mb.finished (block c ((Nci.SecurityProofs.pull M P).gates u))).card := by
@@ -44,7 +44,7 @@ theorem card_P_le_sum_finished {c d : Verity.Declaration} (M : Verity.Containmen
 /-- **The per-block bounds summed over a compliant division pulled back to `c`**: if the block of every set of `c`'s
 gates, when it has at most `s` bits and is handed `k < b D` bits outside the free bits, finishes at most `(k² + e k) / e`
 counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTraining` is this at `e = b`, from `intensity`. -/
-theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.Declaration} (M : Verity.Containment c.D d.D)
+theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.RegisteredCircuit} (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L) {s D w₀ : ℕ}
     (he : 0 ≤ e) (hα : 0 ≤ α) (hC : Nci.Complies Γ α d)
     (hB : Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)

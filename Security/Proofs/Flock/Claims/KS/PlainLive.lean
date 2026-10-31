@@ -242,7 +242,7 @@ theorem plainRepNs_length {spec : SessionSpec} {st : Stmt} {s : Flock.Schedule} 
 table whose schedule has at least two levels. -/
 theorem plainLive_schedLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (ht : tables false x = [(spec, st)])
-    {sch : Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
+    {sch : FlockSoundness.Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
     (pts : Fin 2 → Fin spec.mPts → 𝔽) :
     SchedL (plainDg spec) (plainLiveK keep x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) (repRounds false spec st)
@@ -263,7 +263,7 @@ theorem plainLive_schedLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {s
 /-- `plainLive_schedLK` at the deployed plain verifier (`keep := id`). -/
 theorem plainLive_schedL {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (ht : tables false x = [(spec, st)])
-    {sch : Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
+    {sch : FlockSoundness.Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
     (pts : Fin 2 → Fin spec.mPts → 𝔽) :
     SchedL (plainDg spec) (plainLive x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) (repRounds false spec st)

@@ -179,7 +179,7 @@ Protocols and claims:
   `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
-  are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
+  are for the whole node. PoUB treats the prover's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512

@@ -336,7 +336,7 @@ roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's
 (`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
 theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
         (Claims.Flock.zkSched (st j).m).1.k0))
@@ -388,7 +388,7 @@ roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's
 (`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
 theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
         (Claims.Flock.zkSched (st j).m).1.k0))
@@ -412,7 +412,7 @@ only level 0's event of a table is at round `0` and the slack fits the room (`zk
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
         (Claims.Flock.zkSched (st j).m).1.k0))
@@ -440,7 +440,7 @@ only level 0's event of a table is at round `0` and the slack fits the room (`zk
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
         (Claims.Flock.zkSched (st j).m).1.k0))

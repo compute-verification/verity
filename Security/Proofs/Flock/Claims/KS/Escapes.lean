@@ -48,7 +48,7 @@ theorem not_clashL_nil {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F] (H 
 
 /-- **An output whose openings are all empty never self-clashes.** -/
 theorem not_selfClashL_nil {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F] (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (sch : Accounting.Schedule)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (sch : FlockSoundness.Accounting.Schedule)
     {out : Model.OutCL F D Sl} (h : out.opens = fun _ _ _ => ([], [])) : ¬ SelfClashL H E Lf sch out := by
   rintro (hc | ⟨r, -, ℓ, -, cap, -, hc⟩)
   · refine not_clashL_nil H E Lf _ _ _ (fun x hx => ?_) hc
@@ -68,7 +68,7 @@ theorem tableOutL_nulOp_opens {D Sl : Type} [Inhabited Sl] (Hc : List UInt8 → 
 at the reps' pendings on their runs of their whole decoded tapes, the cap the roots decode to and the openings the proof
 files decode to (`Claims.Bridge.RetOK`), self-clashes. -/
 def LiveSelfClash {D Sl : Type} [Inhabited D] [Inhabited Sl] {J mPts : ℕ} (Hc : List UInt8 → D)
-    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule)
+    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule)
     (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Model.Opens 𝔽 D × Model.Salts Sl)
     (dec : Fin J → ℕ → ByteArray → List Msg) (one : Fin J → ℕ → Bool)
     (fin : Fin J → Fin 2 → Array ByteArray → List Msg) (capOf : Array ByteArray → Fin J → Model.Cap D)

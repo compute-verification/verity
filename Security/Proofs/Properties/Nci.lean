@@ -12,7 +12,7 @@ Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemma
 namespace NciCheck.Properties.SecurityProofs
 
 open Lean (Json toJson)
-open Flock.Program (Prog)
+open Flock.Program (Prog GateTable)
 
 theorem parses_unique {j : Json} {i i' : Instance} (h : Parses j i) (h' : Parses j i') : i = i' := by
   have h1 := (parse_ok j i).2 h
@@ -38,13 +38,13 @@ theorem verdict_iff_wellFormed (j : Json) : (∃ out, evaluate j = .ok out) ↔ 
   constructor
   · rintro ⟨out, h⟩
     obtain ⟨i, P, c, dv, h1, h2, h3, h4, -⟩ := (evaluate_ok j out).1 h
-    obtain ⟨hP, hr⟩ := (decodeProgram_ok _ _).1 h2
+    have hP := (decodeProgram_ok _ _).1 h2
     obtain ⟨ht, hs, ho, he⟩ := (divisionOf_isOk h3 _ _).1 ⟨dv, h4⟩
-    exact ⟨i, P, (parse_ok j i).1 h1, hP, hr, (circuitOf_isOk P).1 ⟨c, h3⟩, ht, hs, ho, he⟩
-  · rintro ⟨i, P, hi, hP, hr, hg, ht, hs, ho, he⟩
+    exact ⟨i, P, (parse_ok j i).1 h1, hP, (circuitOf_isOk P).1 ⟨c, h3⟩, ht, hs, ho, he⟩
+  · rintro ⟨i, P, hi, hP, hg, ht, hs, ho, he⟩
     obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hg
     obtain ⟨dv, hd⟩ := (divisionOf_isOk hc _ _).2 ⟨ht, hs, ho, he⟩
-    exact ⟨_, (evaluate_ok j _).2 ⟨i, P, c, dv, (parse_ok j i).2 hi, (decodeProgram_ok _ _).2 ⟨hP, hr⟩, hc, hd, rfl⟩⟩
+    exact ⟨_, (evaluate_ok j _).2 ⟨i, P, c, dv, (parse_ok j i).2 hi, (decodeProgram_ok _ _).2 hP, hc, hd, rfl⟩⟩
 
 theorem refusalWith_error (e : String) (m : Option String) :
     (refusalWith e m).getObjVal? "error" = .ok (.str e) := by
@@ -97,7 +97,7 @@ theorem CheckAccepts : Properties.CheckAccepts :=
 theorem Decodes : Properties.Decodes := by
   intro j out h
   obtain ⟨i, P, c, dv, h1, h2, h3, h4, -⟩ := (evaluate_ok j out).1 h
-  refine ⟨i, P, (parse_ok j i).1 h1, ((decodeProgram_ok _ _).1 h2).1, circuitFrom h3, laysOut_circuitFrom h3, ?_,
+  refine ⟨i, P, (parse_ok j i).1 h1, (decodeProgram_ok _ _).1 h2, circuitFrom h3, laysOut_circuitFrom h3, ?_,
     dv.n, exists_partition h3 h4 (laysOut_circuitFrom h3)⟩
   have hmem := (divisionOf_ok h3 h4).2.1
   refine ⟨Finset.univ.filter fun g => g.val ∈ dv.theta, fun g => ?_, fun g hg => ?_⟩
@@ -121,7 +121,7 @@ theorem failStep_fst (gamma num den : ℕ) (r : Array (ℕ × ℕ)) (u v : ℕ) 
 
 namespace Setting
 
-variable {P : Prog} {theta owner : Array Json} {c : Circuit} {dv : Division} {d : Verity.Declaration} {n : ℕ}
+variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.RegisteredCircuit} {n : ℕ}
   {U : Verity.Partition d.D n} (S : Setting P theta owner c dv d n U)
 include S
 
@@ -189,13 +189,13 @@ theorem toJson_nat_inj {a b : ℕ} (h : toJson a = toJson b) : a = b := by
 
 /-- **The verdict is the definition's.** -/
 theorem Reports : Properties.Reports := by
-  intro j out hev i P d n U hpar hdec hL hθ hU
+  intro j out hev i P d hpar hdec hL hθ hU
   obtain ⟨i', P', c, dv, h1, h2, h3, h4, rfl⟩ := (evaluate_ok j out).1 hev
   obtain rfl := parses_unique ((parse_ok j i').1 h1) hpar
-  replace h2 := ((decodeProgram_ok _ _).1 h2).1
+  replace h2 := (decodeProgram_ok _ _).1 h2
   rw [hdec, Except.ok.injEq] at h2
   subst h2
-  have S : Setting P i'.theta i'.owner c dv d n U := ⟨h3, h4, hL, hθ, hU⟩
+  have S : Setting P i'.theta i'.owner c dv d d.n d.𝓘 := ⟨h3, h4, hL, hθ, hU⟩
   have hden : 0 < i'.den := hpar.2.2.2.2.2
   intro α
   have hcompl : (verdict c.N (ius c dv) (failure i'.gamma i'.num i'.den (ius c dv))).getObjVal? "complies" =
@@ -212,7 +212,7 @@ theorem Reports : Properties.Reports := by
     apply Array.ext
     · simpa using S.ius_size
     · intro k hk1 hk2
-      have hk : k < n := by simpa using hk2
+      have hk : k < d.n := by simpa using hk2
       rw [Array.getElem_map, Array.getElem_ofFn, ← getElem!_pos _ k (by simpa using hk1)]
       rw [S.ius_get ⟨k, hk⟩]
   · rw [hcompl, ← hnone]
@@ -236,11 +236,12 @@ theorem Witnesses : Properties.Witnesses := by
   intro j out hev i P d hpar hdec hL hθ hc
   obtain ⟨i', P', c, dv, h1, h2, h3, h4, -⟩ := (evaluate_ok j out).1 hev
   obtain rfl := parses_unique ((parse_ok j i').1 h1) hpar
-  replace h2 := ((decodeProgram_ok _ _).1 h2).1
+  replace h2 := (decodeProgram_ok _ _).1 h2
   rw [hdec, Except.ok.injEq] at h2
   subst h2
   obtain ⟨U, hU⟩ := exists_partition h3 h4 hL
-  exact ⟨dv.n, U, (Reports j out hev i' P d dv.n U hpar hdec hL hθ hU).2.2.1.1 hc⟩
+  refine ⟨⟨dv.n, U, (Reports j out hev i' P (.ofPartition d.D d.θ d.θ_input dv.n U) hpar hdec hL hθ hU).2.2.1.1 hc⟩,
+    fun hI => (Reports j out hev i' P d hpar hdec hL hθ hI).2.2.1.1 hc⟩
 
 /-! ## Completeness
 
@@ -280,11 +281,11 @@ def noGates (s : String) : Json :=
   Json.mkObj [("program", .str s), ("theta", .arr #[]), ("owner", .arr #[]), ("gamma", toJson (0 : ℕ)),
     ("alpha", .arr #[toJson (0 : ℕ), toJson (1 : ℕ)])]
 
-/-- **A well-formed instance's case holds**: where the decoder decodes `s` to a Program with no gates, and the width
-analysis finds no reference read at another width, `noGates s` is well-formed. -/
-theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s.toUTF8 = .ok P)
-    (hr : ¬ Reinterprets P) (h0 : gates P = 0) : WellFormed (noGates s) := by
-  refine ⟨⟨s, #[], #[], 0, 0, 1⟩, P, ⟨rfl, rfl, rfl, ⟨_, rfl, rfl⟩, ⟨_, _, rfl, rfl, rfl⟩, Nat.one_pos⟩, hP, hr,
+/-- **A well-formed instance's case holds**: where the decoder decodes `s` to a Program with no gates, `noGates s` is
+well-formed. -/
+theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s.toUTF8 = .ok P) (h0 : gates P = 0) :
+    WellFormed (noGates s) := by
+  refine ⟨⟨s, #[], #[], 0, 0, 1⟩, P, ⟨rfl, rfl, rfl, ⟨_, rfl, rfl⟩, ⟨_, _, rfl, rfl, rfl⟩, Nat.one_pos⟩, hP,
     fun g hg => absurd hg (by omega), fun t ht => absurd ht (by simp), by simp [h0], fun g hg => absurd hg (by omega), ?_⟩
   rintro ⟨g, u, hg, -⟩
   exact absurd hg (by simp)
@@ -294,7 +295,7 @@ theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s
 /-- **`NciCheck.Desc.sizes` is the unrolled tally.** On a division that is the expansion of the root nodes' IUs `own`
 (root node `k` holding gates `[offs[k], offs[k + 1])`, `offs` from `0` to the circuit's `N`, each of them in IU
 `own[k]`), the description-sized check's size of each IU is the one `NciCheck.tally` counts gate by gate. -/
-theorem sizes_eq_tally (c : Circuit) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
+theorem sizes_eq_tally (c : GateTable) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
     (h0 : offs[0]! = 0) (hN : offs[own.size]! = c.N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
     (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → d.owner[g]! = own[k]!) (u : ℕ) (hu : u < d.n) :
     (NciCheck.Desc.sizes offs own d.n)[u]! = (tally c d)[u]!.1 := by

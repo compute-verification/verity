@@ -84,7 +84,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
     "CoinTree": (),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
-    "Collision": ("Security/Definitions/Hash/Basic.lean::Hash.Collision",),
+    "Collision": ("Security/Definitions/Core/Hash.lean::Hash.Collision",),
     "Commitment": ("verity/ml/commitments/merkle.py::Commitment",),
     "Dag": (),
     "Device": (),
@@ -394,8 +394,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Device":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes `Verity.Device`, moved into Security/Definitions/Core/ (lean)",
-    "Security/Definitions/Accounting/Device.lean::Accounting.Op":
-        "homonym, the op classes a step charges: rename (`OpClass`) (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes `Verity.Period`, moved into Security/Definitions/Core/ (lean)",
     "Security/Definitions/Accounting/Gates/Codec.lean::Accounting.Gates.Draw":
@@ -589,6 +587,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.TC.Relation.Witness`: becomes it (soundness)",
     "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
         "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
+    "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
+        "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":

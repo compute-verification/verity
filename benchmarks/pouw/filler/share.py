@@ -25,7 +25,7 @@ Definitions:
   tensor-peak time R*/256 = 1.1722 u, so A = 0.2068. The vector has no DRAM row, so a memory-bound step is priced at its
   MACs only.
 - forced share = 0.99 τ: the share of the window's capacity, in the priced model's own units, that a cheater must spend
-  on the declared work. certified ÷ capacity = 0.99 N ÷ C counts MACs instead, and binds only an honest node.
+  on the registered work. certified ÷ capacity = 0.99 N ÷ C counts MACs instead, and binds only an honest node.
 
 Constants not measured by dcap.cu, each from a note of record:
 - non-GEMM kernels: decode 1.09 ms a step (vLLM 0.28 FP8, full decode graphs, b32 / 1,024), prefill 38.37 ms per 8,192

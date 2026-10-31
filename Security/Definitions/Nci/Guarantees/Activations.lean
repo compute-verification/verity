@@ -33,7 +33,7 @@ subcircuit `R` of the reference circuit `c` computes at most `Λ = max(e, c_r ·
 per `b_a` bits of novel information it reads, where each activation enters at most `e` counted multiplications and each
 activation computed from counted multiplications is computed from at least `dd` distinct activations of its own thread. -/
 def ActivationsReads : Prop :=
-  ∀ (c : Declaration) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) (dd e : ℕ),
+  ∀ (c : RegisteredCircuit) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) (dd e : ℕ),
     0 < b_w → 0 < b_a → 0 < dd →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
     (∀ a, (L.src a).Nonempty →
@@ -48,7 +48,7 @@ dark (`PartialContainment`), computes at most `α Λ size(d) / b_a` of `c`'s cou
 `ThetaRegistered`. There is no term for the dark gates, so it holds however much of `c`, the partial sums included, is
 computed off the books. -/
 def ActivationsBoundOn : Prop :=
-  ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (L : T.Links) (dd e : ℕ)
+  ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : RegisteredCircuit) (T : Threading c) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.ThetaRegistered c d M →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
@@ -63,7 +63,7 @@ of the reference circuit's flops (2 flops each), a declaration that complies at 
 absorb:
 `κ b_a size(c) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
 def ActivationsTrainingOn : Prop :=
-  ∀ (Γ : ℕ) (α K b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (L : T.Links) (dd e : ℕ)
+  ∀ (Γ : ℕ) (α K b_w b_a κ : ℝ) (c d : RegisteredCircuit) (T : Threading c) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d → Assumptions.ThetaRegistered c d M →
     (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
@@ -79,7 +79,7 @@ def ActivationsTrainingOn : Prop :=
 rates: a chain's weight entries and input entries are distinct weight and activation gates, and an input entry whose
 activation is whole in `R` is linked to an entry whole in `R`. -/
 def ActivationsChain : Prop :=
-  ∀ (c : Declaration) (ch : Chain c.D) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ),
+  ∀ (c : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ),
     ChainIn ch T L → 0 ≤ b_w → 0 ≤ b_a →
     Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a →
       Assumptions.ActivationsIncompressible c ch Γ K b_w b_a
