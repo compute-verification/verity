@@ -4,7 +4,7 @@
 # registry-evaluator demo. `renorm.py` searches toy fields for circuits of 6b's model (a port of Model.lean) that return a
 # square's digits with few budgeted gates: the falsification test of the re-normalization conjecture N_L.
 # `tests/test_key_binding_order.py` checks KeyBinding's ideal step against the codec's {x, p − x} symmetry; KB-1's
-# regression test is remote_bandwidth's `test_append_order.py`. `squaring.py` ports Model.lean at p1024 and builds squaring
+# regression test is poub's `test_append_order.py`. `squaring.py` ports Model.lean at p1024 and builds squaring
 # circuits measured in its units (SquaringFloor's e a squaring); `free_codec.py` builds the whole codec word from the
 # one-word gather Model.lean once counted as free; `bitwise_codec.py` builds a block of words at 8 units a key
 # byte under the count before the repricing (bits kept bits by u8 mma ANDs and affine NOTs), which falsified
@@ -23,7 +23,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
-          "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs/__init__.py",
+          "verity/core/protocols/poub", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/pouw/__init__.py",

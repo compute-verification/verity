@@ -2,7 +2,7 @@
 (`reference.Recorded`): a small period of each on node `n0`, made by its hook. Space's (`pous.period.run`, signed by a
 key at S1's deployed parameters, `mc_cases.deployed_signer`) honest, under a prover that answers every other round
 with zeros, and the honest run's case carrying another store's setup (a run committed to a different setup, refused by
-the setup tie); bandwidth's (`remote_bandwidth.period.run`, one window) honest, under a prover whose store dropped every
+the setup tie); bandwidth's (`poub.period.run`, one window) honest, under a prover whose store dropped every
 other block, and stopped before its window is verified; and of each, its honest case with params or evidence that don't
 decode."""
 
@@ -21,8 +21,8 @@ from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period as pous
 from verity.core.protocols.pous import run as RUN
 from verity.core.protocols.pous.schemes import p2 as P2
-from verity.core.protocols.remote_bandwidth import audit, codec
-from verity.core.protocols.remote_bandwidth import period as bandwidth
+from verity.core.protocols.poub import audit, codec
+from verity.core.protocols.poub import period as bandwidth
 from verity.ml.commitments.identity import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[5]
