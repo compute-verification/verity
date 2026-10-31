@@ -58,7 +58,7 @@ def test_a_port_is_window_ingress_where_every_slice_it_reads_is_a_row_before_the
     got = [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]]
     assert got == [("in0", 0, 1, 0), ("in1", 0, 2, 0), ("in0", 2, 1, 0), ("in0", 3, 1, 1), ("in1", 3, 2, 1),
                    ("in0", 5, 1, 3), ("in1", 5, 2, 3), ("in0", 7, 1, 3), ("in0", 8, 1, 4), ("in1", 8, 2, 4)]
-    assert {g["reader"] for g in doc[IF.WINDOW_INGRESS]} == {T} and not {"cap", "ingress"} & set(doc)
+    assert {g["reader"] for g in doc[IF.WINDOW_INGRESS]} == {T} and not {"cap", "ingress", "registered"} & set(doc)
     row = 16 * 8
     assert IF.input_count(doc) == {"units": 10, "inputs": 20 * row, "wired": 0, "registered": 0, "ingress": 0,
                                    IF.WINDOW_INGRESS: 14 * row, "free": 20 * row}
