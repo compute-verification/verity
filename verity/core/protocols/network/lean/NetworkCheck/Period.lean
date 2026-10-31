@@ -2,6 +2,7 @@ import NetworkCheck.Check
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
+import Flock.WindowRecord
 import NciCheck.Desc
 
 /-!
@@ -721,12 +722,13 @@ def paramsOf (j : Json) : V Params := do
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
   pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
 
-/-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record), the record's own format the tag. -/
+/-- A record of one of `formats` and its digest, the window record's (`Flock.WindowRecord.digestOf` of its format and
+canonical JSON, `registration.digest`). -/
 def registrationOf (j : Json) (ctx : String) : V Registration := do
   let format ← Flock.J.str j "format" ctx
   unless formats.contains format do throw s!"{ctx}: format is not {" or ".intercalate formats}"
   let body ← Flock.canon j
-  pure ⟨j, Flock.Sha512.hash (format.toUTF8 ++ ByteArray.mk #[0] ++ body.toUTF8)⟩
+  pure ⟨j, Flock.WindowRecord.digestOf format body.toUTF8⟩
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
