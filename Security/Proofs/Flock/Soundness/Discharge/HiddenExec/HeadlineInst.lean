@@ -102,12 +102,14 @@ noncomputable abbrev layAtHI :
 noncomputable abbrev rsAtHI (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     Binding.HmRowsX (layAtHI ht hc hrf dj x₀ (pub := pub) (Reg := Reg)) :=
   instRowsH (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS ht hc hrf.1)
     (sitesAtH_bcSiteI ht hc hrf dj x₀ hpub) (instKeysRowH ht hc dj x₀ hU hpr hw)
 
 /-- **`hHm` at the hidden tables, at `instProg`** (`instRowsH_computes`, a unit per VU from the check). -/
 theorem rsAtHI_computes (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     (rsAtHI ht hc hrf dj x₀ hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS ht hc hrf.1)
     (checkFactsH ht hc).upv_pos (sitesAtH_bcSiteI ht hc hrf dj x₀ hpub) (instKeysRowH ht hc dj x₀ hU hpr hw)
 
 /-- **The headline at the executable over hidden-output sessions, at the template instance's program.**
