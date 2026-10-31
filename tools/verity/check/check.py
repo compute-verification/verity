@@ -236,6 +236,7 @@ import threading
 import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -1402,10 +1403,11 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
 AUTO_SHARD = re.compile(r"auto:([1-9]\d*)/([1-9]\d*)")
 
 
-def auto_parts(gated: bool = True, jobs: set[str] | None = None) -> list[str]:
+def auto_parts(gated: bool = True, jobs: set[str] | None = None, circuit_shards: int | None = None) -> list[str]:
     """The auto plan's parts on this tree (`shards.parts`): those of the jobs on the gate (or, not ``gated``, of every job),
-    of ``jobs`` alone when given."""
-    js = [j for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
+    of ``jobs`` alone when given; circuit-check in ``circuit_shards`` parts when given, else its ci.toml `shards`."""
+    js = [replace(j, shards=circuit_shards) if circuit_shards and j.name == "circuit-check" else j
+          for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
     return SHARDS.parts(DECLARATION.all_parts(js, _parts_of()), [s.name for s in SUITES.discover()], list(AFTER_LEAN),
                         (FLOCK_LEAN / "lakefile.toml").exists())
 

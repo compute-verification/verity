@@ -8,6 +8,10 @@
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
     verity config new|check|hash    write, check or hash a deployment configuration (run.py)
+    verity tasks list --json [--kind after-landing|preflight] [--changed BASE]
+                                    the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
+    verity tasks run ID [--out FILE]
+                                    run one task here as check runs it, and print its verdict, outputs, seconds and key
     verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
                                     workload on its placement
     verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
@@ -153,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
         return _check(args[1:])
     if args[0] == "bench":
         return _runner("benchmarks", "bench", args[1:])
+    if args[0] == "tasks":
+        return _run([sys.executable, str(HERE / "check" / "tasks.py"), *args[1:]])
     if args[0] in ("run", "config"):
         from . import run
 
