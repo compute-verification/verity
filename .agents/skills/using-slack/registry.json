@@ -298,7 +298,8 @@
       "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
       "usergroup": "S0CBZ2L8542",
       "owns": [
-        "benchmarks/hardness_public/"
+        "benchmarks/hardness_public/",
+        "benchmarks/hardness_prov/"
       ]
     },
     {
