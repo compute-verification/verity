@@ -33,6 +33,12 @@ def row (fn : String) (units ms : Nat) (extra : List (String × Json)) : IO Unit
     ("hwm_mb", toJson (hwm / 1024))] ++ extra)).compress}"
   (← IO.getStdout).flush
 
+/-- `Slots.popOk` as it is stated, off `Slots.layout`'s population. -/
+def popOkLayout (p : Program) (q : Json) (n : Nat) : Bool :=
+  match Slots.layout p q with
+  | .error _ => false
+  | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
+
 def main (args : List String) : IO UInt32 := do
   let (path, ref) ← match args with
     | [p] => pure (p, true)
@@ -62,9 +68,7 @@ def main (args : List String) : IO UInt32 := do
       IO.eprintln "the per-unit reference and unitGates disagree"
       return 1
     for m in [n, n - 1, n + 1] do
-      let (lay, ms) ← timed (fun t => t != 0 && match Slots.layout p q with
-        | .error _ => false
-        | .ok l => decide ((Slots.popOf l).map (fun r : Slots.RU => r.unit) = (List.range m).map some)) fun b => if b then 1 else 0
+      let (lay, ms) ← timed (fun t => t != 0 && popOkLayout p q m) fun b => if b then 1 else 0
       let ranges := Slots.popOk p q m
       row "popOkLayout" m ms [("ok", toJson lay), ("agree", toJson (lay == ranges))]
       if lay != ranges then

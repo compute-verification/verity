@@ -277,9 +277,9 @@ def popOrder (j : Json) : V Json := do
   let some n := (getD j "population").getNat?.toOption | throw "population is not a natural number"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   let q := getD j "query"
-  let layout := match Slots.layout p q with
+  let layout : Bool := match Slots.layout p q with
     | .error _ => false
-    | .ok l => decide ((Slots.popOf l).map (fun r : Slots.RU => r.unit) = (List.range n).map some)
+    | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
   return Json.mkObj [("ranges", Lean.toJson (Slots.popOk p q n)), ("layout", Lean.toJson layout)]
 
 /-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
@@ -582,13 +582,13 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
-   ("pop_order", popOrder),
    ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
+   ("pop_order", popOrder),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
