@@ -30,7 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterator, Sequence
 
-from .defs import Node, PrimitiveDefinition, SpecializedDefinition
+from .defs import BodyNode, PrimitiveDefinition, SpecializedDefinition
 from .refs import Ref
 
 
@@ -142,7 +142,7 @@ class LazyOperands(Sequence):
 
     __slots__ = ("scope", "node", "m", "_segments", "_n")
 
-    def __init__(self, scope: Scope, node: Node, m: int) -> None:
+    def __init__(self, scope: Scope, node: BodyNode, m: int) -> None:
         self.scope, self.node, self.m = scope, node, m
         segs = []  # (start, count, refs-getter)
         start = 0
@@ -190,7 +190,7 @@ class LazyOperands(Sequence):
 WIDE_FAN_IN = 4096
 
 
-def _prim_member_args(scope: Scope, node: Node, m: int):
+def _prim_member_args(scope: Scope, node: BodyNode, m: int):
     """Operand gate indices of member `m` of a primitive node (`prim`, or a `batch` of a primitive)."""
     if sum(p.leaves for _, p in node.fn.params) > WIDE_FAN_IN:
         return LazyOperands(scope, node, m)
@@ -333,7 +333,7 @@ class FunctionCall(Region):
         Region.__init__(self, circuit, lo, lo + node.fn.gates)
 
     @property
-    def node(self) -> Node:
+    def node(self) -> BodyNode:
         return self.parent.spec.body.nodes[self.node_idx]
 
     @property
