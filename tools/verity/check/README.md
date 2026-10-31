@@ -91,7 +91,7 @@ with every job, those off the gate too (`train.sh --deferred`), and `main` moves
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red job off the gate reverts its culprit on `checked`
 but doesn't hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
 body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
-(`verity check move BASE HEAD`).
+(`verity check move BASE HEAD`), running both scripts as `checked` has them.
 
 ## Settings
 

@@ -71,10 +71,11 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   (a PR whose body says `fixes step circuit-check` does).
   Citations and tables read only commits whose after-landing run passed: `main`'s.
 - A layout move lands from `next` with no pause in landing: its PR's body says `Move: tools/move/MAP.toml`, and it needs a
-  mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (that tree's
-  `rename.py --map MAP`, one commit) and leaves it out, telling its owner, unless that tree's `move_check.py` certifies it;
-  members above it are restacked across it, and only a conflict of their own refuses them. Drive closes the PR once `main`
-  reaches it. Only drive's App pushes `main`, `checked` and `next`.
+  mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (`rename.py --map
+  MAP`, one commit) and leaves it out, telling its owner, unless `move_check.py` certifies it; both scripts, and the
+  restack, are `checked`'s, as the landing gates are, and a member below the move that changes `tools/move/`'s scripts holds
+  it back until that member lands. Members above it are restacked across it, and only a conflict of their own refuses them.
+  Drive closes the PR once `main` reaches it. Only drive's App pushes `main`, `checked` and `next`.
 - `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
   pool.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
