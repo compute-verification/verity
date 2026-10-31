@@ -8,7 +8,7 @@ from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry.b1 import BN, Serve, ServeV4, fa2_kblock_n
 
 
-#: [E7 D54] the pinned attention kernel source the geometry rule below is read from
+#: the pinned attention kernel source the geometry rule below is read from
 FA2_KERNEL_SOURCE = ("vllm-project/flash-attention 506341a143fcabd4bb79052a7605ada727d6b3f5 csrc/flash_attn/src/flash_fwd_launch_template.h:172-192 "
                      "run_mha_fwd_splitkv_align (num_splits == 1; paged varlen KV forces the split-KV dispatch, flash_api.cpp:762-764,798)")
 
@@ -44,7 +44,7 @@ def profile_attention_consts(profile_doc: dict) -> dict:
 
 
 #: The serving programs an instance may pin, by `program.identity.family`: `Serve_v1` -- the legacy program (kBlockN 64 as the
-#: module constant; every record before D54; an identity that carries NO geometry means this); `Serve_v4` -- the same program with the
+#: module constant; every record from before the geometry field; an identity that carries NO geometry means this); `Serve_v4` -- the same program with the
 #: attention key-block size as a declared static, filled from `program.identity.attention.kBlockN`.
 SERVE_FAMILIES: dict[str, CompositeDefinition] = {"Serve_v1": Serve, "Serve_v4": ServeV4}
 DEFAULT_SERVE_FAMILY = "Serve_v1"
@@ -63,7 +63,7 @@ def serve_family(family: str | None):
 
 
 def attention_geometry_static(attention: dict) -> int:
-    """[D57] The program static (``BN`` = kBlockN) of an identity's declared ``attention`` geometry
+    """The program static (``BN`` = kBlockN) of an identity's declared ``attention`` geometry
     (`{"kernel", "kBlockM", "kBlockN", "num_splits", ...}`, the shape `fa2_kernel_geometry` produces).  The row program models the FA2
     split-KV kernel's online softmax over kBlockN-key blocks visited last -> first with one rescale per block; that model needs
     `kernel` one of `FA2_SPLITKV_KERNEL_NAMES` (the `num_splits == 1` path), `kBlockM == 64`, `num_splits == 1`, and a kBlockN multiple of 16 --
@@ -84,7 +84,7 @@ def attention_geometry_static(attention: dict) -> int:
 
 
 def serve_program(C: dict, LP: int, STEPS: int, *, family: str | None = None, attention: dict | None = None):
-    """[D57] The bound serving program of an instance identity: ``family`` `Serve_v1` (or None) with no ``attention`` -> `Serve_v1{C,
+    """The bound serving program of an instance identity: ``family`` `Serve_v1` (or None) with no ``attention`` -> `Serve_v1{C,
     LP, STEPS}` (the legacy geometry, BN 64 implicit); ``family`` `Serve_v4` with ``attention`` -> `Serve_v4{C, LP, STEPS, BN =
     attention.kBlockN}`.  A `Serve_v1` identity that carries a geometry, or a `Serve_v4` identity without one, is refused (ValueError):
     the geometry is part of the identity, not something the verifier infers."""

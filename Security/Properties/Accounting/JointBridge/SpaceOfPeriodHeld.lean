@@ -2,11 +2,11 @@ import Properties.Pous.Period
 import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 
 /-!
-# PoUS's per-period guarantee as `JointPeriod`'s `.pous` input
+# PoUS's per-period guarantee as the coins model's `.pous` input
 
 `SpaceOfPeriodHeld` states that a period realizing its PoUS audit as a joint run's capacity audit
-(`Accounting.RealizesSpaceOfPeriodHeld`, under the verifier's whole decision outside a break) has the per-period guarantee
-`Accounting.Guarantees.JointPeriod` takes for `.pous`, `PeriodRun.Sound c p .pous δ`, at PoUS's own error
+(`Accounting.RealizesSpaceOfPeriodHeld`, under the verifier's whole decision outside a break) has the coins model's per-period
+guarantee for `.pous` (`Accounting.PeriodRun`), `PeriodRun.Sound c p .pous δ`, at PoUS's own error
 `δ + ε_max` (`1% + 2^-128`), under `Pous.Period.PeriodHeld`'s premises. It holds at the challenge times PoUS grades
 until `Pous.Guarantees.ContinuousAudit` is tied to the deployed check (`Definitions.Accounting.JointBridge.SpaceOfPeriodHeld`'s
 header). `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld` proves it from `Pous.Period.SecurityProofs.periodHeld`.

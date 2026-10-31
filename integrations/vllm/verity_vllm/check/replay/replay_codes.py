@@ -47,7 +47,7 @@ def why_class(why: str | None) -> str:
     """The class of a replay-time 'not evaluated' reason, read from the exception text the replay wrote."""
     w = str(why or "")
     if "plane slice mapping failed" in w:
-        return "mapping"                                                         # [MAN-06f v3] a Program shape the plane mapping refuses: a fault
+        return "mapping"                                                         # a Program shape the plane mapping refuses: a fault
     if "moe_block_stream" in w:
         return "plane-fed"
     if "interior producer" in w or "composition not possible" in w or "composed evaluator" in w:

@@ -1,5 +1,5 @@
 """`cache_step`'s CacheStep_v1: the circuit against its specification (`reference`) on random tables and rows, at a small
-size class, and on the difftest vectors: two slices of real traces through ENC-DERIVED's `Prefixes`
+size class, and on the difftest vectors: two slices of real traces through the derived encoding's `Prefixes`
 (`benchmarks/network_e2e/encodings/cache_vectors.py`), whose every call the reference must reproduce."""
 from __future__ import annotations
 

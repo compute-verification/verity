@@ -1117,7 +1117,7 @@ def main() -> int:
              "calibration": cal, "gates": backend.gates, "calibration_trace": stalls, "sessions": results,
              "wire": conn.totals()}, indent=1))
     # Tearing down a whole-node store (every pass handle in host memory, every GPU's mapped segments) kept the process
-    # alive 12 minutes past its last output, to the end of its GPU lease (r20261015-171223-cc99).
+    # alive 12 minutes past its last output, to the end of its GPU lease.
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(0)

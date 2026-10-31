@@ -13,7 +13,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
-from verity_flock import ir_lower as IL
+from verity.ml.windows import interface as IF
+from verity_flock import circuit as FC, class_statement as CS, ir_lower as IL
 from verity_flock.gf2 import Circuit
 from verity.ml.definitions.registry import b1, dead_free as DF, fa2_check_inf as F2, hopper, prims as P, sampling as SA, topp_words as TW
 
@@ -123,6 +124,155 @@ def test_token_select_combine_v2_equals_v1(V, C):
     n = len(b1.chunks(V, C))
     for row in _rows(n + 1, 3):
         _same(new, old, row[0], row[1:], [int(i) for i in RNG.integers(0, C, n)])
+
+
+ONE, NEG_ONE, NAN, NEG_INF = 0x3F80, 0xBF80, 0x7FC0, b1.NEG_INF_BF16
+#: Llama-3's vocabulary as 48 units of `TokenSelectGroups_v1{C=2672, G=16}`: 167 groups a unit, a group one LM-head slice of
+#: `Gemm_v2{K=2048, N=16}`, 8,016 in all for `TokenSelectCombine_v2{V=128256, C=16}`
+LLAMA_V, LLAMA_C, LLAMA_G = 128256, 2672, 16
+
+
+def _boundary_rows(V: int, bounds: list[int]) -> list[list[int]]:
+    """Rows that turn on boundaries: at each, a maximum tied across it, +0 and -0 tied across it both ways round, and a NaN at
+    its first logit ahead of the maximum; a maximum at both ends of the row; a NaN logits[0] (positive and negative) and a -inf
+    one; and rows of only -inf, of -inf and NaNs, and of -inf with one number last."""
+    rows = []
+    for b in bounds:
+        rows.append([ONE if j in (b - 1, b) else NEG_ONE for j in range(V)])
+        for z0, z1 in ((0x0000, 0x8000), (0x8000, 0x0000)):
+            rows.append([z0 if j == b - 1 else z1 if j == b else NEG_ONE for j in range(V)])
+        rows.append([NAN if j == b else 0x4000 if j == V - 1 else ONE for j in range(V)])
+    rows.append([ONE if j in (0, V - 1) else NEG_ONE for j in range(V)])
+    rows += [[x0] + [ONE] * (V - 1) for x0 in (NAN, 0xFFC1, NEG_INF)]
+    return rows + [[NEG_INF] * V, [NAN if j % 2 else NEG_INF for j in range(V)], [NEG_INF] * (V - 1) + [NEG_ONE]]
+
+
+@pytest.mark.parametrize("C,G", [(1, 1), (16, 16), (64, 16), (40, 16), (7, 3), (28, 1)])
+def test_token_select_groups_v1_is_each_groups_chunk(C, G):
+    """A batch of `TokenSelectChunk_v2{G}` over the whole groups, and a narrower chunk over the rest: each group's (best, idx)."""
+    fn = bind(DF.TokenSelectGroupsV1, C=C, G=G)
+    assert _dead(fn) == 0
+    for row in _logit_rows(C) + _boundary_rows(C, list(range(G, C, G))):
+        parts = [evaluate(bind(DF.TokenSelectChunkV2, C=hi - lo), row[lo:hi]) for lo, hi in b1.chunks(C, G)]
+        assert evaluate(fn, row) == tuple(p[0] for p in parts) + tuple(p[1] for p in parts), row
+
+
+def test_token_select_groups_v1_refuses_groups_wider_than_its_logits():
+    with pytest.raises(ValueError, match="groups of G = 17 of C = 16 logits"):
+        bind(DF.TokenSelectGroupsV1, C=16, G=17).signature()
+
+
+def _grouped(V: int, C: int, G: int, row: list[int], ev=evaluate) -> tuple[int]:
+    """``row``'s token by groups: `TokenSelectGroups_v1{C, G}` over each C logits (the last unit the rest, one group if that is
+    narrower than G), then `TokenSelectCombine_v2{V, G}` over logits[0] and every group's partial."""
+    assert C % G == 0, "a unit's groups are the combine's chunks of G only when every unit but the last is whole groups"
+    best, idx = [], []
+    for lo, hi in b1.chunks(V, C):
+        out = ev(bind(DF.TokenSelectGroupsV1, C=hi - lo, G=min(G, hi - lo)), row[lo:hi])
+        best += out[:len(out) // 2]
+        idx += out[len(out) // 2:]
+    return ev(bind(DF.TokenSelectCombineV2, V=V, C=G), row[0], best, idx)
+
+
+def _chunked(V: int, C: int, row: list[int], ev=evaluate) -> tuple[int]:
+    """``row``'s token as the window selects it now: `TokenSelectChunk_v2` over each C logits, then `TokenSelectCombine_v2{V, C}`."""
+    parts = [ev(bind(DF.TokenSelectChunkV2, C=hi - lo), row[lo:hi]) for lo, hi in b1.chunks(V, C)]
+    return ev(bind(DF.TokenSelectCombineV2, V=V, C=C), row[0], [p[0] for p in parts], [p[1] for p in parts])
+
+
+def _memo():
+    """`evaluate` that remembers each specialization's outputs by its inputs (`bind` shares one specialization per binding)."""
+    seen: dict = {}
+
+    def ev(fn, *args):
+        key = (fn, *(tuple(a) if isinstance(a, list) else a for a in args))
+        if key not in seen:
+            seen[key] = evaluate(fn, *args)
+        return seen[key]
+    return ev
+
+
+@pytest.mark.parametrize("V,C,G,CC", [(2, 1, 1, 2), (48, 48, 16, 48), (200, 48, 16, 64), (200, 64, 16, 64), (257, 32, 16, 64),
+                                      (130, 40, 8, 64), (100, 21, 7, 16), (192, 96, 16, 64)])
+def test_token_select_by_groups_is_the_chunked_select(V, C, G, CC):
+    """Units of C logits in groups of G, then the combine over every group, against chunks of CC and their combine, and
+    `TokenSelect_v1`: ties across every group, unit and chunk boundary, a last unit narrower than a group (200 at 48), a last
+    group narrower than G (130 at 40 in 8s, 100 at 21 in 7s)."""
+    bounds = sorted({b for step in (G, C, CC) for b in range(step, V, step)})
+    for row in _logit_rows(V) + _boundary_rows(V, bounds):
+        assert _grouped(V, C, G, row) == _chunked(V, CC, row) == evaluate(bind(b1.TokenSelect, V=V), row), row
+
+
+def _first_max(row: list[int]) -> int:
+    """numpy's argmax of a bf16 row with no NaN logits[0], a NaN never the maximum: torch.argmax's lowest index on ties."""
+    f = (np.array(row, np.uint32) << 16).view(np.float32)
+    return int(np.argmax(np.where(np.isnan(f), -np.inf, f)))
+
+
+@pytest.mark.slow
+def test_token_select_by_groups_is_the_chunked_select_at_llama_vocabulary():
+    """Llama-3's V in 48 units of 167 groups of 16, against the window's chunks of 768 (about 12 s, the rows sharing all but a few
+    units): normals, a maximum tied across a unit boundary that is no chunk's and one across a group boundary inside a unit, +0
+    and -0 tied across a unit boundary both ways round, a NaN unit head ahead of the maximum, a NaN logits[0], and all -inf but
+    the last logit."""
+    V, C, BIG = LLAMA_V, LLAMA_C, 0x4400
+    noise = _bf16(RNG.normal(0, 1, V))
+
+    def put(at: dict[int, int], base: list[int]) -> list[int]:
+        return [at.get(j, w) for j, w in enumerate(base)]
+
+    cases = [(_first_max(noise), noise),
+             (C - 1, put({C - 1: BIG, C: BIG, 5 * C + 31: BIG, 5 * C + 32: BIG}, noise)),
+             (5 * C + 31, put({5 * C + 31: BIG, 5 * C + 32: BIG}, noise)),
+             (9 * C + 3, put({7 * C: NAN, 9 * C + 3: BIG}, noise)),
+             (2 * C - 1, put({2 * C - 1: 0x0000, 2 * C: 0x8000}, [NEG_ONE] * V)),
+             (2 * C - 1, put({2 * C - 1: 0x8000, 2 * C: 0x0000}, [NEG_ONE] * V)),
+             (0, [NAN] + noise[1:]),
+             (V - 1, [NEG_INF] * (V - 1) + [NEG_ONE])]
+    ev = _memo()
+    for want, row in cases:
+        assert _grouped(V, C, LLAMA_G, row, ev) == _chunked(V, 768, row, ev) == (want,), want
+
+
+def _unit(fn, cuts: dict[str, int]) -> tuple[int, int]:
+    """A unit of ``fn`` under ``cuts`` as C-Flock's `UnitStager` composes it (`interface.unit_rows`: a bit row a parameter or a
+    cut's row, then one an output, each of exactly its words): its rows in and out, and the SHA-512 compression slots
+    `circuit.compose` gives its rows' blocks before their last (`circuit._row_slots`).  A row of at most 111 bytes is its last
+    block, SHA-512's padding with it, and compose refuses a unit of no slot."""
+    ins, _ = IF.unit_rows(fn, cuts)
+    ports = [FC._port(r, -(-bits // 16), bits) for r, _schema, bits, _ps in ins]
+    ports += [FC.Port(o, w, 16 * w) for o, w in IF.layout(fn).outs]
+    return len(ports), FC._row_slots(ports)[0]
+
+
+def test_every_token_select_unit_at_llama_vocabulary_has_a_row_past_one_sha512_block():
+    """With the LM head's gathers folded into their readers, a unit reads its slices of 16 logits as rows of 32 bytes.  Each of
+    the 48 `TokenSelectGroups_v1{2672, 16}` units reads 167 and writes its bests and indices as rows of 334 and 668 bytes (169
+    rows), and `TokenSelectCombine_v2{V, 16}` reads the 48 units' rows and logits[0] (98 rows): each has a row past 111 bytes
+    and at most 256 rows.  The window's chunks of 768 have none, reading 48 slices and writing 2 and 4 bytes, and neither does
+    their combine, reading 2 and 4 bytes a chunk."""
+    n = LLAMA_V // LLAMA_C
+    assert n * LLAMA_C == LLAMA_V
+    groups = _unit(bind(DF.TokenSelectGroupsV1, C=LLAMA_C, G=LLAMA_G), {"x": LLAMA_C // LLAMA_G})
+    combine = _unit(bind(DF.TokenSelectCombineV2, V=LLAMA_V, C=LLAMA_G), {"best": n, "idx": n})
+    assert (groups, combine) == ((169, 3), (98, 112))
+    assert _unit(bind(DF.TokenSelectChunkV2, C=768), {"x": 48}) == (50, 0)
+    assert _unit(bind(DF.TokenSelectCombineV2, V=LLAMA_V, C=768), {"best": 167, "idx": 167}) == (336, 0)
+
+
+@pytest.mark.slow
+def test_the_row_rule_is_the_one_compose_refuses_by():
+    """C-Flock's `UnitStager` (about 10 s, its SHA-512 slot circuits) refuses a unit of 27 groups of one logit, whose rows are 2,
+    54 and 108 bytes, and composes one of 28, whose index row is 112: where `_unit` puts the line."""
+    for C, slots in ((27, 0), (28, 1)):
+        fn = bind(DF.TokenSelectGroupsV1, C=C, G=1)
+        assert _unit(fn, {"x": C}) == (C + 2, slots)
+        ins, outs = IF.unit_rows(fn, {"x": C})
+        if slots:
+            assert FC._row_slots(CS.UnitStager(fn, f"unit/groups-{C}", ins, outs).ports)[0] == slots
+        else:
+            with pytest.raises(ValueError, match="no row has a compression before its last block"):
+                CS.UnitStager(fn, f"unit/groups-{C}", ins, outs)
 
 
 def _flat_ands(V: int) -> tuple[int, int]:
@@ -317,3 +467,67 @@ def test_attention_head_v19_is_v18_with_its_calls_inlined_at_llama_geometry(D, B
         assert {(n.form, n.fn.base_id) for n in new.body.nodes} <= {("call", f) for f in (*V19_STEPS, "AttnBlock_v5")}
         assert len(new.body.nodes) == nb + 1
         assert _inlined(new, V19_STEPS) == _inlined(old)
+
+
+#: the k16 steps the first block runs: Hopper's (FA3, and FA2 on sm_90 and sm_120) and Ampere's (FA2 on sm_80 and sm_89)
+FIRST_DOTS = pytest.mark.parametrize("DOT", [hopper.HopperBF16WgmmaDot16, P.AmpereBF16TcDot16], ids=["hopper", "ampere"])
+
+
+def _first_blocks(D: int, NVIS: int, BN: int, VS: int, DOT=FA2["DOT"]):
+    return (bind(DF.AttnBlockFirstV2, D=D, NVIS=NVIS, BN=BN, DOT=DOT, VS=VS),
+            bind(DF.AttnBlockFirstV1, D=D, NVIS=NVIS, BN=BN, DOT=DOT))
+
+
+@FIRST_DOTS
+@pytest.mark.parametrize("VS", [16, 8, 4, 1])
+@pytest.mark.parametrize("NVIS,BN", [(1, 32), (8, 32), (15, 32), (16, 32), (17, 32), (31, 32), (32, 32), (16, 16), (5, 128)])
+def test_attn_block_first_v2_equals_v1(NVIS, BN, VS, DOT):
+    """A first block of 1 ... BN keys, its V rows padded to a k-step or not, each key's value in 1 to D slices: v2's circuit is
+    v1's node for node over the same leaves of v in the same order, and the two agree word for word on edge words, random words
+    and normals, and all -inf keys."""
+    new, old = _first_blocks(16, NVIS, BN, VS, DOT)
+    assert _dead(new) == 0
+    assert _inlined(new) == _inlined(old)
+    for q, k, v in _attention_cases(16, NVIS):
+        _same(new, old, q, k, v)
+
+
+@FIRST_DOTS
+@pytest.mark.parametrize("NVIS", [1, 15, 16, 17, 35, 128])
+def test_attn_block_first_v2_equals_v1_at_llama_geometry(NVIS, DOT):
+    """Llama-3.2-1B's heads (D 64, kBlockN 128) with a key's value in 4 slices of 16 columns."""
+    new, old = _first_blocks(64, NVIS, 128, 16, DOT)
+    assert _inlined(new) == _inlined(old)
+    for q, k, v in _attention_cases(64, NVIS):
+        _same(new, old, q, k, v)
+
+
+@pytest.mark.parametrize("VS", [0, -16, 3, 128, 16.0, True])
+def test_attn_block_first_v2_refuses_a_slice_width_not_dividing_d(VS):
+    with pytest.raises(ValueError, match="VS must be a positive divisor of D"):
+        bind(DF.AttnBlockFirstV2, D=64, NVIS=4, BN=128, DOT=FA2["DOT"], VS=VS)
+
+
+def test_attn_block_first_v2_reads_a_value_slice_a_row_at_4_32_4():
+    """At 4,32,4 (35 positions: a head's one key block of kBlockN 128 holds 1 ... 35 keys) a Llama-3.2-1B head's first block
+    reads q as RoPE's one row, k as RoPE's row a key, and v as the value projection's `Gemm_v2{2048, n}` slices at the window's
+    grain, 64 / n a key.  v2's v cut once an element is those rows, n words each, where v1's v has only NVIS elements to cut; with
+    its 3 outputs a unit is 5·NVIS + 4 rows in and out, within the grain's cap.  q's row and each k row (128 B) hash past one
+    SHA-512 block, which C-Flock's compose needs of some row of a unit; the value slices (32 B) don't."""
+    from verity.ml.windows import interface as IF
+    from verity_flock.circuit import Port
+    from verity_vllm.program.predict.window_builder import Grain
+    from verity_vllm.program.predict.window_circuit import WindowClass
+
+    grain = Grain()
+    n = grain.gemm_words // 2048
+    S = 64 // n
+    assert (n, S) == (16, 4)
+    for NVIS in range(1, WindowClass(4, 32, 4).positions + 1):
+        new, old = _first_blocks(64, NVIS, 128, n)
+        lay = IF.layout(new)
+        assert (lay.outer[1:], IF.layout(old).outer[1:]) == ((NVIS, S * NVIS), (NVIS, NVIS))
+        rows = lay.cut({"k": NVIS, "v": S * NVIS})
+        assert [(p.partition("#")[0], w) for p, w, _ in rows] == [("q", 64)] + [("k", 64)] * NVIS + [("v", n)] * (S * NVIS)
+        assert len(rows) + len(lay.outs) == 5 * NVIS + 4 <= grain.rows
+        assert [Port(p, w, bits=16 * w).comps for p, w, _ in rows] == [1] * (1 + NVIS) + [0] * (S * NVIS)

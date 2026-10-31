@@ -1,6 +1,7 @@
 """The MoE and FP8 family's Definition modules import only `verity`, the standard library and Definition modules: their own family's
-(`FAMILY`) and the other families' they call (`OTHER_DEFINITION_MODULES`), never numpy, a twin, the frontend or a runtime.  That is
-what lets them move to the catalog, which imports only `verity`, once the other families' modules are Definitions only too.
+(`FAMILY`) and the other families' they call (`OTHER_DEFINITION_MODULES`), with the evidence their conformance texts cite
+(`EVIDENCE`), never numpy, a twin, the frontend or a runtime.  That is what lets them move to the catalog, which imports only
+`verity`, once the other families' modules are Definitions only too.
 
 An import is any import statement in the module, a function-level one included, with a relative one resolved against the registry
 package; `from verity.ml.definitions.registry import m` imports the module `m`.
@@ -25,7 +26,9 @@ FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", 
 #: (`dsv4_decode_indices`, which also registers its row's numpy twin, so it is no Definitions-only module yet)
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention", "act", "boolean_silu",
                             "topp_word_gates", "gumbel_boolean", "dsv4_decode_indices")
-ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES}
+#: `evidence.json`'s ids, read with the standard library only
+EVIDENCE = "verity.ml.definitions.evidence"
+ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES} | {EVIDENCE}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 

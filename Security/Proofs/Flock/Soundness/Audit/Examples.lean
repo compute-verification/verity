@@ -308,7 +308,7 @@ theorem subset_miss_one {k₂ : ℕ} (hk : k₂ ≤ nv) (i : Fin nv) :
   have := Law.subset_escape hk {i}
   rw [Finset.card_singleton] at this
   rw [← this]
-  unfold Law.escape
+  unfold Verity.Law.escape
   exact congrArg prCoin (funext fun ω => propext Finset.disjoint_singleton_right.symm)
 
 /-- The effective escape of the chains, for any first-stage law. -/
@@ -322,11 +322,11 @@ theorem effEscape_chains {L₁ : Law K} {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 1
   · obtain ⟨⟨c', i⟩, rfl⟩ := (F K nv).surjective v
     have hc : c' = c := by simpa [refines] using hv
     subst hc
-    rw [incl_L₂, Law.incl, ← Law.prCoin_not]
+    rw [incl_L₂, Verity.Law.incl, ← Law.prCoin_not]
     exact (subset_miss_one hk i).le
   · refine le_iSup₂_of_le (f := fun v (_ : (refines K nv).parent v = c) => 1 - (L₂ K nv hk c).incl v)
       (F K nv (c, ⟨0, by omega⟩)) (by simp [refines]) (le_of_eq ?_)
-    rw [incl_L₂, Law.incl, ← Law.prCoin_not]
+    rw [incl_L₂, Verity.Law.incl, ← Law.prCoin_not]
     exact (subset_miss_one hk _).symm
 
 /-- A chain's interior gates are not coarse-committed: only its own chain reads them. -/

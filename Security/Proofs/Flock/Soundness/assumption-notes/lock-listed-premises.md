@@ -19,4 +19,4 @@ None adds a hash premise beyond `cr/sha-512` and `ecr/sha-512`. Each docstring s
 | `Assumptions.LinkCRAt` | `ecr/sha-512` | `Exec.LinkCRL`: `SHA512CRExpected` at each commit string's link finder | `flock_verify_sound`'s `hCR` |
 | `Assumptions.Zk.RecordsCustodyZKJ`, `Zk.DrawCustodyZKHJ` | `live-verifier` | `RecordCustodyZKHJLaw`'s two halves, `RecordsLiveZKJ` and `DrawOkZKHJ` at every draw | `Recursive*` (`ZkOuter.hRec`, `ZkOuterD.hDraw`, `ZkOuterR.hDraw`) |
 | `Assumptions.Zk.DrawAtZKJ`, `DrawAtZKHJ` | `live-verifier` | `DrawOkZKJ`, `DrawOkZKHJ` at one draw; `drawOkZK(H)J_of_file` proves it from `DrawFileZK` | `setupZJ_of_acceptsZK`, `setupZHJ_of_acceptsZK` (`hok`) |
-| `RecDeploy.PlainLeavesAdmitted` | none: a fact about one inner statement, which run `r20261018-053343-99cf` measured | some inner statement passes the checked reader, fits Flock's completeness, and is in scope and true | `ZKStop_meets_ready` |
+| `RecDeploy.PlainLeavesAdmitted` | none: a fact about one inner statement, which a recorded run measured | some inner statement passes the checked reader, fits Flock's completeness, and is in scope and true | `ZKStop_meets_ready` |

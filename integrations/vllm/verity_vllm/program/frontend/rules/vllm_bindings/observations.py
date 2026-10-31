@@ -72,7 +72,7 @@ def active_allreduce_settings() -> dict | None:
 
 
 def observe_launch_context(launch: dict | None) -> None:
-    """[HOP-03] The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
+    """The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
     the varlen launch's max_seqlen_q over ALL co-scheduled sequences).  The attention rule's FA3 tile selection reads it: a request's
     own rows are the launch's value only for a batch of one.  None = no declared context (own rows; B1 semantics, digests unchanged)."""
     _OBSERVED["launch_context"] = dict(launch) if launch else None
@@ -197,7 +197,7 @@ def _attn_pins_ok(obs: dict | None, layer_name: str) -> str | None:
     if obs is None:
         return (f"attention implementation of {layer_name!r} was not observed at construction "
                 "(observe_attention_impls(vllm_meta.attention_impls(model)) before derive) — refusing rather than assuming a backend")
-    # [R13 hopper] the FA version pin is the ACTIVE target's effective one (`TargetProfile.effective_flash_attn_version`: the declared knob
+    # the FA version pin is the ACTIVE target's effective one (`TargetProfile.effective_flash_attn_version`: the declared knob
     # or the selector's default for the capability), and only a version the target has a registered attention chain for is admitted
     # (`frontend.targets.check_flash_attn_registered`); every other field keeps the FA2 profile's pin.
     from verity_vllm.program.frontend import targets as T
@@ -260,7 +260,7 @@ def declared_derived_accounting(profile: TargetProfile | None = None, applied: d
                     "fail-closed via kernel source sha + constexprs + geometry + NUM_SMS and the row's Match replay (bit-exact on captured operands)"},
             {"field": "flash_attn_version", "value": profile.flash_attn_version, "effective": profile.effective_flash_attn_version(),
              "applied": applied.get("flash_attn_version"), "source": "TargetProfile.flash_attn_version -> EngineArgs(attention_config={'flash_attn_version': v})",
-             "why": "[R13 hopper] None = vLLM's selector for the declared capability (FA3 on sm_90); the instantiated layers' version is read back and pinned per layer"},
+             "why": "None = vLLM's selector for the declared capability (FA3 on sm_90); the instantiated layers' version is read back and pinned per layer"},
         ],
     }
 

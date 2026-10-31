@@ -96,7 +96,7 @@ theorem execOS_miss_le_miss (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
     (FlockSoundness.Audit.Law.execOS (n := n) src (.subset kd) n).miss K₀ ≤ ENNReal.ofReal (d.miss P K₀) := by
   refine le_trans ?_ ((FlockSoundness.Audit.Law.subset_miss hkd hK₀).le.trans
     (choose_le_miss n kd hkd hd hP hn K₀ hK₀))
-  unfold FlockSoundness.Audit.Law.miss
+  unfold Verity.Law.miss
   refine iSup₂_le fun B hB => ?_
   exact (FlockSoundness.Audit.Law.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans
     ((FlockSoundness.Audit.Law.subset n kd hkd).escape_le_miss hB)

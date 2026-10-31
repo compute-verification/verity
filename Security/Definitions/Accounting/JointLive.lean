@@ -1,133 +1,144 @@
 import Definitions.Accounting.JointBlocks
 import Definitions.Core.Game
+import Definitions.Claims
 
 /-!
-# A period as a causal game, and the integrity claim read off the commitment (trusted)
+# A period as a causal game, its claims on a fixed extractor's values, its break a fixed finder's (trusted)
 
-Soundness's rulings on the one theorem's form (26 Oct, LEAN-62):
+Soundness's rulings on the one theorem's form (26 Oct, LEAN-62 and LEAN-64):
 
 * **R5, a causal game.** A period is one `Verity.Game` (`Definitions.Core.Game`) played after its parameters and its
   commitment: each device release is a `coin` drawn after the bytes it answers (a `send`), in the device's order, and
-  the evidence is the last `send`. The game ends in the run `O`, what the verifier of record reads: the bytes sent, the
-  coins released and the evidence. A prover's strategy (`Verity.Game.Strategy`) sees each coin only once it is drawn,
-  so every byte is a function of the coins released before it, and nothing else.
-* **R4, the claim read off the commitment.** The sampled-proofs claim reads no transcript that is a field of the run.
-  It reads the openings the runs of the prover's strategy show under the run's commitment (`PeriodLive.opens`): every
-  transcript those openings open to (`OpensTo`) has at most an `ε` share of the circuit's units wrong, where a unit
-  that reads or writes a committed value with no opening to that transcript's value counts as wrong (`unbound`). Two
-  openings of one position to two values (`DoubleOpen`), each shown by a run of the strategy with that commitment, are
-  the period's `Break`: a collision along the two openings' paths under one root, from two runs of the strategy sharing
-  the commitment (the fork form). Every opening the claim reads is in a run of the strategy, so the break is bounded by
-  what the runs carry.
+  the evidence is the last `send`. The game ends in the run `O`, what the verifier of record reads. A prover's strategy
+  (`Verity.Game.Strategy`) sees each coin only once it is drawn.
+* **R4′, Daniel's form.** For every prover `τ`,
+  $$\Pr[\text{accept} \wedge \text{the claim fails on } E^\tau\text{'s values}] \le
+    \delta + f(\Pr[B^\tau \text{ finds a SHA-512 collision}]),$$
+  with the extractor `E` and the finder `B` fixed constructions. The sampled-proofs claim reads the transcript the
+  period's extractor `E` (`PeriodLive.extract`) reads off the strategy: at most an `ε` share of the circuit's units are
+  unbound in it (`unbound`: wrong in it, or with a committed value the commitment doesn't open to its value there).
+  Under zero knowledge a run shows no value, so the values a claim reads are an extractor's; the deployed one is
+  C-Flock's plurality over the strategy's runs (`XplurZC`). The break is no event of the run: it is the probability
+  that the subprotocol's finder `B` (`PeriodLive.finder`), built from the strategy, outputs a collision of the hash
+  (`Claims.Finder.Pr`), so `ecr/sha-512` (`Claims.ExpectedCR`, stated of a `Claims.Finder`) is asked of `B` only.
+  A subprotocol's error at a strategy is `PeriodLive.error` (`δ` plus its reduction's loss at that probability) or,
+  while its reduction takes its finders' collision resistance as a premise, `condError` (`δ` where the finders meet a
+  quantitative bound, `⊤` elsewhere); either way `δ` may read the strategy's cost.
+
+`E` and `B` are fields of the period, fixed before the strategy is: a statement over `PeriodLive` holds at every `E`
+and `B`, and the statement that instantiates it (the one theorem's vocabulary, `Verity.Vocab`) names them. At an `E`
+that reads an honest evaluation whatever the strategy, the integrity claim holds trivially, so what an instance's
+guarantee says rests on the `E` it names.
 
 A period's view of the run (`PeriodLive`) is the device model's period (`Accounting.PeriodRun`) with every field read
-off the run rather than off a product of coins: its partition, accounts and window, its commitment, the openings it
-shows, its schedule, the network certifier's claim, and each subprotocol's verdict. A subprotocol's per-period
-guarantee (`PeriodLive.Sound`) bounds its failure over the whole game at every strategy: its coins may come before,
-between or after the other subprotocols', and the prover may adapt every byte to every coin released before it. Each
-subprotocol proves it from its own game, the prover's moves in it with the other subprotocols' coins fixed at some
-values (`Verity.Game.InducedAt`) being a strategy of that game. The joint guarantees are union bounds over the one
-game (`Accounting.Guarantees.JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive`).
+off the strategy and the run rather than off a product of coins: its partition and the commitment's openings, its
+extractor and finders, the circuit's gates the run computed after their coin (PoUW's claim, in gates), the world the
+run realized (`PeriodWorld`: accounts, window, schedule and the network certifier's claim), and each subprotocol's
+verdict. A subprotocol's per-period guarantee (`PeriodLive.Sound`) bounds its failure over the whole game at every
+strategy: its coins may come before, between or after the other subprotocols', and the prover may adapt every byte to
+every coin released before it. The joint guarantees are union bounds over the one game
+(`Accounting.Guarantees.JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive`).
 
 The period's game may be a horizon's: one game, several periods, each read off the same run, each period's parameters
-and commitment sent after the coins of the periods before it. A period's commitment is the run's, so in a horizon the
-runs whose openings a claim reads are those that sent the same commitment.
+and commitment sent after the coins of the periods before it, so a period's extractor may read the run's prefix up to
+its commitment (`extract` reads the run).
 -/
 
 namespace Accounting
 
 open Verity
-
-section Opened
-
-variable {C : Verity.Circuit} {n : ℕ}
-
-/-- `X` is a transcript the openings `opens` open to: at every position some opening opens, `X` holds an opened
-value. -/
-def OpensTo (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Transcript) : Prop :=
-  ∀ g, (∃ v, opens g v) → opens g (X g)
+open scoped ENNReal
 
 open Classical in
 /-- **The units `X` doesn't bind**: those wrong in `X`, and those that read or write a committed value (`Partition.io`)
-with no opening to `X`'s value there. -/
-noncomputable def unbound (P : Verity.Partition C n) (opens : (g : Fin C.N) → BitVec (C.w g) → Prop)
-    (X : C.Transcript) : Finset (Fin n) :=
+that `opens` doesn't open to `X`'s value there. -/
+noncomputable def unbound {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
+    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Transcript) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ P.Correct X u ∨ ∃ g ∈ P.io u, ¬ opens g (X g)
 
-/-- **Two openings of one position**, to two values. -/
-def DoubleOpen (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) : Prop :=
-  ∃ g v v', opens g v ∧ opens g v' ∧ v ≠ v'
+/-- **The integrity claim on a transcript**, at share `ε`: at most an `ε` share of `P`'s units are unbound in `X` under
+the openings `opens`. -/
+def IntegrityHolds {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
+    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Transcript) (ε : ℝ) : Prop :=
+  ((unbound P opens X).card : ℝ) ≤ ε * n
 
-/-- **The integrity claim read off the commitment**, at share `ε`: every transcript the openings `opens` open to has
-at most an `ε` share of `P`'s units unbound. -/
-def IntegrityHolds (P : Verity.Partition C n) (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (ε : ℝ) : Prop :=
-  ∀ X, OpensTo opens X → ((unbound P opens X).card : ℝ) ≤ ε * n
+/-- **The world a run realized** on device `d` with accounts `α`: whose account each resource is charged to, the window,
+the device schedule, which fits the device, and the network certifier's claim at `K` (what the network certifiers saw
+the node move is within `K` bits). -/
+structure PeriodWorld {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
+  acct : Resource → α
+  win : Window
+  schedule : Schedule ι α
+  fits : schedule.Fits d
+  commWithin : ℝ → Prop
 
-end Opened
-
-/-- The runs a strategy reaches: the game's output at some value of its coins, the strategy playing every `send`. -/
-def Reaches {O : Type} : (G : Verity.Game O) → Verity.Game.Strategy G → O → Prop
-  | .ret a, _, o => o = a
-  | .send _ k, s, o => Reaches (k s.1) s.2 o
-  | @Game.coin _ _ _ _ k, s, o => ∃ c, Reaches (k c) (s c) o
-
-/-- **A period's view of the run `O` a causal game ends in**, on device `d` with accounts `α`, over the circuit `C`,
-with commitments in `Cm`: the partition whose units the integrity claim counts, each resource's account, the period's
-window, the run's commitment, the openings it shows, its schedule, the network certifier's claim, and each
-subprotocol's verdict. The coins are the run's: nothing here reads a coin the game hasn't drawn. -/
-structure PeriodLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (Cm O : Type) where
+/-- **A period's view of the run `O` the causal game `G` ends in**, on device `d` with accounts `α`, over the circuit
+`C`: the partition whose units the integrity claim counts, the commitment's openings, the extractor whose values the
+integrity claim reads and each subprotocol's collision finder, both built from the strategy, the gates the run
+computed after their coin, the world the run realized, and each subprotocol's verdict. -/
+structure PeriodLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) {O : Type} (G : Verity.Game O) where
   /-- the number of units of the partition -/
   units : ℕ
   /-- the partition of the circuit's computed gates into units -/
   parts : Verity.Partition C units
-  /-- the account a resource is charged to -/
-  acct : Resource → α
-  /-- the period's window -/
-  win : Window
-  /-- the commitment the run sent for the period -/
-  commit : O → Cm
-  /-- the run shows an opening of position `g` to `v` that passes the opening check under its commitment -/
-  shows : O → (g : Fin C.N) → BitVec (C.w g) → Prop
-  /-- the schedule the run realizes -/
-  schedule : O → Schedule ι α
-  /-- every schedule fits the device -/
-  fits : ∀ o, (schedule o).Fits d
-  /-- the network certifier's claim at `K`: what the network certifiers saw the node move in the period is within `K`
-  bits -/
-  commWithin : ℝ → O → Prop
+  /-- the commitment opens gate `g` to `v` -/
+  opens : (g : Fin C.N) → BitVec (C.w g) → Prop
+  /-- `E`: the transcript the period's extractor reads off the strategy, on the run -/
+  extract : Verity.Game.Strategy G → O → C.Transcript
+  /-- `B`: a subprotocol's collision finder, built from the strategy -/
+  finder : Audit → Verity.Game.Strategy G → Claims.Finder
+  /-- the circuit's gates the run computed after their window's coin, over the period's windows -/
+  computed : Verity.Game.Strategy G → O → Finset (Fin C.N)
+  /-- the world the run realized -/
+  world : Verity.Game.Strategy G → O → PeriodWorld d α
   /-- a subprotocol's verdict on the run -/
   accepts : Audit → O → Prop
 
 namespace PeriodLive
 
-variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {Cm O : Type}
-  (r : PeriodLive d α C Cm O)
+variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {O : Type} {G : Verity.Game O}
+  (r : PeriodLive d α C G)
 
-/-- **The openings of the run `o`'s commitment** in the game `G` at the strategy `s`: the values some run of `s` that
-sent the same commitment shows at each position. -/
-def opens (G : Verity.Game O) (s : Verity.Game.Strategy G) (o : O) (g : Fin C.N) (v : BitVec (C.w g)) : Prop :=
-  ∃ o', Reaches G s o' ∧ r.commit o' = r.commit o ∧ r.shows o' g v
+/-- **The claim a subprotocol certifies** at certificates `c`, on the run `o` of the strategy `s`: sampled proofs' on
+the extractor's values (at most an `ε` share of the units unbound), PoUW's in gates (at least `W` gates computed after
+their coin), and the others' on the world the run realized (at least `S` bits of device memory held on average, at
+least `Q` bits read, at most `K` bits through the network certifiers). -/
+def Holds (c : Certificates) (s : Verity.Game.Strategy G) : Audit → O → Prop
+  | .sampled, o => IntegrityHolds r.parts r.opens (r.extract s o) c.ε
+  | .pouw, o => c.W ≤ (C.size (r.computed s o) : ℝ)
+  | .pous, o => c.S * (r.world s o).win.len ≤
+      ((r.world s o).schedule.held (r.world s o).win ((r.world s o).acct .capacity) : ℝ)
+  | .poub, o => c.Q ≤ ((r.world s o).schedule.read (r.world s o).win ((r.world s o).acct .bandwidth) : ℝ)
+  | .network, o => (r.world s o).commWithin c.K
 
-/-- **The claim a subprotocol certifies** at certificates `c` and price `p`, on the run `o` of the strategy `s`: the
-integrity claim read off the commitment, and the device-model claims read off the run's schedule. -/
-def Holds (c : Certificates) (p : Price) (G : Verity.Game O) (s : Verity.Game.Strategy G) : Audit → O → Prop
-  | .sampled, o => IntegrityHolds r.parts (r.opens G s o) c.ε
-  | .pouw, o => c.W ≤ ((r.schedule o).work r.win (r.acct .compute) p : ℝ)
-  | .pous, o => c.S * r.win.len ≤ ((r.schedule o).held r.win (r.acct .capacity) : ℝ)
-  | .poub, o => c.Q ≤ ((r.schedule o).read r.win (r.acct .bandwidth) : ℝ)
-  | .network, o => r.commWithin c.K o
+/-- **The probability that subprotocol `a`'s finder, built from the strategy `s`, outputs a collision of `H`.** -/
+noncomputable def collides (H : Claims.Msg → Claims.Msg) (a : Audit) (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
+  ENNReal.ofReal ((r.finder a s).Pr H)
 
-/-- **The break**: runs of the strategy that sent the run `o`'s commitment open one position to two values. -/
-def Break (G : Verity.Game O) (s : Verity.Game.Strategy G) (o : O) : Prop := DoubleOpen (r.opens G s o)
+/-- **Subprotocol `a`'s error at the strategy `s`**: its error `δ`, plus its reduction's loss at the probability that
+its finder, built from `s`, outputs a collision of `H`. -/
+noncomputable def error (H : Claims.Msg → Claims.Msg) (a : Audit) (δ : ℝ≥0∞) (loss : ℝ≥0∞ → ℝ≥0∞)
+    (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
+  δ + loss (r.collides H a s)
 
-/-- **A subprotocol's per-period guarantee over the causal game**, at certificates `c`, price `p` and error `δ`: at
-every strategy, the probability over the coins the game draws that subprotocol `a` accepts while its claim fails,
-with no break, is at most `δ`. -/
-def Sound (G : Verity.Game O) (c : Certificates) (p : Price) (a : Audit) (δ : ℝ) : Prop :=
+/-- **A subprotocol's per-period guarantee over the causal game**, at certificates `c` and the error `err s` at each
+strategy `s`: at every strategy `s`, the probability over the coins the game draws that subprotocol `a` accepts while
+its claim fails on the extractor's values is at most `err s`. The error is a function of the strategy, as `error` and
+`condError` are: its `δ` may read the strategy's cost, and its finder term the finder built from it. -/
+def Sound (c : Certificates) (a : Audit) (err : Verity.Game.Strategy G → ℝ≥0∞) : Prop :=
   ∀ s : Verity.Game.Strategy G,
-    Verity.Game.prob (fun o => r.accepts a o ∧ ¬ r.Holds c p G s a o ∧ ¬ r.Break G s o) G s ≤ ENNReal.ofReal δ
+    Verity.Game.prob (fun o => r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤ err s
 
 end PeriodLive
+
+open Classical in
+/-- **An error conditional on its finders' collision resistance**: `δ s` at a strategy `s` where `P s` holds, `⊤`
+(no bound) elsewhere. With `P s` a quantitative bound on the probability that the finders built from `s` output a
+collision (`Claims.Finder.Pr`), this is the conditional form of the one theorem (the 21:55Z ruling); with `P` true it is
+`δ`. -/
+noncomputable def condError {O : Type} {G : Verity.Game O} (P : Verity.Game.Strategy G → Prop)
+    (δ : Verity.Game.Strategy G → ℝ≥0∞) (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
+  if P s then δ s else ⊤
 
 /-- The wipe that opens a server-time block, read off the run: the bits of device memory its fill covers, the memory
 challenger's verdict, and `kept`, the bits of foreign content beyond the committed carried state that the block can
@@ -145,27 +156,27 @@ structure WipeLive {ι : Type} (d : Device ι) (O : Type) where
 def WipeLive.Survives {ι : Type} {d : Device ι} {O : Type} (w : WipeLive d O) (f : ℝ) (o : O) : Prop :=
   (w.kept o : ℝ) ≤ f * w.fill + 2 * 128 + (d.chip + (d.mem - w.fill))
 
-/-- A horizon of `B` server-time blocks read off one run: each block's period, over its own circuit, the wipe that
-opens it, the bits of weights its PoUS store holds, its PoUS challenge times on the run, and the read deadline. -/
+/-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
+the wipe that opens it, its PoUS challenge times on the run, and the read deadline. -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
-    (Cm O : Type) where
+    {O : Type} (G : Verity.Game O) where
   /-- block `b`'s period -/
-  block : (b : Fin B) → PeriodLive d α (C b) Cm O
+  block : (b : Fin B) → PeriodLive d α (C b) G
   /-- the wipe that opens block `b` -/
   wipe : Fin B → WipeLive d O
-  /-- the bits of weights block `b`'s PoUS store holds (U) -/
-  weights : Fin B → ℕ
   /-- block `b`'s PoUS challenge times on the run -/
   chal : Fin B → O → Finset ℕ
   /-- the read deadline, in ticks (T_read) -/
   readDeadline : ℕ
 
-/-- **Block `b`'s memory term** on the run `o` (`BlocksRun.MemoryTerm`'s, ASK-132): at each of its PoUS challenge
-times, the bits of its weights that its capacity account doesn't hold in device memory are at most
-`0.07 · U + S_chip + ∑_i cap_i · T_read`. -/
+/-- **Block `b`'s memory term at share `σ`** on the run `o` of the strategy `s` (`BlocksRun.MemoryTerm`'s): at each of
+its PoUS challenge times, the bits of device memory its capacity account doesn't hold, `M` less what it holds, are at
+most `σ · M + S_chip + ∑_i cap_i · T_read`, `M` the device's memory. -/
 def BlocksLive.MemoryTerm {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {B : ℕ}
-    {C : Fin B → Verity.Circuit} {Cm O : Type} (s : BlocksLive d α B C Cm O) (b : Fin B) (o : O) : Prop :=
-  ∀ t ∈ s.chal b o, (s.weights b : ℝ) - (((s.block b).schedule o t).mem ((s.block b).acct .capacity) : ℝ) ≤
-    7 / 100 * s.weights b + d.chip + (∑ i, d.cap i * s.readDeadline : ℕ)
+    {C : Fin B → Verity.Circuit} {O : Type} {G : Verity.Game O} (S : BlocksLive d α B C G) (σ : ℝ)
+    (s : Verity.Game.Strategy G) (b : Fin B) (o : O) : Prop :=
+  ∀ t ∈ S.chal b o, (d.mem : ℝ) -
+      ((((S.block b).world s o).schedule t).mem (((S.block b).world s o).acct .capacity) : ℝ) ≤
+    σ * d.mem + d.chip + (∑ i, d.cap i * S.readDeadline : ℕ)
 
 end Accounting

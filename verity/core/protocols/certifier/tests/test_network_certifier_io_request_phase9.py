@@ -2,7 +2,7 @@
 bucket's verdict holds alone, and what rests on the verifier's lanes chaining each connection over its buckets.
 
   a. The public inputs are the lanes (each lane's ordinal and its request's carry-in and carry-out) and still no
-     advice digest or Commit: `advised.IoTieVerdict` (N2-ADVICE) keys the verdicts to the advice's digest, built only
+     advice digest or Commit: `advised.IoTieVerdict` keys the verdicts to the advice's digest, built only
      from proofs verified on the verifier's own lanes (`io_request.lanes`).
   b. Closed: a carried prompt-field count is no free addend. Checked alone, a bucket still accepts a lane's carry-in's
      fields + Δ with its carry-out's + Δ, but the bucket before holds its carry-out's fields, and the verifier's

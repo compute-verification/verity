@@ -540,7 +540,7 @@ def definition(name: str, version: int, build: Callable, params: Sequence[tuple[
 
 
 def part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
-         version: int = 1, *, register: bool = True) -> CompositeDefinition:
+         version: int = 1, *, register: bool = True, conformance: str = "exact-model-tested") -> CompositeDefinition:
     """The Definition ``name_v{version}`` traced from ``build(C, S, *elements)`` once per binding of ``statics`` (``traced(*key)``),
     which keeps ``build`` as `definition` does. A lowering passes S only to a Definition with statics
     (`verity_flock.ir_lower._boolean_activation`), so without any its ``build`` takes the elements alone."""
@@ -555,8 +555,7 @@ def part(name: str, statics: tuple[str, ...], signature: Callable, build: Callab
         params, ret = signature(S)
         return emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
-    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc,
-                            register=register)
+    d = CompositeDefinition(name, version, statics, signature, body, conformance=conformance, doc=doc, register=register)
     d.build = build if statics else wraps(build)(lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
     d.traced = traced  # type: ignore[attr-defined]
     return d

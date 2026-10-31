@@ -1,18 +1,17 @@
-"""Red-team (REDTEAM-ADVICE, phase 10 target 4, note:network-accounting/20261024T0558Z-finding-redteam-v3) against
-CERT-VARLEN's compact framing (#3650 @e12eb39a06): the 8-byte record's finish field and ordinal, the proxy's "record
+"""Adversarial cases against the compact framing: the 8-byte record's finish field and ordinal, the proxy's "record
 names another request" fault, and the client-side renderer (`compact_render`). On an honest compact run (B = 8,
 `_Varied`) its certified records are rewritten and read back by `certifier_serve.certified_io`; the renderer is run on
-the fixture's real Llama-3.2 vocab. Its two findings are kept as regressions of their fixes:
+the fixture's real Llama-3.2 vocab. Its findings are kept as regressions of their fixes:
 
-- finding 3 (live at 12109611a2): the finish rule lost "ending at its first EOS" under compact, so an unmarked record
+- the finish rule lost "ending at its first EOS" under compact, so an unmarked record
   carrying an EOS id read as a token that more follow and was accepted, where the id-event rule refuses "a token after
-  EOS"; `certified_io` now refuses an EOS id in any record but its response's stop, which since REDTEAM phase 12
+  EOS"; `certified_io` now refuses an EOS id in any record but its response's stop, which
   carries the EOS id the model sampled (`test_compact_eos_phase12`);
 - the proxy holds no finish state, so that rule is all there is: it certifies a record after a finish and an unmarked
   EOS id, and faults only a record of another request or one that isn't a record;
 - two token streams render byte-identically (lone UTF-8 continuation bytes before the same token), so the text can't
   stand in for the ids; the render is a function of the cells and the client's own prompt;
-- finding 8 (low at 12109611a2): the renderer raised KeyError on an id outside the vocab, `done` closed a stream with
+- the renderer raised KeyError on an id outside the vocab, `done` closed a stream with
   no finish, and the default `request=None` took another request's record; each is now refused with ValueError, and
   `request` is required.
 """
