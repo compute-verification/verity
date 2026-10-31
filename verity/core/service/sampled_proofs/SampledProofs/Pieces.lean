@@ -19,6 +19,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   coins, with the number of bytes it read (`Select.select`);
 * `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
   (`Slots.select`);
+* `pop_order`: the run's `population-order` check as it runs (`Slots.popOk`, from the ranges: `Slots.popOkRanges`) and
+  as `popOk` states it, off the layout's population;
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -272,6 +274,20 @@ def slots (j : Json) : V Json := do
   let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun v => Json.arr #[Lean.toJson v, Lean.toJson (0 : Nat)]))]
+
+/-- `{"program", "query", "population"}` to `{"ranges", "layout"}`: `Slots.popOk`, which runs as `Slots.popOkRanges`,
+and `popOk`'s own statement read off `Slots.layout`'s population; refused where the program, query or population isn't
+one. -/
+def popOrder (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .obj _ := getD j "query" | throw "query is not an object"
+  let some n := (getD j "population").getNat?.toOption | throw "population is not a natural number"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let q := getD j "query"
+  let layout : Bool := match Slots.layout p q with
+    | .error _ => false
+    | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
+  return Json.mkObj [("ranges", Lean.toJson (Slots.popOk p q n)), ("layout", Lean.toJson layout)]
 
 /-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do
@@ -579,6 +595,7 @@ def table : List (String × (Json → V Json)) :=
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
+   ("pop_order", popOrder),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),

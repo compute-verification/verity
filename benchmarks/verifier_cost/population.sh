@@ -2,9 +2,9 @@
 # The population-order check's cost against a template population's units: population.py writes, per N, a population of
 # about N units over a layered call hierarchy (defaults: 234 root batches of 234 templates over six levels of at most 1,800
 # composites, about 8,100 Definitions), and population-time (population/Main.lean, built in a scratch Lake package
-# against the checkout's verifier) times `Partition.unitGates`, `Slots.popOk` and the per-unit reference
-# (`TemplateQuery.gates` on every unit), refusing where the reference's gates differ. The reference runs only up to
-# REF_MAX units (default 50). Run from a clone (the build writes the verifier's .lake):
+# against the checkout's verifier) times `Partition.unitGates`, `Slots.popOk` (from the ranges) and the references
+# (`TemplateQuery.gates` on every unit, and `popOk` off `Slots.layout`), refusing where a reference differs. The
+# references run only up to REF_MAX units (default 50). Run from a clone (the build writes the verifier's .lake):
 #   research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
 #     bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
 # Extra arguments to population.py go in POPULATION_ARGS. $OUT gets population.jsonl (one row per N and function:

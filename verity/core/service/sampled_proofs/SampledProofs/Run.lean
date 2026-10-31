@@ -28,6 +28,7 @@ the clock's (`late`).
 import SampledProofs.OneStage
 import SampledProofs.Select
 import SampledProofs.Slots
+import SampledProofs.PopOrder
 import SampledProofs.Service
 import SampledProofs.ChallengerCoins
 
