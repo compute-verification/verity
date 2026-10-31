@@ -170,6 +170,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
+import a5_memo as AM  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
@@ -851,6 +852,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if outs:
         summary["outputs"] = {"units": len(outs), "proved": set(outs) <= set(proved) <= set(D.proved(union_draw)),
                               "drawn": len(drawn), "closure": len(union_draw.get("closure", ()))}
+    summary["verifier_checks"] = AM.counts()
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
         and summary.get("outputs", {"proved": True})["proved"]
@@ -1135,6 +1137,7 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     return summary["accepted"]
 
 
+@AM.memoized
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bundle", help="a deferred Commit's sealed replay bundle (<commit out>/replay_bundle_p<pair>)")
