@@ -455,6 +455,7 @@ class CommitWindows:
         self.installed = self.is_open = False
         c = _Closed(self.window, self.com, self.step_t, self.ledgers, [], self.open_s)
         rec, job = self._record(c, rc, readback, lap)
+        self._no_release(rec, c.com, job)
         c.finished = self._pop_finished()
         self._write_step_trace(rec, rc, c)
         lap("step_trace")
@@ -523,6 +524,7 @@ class CommitWindows:
         finally:
             if c.com is not None and not isinstance(job, tuple):
                 thaw(c.com)
+        self._no_release(rec, c.com, job)
         on_loop = sum(c.on_loop.values())
         rec["seconds"] = {"open": round(c.open_s, 4), "close": round(on_loop + laps[-1][1] - t0, 4), "on_loop": round(on_loop, 4),
                           "finalize_wait": round(waited, 4), "seal_wait": round(c.seal_wait, 4), "queued": round(t0 - c.t_close, 4)}
@@ -534,6 +536,14 @@ class CommitWindows:
         if self.mirror is not None:
             self.mirror()
         return self._land(rec, job, here=(c.t_close, c.seal_wait)) if isinstance(job, tuple) else None
+
+    def _no_release(self, rec: dict[str, Any], com: Any, job: Any) -> None:
+        """A window that reaches no seal, so no draw-gated release: `serve_release.Draws.discard`, its device pool pieces freed,
+        so the next windows' steps don't wait on them (``rec["release"]``)."""
+        if self.release is not None and com is not None and not isinstance(job, tuple):
+            why = rec.get("error") or (job or {}).get("error") or "the window has no seal"
+            if (got := self.release.discard(rec["window"], com, f"not sealed: {why}")) is not None:
+                rec["release"] = got
 
     def _record(self, c: _Closed, rc: Any, readback: Any, lap: Callable[[str], None]) -> tuple[dict[str, Any], Any]:
         """The closed window's line of windows.jsonl as its finalize and readback make it, with its served rows and its seal's
