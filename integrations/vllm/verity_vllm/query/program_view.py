@@ -1,4 +1,4 @@
-"""A `verity_vllm.query.units.Program` view of a derived Program.
+"""A `verity_vllm.query.units.CallGraph` view of a derived Program.
 
 Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Program, in body order):
 
