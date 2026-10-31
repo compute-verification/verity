@@ -182,7 +182,8 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
         assert opened.z.commitment.root.hex() == record["calls"][i]["tables"]["z"]
     pub = json.loads((w0 / "live" / "window.json").read_text())
     assert (pub["T"], pub["S"], pub["program"]) == (ROWS, STEPS, arm.digest) and len(pub["served"]) == STEPS
-    assert all((w0 / "live" / str(s) / "rows.npz").is_file() for s in range(STEPS))
+    from tests.protocols.test_pouw_h1_live import assert_dumped_as_np_savez
+    assert_dumped_as_np_savez(run, w0 / "live", tmp_path / "before")
     srv.src.uninstall()
     bare = _Server(monkeypatch)
     plain = SH.H1Windows(bare.model, bare.com, ROWS, STEPS, engine=object(), out=tmp_path / "plain", unit=_unit())

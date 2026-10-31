@@ -25,9 +25,13 @@ never under a run's ``$OUT`` or any published path. The serving node keeps it (`
 """
 from __future__ import annotations
 
+import functools
+import io
 import os
+import struct
 import threading
 import zipfile
+import zlib
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,22 +72,58 @@ def key_of(directory: str | Path) -> bytes:
     return (Path(directory) / KEY).read_bytes()
 
 
-def _savez(path: Path, a: np.ndarray, s_a: np.ndarray, records: np.ndarray | None) -> Path:
-    """``path`` (0600) as ``np.savez`` writes the call's arrays, byte for byte, but each C-ordered array's data written from
-    its own buffer, so the GIL is released while it's hashed and written (``np.savez`` copies it out in 16 MiB chunks)."""
-    arrays = {"a": np.asarray(a, np.int8), "s_a": np.asarray(s_a, "<f4").reshape(-1),
-              "records": np.zeros((0, 0), np.uint8) if records is None else np.asarray(records)}
-    with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f, \
-            zipfile.ZipFile(f, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
-        for name, v in arrays.items():
-            with z.open(f"{name}.npy", "w", force_zip64=True) as out:
-                if not v.flags.c_contiguous:
-                    np.lib.format.write_array(out, v)
-                    continue
-                np.lib.format.write_array_header_1_0(out, np.lib.format.header_data_from_array_1_0(v))
-                if v.size:
-                    out.write(memoryview(v).cast("B"))
+#: the zip records ``np.savez`` writes through `zipfile`: a member's local header, its ZIP64 extra field (``np.savez`` forces
+#: one on every member), its central directory entry, and the end record
+_LOCAL, _ZIP64, _CENTRAL, _END = (struct.Struct(f) for f in ("<4s2B4HL2L2H", "<HHQQ", "<4s4B4HL2L5H2L", "<4s4H2LH"))
+#: `zipfile.ZipInfo`'s default date, 1980-01-01 00:00, as a DOS date, and its creating system
+_DOS_DATE, _SYSTEM = 1 << 5 | 1, zipfile.ZipInfo().create_system
+
+
+@functools.lru_cache(maxsize=1024)
+def _npy_header(dtype: np.dtype, shape: tuple[int, ...], fortran: bool) -> bytes:
+    out = io.BytesIO()
+    np.lib.format.write_array_header_1_0(out, {"descr": np.lib.format.dtype_to_descr(dtype), "fortran_order": fortran,
+                                               "shape": shape})
+    return out.getvalue()
+
+
+def savez(path: Path, arrays: Mapping[str, Any]) -> Path:
+    """``path`` (0600) holding the bytes ``np.savez(path, **arrays)`` writes: each array a stored member ``<name>.npy``
+    with ZIP64 sizes at zipfile's 1980 date. Each member is one header, built once per dtype and shape, and its data hashed
+    and written from the array's own buffer (the GIL released for a large one), so a file of many small arrays costs a
+    few struct packs a member, not a zipfile stream's seeks and rewritten header; past zip's 32-bit sizes and counts,
+    ``np.savez`` writes it."""
+    members = []
+    for name, v in arrays.items():
+        v = np.asanyarray(v)
+        fortran = bool(v.flags.f_contiguous and not v.flags.c_contiguous)
+        data = (v.T if fortran else np.ascontiguousarray(v)).reshape(-1).view(np.uint8)
+        head = _npy_header(v.dtype, v.shape, fortran)
+        members.append((f"{name}.npy".encode("ascii"), head, data, zlib.crc32(data, zlib.crc32(head))))
+    end = sum(_LOCAL.size + _ZIP64.size + _CENTRAL.size + 2 * len(n) + len(h) + d.nbytes for n, h, d, _c in members)
+    with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        if len(members) > 0xFFFF or end + _END.size > zipfile.ZIP64_LIMIT:
+            np.savez(f, **arrays)
+            return path
+        central, offset = [], 0
+        for name, head, data, crc in members:
+            size = len(head) + data.nbytes
+            f.write(_LOCAL.pack(b"PK\x03\x04", zipfile.ZIP64_VERSION, 0, 0, zipfile.ZIP_STORED, 0, _DOS_DATE, crc, 0xFFFFFFFF,
+                                0xFFFFFFFF, len(name), _ZIP64.size) + name + _ZIP64.pack(1, _ZIP64.size - 4, size, size) + head)
+            f.write(data)
+            central.append(_CENTRAL.pack(b"PK\x01\x02", zipfile.ZIP64_VERSION, _SYSTEM, zipfile.ZIP64_VERSION, 0, 0,
+                                         zipfile.ZIP_STORED, 0, _DOS_DATE, crc, size, size, len(name), 0, 0, 0, 0, 0o600 << 16,
+                                         offset) + name)
+            offset += _LOCAL.size + len(name) + _ZIP64.size + size
+        cd = b"".join(central)
+        f.write(cd + _END.pack(b"PK\x05\x06", 0, 0, len(central), len(central), len(cd), offset, 0))
     return path
+
+
+def _savez(path: Path, a: np.ndarray, s_a: np.ndarray, records: np.ndarray | None) -> Path:
+    """``path`` (0600) as ``np.savez`` writes the call's arrays, byte for byte (`savez`)."""
+    return savez(path, {"a": np.asarray(a, np.int8), "s_a": np.asarray(s_a, "<f4").reshape(-1),
+                        "records": np.zeros((0, 0), np.uint8) if records is None else np.asarray(records)})
 
 
 def keep_call(directory: str | Path, index: int, a: np.ndarray, s_a: np.ndarray, records: np.ndarray | None) -> Path:
@@ -310,4 +350,4 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
 
 
 __all__ = ["ALIGN", "CALLS", "KEY", "Opened", "STATE", "Writer", "keep_call", "keep_key", "kept_bytes", "key_of", "locate",
-           "open_call", "private", "writer_of"]
+           "open_call", "private", "savez", "writer_of"]
