@@ -364,12 +364,13 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
    Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read a monitoring period of whole blocks,
    each with its parent's hypotheses at that length and no other. The reference schedule's bound is
-   `(2^k · D^(g·T))^m` over the run's first `m` execution blocks of `g·T` buckets, `n = m·(g·T)`
-   (`EncardAccSeqsLeConstantRatePerWindow`, `EncardDecodableLeConstantRatePerWindow`): the factor per block is the
-   bound's, cumulative from the run's first block, so a temporal unit that starts later is bounded only within the
-   run's first blocks. The ingress bound is `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the first `m`
-   periods of `T` buckets, `n = m·T` (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version); `Packed`,
-   `Allocated` and `JitterBounded` bound every step's branching whatever came before.
+   `(2^k · D^(g·T))^m` over any `m` execution blocks of `g·T` buckets from block `e₀`, for the runs that agree on
+   everything observed before block `e₀` (`EncardAccSeqsLeConstantRatePerWindow`,
+   `EncardDecodableLeConstantRatePerWindow`; at `e₀ = 0` the run's first `m` blocks). It holds whatever came before
+   because each block's rows read only its own advice and its FIFO starts empty, so a temporal unit that starts later
+   is bounded by its own blocks. The ingress bound is `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the
+   first `m` periods of `T` buckets, `n = m·T` (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version);
+   `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
 3. **Theorem 3 counts all accepted sequences,** not only those a run produces, which makes it stronger and needs no
