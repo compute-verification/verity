@@ -2511,16 +2511,6 @@
   }
  },
  "witnesses": {
-  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
-   "honest": ["Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest"],
-   "nontrivial": "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-   "kind": "exclusion"
-  },
-  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": {
-   "honest": ["Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest"],
-   "nontrivial": "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
-   "kind": "exclusion"
-  },
   "Flock.SecurityProofs.RecursiveKS": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
@@ -2654,6 +2644,8 @@
   "Accounting.SecurityProofs.RemoteSessionRunConservationRelay": "b6cf4e92a0f2a47199a63cac897cd2cdbe8490edcbbbf2d917b38f07b84b327d",
   "Accounting.SecurityProofs.RemoteWindowRunConservation": "f16007e559551482e09b2fb005e4f43cd9bb16de7397eb1915c03f1cec34e3d1",
   "Accounting.SecurityProofs.RemoteWindowRunConservationRelay": "8d29d2e533802015098f254806edb1e99d0a93e33acf916a76ca12484b570e3e",
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "53f34c71489741cc75340a6cae48124ef8157feef97b91137dbf6a42a7f80df5",
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "d62c6bacc00665d157782066142fd02a3b8a6c529750192555280ff7de20d723",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": "e0ba339ca7ad1c2f4ffd6f7b580fb7da37359d54a33636ca2c55ac29fac55eae",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": "aaa2fd1abb5a52576af40f1a97198026d334c5aa54e233bbb0b037fdd0777e11",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": "ec89e03fd00fc725d5425102cdbd3540fa61b5db00a9f45ce5042a129f06325f",
