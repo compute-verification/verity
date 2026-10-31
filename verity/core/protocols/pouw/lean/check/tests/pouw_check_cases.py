@@ -206,6 +206,7 @@ MUTATIONS = [
     ("answer-reject-public", "answer", "verdict", "reject"), ("answer-profile-type", "answer", "profile", [1]),
     ("answer-public-bernoulli", "answer", "public.draw", None),
     ("answer-public-bernoulli-unreduced", "answer", "public.draw", None),
+    ("answer-public-bernoulli-padded", "answer", "public.draw", None),
     ("answer-public-stratified", "answer", "public.draw", None), ("answer-public-work", "answer", "public.draw", None),
     ("answer-public-work-bare", "answer", "public.draw", None),
     ("answer-public-law-other", "answer", "public.draw.law", "uniform"),
@@ -358,6 +359,8 @@ def _derived(name: str, case: dict, rng: random.Random):
         return {"law": "bernoulli", "p": "1/2", "population": n, "units": units}
     if name == "answer-public-bernoulli-unreduced":
         return {"law": "bernoulli", "p": "2/4", "population": n, "units": units}
+    if name == "answer-public-bernoulli-padded":
+        return {"law": "bernoulli", "p": "01/2", "population": n, "units": units}
     if name == "answer-public-p-type":
         return {"law": "bernoulli", "p": 1, "population": n, "units": units}
     if name == "answer-public-stratified":
