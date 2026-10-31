@@ -17,7 +17,7 @@
   "PouwCommit": {
    "imports": ["PouwCommit", "Randomness", "Identity", "Flock", "Lean"],
    "except": [],
-   "why": "the port is code: Lean core, C-Flock's verifier, core's randomness and core's identity hash only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the port is code: Lean core, C-Flock's verifier, core's randomness and core's identity hash only, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {
