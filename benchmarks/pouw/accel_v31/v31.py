@@ -170,9 +170,7 @@ class Shape:
 
 
 # ---------------------------------------------------------------------------------------------------------- the coins
-def prg(seed: bytes, tag: str, idx: int) -> bytes:
-    assert len(seed) == 64
-    return hashlib.sha512(seed + tag.encode().ljust(8, b"\0") + idx.to_bytes(8, "big")).digest()
+prg = dither.prg
 
 
 def stream(seed: bytes, tag: str, first: int, blocks: int) -> bytes:
@@ -221,7 +219,10 @@ def noise_rows(seed: bytes, tag: str, rows: range, lp: int) -> np.ndarray:
 
 
 @dataclass
-class Coins:
+class CallNoise:
+    """A call's noise, the public inputs its checks read: the dithers d_A, d_B, the noise V, U and the permutations,
+    expanded from the call's seeds as dither.py expands its coins (a served call's seeds are `dither.seeds` of the
+    challenger's live coin; v3.1's static call's are the stub challenger's)."""
     dA: np.ndarray
     dB: np.ndarray
     U: np.ndarray
@@ -229,16 +230,17 @@ class Coins:
     perm: np.ndarray
 
     @staticmethod
-    def expand(sh: Shape, seeds: dict[str, bytes]) -> Coins:
-        return Coins(bits(seeds["dA"], "dA", sh.m, sh.k), bits(seeds["dB"], "dB", sh.n, sh.k), noise(seeds["U"], "U", sh.n, sh.lp),
-                     noise(seeds["V"], "V", sh.m, sh.lp), perms(seeds["P"], sh.k // sh.lp, sh.lp))
+    def expand(sh: Shape, seeds: dict[str, bytes]) -> CallNoise:
+        return CallNoise(bits(seeds["dA"], "dA", sh.m, sh.k), bits(seeds["dB"], "dB", sh.n, sh.k),
+                         noise(seeds["U"], "U", sh.n, sh.lp), noise(seeds["V"], "V", sh.m, sh.lp),
+                         perms(seeds["P"], sh.k // sh.lp, sh.lp))
 
     @staticmethod
-    def rows(sh: Shape, seeds: dict[str, bytes], ia: range, ja: range) -> Coins:
-        """The coins of A's rows ia and B's rows ja (and every permutation)."""
-        return Coins(bits_rows(seeds["dA"], "dA", ia, sh.k), bits_rows(seeds["dB"], "dB", ja, sh.k),
-                     noise_rows(seeds["U"], "U", ja, sh.lp), noise_rows(seeds["V"], "V", ia, sh.lp),
-                     perms(seeds["P"], sh.k // sh.lp, sh.lp))
+    def rows(sh: Shape, seeds: dict[str, bytes], ia: range, ja: range) -> CallNoise:
+        """The noise of A's rows ia and B's rows ja (and every permutation)."""
+        return CallNoise(bits_rows(seeds["dA"], "dA", ia, sh.k), bits_rows(seeds["dB"], "dB", ja, sh.k),
+                         noise_rows(seeds["U"], "U", ja, sh.lp), noise_rows(seeds["V"], "V", ia, sh.lp),
+                         perms(seeds["P"], sh.k // sh.lp, sh.lp))
 
 
 def seeds_bytes(seeds: dict[str, bytes]) -> bytes:
@@ -255,12 +257,12 @@ def wrap8(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return w, (x - w) // 256
 
 
-def v_full(sh: Shape, c: Coins, rows: slice | None = None) -> np.ndarray:
+def v_full(sh: Shape, c: CallNoise, rows: slice | None = None) -> np.ndarray:
     V = c.V if rows is None else c.V[rows]
     return np.tile(V, (1, sh.k // sh.lp))
 
 
-def u_full(sh: Shape, c: Coins, rows: slice | None = None) -> np.ndarray:
+def u_full(sh: Shape, c: CallNoise, rows: slice | None = None) -> np.ndarray:
     U = c.U if rows is None else c.U[rows]
     return np.concatenate([U[:, c.perm[tau]] for tau in range(sh.k // sh.lp)], axis=1)
 
@@ -275,7 +277,7 @@ class Formed:
     Bd: np.ndarray
 
 
-def form(sh: Shape, A: np.ndarray, B: np.ndarray, c: Coins) -> Formed:
+def form(sh: Shape, A: np.ndarray, B: np.ndarray, c: CallNoise) -> Formed:
     Ad, Bd = A.astype(np.int64) + c.dA, B.astype(np.int64) + c.dB
     X, wX = wrap8(Ad + v_full(sh, c))
     Wp, wW = wrap8(Bd + u_full(sh, c))
@@ -288,7 +290,7 @@ def imatmul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.rint(a.astype(np.float64) @ b.astype(np.float64).T).astype(np.int64)
 
 
-def peels(sh: Shape, f: Formed, c: Coins) -> tuple[np.ndarray, np.ndarray]:
+def peels(sh: Shape, f: Formed, c: CallNoise) -> tuple[np.ndarray, np.ndarray]:
     """Z_X (m x L') and Y_W (N x L')."""
     T = sh.k // sh.lp
     At = f.Ad + v_full(sh, c)
@@ -325,7 +327,7 @@ def values(sh: Shape, f: Formed, skip: int | None = None) -> Values:
     return Values(T, O, acc)
 
 
-def binding(sh: Shape, f: Formed, c: Coins, T_full: np.ndarray) -> np.ndarray:
+def binding(sh: Shape, f: Formed, c: CallNoise, T_full: np.ndarray) -> np.ndarray:
     """O from the tensor product's full-width T_S, the wraps and the peels (the honest prover's route), mod 2^32."""
     Z, Y = peels(sh, f, c)
     wrap = imatmul(f.wX, f.Wp) + imatmul(f.X, f.wW) + 256 * imatmul(f.wX, f.wW)
@@ -511,7 +513,7 @@ def tile_mask(sh: Shape, frac: float, rng: np.random.Generator) -> np.ndarray:
 
 def prove(sh: Shape, A: np.ndarray, B: np.ndarray, seeds: dict[str, bytes], ks: bytes, off: int = 0,
           cheat: str | None = None) -> tuple[Prover, Values]:
-    c = Coins.expand(sh, seeds)
+    c = CallNoise.expand(sh, seeds)
     f = form(sh, A, B, c)
     skip = int(cheat.split(":")[1]) if cheat and cheat.startswith("skip:") else None
     v = values(sh, f, skip)
@@ -526,7 +528,7 @@ def prove(sh: Shape, A: np.ndarray, B: np.ndarray, seeds: dict[str, bytes], ks: 
 
 # ------------------------------------------------------------------------------------------------------- the verifier
 def check_block(sh: Shape, seeds: dict[str, bytes], root: bytes, i: int, j: int, s: int, ans: dict,
-                coins: Coins | None = None) -> str | None:
+                coins: CallNoise | None = None) -> str | None:
     """The proof block's checks (None: passed; else the first failure)."""
     dom, cmt, lim = sh.domain(), Commitment(root, sh.leaves), VerificationLimits()
     rows = {}
@@ -543,9 +545,9 @@ def check_block(sh: Shape, seeds: dict[str, bytes], root: bytes, i: int, j: int,
         p, o = sh.word_leaf(i, j, s_)
         return int.from_bytes(rows[p][o:o + 2], "little")
 
-    c = coins or Coins.expand(sh, seeds)
+    c = coins or CallNoise.expand(sh, seeds)
     Ai, Bj = ans["A"].astype(np.int64)[None, :], ans["B"].astype(np.int64)[None, :]
-    one = Coins(c.dA[i:i + 1], c.dB[j:j + 1], c.U[j:j + 1], c.V[i:i + 1], c.perm)
+    one = CallNoise(c.dA[i:i + 1], c.dB[j:j + 1], c.U[j:j + 1], c.V[i:i + 1], c.perm)
     f = form(sh, Ai, Bj, one)
     a, b = sh.seg(s)
     seg = int((f.X[0, a:b] * f.Wp[0, a:b]).sum())
@@ -566,7 +568,7 @@ def check_block(sh: Shape, seeds: dict[str, bytes], root: bytes, i: int, j: int,
 
 def verdict(sh: Shape, ch: StubChallenger, call: int, prover: Prover, q: int) -> tuple[bool, list[str], str]:
     picks = ch.check(call, prover.cm.root, sh, q)
-    coins = Coins.expand(sh, prover.seeds)
+    coins = CallNoise.expand(sh, prover.seeds)
     fails = []
     for (i, j, s) in picks:
         why = check_block(sh, prover.seeds, prover.cm.root, i, j, s, prover.answer(i, j, s), coins)
@@ -707,7 +709,7 @@ def pad_rows(seeds: dict[str, bytes], rows: range, k: int) -> np.ndarray:
     return raw.reshape(len(rows), kb * 64)[:, :k].copy()
 
 
-def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None = None, upto: int | None = None) -> np.ndarray:
+def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: CallNoise, skip: int | None = None, upto: int | None = None) -> np.ndarray:
     """T_1 .. T_upto (default S; upto x rows(A) x rows(B)) mod 2^16 (skip: a prover that leaves noise tile `skip` out of
     X W'^T)."""
     fm = form(f, A, B, c)
@@ -724,7 +726,7 @@ def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None
     return T
 
 
-def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None = None) -> tuple[np.ndarray, np.ndarray | None]:
+def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: CallNoise, skip: int | None = None) -> tuple[np.ndarray, np.ndarray | None]:
     """The call's committed values: T_1 .. T_W (W x rows(A) x rows(B), mod 2^16) and a served call's O (mod 2^32; None for
     a filler's)."""
     T = fill_words(f, A, B, c, skip, f.W)
@@ -821,7 +823,7 @@ def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s:
         return "a served call's proof block reads A's row"
     Ai = pad_rows(seeds, range(i, i + 1), f.k) if ans.get("A") is None else np.asarray(ans["A"], dtype=np.int8)[None, :]
     Bj = np.asarray(ans["B"], dtype=np.int8)[None, :]
-    c = Coins.rows(f, seeds, range(i, i + 1), range(j, j + 1))
+    c = CallNoise.rows(f, seeds, range(i, i + 1), range(j, j + 1))
     fm = form(f, Ai, Bj, c)
     try:
         if f.o and s == f.S:
@@ -900,7 +902,7 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
         tm, tn = divmod(tile, f.n // TILE)
         A = np.frombuffer((d / f"t{idx}_A.bin").read_bytes(), dtype=np.int8).reshape(TILE, f.k)
         B = np.frombuffer((d / f"t{idx}_B.bin").read_bytes(), dtype=np.int8).reshape(TILE, f.k)
-        c = Coins.rows(f, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
+        c = CallNoise.rows(f, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
         words = fill_buffer(tl, *fill_values(tl, A, B, c))
         g_leaves = (d / f"t{idx}_leaves.bin").read_bytes()
         bad = 0
@@ -1082,7 +1084,7 @@ def cmd_gpu_check(a: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "error": "params.bin isn't this shape's CGP1 file"}))
         return 1
     g_words, g_o, g_lv = (d / "words.bin").read_bytes(), (d / "O.bin").read_bytes(), (d / "levels.bin").read_bytes()
-    c = Coins.expand(sh, seeds)
+    c = CallNoise.expand(sh, seeds)
     f = form(sh, A, B, c)
     v = values(sh, f)
     r_words, r_o = words_buffer(sh, v.T), o_buffer(v.O)
@@ -1138,7 +1140,7 @@ def cmd_gpu_sample(a: argparse.Namespace) -> int:
         tm, tn = divmod(tile, sh.n // TILE)
         A = np.frombuffer((d / f"t{idx}_A.bin").read_bytes(), dtype=np.int8).reshape(TILE, sh.k)
         B = np.frombuffer((d / f"t{idx}_B.bin").read_bytes(), dtype=np.int8).reshape(TILE, sh.k)
-        c = Coins.rows(sh, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
+        c = CallNoise.rows(sh, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
         f = form(tl, A, B, c)
         v = values(tl, f)
         words, obuf = words_buffer(tl, v.T), o_buffer(v.O)
