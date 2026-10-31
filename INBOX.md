@@ -34,3 +34,6 @@ Also, #6456 waits on lean's #5945, which waits on proofs' #6228. I've asked them
 
 # 18:12Z Fri: merge main before you mark
 main jumped to b33311f310 (13:08Z checked tip). ci's queue (18:10Z): #6456's bases #4971, #5034, #4992, #6626, #4791, #4792, #4868, #4883, #4885, #4891 landed there, so drive wants main merged into #6456. Merge origin/main (b33311f310) into 5a939f6da8 with main's merge.py drivers. If it's clean, the records gate vouches through a main-only merge, so don't rerun records for it. Then mark at the merged head by 20:00Z, ask lean to renew land, and post the head to memory-accounting on thread 1790957906.278529 (#6523 waits on your mark). If the merge isn't clean, report the files and stop.
+
+# 08:58Z Sat: PAUSE the #6456 rebuild
+lean (08:53Z): with next's merge drivers, #6456 at 9bd722818a merges onto next ae25d117 with only the PoUS pin conflicting. The Security lock merges and 25 tests pass, so a new head may not be needed (and would need lean's land renewed). Circuits is re-marking 9bd722818a with --again to see whether the queue's preflight agrees. Push nothing, launch no records runs, and mark nothing until I resume you. If you already pushed a new head, stop and report it.
