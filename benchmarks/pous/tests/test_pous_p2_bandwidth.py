@@ -213,6 +213,33 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
 
 
+KILLED = """
+import json, socket
+with socket.create_server(("127.0.0.1", 0)) as srv:
+    print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+    conn, _ = srv.accept()
+    conn.makefile("rb").readline()
+    conn.close()
+print(json.dumps({"killed": "the session's 1 min ran out"}), flush=True)
+"""
+
+
+def test_a_party_the_gate_kills_fails_the_session_naming_the_kill(tmp_path) -> None:
+    """A party whose minutes ran out: the gate closes its session and says so on its stdout (`{"killed"}`), and the
+    session fails with that reason, not a bare closed connection."""
+    reg = B.toy(tmp_path / "toy")
+    (tmp_path / "killed.py").write_text(KILLED)
+    out = tmp_path / "killed"
+    assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
+                   "--node", reg.node.decode(), "--party", f"{sys.executable} {tmp_path / 'killed.py'}",
+                   "--party-host", "127.0.0.1", "--device", "cpu", "--ref-decode", "--workers", "1", "--out", str(out),
+                   "--expect", "accept"]) == 1
+    doc = json.loads((out / "session.json").read_text())
+    assert doc["answer"]["verdict"] == "prover-error", doc["answer"]
+    assert doc["answer"]["reason"] == ("ConnectionError: the auditor's gate killed the party: the session's 1 min ran "
+                                       "out")
+
+
 def test_the_cli_runs_as_a_script(tmp_path) -> None:
     p = subprocess.run([sys.executable, str(HERE / "p2_v1" / "bandwidth.py"), "toy", str(tmp_path)], check=False,
                        capture_output=True, text=True, cwd=ROOT)
