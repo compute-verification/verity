@@ -1005,7 +1005,7 @@ def gate_step(st: Stack, log) -> dict:
             receipts = [RD.digest(y) for y in ys]
             leaves = -(-n // SR.rb.PER_LEAF)
             tree = SR.rb.tree(BW.RECEIPT_SEED, plan, receipts,
-                              [RD.store_salt(BW.STORE_KEY, BW.RECEIPT_SEED, c) for c in range(leaves)])
+                              [RD.store.store_salt(BW.STORE_KEY, BW.RECEIPT_SEED, c) for c in range(leaves)])
             row["root"] = RD.digest(st.root) == tree.commitment.root
         row["ok"] = row["seed"] and row["receipts_ok"] and row["plan_of"] and row.get("root", True)
         out[m] = row
