@@ -180,6 +180,16 @@ Everything else is engineering on parts we have.
   - **Follow-ups (round 4):** does the lead's per-k32-word commitment block Strassen (demo-critical)? Does D-OUT (outputs
     only, over public natural weights) have the same hole?
 
+- **HT-PREMISE v4** (note:compute-research/20261031T0022Z-report-hardness-premise-v4; executed on natural Llama-3.2-1B
+  layers, run r20261031-000614-075e):
+  - **The lead is not exposed to Strassen.** Its own premises (TileGrain, OneInstructionMinimal, H32) charge every
+    committed k32 word a register write. Every schedule that reproduces every committed word costs 1.93–3.12× stock,
+    and splitting only M and N saves nothing (argued).
+  - **D-OUT is exposed if an overflow correction costs about one write:** a gap of 1.84% at 1 write (capacity
+    99.15–99.16%), and 0.21% at 2 writes (99.2–99.45% holds). The crossover is about 1.6 writes on the H200 and 1.9 on
+    sm_120.
+  - The GPU timing is running on vy-nebius-1 (sm_120).
+
 ## Lanes (notes: `lanes/compute-research/<ts>-report-hardness-<lane>.md`)
 
 | lane | modules | first deliverable |
@@ -272,8 +282,8 @@ Everything else is engineering on parts we have.
 **Smells still open:**
 1. **D-OUT** (HASH, outputs only over public natural weights) likely has the Strassen hole, which would put its
    "99.2–99.45% capacity" in doubt. HT-PREMISE round 4 checks it by 01:45Z.
-2. **The lead** commits every k32 word, which should block Strassen (int8 MMA has no k16). That is demo-critical, so it
-   is being priced, not argued (also round 4).
+2. **(Resolved by v4: the lead is not exposed; 1.93–3.12× stock.)** The lead commits every k32 word, which should
+   block Strassen.
 3. The overflow-correction price behind "natural weights are not hard" is counted, not timed. It will be timed on
    vy-nebius-1.
 4. All utility numbers so far are toys.
