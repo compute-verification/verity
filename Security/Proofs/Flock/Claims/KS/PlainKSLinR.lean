@@ -175,9 +175,9 @@ theorem tableBoundAbortLin_of_rdAll {T : Type} (D : Claims.Flock.Deploy Coin (Li
   have hVk : 0 < D.V.k x := (hk x).symm ▸ V_k_pos false x
   obtain ⟨m₀, hm₀⟩ := hrf x
   have hrun := Claims.Recursion.refuser_run sha512 P D.V x decCoin hcs hal hdf keep m₀ hm₀
-  have hk0' : sch.k0 = k0 := congrArg Accounting.Schedule.k0 hF'
+  have hk0' : sch.k0 = k0 := congrArg FlockSoundness.Accounting.Schedule.k0 hF'
   have hlen : (l₀ :: l₁ :: rest).length = depL x + 1 := by
-    have h1 := congrArg (fun S : Accounting.Schedule => S.levels.length) hF'
+    have h1 := congrArg (fun S : FlockSoundness.Accounting.Schedule => S.levels.length) hF'
     simp only [schedOf, List.length_map, Array.length_toList] at h1
     rw [depL_eq hset hst hF]
     simp only [List.length_cons] at h1 ⊢

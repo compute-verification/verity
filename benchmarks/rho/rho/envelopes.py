@@ -7,14 +7,14 @@ uncertified gates `U` no inference block constrains) and its `delta`, split into
 cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (monitored capacity running no certified declared work: the host CPUs, the GPUs outside the floor credit `residual`
+  (monitored capacity running no certified registered work: the host CPUs, the GPUs outside the floor credit `residual`
   and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
   certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
 * `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
-  the faulty blocks accepted before detection `θ`) and `exfil.faulty`, Lean's `χ` (the compute that bits injected by
-  accepted faulty blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
+  the incorrect blocks accepted before detection `θ`) and `exfil.faulty`, Lean's `χ` (the compute that bits injected by
+  accepted incorrect blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
 * `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the earlier content of its whole memory `M_s` (`per =
   "server"`, the ruled operating point), or, the per-device sensitivity, each device
@@ -181,11 +181,11 @@ class Detection:
             raise ValueError(f"sampled proofs need {unset}")
 
     def q(self) -> float:
-        """The detection probability per faulty block: the proof share over the cost of proving a unit."""
+        """The detection probability per incorrect block: the proof share over the cost of proving a unit."""
         return self.proof_share / (self.overhead + self.replay) if self.sampled else 1.0
 
     def injected(self) -> float:
-        """Bits the accepted faulty proof blocks inject: `J ln(1/δ) (1/q + floor) · step_bits`."""
+        """Bits the accepted incorrect proof blocks inject: `J ln(1/δ) (1/q + floor) · step_bits`."""
         if not self.sampled:
             return 0.0
         return self.identities * math.log(1 / self.p_evade) * (1 / self.q() + self.floor_steps) * self.step_bits
@@ -310,7 +310,7 @@ class Certifier:
     (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the Lean statement
     `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
-    its honest-δ form, at a δ where only the empty faulty set is possible. A faulty ingress unit adds
+    its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
     `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
     bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
     is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of
@@ -386,7 +386,7 @@ class Certifier:
 
     @property
     def faulty_unit_bits(self) -> float:
-        """Bits a faulty ingress unit adds, which the honest-δ form excludes and which are 0 when every ingress unit is
+        """Bits an incorrect ingress unit adds, which the honest-δ form excludes and which are 0 when every ingress unit is
         drawn: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
         admission its reset allows (`faultyIngressBits`)."""
         return 8 * self.cell_bytes * self.lanes * self.cell_rate + 2 * self.lanes * self.request_in

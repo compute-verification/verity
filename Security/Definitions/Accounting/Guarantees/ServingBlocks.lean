@@ -33,7 +33,7 @@ Each guarantee has an honest and a nontrivial lemma
 (`Security/Definitions/Accounting/Guarantees/ServingBlocks/Witnesses.lean`): its premises hold together at a small
 serving-block layout, and its conclusion fails at an explicit circuit once one named premise is dropped. The boundary
 term is needed: without it the bound fails at a circuit where every premise holds
-(`ServingBlockBound_nontrivial_overlap`).
+(`ServingBlockBound_nontrivial_overlap`, in `Security/Proofs/Accounting/ServingBlocks/Witnesses.lean`).
 
 `ServingBlockBoundRemote` is the remote case: no wipe or certifier, so `k_S` is unbounded and only the inference cap
 applies.
@@ -53,11 +53,11 @@ at each `(c_S u, k_S u)` and at `(c, k)`, the operations' bodies lead to their r
 weight in the dark remainder:
 `Σ_v ω_v ≤ Σ_{u ∈ S} min {q(c_S, k_S) + ω_max μ k_S, n_u q(c, k) + q_U(u)} + q_U(L_dark)`. -/
 def ServingBlockBound : Prop :=
-  ∀ (d : Declaration) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k B nf : ℕ) (P : Partition d.D B) (S : Finset (Fin B))
+  ∀ (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k B nf : ℕ) (P : Partition d.D B) (S : Finset (Fin B))
     (cS kS : Fin B → ℕ) (Pf : Partition d.D nf) (r : Pf.Refines P) (ωmax : ℝ) (μ : ℕ) (qU : Fin B → ℝ) (qD : ℝ),
-    (∀ u ∈ S, (P.gates u).card ≤ cS u ∧ (d.unregistered (P.gates u)).card ≤ kS u) →
+    ServingSizes d P S cS kS →
     (∀ u ∈ S, PerBlockCap d J q (cS u) (kS u)) → Pf.IsCK d c k → PerBlockCap d J q c k →
-    OperationBodies d J → Overlap J μ → 0 ≤ ωmax → (∀ v ∈ J.V, J.ω v ≤ ωmax) →
+    OperationBodies d J → Overlap J μ → 0 ≤ ωmax → WeightsAtMost J ωmax →
     (∀ u ∈ S, UncertifiedCap J (P.gates u) (fun i : {i // r.parent i = u} => Pf.gates i) (qU u)) →
     UncertifiedCap J ((univ \ S).biUnion P.gates) (Fin.elim0 : Fin 0 → Finset (Fin d.D.N)) qD →
       J.total ≤ ∑ u ∈ S, min (q (cS u) (kS u) + ωmax * μ * kS u)
@@ -66,7 +66,7 @@ def ServingBlockBound : Prop :=
 /-- **The serving-block bound, remote**: with no wipe or certifier, only the inference cap applies:
 `Σ_v ω_v ≤ Σ_{u ∈ S} (n_u q(c, k) + q_U(u)) + q_U(L_dark)`. -/
 def ServingBlockBoundRemote : Prop :=
-  ∀ (d : Declaration) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k B nf : ℕ) (P : Partition d.D B) (S : Finset (Fin B))
+  ∀ (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k B nf : ℕ) (P : Partition d.D B) (S : Finset (Fin B))
     (Pf : Partition d.D nf) (r : Pf.Refines P) (qU : Fin B → ℝ) (qD : ℝ),
     Pf.IsCK d c k → PerBlockCap d J q c k →
     (∀ u ∈ S, UncertifiedCap J (P.gates u) (fun i : {i // r.parent i = u} => Pf.gates i) (qU u)) →

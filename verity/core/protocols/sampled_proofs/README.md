@@ -4,7 +4,7 @@ Sampled proofs spot-check a committed computation. While serving, the developer 
 proof-block boundary of a partition of the program and registers the commitment roots. The verifier then draws proof blocks
 from its own randomness, the developer proves the drawn proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.core.protocols.profile.IntegrityProfile`): except with
-probability δ, at most so many proof blocks are faulty, a proof block being faulty when its committed outputs differ from its gates
+probability δ, at most so many proof blocks are incorrect, a proof block being incorrect when its committed outputs differ from its gates
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
@@ -17,7 +17,7 @@ component accepts.
 ## Guarantee and assumptions
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
-accepts, at most the profile's count of proof blocks are faulty. Its top statement is C-Flock's
+accepts, at most the profile's count of proof blocks are incorrect. Its top statement is C-Flock's
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
@@ -37,9 +37,9 @@ takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --
 composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-stage v2 (under "Where things are").
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
-before any coin. In the remote protocol the coins come from the auditor's challenger (or the verifier's own draw),
-which adds two premises about where it runs, `CoinsConfidential` and `OneClock` ("Where things are"). Both are prose
-only: no `.lean` file defines either.
+before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the
+verifier's own draw), under three Lean premises, `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`;
+onsite adds two prose premises, `CoinsConfidential` and `OneClock` ("Where things are").
 
 ## Outline
 
@@ -76,13 +76,13 @@ but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s
 A work draw may add a closure, proof blocks proved with the drawn ones. Each verifier derives the strata from its own program and
 query, never from the prover.
 
-**What an accepted audit establishes.** Under a stratified draw, a set of faulty proof blocks has acceptance probability
+**What an accepted audit establishes.** Under a stratified draw, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its proof blocks in
-stratum `s`, so a subcircuit that is faulty in every proof block is never missed. Under the work sampling design, faulty proof blocks
+stratum `s`, so a subcircuit that is incorrect in every proof block is never missed. Under the work sampling design, incorrect proof blocks
 doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
 has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
-Applications weight the profile's faulty proof blocks by what each one costs them: exfiltration security by their output bits,
-plus a term for which proof blocks are faulty, and compute security by their work.
+Applications weight the profile's incorrect proof blocks by what each one costs them: exfiltration security by their output bits,
+plus a term for which proof blocks are incorrect, and compute security by their work.
 
 Everything is committed at serve time: the proof system has no two-stage rule, and the Lean verifier refuses a
 registration that names one.
@@ -108,7 +108,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
   `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
-  prove that its draws accept faulty proof blocks no more often than the modelled sampling designs do, and
+  prove that its draws accept incorrect proof blocks no more often than the modelled sampling designs do, and
   `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
@@ -128,8 +128,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   the verdicts and the audit record. `Stream.outcome` holds each outcome on a draw from the coins to it, and an outcome the two don't make alike
   is a reject whose audit record fails `run`. `SampledProofs/Slots.lean` puts that draw in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
-  root's input gates (drawn `all`: the input proof block is always checked), each replay block one proof block, and the draw's
-  checked proof blocks as `(slot, index)` in class, stratum and replay-block order.
+  root's input gates (drawn `all`: the input proof block is always checked), and the draw's checked proof blocks as
+  their slots in class, stratum and block order.
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
@@ -142,9 +142,15 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
-  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`); remote has no coin path of its own yet.
-  The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
-  name; both are prose only:
+  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`).
+  - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, premises in its `Assumptions/`, in the
+    lock): the challenger logs every coin it releases (`ChallengerLogsCoins`) and flips each only after what it samples
+    is recorded (`FlipsAfterRecorded`), and the verifier reads coins only from its log (`VerifierReadsLog`). Under them
+    a logged coin's sample misses a set fixed before it at most as the draw law allows (`SampleAfterRecorded`, proved).
+    None mentions a network certifier.
+
+  Onsite, the challenger rests on two more premises about where it runs, which the network certifier's spec and
+  ACCEL's cite by name; both are prose only:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
     boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
@@ -425,7 +431,7 @@ credit is a rule of its own, documented with `draw.work_table`:
 
 The one-stage profile (`audit.profile`) is core's `IntegrityProfile` of one level `unit` (`Level("unit", <partition
 digest>)`) with `sizes =
-(population,)`, drawn by the sampling design (`Subset(k)`, `Bernoulli(p)`, or `Stratified` with one stratum per template), with `delta`, the program's digest and the count drawn. It bounds faulty proof blocks and weights nothing. The work
+(population,)`, drawn by the sampling design (`Subset(k)`, `Bernoulli(p)`, or `Stratified` with one stratum per template), with `delta`, the program's digest and the count drawn. It bounds incorrect proof blocks and weights nothing. The work
 sampling design's profile is `Stratified` over the same strata at the work sizes, counting the drawn proof blocks only: a
 closure proves more, which only helps.
 

@@ -601,7 +601,7 @@ def test_the_subset_bound_is_now_the_exact_count():
 
 def test_a4_under_the_stratified_rule():
     """A4 P6's population (six templates, 6,771,765 proof blocks) under `stratified:1024`: k_s = 1, 933, 2, 1, 1, 89, and at
-    most 91,063 faulty proof blocks at 2^-20 (uniform subset:1024: 91,051), with a floor in every template."""
+    most 91,063 incorrect proof blocks at 2^-20 (uniform subset:1024: 91,051), with a floor in every template."""
     sizes = (287, 6_171_648, 11_480, 287, 287, 587_776)
     temps = [_template(i) for i in range(6)]
     prog = P.mixed_population_program(list(zip(temps, sizes)))

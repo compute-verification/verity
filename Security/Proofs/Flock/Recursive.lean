@@ -73,6 +73,7 @@ import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.AcceptedScope
 import Proofs.Flock.Claims.Recursion.InnerSetupCount
 import Proofs.Flock.Claims.Recursion.IVStarCalls
+import Proofs.Flock.Recursive.InnerRows
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
@@ -94,5 +95,6 @@ honest worker's half left an obligation (`FirewallFollows`), and the recursive a
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
 verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
-pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`), and
-`flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`). -/
+pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`),
+`flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`), and a unit's rows read off the
+inner relation's witness, each the commit string its public file publishes (`InnerRows`). -/
