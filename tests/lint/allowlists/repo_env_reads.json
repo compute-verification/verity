@@ -285,7 +285,7 @@
     {"file": "tools/verity/cli/verity_cli/__init__.py", "count": 1},
     {"file": "tools/verity/lean/check.py", "count": 3},
     {"file": "tools/verity/lean/lean_audit.py", "count": 1},
-    {"file": "tools/verity/lean/lean_changed.py", "count": 10},
+    {"file": "tools/verity/lean/lean_changed.py", "count": 11},
     {"file": "tools/verity/lean/tests/test_cache.py", "count": 5},
     {"file": "tools/verity/lean/upstream.py", "count": 1},
     {"file": "verity/core/protocols/certifier/lean_audit.py", "count": 1},
