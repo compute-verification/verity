@@ -362,9 +362,9 @@ def _tiny(windows: int):
     e = R.Engine(max_num_seqs=2, max_num_batched_tokens=8, max_model_len=64, num_gpu_blocks=32, block_size=4)
     reqs = tuple(V.Request(f"u{k}", (10 + k,) * 6, 4, (5, 5, EOS), end, (end, end, end + 1))
                  for k, end in enumerate((0, 0, 3 * (windows - 1))))
-    history = [[CV.Window(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
+    history = [[CV.Advice(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
     caps = CV.Caps(arrived=7, hits=1, hit_units=1, resumes=1, order=1, order_len=1, gap=1, index=1, lag=1)
-    return V.Record(reqs), V.Registered(e, (EOS,), T=3, book=CV.fit_book(history, caps))
+    return V.CertifiedRequests(reqs), V.Registered(e, (EOS,), T=3, book=CV.fit_book(history, caps))
 
 
 @pytest.mark.parametrize("w", (1, 2))
