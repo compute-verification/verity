@@ -17,7 +17,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   a string), each refused with any other form or when it expects
   none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
   expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
-  other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
+  other form; and `circuit_params`, the registered parameters of its circuit that are no parameter of its program
+  (`{value: leaves}`, each of a value it expects registered and doesn't fill, its 16-bit leaves a natural number), which
+  R7 counts rows of (`Registered.circuitShape`), refused in any other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
   identity it registered the prover under (lowercase hex of whole bytes), refused in any other form; and it may add
   `challenger`, `{"key", "label"}`: the auditor's challenger the draw's coins come from (its LMS key,
   `ChallengerKey.ofJson`) and the family they are drawn from, which needs `window_root`, refused in any other form;
@@ -133,6 +135,7 @@ def paramsOfJson (j : Json) : V Params := do
   let keys := if (field? j "row_schemas").isSome then keys.push "row_schemas" else keys
   let keys := if (field? j "window_root").isSome then keys.push "window_root" else keys
   let keys := if (field? j "held").isSome then keys.push "held" else keys
+  let keys := if (field? j "circuit_params").isSome then keys.push "circuit_params" else keys
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
@@ -204,6 +207,16 @@ def paramsOfJson (j : Json) : V Params := do
             pure (v, s) else throw s!"row format of {v}: not a registered value it doesn't fill, in one of {Registered.SCHEMAS}"
         | _ => throw s!"row format of {v}: not a string"
     | some _ => throw "row formats are not an object"
+  let circuitParams ← match field? j "circuit_params" with
+    | none => pure #[]
+    | some (.obj kvs) => do
+      if registered.isEmpty then
+        throw "circuit parameters are registered values: the verifier expects none registered"
+      kvs.toArray.mapM fun (v, n) => match nat? n with
+        | some n => if registered.any (·.1 == v) && !supplied.any (·.1 == v) then pure (v, n)
+            else throw s!"circuit parameter {v}: not a registered value it doesn't fill"
+        | none => throw s!"circuit parameter {v}: its leaves are not a natural number"
+    | some _ => throw "circuit parameters are not an object"
   let binding ← match field? j "binding" with
     | none => pure none
     | some b => do
@@ -235,7 +248,8 @@ def paramsOfJson (j : Json) : V Params := do
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
-                                    registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held },
+                                    registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
+                                    circuitParams },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then

@@ -142,6 +142,19 @@ def registered (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
   return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Registration.ownEntries v)
 
+/-- `{"params", "value", "leaves", "words"}`, the parameters of a verifier that expects values registered, a string and
+two natural numbers, to `registered.circuit_shape`'s `{"rows"}`, or `{"refused": reason}` where it raises, the reason
+compared whole: the value a parameter of the program, or its leaves not rows of `words`. -/
+def circuitShape (j : Json) : V Json := do
+  let v := (← params (getD j "params")).verifier
+  if v.registered.isEmpty then throw "the verifier expects no values registered"
+  let .str value := getD j "value" | throw "value is not a string"
+  let (some leaves, some words) := (nat? (getD j "leaves"), nat? (getD j "words"))
+    | throw "leaves or words is not a natural number"
+  return match Registered.circuitShape v.params value leaves words with
+    | .ok (n, k, _) => Json.mkObj [("rows", Lean.toJson (n / k))]
+    | .error e => Json.mkObj [("refused", Json.str e)]
+
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, and an optional
 `"window"`, to `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
 not lowercase hex of 64 bytes). -/
@@ -564,7 +577,7 @@ def run (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
-   ("registered", registered),
+   ("registered", registered), ("circuit_shape", circuitShape),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),

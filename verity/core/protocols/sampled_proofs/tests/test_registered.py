@@ -325,6 +325,39 @@ def test_a_bit_row_value_counts_its_parameters_leaves_in_its_bits():
         G.shape(prog, "A", 33, G.SCHEMA_V2)
 
 
+def test_a_circuit_parameter_is_counted_from_the_leaves_the_verifier_holds():
+    """A registered parameter of the verifier's circuit that is no parameter of its program (a window circuit's scan state)
+    has no Input gates: R7 counts its rows from the 16-bit leaves the verifier holds for it (`circuit_params`), `words` a
+    row in any row format, under the same domain rule. One that is also a parameter of the program, or whose leaves are
+    not whole rows, is refused (`R7-registered`), as is the value without its leaves; other leaves are other rows under
+    another domain; and circuit parameters of any other form refuse the verifier's inputs."""
+    prog = _program()
+    dig = P.program_digest(prog)
+    want = {"leaves": 3, "words": 4, "word_bits": 16, "domain": G.domain(dig, "state", 4, 3).domain_id.hex()}
+    for schemas in (None, {"state": G.SCHEMA_V2}):
+        assert G.registered_entries(prog, {"state": 4, "W": 2}, schemas, circuit={"state": 12})["state"] == want
+    assert G.registered_entries(prog, {"state": 4}, window="ab" * 64, circuit={"state": 12})["state"]["domain"] == \
+        G.domain(dig, "state", 4, 3, window="ab" * 64).domain_id.hex()
+    with pytest.raises(ValueError, match="'state' is not a parameter"):
+        G.registered_entries(prog, {"state": 4})
+    with pytest.raises(ValueError, match="circuit parameter W is a parameter of the program"):
+        G.registered_entries(prog, {"W": 2}, circuit={"W": 10})
+    for n, w in ((13, 4), (0, 4), (12, 0)):
+        with pytest.raises(ValueError, match=f"circuit parameter state: {n} leaves are not rows of {w}$"):
+            G.registered_entries(prog, {"state": w}, circuit={"state": n})
+    state = G.Registered.commit(dig, "state", [[4 * r + j for j in range(4)] for r in range(3)], schema=G.SCHEMA_V2)
+    rec, ports = _record(prog, _registered(prog))
+    rec = {**rec, "registered": [*rec["registered"], state.entry()]}
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2, "state": 4}}
+    assert R.check(rec, prog, Q, **kw, circuit_params={"state": 12}).ok
+    assert R.check(rec, prog, Q, **kw).codes == ("R7-registered",)
+    assert R.check(rec, prog, Q, **kw, circuit_params={"state": 12, "W": 10}).codes == ("R7-registered",)
+    assert R.check(rec, prog, Q, **kw, circuit_params={"state": 24}).codes == ("R7-leaves", "R7-domain")
+    for bad in ({"nope": 12}, {"state": -1}, {"state": True}, ["state"]):
+        with pytest.raises(ValueError, match="circuit parameter"):
+            R.check(rec, prog, Q, **kw, circuit_params=bad)
+
+
 def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
     """A tile's parameter of R whole rows reads each at its own key `a[i]` (the circuit's port `a{i}`): proof block u's rows 2u
     and 2u + 1. The reads file names each as a port of A, in A's row format, with its own positions; a parameter that is

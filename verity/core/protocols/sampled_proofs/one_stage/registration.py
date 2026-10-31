@@ -148,7 +148,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-          held: Sequence[str] | None = None) -> Verdict:
+          held: Sequence[str] | None = None, circuit_params: Mapping[str, int] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -172,7 +172,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     across windows: `held` (registered values, the weights, say), and its pinned, supplied and output values
     (`registered.domain`).  So a per-window value registered in one window is held to nothing in the next, and a root of
     another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
-    the log registered under the domain it takes now is a ValueError (`unwindowed`).  R3 reads `ports` by name, so its codes come in the ports' sorted
+    the log registered under the domain it takes now is a ValueError (`unwindowed`).  `circuit_params`: of the ones it
+    doesn't fill, the registered parameters of its circuit that are no parameter of its program (`{value: leaves}`, its
+    16-bit leaves, which it holds from its own circuit: a window circuit's scan state), whose rows R7 counts from those
+    leaves (`registered.circuit_shape`).  R3 reads `ports` by name, so its codes come in the ports' sorted
     order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
     v2 = bool(registered)
@@ -182,10 +185,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     pins = _pins(pinned, registered or {}, sup)
     outs = _outputs(outputs, registered or {}, sup, pins)
     formats = _schemas(schemas, registered or {}, sup)
+    circuit = _circuit_params(circuit_params, registered or {}, sup)
     bound = _binding(binding)
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     log = list(log)
-    refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
+    refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log, circuit))
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -261,7 +265,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     # R7
     if v2:
         _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
-                          fixed)
+                          fixed, circuit)
     return c.verdict()
 
 
@@ -278,7 +282,8 @@ def _window(window_root: str | None, held: Sequence[str] | None, registered: Map
 
 
 def unwindowed(program: Program, values: Mapping[str, int], schemas: Mapping[str, str] | None, window: str | None,
-               fixed: Sequence[str], log: Iterable[Mapping[str, Any]]) -> list[str]:
+               fixed: Sequence[str], log: Iterable[Mapping[str, Any]],
+               circuit: Mapping[str, int] | None = None) -> list[str]:
     """The values a verifier naming no window root can't take: each it expects registered and doesn't hold across
     windows (`fixed`) that an earlier record of the log registered under the domain it takes now. A window-independent
     program that registers its per-window values under fixed names reaches them from its second window on, and without
@@ -287,7 +292,7 @@ def unwindowed(program: Program, values: Mapping[str, int], schemas: Mapping[str
     if window is not None or not values:
         return []
     try:
-        mine = G.registered_entries(program, values, schemas, fixed=fixed)
+        mine = G.registered_entries(program, values, schemas, fixed=fixed, circuit=circuit)
     except ValueError:
         return []
     logged = held_roots(log)
@@ -335,6 +340,20 @@ def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int], s
         if v not in registered or v in supplied or not isinstance(s, str) or s not in G.SCHEMAS:
             raise ValueError(f"row format of {v!r}: not a registered value it doesn't fill, in one of {G.SCHEMAS}: {s!r}")
     return dict(schemas)
+
+
+def _circuit_params(circuit: Mapping[str, int] | None, registered: Mapping[str, int],
+                    supplied: Mapping[str, Any]) -> dict[str, int]:
+    """The verifier's circuit parameters, each of a value it expects registered and doesn't fill, its 16-bit leaves an
+    int; ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if circuit is None:
+        return {}
+    if not isinstance(circuit, Mapping) or not registered:
+        raise ValueError(f"circuit parameters are an object of registered values' leaves: {circuit!r}")
+    for v, n in circuit.items():
+        if v not in registered or v in supplied or type(n) is not int or n < 0:
+            raise ValueError(f"circuit parameter {v!r}: not a registered value it doesn't fill, with its leaves: {n!r}")
+    return dict(circuit)
 
 
 def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str, key: str = "roots",
@@ -405,9 +424,9 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
                       binding: Mapping[str, str] | None = None,
                       outputs: Mapping[str, tuple[str, str, str]] | None = None,
                       schemas: Mapping[str, str] | None = None, window: str | None = None,
-                      fixed: Sequence[str] = ()) -> None:
+                      fixed: Sequence[str] = (), circuit: Mapping[str, int] | None = None) -> None:
     try:
-        mine = G.registered_entries(program, values, schemas, window, fixed)
+        mine = G.registered_entries(program, values, schemas, window, fixed, circuit)
     except ValueError as e:
         c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
         return
