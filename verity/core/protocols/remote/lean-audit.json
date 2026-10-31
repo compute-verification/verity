@@ -7,7 +7,7 @@
   "CoreRemote": {
    "imports": ["CoreComposition.Cases", "PouwCheck.Protocol", "SampledProofs.OneStage"],
    "except": [],
-   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {
