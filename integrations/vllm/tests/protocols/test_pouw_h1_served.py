@@ -821,6 +821,7 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
                                  SV.V2) for u in range(u0, u0 + n))
     assert served.ok.value == pre + "ok" and served.ok.value not in [e["value"] for e in served.entries()]
     assert [list(row) for row in served.ok.rows] == [list(CC.OK_ROW)] * served.ok.leaves
+    assert served.ok.salts.at(range(served.ok.leaves)) == b"".join(CC.ok_salt(served.root, u) for u in range(served.ok.leaves))
     assert CR.registered_file(program, lay, shape, 0, {**roots, served.ok.value: [served.ok.root.hex()]}, served.root,
                               served.steps, run._salt.hex())[1][0] == "registration"
 
