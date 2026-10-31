@@ -96,7 +96,7 @@ def audit (s : Certificate.Store) (salt root : ByteArray) (leaves : Array ByteAr
   let answers ← match (← field rec "answers" p).getArr? with
     | .ok a => pure a
     | .error _ => throw p
-  let key := Randomness.derive source CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)]
+  let key := FlockSoundness.Randomness.derive source CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)]
   let mut out : Array (Bool × Bool) := #[]
   for j in List.range k do
     need (j < answers.size) "short"
