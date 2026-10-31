@@ -808,10 +808,25 @@ def test_a_cap_key_one_side_adds_or_lacks_counts_from_the_base(tmp_path):
     assert (text, left) == (packages({SEC: 355, FLOCK: 7}, inline), 0)
 
 
-def test_a_conflict_beyond_the_cap_lines_stays_git_s(tmp_path, capsys):
-    """Only a conflict all of whose sides are cap lines merges: one in a docstring stays git's beside a cap conflict that
-    merges, and so does one that spans a cap line and its comment, one whose sides hold different caps, and one whose count
-    would go below 0 (both sides dropped the same entries, which this file can't tell)."""
+def test_a_cap_whose_comment_both_sides_reword_merges_as_counters_under_theirs_comment(tmp_path):
+    """A PR that moves a cap rewords the comment above it, so the count and the comment sit in one hunk: the count merges
+    as counters all the same, a comment both sides reworded differently is theirs', and one both reworded alike is that."""
+    inline = {SEC: 1422}
+    base = packages({SEC: 354, PROPS: 184}, inline)
+    text, left = _caps(tmp_path, base, packages({SEC: 355, PROPS: 184}, inline, above="ours"),
+                       packages({SEC: 354, PROPS: 185}, inline, above="theirs"))
+    assert (text, left) == (packages({SEC: 355, PROPS: 185}, inline, above="theirs"), 0)
+    text, left = _caps(tmp_path, base, packages({SEC: 381, PROPS: 188}, inline, above="both"),
+                       packages({SEC: 384, PROPS: 186}, inline, above="both"))
+    assert (text, left) == (packages({SEC: 411, PROPS: 190}, inline, above="both"), 0)
+    alike = packages({SEC: 381, PROPS: 188}, inline, above="both")
+    assert _caps(tmp_path, base, alike, alike) == (alike, 0), "a line both sides changed alike is that line, not twice"
+
+
+def test_a_conflict_beyond_the_cap_lines_and_comments_stays_git_s(tmp_path, capsys):
+    """Only the caps and the comments merge: a conflict in a docstring stays git's beside a cap that merges, and the caps
+    stay git's where the sides hold different caps or a count would go below 0 (both sides dropped the same entries, which
+    this file can't tell)."""
     inline = {SEC: 1422}
     base = packages({SEC: 354, PROPS: 184}, inline)
     ours, theirs = packages({SEC: 355, PROPS: 184}, inline, doc="shrinks"), packages({SEC: 354, PROPS: 185}, inline, doc="drops")
@@ -820,9 +835,7 @@ def test_a_conflict_beyond_the_cap_lines_stays_git_s(tmp_path, capsys):
     assert "<<<<<<< ours\n    \"\"\"A lock's `unwitnessed` shrinks.\"\"\"\n" in text and ">>>>>>> theirs\n" in text
     assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 1
     assert "merge.py: tests/test_lean_packages.py: 1 conflict(s) beyond the ratchet caps" in capsys.readouterr().err
-    for o, a, b in ((base, packages({SEC: 355, PROPS: 184}, inline, above="ours"),
-                     packages({SEC: 354, PROPS: 185}, inline, above="theirs")),
-                    (base, packages({SEC: 355, PROPS: 184}, inline).replace("UNWITNESSED = ", "INLINE = "),
+    for o, a, b in ((base, packages({SEC: 355, PROPS: 184}, inline).replace("UNWITNESSED = ", "INLINE = "),
                      packages({SEC: 354, PROPS: 185}, inline)),
                     (packages({SEC: 2, PROPS: 5}, inline), packages({SEC: 0, PROPS: 5}, inline),
                      packages({SEC: 1, PROPS: 6}, inline))):
@@ -861,3 +874,42 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == "python3 tools/verity/lean/merge.py --caps %O %A %B %P"
     git(repo, "merge", "--no-edit", "b")
     assert caps.read_text() == packages({SEC: 355, PROPS: 184, FLOCK: 7}, inline)
+
+
+def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_driver(tmp_path, monkeypatch):
+    """Two branches that each merged the other's cap change, and then moved on, have two merge bases; git merges those with
+    this driver into the base it merges the branches over, so every cap and comment merges, base and all."""
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "PYTHONDONTWRITEBYTECODE": "1"}.items():
+        monkeypatch.setenv(k, v)
+    repo = tmp_path / "repo"
+    (repo / "tools" / "verity" / "lean").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    for f in ("merge.py", "check.py"):
+        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
+    caps = repo / "tests" / "test_lean_packages.py"
+    inline = {SEC: 1422}
+
+    def commit(branch: str, start: str | None, count: int, above: str):
+        if start:
+            git(repo, "checkout", "-q", "-b", branch, start)
+        caps.write_text(packages({SEC: count}, inline, above=above))
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", branch)
+
+    git(repo, "init", "-q", "-b", "main")
+    commit("main", None, 354, "main")
+    subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    commit("x", "main", 355, "x")
+    commit("y", "main", 356, "y")
+    for branch, start, other in (("a", "x", "y"), ("b", "y", "x")):
+        git(repo, "checkout", "-q", "-b", branch, start)
+        git(repo, "merge", "--no-edit", other)
+        assert caps.read_text() == packages({SEC: 357}, inline, above=other)
+    commit("a2", "a", 358, "a2")
+    commit("b2", "b", 356, "b2")
+    assert len(git(repo, "merge-base", "--all", "a2", "b2").stdout.split()) == 2
+    git(repo, "checkout", "-q", "a2")
+    git(repo, "merge", "--no-edit", "b2")
+    assert caps.read_text() == packages({SEC: 357}, inline, above="b2")

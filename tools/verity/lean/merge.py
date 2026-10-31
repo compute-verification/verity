@@ -46,9 +46,10 @@ that each add a guarantee's module to `Guarantees.lean` merge, and any other con
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
 package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
-other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), a conflict all of whose sides
-are its ratchet caps' lines (`UNWITNESSED = {...}`, `INLINE = {...}`) merges as counters, each key theirs' count plus ours'
-change from the base, so two branches that each witness or grandfather guarantees merge; any other conflict stays git's.
+other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), each of its ratchet caps
+(`UNWITNESSED = {...}`, `INLINE = {...}`) merges over the whole files as counters, each key theirs' count plus ours' change
+from the base, so two branches that each witness or grandfather guarantees merge, and a conflict whose sides differ only in
+comment lines takes theirs'; any other conflict stays git's.
 """
 from __future__ import annotations
 
@@ -58,6 +59,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import tomllib
 import sys
 from pathlib import Path
@@ -690,11 +692,22 @@ def _cap_lines(lines: list[str]) -> dict[str, dict[str, int]] | None:
     return out
 
 
+def _counted(base: dict[str, int], ours: dict[str, int], theirs: dict[str, int]) -> dict[str, int] | None:
+    """One cap's counts merged as counters: each key theirs' count plus ours' change from the base (a key a side lacks counts
+    as the base's, or 0), in ours' order with theirs' new keys after the key theirs has before them.  None when a count would
+    go below 0 (both sides dropped the same entries: the count is the merged lock's, which only `check.py` can say)."""
+    counts = {k: theirs.get(k, base.get(k, 0)) + ours.get(k, base.get(k, 0)) - base.get(k, 0)
+              for k in items([], list(ours), list(theirs))}
+    return None if any(n < 0 for n in counts.values()) else counts
+
+
+def _cap_line(head: str, counts: dict[str, int], end: str) -> str:
+    return head + "{" + ", ".join(f'"{k}": {n}' for k, n in counts.items()) + "}" + end
+
+
 def _caps(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
-    """A conflict all of whose sides are the same ratchet caps' lines, merged as counters: each key theirs' count plus ours'
-    change from the base (a key a side lacks counts as the base's, or 0), in ours' order with theirs' new keys after the key
-    theirs has before them.  None when a side holds anything else, the sides hold different caps, or a count would go below
-    0 (both sides dropped the same entries: the count is the merged lock's, which only `check.py` can say)."""
+    """A conflict all of whose sides are the same ratchet caps' lines, merged as counters (`_counted`).  None when a side
+    holds anything else, the sides hold different caps, or a count would go below 0."""
     x, y, z = _cap_lines(o), _cap_lines(a), _cap_lines(b)
     if x is None or y is None or z is None or not y or not set(x) == set(y) == set(z):
         return None
@@ -704,21 +717,78 @@ def _caps(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
         if m is None:
             out.append(s)
             continue
-        base, ours, theirs = x[m.group(1)], y[m.group(1)], z[m.group(1)]
-        counts = {k: theirs.get(k, base.get(k, 0)) + ours.get(k, base.get(k, 0)) - base.get(k, 0)
-                  for k in items([], list(ours), list(theirs))}
-        if any(n < 0 for n in counts.values()):
+        counts = _counted(x[m.group(1)], y[m.group(1)], z[m.group(1)])
+        if counts is None:
             return None
-        body = ", ".join(f'"{k}": {n}' for k, n in counts.items())
-        out.append(m.group(1) + "{" + body + "}" + ("\n" if s.endswith("\n") else ""))
+        out.append(_cap_line(m.group(1), counts, "\n" if s.endswith("\n") else ""))
+    return out
+
+
+def _comments(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
+    """A conflict whose sides differ only in comment lines (`#`), blank lines aside: theirs'.  None when their code differs."""
+    def code(side):
+        return [s for s in side if s.strip() and not s.lstrip().startswith("#")]
+    return list(b) if code(a) == code(b) else None
+
+
+def _file_caps(text: str) -> dict[str, tuple[str, dict[str, int]]] | None:
+    """A whole file's ratchet caps ({its line up to `{`: (the line, its counts by key)}), or None when a cap's line appears
+    twice (a side git left in conflict) or holds anything but counts."""
+    out: dict[str, tuple[str, dict[str, int]]] = {}
+    for s in text.splitlines(keepends=True):
+        if CAP_LINE.match(s) is None:
+            continue
+        got = _cap_lines([s])
+        if got is None:
+            return None
+        (head, counts), = got.items()
+        if head in out:
+            return None
+        out[head] = (s, counts)
     return out
 
 
 def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
-    """(the merged text, the number of conflicts left) of `tests/test_lean_packages.py`: git's own merge, then each conflict
-    whose sides are only its ratchet caps' lines merged as counters (`_caps`), so two branches that each move a cap merge.
-    Any other conflict is left as git writes it."""
-    return lean(base, ours, theirs, (_caps,))
+    """(the merged text, the number of conflicts left) of `tests/test_lean_packages.py`.  Each ratchet cap merges over the
+    whole files: a line both sides changed alike as that line, else as counters (`_counted`).  While git's own merge runs,
+    each cap's line stands as one placeholder (`HEAD{}`) on every side, so the count never conflicts with the comment above
+    it, and a conflict whose sides differ only in comment lines takes theirs' (`_comments`); the merged counts then replace
+    the placeholders.  So two branches that each move a cap and reword its comment merge, whatever the bases git's
+    recursive merge combines (it runs this driver on them too).  Where a side's caps can't be read whole (a cap's line twice,
+    the sides holding different caps) or a count would go below 0, the conflicts merge one by one instead: one whose sides
+    are only cap lines as counters (`_caps`), one that differs only in comments as theirs'.  Any other conflict is left as
+    git writes it."""
+    def one_by_one():
+        return lean(base, ours, theirs, (_caps, _comments))
+
+    texts = [p.read_text() for p in (base, ours, theirs)]
+    found = [_file_caps(t) for t in texts]
+    if None in found or not found[1] or not set(found[0]) == set(found[1]) == set(found[2]):
+        return one_by_one()
+    merged: dict[str, str] = {}
+    for head, (line, counts) in found[1].items():
+        if found[2][head][0] == line:
+            merged[head] = line.rstrip("\n")
+        elif (n := _counted(found[0][head][1], counts, found[2][head][1])) is not None:
+            merged[head] = _cap_line(head, n, "")
+        else:
+            return one_by_one()
+    with tempfile.TemporaryDirectory() as tmp:
+        sides = []
+        for name, text in zip(("base", "ours", "theirs"), texts):
+            (side := Path(tmp) / name).write_text("".join(
+                m.group(1) + "{}" + ("\n" if s.endswith("\n") else "") if (m := CAP_LINE.match(s)) else s
+                for s in text.splitlines(keepends=True)))
+            sides.append(side)
+        text, left = lean(*sides, (_comments,))
+    lines = text.splitlines(keepends=True)
+    for head, line in merged.items():
+        at = [i for i, s in enumerate(lines) if s.rstrip("\n") == head + "{}"]
+        if not at or (len(at) > 1 and not left):
+            return one_by_one()
+        for i in at:
+            lines[i] = line + ("\n" if lines[i].endswith("\n") else "")
+    return "".join(lines), left
 
 
 def load(path: Path) -> dict:
