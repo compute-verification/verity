@@ -42,10 +42,10 @@ LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 LEFT_OUT = ("integrations/vllm/", "archive/")
 #: a settings registry's module name: reads belong there
 REGISTRY = "settings.py"
-TEMPLATE = "integrations/vllm/verity_vllm/settings.py"
+TEMPLATE = "tools/config/verity_config/settings.py"
 FIX = (f"Read the variable through your area's settings registry, which declares each one once (under verity/, verity/settings.py, "
-       f"the distribution's one; the template: {TEMPLATE}, with integrations/vllm/tests/test_settings.py and "
-       f"integrations/vllm/tests/lint/test_p07_declared_inputs.py), or create one: a module named `{REGISTRY}`, or one "
+       f"the distribution's one, on the machinery every registry is built on; elsewhere the one beside your pyproject.toml, as "
+       f"{TEMPLATE} says, with tools/config/tests/test_settings.py), or create one: a module named `{REGISTRY}`, or one "
        f"tests/lint/allowlists/{NAME}.json marks "
        f'{{"file": PATH, "registry": true}}. If the file moved, move its entries in the same change: '
        f"`python3 tests/lint/test_{NAME}.py --move OLD NEW`.")

@@ -146,6 +146,9 @@ theorem tagsAt_typed (tags : Tags) (count j : ℕ) : (tagsAt tags count j).typed
 theorem tagsAt_hm96Rows (tags : Tags) (count j : ℕ) : (tagsAt tags count j).hm96Rows = tags.hm96Rows := by
   unfold tagsAt; split_ifs <;> rfl
 
+theorem tagsAt_isTmpl (tags : Tags) (count j : ℕ) : (tagsAt tags count j).isTmpl = tags.isTmpl := by
+  unfold tagsAt; split_ifs <;> rfl
+
 /-- Every table `setupTables` returns is `setupH`'s statement, under the table's tags (`tagsAt`) and at some draw
 (the session's, for one table). -/
 theorem setupTables_setupH (hh : tags.hiddenOutputs = false)
