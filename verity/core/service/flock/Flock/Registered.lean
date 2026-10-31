@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10 (registered reads); `protocols/sampled_proofs/README.md`, "Registered values": a statement's rows of a
+`Flock.HmRow` (registered reads); `protocols/sampled_proofs/README.md`, "Registered values": a statement's rows of a
 registered value (a program's weights, constants and tables, committed once at registration under `hm96-sha512/row/v1`
 leaves, or a served tree's rows under its port's `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` leaves), opened against
 the verifier's own registered roots at the positions its own program reads.
@@ -211,7 +211,7 @@ def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices
     !(decide (ref t np p i < rows) && decide (reg.readAt (indices.getD i 0) = some (some (positions.getD (ref t np p i) 0))))
 
 /-- One port of the verifier's registered reads: a row of the circuit (an input port's, or a hidden-output statement's
-output row, §16.13, whose table is its instances' own rows, instance `i`'s ref `i`), whose leaf schema is the
+output row, `HmOut`, whose table is its instances' own rows, instance `i`'s ref `i`), whose leaf schema is the
 registration's (`portSchema`), whose rows are the registered rows (`Port.fits`), whose table rows all open the
 registered root, and whose instances each read the row at the position the verifier's program reads for their unit. -/
 def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (reg : Port) : V Unit := do
@@ -268,7 +268,7 @@ when its callee is one of these, wherever it sits. -/
 def programInputs (d : TemplateQuery.Desc) : Array String :=
   d.callees.filter fun id => (Program.inputId? id).map (·.1) == some Program.REGISTRATION
 
-/-- **A program that reads a registered value is verified only against registered roots** (PROTOCOL.md §16.10): with the
+/-- **A program that reads a registered value is verified only against registered roots** (`Flock.HmRow`): with the
 verifier's own program (`program`, `--program`), a statement whose program has a `RegisteredInput<w>_v1` callee
 (`programInputs`) is refused unless the verifier holds its own registered reads (`registered`, `--registered`), whatever
 the statement's files say. The public file's header `registered` is the prover's, and the circuit marks no port
@@ -363,7 +363,7 @@ def partNodes : Program.Part → Array Nat
 /-- A root node's argument reads a registered input: a part of it reads a `RegisteredInput<w>_v1` root node. -/
 def argReads (P : Program.Prog) (a : Program.Arg) : Bool := a.seq.parts.any fun q => (partNodes q).any (regNode P)
 
-/-- **The template parameters that read a registered input** (PROTOCOL.md §16.10), from the verifier's own program: for
+/-- **The template parameters that read a registered input** (`Flock.HmRow`), from the verifier's own program: for
 each root node that calls `t` (a template query's instance of it), each parameter of `t` whose argument reads a
 `RegisteredInput<w>_v1` root node, with its type. Input nodes appear only in the root's body (`Program.decode`), so a
 template instance reads a registered value exactly through these arguments. It reads the root's nodes and their argument
@@ -397,7 +397,7 @@ def templatePartition (partition : Option Json) : Bool :=
     (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "")
       ((q.getObjValAs? Nat "version").toOption.getD 0) ((q.getObjVal? "params").toOption.getD Json.null)).isSome
 
-/-- **Every registered input the statement reads has a port** (PROTOCOL.md §16.10): with the verifier's own program and
+/-- **Every registered input the statement reads has a port** (`Flock.HmRow`): with the verifier's own program and
 registered reads, a program with a `RegisteredInput<w>_v1` root node is verified only under a template query (whose units
 are the root's instances of the circuit's template, `HmRow.queryTemplate`), and every parameter of that template that
 reads one (`regParams`) is read by a port of the verifier's registered reads (`coversParam`, by the ports' `params`,
@@ -489,7 +489,7 @@ def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
       ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
     else none
 
-/-- U4 (PROTOCOL.md §16.10): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
+/-- U4 (`Flock.HmRow`): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
 own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw` is the record's; a statement without a
 draw proves its whole population. -/
 def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
@@ -500,7 +500,7 @@ def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   | some (p, u) =>
     throw s!"U4: unit {u} reads {p.value}, a round's commitment (port {p.name}), and the draw does not draw it in full"
 
-/-! ### A recursive session's inner statement: its description, read from the developer's registration (§16.16) -/
+/-! ### A recursive session's inner statement: its description, read from the developer's registration (`Tags.withPlainLeaves`) -/
 
 /-- The circuit's first port named `name`. -/
 def portOf (c : Circuit) (name : String) : Option Nat := (List.range c.ports.size).find? fun p => c.ports[p]!.name == name
@@ -565,7 +565,7 @@ def checkDescriptionPort (c : Circuit) (pub : Public) (t : Tables) (reg : Port) 
           throw s!"registered reads: port {reg.name}: none of the {pub.n} instances reads table row {r}, registered row {r} of {reg.value}'s {reg.leaves}: an inner statement reads its whole description"
         | none => pure ()
 
-/-- **A recursive session's inner statement's description, read from the developer's registration** (PROTOCOL.md §16.16):
+/-- **A recursive session's inner statement's description, read from the developer's registration** (`Tags.withPlainLeaves`):
 the header's `registered` names exactly the verifier's own ports (`own`, `--registered`), each a table of a shared-row file
 that is the registration in order, every row of it opening the registered root at its index and read by an instance
 (`checkDescriptionPort`; `FlockProofs.Registered`: `checkDescription_ok`). No position depends on which unit an instance
@@ -593,7 +593,7 @@ end Registered
 
 /-- An hm96 statement's registered reads (`Registered.check`), and with the verifier's own, a circuit that names each port
 once (`Registered.namesOnce`). A hidden-output statement's registered ports may be its output rows as well as its input
-rows (§16.13): an output row's table is its instances' own rows, each opened against the registered root at the position
+rows (`HmOut`): an output row's table is its instances' own rows, each opened against the registered root at the position
 its unit reads, so the instance's output is that row of the registered value. -/
 def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   match registered with

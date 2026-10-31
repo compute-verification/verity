@@ -6,10 +6,10 @@ import Proofs.Flock.Soundness.Refine.Table
 
 The phases before Ligerito, in the form `Emitted` composes (`Emit.lean`): each succeeds on retained rounds only
 by emitting its frames, in order.
-* `zerocheck_emitted`: the statement binding and the zerocheck (PROTOCOL.md §9.1–§9.2), `zcFrames`; its final values
+* `zerocheck_emitted`: the statement binding and the zerocheck (`Flock.Piop`), `zcFrames`; its final values
   are left pending for the lincheck's first round.
 * `lincheck_emitted`: the lincheck (§10), `lcFrames`.
-* `ringSwitch_emitted`: the opening's ring switch (§12.2–§12.3), `rsFrames`.
+* `ringSwitch_emitted`: the opening's ring switch (`Flock.Opening`), `rsFrames`.
 
 `rep_rounds` composes them with `ligerito_frames`: when `verifyRep` accepts, every round of the rep's stream retained
 the bytes of its chunk of `repFrames`, one chunk per round.
@@ -19,7 +19,7 @@ namespace FlockSoundness.Discharge.Exec
 
 open Flock Refine Transcript
 
-/-- The statement binding's and the zerocheck's frames (PROTOCOL.md §9.1–§9.2). -/
+/-- The statement binding's and the zerocheck's frames (`Flock.Piop`). -/
 def zcFrames (m : ℕ) (digest cap : ByteArray) (p : ZerocheckProof) : List Frame :=
   [.label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap, .label "flock-zerocheck-v0".toUTF8, .sq 2 6, .sq 2 (m - 13),
     .vec p.round1ab.toList, .vec p.round1c.toList, .sq 1 1] ++
@@ -75,7 +75,7 @@ theorem zerocheck_emitted (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteArray) (p 
     (e₁₁.trans e₁₂))))))))))
   simpa [zcFrames] using this
 
-/-- The lincheck's frames (PROTOCOL.md §10). -/
+/-- The lincheck's frames (`Flock.Piop`). -/
 def lcFrames (kLog : ℕ) (p : LincheckProof) : List Frame :=
   [.label "flock-lincheck-v0".toUTF8, .sq 1 1, .sq 1 1] ++
   (List.range' 0 (kLog - 6)).flatMap (fun j => [.one (p.rounds[j]!).1, .one (p.rounds[j]!).2, .sq 1 1]) ++
@@ -123,7 +123,7 @@ theorem lincheck_emitted (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckProof
     have := e₁.trans (e₂.trans (e₃.trans (eL.trans (e₁₁.trans e₁₂))))
     simpa [lcFrames] using this
 
-/-- The ring switch's frames (PROTOCOL.md §12.2–§12.3), for `n` claims: the batch label; per claim its label, switch
+/-- The ring switch's frames (`Flock.Opening`), for `n` claims: the batch label; per claim its label, switch
 vector and squeeze; then `γ`'s squeeze. -/
 def rsFrames (n : ℕ) (rs : Array (Array F128)) : List Frame :=
   .label "flock-pcs-open-batch-v0".toUTF8 ::
@@ -155,13 +155,13 @@ theorem ringSwitch_emitted (m : ℕ) (claims : Array Flock.Claim) (rs : Array (A
   have := e₁.trans (eL.trans e₃)
   simpa [rsFrames] using this
 
-/-- **A rep's frames** (PROTOCOL.md §6–§13): its domain; the statement binding and the zerocheck; the lincheck; the ring
+/-- **A rep's frames** (`Flock.Transcript`, `Flock.Draw`, `Flock.Proof`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`): its domain; the statement binding and the zerocheck; the lincheck; the ring
 switch of `n` claims; and Ligerito, whose first frames absorb the ring switch's batched value `T`. -/
 def repFrames (st : Setup) (sch : Flock.Schedule) (domain : ByteArray) (n : ℕ) (p : Proof) (T : F128) : List Frame :=
   .dom domain :: (zcFrames st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck ++
     lcFrames st.fold.kLog p.lincheck ++ rsFrames n p.ringSwitches ++ ligFrames sch T p.cap p.ligerito)
 
-/-- **Every round of a verified rep's stream retained its frames** (PROTOCOL.md §6, §9–§13). When `verifyRep` accepts
+/-- **Every round of a verified rep's stream retained its frames** (`Flock.Transcript`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`). When `verifyRep` accepts
 rep `r` of table `i`, its stream and proof decode, and on a stream whose rounds all retained their bytes, round `j`
 retained the bytes of the `j`-th chunk of the rep's frames, and there is one chunk per round. -/
 theorem rep_rounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)

@@ -1,9 +1,9 @@
 {
  "format": "flock-verifier-vectors/v1",
- "spec": "backends/flock/verifier/PROTOCOL.md",
+ "spec": "verity/core/service/flock",
  "spec_transcript_check": "backends/flock/verifier/transcript_check.py reproduces every recorded round digest of the first vector of each honest set from the spec alone (50 of 50 sets, both reps)",
  "fetch": "research data fetch <record> --path <path> (the evidence store; records are run-record/v1 trees)",
- "honest_upstream_only": "every honest cell is upstream's alone, replayed by no agreement job: upstream accepts each, and the Lean verifier refuses each: the pure-block, IR frame, IR sampling and vllm-block cells are legacy statements (PROTOCOL.md §16.9, ProvedScope.legacyStatements), and the netlist cell's statement is one before hm96-sha512 rows (ProvedScope.statementRules)",
+ "honest_upstream_only": "every honest cell is upstream's alone, replayed by no agreement job: upstream accepts each, and the Lean verifier refuses each: the pure-block, IR frame, IR sampling and vllm-block cells are legacy statements (ProvedScope.legacyStatements), and the netlist cell's statement is one before hm96-sha512 rows (ProvedScope.statementRules)",
  "honest": [
   {
    "cell": "art:6d1295ed",
@@ -3689,7 +3689,7 @@
     "why": "\u00a716.10: not the verifier's rec-opening/\u2026 (row r differs), D13"
    }
   ],
-  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1). The six rec_residuals_* cases (\u00a716.10, D13) refuse a rec-residuals/\u2026 unit that is not the verifier's part net, the five rec_sparse_* cases a rec-sparse/\u2026 unit that is not the verifier's sparse-phase net, and the six rec_opening_* cases a rec-opening/\u2026 unit that is not the verifier's opening part net; upstream takes the unit as the file gives it."
+  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 (verity/ml/flock/verifier/README.md)). The six rec_residuals_* cases (\u00a716.10, D13) refuse a rec-residuals/\u2026 unit that is not the verifier's part net, the five rec_sparse_* cases a rec-sparse/\u2026 unit that is not the verifier's sparse-phase net, and the six rec_opening_* cases a rec-opening/\u2026 unit that is not the verifier's opening part net; upstream takes the unit as the file gives it."
  },
  "forgeries": {
   "note": "The adversarial forgeries were run in-process against upstream's verifier or the live server; each run stored its harness and a verdict table, not the forged record and proof bytes. Phase 2 materialises them as replayable (record, proofs) pairs with the dump plan below.",
@@ -3806,7 +3806,7 @@
   "dump_plan": "Add `--dump DIR` to the selftest subcommand of flock-pure-gpu, flock-ir-frame and the PR #83 circuit-statement binary so every case writes its session.json and proofs; run once on a CPU pod at 8 VUs (a few minutes); preserve the tree as one artifact; each case's expected verdict is its selftest `pass` line."
  },
  "replayable": {
-  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py). A set with `lean_refuses_drawn` has sessions drawn by a law no soundness claim draws by (D12): the Lean verifier refuses each session whose record carries a unit draw with that reason at setup (one that does not set up, for that first), and upstream must give it its expected verdict (`agree.py --lean-refuses-drawn`). A set with `lean_refuses` is a statement form the soundness proof does not cover (PROTOCOL.md §16.15, D12), and one with `lean_refuses_drawless` has sessions without a draw (D12): the Lean verifier refuses each session they cover (every session not refused at setup, and each without a draw) with that reason once every check has passed, the form's first. Such a session passed every check and is compared as accepted, any other verdict as it is (`agree.py --lean-refuses`, `--lean-refuses-drawless`).",
+  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py). A set with `lean_refuses_drawn` has sessions drawn by a law no soundness claim draws by (D12): the Lean verifier refuses each session whose record carries a unit draw with that reason at setup (one that does not set up, for that first), and upstream must give it its expected verdict (`agree.py --lean-refuses-drawn`). A set with `lean_refuses` is a statement form the soundness proof does not cover (`Flock.ProvedScope`, D12), and one with `lean_refuses_drawless` has sessions without a draw (D12): the Lean verifier refuses each session they cover (every session not refused at setup, and each without a draw) with that reason once every check has passed, the form's first. Such a session passed every check and is compared as accepted, any other verdict as it is (`agree.py --lean-refuses`, `--lean-refuses-drawless`).",
   "sets": [
    {
     "statement": {
@@ -4577,7 +4577,7 @@
     "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law"
    },
    {
-    "tags": "verity/flock-circuit (hidden outputs, PROTOCOL.md §16.13): RoPE, a stage returns its outputs",
+    "tags": "verity/flock-circuit (hidden outputs, Stmt.setupHidden): RoPE, a stage returns its outputs",
     "pr83": "455a01049",
     "generator": "backends/flock/pod/60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 on vy-nebius-1 (r20261002-000747-add2, source 455a01049: --features sha512,glue,seed-injection), staging rope-head/d64/neox-bf16 (synthetic set seed 20260926) with verity_flock.circuit; converted by selftest_records.py",
     "statement": {
@@ -4595,7 +4595,7 @@
     "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
-    "tags": "verity/flock-circuit (hidden outputs, PROTOCOL.md §16.13): one BF16 GEMM coordinate, a tail stage returns its one output word in a 64-word row",
+    "tags": "verity/flock-circuit (hidden outputs, Stmt.setupHidden): one BF16 GEMM coordinate, a tail stage returns its one output word in a 64-word row",
     "pr83": "455a01049",
     "generator": "backends/flock/pod/60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 on vy-nebius-1 (r20261002-000747-add2, source 455a01049: --features sha512,glue,seed-injection), staging gemm-coordinate/k64/sm80-mma-bf16 (synthetic set seed 20260926) with verity_flock.circuit; converted by selftest_records.py",
     "statement": {
@@ -4613,7 +4613,7 @@
     "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
-    "tags": "verity/flock-circuit/types (hidden outputs, PROTOCOL.md §16.13): RoPE as a flat class",
+    "tags": "verity/flock-circuit/types (hidden outputs, Stmt.setupHidden): RoPE as a flat class",
     "pr83": "455a01049",
     "generator": "backends/flock/pod/60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 TYPED=1 on vy-nebius-1 (r20261002-000809-263e, source 455a01049: --features sha512,glue,seed-injection), staging rope-head/d64/neox-bf16 (synthetic set seed 20260926) with verity_flock.typed_statement; converted by selftest_records.py",
     "statement": {
@@ -4631,7 +4631,7 @@
     "lean_refuses": "refused: verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement: a statement form the soundness proof does not cover"
    },
    {
-    "tags": "verity/flock-circuit/types (hidden outputs, PROTOCOL.md §16.13): one BF16 GEMM coordinate as a template",
+    "tags": "verity/flock-circuit/types (hidden outputs, Stmt.setupHidden): one BF16 GEMM coordinate as a template",
     "pr83": "455a01049",
     "generator": "backends/flock/pod/60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 TYPED=1 on vy-nebius-1 (r20261002-000809-263e, source 455a01049: --features sha512,glue,seed-injection), staging gemm-coordinate/k64/sm80-mma-bf16 (synthetic set seed 20260926) with verity_flock.typed_statement; converted by selftest_records.py",
     "statement": {
@@ -4649,7 +4649,7 @@
     "lean_refuses": "refused: verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement: a statement form the soundness proof does not cover"
    },
    {
-    "tags": "verity/flock-circuit (hidden outputs, registered reads: header registered and shared_rows, flock-verify --registered without --zk, PROTOCOL.md §16.15 rule 6)",
+    "tags": "verity/flock-circuit (hidden outputs, registered reads: header registered and shared_rows, flock-verify --registered without --zk, Flock.ProvedScope)",
     "pr83": "61e5c2617",
     "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-4 (r20261027-130427-933f, source 4fb69563c2: --features sha512, CPU, FC_COINS=os): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, with x and the outputs registered beside it: registered_file, every port of the circuit a registered port), one plain session under the verifier's own stratified draw of 16 (flock-verify draw --stratified 16, stage/draw.json), served from its file",
     "statement": {

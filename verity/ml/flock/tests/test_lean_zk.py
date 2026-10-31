@@ -1,10 +1,10 @@
-"""`verify --zk` (verifier PROTOCOL.md §16.14, `Flock.Zk`): the Lean verifier on `flock-circuit --zk` sessions, the masked
+"""`verify --zk` (`Flock.Zk`): the Lean verifier on `flock-circuit --zk` sessions, the masked
 protocol (M1) on the keyed coin tree (M2). The sessions are the live build's on RoPE d64 (m = 25 and 26), each with the
 verdict its server reached: a `selftest --zk --record-dir` run (`selftest_records.py`), and `serve`/`prove --zk` sessions of
 two tables, of one m = 26 table and of a drawn one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
-them with upstream's offline verdict (§18). None is accepted: the circuit is no Program's, so the drawn session is refused for
+them with upstream's offline verdict (`verity/ml/flock/verifier/vectors.json`). None is accepted: the circuit is no Program's, so the drawn session is refused for
 want of the verifier's program (`NO_PROGRAM`) once every check has passed, and the others have no sample, which `verify` refuses
-first (§16.15, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other session its own reason."""
+first (`Flock.ProvedScope`, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other session its own reason."""
 from __future__ import annotations
 
 import json
@@ -113,7 +113,7 @@ def test_every_selftest_session_gets_its_live_verdict(zk):
 
 @pytest.mark.slow
 def test_a_session_key_is_used_once(zk):
-    """The coin tree's key is fresh (§7.4): a session read twice in one run is refused the second time."""
+    """The coin tree's key is fresh (`Flock.CoinTree`): a session read twice in one run is refused the second time."""
     honest = zk / "sessions" / "selftest" / "honest"
     first, second = _verify(zk, honest, honest)
     assert _passes(first), first["why"]

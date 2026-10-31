@@ -4,7 +4,7 @@ import Definitions.Flock.Statement
 /-!
 # The compiled lowering: templates' rows, their placement in a statement, and programs of units
 
-**The audit's circuit is the rows the verifier parses** (PROTOCOL.md §16.5, `Flock/Net.lean`). A
+**The audit's circuit is the rows the verifier parses** (`Flock.Circuit`, `Flock/Net.lean`). A
 template's unit is `nIn` input columns, `nComp` computed rows and the constant, its last column
 (`Rows`). Computed row `i` is column `nIn + i`:
 
@@ -100,7 +100,7 @@ def bit (x : ZMod 2) : Bool := decide (x = 1)
 
 /-- **A unit's rows placed in a statement**, at the block columns `col`: the block matrices' rows at
 the unit's computed columns read exactly the placed columns of its rows, and the rows at its constant
-read the pin (every slot's constant is wired to the pin, PROTOCOL.md §16.1). -/
+read the pin (every slot's constant is wired to the pin, `Flock.Statement`). -/
 structure Placement (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : Prop where
   hA : ∀ i j, S.A₀ (col (R.comp i)) j = (((R.a i).map col).count j : ZMod 2)
   hB : ∀ i j, S.B₀ (col (R.comp i)) j = (((R.b i).map col).count j : ZMod 2)

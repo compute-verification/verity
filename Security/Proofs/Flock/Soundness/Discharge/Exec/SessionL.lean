@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Audit.FlockBatched
 import Proofs.Flock.Soundness.Refine.Salted
 
 /-!
-# The batched session under a leaf scheme (PROTOCOL.md §5, §14)
+# The batched session under a leaf scheme (`Flock.Record`, `Flock.Merkle`)
 
 `batchedSession` (`Audit/FlockBatched.lean`) checks every opened path from the unsalted leaf `H(encode row)`
 (`OpensOK`). The statements the headline is about commit their proof rows with `hm96-sha512/v1` leaves, whose salts the
@@ -66,7 +66,7 @@ noncomputable def sessAfterBL (fs : List ((Fin 2 → Fin mPts → F) → Game (O
     Game (List (OutCL F D Sl)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
-/-- **A batched session under `Lf`** (PROTOCOL.md §5): `Commit` sends every table's level-0 cap, then one link-point
+/-- **A batched session under `Lf`** (`Flock.Record`): `Commit` sends every table's level-0 cap, then one link-point
 draw, then every table's reps and salted openings concurrently. -/
 noncomputable def sessionBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) : Game (List (OutCL F D Sl)) :=
@@ -76,7 +76,7 @@ noncomputable def sessionBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.E
 def acceptedBL [Inhabited D] [Inhabited Sl] (ts : List (TabSpec mPts)) (outs : List (OutCL F D Sl)) : Prop :=
   ∀ i : Fin ts.length, (outs.getD i dfltOutL).accepted = true
 
-/-- **A batched session over any table run** (PROTOCOL.md §5): `Commit` sends every table's commitment `Cm`, then one
+/-- **A batched session over any table run** (`Flock.Record`): `Commit` sends every table's commitment `Cm`, then one
 link-point draw, then every table's run `tab` after them, concurrently. `sessionBL` is its instance at `tabAfterL`
 (`sessionBL_eq`); a session whose tables commit or open more (`--zk`'s pads) is another. -/
 def sessionG {Cm Out : Type} (tab : TabSpec mPts → Cm → (Fin 2 → Fin mPts → F) → Game Out)

@@ -415,8 +415,8 @@ def toF128 (a : 𝔽) : F128 := a
 
 /-- **The verifier's setup of a statement realizes its model statement** (`Setup.ofCircuit`, `Verify.lean:29-32`): its
 `m` and `k_log` are the statement's, its fold realizes `stmtOf`'s (`ofCircuit_fold`), and at every pair of link points
-the arrays holding them give extra claims (`extraClaims_exists`) that realize the model's (`ofCircuit_extra`), §5 and
-§16.2. The schedule is `fast100`'s at `m` (whose range gives `14 ≤ m`) and the scheme the statement's. -/
+the arrays holding them give extra claims (`extraClaims_exists`) that realize the model's (`ofCircuit_extra`; `Flock.Record`,
+`Flock.Statement`'s regions). The schedule is `fast100`'s at `m` (whose range gives `14 ≤ m`) and the scheme the statement's. -/
 theorem setupRealizes_ofCircuit (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) {sch : Flock.Schedule}
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (hf : Flock.fast100 st.m = some sch)
     (hb : RegionBytes st) :

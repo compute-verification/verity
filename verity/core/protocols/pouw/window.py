@@ -686,7 +686,7 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
 
 # ---- the tile instances' public inputs ------------------------------------------------------------------------------------
 
-#: C-Flock's format of the verifier's own ``--public-inputs`` file (its PROTOCOL.md §16.10, Lean's ``HmIn.checkOwn``)
+#: C-Flock's format of the verifier's own ``--public-inputs`` file (Lean's ``HmIn.checkOwn``, in ``Flock.HmRow``)
 PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 #: a tile instance's public input ports, in order, as its circuit's META ``public_inputs`` must name them: each port's u16
 #: words (whole 128-bit words, so no row leaf shares one), the public datum it is recomputed from and its rule.  t is a
@@ -700,7 +700,7 @@ PUBLIC_PORTS = (
     {"port": "domain_b", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_SIDE_DOMAIN_B},
     {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": domains.POUW_PERIOD_DOMAIN_H3},
 )
-#: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its PROTOCOL.md §16.5, `shape_in_range`)
+#: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its Lean ``Flock.Schedule``, `shape_in_range`)
 M_MAX = 35
 
 

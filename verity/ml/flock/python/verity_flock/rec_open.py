@@ -22,7 +22,7 @@ element of F = GF(2^128) is 8 words, its 16 bytes ``lo`` LE then ``hi`` LE, so i
 * ``out``: the node H levels up (32 words) and 32 zero words: one M0 row, the top node's own registered row
   (`expected`, `verity_flock.rec_live.top_rows`). The statement reads it from the prover's registration of the top the ZK server
   committed under salts (`verity_flock.rec_outer`), so one registered output row checks the climb against the top
-  (PROTOCOL.md §16.13 "Registered reads") and ``dirs`` the side at every level.
+  (`HmOut` "Registered reads") and ``dirs`` the side at every level.
 
 The statement reads ``coef`` and ``dirs`` from values the verifier registers itself (`verity_flock.rec_outer`), so it has no
 public input.
@@ -37,7 +37,7 @@ the final check's share of that level's sums. The openings of a rep chain their 
 
 The leaf is plain SHA-512 of the row (the inner statement's ``flock-leaf/sha512-unsalted``,
 `verity_flock.circuit.LEAF_SCHEME_PLAIN`): the tops are what the ZK server salts, so a leaf needs none. A node is
-``SHA-512(left || right)`` (§14), the current digest on the side its bit names (``t = d AND (cur XOR sib)`` swaps them).
+``SHA-512(left || right)`` (`Flock.Merkle`), the current digest on the side its bit names (``t = d AND (cur XOR sib)`` swaps them).
 Compressions: ``LANES / 8 + 1`` for the leaf and 2 a level.
 
 ``H`` is 0 to 32. At ``H = 0`` the leaf is the top: ``out`` is the leaf itself, which the statement reads against the

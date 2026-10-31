@@ -192,7 +192,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
-    (verifier PROTOCOL §16.15). `env`: added to
+    (`Flock.ProvedScope`). `env`: added to
     both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]

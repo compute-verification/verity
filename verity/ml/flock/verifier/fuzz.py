@@ -1,14 +1,14 @@
-"""Fuzzing for the agreement check (PROTOCOL.md §17.1 item 2): random single mutations of an honest session.
+"""Fuzzing for the agreement check (`verity/ml/flock/verifier/README.md` item 2): random single mutations of an honest session.
 
     python fuzz.py SESSION_DIR OUT_DIR --seed S --n N [--upstream-checks link_sigma]
 
 Each case edits one thing, chosen with `random.Random(seed)`:
 - `proof-byte`: a bit of one rep's proof file, with its `proof_sha256` updated (so S17 passes) and nothing else. The
-  transcript (R2) or the decoder must reject (past the pair in its statement's pinned form, §8.1 refuses every byte: D17).
+  transcript (R2) or the decoder must reject (past the pair in its statement's pinned form, `Flock.Proof` refuses every byte: D17).
 - `proof-value`: one field element or hash of one rep's proof, with that rep's round digests rebuilt (`redigest.py`). It must
   be rejected; a proof-of-work nonce by the Lean verifier's decoder only, which refuses every nonce but `0` (R4), divergence
   D21.
-- `coin`: one bit of one recorded coin. No expectation: an unused coin (§19 A1) or the high bits of a query coin (§13.5)
+- `coin`: one bit of one recorded coin. No expectation: an unused coin (`verity/ml/flock/verifier/README.md` A1) or the high bits of a query coin (`Flock.Ligerito`)
   leave the verdict unchanged; the verifiers must only agree.
 - `digest`: one bit of one round's `msg_sha256`. Must be rejected (R2).
 - `record`: one bit of `root_b`, `sigma`, a link point, `y`, `link_sha256` or a proof's `sha256`. Must be rejected (a

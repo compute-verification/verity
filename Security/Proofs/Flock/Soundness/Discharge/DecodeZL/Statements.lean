@@ -41,7 +41,7 @@ def ZLCarries : Prop :=
     Carries (wZL m kLog) (zcShape 𝔽 m ++ lcShape 𝔽 kLog) (.dom d :: (zcFrames m dig cap zp ++ lcFrames kLog lp))
       (zcMsgs m zp ++ lcMsgs kLog lp) []
 
-/-- **The lengths a decoded proof has** (`decodeProof`'s `vecExact` checks, PROTOCOL.md §8). -/
+/-- **The lengths a decoded proof has** (`decodeProof`'s `vecExact` checks, `Flock.Proof`). -/
 structure ProofSizes (sh : Shape) (p : Proof) : Prop where
   r1ab : p.zerocheck.round1ab.size = 64
   r1c : p.zerocheck.round1c.size = 64

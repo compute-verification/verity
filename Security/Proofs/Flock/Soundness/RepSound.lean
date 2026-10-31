@@ -12,14 +12,14 @@ import Proofs.Flock.Soundness.LigeritoPhase
 `rep_sound`: from a doomed start (no codeword near the committed table packs a witness that
 satisfies the R1CS and the pin and makes every region claim true), one rep accepts with
 probability at most `repError`. It is proved here from four phase lemmas, one per phase of
-PROTOCOL.md §9–§13, each bounding the probability that its phase ends outside a doomed state:
+`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, each bounding the probability that its phase ends outside a doomed state:
 
 | phase | doomed at its end, for every codeword near the committed table | error |
 |---|---|---|
 | zerocheck (§9) | the `a`, `b`, `c` claims, the pin at `ρ_out` and the region claims do not all hold | `εZc` |
 | lincheck (§10) | the `ab`, `c` and region claims do not all hold | `εLc` |
 | opening (§12) | the batched inner product `Σ_y f(y)·b(y)` is not `T` | `εOp` |
-| Ligerito (§13) | (accepts) | `εLig` |
+| Ligerito (`Flock.Ligerito`) | (accepts) | `εLig` |
 
 The errors add up to `repError` exactly (`repError_eq`), and `Game.value_bind_le` chains the
 phases. Each phase lemma is a chain of per-coin (round-by-round) steps: `Rounds` for the sumcheck
@@ -176,7 +176,7 @@ theorem ligerito_phase (A : Arith F K) (hA : A.Correct)
 
 /-! ## Composition -/
 
-/-- **One rep is sound** (PROTOCOL.md §9–§13): from a doomed start, whatever the prover does,
+/-- **One rep is sound** (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`): from a doomed start, whatever the prover does,
 the rep accepts with probability at most `repError`. Proved from the four phase lemmas. -/
 theorem rep_sound (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)

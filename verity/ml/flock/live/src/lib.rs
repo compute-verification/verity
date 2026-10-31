@@ -199,7 +199,7 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
 }
 
-/// The unit sample (the Lean verifier's PROTOCOL.md §7.3): the verifier samples the units to prove in the clear from its OS
+/// The unit sample (the Lean verifier's `Flock.Draw`): the verifier samples the units to prove in the clear from its OS
 /// randomness, after registration and before the statement is fixed, with `verity.ml.randomness`'s exact samplers read straight
 /// from OS bytes (no derivation). The sample is the object `{"law": "subset", "population": N, "k": K, "units": [...]}`,
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,

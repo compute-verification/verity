@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Tables
 /-!
 # What an accepted statement's public file is tied to (`flock_verify_public_ties`)
 
-Every statement `flock-verify verify` sets up passed the check of its public file (PROTOCOL.md §16.10):
+Every statement `flock-verify verify` sets up passed the check of its public file (`Flock.HmRow`):
 `HmRow.checkPublic` (`Exec.setupH_public`), with hidden outputs `HmOut.checkPublic` (`Hidden.Spec.checkPublic`). The
 check recomputes the frame-v3-sha512 trees natively; the circuit proves only the `hm96-sha512` leaves. `PublicTies`
 restates what it established as equalities, and `flock_verify_public_ties` states them of every statement an acceptance

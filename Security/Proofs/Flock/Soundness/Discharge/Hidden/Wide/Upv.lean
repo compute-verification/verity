@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 /-!
 # A unit per template instance, from acceptance
 
-`HmRow.check` refuses an untyped circuit of `units_per_vu = 0` (PROTOCOL.md §16.10, D8), the one check that does when a
+`HmRow.check` refuses an untyped circuit of `units_per_vu = 0` (`Flock.HmRow`, D8), the one check that does when a
 tail returns the outputs (`check_upv_pos`), and `Stmt.setupHidden` parses its circuit through it (`setupHidden_upv_pos`).
 -/
 
