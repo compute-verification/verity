@@ -588,11 +588,11 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     if hashlib.sha512(body).hexdigest() != own.get("circuit"):
         raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
     doc = json.loads(body)
-    ties, untied = window_pins(own, doc)
+    ties, untied = window_pins(own, doc, catalog_resolve)
     if TIED not in ties | untied:
         raise ValueError(f"the window commits no {TIED} its circuit reads: the period has no state to tie to its scan's")
-    count = declared_count(doc, 0, pins={**pins, **pin_roots({**ties, **untied})}, roots=window_roots(own),
-                           untied=set(untied) - {TIED})
+    count = declared_count(doc, 0, catalog_resolve, pins={**pins, **pin_roots({**ties, **untied})},
+                           roots=window_roots(own), untied=set(untied) - {TIED})
     try:
         program = json.loads((audit / "window" / "program.json").read_text())
     except OSError:
