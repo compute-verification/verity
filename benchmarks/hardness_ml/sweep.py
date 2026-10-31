@@ -265,6 +265,47 @@ def replan14():
              "design": "A", "rank_frac": 1 / 8, "diag": True}]
 
 
+A8 = {"design": "A", "rank_frac": 1 / 8, "diag": True}
+BD44 = {"design": "B", "diag": True, "rho": 0.44, "r_dist": "int8"}
+
+
+def fw1():
+    """FineWeb-Edu (prep.py --source fineweb-edu), w128 and w256 at 25.4 tokens per parameter, to tell TinyStories'
+    floor from the constraint: the baseline ladders at 2e-3 with the lrs TinyStories found best at the matched points,
+    and A 1/8, A 1/4, B ρ = 0.44 (int8 R, diagonals) and B ρ = 0.25 at their TinyStories-best lr and a neighbour.
+    The same names as the TinyStories runs; analyze each corpus's dirs on their own."""
+    w2 = {"size": "w256", "tokens": 80_000_000, "threads": 4}
+    w1 = {"size": "w128", "tokens": 20_000_000, "threads": 2}
+    cfgs = [{"name": "w256-base-D160000000", "size": "w256", "tokens": 160_000_000, "lr": 2e-3, "threads": 8}]
+    cfgs += [{**w2, "name": "w256-base-D80000000", "lr": 2e-3}, {**w2, "name": "w256-base-D80M-lr0.004", "lr": 4e-3}]
+    cfgs += [{**w2, **A8, "name": f"w256-A8-diag-D80M-lr{lr:g}", "lr": lr} for lr in (4e-3, 2e-3)]
+    cfgs += [{**w2, **A8, "name": "w256-A4-diag-D80M-lr0.004", "lr": 4e-3, "rank_frac": 1 / 4}]
+    cfgs += [{**w2, **BD44, "name": "w256-Bd0.44-rint8-D80M-lr0.001", "lr": 1e-3},
+             {**w2, **BD44, "name": "w256-Bd0.44-rint8-D80M", "lr": 2e-3},
+             {**w2, "name": "w256-B0.25-D80M-lr0.001", "lr": 1e-3, "design": "B", "rho": 0.25}]
+    cfgs += [{**w2, "name": f"w256-base-D{t}", "tokens": t, "lr": 2e-3} for t in (40_000_000, 20_000_000, 10_000_000)]
+    cfgs += [{**w1, "name": f"w128-base-D{t}", "tokens": t, "lr": 2e-3}
+             for t in (80_000_000, 40_000_000, 20_000_000, 10_000_000, 5_000_000, 2_500_000)]
+    cfgs += [{**w1, "name": f"w128-base-lr{lr:g}", "lr": lr} for lr in (4e-3, 8e-3)]
+    cfgs += [{**w1, **A8, "name": f"w128-A8-diag-lr{lr:g}", "lr": lr} for lr in (1.6e-2, 8e-3)]
+    cfgs += [{**w1, **A8, "name": "w128-A4-diag-lr0.008", "lr": 8e-3, "rank_frac": 1 / 4}]
+    cfgs += [{**w1, **BD44, "name": f"w128-Bd0.44-rint8-lr{lr:g}", "lr": lr} for lr in (8e-3, 4e-3)]
+    cfgs += [{**w1, "name": "w128-B0.25-lr0.008", "lr": 8e-3, "design": "B", "rho": 0.25}]
+    return cfgs
+
+
+def fw2():
+    """FineWeb-Edu at w384, 25.4 tokens per parameter (180M): the baseline ladder at 2e-3 to 360M, and A 1/8 and
+    B ρ = 0.44 at their TinyStories-best lr, the third width beside fw1's two."""
+    b = {"size": "w384", "lr": 2e-3}
+    cfgs = [{**b, "name": "w384-base-D360000000", "tokens": 360_000_000, "threads": 24},
+            {**b, "name": "w384-base-D180000000", "tokens": 180_000_000, "threads": 12},
+            {**b, **A8, "name": "w384-A8-diag-D180M-lr0.002", "tokens": 180_000_000, "threads": 16},
+            {**b, **BD44, "name": "w384-Bd0.44-rint8-D180M-lr0.001", "tokens": 180_000_000, "lr": 1e-3, "threads": 16}]
+    cfgs += [{**b, "name": f"w384-base-D{t}", "tokens": t, "threads": 8} for t in (90_000_000, 45_000_000)]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -281,6 +322,8 @@ PRESETS = {
     "replan12": replan12,
     "replan13": replan13,
     "replan14": replan14,
+    "fw1": fw1,
+    "fw2": fw2,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }

@@ -375,7 +375,8 @@ def train(cfg: Cfg, data: Path):
     acct = accounting(model, cfg, vocab)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     n_emb = model.emb.numel()
-    print(json.dumps({"cfg": dataclasses.asdict(cfg), "steps": steps, "trainable_params": n_params,
+    print(json.dumps({"cfg": dataclasses.asdict(cfg), "data": {"repo": meta["settings"]["repo"]}, "steps": steps,
+                      "trainable_params": n_params,
                       "non_emb_trainable": n_params - n_emb, **acct}), flush=True)
 
     def lr_at(s):
@@ -415,6 +416,7 @@ def train(cfg: Cfg, data: Path):
     wall = time.time() - t0
     return {
         "cfg": dataclasses.asdict(cfg),
+        "data": {"repo": meta["settings"]["repo"], "train_sha256": meta["files"]["train"]["sha256"]},
         "vocab": vocab,
         "steps": steps,
         "tokens": steps * cfg.batch * cfg.ctx,

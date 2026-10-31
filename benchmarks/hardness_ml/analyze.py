@@ -32,11 +32,12 @@ from pathlib import Path
 
 def load(dirs, partial=False):
     """Finished runs from runs/*.json; with ``partial``, also runs still going, from their logs (curve only)."""
-    runs = {}
+    runs, repos = {}, defaultdict(set)
     for d in dirs:
         for p in sorted(Path(d).glob("runs/*.json")):
             r = json.loads(p.read_text())
             runs[r["cfg"]["name"]] = r
+            repos[r.get("data", {}).get("repo", "roneneldan/TinyStories")].add(str(d))
         if not partial:
             continue
         for p in sorted(Path(d).glob("logs/*.log")):
@@ -44,6 +45,7 @@ def load(dirs, partial=False):
             if p.stem in runs or not lines or not lines[0].startswith("{"):
                 continue
             head = json.loads(lines[0])
+            repos[head.get("data", {}).get("repo", "roneneldan/TinyStories")].add(str(d))
             curve = []
             for ln in lines[1:]:
                 f = ln.split()
@@ -51,6 +53,9 @@ def load(dirs, partial=False):
                     curve.append({"step": int(f[1].split("/")[0]), "tokens": int(f[3]), "val": float(f[7])})
             runs[p.stem] = {"cfg": head["cfg"], "tokens": head["steps"] * head["cfg"]["batch"] * head["cfg"]["ctx"],
                             "curve": curve, "partial": True}
+    if len(repos) > 1:
+        raise SystemExit("analyze: the dirs mix corpora; analyze each corpus's dirs on their own: "
+                         + "; ".join(f"{k}: {' '.join(sorted(v))}" for k, v in sorted(repos.items())))
     return runs
 
 
