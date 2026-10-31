@@ -35,7 +35,12 @@ registered reads open every row of its read ports against the pinned root at the
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
 of a pinned parameter leave the free inputs where the window's root for it is the pinned root: `declared_count` counts
 them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
-(`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries).
+(`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries). A record that
+lists its members (a served window's) declares its reads beside them, as a served window reads its model's weights
+(each ``weights/<label>@<words>``, pinned at the root of the committer's weights registration): each read port its
+members' own rows or a shared-row table of them (`interface.listed_reads`), audited and counted as a stated record's
+reads are, and the count names every parameter it reads whose window root is no pin (``unpinned``), whose reads count
+free.
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
 loop's activation rows) has them fixed before the sample with the rest of the registration;
@@ -73,8 +78,8 @@ the scan's state tree (``stateTied``), so its reads count registered. Refused wh
 
 ``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
 stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from its description alone, and one that lists
-its members from them and its window's ingress (`interface.listed_ingress`), the window figure printed beside the run
-figure with its premise. A registered read counts as
+its members from them and the registered reads and window ingress it declares beside them (`interface.listed_reads`,
+`interface.listed_ingress`), the window figure printed beside the run figure with its premise. A registered read counts as
 registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
 and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
 `interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
@@ -308,8 +313,8 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
     (``wired``, which a5's wiring check holds). A record that declares no input lists no steps and registers no input (a
     row table's registered reads are refused, `verifier_window`), so none is ingress or registered: the ``external``
-    ports are reported, not subtracted. A record that declares its window's ingress (vLLM's served windows) is counted by
-    `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
+    ports are reported, not subtracted. A record that declares its registered reads or its window's ingress (vLLM's
+    served windows) is counted by `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
     inputs = wired = ext_bits = 0
     ext = set(external)
     for m in members:
@@ -328,7 +333,8 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
                    pins: Mapping[str, str] | str | None = None, roots: Mapping[str, str] | None = None,
                    untied: Iterable[str] = ()) -> dict[str, Any]:
     """The leak bound's count of a record that declares its inputs (`interface.input_count`: a stated record's from its
-    description alone, a listed one's from its members and its window's ingress): its input rows less those its wires,
+    description alone, a listed one's from its members, its registered reads and its window's ingress): its input rows
+    less those its wires,
     registered reads of a parameter whose window root (``roots``, those the registration records: `window_roots`) is the
     verifier's pin (``pins``, ``{param: root}``) and the run's ingress fill
     leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
@@ -336,12 +342,17 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     the one to quote: only Lean's run ingress (the ingress gates ``freeInputs`` reads) counts as ingress. A listed
     record's window ingress (`interface.listed_ingress`: what its members read from rows before the window) adds the
     window figure beside it (``window``, those rows subtracted too), which holds only under its ``premise``
-    (`WINDOW_PREMISE`). An ``untied`` value
+    (`WINDOW_PREMISE`). ``unpinned`` names the parameters the record reads whose window root is no pin of the
+    verifier's (none pinned, another root, or none the registration records): their reads of input rows are free. An
+    ``untied`` value
     (`window_pins`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here,
     though the audit opens its reads against its committed root: its input rows are free, and the count names it."""
     untied = set(untied)
     held = {p: r for p, r in pins.items() if p not in untied} if isinstance(pins, Mapping) else pins
     n = IF.input_count(doc, resolve, held, roots)
+    reg = IF.declarations(doc)[2]
+    if unpinned := sorted({r.param for r in (reg.reads if reg else ())} - IF.held_params(held, roots) - untied):
+        n = {**n, "unpinned": unpinned}
     if untied:
         n = {**n, "untied": sorted(untied)}
     other = n["free"] + bits
@@ -833,7 +844,8 @@ def audit(a: argparse.Namespace) -> int:
                                      "definitions": row["definitions"], "loaded": row["loaded"],
                                      "activations": None if acts is None else acts["ok"],
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "free", "registered", "advice_bits",
-                                                                          "bound", "untied", "window") if k in row["leak"]},
+                                                                          "bound", "unpinned", "untied", "window")
+                                              if k in row["leak"]},
                                      **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
 
@@ -911,8 +923,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jobs", type=int, default=1, help="templates composed at once, each in a forked process: what the "
                    "machine's memory takes (a5.warm)")
     p = sub.add_parser("count", help="a circuit record's leak count (declared_count): a stated record's from its description "
-                       "alone, a listed one's from its members and its window's ingress; the run figure, and beside it, where "
-                       "the record declares window ingress, the window figure with its premise")
+                       "alone, a listed one's from its members and the registered reads and window ingress it declares; the "
+                       "run figure, and beside it, where the record declares window ingress, the window figure with its premise")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
     p.add_argument("--catalog", action="append", default=[], help="a module whose Definitions the record's templates name, "
