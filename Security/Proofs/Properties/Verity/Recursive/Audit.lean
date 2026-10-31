@@ -135,8 +135,7 @@ elsewhere; and (ii) zero knowledge, `RecursiveFirewallPrivate`.
 
 Its `λ` is `λ₂ = 100`: route 2C's level (`Claims.Recursion.lamLin2`) at the inner calls `nI₀ = 2^28 + (c_B + 2^24)` and
 V\*'s setup calls `vS₀ = 2^55`, both read off the accepted run (`RecDeploy.lamLin2_R_ge_in`). The bound record's level
-(`Claims.Recursion.lam`, about 65 bits per SHA-512 call at the deployed shape) is below the 100-bit floor under every
-weight, and (i) doesn't use it. -/
+(`Claims.Recursion.lam`), which no theorem evaluates at the deployment, is one (i) doesn't use. -/
 def RecursiveAuditC3 : Prop :=
   Verity.Recursive.SampledProofsRecursive Verity.Recursive.RecVerdict ∧ RecursiveFirewallPrivate
 
