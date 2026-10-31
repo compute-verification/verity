@@ -81,7 +81,7 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
-    assert any(p.startswith("@ci @lane-2 queue: #2 reverted on `checked`") for p in h.posts), h.posts
+    assert any(p.startswith("@lane-2 @pkg-owner queue: #2 reverted on `checked`") for p in h.posts), h.posts
     assert h.posted[-1][0] == reverted
     _pass(h, ("pkg",))
     h.tick()
