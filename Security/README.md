@@ -81,7 +81,13 @@ accept and the commitment binds both (`Properties.Composition`, proved). Onsite 
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
-  `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
+  `CoinsConfidential` and `OneClock`, are onsite's and prose only (`verity/core/protocols/sampled_proofs/README.md`).
+  Remote's coin path is three named premises over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
+  `Definitions/Core/Assumptions/Challenger.lean` and listed in the lock: the challenger logs every coin it releases
+  (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
+  reads coins only from that log (`VerifierReadsLog`). Under them a sample drawn with a logged coin misses a set fixed
+  before it at most as often as the draw law allows (`Verity.Guarantees.SampleAfterRecorded`, proved); for
+  `CoinsConfidential` and `OneClock`, no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
 - **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
