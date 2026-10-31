@@ -1,3 +1,5 @@
+import Mathlib.Algebra.Order.Archimedean.Real.Basic
+import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Lead.Model
 
 /-!
@@ -27,6 +29,7 @@ Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
   (`wMac`).
 * `gapServed` is the gap over served stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points and
   `GapAtDecode` at decode; `gapBound` is a closed form of it at every admitted call (`GapAll`).
+* **The tail form** (`G_tail`) splits the gap into a fixed part (`gapFixed`) and a probability (`etaLead`).
 -/
 
 namespace Pouw.Lead
@@ -111,5 +114,52 @@ def gapBound (m n K : ℕ) : ℚ :=
 
 /-- The words chunks of a call: `⌈m n S / chunkWords⌉`, at most `chunkWords` words a leaf. -/
 def wordChunks (L : Layout) : ℕ := (L.m * L.n * L.S + L.chunkWords - 1) / L.chunkWords
+
+/-! ## The tail form
+
+`Pouw.Guarantees.Lead.G_tail` bounds the share of the certifier's entropy values at whose coins a strategy is
+accepted, hashed no collision and worked, `betaLead` a bit exchanged included, less than the honest work less the
+fixed gap (`gapFixed`) by `etaLead`.
+
+* **Fixed** (`gapFixed`), in registers, holding at every accepted coin value: the head (`headGap`), the coin-branch
+  count's mean (`coinBranchMean`) and slack (`coinSlack`), and `p*`'s mean (`pStarGap`). The network is charged in
+  the work, as in `G`, and bounded per forward. Hiding doesn't enter: the per-coin floor has no hiding term.
+* **Probabilities** (`etaLead`): a pre-coin table in the node's storage or the coin stream holding a committed tile
+  (`tableTail`, a union bound over tiles and steps), and the call's repeated tiles exceeding their mean by more than
+  the slack (`coinTail`). -/
+
+/-- **The coin-branch count's mean**, in registers: `tileWords · rowBlocks · colBlocks · S · (4/7^8 + 2^−16)`. A
+tile's value agrees with each of the three other tiles at its step, column block and coin tile on at most `7^−8` of
+the coins and with any tile on at most `2^−56`, and a call the verifier admits has at most `2^40` tiles, so averaged
+over the coins `tileWords · repeats` is at most this. -/
+def coinBranchMean (L : Layout) : ℚ :=
+  tileWords * (L.rowBlocks * L.colBlocks * L.S : ℚ) * (4 / 7 ^ 8 + 1 / 2 ^ 16)
+
+/-- **The slack** `t` over the coin-branch mean that the tail allows: 0.08% of padded stock. -/
+def coinSlack (L : Layout) : ℚ := 8 / 10000 * stockRegs L
+
+/-- **The tail's fixed gap** in registers: the head, the coin-branch mean and slack, and `p*`. -/
+def gapFixed (L : Layout) (C : Commit L) : ℚ :=
+  headGap L C + coinBranchMean L + coinSlack L + pStarGap L
+
+/-- The fixed gap as a share of served stock. -/
+def gapFixedServed (L : Layout) (C : Commit L) : ℚ := gapFixed L C / servedRegs L
+
+/-- **The tables' tail**: the share of the coins on which a storage fixed before the coins, or the coin stream,
+holds some committed tile, by a union bound over the call's tiles and steps. A tile at a step is one of a storage's
+`mem + 1` values (the tables' and zero) on at most `2^−168` of the coins each, and one of its `mem` streamed tiles on
+at most `2^−105` each. -/
+def tableTail (L : Layout) : ℚ :=
+  (L.rowBlocks * L.colBlocks * L.S : ℚ) * ((L.mem + 1 : ℚ) / 2 ^ 168 + L.mem / 2 ^ 105)
+
+/-- **The coin-branch tail**: the largest share of the coins, over the call's data, on which its repeated tiles'
+words exceed the coin-branch mean by more than the slack. A strategy doesn't enter: `repeats` reads the data and the
+coins alone. -/
+noncomputable def coinTail (L : Layout) : ℝ :=
+  ⨆ κ : Fin L.m → Fin L.S → Fin L.n → ℤ,
+    Pouw.pr fun ω : Coins L => coinBranchMean L + coinSlack L < tileWords * (repeats L κ ω : ℚ)
+
+/-- **The tail** `η_lead`: the tables' tail and the coin-branch tail. -/
+noncomputable def etaLead (L : Layout) : ℝ := tableTail L + coinTail L
 
 end Pouw.Lead
