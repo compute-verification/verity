@@ -35,10 +35,6 @@ PUBLISHED = {
     "VF3j-16": (0.0610, 1.1563, 2.000),
     "VF3k-16": (0.0603, 1.1563, 2.000),
     "VF3l-16": (0.0603, 1.1563, 2.000),       # with its copy prices
-    "VF3l-16-copy16": (0.0525, 1.1563, 2.000),
-    "VF3l-16-copy16-fan32": (0.0460, 1.1563, 2.000),
-    "VF3l-16-copy32-fan16": (0.0600, 1.3125, 2.000),
-    "VF3l-16-copy32": (0.0518, 1.3125, 2.000),
     "VF3m-16": (0.0591, 1.1563, 2.000),
     "VF3n-16": (0.0586, 1.1563, 2.000),
     "VF3o-16": (0.0588, 1.1563, 2.000),
@@ -119,8 +115,6 @@ CLAIMED = {
     "VF3j-16": ([], []),
     "VF3k-16": ([], []),
     "VF3l-16": ([], []),
-    "VF3l-16-copy16": ([], []),
-    "VF3l-16-copy32": ([], []),
     "VF3m-16": ([], []),
     "VF3n-16": ([], []),
     "VF3o-16": ([], []),
@@ -136,11 +130,9 @@ def test_claims(name):
 
 
 # π_c ≥ 16 by vector: what is under it, and its cheapest copy route a word. VF3k-16 and VF3l-16 price the UR fan-out
-# under it; each copy candidate raises the routes it names; VF3p-16's UNI on the issue rows lifts UNI's route over it
+# under it; VF3p-16's UNI on the issue rows lifts UNI's route over it
 UR_FANOUT = ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"]
-COPIES = {"VF3k-16": (UR_FANOUT, 1), "VF3l-16": (UR_FANOUT, 1), "VF3l-16-copy16": ([], 16),
-          "VF3l-16-copy16-fan32": ([], 16), "VF3l-16-copy32-fan16": ([], 16), "VF3l-16-copy32": ([], 32),
-          "VF3m-16": (UR_FANOUT, 1), "VF3n-16": (UR_FANOUT, 1), "VF3o-16": (UR_FANOUT, 1),
+COPIES = {"VF3k-16": (UR_FANOUT, 1), "VF3l-16": (UR_FANOUT, 1), "VF3m-16": (UR_FANOUT, 1), "VF3n-16": (UR_FANOUT, 1), "VF3o-16": (UR_FANOUT, 1),
           "VF3p-16": (UR_FANOUT[1:], 1)}
 
 
