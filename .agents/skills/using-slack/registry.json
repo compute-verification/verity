@@ -127,6 +127,7 @@
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
+        "benchmarks/flock_s8_block/",
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
