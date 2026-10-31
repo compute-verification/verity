@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A templated statement end to end (PRF-133): RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
+# A templated statement end to end: RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
 # unit read at layout LAYOUT by Lean's `flock-tmpl-unit` (tests/lean/TmplUnit.lean: the rows at Tmpl.posMap, an ORDER
 # line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
 # refuses the statement once every check has passed, so each verdict's reason must be exactly that refusal. Run from the

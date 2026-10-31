@@ -234,7 +234,7 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
     """`ledger.draw` is `PooledDraw`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
     record's `samples`, the hiding terms, and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
-    than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the draw cap, and
+    than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the sample cap, and
     q_t = 2·F·C + 2·s·69 for the fork finder that runs the prover twice; the PRF advantages are named with their claim
     and in no total.  γ's errors carry the three; the line's δ carries the binding term beside its own."""
     s, prover, passes, clock = drive(store, params(samples=7), SCHEDULE)
@@ -263,9 +263,9 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
 
 
 def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
-    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the draws window t
+    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window t
     requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
-    record's draws there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
+    record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
     more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts draw 70, 60 and 60: the ledger
     charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its five additions'
     rounding.  A record whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ."""

@@ -232,7 +232,7 @@ theorem forIn_absorbF_runs : ∀ (ws : List F128) (vs : LState) (k : ℕ),
 
 section VStar
 
-variable {A : Type} {src : Coins}
+variable {A : Type} {src : CoinSource}
 
 theorem vbind_ok {x : RecAlgebra.LM F128 α} {f : α → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ}
     {r : (β × LSt F128) × ℕ} (h : (x >>= f) st k src = .ok r) :
@@ -311,13 +311,13 @@ theorem vnextOod_bind {M : Messages F128} {f : F128 → RecAlgebra.LM F128 β} {
 
 end VStar
 
--- V*'s rounds hold no round of no coins, so `Coins.ofRounds` reads them as recorded.
+-- V*'s rounds hold no round of no coins, so `CoinSource.ofRounds` reads them as recorded.
 variable [hne : Fact (NoEmpty c)]
 
 /-- A round of the record that V* drew `n` coins from. -/
-theorem ofRounds_round {k n : ℕ} {v : Array F128} (h : (Coins.ofRounds c).round k n = .ok v) :
+theorem ofRounds_round {k n : ℕ} {v : Array F128} (h : (CoinSource.ofRounds c).round k n = .ok v) :
     c[k]! = v ∧ v.size = n := by
-  simp only [Coins.ofRounds, filter_noEmpty hne.out] at h
+  simp only [CoinSource.ofRounds, filter_noEmpty hne.out] at h
   cases hc : c[k]? with
   | none => rw [hc] at h; cases h
   | some r =>
@@ -329,7 +329,7 @@ theorem ofRounds_round {k n : ℕ} {v : Array F128} (h : (Coins.ofRounds c).roun
       exact ⟨getElem!_of_getElem? hc, hr⟩
     · cases h
 
-theorem vcoinVec {n k k' : ℕ} {v : Array F128} (hn : n ≠ 0) (h : coinVec n k (Coins.ofRounds c) = .ok (v, k')) :
+theorem vcoinVec {n k k' : ℕ} {v : Array F128} (hn : n ≠ 0) (h : coinVec n k (CoinSource.ofRounds c) = .ok (v, k')) :
     v = c[k]! ∧ (c[k]!).size = n ∧ k' = k + 1 := by
   rcases coinVec_ok h with ⟨h0, -, -⟩ | ⟨-, hr, rfl⟩
   · exact absurd h0 hn
@@ -339,15 +339,15 @@ theorem vcoinVec {n k k' : ℕ} {v : Array F128} (hn : n ≠ 0) (h : coinVec n k
 
 theorem vcoinVec_bind {n : ℕ} {f : Array F128 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ}
     {r : (β × LSt F128) × ℕ} (hn : n ≠ 0)
-    (h : ((StateT.lift (coinVec n) : RecAlgebra.LM F128 (Array F128)) >>= f) st k (Coins.ofRounds c) = .ok r) :
-    (c[k]!).size = n ∧ f (c[k]!) st (k + 1) (Coins.ofRounds c) = .ok r := by
+    (h : ((StateT.lift (coinVec n) : RecAlgebra.LM F128 (Array F128)) >>= f) st k (CoinSource.ofRounds c) = .ok r) :
+    (c[k]!).size = n ∧ f (c[k]!) st (k + 1) (CoinSource.ofRounds c) = .ok r := by
   obtain ⟨v, k₁, h₁, h₂⟩ := vlift_bind h
   obtain ⟨rfl, hs, rfl⟩ := vcoinVec hn h₁
   exact ⟨hs, h₂⟩
 
 theorem vcoinOne_bind {f : F128 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((StateT.lift coinOne : RecAlgebra.LM F128 F128) >>= f) st k (Coins.ofRounds c) = .ok r) :
-    (c[k]!).size = 1 ∧ f ((c[k]!).getD 0 0) st (k + 1) (Coins.ofRounds c) = .ok r := by
+    (h : ((StateT.lift coinOne : RecAlgebra.LM F128 F128) >>= f) st k (CoinSource.ofRounds c) = .ok r) :
+    (c[k]!).size = 1 ∧ f ((c[k]!).getD 0 0) st (k + 1) (CoinSource.ofRounds c) = .ok r := by
   obtain ⟨x, k₁, h₁, h₂⟩ := vlift_bind h
   obtain ⟨v, hr, rfl, rfl⟩ := coinOne_ok h₁
   obtain ⟨rfl, hs⟩ := ofRounds_round hr
@@ -355,8 +355,8 @@ theorem vcoinOne_bind {f : F128 → RecAlgebra.LM F128 β} {st : LSt F128} {k : 
   exact ⟨hs, h₂⟩
 
 theorem vcoinK2_bind {f : F256 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((StateT.lift coinK2 : RecAlgebra.LM F128 F256) >>= f) st k (Coins.ofRounds c) = .ok r) :
-    (c[k]!).size = 2 ∧ f ⟨(c[k]!).getD 0 0, (c[k]!).getD 1 0⟩ st (k + 1) (Coins.ofRounds c) = .ok r := by
+    (h : ((StateT.lift coinK2 : RecAlgebra.LM F128 F256) >>= f) st k (CoinSource.ofRounds c) = .ok r) :
+    (c[k]!).size = 2 ∧ f ⟨(c[k]!).getD 0 0, (c[k]!).getD 1 0⟩ st (k + 1) (CoinSource.ofRounds c) = .ok r := by
   obtain ⟨x, k₁, h₁, h₂⟩ := vlift_bind h
   obtain ⟨v, k₂, h₃, h₄⟩ := cm_bind h₁
   cases cm_pure h₄
@@ -366,7 +366,7 @@ theorem vcoinK2_bind {f : F256 → RecAlgebra.LM F128 β} {st : LSt F128} {k : �
 
 omit hne in
 theorem vthrow {e : String} {f : α → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((throw e : RecAlgebra.LM F128 α) >>= f) st k (Coins.ofRounds c) = .ok r) : False := by
+    (h : ((throw e : RecAlgebra.LM F128 α) >>= f) st k (CoinSource.ofRounds c) = .ok r) : False := by
   cases h
 
 /-! ## V*'s state as the verifier's -/
@@ -473,7 +473,7 @@ section Conv
 variable {M : Messages F128} {p : LigeritoProof}
 
 theorem challenge_conv {st st' : LSt F128} {k k' : ℕ} {rk : F256}
-    (h : RecAlgebra.challenge M st k (Coins.ofRounds c) = .ok ((rk, st'), k')) :
+    (h : RecAlgebra.challenge M st k (CoinSource.ofRounds c) = .ok ((rk, st'), k')) :
     k' = k + 1 ∧ st'.msg = st.msg + 1 ∧ st'.ood = st.ood ∧ st'.oods = st.oods ∧ st'.conss = st.conss ∧
       (p.messages = M.msgs.map (fun mm => (kv mm.1, kv mm.2)) →
         RunsL c (Flock.challenge p) (toL st) k k' rk (toL st')) := by
@@ -491,7 +491,7 @@ theorem challenge_conv {st st' : LSt F128} {k k' : ℕ} {rk : F256}
   apply toL_eq <;> dsimp only [toL] <;> simp only [kv_challenge, polyOf_ofMsg]
 
 theorem challenges_conv : ∀ (n j : ℕ) (acc : Array F256) (st st' : LSt F128) (k k' : ℕ) (chs : Array F256),
-    RecAlgebra.challenges M n st k (Coins.ofRounds c) = .ok ((chs, st'), k') →
+    RecAlgebra.challenges M n st k (CoinSource.ofRounds c) = .ok ((chs, st'), k') →
     k' = k + n ∧ chs.size = n ∧ st'.msg = st.msg + n ∧ st'.ood = st.ood ∧ st'.oods = st.oods ∧
       st'.conss = st.conss ∧
       (p.messages = M.msgs.map (fun mm => (kv mm.1, kv mm.2)) →
@@ -516,7 +516,7 @@ theorem challenges_conv : ∀ (n j : ℕ) (acc : Array F256) (st st' : LSt F128)
     simp
 
 theorem oodIntro_conv {dim split : ℕ} {st st' : LSt F128} {k k' : ℕ} {u : PUnit} (hd : dim ≠ 0)
-    (h : RecAlgebra.oodIntro M dim split st k (Coins.ofRounds c) = .ok ((u, st'), k')) :
+    (h : RecAlgebra.oodIntro M dim split st k (CoinSource.ofRounds c) = .ok ((u, st'), k')) :
     k' = k + 1 + 1 ∧ st'.msg = st.msg + 1 ∧ st'.ood = st.ood + 1 ∧ st'.conss = st.conss ∧
       (p.messages = M.msgs.map (fun mm => (kv mm.1, kv mm.2)) → p.oodValues = M.ood →
         st.ood + st.conss.size < p.claimNonces.size →
@@ -538,7 +538,7 @@ theorem oodIntro_conv {dim split : ℕ} {st st' : LSt F128} {k k' : ℕ} {u : PU
 
 theorem vquery {sch : Flock.Schedule} {i : ℕ} {fold : Array F256} {st st' : LSt F128} {k k' : ℕ}
     {r : Array ℕ × Array F128 × KV F128} (hq : (sch.levels.getD i default).q ≠ 0)
-    (h : RecAlgebra.query sch M i fold st k (Coins.ofRounds c) = .ok ((r, st'), k')) :
+    (h : RecAlgebra.query sch M i fold st k (CoinSource.ofRounds c) = .ok ((r, st'), k')) :
     st' = st ∧ k' = k + 1 + 1 ∧ (c[k]!).size = (sch.levels.getD i default).q ∧
       (c[k + 1]!).size = Nat.log2 ((sch.levels.getD i default).q - 1) + 1 ∧
       r = (positions (sch.levels.getD i default) c[k]!, c[k + 1]!,
@@ -552,7 +552,7 @@ theorem vquery {sch : Flock.Schedule} {i : ℕ} {fold : Array F256} {st st' : LS
 
 theorem vqueryFold {sch : Flock.Schedule} {i cols : ℕ} {fold : Array F256} {st st' : LSt F128} {k k' : ℕ}
     {u : PUnit} (hq : (sch.levels.getD i default).q ≠ 0)
-    (h : RecAlgebra.queryFold sch M i cols fold st k (Coins.ofRounds c) = .ok ((u, st'), k')) :
+    (h : RecAlgebra.queryFold sch M i cols fold st k (CoinSource.ofRounds c) = .ok ((u, st'), k')) :
     k' = k + 1 + 1 + 1 ∧ (c[k]!).size = (sch.levels.getD i default).q ∧
       (c[k + 1]!).size = Nat.log2 ((sch.levels.getD i default).q - 1) + 1 ∧ (c[k + 1 + 1]!).size = 1 ∧
       ∃ mm, M.msgs[st.msg]? = some mm ∧ st'.msg = st.msg + 1 ∧ st'.ood = st.ood ∧ st'.oods = st.oods ∧
@@ -577,7 +577,7 @@ theorem vqueryFold {sch : Flock.Schedule} {i cols : ℕ} {fold : Array F256} {st
 theorem levelsLoop_le {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : LSt F128) (k' : ℕ), i + fuel ≤ R →
-      RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Coins.ofRounds c) = .ok ((out, st'), k') → Le st st'
+      RecAlgebra.levelsLoop sch M R fuel i split levels e st k (CoinSource.ofRounds c) = .ok ((out, st'), k') → Le st st'
   | 0, _, _, _, _, st, k, out, st', k', _, h => by
     simp only [RecAlgebra.levelsLoop] at h
     obtain ⟨-, rfl, -⟩ := vpure h
@@ -633,24 +633,24 @@ theorem loop_runs {M : Messages F128} {p : LigeritoProof} {ms : MerkleScheme} {s
     (hstep : ∀ (i : ℕ) (s : σ) (split : ℕ) (levels : Array (Array F256)) (st : LSt F128) (k : ℕ) (chs : Array F256)
       (st₁ : LSt F128) (k₁ : ℕ) (st₂ : LSt F128) (k₂ : ℕ) (st₃ : LSt F128) (k₃ : ℕ) (st₄ : LSt F128) (k₄ : ℕ),
       i + 1 < R → Inv i s split levels → ¬ split < 4 →
-      RecAlgebra.challenges M 4 st k (Coins.ofRounds c) = .ok ((chs, st₁), k₁) →
-      RecAlgebra.oodIntro M (split - 4 + 1) (i + 1) st₁ k₁ (Coins.ofRounds c) = .ok (((), st₂), k₂) →
-      RecAlgebra.oodIntro M (split - 4 + 1) (i + 1) st₂ k₂ (Coins.ofRounds c) = .ok (((), st₃), k₃) →
-      RecAlgebra.queryFold sch M (i + 1) (split - 4) chs st₃ k₃ (Coins.ofRounds c) = .ok (((), st₄), k₄) →
+      RecAlgebra.challenges M 4 st k (CoinSource.ofRounds c) = .ok ((chs, st₁), k₁) →
+      RecAlgebra.oodIntro M (split - 4 + 1) (i + 1) st₁ k₁ (CoinSource.ofRounds c) = .ok (((), st₂), k₂) →
+      RecAlgebra.oodIntro M (split - 4 + 1) (i + 1) st₂ k₂ (CoinSource.ofRounds c) = .ok (((), st₃), k₃) →
+      RecAlgebra.queryFold sch M (i + 1) (split - 4) chs st₃ k₃ (CoinSource.ofRounds c) = .ok (((), st₄), k₄) →
       Good ms sch cap p M st₄ →
       ∃ s', RunsL c (body i s) (toL st) k k₄ (.yield s') (toL st₄) ∧ Inv (i + 1) s' (split - 4 + 1) (levels.push chs))
     (hlast : ∀ (i : ℕ) (s : σ) (split : ℕ) (levels : Array (Array F256)) (st : LSt F128) (k : ℕ) (chs : Array F256)
       (st₁ : LSt F128) (k₁ : ℕ) (pos : Array ℕ) (al : Array F128) (e : KV F128) (st₂ : LSt F128) (k₂ : ℕ),
       i + 1 = R → Inv i s split levels → ¬ split < 4 →
-      RecAlgebra.challenges M 4 st k (Coins.ofRounds c) = .ok ((chs, st₁), k₁) →
-      RecAlgebra.query sch M R chs st₁ k₁ (Coins.ofRounds c) = .ok (((pos, al, e), st₂), k₂) → (c[k₂]!).size = 1 →
+      RecAlgebra.challenges M 4 st k (CoinSource.ofRounds c) = .ok ((chs, st₁), k₁) →
+      RecAlgebra.query sch M R chs st₁ k₁ (CoinSource.ofRounds c) = .ok (((pos, al, e), st₂), k₂) → (c[k₂]!).size = 1 →
       Hf (levels.push chs, split - 4) (qPush st₂ ((c[k₂]!).getD 0 0) e ⟨split - 4, pos, al, (c[k₂]!).getD 0 0, R⟩) →
       Good ms sch cap p M (qPush st₂ ((c[k₂]!).getD 0 0) e ⟨split - 4, pos, al, (c[k₂]!).getD 0 0, R⟩) →
       RunsL c (body i s) (toL st) k (k₂ + 1) (.yield (fOut (levels.push chs, split - 4)))
         (toL (qPush st₂ ((c[k₂]!).getD 0 0) e ⟨split - 4, pos, al, (c[k₂]!).getD 0 0, R⟩))) :
     ∀ (fuel i : ℕ) (s : σ) (split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : LSt F128) (k' : ℕ), i + fuel = R → 0 < fuel → Inv i s split levels →
-      RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Coins.ofRounds c) = .ok ((out, st'), k') →
+      RecAlgebra.levelsLoop sch M R fuel i split levels e st k (CoinSource.ofRounds c) = .ok ((out, st'), k') →
       Hf out st' → Good ms sch cap p M st' →
       RunsL c (forIn (List.range' i fuel) s body) (toL st) k k' (fOut out) (toL st')
   | 0, _, _, _, _, _, _, _, _, _, _, _, h0, _, _, _, _ => absurd h0 (lt_irrefl 0)
@@ -703,7 +703,7 @@ theorem ligerito_of_run {ms : MerkleScheme} {sch : Flock.Schedule} {T : F128} {c
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hrun : (ligeritoRun sch M).run
         { s := kofF T, q := ((Val.zero, Val.zero), (Val.zero, Val.zero), (Val.zero, Val.zero)) } k₀
-        (Coins.ofRounds c) = .ok (((initCh, levels, ext), stV), k'))
+        (CoinSource.ofRounds c) = .ok (((initCh, levels, ext), stV), k'))
     (hfin : FinalOK sch sws M.yr initCh levels ext stV) (hmsg : stV.msg = M.msgs.size) (hood : stV.ood = M.ood.size)
     (hpm : p.messages = M.msgs.map fun mm => (kv mm.1, kv mm.2)) (hpo : p.oodValues = M.ood)
     (hyr : p.finalProof.yr = M.yr) (hcap : (p.initialCap == cap) = true)
@@ -910,7 +910,7 @@ theorem ligerito_refines_of_run {ms : MerkleScheme} {sch : Flock.Schedule} {T : 
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hrun : (ligeritoRun sch M).run
         { s := kofF T, q := ((Val.zero, Val.zero), (Val.zero, Val.zero), (Val.zero, Val.zero)) } k₀
-        (Coins.ofRounds c) = .ok (((initCh, levels, ext), stV), k'))
+        (CoinSource.ofRounds c) = .ok (((initCh, levels, ext), stV), k'))
     (hfin : FinalOK sch sws M.yr initCh levels ext stV) (hmsg : stV.msg = M.msgs.size) (hood : stV.ood = M.ood.size)
     (hpm : p.messages = M.msgs.map fun mm => (kv mm.1, kv mm.2)) (hpo : p.oodValues = M.ood)
     (hyr : p.finalProof.yr = M.yr) (hcap : (p.initialCap == cap) = true)

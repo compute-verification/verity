@@ -6,8 +6,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # Test-only: the reference is the Python mirror, `verity.ml.definitions.boolean.sigma_check`, over the Definitions'
 # composites and registry and the descriptors `verity.ml.circuits` encodes and decodes (with what those import of core:
-# the PoUW circuit's Boolean profile through the registry); `lake` builds this package against C-Flock's verifier and
-# the difftest harness, both required by path, and `flock-verify sigma-check` is C-Flock's verifier.
+# the PoUW circuit's Boolean profile through the registry); `lake` builds this package against Flock's verifier and
+# the difftest harness, both required by path, and `flock-verify sigma-check` is Flock's verifier.
 inputs = ["verity/ml/definitions", "integrations/vllm/verity_vllm", "verity/ml/circuits", "verity/ml/kernels",
           "verity/ml/randomness",
           "verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/core/__init__.py",

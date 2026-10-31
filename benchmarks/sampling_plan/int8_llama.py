@@ -1,4 +1,4 @@
-"""The sampling plan for an int8 row under C-Flock (`verity.core.protocols.sampled_proofs`), Llama-3.1-8B or Qwen3-8B: the
+"""The sampling plan for an int8 row under Flock (`verity.core.protocols.sampled_proofs`), Llama-3.1-8B or Qwen3-8B: the
 fitted cost model, the cuts the generator finds, the frontier of ε against the verification overhead B, the break-even
 granularity by window, ε and commitment regime, the frontier's sensitivity to its inputs, the tensors committed at more
 than one scale, and the weight classes' weights at each target.

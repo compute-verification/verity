@@ -7,9 +7,9 @@ challenger's path runs its Lean and its Python reference on one input:
 * ``public``: the service's public-items rule over the Stream's Spec (`sampled-proofs-difftest check_public`,
   `service.check_public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch`);
-* ``draw``: the drawn units are the draw coin's, under the challenger key the window's parameters pin when it is
+* ``draw``: the sampled proof blocks are the sampling coin's, under the challenger key the window's parameters pin when it is
   certified (`pouw-check-difftest draw`, `core_check.draw`);
-* ``opening``: a drawn unit's opening (`pouw-check-difftest opening`, `core_check.opening`), with ``prelude``,
+* ``opening``: a sampled proof block's opening (`pouw-check-difftest opening`, `core_check.opening`), with ``prelude``,
   `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
 * ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case`).
 
@@ -100,7 +100,7 @@ def public_params(spec: Any, record: Mapping[str, Any], scheme: str) -> dict:
 def service_answer(accepted: bool, codes: list[str], profile: Mapping[str, Any] | None, registration: str,
                    draw: Mapping[str, Any] | None, delta: str) -> dict:
     """The service's answer (`Core.Answer`) of a stream's outcome: on acceptance its profile (δ as the window's ratio when
-    the float is it) and its draw."""
+    the float is it) and its sample."""
     base = {"protocol": CC.ONE_STAGE, "commitment": registration}
     if accepted:
         d = profile["delta"]

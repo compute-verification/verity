@@ -75,15 +75,24 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- A plain table's setup, `setupH` followed by the refusal of a `public_inputs` meta key, returns `setupH`'s statement. -/
-theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
-    (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s := by
+/-- A table's setup followed by a refusal (of a `public_inputs` meta key on a plain table, of pinned outputs on one
+with hidden outputs) returns the setup's statement, which the refusal's test passes. -/
+theorem refuse_ok {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
+    (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s ∧ p s = false := by
   cases x with
   | error => cases h
   | ok a =>
     by_cases hp : p a = true
     · simp [bind, Except.bind, hp, throw, throwThe, MonadExceptOf.throw, Except.bind] at h
-    · simpa [bind, Except.bind, hp, pure, Except.pure] using h
+    · have ha : a = s := by simpa [bind, Except.bind, hp, pure, Except.pure] using h
+      subst ha
+      exact ⟨rfl, Bool.eq_false_iff.2 hp⟩
+
+set_option maxHeartbeats 4000000 in
+/-- A plain table's setup, `setupH` followed by the refusal of a `public_inputs` meta key, returns `setupH`'s statement. -/
+theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
+    (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s :=
+  (refuse_ok h).1
 
 /-- **`setupTables` sets up each table with `setupH`** (§16.12) under a tag without hidden outputs (`hh`; with them
 it calls `setupHidden`). For one table, its statement is `setupH`'s at the session's draw, and the session's spec is

@@ -94,7 +94,7 @@ strip reads its rows' ok words and computes their admission bits and the bound a
 tile in the strip; a row tally reads its row's words' flags, their count, their later +0 promotions and good, and its
 A row's salt-dead counts, and computes the row's sums; and the tally reads its rows' sums and the strip's bits and
 bound, all through their committed rows (`PORTS`; the cut is `pc8.unit_cut`'s).
-  - The tile and the tally are cut per tile row because C-Flock's composer gives each row a unit reads or writes an
+  - The tile and the tally are cut per tile row because Flock's composer gives each row a unit reads or writes an
     hm96 slot of 2^18 bits and a unit at most 2^27 bits (`circuit.K_MAX`), so at most 256 rows: a tile reading its
     words' rows directly would need 2^31 at 64 × 64.  Cut per row, no unit of a 64 × 64 tile has more than 66 rows
     (the row tally's TN cap-flags rows, its sd row and its cap-sums row).
@@ -131,7 +131,7 @@ from ..protocol import DomainError, Matmul, Shape
 from ..schemes import pearl_c as C
 from ..schemes import pearl_c_debit as D
 from ..schemes.pearl_c_device import DEVICES
-from . import boolean as _boolean  # noqa: F401  registers the windows' _v2 Definitions C-Flock's lowering falls back to
+from . import boolean as _boolean  # noqa: F401  registers the windows' _v2 Definitions Flock's lowering falls back to
 from . import hashes as H
 from . import leaves as L
 from . import pc4, pc8

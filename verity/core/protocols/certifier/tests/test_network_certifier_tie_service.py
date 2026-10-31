@@ -326,7 +326,7 @@ def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
 
 
 def test_a_head_of_another_window_is_refused(tmp_path):
-    """The verifier reads the registered root's head: a head of window 1 on window 0's draw, or a head of another
+    """The verifier reads the registered root's head: a head of window 1 on window 0's sample, or a head of another
     session's domain, refuses it."""
     run, advice = Run(tmp_path), _advice(SPAN)
     draw, delivered = run.prove(0, advice)

@@ -16,7 +16,7 @@ from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import window as PHW
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
-#: The schemes whose coins the auditor host's challenger can draw (the setting ``challenger``): H1's salt and rounds,
+#: The schemes whose coins the auditor host's challenger can sample (the setting ``challenger``): H1's salt and rounds,
 #: ncp-v2's and Pearl-C's salt
 CHALLENGED = (PH.SCHEME, "ncp-v2", *PPD.SCHEMES)
 #: The challenged schemes whose install opens the session the gate reserved itself (``session`` the gate's reserve

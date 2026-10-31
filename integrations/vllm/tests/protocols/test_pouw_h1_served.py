@@ -655,7 +655,7 @@ def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
 
 
 class _Receipts(dict):
-    """A stand-in receipt producer: each proof block of the call one receipt of the stand-in's width (one u16 word), drawn from
+    """A stand-in receipt producer: each proof block of the call one receipt of the stand-in's width (one u16 word), sampled from
     the call's served codes and weight, kept by call (with the codes it was given, and the order it was asked in) so a
     test recomputes each table from them."""
 

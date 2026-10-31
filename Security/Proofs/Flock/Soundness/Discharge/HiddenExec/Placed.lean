@@ -66,12 +66,10 @@ theorem kLog_eq : 2 ^ (a.L.model a.regs).kLog = 2 ^ T.kLog :=
 theorem nbl_eq : 2 ^ (a.L.model a.regs).nbl = 2 ^ T.nbl :=
   congrArg (fun S : Model.Statement => 2 ^ S.nbl) a.hT
 
-/-- **Template instance `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared
+/-- **Template instance `g`'s columns in the block** (`Layout.col`): the unit slots `ur.slot (g·upv + i)`, the shared
 constant at the pin. -/
 noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 ^ T.kLog) :=
-  Fin.cast a.kLog_eq
-    (stackPlace (a.L.model a.regs) (unitRows a.st a.L.unit_built) a.st.c.upv
-      (fun u => a.st.c.unitRange.slot (g * a.st.c.upv + u)) (a.L.hb hg) c)
+  Fin.cast a.kLog_eq (a.L.col a.regs hg c)
 
 /-- **The accepted statement places its template instance rows at every template instance** (`Layout.placement`), in
 every block. -/
@@ -89,7 +87,7 @@ theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok
     a.rows = Placed.circuitRows c hU := by
   have hc := a.c_eq hp
   unfold rows Placed.circuitRows unitRows
-  rw [Placed.ofNet_eq hc a.L.unit_built hU, hc]
+  rw [Placed.ofNet_eq (Placed.lunit_of_parse hp hc) a.L.unit_built hU, hc]
 
 /-- **`Layout.Aliased` in `ProgPlaces`' form**, as `Placed.Accepted.aliased_of_layout`. -/
 theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}

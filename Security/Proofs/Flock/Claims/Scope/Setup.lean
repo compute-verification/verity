@@ -181,7 +181,7 @@ theorem table0 {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : 
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have S := Hidden.setupHidden_spec' hd
-    have L := Hidden.hidden_layout' ht' hd
+    have L := Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset 0 hpos)
     have hp := S.parse
     rw [parseH_tagsAt ht] at hp
     obtain ⟨pop, hpop, -⟩ := S.pub

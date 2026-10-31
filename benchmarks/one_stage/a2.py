@@ -142,7 +142,7 @@ def main() -> int:
         print("A2 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}))
         return 1
 
-    # the draw, the session, the verifiers, the audit record
+    # the sample, the session, the verifiers, the audit record
     if a.unbind:
         st, header = unbound_copy(st, header, n, a, out)
         summary["unbound"] = {"pin": st["pin"], "rule": "leaf layer byte for byte serving's; the statement no longer binds the partition"}

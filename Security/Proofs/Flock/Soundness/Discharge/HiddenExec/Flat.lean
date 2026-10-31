@@ -115,7 +115,7 @@ theorem outPairs_ne_unit (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows 
     (show AtSlot st.c st.c.unitNet s₀ b _ from ⟨hs₀, hb', he⟩)
 
 /-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, at unsegmented output rows, its Δ being
-`HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/
+`HmRow.delta`'s, then `outPairs` (`Hidden.hidden_delta_unpinned`: one output row per output port pins none). -/
 theorem unitRowsFlat (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
     (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlat st := by
@@ -125,8 +125,11 @@ theorem unitRowsFlat (ht : tags.typed = false)
   intro s₀ hs₀ b hb r j hr
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
     rw [hr]; exact outPairs_ne_unit L F hrows hq hs₀ hb
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by rw [s.da, Hidden.hidden_delta']
-  have hdb : st.db = (HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray := by rw [s.db, Hidden.hidden_delta']
+  have hpin := Hidden.setupHidden_unpinned ht h hrows.1
+  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
+    rw [s.da, Hidden.hidden_delta_unpinned hpin]
+  have hdb : st.db = (HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray := by
+    rw [s.db, Hidden.hidden_delta_unpinned hpin]
   refine ⟨?_, ?_⟩
   · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val =
       rangesEntry st (slotEntryA st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).1 r.val j.val
@@ -157,7 +160,9 @@ theorem rowsFit_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String ×
         rw [hv p (Array.mem_toList_iff.2 hm)]
         decide
       rw [hv p hm, hr2]
-  · have hrep := Hidden.outRows_single (Hidden.parse_rowPorts hp).2 fun j hj => by
+  · have hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size := by
+      rw [(Hidden.parse_rowPorts hp).2, Layout.rowsH_unpinned h, Nat.sub_zero]
+    have hrep := Hidden.outRows_single hsum fun j hj => by
       simp only [HmOut.outGroup, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some]
       exact hr _ (Array.getElem_mem_toList hj)
     have hsz : c.outRowPorts.size = c.outPorts.size := by rw [hrep, Array.size_replicate]

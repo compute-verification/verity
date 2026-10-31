@@ -106,10 +106,12 @@ theorem foldl_snd_eq {α : Type} {xs : List (α × ℕ)} :
   | cons x xs ih => intro a; rw [List.foldl_cons, ih, List.map_cons, List.sum_cons]; omega
 
 set_option maxHeartbeats 4000000 in
-/-- **`HmRow.parse`'s rows are `HmRow.rowPorts`'** of some META, and its output rows' runs cover its output ports. -/
+/-- **`HmRow.parse`'s rows are `HmRow.rowPorts`'** of some META, and its output rows' runs cover its output ports but the
+pinned ones (META `pinned_outputs`, `HmRow.pinnedCount`). -/
 theorem parse_rowPorts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
     {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
-    (∃ mj typed, HmRow.rowPorts mj typed = .ok c.ports) ∧ c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size := by
+    (∃ mj typed, HmRow.rowPorts mj typed = .ok c.ports) ∧
+      c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size - HmRow.pinnedCount c.metaJ := by
   unfold HmRow.parse at h
   simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) sha jp0 at h
@@ -129,8 +131,7 @@ theorem parse_rowPorts {tags : Tags} {bytes : ByteArray} {tables : List (String 
   split at h
   swap
   · obtain ⟨_, hte, -⟩ := except_bind_ok h; cases hte
-  (have hh := except_bind_ok h; clear h; obtain ⟨mj, hte, h⟩ := hh)
-  cases hte
+  (have hh := except_bind_ok h; clear h; obtain ⟨mj, -, h⟩ := hh)
   simp (config := { zeta := false }) only [jp3] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨f1, hf1, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨f2, hf2, h⟩ := hh)
@@ -187,7 +188,7 @@ theorem parse_rowPorts {tags : Tags} {bytes : ByteArray} {tables : List (String 
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨outPorts, -, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h)
-  obtain ⟨outRowPorts, hsum, h⟩ : ∃ r, r.foldl (· + ·) 0 = outPorts.size ∧ jpR r = .ok c := by
+  obtain ⟨outRowPorts, hsum, h⟩ : ∃ r, r.foldl (· + ·) 0 = outPorts.size - HmRow.pinnedCount mj ∧ jpR r = .ok c := by
     split at h
     · exact ⟨_, foldl_replicate_one _, h⟩
     · obtain ⟨_, -, h⟩ := except_bind_ok h
@@ -282,6 +283,60 @@ theorem checkRows_out {c : Circuit} (h : HmOut.checkRows c = .ok ()) {j : ℕ} (
       · exact Or.inr ⟨Or.inr rfl, h16⟩
       · exact Or.inl ⟨h1, hw, hb, rfl⟩
 
+/-- `HmOut.checkRows` ends in `HmOut.checkPinned`. -/
+theorem checkPinned_of_checkRows {c : Circuit} (h : HmOut.checkRows c = .ok ()) : HmOut.checkPinned c = .ok () := by
+  unfold HmOut.checkRows at h
+  obtain ⟨k, -, h⟩ := except_bind_ok h
+  dsimp only at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · exact h
+
+/-- **What `HmOut.checkPinned` checks of a pinned statement**: at most its output ports pinned, and at least one row,
+each a bit row (`sha512/row/v2` or `sha512/row-seg/v1`). -/
+theorem pinned_facts {c : Circuit} (h : HmOut.checkPinned c = .ok ()) (hk : 0 < HmRow.pinnedCount c.metaJ) :
+    HmRow.pinnedCount c.metaJ ≤ c.outPorts.size ∧ c.ports.size ≠ 0 ∧ ∀ p ∈ c.ports.toList, p.v2 = true := by
+  unfold HmOut.checkPinned at h
+  split at h
+  · rename_i e he
+    simp [HmRow.pinnedCount, he] at hk
+  · dsimp only at h
+    split at h
+    · cases h
+    · rename_i hb
+      simp only [Bool.or_eq_true, beq_iff_eq, gt_iff_lt, decide_eq_true_eq, not_or] at hb
+      obtain ⟨⟨⟨-, hle⟩, hsz⟩, hany⟩ := hb
+      refine ⟨Nat.le_of_not_lt hle, hsz, fun p hp => ?_⟩
+      have := (Array.any_eq_false'.1 (Bool.eq_false_iff.2 hany)) p (Array.mem_toList_iff.1 hp)
+      simpa using this
+
+/-- **A statement of `sha512/row/v1` rows pins no output** (`pinned_facts`: a pinned statement's rows are bit rows). -/
+theorem unpinned_of_v1 {c : Circuit} (hc : HmOut.checkRows c = .ok ()) (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) :
+    HmRow.pinnedCount c.metaJ = 0 := by
+  by_contra hk
+  obtain ⟨-, hsz, hall⟩ := pinned_facts (checkPinned_of_checkRows hc) (Nat.pos_of_ne_zero hk)
+  have hp := Array.getElem_mem_toList (xs := c.ports) (Nat.pos_of_ne_zero hsz)
+  have := (hall _ hp).symm.trans (hv1 _ hp)
+  cases this
+
+/-- **Output rows whose runs cover every output port pin none** (`parse_rowPorts`: the runs cover all but the pinned
+ports, at most all of them). -/
+theorem unpinned_of_sum {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags bytes tables = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (h : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size) : HmRow.pinnedCount c.metaJ = 0 := by
+  have h2 := (parse_rowPorts hp).2
+  by_contra hk
+  have hle := (pinned_facts (checkPinned_of_checkRows hc) (Nat.pos_of_ne_zero hk)).1
+  omega
+
+/-- **One output row per output port pins no output** (`unpinned_of_sum`). -/
+theorem unpinned_of_rep {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags bytes tables = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (h : c.outRowPorts = Array.replicate c.outPorts.size 1) : HmRow.pinnedCount c.metaJ = 0 :=
+  unpinned_of_sum hp hc (by rw [h, foldl_replicate_one])
+
 /-- **Output rows each of one port are one per output port.** -/
 theorem outRows_single {c : Circuit} (hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size)
     (h1' : ∀ j < c.outRowPorts.size, (HmOut.outGroup c j).2.1 = 1) :
@@ -327,7 +382,9 @@ theorem out_rows_v1 {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
         2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks := by
   have P := parse_facts hp
   have hu : ∀ p ∈ c.ports.toList, p.segs = none := fun p hm => P.v1Segs p hm (hv1 p hm)
-  have hr := outRows_single (parse_rowPorts hp).2 fun j hj => by
+  have hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size := by
+    rw [(parse_rowPorts hp).2, unpinned_of_v1 hc hv1, Nat.sub_zero]
+  have hr := outRows_single hsum fun j hj => by
     obtain ⟨hlt, h1 | ⟨hs, -⟩⟩ := checkRows_out hc hj
     · exact h1.1
     · rw [hu _ (getD_mem_toList (d := default) hlt), hv1 _ (getD_mem_toList (d := default) hlt)] at hs

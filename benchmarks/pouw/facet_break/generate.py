@@ -7,7 +7,7 @@ A program is a dict (`kind` mix | spec | alone | mma, the MMA `form`, lane ops `
   (x_MMA, x_X) (every row either loads, the census at the epoch), and programs whose ratio X/MMA sits at each vertex and
   around it (x 0.6 ... 1.6), at 4 warps a SMSP; each lane alone; each MMA form alone at 2, 4 and 8 warps a SMSP; and the
   JI3n family (every form beside IADD3, FFMA, IADD3+FFMA, immediate FFMA, LOP3 and IMAD at 4 to 16 ops a MMA).
-- **sampled** (`seed`): `n` programs drawn uniformly over forms, one or two lanes, q, warps, placement and schedule.
+- **sampled** (`seed`): `n` programs sampled uniformly over forms, one or two lanes, q, warps, placement and schedule.
 
 `emit_cu` writes the probe source: each program's kernel (`FB_MIX`, `FB_SPEC`, `FB_ALONE`, `FB_MMA`) and its table entry
 with the exact SASS counts the gate pins. A program the gate refuses is dropped (`--only`), never relaxed.

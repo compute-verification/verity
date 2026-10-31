@@ -14,7 +14,7 @@ carries the messages w holds (`decoded`):
 * the ring switches and claims have the shapes `prog_of_checks` takes, and pass the verifier's value check
   (Opening.lean:78);
 * ring switching's rounds issued the coins `verifierRows` read: claim `k`'s `r''_k`, then the batching coins `γ`
-  (Opening.lean:79, 85), from `ringSwitch_spec` and `Coins.ofRounds`. The rounds' coin counts and the bytes they answer
+  (Opening.lean:79, 85), from `ringSwitch_spec` and `CoinSource.ofRounds`. The rounds' coin counts and the bytes they answer
   are hypotheses, facts about the record V* holds;
 * the batched value `T` (Opening.lean:86) is the one w holds, and the switched claims (Opening.lean:87) are
   `verifierRows`', the two Ligerito reads.
@@ -24,20 +24,20 @@ namespace FlockVBridge.Runs
 
 open Flock Flock.RecAlgebra FlockSoundness.Refine FlockVBridge.Compiled
 
-/-- `Coins.ofRounds` on a record's coins, none of its rounds empty, reads round `k`'s, when it has `n`
+/-- `CoinSource.ofRounds` on a record's coins, none of its rounds empty, reads round `k`'s, when it has `n`
 (RecAlgebra.lean:40–46). -/
 theorem ofRounds_round {rs : Array Round} {k n : ℕ} {c : Array F128} (hne : NoEmpty (rs.map (·.coins)))
-    (h : (Coins.ofRounds (rs.map (·.coins))).round k n = .ok c) : k < rs.size ∧ (rs[k]!).coins = c ∧ c.size = n := by
+    (h : (CoinSource.ofRounds (rs.map (·.coins))).round k n = .ok c) : k < rs.size ∧ (rs[k]!).coins = c ∧ c.size = n := by
   by_cases hk : k < rs.size
   · have e : (rs.map (·.coins))[k]? = some rs[k].coins := by simp [hk]
-    simp only [Coins.ofRounds, filter_noEmpty hne, e] at h
+    simp only [CoinSource.ofRounds, filter_noEmpty hne, e] at h
     by_cases hs : rs[k].coins.size = n
     · simp only [hs, ↓reduceIte] at h
       cases h
       exact ⟨hk, by rw [getElem!_pos rs k hk], hs⟩
     · simp [hs] at h
   · have e : (rs.map (·.coins))[k]? = none := by simp [hk]
-    simp only [Coins.ofRounds, filter_noEmpty hne, e] at h
+    simp only [CoinSource.ofRounds, filter_noEmpty hne, e] at h
     cases h
 
 theorem getD_zero_of_size {c : Array F128} (h : c.size = 1) : c.getD 0 0 = c[0]! := by

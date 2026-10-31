@@ -11,8 +11,8 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
     opened tile per excluded row, every one.
   - A credited row must pass the rules.
 * **Credit.**
-  - A cell's draw weight is its row's share of `W_ref` at |K|, with no weight side (F2), so padding to `k_unit` and
-    filler earn nothing. `W_ref` is the one the draw's Lean statement weighs by (`draw_wref`): on sm_120 at its cap
+  - A cell's sample weight is its row's share of `W_ref` at |K|, with no weight side (F2), so padding to `k_unit` and
+    filler earn nothing. `W_ref` is the one the sample's Lean statement weighs by (`draw_wref`): on sm_120 at its cap
     1/1,000, `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72 (`SM120_LOOP_CAST_8P72`), so that a served
     step's mixed linears are drawn in proportion to it (red team #919 F1); elsewhere the scheme's own `wref`, Lean's
     `wrefDevRev1` at its record.  W, the profile's work, stays the scheme's own `wref`.
@@ -30,20 +30,20 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **Voluntary rows.**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
-    in every unit of the weight). They are committed in `records_root` with the excluded rows, before the draw coin.
+    in every unit of the weight). They are committed in `records_root` with the excluded rows, before the sampling coin.
   - A voluntary row earns no credit. Its words are still formed, checked and hashed on every drawn tile that holds it.
   - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
   - The tile cap and R1 read credited rows only, as before. Giving up credit never helps a cheater, and the declaration
-    can't adapt to the draw. `volunteer` is an honest prover's remedy for a tile over the cap.
-* **The sampling guarantee is per credited cell.** The draws are weighted by the credited cells' `wref`, and a drawn
+    can't adapt to the sample. `volunteer` is an honest prover's remedy for a tile over the cap.
+* **The sampling guarantee is per credited cell.** The samples are weighted by the credited cells' `wref`, and a drawn
   tile's uncredited cells (filler, excluded or voluntary) never count as coverage. Volunteering a tile's other rows only
   lowers that tile's weight to its credited cells, which is exactly the bound claimed.
-* **The draws (F8)** are keyed by the epoch's draw coin, through `verity.ml.randomness.derive`.
+* **The samples (F8)** are keyed by the epoch's sampling coin, through `verity.ml.randomness.derive`.
   - `audit` asks the challenger for the coin once the verifier has recorded the prover's commitment (the transcript root
     and the records root, `draw_after`), and checks it against the epoch's coin commitment (`verity.core.protocols.pouw.coins`).
     A coin that doesn't open against it, or that was opened after anything else, is refused.
   - `audit_replay` keeps the unverified draw of a recorded run (`RecordedDraw`), for replays whose draws are Fiat–Shamir
-    on the commitment. It supports no claim about the draw.
+    on the commitment. It supports no claim about the sample.
   - `audit` checks the splits through `split_check`, the pinned rule that computes S (`split_channels`, with its
     tie-break and budget), which lives with the model integration.
 * **Other row formats.** A scheme with its own row encoding, per-row rules and debit (`pearl_c4`) brings
@@ -122,7 +122,7 @@ def cell_credit(scheme: C.PearlC, record: UnitRecord) -> Fraction:
 
 @dataclass(frozen=True)
 class DrawWref:
-    """The `W_ref` a Lean statement's draw weighs by: `wrefDevRev1K (devAt d prices) c`, the scheme's rev1 `wref` at the
+    """The `W_ref` a Lean statement's sample weighs by: `wrefDevRev1K (devAt d prices) c`, the scheme's rev1 `wref` at the
     statement's prices plus `c` per activation element (the honest kernel's forming beyond the record's).  `GγSampled`,
     `HonestTileCapRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
     columns, so a draw by another price record's `wref` attains the statement's γ only on a layout of one (n, k): on a
@@ -148,14 +148,14 @@ DRAW_WREF = {(SM120.name, SM120.prices, SM120.cap): SM120_LOOP_CAST_8P72}
 
 
 def draw_wref(scheme: C.PearlC) -> DrawWref | None:
-    """The statement the scheme's draw weighs by, or None for the scheme's own `wref` (Lean's at its record, c = 0)."""
+    """The statement the scheme's sample weighs by, or None for the scheme's own `wref` (Lean's at its record, c = 0)."""
     if type(scheme) is not C.PearlC or scheme.forming != "v1":
         return None
     return DRAW_WREF.get((scheme.device.name, scheme.prices, scheme.cap))
 
 
 def ticket_cell(scheme: C.PearlC, record: UnitRecord) -> Fraction:
-    """A credited cell's draw weight: its row's share of the drawn statement's `W_ref` at |K| (`draw_wref`)."""
+    """A credited cell's sample weight: its row's share of the drawn statement's `W_ref` at |K| (`draw_wref`)."""
     at = draw_wref(scheme)
     if at is None:
         return cell_wref(scheme, record)
@@ -172,7 +172,7 @@ def tile_weight(scheme: C.PearlC, record: UnitRecord, tile: Tile) -> Fraction:
 
 def tickets(scheme: C.PearlC, records: Sequence[UnitRecord]) -> list[tuple[int, Tile, int]]:
     """(record position, tile, integer ticket) for every tile of every record, by its credited cells' `W_ref` at the
-    statement the draw cites (`draw_wref`)."""
+    statement the sample cites (`draw_wref`)."""
     weights = [(p, t, tile_weight(scheme, r, t)) for p, r in enumerate(records) for t in scheme.tiles(r.matmul.shape)]
     den = lcm(*(w.denominator for _, _, w in weights)) if weights else 1
     return [(p, t, int(w * den)) for p, t, w in weights]
@@ -322,24 +322,24 @@ class _TileRuleView:
 
 @dataclass(frozen=True)
 class RecordedDraw:
-    """A recorded run's draw source: its round and value, for `audit_replay` alone."""
+    """A recorded run's sample source: its round and value, for `audit_replay` alone."""
 
     round: int
     value: bytes
 
 
 def draw_after(transcript_root: bytes, records_digest: bytes) -> bytes:
-    """What the verifier records before the challenger opens the draw coin: the transcript root and the records root."""
+    """What the verifier records before the challenger opens the sampling coin: the transcript root and the records root."""
     return tagged(DRAW_AFTER_TAG, transcript_root, records_digest)
 
 
 def draw_key(coin: bytes, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
-    """The draws' key from the epoch's draw coin and the commitment it was opened after."""
+    """The samples' key from the epoch's sampling coin and the commitment it was opened after."""
     return derive(coin, DRAW_DOMAIN, {"transcript": transcript_root, "records": records_digest, "salt": salt})
 
 
 def replay_key(recorded: RecordedDraw, transcript_root: bytes, records_digest: bytes, salt: bytes) -> Key:
-    """A recorded run's draws' key, byte for byte as the run drew them."""
+    """A recorded run's samples' key, byte for byte as the run drew them."""
     return derive(recorded.value, DRAW_DOMAIN, {"round": recorded.round, "transcript": transcript_root,
                                                 "records": records_digest, "salt": salt})
 
@@ -401,9 +401,9 @@ def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records:
 def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
           records: Sequence[UnitRecord], challenger: Challenger, t: int,
           split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
-    """Check the splits and the records, draw t tiles by the records' credit with the epoch's draw coin, open one tile
+    """Check the splits and the records, draw t tiles by the records' credit with the epoch's sampling coin, open one tile
     per excluded row, and accept iff every opened tile passes `check_drawn`.
-    - The verifier asks `challenger` for the draw coin only once it has recorded the commitment (`draw_after`), and the
+    - The verifier asks `challenger` for the sampling coin only once it has recorded the commitment (`draw_after`), and the
       coin must open against the epoch's coin commitment (`clear_audit.draw_coin`).
     - `split_check(weight, split)` recomputes S from the calibration data by the pinned rule, and is required when any S
       is nonempty.
@@ -421,7 +421,7 @@ def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Tra
                  records: Sequence[UnitRecord], committed_round: int, recorded: RecordedDraw, t: int,
                  split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
     """`audit` with a recorded run's unverified draw, for replays whose draws are Fiat–Shamir on the commitment
-    (`pearl_c4_replay`): the recorded round must only exceed `committed_round`.  It supports no claim about the draw."""
+    (`pearl_c4_replay`): the recorded round must only exceed `committed_round`.  It supports no claim about the sample."""
     def key_of(digest: bytes) -> tuple[Key | None, str | None]:
         if recorded.round <= committed_round:
             return None, "the draws' recorded round is not after the commitment"
@@ -510,7 +510,7 @@ def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[b
 def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: Sequence[UnitRecord],
               activations: Mapping[int, Sequence[bytes]], weights: Mapping[int, Sequence[bytes]]
               ) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
-    """V-EX's honest remedy, before the draws: (voluntary A rows by matmul index, voluntary B rows by weight) such that
+    """V-EX's honest remedy, before the samples: (voluntary A rows by matmul index, voluntary B rows by weight) such that
     no tile's credited debit passes its cap, for `declare`.  The prover knows the salt when it forms and commits, so it
     replays every tile's debit as the verifier will.  For a tile over the cap it gives up the credited row whose removal
     leaves the least debit over the cap, and repeats while the tile is over and the count caps allow; a tile the caps

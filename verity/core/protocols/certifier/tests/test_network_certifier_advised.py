@@ -82,7 +82,7 @@ class Run:
         self.previous = None
 
     def draw(self, w, egress, ingress):
-        """Window w's opening on certificates of `egress` and `ingress`, registered, and its draw."""
+        """Window w's opening on certificates of `egress` and `ingress`, registered, and its sample."""
         opening = self.lw.commit(w, self.issuer.certify(egress, Direction.EGRESS, P, parameters_digest(P, SYNC_SET)),
                                  self.issuer.certify(ingress, Direction.INGRESS, PIN, parameters_digest(PIN)),
                                  SALTS[w])

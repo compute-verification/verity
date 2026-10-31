@@ -42,7 +42,7 @@ theorem Binding_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
           (bytes (digBytes (H512 (hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o))))) i (bytes (c.π o)) =
           true := by
   rw [SamplingDeploy.deploy_commit]
-  unfold Commitment.Opens
+  unfold CommitmentScheme.Opens
   simp only [pathCommit]
   cases hat : c.at_ roots o.pos with
   | none => simp [OC.eval]
@@ -92,7 +92,7 @@ theorem Binding_dead (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readab
     (hat : ∀ roots pos, c.at_ roots pos = none) (H : Msg → Msg) (roots : List Msg) (o : Opening Bool) :
     (SamplingDeploy.deploy rel c).commit.Opens H roots o = false := by
   rw [SamplingDeploy.deploy_commit]
-  unfold Commitment.Opens
+  unfold CommitmentScheme.Opens
   simp [pathCommit, hat, OC.eval]
 
 end Claims.Sampling

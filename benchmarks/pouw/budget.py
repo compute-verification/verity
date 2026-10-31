@@ -63,9 +63,9 @@ ALLOCATED = ("plain", "sessions/256")
 SPEND_GRID = tuple(round(10 ** (e / 8), 6) for e in range(-28, 21))
 #: today's draws: 2 a round over a week (SAMPLING, note:20261017T0608Z-draft-eps1-sampling, after PRF-57)
 TODAY_DRAWS = 2 * ROUNDS
-#: a drawn unit's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
+#: a sampled proof block's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
 #: (1 + y/16) at y extra lane instructions a word, as if the receipt arm were a quarter of the proof at fx1's 4 a word
-#: (assumed); it scales the part of a draw's cost that grows with the unit's ANDs (`unit_share`)
+#: (assumed); it scales the part of a sample's cost that grows with the unit's ANDs (`unit_share`)
 FILL_PROOF = 1 / 16
 
 #: of plain prefill time (COMMIT-GPU r5, r20261016-183051-a379; measured on sm_120 at 8 × 4K, applied to every family as
@@ -213,7 +213,7 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total (ASK-25), run with `scheme=None` so a spend
     is sampling's alone, the serve-time commitments being `budget.py`'s own terms. Per regime its frontier at δ_s, and at
     each spend of SPEND_GRID the least-ε plan within it (`at_budget`, the zero-work templates included): ε_sample, the
-    draws a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
+    samples a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
     linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
     sys.path[:0] = [str(tree), str(tree / "benchmarks" / "sampling_plan")]
@@ -280,7 +280,7 @@ class Sample:
 
 
 def sample(f: Family, b_s: float, y: float = 0.0, regime: str = "plain") -> Sample | None:
-    """What a family's B_s buys: its spend on RTX PRO 6000 provers, shrunk by the filler's growth of each drawn unit's
+    """What a family's B_s buys: its spend on RTX PRO 6000 provers, shrunk by the filler's growth of each sampled proof block's
     ANDs; None below the sweep's least spend."""
     xs, es, ds, us, cuts = curve(regime)
     x0 = b_s / f.prover
@@ -347,7 +347,7 @@ def fixed_b(f: Family, c: Config, leaf: int = 128) -> float:
 
 
 def today(f: Family, **kw) -> Point:
-    """Today's protocol priced by cost-model/v1: the design's own filler, P·V's served output free, today's draws."""
+    """Today's protocol priced by cost-model/v1: the design's own filler, P·V's served output free, today's samples."""
     return point(f, Config("int", 0.0, False), f.prover * spend_for(TODAY_DRAWS), **kw)
 
 

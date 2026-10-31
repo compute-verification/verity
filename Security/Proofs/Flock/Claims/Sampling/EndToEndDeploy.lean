@@ -94,7 +94,7 @@ theorem miss_subset (hd : SubsetDesign d kd) (hP : P.classes = [c]) (hn : P.rus.
   rw [Pa_subset_of_range hd hP hn (hn ▸ hB₀), Finset.card_range]
 
 /-- **`missAt` is the hypergeometric tail** at a statement of one class drawn `subset kd`. -/
-theorem missAt_subset {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s : Stmt) (hs : D.parse x = some s)
+theorem missAt_subset {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s : AuditStatement) (hs : D.parse x = some s)
     (hd : SubsetDesign s.design kd) (hP : (D.part s).classes = [c]) (hn : (D.part s).rus.length = n) {t : ℕ}
     (ht : t ≤ n) : missAt D t x = ((n - t).choose kd : ℝ) / (n.choose kd : ℝ) := by
   unfold missAt
@@ -192,7 +192,7 @@ variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.
 /-- **The deployed statement's shape**: at the deployed code under `RegMatches`, a statement that parses and
 partitions has two rules, the population's first stage and the input class drawn `all`, over two classes, the
 population and the input class (empty, or one stratum). -/
-theorem deployOf_shape (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : Stmt} {Pt : Partition}
+theorem deployOf_shape (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : AuditStatement} {Pt : Partition}
     (hx : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).parse x = some s)
     (hp : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).partition s = some Pt) :
     ∃ first pop ins, s.design.rules = [⟨first, none⟩, ⟨.all, none⟩] ∧ Pt.classes = [pop, ins] ∧
@@ -203,7 +203,7 @@ theorem deployOf_shape (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : S
   obtain ⟨c', ic, hc', hic⟩ := slotPartition_classes hc hins
   exact ⟨first, c', ic, hr, hc', hic⟩
 
-theorem deployOf_not_subsetDesign (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : Stmt} {Pt : Partition}
+theorem deployOf_not_subsetDesign (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : AuditStatement} {Pt : Partition}
     (hx : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).parse x = some s)
     (hp : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).partition s = some Pt) (kd : ℕ) :
     ¬ SubsetDesign s.design kd := by
@@ -212,7 +212,7 @@ theorem deployOf_not_subsetDesign (hreg : SamplingDeploy.RegMatches c reg) {x : 
   rw [SubsetDesign, hr] at h
   simp at h
 
-theorem deployOf_not_oneClass (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : Stmt} {Pt : Partition}
+theorem deployOf_not_oneClass (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : AuditStatement} {Pt : Partition}
     (hx : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).parse x = some s)
     (hp : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).partition s = some Pt)
     (c₁ : List (List RU)) : Pt.classes ≠ [c₁] := by
@@ -305,7 +305,7 @@ theorem miss_subsetInputs (hd : SubsetInputsDesign d kd) (hP : P.classes = [c, i
   refine le_antisymm (ciSup_le hle) (le_ciSup_of_le ⟨_, Set.forall_mem_range.2 hle⟩ ⟨_, hB₀, by simp⟩ ?_)
   rw [Pa_subsetInputs_of_window hd hP (hlen ▸ hB₀) (window_range_of_le ht), Finset.card_range]
 
-theorem missAt_subsetInputs {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s : Stmt)
+theorem missAt_subsetInputs {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (s : AuditStatement)
     (hs : D.parse x = some s) (hd : SubsetInputsDesign s.design kd) (hP : (D.part s).classes = [c, ic]) {t : ℕ}
     (ht : t ≤ c.flatten.length) :
     missAt D t x = ((c.flatten.length - t).choose kd : ℝ) / (c.flatten.length.choose kd : ℝ) := by

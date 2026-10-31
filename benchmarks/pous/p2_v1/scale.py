@@ -693,7 +693,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scratch", required=True)
     p.add_argument("--log2", default="19,25")
     p.add_argument("--store-seed", type=int, default=20261012,
-                   help="the synthetic store's blocks (the memory challenger draws its own coins)")
+                   help="the synthetic store's blocks (the memory challenger flips its own coins)")
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--audits", type=int, default=20)
     p.add_argument("--pings", type=int, default=5000)

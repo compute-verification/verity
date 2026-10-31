@@ -143,7 +143,7 @@ def s512(role: str, message: bytes) -> bytes:
 
 
 class S512Seed(bytes):
-    """A seed of -h3: its noise lines are drawn by `sample_line`'s SHA-512 rule, not Pearl's BLAKE3 one."""
+    """A seed of -h3: its noise lines are sampled by `sample_line`'s SHA-512 rule, not Pearl's BLAKE3 one."""
 
 
 def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int, hashing: str = "h0") -> bytes:
@@ -158,12 +158,12 @@ def seed_b(salt: bytes, root_b: bytes, hashing: str = "h0") -> bytes:
 
 
 def line_key(seed: bytes) -> bytes:
-    """The key a seed's noise lines are drawn under: Pearl's (`pearl_kw._line_key`), or an `S512Seed`'s H_"noise-line"(seed)."""
+    """The key a seed's noise lines are sampled under: Pearl's (`pearl_kw._line_key`), or an `S512Seed`'s H_"noise-line"(seed)."""
     return _s512_line_key(seed) if isinstance(seed, S512Seed) else P._line_key(seed)
 
 
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
-    """-h3's seed of row `row` of unit `unit`, whose E_A line is drawn from it alone: the one-row unit's seed_A over the
+    """-h3's seed of row `row` of unit `unit`, whose E_A line is sampled from it alone: the one-row unit's seed_A over the
     row's 64-byte SHA-512 digest `leaf` (`row_digest`), H_"seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE)
     (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32
     (`CALL_RANGE`). `hash_h3.cuh`'s `s512_seeds` computes it."""
@@ -457,7 +457,7 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h0") -> list[bytes]
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
     and -h3 the device record's `census_ks` below it (each row capped at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3
-    names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A drawing its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
+    names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
     `row_digest`), the work law checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""

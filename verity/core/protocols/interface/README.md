@@ -1,6 +1,6 @@
 # core_protocol: the interface every core protocol implements
 
-This is a Lake package (`CoreProtocol`, namespace `Core`). It requires C-Flock's verifier by path for canonical JSON,
+This is a Lake package (`CoreProtocol`, namespace `Core`). It requires Flock's verifier by path for canonical JSON,
 bytes and hashes, and nothing else: no Mathlib. A protocol's port is its own package. It requires this one by path,
 defines one `Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
 
@@ -39,7 +39,7 @@ accepts only what `toJson` writes (re-encoding must give the same canonical JSON
 an `accept` has no reason and both its public outputs and its profile, while a refusal has a reason and neither.
 
 `Protocol`, `Profile` and `Ratio` are the package's spec (`layers` in `lean-audit.json`): a property's statement may read
-them, and they import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
+them, and they import only Lean's JSON, Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
 profile's types derive `DecidableEq`.
 
 ## The command line (`CoreProtocol/Cli.lean`), the same for every protocol
@@ -68,7 +68,7 @@ the toy protocol whose guards cover both.
 ## The profile (`CoreProtocol/Profile.lean`)
 
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
-`linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
+`linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.

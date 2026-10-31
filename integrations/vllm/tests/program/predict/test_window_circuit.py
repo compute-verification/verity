@@ -496,7 +496,7 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
     """`interface.input_count` over the circuit's description (JSON, no Program lowered), each registered parameter pinned
     by the verifier itself before the run at the root the window's registration records for it (`held`): each weight's (one
     a weight and row width, ``weights/<label>@<words>``) and the scan state's, which the network certifier's scan proofs
-    hold. It finds no free input row and no ingress, so a proof of the window's units leaves nothing but the declared advice
+    hold. It finds no free input row and no ingress, so a proof of the window's units leaves nothing but the advice
     to the prover. The registered reads, table reads and openings are of the weights (the GEMM slices', norms' and RoPE
     tables' rows; the embedding table's root, domain and rows) but for the two slots' scan state rows (4,548 words each):
     with the weights' pins alone those are free, with no pin all of them are, a weight whose window root is another's is
@@ -524,7 +524,7 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
 ROPE = WB.weight_param("model.layers.0.self_attn.rotary_emb.cos_sin_cache", 16)
 #: the scan state's pin, which no weights registration gives: the network certifier's scan rows' root
 SCAN_PIN = {SS.SCAN_STATE: "ef" * 64}
-#: the committer's secret key, which its weights' row salts are drawn under (`window_weights.weights_registration`)
+#: the committer's secret key, which its weights' row salts are sampled under (`window_weights.weights_registration`)
 KEY = bytes(range(32))
 
 
