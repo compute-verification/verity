@@ -220,7 +220,7 @@ def pivot(res, key="P_env"):
             continue
         v = r.get(key)
         cells[r["arm"]][r["size"]] = (f"κ {r['kappa']:.2f}: {r['gap']:+.3f} / "
-                                      + (f"{v:.2f}×" + ("*" if r.get("P_env_ext") else "") if v else "-")
+                                      + (f"{v:.2f}×" + ("*" if r.get(key + "_ext") else "") if v else "-")
                                       + (f" (u {r['u']:+.2f})" if "u" in r and key == "P_env" else ""))
     out = ["| arm | " + " | ".join(sizes) + " |", "|---|" + "---|" * len(sizes)]
     for arm in sorted(cells):
@@ -232,7 +232,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("paths", nargs="+", help="run dirs, out dirs or result files")
     ap.add_argument("--best", action="store_true", help="each arm at its best lr")
-    ap.add_argument("--pivot", action="store_true")
+    ap.add_argument("--pivot", action="store_true", help="arm × size: κ, gap and --key")
+    ap.add_argument("--key", default="P_env", choices=("P_env", "P_env_real", "P_size", "P_fit"))
     ap.add_argument("--json", default=None)
     a = ap.parse_args()
     res = analyze(load(a.paths), a.best)
@@ -241,7 +242,7 @@ def main():
     print("lr*:", res["lr_star"])
     print("envelope (C, L):", [(f"{c:.2e}", round(l, 4)) for c, l in res["envelope"]])
     print("fit:", res["fit"])
-    print(pivot(res) if a.pivot else table(res))
+    print(pivot(res, a.key) if a.pivot else table(res))
     print("\n* extrapolated past the baseline ladder or envelope")
 
 
