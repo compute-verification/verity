@@ -393,13 +393,16 @@ theorem raw_le (r : FlockDeploy.Raw) (ht : r.tables = []) :
     List.length_cons]
   omega
 
-/-- The compiled statement encodes in its inner statement, inner shape, registration and parts, and at most 100
-bytes of lengths and format. -/
-theorem recx_le (w : RecDeploy.RecX) :
+/-- The compiled statement, which carries no link table, encodes in its inner statement, inner shape, registration
+and parts, and at most 100 bytes of lengths and format. -/
+theorem recx_le (w : RecDeploy.RecX) (hL : w.links = none) :
     w.encode.length ≤ 100 + w.inner.length + w.recInner.size + osz w.registration +
       (w.parts.flatMap RecDeploy.PartX.encode).length := by
   have hf : RecDeploy.XFORMAT.toUTF8.size ≤ 32 := by decide
   have := len_encOptB w.registration
+  have hl : (FlockDeploy.encOpt (fun l : ByteArray × ℕ => FlockDeploy.encBytes l.1 ++ FlockDeploy.encNat l.2)
+      w.links).length = 1 := by
+    rw [hL]; rfl
   simp only [RecDeploy.RecX.encode, FlockDeploy.encList, List.length_append, Part.len_encStr, Part.len_encBytes,
     FlockComplete.encNat_length]
   omega
@@ -541,7 +544,7 @@ theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs
   have hps' := parts_le w.parts p.own.parts.toList e.proofs.parts.toList 0 partsB hps (by simp [hl]) (by simp [hl2])
     fun i q po pp e1 e2 e3 => by
       simpa using hN i q po pp e1 (by simpa using e2) (by simpa using e3)
-  have hrx := recx_le w
+  have hrx := recx_le w hI.links
   rw [hx, ← hin] at hrx
   have hso : VStar.Recursive.STMT_OVER = 1024 := rfl
   omega
