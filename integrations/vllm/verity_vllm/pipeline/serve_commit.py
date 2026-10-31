@@ -81,7 +81,7 @@ def advice_trace(out: Path, engine: Any) -> Any:
     (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
     suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``).
     Its writer thread writes the file (`StepTrace.writer`): the engine thread never waits on the serve dir's disk, which the seals
-    keep busy; `Mirror(before=trace.drain)` copies it whole."""
+    keep busy. It holds request values, so it stays in the serve dir (`MIRRORED` leaves it out)."""
     from verity_vllm.engine.engine_driver import external_id
     from verity_vllm.engine.step_trace import SERVED, StepTrace
 
@@ -90,12 +90,13 @@ def advice_trace(out: Path, engine: Any) -> Any:
 
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
 #: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
-#: advice_trace.jsonl, windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
+#: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
 REQUEST_USERS = "request_users.jsonl"
 
-#: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
-MIRRORED = ("serve.json", "requests.jsonl", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "step_trace.jsonl",
-            "advice_trace.jsonl", "pauses.jsonl", "summary.json", "remote_session.json", "memory_map.jsonl")
+#: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
+#: traces, which hold request values, stay in the serve dir with the served rows' salts, and what reads them runs there
+MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json",
+            "memory_map.jsonl")
 
 
 def gc_of(rc: Any) -> dict[str, Any] | None:
@@ -127,18 +128,14 @@ def commit_s_of(rc: Any) -> dict[str, dict[str, float]] | None:
 
 class Mirror:
     """The serve dir's records (`MIRRORED`) copied into ``dst`` (the run's ``$OUT``, which custody uploads), so they outlive the serve
-    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread.
-    ``before``: called first, each time (the step trace's `drain`, so its writer's lines are in the file)."""
+    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread."""
 
-    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED, *,
-                 before: Callable[[], None] | None = None) -> None:
-        self.src, self.dst, self.names, self.before = Path(src), Path(dst), tuple(names), before
+    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED) -> None:
+        self.src, self.dst, self.names = Path(src), Path(dst), tuple(names)
         self.errors: list[str] = []
         self._lock = threading.Lock()
 
     def __call__(self) -> None:
-        if self.before is not None:
-            self.before()
         with self._lock:
             self.dst.mkdir(parents=True, exist_ok=True)
             for name in self.names:
@@ -168,11 +165,11 @@ class Mirror:
                 g.write(data)
 
 
-def records_mirror(out: Path, dst: str | None, before: Callable[[], None] | None = None) -> Mirror | None:
+def records_mirror(out: Path, dst: str | None) -> Mirror | None:
     """`Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
     if not dst or Path(dst).resolve() == Path(out).resolve():
         return None
-    return Mirror(out, dst, before=before)
+    return Mirror(out, dst)
 
 
 def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
