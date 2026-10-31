@@ -262,6 +262,21 @@ loopback() {
   # the prover's 0 is 3 unless the verifier accepted each of the NS sessions
   [ $rc != 0 ] || accepted $s/sessions/index.jsonl || rc=3
   LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
+  # OPENS (oprove under MODES=firewall): every session this coin server served, as statement OPENS_AS, one line each
+  # with its coin key, appended in one write before a retry's loopback clears $s
+  if [ -n "${OPENS:-}" ]; then
+    python3 - $s/sessions ${OPENS_AS:-$name} >> $OPENS <<'EOF' || return 1
+import json, sys
+from pathlib import Path
+out, st = Path(sys.argv[1]), sys.argv[2]
+index = (out / "index.jsonl").read_text().splitlines() if (out / "index.jsonl").exists() else []
+lines = []
+for s in (json.loads(line)["session"] for line in index):
+    key = (json.loads((out / s / "session.json").read_text()).get("coin_tree") or {}).get("key")
+    lines.append(json.dumps({"statement": st, "session": f"{st}.{s}", "coin_key": key}) + "\n")
+sys.stdout.write("".join(lines))
+EOF
+  fi
   return $rc
 }
 
@@ -728,6 +743,10 @@ oprove)
     [ $((WARM + RUNS)) = 1 ] || { echo "REFUSED: WARM=$WARM RUNS=$RUNS: a firewalled oprove gives each staged statement exactly one session (WARM=0 RUNS=1)"; exit 2; }
     export GPU_TRIES=1 GPU_PREEMPTIBLE=
   fi
+  # one session per statement (MODES=firewall): every session oprove's coin servers serve goes in opens.jsonl, from which
+  # STEP=lean's lean_verdicts.py writes the run's interactive-run record (rec-run.json)
+  rm -f $DD/v-sess/opens.jsonl; OPENS=
+  [ "$MODES" = firewall ] && OPENS=$DD/v-sess/opens.jsonl && : > $OPENS
   (cd $V && find . \( -name circuit.txt -o -name pub.bin -o -name inst.bin -o -name partition.json -o -name program.json \
     -o -name registered.json \) | LC_ALL=C sort | xargs sha512sum) > $O/oprove/statements.sha512
   : > $O/oprove/exits.tsv
@@ -737,6 +756,7 @@ oprove)
     # a forgery's one session is the dev prover's, a dishonest prover running no ZK server: a ZK server would hold it back,
     # leaving Lean nothing to check (lean_verdicts.py: "not exercised")
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip LM=dev ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    local OPENS_AS=$l
     hello_at $V/$C
     for mode in $LM; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
@@ -940,6 +960,8 @@ EOF
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
   else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null
+    [ -f $DD/v-sess/opens.jsonl ] && cp $DD/v-sess/opens.jsonl $O/lean/ \
+      && echo "--rec-inner $O/lean/rec-inner.json $REC_INNER" > $O/lean/rec-shared-args.txt
     python3 verity/ml/flock/pod/lean_verdicts.py $([ -s $O/lean/rows.json ] && echo "--compose $LEAN_BIN") $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
 esac
