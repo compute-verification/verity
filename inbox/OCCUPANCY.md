@@ -97,3 +97,45 @@ coordinator's synthesis to Daniel by 03:00Z.
     sm_120).
   - **Silicon:** FT's coin-seeded transcript extends V1 to useful work. V3's lock covers an L2-bound GEMM's idle cycles.
     An operand-independent clock or attested temperature narrows the 4.4%.
+
+## §synthesis (coordinator, 20:15Z Sat 31 Oct): the minimal silicon property set
+
+Sources: OCC-SILICON (note:compute-research/20261031T2005Z-report-occupancy-silicon; netlists matched to their Python
+references bit for bit, and LPs matched to their closed forms), OCC-STATE and OCC-RATE.
+
+- **P1, a fused transcript with whole-descriptor closure (FT).** Daniel's (1) and (2) merged.
+  - The MMA unit absorbs every credited accumulator word into an on-chip transcript that never feeds the served path.
+  - Only a full credited issue advances it, and the transcript binds the format, sparsity and shape.
+  - Each tile's chain starts from H(coins ‖ tile).
+  - **Buys:** h from 127.5 to about 0.3, coins from megabytes to seeds, and proofs at about +1 AND a MAC.
+  - **Area:** +2.7% of an s8 MAC (Keccak); SHA-512 costs more.
+  - **Trust:** none for correctness; the credit is stated in operations.
+- **P2, a credited-mode lock.** Replaces Daniel's (4) and keeps the checkable part of (3).
+  - While an SM is credited, any non-credited issue, preemption, trap or debugger access poisons its transcript.
+  - Nothing can save the transcript state, and the poison and session tag are sealed in.
+  - **Buys:** a time claim derived from the proven work. With O_W the work-implied occupancy, undeclared use of each
+    pipe is at most f·(1 − O_W): the ALU exactly 1 − O_W; the tensor 1.085× (coin-dependent words) or 1.364×
+    (precomputable words, the lead's deployed layout); other pipes 1.364× (H200).
+  - **Area:** 0.04–0.05% of an H200 SM's MAC array.
+  - **Trust:** T-op only. A colluding vendor forges seals.
+- **P3 (optional), SHA-512 on the operand path as a credited unit.** Under the lock, software hashing can't overlap the
+  GEMM, so the honest ceiling is O_W ≈ 0.72. P3 lifts it to about 0.84, at 0.67–0.93% of the MAC array.
+- **Dropped:**
+  - **Counters as a silicon property.** Without device keys only the non-credited-issue count can be bound, and P2
+    already carries it. Cycles, stalls, clocks and temperature can't be bound keylessly; the capacity denominator uses
+    the host-timed sweep instead.
+  - **State occupancy (V2).** It collapses into P2.
+- **Software today (V1 deadlines):** these bound only the saturated resource, need a challenger near the GPU, and fail
+  under T-vendor.
+- **Under T-vendor, only three things survive:** the certifier's timing, the auditor's energy meter, and teardown of
+  sampled chips.
+
+**Open, and the caveats:**
+1. **Daniel's decision: `calibration-optimal`** (no genuine kernel beats its calibrated rate ρ). It's needed to count a
+   slow kernel's idle tensor cycles as declared. With it the factor worsens (1.24–2.05 at ρ 0.75–0.52), and below
+   ρ = 0.267 it gives nothing (decode below batch about 58).
+2. **The claim is only as strong as O_W.** At the honest O_W ≈ 0.72, undeclared tensor use can reach about 30%, and
+   decode at small batch has O_W of only a few percent. Exhaustion needs declared kernels near peak.
+3. **The real-operand GEMM rate** on sm_120 is being measured (OCC-RATE round 2, 01:30Z).
+4. Everything here is synthesis and LPs on CPU; there's no silicon or simulation. The time claim is separate from
+   §2a's work credit.
