@@ -2006,6 +2006,14 @@
    "owner": "@compute-research",
    "digest": "9d73b1740229779284c240d9e487ea982e6a0a169e8413d50dc4edb5d69fa993"
   },
+  "Verity.Assumptions.ChannelAuthentic": {
+   "owner": "@memory-accounting",
+   "digest": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145"
+  },
+  "Verity.Assumptions.ChannelHides": {
+   "owner": "@memory-accounting",
+   "digest": "1f28a8621b44a3418a0cbf708dd233c1db3d0b545390f467be9b6078874e65f4"
+  },
   "Verity.Assumptions.DeviceWithinRegisteredFigures": {
    "owner": "@soundness",
    "digest": "e083b5535a6d2136d0c688b1d62f6a038456b92fc48609c1a1e6ed2157d4301c"
@@ -2018,6 +2026,10 @@
    "owner": "@proofs",
    "digest": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e"
   },
+  "Verity.Assumptions.ImprintPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722"
+  },
   "Verity.Assumptions.StepInputs": {
    "owner": "@proofs",
    "digest": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
@@ -2025,6 +2037,10 @@
   "Verity.Assumptions.TrustedHost": {
    "owner": "@network-accounting",
    "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
+  },
+  "Verity.Assumptions.WitnessPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "0cfea131c887329234ffebed9a754f10fa2325dafd61823e5a0ac5934d33d1be"
   },
   "Verity.Circuit.BitFaninPos": {
    "owner": "@lean",
@@ -12108,6 +12124,12 @@
    "assumptions": [],
    "type_hash": "099ec51d6318715f2ad10a572ec517c8b04942179a3218ff45042c279759f7a0"
   },
+  "Verity.SecurityProofs.ImprintRootHidden": {
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.ImprintRootHidden : Verity.Guarantees.ImprintRootHidden"],
+   "assumptions": [],
+   "type_hash": "daf89ed0fc0655a143f405f84607e1efa3e709bfe7bc1e6844022a04ee5454c2"
+  },
   "Verity.SecurityProofs.InferenceCap": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.InferenceCap : Verity.Guarantees.InferenceCap"],
@@ -12221,6 +12243,18 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "Verity.SecurityProofs.TransportDelivers": {
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.TransportDelivers : Verity.Guarantees.TransportDelivers"],
+   "assumptions": [],
+   "type_hash": "bf1b8fdb1ce0b562c7e6d604fc2df5d29ddbba81cc340d67077f00c631abb901"
+  },
+  "Verity.SecurityProofs.TransportPassiveZk": {
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.TransportPassiveZk : Verity.Guarantees.TransportPassiveZk"],
+   "assumptions": [],
+   "type_hash": "1b0a0ef1bddcb8f90de1275827ce9eafd0faa27cfe6fe397cecfff2b02182e7b"
   }
  },
  "shape": {
@@ -13387,7 +13421,10 @@
    "Pous.SecurityProofs.StreamedWipeMeetsInfoStated": "frozen (no-function): It states no property: it reads Pous.Guarantees.StreamedWipeMeetsInfo, so the lock records its text, and it leaves when StreamedWipeMeetsInfo's own theorem is proved and listed.",
    "Pous.Guarantees.StreamedWipeMeetsInfo": "unstated: StreamedWipe's retention as conditional mutual information, I(z ; held | c) <= max(M + E - (g+1)b + log2(k C(N,g+1)), 0) + q((g/N)^k + listAdvantage) + 3 bits over uniform z, c and key, with the labels and key hidden (MEM-98, read by the end-to-end overhead bound's WipeState bridge); stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under StreamedWipeMeetsInfoStated, and its theorem Pous.SecurityProofs.StreamedWipeMeetsInfo is due Mon 2 Nov with its honest and nontrivial lemmas.",
    "Accounting.SecurityProofs.PooledSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (Security/Definitions/Accounting/RateAuditPooled.lean, Causal), not a deployed sampler or verifier.",
-   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code."
+   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
+   "Verity.SecurityProofs.TransportPassiveZk": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet.",
+   "Verity.SecurityProofs.ImprintRootHidden": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet.",
+   "Verity.SecurityProofs.TransportDelivers": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -22049,6 +22086,20 @@
    },
    "guarantees": ["Verity.SecurityProofs.CapacityWithinEstimate"]
   },
+  "Definitions.Core.Assumptions.Transport": {
+   "digest": "9545eb71509723cc596d09cb9b66e446f61917ef6088fe1c1869f22df632ed22",
+   "definitions": {
+    "Verity.Assumptions.ChannelAuthentic": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145",
+    "Verity.Assumptions.ChannelHides": "1f28a8621b44a3418a0cbf708dd233c1db3d0b545390f467be9b6078874e65f4",
+    "Verity.Assumptions.ImprintPathPrivate": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722",
+    "Verity.Assumptions.WitnessPathPrivate": "0cfea131c887329234ffebed9a754f10fa2325dafd61823e5a0ac5934d33d1be"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ImprintRootHidden",
+    "Verity.SecurityProofs.TransportDelivers",
+    "Verity.SecurityProofs.TransportPassiveZk"
+   ]
+  },
   "Definitions.Core.Blocks": {
    "digest": "69f002782ff74804c6c3e22d6b0b6edae9910c30843f3d7e24330817aecb1c30",
    "definitions": {
@@ -22961,12 +23012,14 @@
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Verity.SecurityProofs.ImprintRootHidden",
     "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",
     "Verity.SecurityProofs.SoundInterleave",
-    "Verity.SecurityProofs.SoundMono"
+    "Verity.SecurityProofs.SoundMono",
+    "Verity.SecurityProofs.TransportPassiveZk"
    ]
   },
   "Definitions.Core.Game.Batch": {
@@ -23321,6 +23374,19 @@
     "Verity.SecurityProofs.IsZeroGadget",
     "Verity.SecurityProofs.PackSoundComplete",
     "Verity.SecurityProofs.RangeGadget"
+   ]
+  },
+  "Definitions.Core.Guarantees.Transport": {
+   "digest": "291713e105948f3887c27654aac8c9488af72025f366bf74299d76c142811efe",
+   "definitions": {
+    "Verity.Guarantees.ImprintRootHidden": "d8c07b123007646d1fd164abafd0fd463840737e033b235b628f66978d9b2094",
+    "Verity.Guarantees.TransportDelivers": "8abd2ff063ff6f7b13cc8877aead2a6231f49d7d1b38773e5b3a7c4452ee37f0",
+    "Verity.Guarantees.TransportPassiveZk": "72bd2dd40de46d9c44b3c851a90df53acb1c6b5a1446bb5910580cafd81cd306"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ImprintRootHidden",
+    "Verity.SecurityProofs.TransportDelivers",
+    "Verity.SecurityProofs.TransportPassiveZk"
    ]
   },
   "Definitions.Core.Information": {
@@ -23924,6 +23990,24 @@
     "Verity.SecurityProofs.HopperUnitSoundZero",
     "Verity.SecurityProofs.PackSoundComplete"
    ]
+  },
+  "Definitions.Core.Transport": {
+   "digest": "3ce35ace7de8df7a6e5770d35f902de3c260c3450946cf4adceec299797934ba",
+   "definitions": {
+    "Verity.Transport.Channel": "062f67d743fd13e80ae3a55ce9bebda653a5300c1189f668aafb3eea375eb74c",
+    "Verity.Transport.Channel.party": "e3ce45f3f4e1102fec91d3fc8e9244992cc22dbe1a657ac5bbb52d9ff420296c",
+    "Verity.Transport.Channel.readsImprint": "eac6cf208ecf29ac34d5082e59def5e8d2fc7ae0b3f29c3c31f482f5e32a98af",
+    "Verity.Transport.Channel.readsPrivate": "5313436fd134a1e976df015f19f6dc97afe9c0cc7986b599b066ef507372ffde",
+    "Verity.Transport.Close": "d7c93db41330cd42b0ce78786b7fa4c9b469f94a756906465db82594a765e715",
+    "Verity.Transport.PathPrivate": "1489315885aaf0e2d2a2fa6af7d578bc417932c2cec12d915a3d64ba79c1056e",
+    "Verity.Transport.Roles": "083fafc42ee912d241d0ae572678459cab3c8b7fcb6930bf10cfcb26bb138603",
+    "Verity.Transport.Roles.Confined": "6c2c5815652d73406e8d5e305f7145b28e131a253b51106b6c79c18bedfd5cee",
+    "Verity.Transport.Roles.developer": "87581b10ef6217fe4cde71fc3f304c0554c6c861983f32a3be3c03a20a63f4af",
+    "Verity.Transport.ViewIsRecord": "906b909f33f42b786b10c5c1b28fd1d0940bf70aea5147e255196c7c1f9befed",
+    "Verity.Transport.outside": "aab177488169610ddd6bd3ed932323068436b9fc4430914d99e003301530dc33",
+    "Verity.Transport.seen": "6365e76b633ed3a89da61e3befc26c66fd1a26435ed495ec6dc031643c88bda5"
+   },
+   "guarantees": ["Verity.SecurityProofs.ImprintRootHidden", "Verity.SecurityProofs.TransportPassiveZk"]
   },
   "Definitions.Flock.Accounting.Bound": {
    "digest": "40380563a6f220d81b45b9de171e5e25a85ce5d74ea1f18d5500831d646c11e1",
