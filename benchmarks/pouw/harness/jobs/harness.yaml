@@ -1,4 +1,4 @@
-# A harness run on node 2 (vy-nebius-2) that isn't timed for the panel (gates, characterization, a smoke run), on one GPU: queue
+# A harness run on node 2 that isn't timed for the panel (gates, characterization, a smoke run), on one GPU: queue
 # pouw, priority pouw. A timed run preempts it and SkyPilot requeues it; it restarts from the beginning (each run is minutes).
 # research's sky jobs/prover-dev.yaml with the pouw labels and the harness's command.
 #
