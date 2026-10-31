@@ -130,7 +130,7 @@ def lr_sweep(size, lrs, res):
 
 def t1(res):
     """Tier 1 in claim order, and whether configs may still appear. 20M sweeps the baseline's lr (LR20) and picks lr20; 60M
-    sweeps lr20·(384/640)^p for p ∈ {1, ½, 0} and picks lr60, whose exponent p60 sets 125M's lr20·(384/896)^p60, checked a
+    sweeps lr20·(384/640)^p for p ∈ {1, ½, 0, −½} and picks lr60, whose exponent p60 sets 125M's lr20·(384/896)^p60, checked a
     half-step of p either side. Every other config of a size runs at its picked lr; 125M's 2D baseline goes first (the
     longest), then 60M, the rest of 20M, and 125M."""
     out, pending = [], False
@@ -138,7 +138,7 @@ def t1(res):
     out += s20
     if lr20 is None:
         return out, True
-    s60, lr60 = lr_sweep("60m", [lr20 * (384 / 640) ** p for p in (1, 0.5, 0)], res)
+    s60, lr60 = lr_sweep("60m", [lr20 * (384 / 640) ** p for p in (1, 0.5, 0, -0.5)], res)
     out += s60
     c125 = []
     if lr60 is None:
