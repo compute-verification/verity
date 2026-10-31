@@ -20,10 +20,8 @@ variable {B w p : ℕ} [NeZero p]
 
 /-- A sequential responder holding `Sz j` bits at boundary `j`: `step W pp j σ i` answers index `i` in round `j` from
 the `Sz j`-bit state `σ`, and returns the block and the `Sz (j + 1)`-bit state, within `RingBounded D Q L`. -/
-structure VarResponderOn (sch : Scheme (ringRO B w p)) (Sz : ℕ → ℕ) (D Q L : ℕ) : Type where
-  step : Bits sch.n → Bits sch.t → (j : ℕ) → Bits (Sz j) → Fin sch.B →
-    Prog (ringRO B w p) (Bits sch.ℓ × Bits (Sz (j + 1)))
-  bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
+abbrev VarResponderOn (sch : Scheme (ringRO B w p)) (Sz : ℕ → ℕ) (D Q L : ℕ) : Type :=
+  SeqResponderBy sch Sz (Prog.RingBounded D Q L)
 
 /-- The blocks a `VarResponderOn` returns for the indices `is`, starting at round `j` in state `σ`. -/
 def varAnswers {M : IdealModel} {ℓ B : ℕ} {Sz : ℕ → ℕ} (f : M.Qry → M.Ans)

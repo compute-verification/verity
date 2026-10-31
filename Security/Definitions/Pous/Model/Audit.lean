@@ -16,6 +16,10 @@ import Definitions.Pous.Model.Scheme
 `(D, Q)` returns block `i_j` and the next `S`-bit state; the next index arrives as soon as the answer is returned.
 
 A bounded program always answers on time, so "every answer correct and on time" is "every answer correct" here.
+
+The two responders are `SimResponderBy` and `SeqResponderBy`, over a cost bound `bd` on each program a responder runs
+(and, sequentially, a state size `Sz j` at each round boundary `j`). `SimResponder` and `SeqResponder` are them at
+`Prog.Bounded D Q` and a constant `S`; each other cost model's responders are them at its own bound.
 -/
 
 namespace Pous
@@ -28,16 +32,23 @@ variable {M : IdealModel}
 abbrev Preprocessor (sch : Scheme M) (S : ℕ) : Type :=
   Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S
 
-/-- A responder for simultaneous reveal: all `k` indices at once, one `(D, Q)` budget for the whole answer. -/
-structure SimResponder (sch : Scheme M) (S D Q k : ℕ) : Type where
+/-- A responder for simultaneous reveal: all `k` indices at once, one program within `bd` for the whole answer. -/
+structure SimResponderBy (sch : Scheme M) (S k : ℕ) (bd : ∀ {α : Type}, Prog M α → Prop) : Type where
   prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → Prog M (Fin k → Bits sch.ℓ)
-  bounded : ∀ W pp σ I, (prog W pp σ I).Bounded D Q
+  bounded : ∀ W pp σ I, bd (prog W pp σ I)
+
+/-- A responder for sequential reveal holding `Sz j` bits at boundary `j`: `step W pp j σ i` answers index `i` in
+round `j` from the `Sz j`-bit state `σ`, and returns the block and the `Sz (j + 1)`-bit state, within `bd`. -/
+structure SeqResponderBy (sch : Scheme M) (Sz : ℕ → ℕ) (bd : ∀ {α : Type}, Prog M α → Prop) : Type where
+  step : Bits sch.n → Bits sch.t → (j : ℕ) → Bits (Sz j) → Fin sch.B → Prog M (Bits sch.ℓ × Bits (Sz (j + 1)))
+  bounded : ∀ W pp j σ i, bd (step W pp j σ i)
+
+/-- A responder for simultaneous reveal: all `k` indices at once, one `(D, Q)` budget for the whole answer. -/
+abbrev SimResponder (sch : Scheme M) (S D Q k : ℕ) : Type := SimResponderBy sch S k (Prog.Bounded D Q)
 
 /-- A responder for sequential reveal: `step W pp j σ i` answers index `i` in round `j` from state `σ`, and returns
 the block and the next state, within `(D, Q)`. -/
-structure SeqResponder (sch : Scheme M) (S D Q : ℕ) : Type where
-  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog M (Bits sch.ℓ × Bits S)
-  bounded : ∀ W pp j σ i, (step W pp j σ i).Bounded D Q
+abbrev SeqResponder (sch : Scheme M) (S D Q : ℕ) : Type := SeqResponderBy sch (fun _ => S) (Prog.Bounded D Q)
 
 /-- The randomness of one audit: the primitive, the encoder's coins and the challenge indices. -/
 abbrev Outcome (sch : Scheme M) (k : ℕ) : Type := M.Ω × sch.Coins × (Fin k → Fin sch.B)
