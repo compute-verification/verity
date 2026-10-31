@@ -102,7 +102,7 @@ def int8_program(S: int = 3, K: int = 64, *, mmas=None, acc0="zero", epilogue=Fa
 
 def judge(program, ends, *, c=FREE, R_in=10 ** 9, L=None, windows=None, **fw):
     cen = census(program, ends)
-    ws = windows if windows is not None else [P.Window(range(len(ends)), 10 ** 9, 1)]
+    ws = windows if windows is not None else [P.CertifiedReads(range(len(ends)), 10 ** 9, 1)]
     return P.check(program, cen, c=c, windows=ws, R_in=R_in, L=L, **fw)
 
 
@@ -113,8 +113,8 @@ def _one_gate_program(prim, registered=()) -> tuple[Program, list[int]]:
     return program, [len(program.root.body.nodes)]
 
 
-def one_step_windows(S: int = 3, reads: int = 64) -> list[P.Window]:
-    return [P.Window(range(s, s + 1), reads, 1) for s in range(S)]
+def one_step_windows(S: int = 3, reads: int = 64) -> list[P.CertifiedReads]:
+    return [P.CertifiedReads(range(s, s + 1), reads, 1) for s in range(S)]
 
 
 def codes(v: P.Judgement) -> list[str]:
@@ -347,10 +347,10 @@ def test_carries_are_budgeted_and_only_proven_affine_maps_are_free():
     assert (a.family, a.affine, a.refused, a.unproven) == (4, 2, {}, {})  # the combine and the product by 256
     # I32Rem, I32Div, U32And, the add on r and the product of two run words; I32Le and SelectI32
     assert a.steps[0]["units"] == {**FREE, "roundings": 5, "compare_select": 2}
-    v = judge(program, ends, windows=[P.Window(range(1), 7, 1)])
+    v = judge(program, ends, windows=[P.CertifiedReads(range(1), 7, 1)])
     assert codes(v) == ["roundings", "compare_select"]
     c = {**FREE, "roundings": "5/7", "compare_select": "2/7"}
-    assert judge(program, ends, c=c, windows=[P.Window(range(1), 7, 1)]).ok
+    assert judge(program, ends, c=c, windows=[P.CertifiedReads(range(1), 7, 1)]).ok
 
 
 def _compare_split_program() -> tuple[Program, list[int]]:
@@ -482,14 +482,14 @@ def test_a_lifted_gather_scans_every_operands_tag():
     too, and its rows are operand bits (an unlifted gather's column isn't)."""
     lg = stand_in("LGatherRow16x3", (("idx", Value(33)), ("rows", Array(3, Value(17)))), Value(17))
     program, ends = _one_gate_program(lg, ("idx",))
-    v = judge(program, ends, c={**FREE, "compare_select": 1}, windows=[P.Window(range(1), 1, 1)])
+    v = judge(program, ends, c={**FREE, "compare_select": 1}, windows=[P.CertifiedReads(range(1), 1, 1)])
     assert v.ok and v.numbers["units"] == {**FREE, "compare_select": 1}
     program, ends = _one_gate_program(lg, ("rows",))
-    v = judge(program, ends, c={**FREE, "compare_select": 1, "gathers": 3}, windows=[P.Window(range(1), 1, 1)])
+    v = judge(program, ends, c={**FREE, "compare_select": 1, "gathers": 3}, windows=[P.CertifiedReads(range(1), 1, 1)])
     assert v.ok and v.numbers["units"] == {**FREE, "compare_select": 1, "gathers": 3}
     wide = stand_in("LGatherRow16x6", (("idx", Value(33)), ("rows", Array(6, Value(17)))), Value(17))
     program, ends = _one_gate_program(wide, ("rows",))
-    v = judge(program, ends, c={**FREE, "compare_select": 1, "gathers": 4}, windows=[P.Window(range(1), 1, 1)])
+    v = judge(program, ends, c={**FREE, "compare_select": 1, "gathers": 4}, windows=[P.CertifiedReads(range(1), 1, 1)])
     assert [(r["code"], r["primitives"]) for r in v.reasons] == [("operand-bits", {"LGatherRow16x6_v1": 33 + 6 * 17})]
 
 
@@ -628,7 +628,7 @@ def test_a_gate_past_B_operand_bits_is_refused(prim, registered, bits, units):
     64-bit entries is within any B (a gather's column isn't operand bits: its value is one of them). At a B they fit, each is
     charged its class's unit (a gather its index bits)."""
     program, ends = _one_gate_program(prim, registered)
-    one = [P.Window(range(1), 1, 1)]
+    one = [P.CertifiedReads(range(1), 1, 1)]
     v = judge(program, ends, c={**FREE, **units}, windows=one)
     listed = [("operand-bits", {prim.id: bits})] if bits is not None and bits > P.OPERAND_BITS else []
     assert [(r["code"], r["primitives"]) for r in v.reasons] == listed, v.reasons
@@ -765,9 +765,9 @@ def test_inputs_lifetimes_and_coverage():
     program, ends = int8_program()
     ws = one_step_windows()
     assert codes(judge(program, ends, R_in=63, windows=ws)) == ["inputs"] * 3
-    assert judge(program, ends, R_in=32, windows=[P.Window(range(s, s + 1), 64, 2) for s in range(3)]).ok
-    assert judge(program, ends, R_in=P.R_IN, windows=[P.Window(range(3), 64, "1/500")]).ok  # 192 bytes <= 200 at 100 KB/s
-    assert codes(judge(program, ends, R_in=P.R_IN, windows=[P.Window(range(3), 64, "1/1000")])) == ["inputs"]
+    assert judge(program, ends, R_in=32, windows=[P.CertifiedReads(range(s, s + 1), 64, 2) for s in range(3)]).ok
+    assert judge(program, ends, R_in=P.R_IN, windows=[P.CertifiedReads(range(3), 64, "1/500")]).ok  # 192 bytes <= 200 at 100 KB/s
+    assert codes(judge(program, ends, R_in=P.R_IN, windows=[P.CertifiedReads(range(3), 64, "1/1000")])) == ["inputs"]
     assert codes(judge(program, ends, windows=ws[:2])) == ["uncovered"]
     program, ends = int8_program(reread=(2, 0))
     v = judge(program, ends, L=1, windows=ws)
@@ -779,18 +779,18 @@ def test_inputs_lifetimes_and_coverage():
 def test_check_refuses_bad_windows_c_and_another_programs_census():
     program, ends = int8_program()
     cen = census(program, ends)
-    for ws in ([P.Window(range(0), 1, 1)], [P.Window(range(0, 4), 1, 1)], [P.Window(range(0, 3, 2), 1, 1)],
-               [P.Window(range(3), -1, 1)], [P.Window(range(3), 1, 0)]):
+    for ws in ([P.CertifiedReads(range(0), 1, 1)], [P.CertifiedReads(range(0, 4), 1, 1)], [P.CertifiedReads(range(0, 3, 2), 1, 1)],
+               [P.CertifiedReads(range(3), -1, 1)], [P.CertifiedReads(range(3), 1, 0)]):
         with pytest.raises(ValueError):
             P.check(program, cen, c=FREE, windows=ws)
     with pytest.raises(ValueError):
-        P.check(program, cen, c={"roundings": 0}, windows=[P.Window(range(3), 1, 1)])
+        P.check(program, cen, c={"roundings": 0}, windows=[P.CertifiedReads(range(3), 1, 1)])
     for B in (0, -1, True, 128.0):
         with pytest.raises(ValueError):
-            P.check(program, cen, c=FREE, windows=[P.Window(range(3), 1, 1)], B=B)
+            P.check(program, cen, c=FREE, windows=[P.CertifiedReads(range(3), 1, 1)], B=B)
     other, other_ends = int8_program(S=2)
     with pytest.raises(ValueError):
-        P.check(program, census(other, other_ends), c=FREE, windows=[P.Window(range(2), 1, 1)])
+        P.check(program, census(other, other_ends), c=FREE, windows=[P.CertifiedReads(range(2), 1, 1)])
 
 
 def test_caps_rates_and_durations_are_exact_and_a_float_is_refused():
@@ -799,16 +799,16 @@ def test_caps_rates_and_durations_are_exact_and_a_float_is_refused():
     message, and a window's reads is an integer."""
     program, ends = int8_program(epilogue=True)
     a = P.analyze(program, census(program, ends))
-    one = [P.Window(range(3), 192, 1)]
+    one = [P.CertifiedReads(range(3), 192, 1)]
     for cap in (Fraction(1, 32), "1/32", "0.03125"):
         assert P.judge(a, c={**FREE, "roundings": cap}, windows=one).ok
     assert codes(P.judge(a, c={**FREE, "roundings": Fraction(1, 33)}, windows=one)) == ["roundings"]
     bad = [dict(c={**FREE, "roundings": 0.1}, windows=one), dict(c={**FREE, "gathers": np.float64(0.5)}, windows=one),
-           dict(c=FREE, windows=one, R_in=1e5), dict(c=FREE, windows=[P.Window(range(3), 192, 0.5)])]
+           dict(c=FREE, windows=one, R_in=1e5), dict(c=FREE, windows=[P.CertifiedReads(range(3), 192, 0.5)])]
     for kw in bad:
         with pytest.raises(ValueError, match=r"the float .*: give it exactly, as Fraction\('"):
             P.judge(a, **kw)
-    for kw in (dict(c={**FREE, "folds": None}, windows=one), dict(c=FREE, windows=[P.Window(range(3), 192.0, 1)])):
+    for kw in (dict(c={**FREE, "folds": None}, windows=one), dict(c=FREE, windows=[P.CertifiedReads(range(3), 192.0, 1)])):
         with pytest.raises(ValueError):
             P.judge(a, **kw)
 

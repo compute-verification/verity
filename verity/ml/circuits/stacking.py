@@ -64,7 +64,7 @@ A word is read at its own width. A reference to a leaf of another width than the
 word read back as s8 lanes: a limb split no gate computes) is a ``reinterpretation``, refused wherever it occurs, an argument
 or a body's return.
 
-P(c, R_in, L) holds, at B operand bits, when under the audit's windows (`Window`: a range of the census's steps, the bytes the
+P(c, R_in, L) holds, at B operand bits, when under the audit's windows (`CertifiedReads`: a range of the census's steps, the bytes the
 audit certified as read in it and its duration):
 
 1. ``unlisted``: no gate is refused;
@@ -878,7 +878,7 @@ def analyze(program: Any, census: Mapping) -> Analysis:
 
 
 @dataclass(frozen=True)
-class Window:
+class CertifiedReads:
     """A window: a range of the census's steps, the bytes the audit certified as read in it, and its duration in seconds."""
 
     steps: range
@@ -898,7 +898,7 @@ class Judgement:
         return {"schema": SCHEMA, "classes": digest(), "ok": self.ok, "reasons": list(self.reasons), "numbers": self.numbers}
 
 
-def check(program: Any, census: Mapping, *, c: Mapping[str, Any], windows: Sequence[Window], R_in: Any = R_IN,
+def check(program: Any, census: Mapping, *, c: Mapping[str, Any], windows: Sequence[CertifiedReads], R_in: Any = R_IN,
           L: int | None = None, B: int = OPERAND_BITS) -> Judgement:
     """P(c, R_in, L) at B operand bits on `program` and its census under the audit's `windows`. c maps each budgeted class to
     its units per certified byte read, R_in is bytes per second, L is steps (None: left to re-keying). c, R_in and a window's
@@ -917,7 +917,7 @@ def _exact(x: Any, what: str) -> Fraction:
     return Fraction(x)
 
 
-def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in: Any = R_IN, L: int | None = None,
+def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[CertifiedReads], R_in: Any = R_IN, L: int | None = None,
           B: int = OPERAND_BITS) -> Judgement:
     """P(c, R_in, L) at B operand bits on an `Analysis` (as `check`)."""
     if set(c) != set(BUDGETED):
@@ -966,5 +966,5 @@ def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in:
 
 __all__ = ["AFFINE", "Analysis", "BUDGETED", "CLASSES", "CONST_ID", "EXP2_LUT127", "EXP2_LUT127_TABLE", "F32_POS", "FAMILIES",
            "FAMILY", "GATHERS", "LIFTS", "OPERAND_BITS", "RANGES", "REFUSED", "R_IN", "S16", "S32", "S8", "SCHEMA", "Step",
-           "TAG", "Tally", "U8", "VERSION", "Judgement", "Window", "analyze", "check", "class_of", "count", "digest", "gather",
+           "TAG", "Tally", "U8", "VERSION", "Judgement", "CertifiedReads", "analyze", "check", "class_of", "count", "digest", "gather",
            "judge", "spec"]
