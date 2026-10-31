@@ -167,7 +167,7 @@ def plane_stats(C):
 class Natural:
     """The cheapest schedule for A·C, A the noise side (m×K) and C = Wᵀ's form (K×n), priced on one chip and reading."""
 
-    def __init__(self, chip: str, reading: str, a: int = 4, alu: float = 1.0):
+    def __init__(self, chip: str, reading: str, a: int = 4, alu: float | dict[int, float] = 1.0):
         self.chip, self.a, self.alu = chip, a, alu
         self.iadd3 = reading == "fast"
         self.lanes = 4 if self.iadd3 else 2
@@ -176,7 +176,14 @@ class Natural:
     def corr(self, hs, ia, m):
         """W1 to add 256·(A·hi) exactly into the outputs hi touches, hi the overflow digit."""
         S, T, nnz, hmax = hs["S"], hs["T"], hs["nnz"], hs["hmax"]
-        opts = [(m * S * T + 32 * m * T, "gather"), (32 * self.alu * m * nnz + 32 * m * S / self.lanes, "alu")]
+        opts = [(m * S * T + 32 * m * T, "gather")]
+        if isinstance(self.alu, dict):
+            bits = max(1, math.ceil(math.log2(ia[1] - ia[0] + 1)))
+            alu = min((w for b, w in self.alu.items() if b >= bits), default=None)
+            if alu is not None:
+                opts.append((32 * alu * m * nnz, "alu"))
+        else:
+            opts.append((32 * self.alu * m * nnz + 32 * m * S / self.lanes, "alu"))
         if self.b1:
             pE = max(1, math.ceil(math.log2(ia[1] - ia[0] + 1)))
             pH = 2 * math.ceil(math.log2(hmax + 1))
@@ -412,6 +419,12 @@ def work(task, chips, readings, depth, a, kcaps, full=False, alu=1.0):
     return rec
 
 
+def alu_prices(spec: str) -> float | dict[int, float]:
+    if ":" not in spec:
+        return float(spec)
+    return {int(b): float(w) for b, w in (p.split(":") for p in spec.split(","))}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--models", default=",".join(MODELS))
@@ -424,7 +437,10 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--self-check", action="store_true", help="only the bookkeeping check against execute.run")
     ap.add_argument("--full-check", action="store_true", help="also execute the served-K trees on whole matrices")
-    ap.add_argument("--alu", type=float, default=1.0, help="register writes an ALU correction takes per nonzero and noise row")
+    ap.add_argument("--alu", type=alu_prices, default=1.0,
+                    help="register writes an ALU correction takes per nonzero and noise row, loading the noise rows on top; "
+                         "or BITS:WRITES,... measured on silicon, loads included, by the noise form's width (a form "
+                         "of b bits takes the cheapest price listed at b or more, and a wider one has no ALU route)")
     args = ap.parse_args(argv)
     chips, readings = args.chips.split(), args.readings.split()
     for chip in chips:
