@@ -165,7 +165,7 @@ theorem sched_ctx (acc : ℕ → Array F128) {i : ℕ} (hG : D.RowG cls acc i) (
 /-- **A frame element is its chunk's value**: at a dense decision, element `o` of `rounds`' `kk`-th round, read off the
 messages at its flat index, is element `o` of the values `vs` chunk `t` absorbs, where `t` is the `kk`-th committing
 round of the rep's schedule `rs`, and the rep's round-`t` rows hold `vs` (`RowsAt`). -/
-theorem frame_elem {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem frame_elem {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (h0 : 0 < D.sts.size) (r : Fin 2)
     {Xs : Shape} (hX : D.sh cls 0 = Xs) {rs : Array RecVStar.SchedRound}
     (hrs : (D.ctx (2 * 0 + (r : ℕ))).sched = rs.toList) {kk o : ℕ} (hkk : kk < (rounds Xs).size)
