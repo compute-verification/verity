@@ -358,8 +358,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     descriptor (``joint/program.json``) as the scan, the block's audit (its descriptor, free inputs and no steps; its
     registration, whose ``block/o1`` is the scan's ``scan/prog`` root and domain, and its answer), the registration,
     and its answer, three records' certificates (requests, responses, fails: its own) and two row registrations, each
-    named by the registration's roots. The period's mirror accepts the honest case, its scan's terms read off the test
-    class's own templates with no free inputs, and refuses the forged case (a certificate's signature changed) at the
+    named by the registration's roots. The period's mirror refuses the honest case at the wiring alone
+    (`period_case.UNWIRED`, the rows form's last refusal) and without that refusal accepts it, its scan's terms read off
+    the test class's own templates with no free inputs; it refuses the forged case (a certificate's signature changed) at the
     certificates, the tampered case (another Program's registration) at the registration, the chain case (the round's
     registration of the Program) at its refusal and a block whose o1 is at another root by name; a group of two
     link-windows is refused by name. Slow (the test class's Program, about 15 s): the period check reads the scan's
@@ -429,6 +430,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
     assert PC.params(p).scan == PC.Scan(T, 0, 16 + bits["first"]["o1"] + bits["first"]["o2"], 16 + bits["egress"]["o1"])
     out = PC.reference(case)
+    assert (out["verdict"], out["reason"]) == ("reject", PC.UNWIRED), out
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(PC, "_unwired", lambda p: None)
+        out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
