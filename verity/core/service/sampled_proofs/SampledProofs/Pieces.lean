@@ -247,11 +247,11 @@ def select (j : Json) : V Json := do
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
-/-- `select`'s input to `{"design"}`: the sampling design (`Core.Draw.ofFlock`) of C-Flock's law of the challenger's
-draw, as the profile writes it (`Core.Draw.toJson`); refused where `select` is. -/
+/-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of C-Flock's law of the challenger's
+draw, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
 def design (j : Json) : V Json := do
   let d ← Flock.Draw.UnitDraw.ofJson (getD (← select j) "draw")
-  let some design := Core.Draw.ofFlock d.law | throw "the draw's law has no sampling design"
+  let some design := Core.SamplingDesign.ofFlock d.law | throw "the draw's law has no sampling design"
   return Json.mkObj [("design", design.toJson)]
 
 /-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
