@@ -1,4 +1,4 @@
-"""`research queue`: the merge queue (infra plan change 5).  `next` is `checked` (drive.toml's `land_into`: `Queue.into`) plus every
+"""`research queue`: the merge queue.  `next` is `checked` (drive.toml's `land_into`: `Queue.into`) plus every
 admitted PR, one merge commit each, in the order they were admitted.  Drive (`research.drive`) fast-forwards `checked` to the top
 of the longest prefix of `next` whose every member has a reviewer's land verdict at its head, and `main` to a commit of `checked`
 only once that commit's after-landing run, the full check, passed every step on the merge gate (not circuit-check, ci.toml's
@@ -10,7 +10,7 @@ only once that commit's after-landing run, the full check, passed every step on 
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue eject PR --reason TEXT [--by HANDLE]
                                                    keep the PR's current head out of `next`; a new push or ready mark re-admits it;
-                                                   posted as HANDLE to @ci and the owner in the merge thread (exit 1 if it couldn't be)
+                                                   posted as HANDLE to `CI` and the owner in the merge thread (exit 1 if it couldn't be)
     research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA] [--json]
                                                    the owner's word that the PR is ready at its current head (a new push needs it again;
                                                    --sha: only at SHA, refused when GitHub still has another head after a few reads),
@@ -42,7 +42,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    one tick of the landing automation (`research.drive`): sync and land the
                                                    reviewed prefix of `next` on `checked`, a Lean change once its Lean check
                                                    passed, then check `checked` (--after-landing-no-cache: reusing no pass but
-                                                   circuit-check's) and move `main` to what passed every gated step; tell @ci the rest.
+                                                   circuit-check's) and move `main` to what passed every gated step; tell `CI` the rest.
                                                    --config reads the flags (`DriveFlags`) from PATH at `main` in the queue's clone,
                                                    fresh each tick, so a change to them is a reviewed commit (drive's of record:
                                                    tools/verity/check/drive.toml); a flag given here overrides the file's, the
@@ -169,11 +169,11 @@ names the PR it contains and why that one is out, judging each PR after those it
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 once its Lean check passed, by a fast-forward of `checked` (no new merge commit), and checks `checked` after each landing,
 reverting on `checked` what that check fails, and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
-`@ci` what it refuses.  A push refused because `checked` moved leaves it alone; the next sync rebuilds `next` on the new
+`CI` what it refuses.  A push refused because `checked` moved leaves it alone; the next sync rebuilds `next` on the new
 `checked`.  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
-Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owner's handle, once per PR head:
+Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `CI` and the owner's handle, once per PR head:
 drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
 there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit.  What a sync leaves out
 is told once per root cause instead, the PR that didn't merge or isn't admitted, naming every PR it takes out and tagging each
@@ -1566,7 +1566,7 @@ class Queue:
         return prs[pr]
 
     def tell_ejected(self, p: PR, reason: str, by: str, post: Callable[..., bool] | None = None) -> int:
-        """A hand ejection's notice, posted as ``by`` in the merge thread to `@ci` and the lane that owns ``p`` (only a handle's
+        """A hand ejection's notice, posted as ``by`` in the merge thread to `CI` and the lane that owns ``p`` (only a handle's
         holder may post as it).  Drive's
         own ejections are told by `Driver.refuse`.  1, with the text to send, when the post failed."""
         from .drive import CI, _merge_thread, merge_thread_post
