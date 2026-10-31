@@ -15,7 +15,9 @@ product, and each layer's int8 attention as two, its batch's KV quantization and
 The quantizer's results are a separate node's, read only by the product inside the linear's body, so a Program cuts them as
 values the linear's two Calls exchange (`call_boundaries`), never as a second return of the linear.  `linear` runs the two.
 On CUDA each of the two is one Triton kernel (`engine.int8_fused`) with int8_exact's values bit for bit; the torch bodies
-serve every other device and stay the reference.
+serve every other device and stay the reference.  When the kernel that wrote x also quantized it (`engine.int8_producers`,
+which leaves its codes and scales with `hand_off`), row_quant's CUDA body returns those, the same values, and launches
+nothing.
     verity_int8::kv_quant_batch(Tensor key_cache, Tensor value_cache, Tensor block_table, int[] lens, Tensor k_scales)
             -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
         every request r's first lens[r] tokens in the paged caches [num_blocks, block_size, G, d] under its block-table row, with
@@ -79,10 +81,36 @@ def _scaled_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: t
     return xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16)
 
 
+#: per device, the (x, codes, scales) the kernel that wrote x left for x's row_quant
+_HANDOFF: dict[torch.device, tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
+
+
+def hand_off(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor) -> None:
+    """Leave x's codes and scales, `quantize_rows(x)`'s values, for the next row_quant on x's device; holding x, so no
+    other tensor takes its memory meanwhile."""
+    _HANDOFF[x.device] = (x, xq, s)
+
+
+def take(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor] | None:
+    """The codes and scales handed off for x (the same storage, shape, strides and dtype), else None; the device's hand-off
+    is gone after this call either way."""
+    got = _HANDOFF.pop(x.device, None)
+    if got is None:
+        return None
+    src, xq, s = got
+    if x.data_ptr() == src.data_ptr() and x.shape == src.shape and x.stride() == src.stride() and x.dtype == src.dtype:
+        return xq, s
+    return None
+
+
+def drop_hand_offs() -> None:
+    _HANDOFF.clear()
+
+
 @row_quant.register_kernel("cuda")
 def _row_quant_cuda(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     from verity_vllm.engine import int8_fused
-    return int8_fused.row_quant(x)
+    return take(x) or int8_fused.row_quant(x)
 
 
 @scaled_mm.register_kernel("cuda")
