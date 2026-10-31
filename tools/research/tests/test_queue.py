@@ -23,8 +23,8 @@ import pytest
 import research.queue as Q
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
-from research.queue import (DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files, credential_args,
-                            label_target)
+from research.queue import (DRIVE_FLAGS, PR, PREFLIGHT_BUDGET_S, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files,
+                            credential_args, label_target)
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
@@ -570,6 +570,92 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
     assert _git(world.origin, "rev-parse", f"{tip}^2") == world.gh.prs[2].head
     assert _git(world.origin, "log", "-1", "--format=%B", tip) == f"Queue: #2 change 2\n\nPR: #2\nHead: {world.gh.prs[2].head}\nOwner: lane-2"
+
+
+def _sync_preflight(refuse: dict[int, str]) -> tuple[Callable, list[tuple[int, str]]]:
+    """A stand-in for drive's `Preflight.onto`, refusing each PR of ``refuse`` with its text, and the (PR, base) of each call."""
+    calls: list[tuple[int, str]] = []
+
+    def run(pr, base, commit, members):
+        calls.append((pr.number, base))
+        return refuse.get(pr.number)
+    return run, calls
+
+
+def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_above_it_merge(world):
+    """Each merge a sync makes is preflighted onto the member below it, so a refusal leaves out that PR alone, told as a
+    conflict is (the state's `conflicts`, which drive posts to its owner)."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({2: "the preflight of its head merged onto next refused it: a.py: SyntaxError"})
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3], world.logs
+    one = members[0].commit
+    assert calls == [(1, _git(world.origin, "rev-parse", "main")), (2, one), (3, one)]
+    assert entries[2].state == "refused" and entries[2].why.endswith("a.py: SyntaxError")
+    assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why and world.on_next(q) == [1, 3]
+
+
+def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base_is(world):
+    """A PR's preflight is recorded per (head, base): a sync that tries a refused PR again onto the same tree reads its refusal
+    back, and so does one onto another commit of that tree (a rebuilt `next`'s merges carry the time they're made).  A new
+    base runs it again."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    refuse, calls = _sync_preflight({2: "refused: x"})
+    q = world.queue()
+    q.preflight = refuse
+    q.sync()
+    assert [n for n, _ in calls] == [1, 2]
+    again = world.queue()                                                   # a later tick's queue reads the records back
+    again.preflight = refuse
+    members, entries = again.sync()
+    assert [m.pr for m in members] == [1] and entries[2].why == "refused: x" and [n for n, _ in calls] == [1, 2], world.logs
+    first = members[0].commit
+    remade = subprocess.run(["git", "commit-tree", f"{first}^{{tree}}", "-p", f"{first}^1", "-p", f"{first}^2", "-m",
+                             _git(world.origin, "log", "-1", "--format=%B", first)], cwd=world.origin, check=True, text=True,
+                            capture_output=True, env={**os.environ, **{k: v for d in ("AUTHOR", "COMMITTER") for k, v in (
+                                (f"GIT_{d}_NAME", "q"), (f"GIT_{d}_EMAIL", "q@q"), (f"GIT_{d}_DATE", "2000-01-01T00:00:00Z"))}}
+                            ).stdout.strip()
+    _git(world.origin, "update-ref", "refs/heads/next", remade)
+    rebuilt = world.queue()
+    rebuilt.preflight = refuse
+    members, entries = rebuilt.sync()
+    assert [m.commit for m in members] == [remade] and remade != first and entries[2].state == "refused"
+    assert [n for n, _ in calls] == [1, 2], world.logs
+    _move_main(world, {"c.txt": "moved\n"})
+    moved = world.queue()
+    moved.preflight = refuse
+    moved.sync()
+    assert [n for n, _ in calls] == [1, 2, 1, 2], world.logs
+
+
+def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_preflighted_waits_off_next_untold(world):
+    """A sync's preflights start only while they've taken under `PREFLIGHT_BUDGET_S` together: past it a PR waits off `next`,
+    with the PRs that contain it, told nothing, and a later sync preflights it."""
+    now = [0.0]
+    calls: list[int] = []
+
+    def slow(pr, base, commit, members):
+        calls.append(pr.number)
+        now[0] += PREFLIGHT_BUDGET_S
+        return None
+
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, two := world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}, base=two))
+    q = world.queue()
+    q.preflight, q.clock = slow, lambda: now[0]
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1] and calls == [1], world.logs
+    assert entries[2].state == entries[3].state == "waiting" and "hasn't run" in entries[2].why
+    assert entries[3].why.endswith("which waits for its preflight"), entries[3].why
+    state = q.load_state()
+    assert state["conflicts"] == {} and state["waiting"] == {} and "waiting off it for their preflight (#2 #3)" in world.logs[-1]
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and calls == [1, 2]
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and calls == [1, 2, 3]
 
 
 def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
