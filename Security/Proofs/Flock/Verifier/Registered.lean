@@ -306,7 +306,7 @@ theorem opensLeaf_binding (reg : Port) (pos : Nat) (x path y path' : ByteArray) 
 /-- The proposition `opensLeaf_binding` implies (satisfiable by counting on its own; `opensLeaf_binding` is the
 reduction). -/
 theorem opensLeaf_collision (reg : Port) (pos : Nat) (x path y path' : ByteArray) (hx : x.size = 64) (hy : y.size = 64)
-    (hne : x ≠ y) (h1 : opensLeaf reg x pos path = true) (h2 : opensLeaf reg y pos path' = true) : Sha512.Collision :=
+    (hne : x ≠ y) (h1 : opensLeaf reg x pos path = true) (h2 : opensLeaf reg y pos path' = true) : Sha512.HasCollision :=
   let h := opensLeaf_binding reg pos x path y path' hx hy hne h1 h2
   ⟨_, _, h.1, h.2⟩
 
