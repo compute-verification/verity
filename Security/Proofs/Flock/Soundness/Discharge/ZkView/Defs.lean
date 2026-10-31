@@ -1,8 +1,11 @@
-import Proofs.Flock.Soundness.CROnly
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 import Proofs.Flock.Verifier.Hash
 import Flock.Zk
 import Proofs.Flock.Level3.ArithFacts
+import Proofs.Flock.Soundness.CROnly.ZKKey
+import Proofs.Flock.Soundness.Headline
+import Proofs.Flock.Soundness.Registered.Binding
+import Proofs.Flock.Soundness.Types.ProgramPlaces
 
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages

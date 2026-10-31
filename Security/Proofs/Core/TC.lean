@@ -1,7 +1,5 @@
 import Definitions.Core.Guarantees.TC
 import Proofs.Core.TC.Gadgets
-import Proofs.Core.TC.Proofs
-import Proofs.Core.TC.Ampere
 import Proofs.Core.TC.Sound
 import Proofs.Core.TC.AmpereSound
 import Proofs.Core.TC.Boundary

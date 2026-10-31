@@ -1,9 +1,9 @@
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.PearlC.FreezeP
 import Proofs.Pouw.PearlC.Cap.IntForm
-import Proofs.Pouw.PearlC.Cap.Pins
 import Proofs.Pouw.PearlC.Cap.SaltDeadStep
 import Proofs.Pouw.PearlC.Cap.SaltDead
+import Proofs.Pouw.PearlC.Cap.Pins
 
 /-!
 # The cap circuit's Lean pieces
