@@ -69,8 +69,11 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
   (a PR whose body says `fixes step circuit-check` does).
   Citations and tables read only commits whose after-landing run passed: `main`'s.
-- A pure move that `verity check move BASE HEAD` certifies lands alone on `main`, ahead of the queue, through the lander;
-  drive merges it into `checked`. Only drive's App pushes `main`, `checked` and `next`.
+- A layout move lands from `next` with no pause in landing: its PR's body says `Move: tools/move/MAP.toml`, and it needs a
+  mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (that tree's
+  `rename.py --map MAP`, one commit) and leaves it out, telling its owner, unless that tree's `move_check.py` certifies it;
+  members above it are restacked across it, and only a conflict of their own refuses them. Drive closes the PR once `main`
+  reaches it. Only drive's App pushes `main`, `checked` and `next`.
 - `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
   pool.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.

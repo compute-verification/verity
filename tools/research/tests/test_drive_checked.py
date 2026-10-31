@@ -301,8 +301,8 @@ def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
 
 
 def test_a_main_pushed_outside_drive_is_merged_into_checked_and_main_follows_once_that_is_checked(world, monkeypatch):
-    """The lander's pure move lands on `main` on its own check while `checked` holds landings `main` lacks: drive merges it
-    into `checked`, whose next after-landing run checks the two together before `main` moves on."""
+    """The lander's `research merge --push` lands on `main` on its own check while `checked` holds landings `main` lacks: drive
+    merges it into `checked`, whose next after-landing run checks the two together before `main` moves on."""
     h = Review(world, monkeypatch, land_into="checked")
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
