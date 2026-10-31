@@ -66,7 +66,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
-from verity.ml.circuits.codec import canonical_json
+from verity.ml.windows import interface as IF
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
@@ -81,7 +81,6 @@ COMPILER = "verity_vllm.program.predict.steps.compile_steps"
 PENDING = 3
 
 
-#: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
 CAP_BITS = AW.CAP_BITS
 
 
@@ -92,19 +91,14 @@ class Compiler:
     digest: str
 
 
-def compiler_digest(name: str, code: str) -> str:
-    """The inner compiler's digest: SHA-512 of its name and its code identity."""
-    return hashlib.sha512(canonical_json({"name": name, "code": code})).hexdigest()
-
-
 def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> AW.Capped:
-    """The compiler the advice is bound to: `advice_windows.Capped` (PROVE-PATH's, whose digest names the inner compiler's and ℓ =
-    ``cap_bits``) over ``name``, whose digest is ``digest``, else `compiler_digest` over `name` and the tree's code identity
-    (`source_identity.code_identity`)."""
+    """The compiler the advice is bound to: `advice_windows.Capped` (whose digest names the inner compiler's and ℓ =
+    ``cap_bits``) over ``name``, whose digest is ``digest``, else the verifier's `interface.compiler_digest` of ``name`` over
+    the integration's import closure (`research_tools.CLOSURE`) in this git work tree."""
     if digest is None:
-        # TODO: COMPILER's own registered digest once compile_steps lands with one
+        from verity_vllm.pipeline import research_tools as RT
         from verity_vllm.pipeline import source_identity as SI
-        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
+        digest = IF.compiler_digest(name, SI.TREE, [g.removesuffix("/**") for g in RT.CLOSURE])
     return AW.Capped(Compiler(name, digest), cap_bits)
 
 
@@ -616,7 +610,8 @@ class Options:
     window: int | None = option("--window", type=int, default=None, help="a server's run: only this Commit window (default every closed one)")
     compiler_name: str = option("--compiler-name", default=COMPILER, help="the registered compiler the advice is bound to")
     compiler_digest: str | None = option("--compiler-digest", default=None,
-                                         help="its digest, 128 hex digits (default: SHA-512 of the name and the tree's code identity)")
+                                         help="its digest, 128 hex digits (default: interface.compiler_digest of the name over "
+                                              "the integration's import closure in this git work tree)")
     cap: int = option("--cap", type=int, default=CAP_BITS,
                       help="ℓ, the cap on the advice's length in bits the compiler is total up to: the registered compiler is "
                            "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
