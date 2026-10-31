@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.DeployInputs
+import Flock.RecBudget
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
@@ -18,9 +19,9 @@ registration (`--rec-inner-registration`) and how the inner statement is set up 
 (`innerMetaRegistration`, from the header's first nine lines, `metaOf`), `recTranscriptInput`'s commits
 (`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
 on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's draw with those inputs and no
-`--identifier`, in its order: `RecSetup.checkInner`, the session's statement (`Stmt.setupTables`) with each table's
+`--identifier`, in its order: `RecSetup.checkInner`, `RecBudget.regs`, `RecBudget.statements`, the session's statement (`Stmt.setupTables`) with each table's
 registered reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`,
-`Zk.shapeOk`,
+`RecBudget.table`, `Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
 (through `checkOpenTops` and `checkLevelTopReads`), `RecVStar.checkLabels` and the draw's law.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
@@ -238,6 +239,8 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   if !r.tags.hm96Rows then
     throw s!"{r.tags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
   RecSetup.checkInner s.inner s.src s.bound
+  RecBudget.regs s.inner s.base.registered
+  RecBudget.statements s.inner
   let (spec, sts) ← r.setup
   for st in sts do
     checkRegistered st s.base.registered
@@ -246,6 +249,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   RecSetup.checks s.inner s.commits s.base.stmtTags r.I.tables sts r.I.circuitFile r.I.partition r.I.program
     s.base.registered s.part s.bindings s.rows
   RecSetup.oneFull s.inner sts
+  RecBudget.table s.inner sts
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits)
     (RecSetup.c3 s.inner s.commits))

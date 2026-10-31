@@ -163,6 +163,11 @@ run; after a run, from the kept outputs alone, PoUS's `C*` is encoded again from
 each kept output is held to the others before anything is written. `served_case.sh PIECES` runs it on a served run's
 pieces, PoUS's under a lease of a card. `tests/test_pous_served_case.py` runs both on a CPU.
 
+`big_case.py SIZE OUT` writes a synthetic run case of about SIZE bytes, streamed: an honest period at width 64 under a
+test signer, so `pous-run-protocol --test serve` answers it. It times the Lean at a served case's size: a 5.0 GiB case is
+accepted in under 8 minutes on 4 cores, at a peak of 2 times the line, which `served_case.sh`'s `MEM_GB` default
+allows for.
+
 `wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the
 `D = 5` read deadline. `resume.py` adapts the attack to the streamed wipe, which the prover can't evaluate without `K`, and runs

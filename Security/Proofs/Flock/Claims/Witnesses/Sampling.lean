@@ -82,7 +82,7 @@ def rejCm : Commitment Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []⟩
 def toyProg : Prog := ⟨[.input], [0]⟩
 
 /-- The program, drawn `all`. -/
-def toyStmt : Stmt := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def toyStmt : AuditStatement := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
 
 /-- One class of one stratum of one replay unit, the proof unit `{0}`. -/
 def toyPart : Partition := ⟨[[[[[0]]]]]⟩
@@ -535,7 +535,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The sampling `Universal` fails** at `compSD`, whose universal unit returns nothing, at the class `(0, 0, 1)`. -/
 theorem Universal_fails : ¬ Universal (compSD Coin) := fun h => by
   have := h ⟨0, 0, 1⟩ ⟨0, [], [0]⟩ [] ⟨rfl, rfl, rfl, by simp, by simp [SizeClass.indexBits]⟩ rfl
-  simp [compSD, Prog.eval, Netlist.eval] at this
+  simp [compSD, Prog.eval, PrivateCircuit.eval] at this
 
 omit [Nonempty Coin] in
 /-- **The sampling `Complete` fails** at `compSD`, whose reference prover is silent, at its error `δ_c = 0`. -/
