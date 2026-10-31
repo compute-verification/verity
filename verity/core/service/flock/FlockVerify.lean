@@ -800,7 +800,9 @@ reading several input groups or a tail stage returning the outputs is; a shared-
 public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
 under different domains); at more than one table a draw that does not parse or a subset draw whose `k` the tables don't
 divide; `Flock.Guarantees.SampledKSLiveV4` is over that acceptance without shared rows, and `SampledKSLiveV5` with
-them), all after every
+them), and last a statement version other than `verity/flock-circuit` and `verity/flock-circuit+plain-leaves`
+(`ProvedScope.served`: every `+seed-injection` version and every superseded one) and a plain session on seed coins
+(`--coins seed`, the default without `--zk`; `ProvedScope.servedForm`), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -1000,7 +1002,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- the program,
       -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
       -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a circuit, a
-      -- public file or a draw outside its form (`KsScope.checkOf`)
+      -- public file or a draw outside its form (`KsScope.checkOf`), then a statement version other than
+      -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -1012,6 +1015,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       RecordText.check record
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
+      ProvedScope.servedForm stmtTags coins
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
