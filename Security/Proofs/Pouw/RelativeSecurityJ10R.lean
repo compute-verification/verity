@@ -2,6 +2,7 @@ import Mathlib
 import Definitions.Pouw.RelativeSecurityJ10R
 import Definitions.Pouw.Guarantees.RelativeSecurity
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Pouw.RelativeSecurityFork
 
 /-!
 # Relative security at call scope under J10-R: the floors of record, proved on the call design
@@ -19,7 +20,8 @@ two-sided part is `⟨x, y⟩`. `U` reads neither side of any frame, and the ear
 segment `t`'s frame, so no plane weight enters: any ring map onto `F₂` does.
 
 The floors per prover take the same chain one adversary and one value of its coins at a time
-(`roundsSlice_of_stagedPJ`, `roundsSlice_of_overlapPJ`) into `serviceFloorPerProver_of_slices`.
+(`roundsSlice_of_stagedPJ`, `roundsSlice_of_overlapPJ`) into `serviceFloorPerProver_breakPr_of_slices`, at the
+adversary's fork finders.
 -/
 
 namespace Pouw.RelativeSecurity
@@ -441,34 +443,34 @@ theorem OverlapFloorKOneSidedJ10R : Pouw.Guarantees.RelativeSecurity.OverlapFloo
 
 theorem StagedFloorKOneSidedJ10RPerProver :
     Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver := by
-  intro Mc S R St n L B n' e run sha fb fz cb db cz dz δb βb δz βz κ Vmax hSt hκ hC _ hβb _ hβz hS hK hP
+  intro Mc S R St n L B n' e run sha kz δb βb δz βz κ Vmax hSt hκ hC _ _ _ _ hS hK hP
   have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
     rw [mul_assoc]; exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
-  have h := serviceFloorPerProver_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
-    fb fz (fun Ω' _ M hcom r => by
+  have h := serviceFloorPerProver_breakPr_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
+    (forkFinders S e sha 1) (forkFinders S e sha kz) (fun Ω' _ M hcom r => by
       obtain ⟨hB, hZ, hacc⟩ := hS Ω' M hcom r
       exact ⟨(run Ω' M r).Bind, (run Ω' M r).ZK, hB, hZ, roundsSlice_of_stagedPJ (φ := toF2) (run Ω' M r).play
         _ _ _ _ (run Ω' M r).V hacc (fun x => (hP Ω' M hcom r x).1) (fun x =>
           ⟨(run Ω' M r).N x, (run Ω' M r).prog x, (run Ω' M r).aq x, (run Ω' M r).wq x, (run Ω' M r).word x,
             (hK Ω' M hcom r x).1, (hK Ω' M hcom r x).2.1, (hK Ω' M hcom r x).2.2, (hP Ω' M hcom r x).2⟩)
         hSt hκ.le⟩)
-    (by norm_num) hF₀ hβb hβz cb db cz dz (274 * Real.log 2) ModelB.exp_parity_274
+    (by norm_num) hF₀ (274 * Real.log 2) ModelB.exp_parity_274
   rwa [mul_zero, sub_zero] at h
 
 theorem OverlapFloorKOneSidedJ10RPerProver :
     Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver := by
-  intro Mc S R St L n B n' e run sha fb fz cb db cz dz δb βb δz βz κ Vmax hκ hC _ hβb _ hβz hS hK hP
+  intro Mc S R St L n B n' e run sha kz δb βb δz βz κ Vmax hκ hC _ _ _ _ hS hK hP
   have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
     rw [mul_assoc, card_oCells]; exact mul_pos hκ (by exact_mod_cast hC)
-  have h := serviceFloorPerProver_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
-    fb fz (fun Ω' _ M hcom r => by
+  have h := serviceFloorPerProver_breakPr_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
+    (forkFinders S e sha 1) (forkFinders S e sha kz) (fun Ω' _ M hcom r => by
       obtain ⟨hB, hZ, hacc⟩ := hS Ω' M hcom r
       exact ⟨(run Ω' M r).Bind, (run Ω' M r).ZK, hB, hZ, roundsSlice_of_overlapPJ (φ := toF2) (run Ω' M r).play
         _ _ _ _ (run Ω' M r).V hacc (fun x => (hP Ω' M hcom r x).1) (fun x =>
           ⟨(run Ω' M r).N x, (run Ω' M r).prog x, (run Ω' M r).aq x, (run Ω' M r).wq x, (run Ω' M r).word x,
             (hK Ω' M hcom r x).1, (hK Ω' M hcom r x).2.1, (hK Ω' M hcom r x).2.2, (hP Ω' M hcom r x).2⟩)
         hκ.le⟩)
-    (by norm_num) hF₀ hβb hβz cb db cz dz (274 * Real.log 2) ModelB.exp_parity_274
+    (by norm_num) hF₀ (274 * Real.log 2) ModelB.exp_parity_274
   rwa [mul_zero, sub_zero, card_oCells] at h
 
 end Pouw.SecurityProofs.RelativeSecurity
