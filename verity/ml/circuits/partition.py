@@ -2,7 +2,7 @@
 
 Partitionhood is not a property of queries: a `Family` (an ordered sequence of `GateSet`s, `query_ast`) may overlap or
 omit gates, and nothing in the query model forbids it.  It is a property checked here, when a family is used as the
-decomposition of a Program into proof blocks.  Three checks, one verdict each, composed by `validate_block_partition`:
+decomposition of a Program into proof blocks.  Three checks, one verdict each:
 
 * `validate_partition` -- every gate of the Program (Input and constant gates included) in exactly one set.
   Fast path (tier A, design §4): the family's structural description `Family.tiling()` is checked by per-body
@@ -57,7 +57,7 @@ from .defs import PrimitiveDefinition, SpecializedDefinition
 from .intervals import Intervals, complement, isect, norm
 from .layout import Scope
 from .parts import Limits, Part, Unsupported, n_members
-from .query_ast import GateSet, evaluate
+from .query_ast import GateSet
 
 if TYPE_CHECKING:  # pragma: no cover
     from .program import Program
@@ -136,21 +136,6 @@ class ReadinessReport:
     def to_json(self) -> dict:
         return {"w_max": self.w_max, "ok": self.ok, "violators": [v.to_json() for v in self.violators],
                 "max_w": self.max_w, "specs": self.specs, "gates_over": self.gates_over}
-
-
-@dataclass(frozen=True)
-class BlockVerdict:
-    """`status`: "ok" | "fail" (overlap/gap or a proven width violation) | "not-ready" (a gate wider than `w_max`
-    exists; partition and width did not fail) | "unsupported" (nothing failed, something could not be decided)."""
-    partition: PartitionVerdict
-    width: WidthVerdict
-    count: int
-    readiness_32: ReadinessReport
-    status: str
-
-    def to_json(self) -> dict:
-        return {"status": self.status, "count": self.count, "partition": self.partition.to_json(),
-                "width": self.width.to_json(), "readiness_32": self.readiness_32.to_json()}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -1056,35 +1041,7 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
     return CutVerdict(not codes, codes, detail)
 
 
-def block_status(partition: PartitionVerdict, width: WidthVerdict, readiness: ReadinessReport) -> str:
-    if partition.status in ("overlap", "outside", "gap") or width.status == "violation":
-        return "fail"
-    if not readiness.ok:
-        return "not-ready"
-    if partition.status == "unsupported" or width.status == "unsupported":
-        return "unsupported"
-    return "ok"
-
-
-def validate_block_family(program: "Program", fam, w_max: int = 32, limits: Limits = LIMITS) -> BlockVerdict:
-    """Both validators and the readiness report over an already evaluated family."""
-    partition = validate_partition(program, fam, limits)
-    width = validate_width(program, fam, w_max, limits)
-    readiness = gate_width_readiness(program, w_max)
-    count = _family_count(fam)
-    if count is None:
-        count = sum(1 for _ in fam)
-    return BlockVerdict(partition, width, count, readiness, block_status(partition, width, readiness))
-
-
-def validate_block_partition(program: "Program", query, w_max: int = 32) -> BlockVerdict:
-    """evaluate -> validate_partition + validate_width + readiness -> BlockVerdict.  `query` is a `query_ast.Query`
-    (or anything `query_ast.evaluate` accepts)."""
-    fam = evaluate(program, query)
-    return validate_block_family(program, fam, w_max)
-
-
-__all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "BlockVerdict",
-           "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "block_status",
-           "validate_block_family", "validate_block_partition", "CutVerdict", "INPUT_UNIT", "MAX_LISTED", "RECOMPUTE_RULES", "validate_unit_cut",
+__all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport",
+           "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit",
+           "CutVerdict", "INPUT_UNIT", "MAX_LISTED", "RECOMPUTE_RULES", "validate_unit_cut",
            "Level", "Hierarchy"]
