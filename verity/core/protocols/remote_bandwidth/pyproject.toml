@@ -27,4 +27,11 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # canonical JSON, held to the circuits codec's
           "verity/core/protocols/pouw/lean/check/models.json",
           # the claims registry, which test_ledger.py holds the memory line's named PRF claim to
-          "verity/core/claims/__init__.py"]
+          "verity/core/claims/__init__.py",
+          # PoUW's core answer form and what it imports, which test_p2_party.py holds a session's answer to
+          "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py",
+          "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
+          "verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/salt.py",
+          "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
+          "verity/core/protocols/sampled_proofs/one_stage/partition.py",
+          "verity/core/protocols/sampled_proofs/one_stage/registered.py"]
