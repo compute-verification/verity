@@ -59,7 +59,7 @@ theorem withStop_budgetAbort (CM : CostModel Q R S)
         · rw [if_neg h, if_neg fun h' => h (h'.trans (min_le_right _ _))]
 
 /-- The priced W1 charges nothing negative at positive prices. -/
-theorem w1Priced_nonneg (dv : W1Device) (hdv : Positive dv) (salt : S → List ℕ) (p : Prog) (H : Q → R)
+theorem w1Priced_nonneg (dv : W1Device) (hdv : Positive dv) (salt : S → List ℕ) (p : CodeImage) (H : Q → R)
     (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) : 0 ≤ (w1Priced dv salt).cost p H U act σ s := by
   have h0 : (0 : ℚ) ≤ (final dv (salt s) p U act σ).cost := (exec_mono dv hdv _ false _).1
   simp only [w1Priced]

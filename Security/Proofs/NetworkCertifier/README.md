@@ -228,7 +228,7 @@ The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarante
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
 last two by `horizonIncorrectBlocks` and `horizonLeak`). All 25 are under `shape.frozen` as
-`frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
+`frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and an accepted run reaches the first 18 through

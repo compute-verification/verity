@@ -42,7 +42,7 @@ separately. It speaks at the deployment when `sem := NoiseSha512.sha512Sem base 
 model reads: one salt, which the program reads as its salt bytes (`W1.init`'s region 1) and the protocol reads as the
 noise's. At any other pair it is still proved, but about a game the deployment doesn't play.
 
-**The program's text is bounded** (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64` constants).
+**The program's text is bounded** (`W1.CodeImage.bounded`: at every layout `2^64` code nodes and `2^64` constants).
 W1 charges only the path a run takes, so a strategy with unbounded text could hold the reference at
 `sha512Sem` as a table of one leaf per salt in its code. A W1 program can't
 (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`).

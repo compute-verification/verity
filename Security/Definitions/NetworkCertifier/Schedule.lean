@@ -9,10 +9,10 @@ at `h(k) = max(send(k), h(k−1))` from the span's first bucket, and the certifi
 left-packed: `fifoGrid`) fixes every row. The FIFO starts empty at each span's first bucket, and a frame handed at or
 after the span's end is never enqueued.
 
-**What the Program reads.** `constantRate T g E frames` is a `Program` whose advice is one value per execution block,
-`Fin E → Adv`; the protocol's is a string of `|a|` bits, `Adv = Fin k → Bool`. Execution block `e`'s frames (content,
-send tick, canonical order) are `frames ins e (a e) ℓ`: a function of the ingress and of `e`'s own advice only, which
-is B's computation and is left abstract. So block `e`'s rows read no other block's advice.
+**What the Program reads.** `constantRate T g E frames` is an `EgressPrediction` whose advice is one value per execution
+block, `Fin E → Adv`; the protocol's is a string of `|a|` bits, `Adv = Fin k → Bool`. Execution block `e`'s frames
+(content, send tick, canonical order) are `frames ins e (a e) ℓ`: a function of the ingress and of `e`'s own advice
+only, which is B's computation and is left abstract. So block `e`'s rows read no other block's advice.
 
 **The program.** The certifier program (`NetworkCertifier.Schedule`, `schedule.py`) computes each frame's hand tick from
 a declared clock sync per window (`NetworkCertifier.handingBuckets`). Its rows over its `W` windows are this schedule's
@@ -60,7 +60,7 @@ def expectedRow (S N base : ℕ) (frames : List LogicalFrame) (u : ℕ) : Row S 
 `t mod (g·T)` of its span. Past the `E` blocks no slot holds a frame. Every link reads the same advice, one clock per
 spatial unit (`Proofs/NetworkCertifier/README.md`, modelling choice 15). -/
 def constantRate {L S : ℕ} {In Adv : Type} (T g E : ℕ)
-    (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) : Program L S In (Fin E → Adv) where
+    (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) : EgressPrediction L S In (Fin E → Adv) where
   rows t ins a ℓ :=
     if h : t / (g * T) < E then
       expectedRow S (g * T) (t / (g * T) * (g * T)) (frames ins ⟨t / (g * T), h⟩ (a ⟨t / (g * T), h⟩) ℓ)
