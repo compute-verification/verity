@@ -35,17 +35,17 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.BaselineDifftestMain": {
-   "why": "1,213 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 13 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, theta-not-registered, and two of a field of another JSON type than the string or null the check compares it with: the cited entry's root a number, refused theta-root, and a record's previous neither its predecessor's digest nor null, refused trusted), on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
+   "why": "1,218 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, 14 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, theta-not-registered, and two of a field of another JSON type than the string or null the check compares it with: the cited entry's root a number, refused theta-root, and a record's previous neither its predecessor's digest nor null, refused trusted) and two served windows with θ empty, each accepted on its own registration log, and each one's log with the other's Program, refused run-program, on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
    "args": [
     "{baseline_difftest/cases.jsonl}",
     "{baseline_difftest/expanded.jsonl}",
     "{baseline_difftest/python.jsonl}",
-    "1213"
+    "1218"
    ],
    "data": {
-    "baseline_difftest/cases.jsonl": "beaf9b3eef9bc3b73f83f357c49ac6ef17edd6a1cd24c2e3c29db5430bb0e56d",
-    "baseline_difftest/expanded.jsonl": "f7f663ee7fd475103c74652da0be7f35596c76ad722d554ff5d695c3a2c79d7d",
-    "baseline_difftest/python.jsonl": "46a62e2b44122e4f53fb0bb1899a92aa2a1951c95beecc856fe51435b0b1a1b7"
+    "baseline_difftest/cases.jsonl": "d3bb952b8ff9f664eb95a4b3691ab3c36427f6ae16d0a9c33df8de67026ad571",
+    "baseline_difftest/expanded.jsonl": "3f81a967870c4226434ae8b52c2bd6b8d7bf2819edc592421a0f07a255fa185b",
+    "baseline_difftest/python.jsonl": "309dad230487b9101c41c22fa269268670210f151d2c797aaa5d5db8df44ec67"
    },
    "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
