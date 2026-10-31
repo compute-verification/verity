@@ -97,6 +97,33 @@ def test_a_run_no_machine_holds_names_each_machines_answer_and_the_store_attempt
     assert f"the store has its attempt: `research data show {gone}`" in capsys.readouterr().err
 
 
+def test_the_machines_are_asked_at_once_so_a_stopped_one_never_holds_up_the_one_that_has_the_run(machines, monkeypatch, capsys):
+    """The registry keeps stopped machines, each costing its ssh connect timeout: asked one after another, a lookup took
+    minutes. Here machine a answers only once machine b has been asked, which a one-at-a-time lookup never reaches."""
+    import threading
+
+    b_asked, real = threading.Event(), remote.ssh_run
+
+    def ssh_run(argv, cmd, **kw):
+        if str(machines["tmp"] / "b") in cmd[-1]:
+            b_asked.set()
+        else:
+            b_asked.wait()
+        return real(argv, cmd, **kw)
+
+    monkeypatch.setattr(remote, "ssh_run", ssh_run)
+    assert cli.main(["status", RUN, "--runs-dir", str(machines["local"])]) == 0
+    (row,) = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith(RUN)]
+    assert " vy-b " in row
+
+
+def test_the_first_machine_in_name_order_that_holds_a_run_is_the_one_adopted(machines, capsys):
+    _run_on(machines["tmp"] / "a", RUN, "done")
+    here = machines["local"]
+    assert cli.main(["status", RUN, "--runs-dir", str(here)]) == 0
+    assert json.loads((here / RUN / "remote.json").read_text())["machine"] == "vy-a"
+
+
 def test_a_prefix_is_never_looked_up_on_the_machines(machines, capsys):
     assert cli.main(["inspect", "r20261002", "--runs-dir", str(machines["local"])]) == 1
     assert "no run matching 'r20261002'" in capsys.readouterr().err and machines["probed"] == []

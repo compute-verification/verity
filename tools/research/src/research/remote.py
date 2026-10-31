@@ -2068,10 +2068,13 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
 
 def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
           unique: bool = False) -> Path:
-    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
-    the remote.json `launch` would have (phase `adopted`), and fetch its records.  Refused when the id is not a full run id, when no
-    machine holds it (each machine's answer in the reason), or when the local dir already exists; with `unique` (a cancel), every
-    machine is asked and an id more than one holds is refused rather than taken from the first."""
+    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on the first ssh machine in
+    name order that holds it, write the remote.json `launch` would have (phase `adopted`), and fetch its records.  The machines are
+    asked at once: a stopped one costs its ssh connect timeout, and the registry keeps stopped machines.  Refused when the id is not
+    a full run id, when no machine holds it (each machine's answer in the reason), or when the local dir already exists; with
+    `unique` (a cancel), an id more than one machine holds is refused rather than taken from the first."""
+    from concurrent.futures import ThreadPoolExecutor
+
     from .store import ids
 
     if not ids.is_run_id(run_id):
@@ -2081,7 +2084,8 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
         raise Refused(f"{local} exists already")
     ms = load_machines() if machines is None else machines
     names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
-    answers, held = [], []
+    answers: list[str | None] = []
+    asked: list[tuple[int, str, dict[str, Any], dict[str, Any], str]] = []
     for name in names:
         m = ms.get(name)
         if m is None:
@@ -2092,19 +2096,28 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             answers.append(f"{name}: {e}")
             continue
         m = {**m, "root": m.get("root") or DEFAULT_ROOT}
-        rd = f"{m['root']}/runs/{run_id}"
-        ssh = ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
+        asked.append((len(answers), name, m, tgt, f"{m['root']}/runs/{run_id}"))
+        answers.append(None)
+
+    def holds(a: tuple[int, str, dict[str, Any], dict[str, Any], str]) -> str | None:
+        _, name, _, tgt, rd = a
         try:
-            r = ssh_run(ssh, ["test", "-d", rd], timeout=60)
+            r = ssh_run(ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root")), ["test", "-d", rd], timeout=60)
         except subprocess.TimeoutExpired:
-            answers.append(f"{name}: no answer in 60 s")
-            continue
+            return f"{name}: no answer in 60 s"
         if r.returncode != 0:
-            answers.append(f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}"))
-            continue
-        held.append((name, m, tgt, rd))
-        if not unique:
-            break
+            return f"{name}: " + (f"no {rd}" if r.returncode == 1 else f"ssh rc {r.returncode}: {r.stderr.decode(errors='replace').strip()[-160:]}")
+        return None
+
+    held = []
+    with ThreadPoolExecutor(max_workers=max(1, len(asked))) as ex:
+        for a, why in zip(asked, ex.map(holds, asked)):
+            answers[a[0]] = why
+            if why is None:
+                held.append(a[1:])
+    answers = [x for x in answers if x is not None]
+    if not unique:
+        held = held[:1]
     if len(held) > 1:
         raise Refused(f"{' and '.join(h[0] for h in held)} each hold a run {run_id}: name one with --on")
     if held:
