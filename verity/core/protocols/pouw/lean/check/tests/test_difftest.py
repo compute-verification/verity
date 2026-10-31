@@ -42,6 +42,11 @@ output: the salt, or the same refusal.
 
 Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
 multiple of 32 below 2^17, then sampled integers and non-integers, compared output for output: the count, or the same refusal.
+
+Its `lead-record`, `lead-instance`, `lead-unit`, `lead-egress` and `lead-window` against `circuit.lead`'s `lead_record`,
+`instance_domain` (with its leaves and root), `unit_opening`, `egress_refused` with `forward_count`, and `window_refusal`:
+one `Port` each, over the cases `pouw_lead_cases` generates (honest inputs, then one mutation each aimed at every refusal
+and at a malformed input), compared output for output: the value, or the same refusal.
 """
 from __future__ import annotations
 
@@ -59,6 +64,7 @@ from hypothesis import strategies as st
 
 import pouw_check_cases as cases
 import pouw_credit_cases as credit_cases
+import pouw_lead_cases as lead_cases
 import pouw_opening_cases as openings
 import pouw_pass_cases as passes
 import pouw_rounds_cases as rounds_cases
@@ -66,6 +72,8 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import weights as W
+from verity.core.protocols.pouw.circuit import lead as L
+from verity.ml.commitments.merkle import tree_levels
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -546,6 +554,150 @@ def test_chunks(pass_server):
     print(f"pouw-check-difftest chunks: 4096 Ks swept, then {stats}")
     assert Counter(next(iter(o)) for o in outs) == {"chunks": 375, "refused": 3721}
     assert [outs[k // 32] for k in (4096, 6144, 12288, 14336, 16384)] == [{"chunks": n} for n in (1, 2, 3, 4, 4)]
+
+
+LEAD: Counter[str] = Counter()
+
+
+def _int(x: dict, k: str, least: int | None = None) -> int:
+    v = x.get(k)
+    if type(v) is not int or least is not None and v < least:
+        raise D.Reject(f"the input's {k} is malformed")
+    return v
+
+
+def _hex(x: dict, k: str) -> bytes:
+    if type(x.get(k)) is not str:
+        raise D.Reject(f"the input's {k} is not a string")
+    return bytes.fromhex(x[k])
+
+
+def _shapes(x: dict) -> list[L.Shape]:
+    s = x.get("shapes")
+    if type(s) is not list or not all(type(v) is list and len(v) == 4 and all(type(i) is int for i in v) for v in s):
+        raise D.Reject("the input's shapes is malformed")
+    return [L.Shape(*v) for v in s]
+
+
+def _refused(fn, *args):
+    """``fn(*args)`` and None, or None and the refusal it raises."""
+    try:
+        return fn(*args), None
+    except ValueError as e:
+        return None, str(e)
+
+
+def _tally(fn: str, out: dict) -> dict:
+    """Count ``fn``'s outcome by its refusal's template, the certifier's verdict cut off."""
+    why = out.get("reason" if fn == "window" else "refused")
+    LEAD[f"{fn}: " + (_template(why).split("'s egress: ")[0] if isinstance(why, str) else
+                      "refused" if why is True else "ok")] += 1
+    return out
+
+
+def lead_record(x: dict) -> dict:
+    record, why = _refused(L.lead_record, *(_hex(x, k) for k in ("weights_root", "stream", "prover", "key_leaf")),
+                           _int(x, "calls"))
+    return _tally("record", {"record": record.hex()} if why is None else {"refused": why})
+
+
+def lead_instance(x: dict) -> dict:
+    salt, position, schema, values = _hex(x, "salt"), _int(x, "position"), x.get("schema"), x.get("values")
+    if type(schema) is not str or type(values) is not list or not all(type(v) is str for v in values):
+        raise D.Reject("the input's schema or values is malformed")
+    values = [bytes.fromhex(v) for v in values]
+    dom, why = _refused(L.instance_domain, salt, position, len(values))
+    if why is not None:
+        return _tally("instance", {"refused": why})
+    leaves = [dom.leaf(r, r, schema, v) for r, v in enumerate(values)]
+    levels = tree_levels(dom, leaves)
+    return _tally("instance", {"domain": dom.domain_id.hex(), "leaves": [leaf.hex() for leaf in leaves],
+                               "root": (levels[-1][0] if levels else dom.empty_root()).hex()})
+
+
+def lead_unit(x: dict) -> dict:
+    op, why = _refused(L.unit_opening, _shapes(x), *(_int(x, k) for k in ("call", "R0", "C0", "BLK")))
+    if why is not None:
+        return _tally("unit", {"refused": why})
+    return _tally("unit", {"words": [list(w) for w in op["words"]], "a": [list(a) for a in op["a"]],
+                           "segments": op["segments"]})
+
+
+def lead_egress(x: dict) -> dict:
+    shapes, buckets = _shapes(x), x.get("buckets")
+    if any(s.refuse() for s in shapes):
+        raise D.Reject("a forward's shapes are the verifier's")
+
+    def nat(v) -> bool:
+        return type(v) is int and v >= 0
+
+    if type(buckets) is not list or not all(type(b) is list and len(b) == 2 and nat(b[0]) and type(b[1]) is list
+                                            and all(map(nat, b[1])) for b in buckets):
+        raise D.Reject("the input's buckets is malformed")
+    count, cap, fwd, release = (_int(x, k, 0) for k in ("count", "cap", "fwd_macs", "release"))
+    return _tally("egress", {"refused": L.egress_refused(count, shapes, cap, fwd),
+                             "count": L.forward_count([(r, frames) for r, frames in buckets], release)})
+
+
+def lead_window(x: dict) -> dict:
+    digests = [_hex(x, k) for k in ("record", "weights_root", "stream", "prover", "key_leaf")]
+    calls = _int(x, "calls")
+    if type(x.get("events")) is not list:
+        raise D.Reject("the input's events is not a list")
+    return _tally("window", {"reason": L.window_refusal(*digests, calls, x["events"])})
+
+
+#: each lead function's reference, its cases and their mutations' names
+LEADS = {"record": (lead_record, lead_cases.record_instance, lead_cases.RECORD_NAMES),
+         "instance": (lead_instance, lead_cases.instance_instance, lead_cases.INSTANCE_NAMES),
+         "unit": (lead_unit, lead_cases.unit_instance, lead_cases.UNIT_NAMES),
+         "egress": (lead_egress, lead_cases.egress_instance, lead_cases.EGRESS_NAMES),
+         "window": (lead_window, lead_cases.window_instance, lead_cases.WINDOW_NAMES)}
+#: the outcomes each one's run and sweep reach: every refusal, written as `_template` writes it
+LEAD_OUTCOMES = {
+    "record": {"ok", "a record binds a #-byte weights root, stream, prover and keyLeaf and # .. #^# - # calls a forward"},
+    "instance": {"ok", "a #-byte salt_w and a u# position"},
+    "unit": {"ok", "call #: K = # is outside [#, #], the inner dimensions the verifier admits",
+             "call #: a call of # rows and # columns is outside the [#, #] rows and [#, #] columns the verifier admits",
+             "call #: the kernel runs a call at a column tile of # or #, not #", "call # is not one of the forward's #",
+             "the tile at row #, column # is not on the # × # grid",
+             "the tile at row #, column # passes the # rows and # columns the verifier admits",
+             "a tile holds # .. # of the call's rows and # .. # of its columns, not # and #",
+             "block # starts past the call's # steps"},
+    "egress": {"ok", "refused"},
+    "window": {"ok", "a window of # calls a forward",
+               "the record, the weights' root, the stream, the prover and keyLeaf are # bytes each",
+               "the window's record does not open to its weights' root, stream, prover, keyLeaf and call count",
+               "event #: not a salt, an A root or a words root", "event #: the a_root event's fields are malformed",
+               "event #: the words_root event's fields are malformed", "event #: a second salt_w",
+               "event #: forward #'s call # has an A root recorded before salt_w",
+               "event #: call # of forward # has no A position in a window of # calls a forward",
+               "event #: K = # is outside [#, #], the inner dimensions the verifier admits",
+               "event #: a call of # rows and # columns is outside the [#, #] rows and [#, #] columns the verifier admits",
+               "event #: the kernel runs a call at a column tile of # or #, not #",
+               "event #: forward #'s A root while forward # is open: the forwards overlap", "event #: forward # is closed",
+               "event #: call # of forward # has an A root already",
+               "event #: a words root of forward #, which is not open", "event #: the certifier refused forward #",
+               "forward # is open when the record ends"},
+}
+
+
+@pytest.mark.parametrize("fn", list(LEADS))
+def test_lead(pass_server, fn):
+    """`PouwCheck.Lead` is `circuit.lead`'s window, function by function: generated honest inputs, then each mutation
+    over a few seeds (`replay`), so every refusal is reached whatever the sample, each one's message included."""
+    reference, instance, names = LEADS[fn]
+    port = D.Port("pouw-check-difftest", f"lead-{fn}", reference, package=LEAN, rejects=(D.Reject, ValueError),
+                  of_record=V.RECORD_VERDICT, inputs=st.builds(instance, st.randoms(use_true_random=False),
+                                                               st.sampled_from(["honest"] * max(1, len(names) // 3) + names)))
+    LEAD.clear()
+    stats = D.run(port, examples=400, server=pass_server)
+    swept = Counter(D.replay(port, instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                    for name in ["honest", *names] for seed in range(3))
+    print(f"pouw-check-difftest lead-{fn}: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(LEAD.items()))}")
+    got = {k.split(": ", 1)[1] for k in LEAD}
+    assert got == LEAD_OUTCOMES[fn], got ^ LEAD_OUTCOMES[fn]
 
 
 ROUNDED: Counter[str] = Counter()
