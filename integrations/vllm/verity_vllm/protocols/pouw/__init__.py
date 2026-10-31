@@ -23,11 +23,11 @@ commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
 weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
-retained in its own directory under ``transcript_dir`` when given.  The audit (drawing tiles, opening
+retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
-computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws each call's units under
+computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its window's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
 Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row nothing is executed in the linear's place
 (`executes`): the arm serves its own y, and each call is recorded as its own Program, compiled to H1 tile units
@@ -99,7 +99,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
-        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period")
+        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -140,11 +140,11 @@ class Settings:
     coins: Any = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    #: ``ncp-v2``'s replay: the window's work-law budget K, each call drawing its share (`plan.window_laws`); None is
+    #: ``ncp-v2``'s replay: the window's work-law budget K, each call sampling its share (`plan.window_laws`); None is
     #: `RECORD_K`
     draws: int | None = None
     #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first
-    #: call with its low bit flipped, so whatever the window's fresh draw, a drawn tile is wrong
+    #: call with its low bit flipped, so whatever the window's fresh sample, a sampled tile is wrong
     #: (`check.replay.pouw_circuit.tamper_tiles`); ``bias`` commits and serves the first biased call with bias word 0's low
     #: bit flipped
     tamper: str | None = None
@@ -188,6 +188,9 @@ class Settings:
     graphs: tuple[int, ...] = ()
     #: Pearl-C's: the lane's open period before ``session``'s reserve, or None (`pouw_h1_window.reserve_salt`, `period_reason`)
     period: Mapping[str, Any] | None = None
+    #: H1's window Program's tile unit (`pouw_h1_settings.UNITS`; None is v1's) and the K's it records (`pouw_h1_hooks.layers`)
+    unit: str | None = None
+    ks: tuple[int, ...] | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -647,11 +650,9 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
 def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
     committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
-    Under H1, the int8_exact arm's int8 weight rows as they are served, once a process (`pouw_h1_hooks.weight_roots`)."""
+    Under H1, the int8_exact arm's int8 weight rows as they are served, once a process (`pouw_h1_hooks.committed`)."""
     if scheme == PH.SCHEME:
-        layers = PHK.layers(target.model, linear_types())
-        return {"weight_roots": {str(w): r.hex() for w, r in PHK.weight_roots(layers).items()},
-                "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
+        return PHK.committed(PHK.layers(target.model, linear_types(), Settings.of(target.context.settings_of(NAME)).ks))
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
@@ -671,7 +672,7 @@ def weights_claim(scheme: Any, curated: bool = False, needs_gamma_fold: bool = F
     weights only when `SERVED_TRANSFORMS` pass the registered-weights rule (`registration.check_registration`, Pearl-C4's
     too); a keyed transform would take its key from the epoch's salt coin (`registration.rotation_key`).  Otherwise the
     claim says it is about nothing (`UNREGISTERED`) and names the refusal, and serving goes on: the salt is still the
-    challenger's live coin (`Epoch.start`), so what the draw establishes of the work is unchanged."""
+    challenger's live coin (`Epoch.start`), so what the sample establishes of the work is unchanged."""
     out: dict[str, Any] = {"transforms": list(SERVED_TRANSFORMS), "curated": curated}
     try:
         scheme.check_registration(SERVED_TRANSFORMS, curated, needs_gamma_fold)
@@ -748,8 +749,8 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     (`pouw_h1_hooks.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
     under the credit gate's trace (`pouw_h1_hooks.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
     requests and its batch order to the run (`pouw_h1_hooks.admitting`), each entry and each served row's request under its
-    round's root before the ``rounds`` coin, and the window's draw coin opens at release after its manifest. With the
-    setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
+    round's root before the ``rounds`` coin, and the window's sampling coin opens at release after its manifest. With the
+    setting ``challenger`` the salt, round and sampling coins are the auditor host's, from the one session infra's gate
     reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window has
     finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`). The
@@ -757,8 +758,8 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     registers no ``b/<K>`` and so credits nothing. ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
     only by default). On an arm that serves z/y records (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each
     committed layer whose N is whole 32-column units serves through ``scaled_mm_zy`` over T slots, the records its z. The
-    served values are the arm's, untouched."""
-    layers = PHK.layers(target.model, linear_types())
+    served values are the arm's, untouched. A linear at a K outside ``ks`` serves unhooked (`pouw_h1_hooks.wire`)."""
+    layers = PHK.layers(target.model, linear_types(), settings.ks)
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(int(w), Shape(16, k, n), int(w)) for w, (n, k) in committed["shapes"].items()))
@@ -791,7 +792,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
             run.commits["round_coins"] = rounds.challenger.commitment.to_json()
     _H1_RUNS[entry] = run
     h = target.hooks(entry)
-    PHK.wire(run, h, layers, settings.runner, settings.rows)
+    PHK.wire(run, h, layers, settings.runner, settings.rows, settings.ks)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: PHW.finish(run, session))
 
 

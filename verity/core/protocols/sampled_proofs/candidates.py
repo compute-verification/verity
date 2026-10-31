@@ -34,7 +34,8 @@ Parts = tuple[tuple["Shape", int], ...]
 class Shape:
     """A Definition at its statics, `id` naming it: one instance has `ands` ANDs, credits `work` and forfeits `influence`
     downstream when wrong, returns `out_bits` over `out_gates` gates, opens `rows` (bytes each) when proved, and has serving
-    commit `commit_bits` in `commit_rows` rows when it is a proof block; a statement holds at most `cap` of it.  It descends into
+    commit `commit_bits` in `commit_rows` rows when it is a proof block; a statement holds at most `cap` of it (0: past C-Flock's
+    block, never a proof block).  It descends into
     `parts` (its body's children, each with its count per instance) or any of `ways`, labelled."""
 
     id: str
@@ -69,7 +70,7 @@ class Pressure:
 
 
 def _legal(s: Shape) -> bool:
-    return unit_class(s.out_bits) is not None
+    return s.cap >= 1 and unit_class(s.out_bits) is not None
 
 
 def _candidate(op: str, s: Shape, n: int, label: str = "", replay: tuple[str, int] | None = None) -> Candidate:
@@ -106,8 +107,9 @@ class _Program:
             subs = [self.best(child, n * count) for child, count in parts]
             options.append((sum(p for p, _ in subs), tuple(u for _, us in subs for u in us)))
         if not options:
-            raise ValueError(f"{s.id} has no legal cut: its {s.out_bits} bits out fit no size class (at most "
-                             f"{UNIT_CLASS_MAX}) and it has no parts or ways to descend into")
+            why = ("it is past C-Flock's block (cap 0)" if s.cap < 1 else
+                   f"its {s.out_bits} bits out fit no size class (at most {UNIT_CLASS_MAX})")
+            raise ValueError(f"{s.id} has no legal cut: {why} and it has no parts or ways to descend into")
         self.memo[key] = min(options, key=lambda o: o[0])
         return self.memo[key]
 
@@ -161,7 +163,7 @@ def _pressure(prog: _Program, s: Shape, n: int, threshold: float, out: list[Pres
         return
     seen.add((s.id, n))
     best = prog.best(s, n)[0]
-    if not _legal(s):
+    if not _legal(s) and s.cap >= 1:
         free = _price(_unchecked(s, n), prog.costs, prog.objective, prog.lam)
         if free < best * (1 - threshold):
             out.append(Pressure("width", s.id, "", prog.lam, 1, 1 - free / best))
@@ -223,7 +225,7 @@ def shape_of(defn, pieces: Mapping[str, int], *, work: Mapping[str, int] | None 
     batch's members, a scan's iterations, summed), credited `work` by Definition
     id (0 elsewhere, a node's being its parts' unless named), the rows a proved instance opens one per parameter and one for
     its return (with `rows`), and serving's commitment its return's bits."""
-    from verity.ml.circuits.types import Array, Record, Tuple, Value
+    from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
     def bits(t) -> int:
         if isinstance(t, Value):
@@ -232,7 +234,7 @@ def shape_of(defn, pieces: Mapping[str, int], *, work: Mapping[str, int] | None 
             return t.n * bits(t.elem)
         if isinstance(t, Tuple):
             return sum(bits(f) for f in t.fields)
-        if isinstance(t, Record):
+        if isinstance(t, RecordType):
             return sum(bits(f) for _, f in t.fields)
         raise TypeError(f"no width for {t!r}")
 

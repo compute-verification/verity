@@ -74,8 +74,8 @@ port of that name at that port's one position, the registrants committing only t
 `leafLayer sess out known full want (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw)) pub receiptOf leafOf right` (accepted where flock-verify `--zk --registered` accepts all
 33 sessions, its known-content check at `known x w i k = knownOf (pub x w i) (salts x w i k) k`, the rows of the path's
 public inputs `pub x w i` (`PouwWindow.Lanes.knownRows`) under any salts, and its complete check
-(`Flock.Registered.checkComplete`, run when the `--registered` file sets `complete`: every port of the circuit is a port
-of `own`) and its known-read check (`Flock.KnownRead.check`: each known port, and each port the file marks
+(`Flock.Registered.checkComplete`, run on every statement whenever `--registered` is given: every port of the circuit is
+a port of `own`) and its known-read check (`Flock.KnownRead.check`: each known port, and each port the file marks
 `read_in_full`, `full x w i k = PouwWindow.Lanes.readFull (servedTile K) k`, the statement's reads of the partials, is
 a `sha512/row/v2` row of its known rows' or registered row's words, a computed row of the unit reads each bit of such
 an input row and a copy returns each bit of such an output row) included, and the leaf verifier's check of the file
