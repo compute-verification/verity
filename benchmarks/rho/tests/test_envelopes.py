@@ -73,8 +73,8 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
     slack = sampled.slack(ctx)
     assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
     assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-    assert math.fsum(v for k, v in slack.items() if k != "exfil.faulty") == pytest.approx(t5["residual"], rel=1e-9)
-    assert slack["exfil.faulty"] == pytest.approx(t5["cheat"], rel=1e-7)
+    assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+    assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
@@ -159,7 +159,7 @@ def test_the_layout_gets_only_what_an_abiding_strategy_gets():
     layout = sampled.partition(ctx).serving[0].layout
     assert set(layout.uncertified) == set(Remote.ABIDING)
     assert set(sampled.slack(ctx)) - set(layout.uncertified) == {"skip.certs", "break.lag", "break.escape",
-                                                                 "exfil.faulty"}
+                                                                 "exfil.incorrect"}
     used = ctx.location.phi * ctx.period.seconds * ctx.fleet.mfu_train
     assert layout.uncertified["undecl.gpu"] == pytest.approx(sampled.pouw.residual * used)
 
