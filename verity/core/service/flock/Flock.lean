@@ -64,6 +64,7 @@ import Flock.RecSetup
 import Flock.RecBudget
 import Flock.RecCompose
 import Flock.RecLinks
+import Flock.RecLinkTree
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
