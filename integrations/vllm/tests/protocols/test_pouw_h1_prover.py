@@ -59,6 +59,24 @@ def test_a_file_of_arrays_in_any_layout_is_np_savez_s(tmp_path):
         assert PV.keep_call(tmp_path, i, x, s, rec).read_bytes() == _today(tmp_path / f"{i}.today", x, s, rec), i
 
 
+def test_savez_writes_np_savezs_bytes_for_many_small_arrays_of_any_dtype(tmp_path):
+    """`savez` of the live dump's kinds of arrays (one-row u16 words, u8 salts viewed out of one buffer, a value's and a
+    path's strings, an i64 position, a 0-d unit) and of empty and Fortran-ordered ones is ``np.savez``'s file, byte for
+    byte."""
+    salts = np.arange(4 * 192, dtype=np.uint64).astype(np.uint8).reshape(4, 1, 192)
+    arrays = {"units": np.array([3]), "zero": np.array(7, np.int32), "empty": np.zeros((0, 3), "<f4"),
+              "fortran": np.asfortranarray(np.arange(12, dtype=np.int16).reshape(3, 4))}
+    for i in range(400):
+        p = f"slot_{i}"
+        arrays |= {f"w_{p}": np.asarray([[i, i >> 16]], np.uint16), f"s_{p}": salts[i % 4],
+                   f"v_{p}": np.array([f"h1/slots@{i % 3}"]), f"r_{p}": np.array([i], np.int64),
+                   f"p_{p}": np.array([bytes(range(i % 64, i % 64 + 64)).hex() * 3])}
+    with open(tmp_path / "want.npz", "wb") as f:
+        np.savez(f, **arrays)
+    assert PV.savez(tmp_path / "got.npz", arrays).read_bytes() == (tmp_path / "want.npz").read_bytes()
+    assert sorted(np.load(tmp_path / "got.npz").files) == sorted(arrays)
+
+
 @pytest.mark.parametrize("oldest, head, n, at", [
     (None, 0, 16, 0),
     (0, 8, 8, 8), (0, 8, 9, None), (0, 16, 1, None),
