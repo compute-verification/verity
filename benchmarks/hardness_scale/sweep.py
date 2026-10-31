@@ -110,6 +110,8 @@ LR20 = (7.5e-4, 1.5e-3, 3e-3, 6e-3, 1.2e-2, 2.4e-2)
 #: two κ per arrangement, matched across them: κ_lin ≈ 1/6 (m-mlpq-r8, res-f17, feat-s50), ≈ 1/3 (m-mlph-r8, res-f33,
 #: feat-s100), and the higher m-mlp-r8 (≈ 0.6) and res-f50
 MATCHED = ("m-mlp-r8", "m-mlph-r8", "m-mlpq-r8", "res-f17", "res-f33", "res-f50", "feat-s50", "feat-s100")
+#: MATCHED in 125M's claim order: the best arrangements at κ_lin ≈ 1/3 and 1/6 first, feature (the worst at 20M) last
+T1_125 = ("res-f33", "m-mlph-r8", "res-f17", "m-mlpq-r8", "m-mlp-r8", "res-f50", "feat-s50", "feat-s100")
 
 
 def lr_sweep(size, lrs, res):
@@ -133,7 +135,9 @@ def t1(res):
     runs lr20·(384/640)^p for p ∈ {1, ½, 0} and picks lr60 among them, whose exponent p60 sets 125M's lr20·(384/896)^p60,
     checked a half-step of p either side. p = −½ and −1 at 60M are baseline checks only: 60M's optimum is flat from p = ½ to
     −½ (3.2402, 3.2403, 3.2358), and an lr rising with width is not followed on a 0.004 edge. Every other config of a size
-    runs at its picked lr; 125M's 2D baseline goes first (the longest), then 60M, the rest of 20M, and 125M."""
+    runs at its picked lr. After 60M's arms, the order puts the 125M point of the trend first: 125M's baseline at D with
+    60M's two best arms at the higher lr, 125M's arms (T1_125), 125M's D/2, then 20M's lr and seed checks, 60M's, and
+    125M's lr check last (only Tier 2 reads its pick)."""
     out, pending = [], False
     s20, lr20 = lr_sweep("20m", LR20, res)
     out += s20
@@ -142,30 +146,31 @@ def t1(res):
     s60 = [cfg("60m", "base", lr20 * (384 / 640) ** p) for p in (1, 0.5, 0)]
     out += s60
     lr60 = None if any(c["name"] not in res for c in s60) else min(s60, key=lambda c: res[c["name"]])["lr"]
-    c125 = []
+    c125, checks60, s125 = [], [], []
     if lr60 is None:
         pending = True
     else:
         lr125 = lr20 * (384 / 896) ** (math.log(lr60 / lr20) / math.log(384 / 640))
         out.append(cfg("125m", "base", lr125, 2))
         out += [cfg("60m", "base", lr60, 2)] + [cfg("60m", a, lr60) for a in ("m-all-r8",) + MATCHED]
-        out += [cfg("60m", "base", lr60, 0.5), cfg("60m", "noise", lr60), cfg("60m", "base", lr60, seed=1)]
+        out += [cfg("60m", "base", lr60, 0.5), cfg("60m", "noise", lr60)]
         hi = lr20 * (384 / 640) ** -0.5
         top = cfg("60m", "base", lr20 * 640 / 384)
-        out += [cfg("60m", "base", hi), {**top, "name": top["name"] + "-r2"}]  # the first 5e-3 run was cancelled
-        out += [cfg("60m", a, hi) for a in ("res-f33", "m-mlph-r8")]
+        c125 = [cfg("125m", "base", lr125)] + [cfg("60m", a, hi) for a in ("res-f33", "m-mlph-r8")]
+        c125 += [cfg("125m", a, lr125) for a in T1_125] + [cfg("125m", "base", lr125, 0.5)]
+        checks60 = [cfg("60m", "base", lr60, seed=1), cfg("60m", "base", hi)]
+        checks60.append({**top, "name": top["name"] + "-r2"})  # the first 5e-3 run was cancelled
         s125, best125 = lr_sweep("125m", [lr125 * (384 / 896) ** p for p in (-0.5, 0, 0.5)], res)
         pending |= best125 is None
-        c125 = s125 + [cfg("125m", a, lr125) for a in MATCHED] + [cfg("125m", "base", lr125, 0.5)]
-    out += [cfg("20m", "base", lr20, dx) for dx in (2, 0.5, 0.25, 0.125)]
-    out += [cfg("9m", "base", lr20 * 1.5, dx) for dx in (1, 2)] + [cfg("9m", "base", lr20)]
-    out += [cfg("20m", a, lr20) for a in MATCHED]
-    out += [cfg("20m", a, lr20) for a in ("m-mlp-r4", "m-all-r8", "m-all-r4", "res-f25", "res-f67", "feat-s25",
-                                          "feat-s75", "noise", "bf16")]
-    out += [cfg("20m", a, lr20 * k) for a, k in (("m-mlp-r8", 2), ("m-mlph-r8", 2), ("res-f33", 2), ("res-f33", 0.5),
-                                                 ("feat-s50", 2))]
-    out += [cfg("20m", a, lr20, seed=1) for a in ("base", "m-mlp-r8", "res-f33")]
-    return out + c125, pending
+    rest = [cfg("20m", "base", lr20, dx) for dx in (2, 0.5, 0.25, 0.125)]
+    rest += [cfg("9m", "base", lr20 * 1.5, dx) for dx in (1, 2)] + [cfg("9m", "base", lr20)]
+    rest += [cfg("20m", a, lr20) for a in MATCHED]
+    rest += [cfg("20m", a, lr20) for a in ("m-mlp-r4", "m-all-r8", "m-all-r4", "res-f25", "res-f67", "feat-s25",
+                                           "feat-s75", "noise", "bf16")]
+    rest += [cfg("20m", a, lr20 * k) for a, k in (("m-mlp-r8", 2), ("m-mlph-r8", 2), ("res-f33", 2), ("res-f33", 0.5),
+                                                  ("feat-s50", 2))]
+    rest += [cfg("20m", a, lr20, seed=1) for a in ("base", "m-mlp-r8", "res-f33")]
+    return out + c125 + rest + checks60 + s125, pending
 
 
 T2_ARMS = ("res-f33", "m-mlph-r8")  # the two best arrangements at matched κ_lin = 1/3 in Tier 1
