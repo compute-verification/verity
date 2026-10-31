@@ -8,7 +8,8 @@ same arguments are the same verdict. A check is keyed by the SHA-512 of its name
 argument bound to its signature with the defaults applied, pickled: the registration record and each copy the verifier
 holds it to, a `Program` by its digest and annotations (computed once per object: a Program is never changed once
 built). A registration with anything changed, or any copy changed (R2's program, R3's ports, R4's leaf layer), is
-another key and is checked again; an argument pickle can't write is never kept. Not kept: `coins` (the operating
+another key and is checked again; a check whose arguments pickle can't write is never kept (`Memo.unkeyed` says
+why). Not kept: `coins` (the operating
 system's randomness), `run` (each stream's whole run, on its own coins and evidence), and any verdict whose Lean side
 refused, which may be the Lean failing to run rather than its answer. A reused verdict is a copy. The cache is the
 harness's: the verifier is unchanged, and outside `memo` every check runs."""
@@ -48,13 +49,14 @@ def _answered(got: Any) -> bool:
 
 
 class Memo:
-    """The verdicts kept by key, and per check how many the verifier was asked (`asked`) and how many were reused
-    (`reused`)."""
+    """The verdicts kept by key, and per check how many the verifier was asked (`asked`), how many were reused
+    (`reused`), and why the last of its arguments that pickle couldn't write was not keyed (`unkeyed`)."""
 
     def __init__(self) -> None:
         self.kept: dict[bytes, Any] = {}
         self.asked: Counter[str] = Counter()
         self.reused: Counter[str] = Counter()
+        self.unkeyed: dict[str, str] = {}
         self._programs: dict[int, tuple[Program, tuple[str, bytes]]] = {}
 
     def _program(self, p: Program) -> tuple[str, bytes]:
@@ -71,7 +73,8 @@ class Memo:
         out = _Sha512()
         try:
             pickle.Pickler(out, protocol=5).dump((name, V.RECORD_VERDICT, items))
-        except (pickle.PicklingError, TypeError, AttributeError, ValueError, RecursionError):
+        except (pickle.PicklingError, TypeError, AttributeError, ValueError, RecursionError) as e:
+            self.unkeyed[name] = f"{type(e).__name__}: {e}"[:200]
             return None
         return out.h.digest()
 
@@ -89,8 +92,8 @@ class Memo:
             return got
         return call
 
-    def counts(self) -> dict[str, dict[str, int]]:
-        return {"asked": dict(self.asked), "reused": dict(self.reused)}
+    def counts(self) -> dict[str, dict]:
+        return {"asked": dict(self.asked), "reused": dict(self.reused), "unkeyed": dict(self.unkeyed)}
 
 
 _active: Memo | None = None
@@ -125,6 +128,6 @@ def memoized(fn: Callable) -> Callable:
     return call
 
 
-def counts() -> dict[str, dict[str, int]] | None:
+def counts() -> dict[str, dict] | None:
     """The active memo's `Memo.counts`, None outside `memo`."""
     return None if _active is None else _active.counts()

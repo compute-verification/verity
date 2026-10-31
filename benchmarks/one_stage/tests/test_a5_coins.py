@@ -225,7 +225,7 @@ def test_under_the_memo_the_negatives_reuse_the_honest_registrations_checks_and_
         assert (neg[name]["lean"]["step"], neg[name]["lean"]["codes"]) == AC.SELECT_COINS
     assert (asked["check_public"], asked["registration"], asked["select"], asked["record"], asked["run"]) == (1, 1, 1, 2, 3)
     assert m.counts() == {"asked": {"check_public": 1, "check": 1, "select": 1, "audit_record": 2},
-                          "reused": {"check_public": 2, "check": 2, "select": 2, "audit_record": 1}}
+                          "reused": {"check_public": 2, "check": 2, "select": 2, "audit_record": 1}, "unkeyed": {}}
     assert {name: getattr(V, name) for name in AM.PURE} == own and AM.counts() is None
 
 
