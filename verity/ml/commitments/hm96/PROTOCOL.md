@@ -6,6 +6,8 @@ rules wrap a SHA-256 or SHA-512 leaf digest so that the published data hides the
 with the pinned key the bound holds except for a 2^-64 fraction of keys). Binding rests on the collision resistance of the one hash
 alone. `hm96-sha512/v1` is the rule for SHA-512 data commitments (SHA-512 on every commitment path); both
 instances have the same hiding bound.
+The one other rule is PoUW's lead's keyed leaf, which hides computationally under a window's secret key and commits that
+key as an `hm96-sha512/v1` leaf (frame-v3's `PROTOCOL.md`, §6, "Keyed leaves").
 
 - **Reference.** `verity.ml.commitments.hm96`, stdlib only: the instances `SHA256` and `SHA512`, and `HidingLayout`, one leaf
   over its inner layout. The module-level names are `hm96-sha256/v1`'s.

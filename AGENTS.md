@@ -74,7 +74,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
   model's size is public.
-- **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows) in frame-v3-sha512 trees, and signatures
+- **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
+  leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
   named premise H-μ⁺, not yet in a lock. Transport has one more: ML-KEM-1024, for a cableless remote party's sessions
