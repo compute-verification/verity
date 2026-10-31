@@ -324,8 +324,12 @@ class CommitWindows:
     def before_step(self, live: Iterable[str] = ()) -> None:
         """``live``: the engine ids the next step may run. With ``request_cap``, the open window closes before a step that
         would bring its distinct requests past the cap; the engine loop holds ``live`` to the cap, so the next window
-        opens within it."""
+        opens within it. A window that holds no step yet counts no request: under async scheduling the call that only
+        returns a burst's last outputs opens one that runs nothing, and the next burst serves in it rather than closing it
+        empty."""
         live = set(live)
+        if self.is_open and not int(self.com._step_index):
+            self.in_window = set()
         if self.is_open and (int(self.com._step_index) >= self.window_steps
                              or (self.window_bytes and committed_bytes(self.com) >= self.window_bytes)
                              or (self.request_cap and len(self.in_window | live) > self.request_cap)):
