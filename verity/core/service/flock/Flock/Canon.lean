@@ -1,6 +1,6 @@
 /-
 Canonical JSON: compact, object keys sorted bytewise, serde_json's string escaping (the form `compact-sorted-JSON` of
-`Flock.Statement` hashes). Only integers are accepted as numbers; anything else is refused rather than guessed.
+PROTOCOL.md §16 hashes). Only integers are accepted as numbers; anything else is refused rather than guessed.
 -/
 import Lean.Data.Json
 import Std.Data.TreeMap.Raw.Lemmas
