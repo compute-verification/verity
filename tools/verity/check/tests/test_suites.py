@@ -1818,6 +1818,20 @@ def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_p
     assert S.serial_slots([], 3, 32, 16) == 0
 
 
+def test_the_suites_in_one_process_leave_the_parallel_suites_half_the_memory(tmp_path, monkeypatch):
+    """A parallel suite's workers are fixed when it starts, which is before the one-process suites finish: 16 serial lanes at
+    TEST_PROCESS_GB took 144 of a 150 GB check's GB for the whole run, and flock ran on one 16 GB worker. Half of 150 GB holds
+    8 serial lanes (72 GB), so flock gets 78 // 16 = 4 workers, and the two together still fit in --mem-gb."""
+    S = _suites(monkeypatch, tmp_path)
+    flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
+    assert S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90) == 16
+    r = S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90, 150)
+    assert r == 8 and S.wide_gb(150, r) == 150 - 8 * S.TEST_PROCESS_GB
+    assert S.wide_workers(flock, 90 - r, S.wide_gb(150, r)) == 4 and S.wide_workers(flock, 74, S.wide_gb(150, r)) == 4
+    assert r * S.TEST_PROCESS_GB + 4 * 16 <= 150
+    assert S.serial_slots([5.0] * 48, 0, 48, 150) == 150 // S.TEST_PROCESS_GB, "with no parallel suite they may take all of it"
+
+
 def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):
     import json
 
