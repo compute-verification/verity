@@ -21,7 +21,7 @@ recomputation of each proof block's public input words (`HmIn.checkOwn`), and th
 
 The targets V5's assembly takes (`Bridge.AssemblyTargetV5`): `TransportsLiveV5` (`TransportsLiveCR` at these),
 `EndToEndHiddenV5` (`EndToEndHiddenC` at these, from `OpeningsCanonTargetV5`), and `FaultyRightTargetC`,
-`PartRusTarget` and `CountTarget` as V2 takes them.
+`PartBlocksTarget` and `CountTarget` as V2 takes them.
 -/
 
 namespace Flock.Guarantees
@@ -246,7 +246,7 @@ def SampledKSLiveV5 : Prop :=
 /-- **V5's assembly**: canonical transport at public inputs, M1's core over `RightRegZc`, the slot count and the count
 lemma turn `EndToEndHiddenV5` into `SampledKSLiveV5`. -/
 def _root_.Flock.Bridge.AssemblyTargetV5 : Prop :=
-  Bridge.TransportsLiveV5 → Bridge.FaultyRightTargetC → Bridge.PartRusTarget → Bridge.CountTarget →
+  Bridge.TransportsLiveV5 → Bridge.FaultyRightTargetC → Bridge.PartBlocksTarget → Bridge.CountTarget →
     Bridge.EndToEndHiddenV5 → SampledKSLiveV5
 
 end Flock.Guarantees
