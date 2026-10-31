@@ -1,7 +1,7 @@
 import Definitions.Accounting.RateAudit
 import Definitions.Accounting.RateAuditInteractive
 import Definitions.Accounting.RateAuditRemote
-import Definitions.Accounting.RateAuditHorizon
+import Definitions.Accounting.RateAuditPooled
 
 /-!
 # Conservation over tiers with named words (trusted)
@@ -17,7 +17,7 @@ oracle value is that word's receipt. Two of the run's queries with one oracle va
 * `RatePaidNamedRO`: at every count at once, `2^N/2^λ` in place of `RatePaidRO`'s `2^q/2^λ`.
 * `RateChainSampledNamedRO`: the route `Sampled` (`RateChainSampledRO`) with that error at each pass.
 * `RateSessionSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled draw
-  (`RateSessionDraw`): over the horizon and in every window at once.
+  (`RateSessionDraw`): over the monitoring period and in every window at once.
 
 The prover is one undifferentiated resource: these conserve the words read, rebuilt or held, whichever devices or
 parties read, rebuild or hold them, with no assumption on who they are.
@@ -92,7 +92,7 @@ is at most `(K / (P·N))^(s·P) + P·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 **The reading.** At `K = (1 − d̄)·P·N`, a window whose `s·P` openings all pass read, rebuilt or held the words of more
 than `K` correct receipts, at a slack of `N + 40` bits a pass for `λ`.
 
-Proof: `Accounting.SecurityProofs.RateChainSampledNamedRO`: `RateHorizon`, and `RatePaidNamedRO` at each pass through
+Proof: `Accounting.SecurityProofs.RateChainSampledNamedRO`: `RatePooled`, and `RatePaidNamedRO` at each pass through
 `RateChainPaidRO`'s union over passes.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -122,9 +122,9 @@ or some window's fall short of `K_w + 1` words,
 is at most `RateSessionDraw`'s bound plus `n·P·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 
 **The reading.** The hybrid claim on the words: at `K = (1 − d̄)·n·P·N` and `K_w = (1 − d_w)·P·N`, a session whose
-openings all pass read, rebuilt or held more than `(1 − d̄)` of its passes' words over its horizon and more than
-`(1 − d_w)` of them in every window, at a slack of `N + 40` bits a pass for `λ`. The words are conserved whoever reads,
-rebuilds or holds them: the prover is one resource, and nothing here assumes which device or party it is.
+openings all pass read, rebuilt or held more than `(1 − d̄)` of its passes' words over its monitoring period and more
+than `(1 − d_w)` of them in every window, at a slack of `N + 40` bits a pass for `λ`. The words are conserved whoever
+reads, rebuilds or holds them: the prover is one resource, and nothing here assumes which device or party it is.
 
 Proof: `Accounting.SecurityProofs.RateSessionSampledNamedRO`: at most `K` correct receipts in all or `K_w` in some
 window is `RateSessionDraw`'s event; otherwise some window's reads fall short of its correct receipts' words, so some
