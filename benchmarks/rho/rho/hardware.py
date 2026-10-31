@@ -1,5 +1,5 @@
-"""The physical model, `𝒜_phys`: the inventory's locations, its dark leaves and the horizon, in gates (the working
-draft's §8).
+"""The physical model (GLOSSARY.md's "The physical model": HW and INV, `Accounting.Hardware` and `Accounting.Covered`),
+which bounds the feasible set 𝓕: the inventory's locations, its dark leaves and the horizon, in gates.
 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
 and range. The datasheets' FLOP/s, the policy's `Γ`, the run's target, a sampled step's FLOPs and the classes' and
