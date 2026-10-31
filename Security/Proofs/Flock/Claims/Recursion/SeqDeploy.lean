@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Recursion.DeployZK
 The claim reads statement-indexed tapes (`ZKmalRx`), so `ZKBoundM` is `Claims.Recursion.ZK` at the masked record
 `deployRecM`: `deployRec` with a masked verifier `VM` and its inner view, the masked reference prover (`refPM`) on one
 tape (the inner prover's tape and the staging salts, then the sessions' slots), at each statement `x` read off the
-nested tape of `x`'s `n_S(x)` V\* sessions (`Layout.flatten`) on `x`'s own first-part tape `T₀ x`, through `pre x`, and
+nested tape of `x`'s `n_S(x)` V\* sessions (`RunParts.flatten`) on `x`'s own first-part tape `T₀ x`, through `pre x`, and
 the outer simulators. `R`, `Sim`, `εzk`, `γzk` and the pinned key read neither the verifier nor the prover, so they
 are `deployRec`'s.
 
@@ -24,7 +24,7 @@ namespace RecDeploy
 
 open _root_.Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout SeqTape Proto)
+open Claims.ZKMal (RunParts SeqTape Proto)
 open scoped NNReal
 
 /-- **The layout's prover reads its first part's tape only through `p`**: on a tape `p` reads, it is the layout's at
@@ -39,7 +39,7 @@ theorem layProver_comap (IV : Claims.Verifier Coin) (b : Brings) {T TS : Type} (
   | m + 1, x, hist, ω => by
       have hs : (lay IV b id wit).start x m = (lay IV b p wit).start x m := by
         rw [lay_start, lay_start, parts_start, parts_start]
-      simp only [Layout.prover, hs, layProver_comap IV b p wit PS w m x hist ω]
+      simp only [RunParts.prover, hs, layProver_comap IV b p wit PS w m x hist ω]
       rfl
 
 /-- **The masked record**: `deployRec` with the masked verifier `VM` and its inner view `iv`, the masked reference
@@ -62,7 +62,7 @@ noncomputable def deployRecM (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
     Nonce := fun x => ((T₀ x).iter 0 NB ΩB (nS x)).N
     Rest := fun x => ((T₀ x).iter 0 NB ΩB (nS x)).Ω
     tapeOf := fun x ω =>
-      (pre x (Layout.flatten (T₀ x) 0 NB ΩB (nS x) ω).1, (Layout.flatten (T₀ x) 0 NB ΩB (nS x) ω).2)
+      (pre x (RunParts.flatten (T₀ x) 0 NB ΩB (nS x) ω).1, (RunParts.flatten (T₀ x) 0 NB ΩB (nS x) ω).2)
     SO := SO }
 
 section Sim
@@ -95,10 +95,10 @@ theorem sim_deployRecM (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) :
 /-- **The masked record's prover at `x` is `ZKBoundM`'s**: `refPM` at `pre x` on the nested tape of `x`'s sessions
 read flat. -/
 theorem prover_deployRecM : (deployRecM IV ivScope b VM iv T₀ NB ΩB pre wit PS SO).prover =
-    fun w x => (refPM IV b (pre x) wit PS w).comap (Layout.flatten (T₀ x) 0 NB ΩB (nS x)) := by
+    fun w x => (refPM IV b (pre x) wit PS w).comap (RunParts.flatten (T₀ x) 0 NB ΩB (nS x)) := by
   funext w x
   exact congrArg Claims.Prover.mk (funext fun x' => funext fun hist => funext fun ω =>
-    layProver_comap IV b (pre x) wit PS w (nS x') x' hist (Layout.flatten (T₀ x) 0 NB ΩB (nS x) ω))
+    layProver_comap IV b (pre x) wit PS w (nS x') x' hist (RunParts.flatten (T₀ x) 0 NB ΩB (nS x) ω))
 
 end Sim
 

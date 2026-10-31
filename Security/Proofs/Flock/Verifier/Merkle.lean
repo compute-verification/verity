@@ -62,7 +62,7 @@ def MerklePair.Collides (ms : MerkleScheme) : MerklePair → Prop
   | .leaf r r' y y' => r ≠ r' ∧ ms.leaf r y = ms.leaf r' y'
 
 /-- A collision of a Merkle scheme's hash, as a proposition: some pair collides. -/
-def MerkleScheme.Collision (ms : MerkleScheme) : Prop := ∃ p : MerklePair, p.Collides ms
+def MerkleScheme.HasCollision (ms : MerkleScheme) : Prop := ∃ p : MerklePair, p.Collides ms
 
 /-- **The climb's extractor:** walking two paths up in step, the first node whose two parents are one while its children
 differ. -/
@@ -191,7 +191,7 @@ theorem merkle_binding_collision (ms : MerkleScheme) (hs : ms.Sized) (cap : Arra
     (positions : Array Nat) (rows1 rows2 : Array (Array F128)) (sib1 sib2 salt1 salt2 : Array ByteArray) (lanes : Nat)
     (h1 : merkleCheck ms cap c d positions rows1 sib1 salt1 lanes = .ok ())
     (h2 : merkleCheck ms cap c d positions rows2 sib2 salt2 lanes = .ok ())
-    (j : Nat) (hj : j < positions.size) (hr : rows1[j]! ≠ rows2[j]!) : ms.Collision :=
+    (j : Nat) (hj : j < positions.size) (hr : rows1[j]! ≠ rows2[j]!) : ms.HasCollision :=
   ⟨_, merkle_binding ms hs cap c d positions rows1 rows2 sib1 sib2 salt1 salt2 lanes h1 h2 j hj hr⟩
 
 /-! ### From a colliding pair to the hash's own inputs, for each scheme the verifier knows -/
@@ -244,21 +244,21 @@ theorem MerklePair.hm96_inputs (p : MerklePair) (h : p.Collides MerkleScheme.hm9
       exact Hm96.leafPair_collides _ _ _ _ _ y y' (Sha512.hash_size _) (Sha512.hash_size _)
         (fun hh => hx (Prod.mk.inj hh).1) h.2
 
-theorem MerkleScheme.sha256_collision (id : String) (h : (MerkleScheme.sha256 id).Collision) : Sha256.Collision :=
+theorem MerkleScheme.sha256_collision (id : String) (h : (MerkleScheme.sha256 id).HasCollision) : Sha256.HasCollision :=
   let ⟨p, hp⟩ := h
   ⟨_, _, (p.sha256_inputs id hp).1, (p.sha256_inputs id hp).2⟩
 
-theorem MerkleScheme.sha512_collision (id : String) (h : (MerkleScheme.sha512 id).Collision) : Sha512.Collision :=
+theorem MerkleScheme.sha512_collision (id : String) (h : (MerkleScheme.sha512 id).HasCollision) : Sha512.HasCollision :=
   let ⟨p, hp⟩ := h
   ⟨_, _, (p.sha512_inputs id hp).1, (p.sha512_inputs id hp).2⟩
 
-theorem MerkleScheme.hm96Sha512_collision (h : MerkleScheme.hm96Sha512.Collision) : Sha512.Collision :=
+theorem MerkleScheme.hm96Sha512_collision (h : MerkleScheme.hm96Sha512.HasCollision) : Sha512.HasCollision :=
   let ⟨p, hp⟩ := h
   ⟨_, _, (p.hm96_inputs hp).1, (p.hm96_inputs hp).2⟩
 
 /-- A collision of any scheme the verifier knows is a SHA-256 or SHA-512 collision (the corollary of the extractors
 `MerklePair.shaInputs` and `MerklePair.hm96Inputs`). -/
-theorem MerkleScheme.collision_hash : ∀ ms ∈ MerkleScheme.all, ms.Collision → Sha256.Collision ∨ Sha512.Collision := by
+theorem MerkleScheme.collision_hash : ∀ ms ∈ MerkleScheme.all, ms.HasCollision → Sha256.HasCollision ∨ Sha512.HasCollision := by
   intro ms h hc
   simp only [MerkleScheme.all, List.mem_cons, List.not_mem_nil, or_false] at h
   rcases h with rfl | rfl | rfl | rfl

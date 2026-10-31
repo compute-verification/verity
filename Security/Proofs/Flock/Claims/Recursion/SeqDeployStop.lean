@@ -25,7 +25,7 @@ namespace RecDeploy
 
 open _root_.Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout SeqTape Proto ZKmalAt iterSimG)
+open Claims.ZKMal (RunParts SeqTape Proto ZKmalAt iterSimG)
 open FlockSoundness.Discharge
 open scoped NNReal
 
@@ -117,12 +117,12 @@ theorem halted_asRounds (H : Claims.Msg → Claims.Msg) (k : ℕ) (x : Claims.Ms
 nested tape of `x`'s sessions read flat. -/
 theorem prover_deployRecMStop : (𝔇).prover =
     fun w x => (Claims.ZKMal.stopP (refPM IV b (pre x) wit PS w) (sR IV ivScope b) (kPre IV)).comap
-      (Layout.flatten (T₀ x) 0 NB ΩB (nS x)) := by
+      (RunParts.flatten (T₀ x) 0 NB ΩB (nS x)) := by
   funext w x
   exact congrArg Claims.Prover.mk (funext fun x' => funext fun hist => funext fun ω =>
     congrArg (fun o => if Claims.ZKMal.fired (sR IV ivScope b x') (kPre IV x') hist = true then Claims.OC.ret []
         else o)
-      (layProver_comap IV b (pre x) wit PS w (nS x') x' hist (Layout.flatten (T₀ x) 0 NB ΩB (nS x) ω)))
+      (layProver_comap IV b (pre x) wit PS w (nS x') x' hist (RunParts.flatten (T₀ x) 0 NB ΩB (nS x) ω)))
 
 theorem innerRound_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
     (ms : List (Claims.Msg × Claims.Out)) (y : Fin 1 → Fin (𝔇).saltLen → UInt8) :
@@ -151,7 +151,7 @@ noncomputable def stopEquiv (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
       (simMStop IV b (T₀ x) NB ΩB (simPre (deployRec IV ivScope b) I) SO' (sR IV ivScope b)).C x :=
   (Equiv.prodCongr (Equiv.piCongrRight fun _ => Equiv.funUnique (Fin 1) (Fin (𝔇).saltLen → UInt8))
     (Equiv.refl _)).trans ((Equiv.prodAssoc _ _ _).symm.trans (Claims.ZKMal.iterCoins (T₀ x) 0 NB ΩB
-      (Layout.seq (T₀ x) 0 NB ΩB ((parts IV b ((T₀ x).N × (T₀ x).Ω)).stopped (sR IV ivScope b)))
+      (RunParts.seq (T₀ x) 0 NB ΩB ((parts IV b ((T₀ x).N × (T₀ x).Ω)).stopped (sR IV ivScope b)))
       (Claims.ZKMal.censorSim (simPre (deployRec IV ivScope b) I) (sR IV ivScope b) (kPre IV))
       (fun j x => (SO' x j).C)
       (Claims.ZKMal.stopProgB (sR IV ivScope b) (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
@@ -252,7 +252,7 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
     (Claims.ZKMal.censorSim (simPre (deployRec IV ivScope b) I) (sR IV ivScope b) (kPre IV)) SO' (sR IV ivScope b) x
     𝔓 (nS x) (stopEquiv IV ivScope b VM iv T₀ NB ΩB pre wit PS SO I SO' H x (c₁, c₂, cs))
   have hc : Claims.ZKMal.iterCoins (T₀ x) 0 NB ΩB
-      (Layout.seq (T₀ x) 0 NB ΩB ((parts IV b ((T₀ x).N × (T₀ x).Ω)).stopped (sR IV ivScope b)))
+      (RunParts.seq (T₀ x) 0 NB ΩB ((parts IV b ((T₀ x).N × (T₀ x).Ω)).stopped (sR IV ivScope b)))
       (Claims.ZKMal.censorSim (simPre (deployRec IV ivScope b) I) (sR IV ivScope b) (kPre IV))
       (fun j x => (SO' x j).C)
       (Claims.ZKMal.stopProgB (sR IV ivScope b) (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
