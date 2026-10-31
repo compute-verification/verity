@@ -618,7 +618,7 @@ WORK = Work(3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("b", 6, 1, 1, 1)))
 
 def test_a_work_design_is_the_stratified_one_at_its_k():
     """A `Work` draw of the checked level reads its bounds off the stratified design at its k_s, and writes the profile's
-    `work` case (Lean `Core.Draw.work`), its existing cases unchanged."""
+    `work` case (Lean `Core.SamplingDesign.work`), its existing cases unchanged."""
     a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": WORK}, 0.1, drawn={"unit": 3})
     law = Stratified((Stratum("a", 4, 2), Stratum("b", 6, 1)))
     assert WORK.stratified == law and a.strata() == law and a.bound() == law.count_bound(0.1)
