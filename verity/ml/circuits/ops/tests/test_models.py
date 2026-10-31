@@ -1,4 +1,4 @@
-"""``verity.ml.circuits.silicon.models``: the ``Model`` protocol, ``GroupSum`` (= ``Pipeline``) and ``BlockScaledAlignAdd``.
+"""``verity.ml.circuits.silicon.models``: the ``Model`` protocol, ``GroupSum`` and ``BlockScaledAlignAdd``.
 
 The block-scaled model is replayed on every RTX 5090 vector autoproof recorded (``verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json``:
 1,601 nvfp4 ascending-K chains and 1,400 unscaled-FP4 dots) and must agree bit-for-bit; the refuted single-window
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity.ml.circuits.silicon import models, silicon
+from verity.ml.circuits.silicon import models
 from verity.ml.circuits.silicon.models import (
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,
@@ -37,7 +37,6 @@ from verity.ml.circuits.silicon.models import (
     BlockScaledAlignAdd,
     GroupSum,
     Model,
-    Pipeline,
     tc_dot,
     tc_dot_chain,
 )
@@ -68,13 +67,10 @@ def test_every_model_satisfies_the_protocol() -> None:
         assert isinstance(m.product(0, 0), Term)
 
 
-def test_pipeline_is_group_sum_and_nothing_moved() -> None:
-    assert Pipeline is GroupSum
-    assert silicon.Pipeline is GroupSum and silicon.Term is Term
+def test_pipelines_are_models() -> None:
     for name in ("AMPERE_BF16_M16N8K16", "HOPPER_BF16_M16N8K16", "HOPPER_E4M3_K32", "ADA_BF16_M16N8K16",
                  "ADA_E4M3_M16N8K32", "HAWKEYE_AMPERE_GROUPSUM_E4M3_V0"):
-        assert getattr(silicon, name) is getattr(models, name) is PIPELINES[getattr(models, name).name]
-    assert silicon.tc_dot is tc_dot and silicon.tc_dot_chain is tc_dot_chain
+        assert getattr(models, name) is PIPELINES[getattr(models, name).name]
     assert set(PIPELINES) <= set(MODELS)
 
 
