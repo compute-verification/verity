@@ -11,8 +11,9 @@ is a node the engine computed under other statics of its Definition than the cla
 node's on its operands: FA3's key block follows its launch's query rows (`targets.fa3_kblock_n`), so a prefill's
 attention isn't the class Program's one-row decode's, though at as few keys as one block of either holds the two agree.
 
-A unit its node's lowering filled holds its rows of that value (`_Program.outs`). Every other unit holds its Definition's
-function of the window's values:
+A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
+cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum. Every other unit holds
+its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
   prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `OutCollect_v1` the select
@@ -435,7 +436,9 @@ class Rows:
         nodes = self.lowered.fn.body.nodes
         for j, pieces in P.outs.items():
             w = _words(S.values[j])
-            for lo, hi, r in pieces:
+            parts = P.norms.get(j, ())
+            sums = [(len(w) // 2 + at * r.words, r) for at, r in enumerate(parts)]
+            for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
