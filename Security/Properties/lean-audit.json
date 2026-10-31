@@ -808,7 +808,8 @@
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": "b5bacea572fa620de0934d04bb17bf5973ceea4b5ea8512a20cbaa34904b991b",
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": "250f6026262a888db9a868c8cdfe9c036963a7f559e188ff1b96d67108172d77",
   "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
-  "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5"
+  "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5",
+  "Properties.RemoteAudit.Component.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789"
  },
  "layers": {
   "Properties.Pouw": {
