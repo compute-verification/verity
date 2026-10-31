@@ -69,6 +69,9 @@
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Recursive",
+  "Proofs.Properties.Verity.Recursive.Target",
+  "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger"
  ],
