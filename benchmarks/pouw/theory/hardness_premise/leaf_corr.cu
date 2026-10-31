@@ -134,9 +134,82 @@ __device__ __forceinline__ void correct(int4& v, int j, int m0, int lane, const 
   }
 }
 
+// The batched corrections (CORR 3: int8 E; CORR 4: E in [−1, 2], D-OUT's level-1 noise forms, 2 bits a row): a lane
+// group of 8 lanes a column, a lane 16 rows (m0 + 16 l8 ..), so a warp takes 4 columns at once. The column's entries are
+// loaded across the group's lanes and broadcast by SHFL, and 4 nonzeros' E^T loads are in flight before any is used.
+struct HiB {
+  const void* Et;      // BITS 8: E^T biased bytes (E + 128), K × m; BITS 2: E + 1 in 2 bits, 16 rows a word (row 4s + t
+                       // at bit 8t + 2s), K × m / 16 words
+  const int* colptr;   // n + 1
+  const u32* ent;      // per entry: (k · m / 16) << 8 | (hi & 255)
+  const int2* colc;    // per column: {B, B + c Σ hi}: BITS 8 B = 255 Σ_{hi<0}|hi|, c = 128; BITS 2 B = 3 Σ_{hi<0}|hi|, c = 1
+};
+
+template <int BITS>
+__device__ __forceinline__ void correct16(int4 (&v)[4], int j, int m0, int lane, const HiB& h) {
+  const int l8 = lane & 7;
+  const int beg = j >= 0 ? __ldg(h.colptr + j) : 0, cnt = j >= 0 ? __ldg(h.colptr + j + 1) - beg : 0;
+  const int maxc = __reduce_max_sync(0xffffffffu, cnt);
+  if (maxc == 0) return;
+  const int2 c = j >= 0 ? __ldg(h.colc + j) : make_int2(0, 0);
+  constexpr int W = BITS == 8 ? 8 : 4;
+  u32 acc[W];
+  const u32 b = BITS == 8 ? (u32)c.x * 0x10001u : (u32)c.x * 0x01010101u;
+#pragma unroll
+  for (int w = 0; w < W; w++) acc[w] = b;
+  const size_t base = (size_t)(m0 >> 4) + l8;
+  u32 mine = 0;
+#pragma unroll 1
+  for (int q0 = 0; q0 < maxc; q0 += 4) {
+    if ((q0 & 7) == 0) mine = q0 + l8 < cnt ? __ldg(h.ent + beg + q0 + l8) : 0u;  // 0: offset 0, hi 0
+    u32 e[4];
+#pragma unroll
+    for (int i = 0; i < 4; i++) e[i] = __shfl_sync(0xffffffffu, mine, (q0 & 7) + i, 8);
+    if constexpr (BITS == 8) {
+      uint4 x[4];
+#pragma unroll
+      for (int i = 0; i < 4; i++) x[i] = __ldg(reinterpret_cast<const uint4*>(h.Et) + base + (e[i] >> 8));
+#pragma unroll
+      for (int i = 0; i < 4; i++) {
+        const u32 d = (u32)(int)(int8_t)(e[i] & 255);
+        const u32 xs[4] = {x[i].x, x[i].y, x[i].z, x[i].w};
+#pragma unroll
+        for (int w = 0; w < 4; w++) {
+          acc[2 * w] += d * __byte_perm(xs[w], 0, 0x4140);
+          acc[2 * w + 1] += d * __byte_perm(xs[w], 0, 0x4342);
+        }
+      }
+    } else {
+      u32 x[4];
+#pragma unroll
+      for (int i = 0; i < 4; i++) x[i] = __ldg(reinterpret_cast<const u32*>(h.Et) + base + (e[i] >> 8));
+#pragma unroll
+      for (int i = 0; i < 4; i++) {
+        const u32 d = (u32)(int)(int8_t)(e[i] & 255);
+#pragma unroll
+        for (int s = 0; s < 4; s++) acc[s] += d * ((x[i] >> (2 * s)) & 0x03030303u);
+      }
+    }
+  }
+#pragma unroll
+  for (int w = 0; w < 4; w++) {
+    if constexpr (BITS == 8) {
+      v[w].x += ((int)(acc[2 * w] & 0xffff) - c.y) * 256;
+      v[w].y += ((int)(acc[2 * w] >> 16) - c.y) * 256;
+      v[w].z += ((int)(acc[2 * w + 1] & 0xffff) - c.y) * 256;
+      v[w].w += ((int)(acc[2 * w + 1] >> 16) - c.y) * 256;
+    } else {
+      v[w].x += ((int)(acc[w] & 0xff) - c.y) * 256;
+      v[w].y += ((int)((acc[w] >> 8) & 0xff) - c.y) * 256;
+      v[w].z += ((int)((acc[w] >> 16) & 0xff) - c.y) * 256;
+      v[w].w += ((int)(acc[w] >> 24) - c.y) * 256;
+    }
+  }
+}
+
 template <int CORR>
-__global__ void __launch_bounds__(THREADS, 2)
-    leaf_kernel(const int8_t* __restrict__ E, const int8_t* __restrict__ L, int m, int K, int* __restrict__ Mt, Hi h) {
+__global__ void __launch_bounds__(THREADS, 2) leaf_kernel(const int8_t* __restrict__ E, const int8_t* __restrict__ L, int m,
+                                                          int K, int* __restrict__ Mt, Hi h, HiB hb) {
   extern __shared__ __align__(128) unsigned char smem[];
   const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5;
   const int wm = warp >> 2, wn = warp & 3;
@@ -201,11 +274,26 @@ __global__ void __launch_bounds__(THREADS, 2)
         }
     }
     __syncthreads();
+    if constexpr (CORR >= 3) {
+      // the warp's own 8 columns, 4 at a time, corrected in T (a lane 16 rows) before they are stored
+#pragma unroll 1
+      for (int round = 0; round < 2; round++) {
+        const int c = warp * 8 + round * 4 + (lane >> 3), j = n0 + half * 64 + c;
+        int4 v[4];
+        int4* t = reinterpret_cast<int4*>(&T[c * TP + 16 * (lane & 7)]);
+#pragma unroll
+        for (int w = 0; w < 4; w++) v[w] = t[w];
+        correct16<CORR == 3 ? 8 : 2>(v, j, m0, lane, hb);
+#pragma unroll
+        for (int w = 0; w < 4; w++) t[w] = v[w];
+      }
+      __syncwarp();
+    }
 #pragma unroll 1
     for (int cc = 0; cc < 8; cc++) {
       const int c = warp * 8 + cc, j = n0 + half * 64 + c;
       int4 v = *reinterpret_cast<const int4*>(&T[c * TP + 4 * lane]);
-      if constexpr (CORR != 0) correct<CORR>(v, j, m0, lane, h);
+      if constexpr (CORR == 1 || CORR == 2) correct<CORR>(v, j, m0, lane, h);
       *reinterpret_cast<int4*>(&Mt[(size_t)j * m + m0 + 4 * lane]) = v;
     }
     __syncthreads();
@@ -224,6 +312,23 @@ __global__ void __launch_bounds__(THREADS) corr_kernel(int* __restrict__ Mt, int
   int4 v = *p;
   correct<CORR>(v, j, m0, lane, h);
   *p = v;
+}
+
+// the batched correction alone: block (row tile, 32 overflowing columns), a warp 4 columns, a lane 16 rows
+template <int BITS>
+__global__ void __launch_bounds__(THREADS) corr16_kernel(int* __restrict__ Mt, int m, const int* __restrict__ cols, int ncols,
+                                                         HiB h) {
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const int m0 = blockIdx.x * BM, ci = blockIdx.y * 32 + warp * 4 + (lane >> 3);
+  const int j = ci < ncols ? __ldg(cols + ci) : -1;
+  int4 v[4];
+  int4* p = j >= 0 ? reinterpret_cast<int4*>(&Mt[(size_t)j * m + m0 + 16 * (lane & 7)]) : nullptr;
+#pragma unroll
+  for (int w = 0; w < 4; w++) v[w] = p ? p[w] : make_int4(0, 0, 0, 0);
+  correct16<BITS>(v, j, m0, lane, h);
+  if (p)
+#pragma unroll
+    for (int w = 0; w < 4; w++) p[w] = v[w];
 }
 
 __global__ void empty_kernel(int* out) {
@@ -308,8 +413,8 @@ int main(int argc, char** argv) {
     max_abs = std::max(max_abs, s);
     if (colptr[j + 1] > colptr[j]) cols.push_back(j);
   }
-  if (max_abs * 255 >= 65536) {
-    fprintf(stderr, "a column's sum of |hi| (%lld) overflows pack's 16-bit lanes\n", max_abs);
+  if (max_abs * 255 >= 65536 || max_abs * 3 >= 256) {
+    fprintf(stderr, "a column's sum of |hi| (%lld) overflows pack's 16-bit or bits2's 8-bit lanes\n", max_abs);
     return 2;
   }
 
@@ -321,6 +426,8 @@ int main(int argc, char** argv) {
   GK_CK(cudaFuncSetAttribute(leaf_kernel<0>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   GK_CK(cudaFuncSetAttribute(leaf_kernel<1>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   GK_CK(cudaFuncSetAttribute(leaf_kernel<2>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+  GK_CK(cudaFuncSetAttribute(leaf_kernel<3>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+  GK_CK(cudaFuncSetAttribute(leaf_kernel<4>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   int occ = 0;
   GK_CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, leaf_kernel<1>, THREADS, SMEM));
   // m: two full waves of 128 × 128 tiles over the n / 128 column tiles
@@ -330,18 +437,42 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  // E: D-OUT's level-1 noise forms (sums and differences of two 1-bit quadrants), uniform over {−1, 0, 1, 2}
   std::vector<int8_t> E((size_t)m * K), Et((size_t)K * m), Etb((size_t)K * m);
+  std::vector<u32> Et2((size_t)K * (m / 16), 0u);
   uint64_t st = 0x2545F4914F6CDD1Dull;
   for (auto& x : E) {
     st ^= st << 13, st ^= st >> 7, st ^= st << 17;
-    x = (int8_t)(st >> 24);
+    x = (int8_t)((int)((st >> 24) & 3) - 1);
   }
   for (int i = 0; i < m; i++)
     for (int k = 0; k < K; k++) {
-      Et[(size_t)k * m + i] = E[(size_t)i * K + k];
-      Etb[(size_t)k * m + i] = (int8_t)(E[(size_t)i * K + k] ^ 0x80);
+      const int8_t e = E[(size_t)i * K + k];
+      Et[(size_t)k * m + i] = e;
+      Etb[(size_t)k * m + i] = (int8_t)(e ^ 0x80);
+      const int r = i & 15;
+      Et2[(size_t)k * (m / 16) + i / 16] |= (u32)(e + 1) << (8 * (r & 3) + 2 * (r >> 2));
     }
   int8_t *dE = dput(E), *dL = dput(lo), *dEt = dput(Et), *dEtb = dput(Etb);
+  u32* dEt2 = dput(Et2);
+  if ((long long)K * (m / 16) >= (1LL << 23)) {
+    fprintf(stderr, "K · m / 16 overflows the batched entries' 23-bit offsets\n");
+    return 2;
+  }
+  std::vector<u32> ent3(ent.size());
+  for (size_t p = 0; p < ent.size(); p++) ent3[p] = ((u32)(ent[p] >> 8) * (u32)(m / 16)) << 8 | (u32)(ent[p] & 255);
+  std::vector<int2> colc2(n);
+  for (int j = 0; j < n; j++) {
+    int neg = 0, sum = 0;
+    for (int p = colptr[j]; p < colptr[j + 1]; p++) {
+      const int d = (int8_t)(ent[p] & 255);
+      sum += d;
+      if (d < 0) neg -= d;
+    }
+    colc2[j] = make_int2(3 * neg, 3 * neg + sum);
+  }
+  u32* dent3 = dput(ent3);
+  int2* dcolc2 = dput(colc2);
   std::vector<longlong2> ent2(ent.size());
   for (size_t p = 0; p < ent.size(); p++)
     ent2[p] = make_longlong2((long long)(ent[p] >> 8) * m, (long long)(int8_t)(ent[p] & 255));
@@ -364,9 +495,11 @@ int main(int argc, char** argv) {
   GK_CK(cudaMalloc(&dS, mbytes));
   const Hi h1{reinterpret_cast<const u32*>(dEt), dcolptr, dent, dcolc},
       h2{reinterpret_cast<const u32*>(dEtb), dcolptr, dent, dcolc};
+  const HiB hb8{dEtb, dcolptr, dent3, dcolc}, hb2{dEt2, dcolptr, dent3, dcolc2};
   cudaStream_t s;
   GK_CK(cudaStreamCreate(&s));
-  const dim3 lgrid(n / BN, m / BM), cgrid(m / BM, (unsigned)((cols.size() + 7) / 8));
+  const dim3 lgrid(n / BN, m / BM), cgrid(m / BM, (unsigned)((cols.size() + 7) / 8)),
+      cgrid16(m / BM, (unsigned)((cols.size() + 31) / 32));
   const int peak_blocks = sms * 4, peak_iters = 4096;
   GK_CK(cudaMalloc(&dpeak, (size_t)peak_blocks * THREADS * 4));
 
@@ -397,29 +530,34 @@ int main(int argc, char** argv) {
     };
   };
   auto leaf = [&](int corr, int* M, cudaStream_t st_) {
-    if (corr == 0) leaf_kernel<0><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h1);
-    if (corr == 1) leaf_kernel<1><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h1);
-    if (corr == 2) leaf_kernel<2><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2);
+    if (corr == 0) leaf_kernel<0><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h1, hb8);
+    if (corr == 1) leaf_kernel<1><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h1, hb8);
+    if (corr == 2) leaf_kernel<2><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8);
+    if (corr == 3) leaf_kernel<3><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8);
+    if (corr == 4) leaf_kernel<4><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb2);
   };
   auto corr = [&](int c, int* M, cudaStream_t st_) {
     if (c == 1) corr_kernel<1><<<cgrid, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), h1);
     if (c == 2) corr_kernel<2><<<cgrid, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), h2);
+    if (c == 3) corr16_kernel<8><<<cgrid16, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), hb8);
+    if (c == 4) corr16_kernel<2><<<cgrid16, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), hb2);
   };
+  const char* names[5] = {"", "imad", "pack", "pack16", "bits2"};
 
   bool ok = true;
-  struct GateRow { const char* name; gk::PoisonGate g; };
+  struct GateRow { std::string name; gk::PoisonGate g; };
   std::vector<GateRow> gates;
   gates.push_back({"leaf", gk::poison_gate(dM, mbytes, s, [&](cudaStream_t st_) { leaf(0, dM, st_); }, matches(ref_lo))});
-  gates.push_back({"leaf+imad", gk::poison_gate(dM, mbytes, s, [&](cudaStream_t st_) { leaf(1, dM, st_); }, matches(ref_full))});
-  gates.push_back({"leaf+pack", gk::poison_gate(dM, mbytes, s, [&](cudaStream_t st_) { leaf(2, dM, st_); }, matches(ref_full))});
-  for (int c = 1; c <= 2; c++) {
+  for (int c = 1; c <= 4; c++) {
+    gates.push_back({std::string("leaf+") + names[c],
+                     gk::poison_gate(dM, mbytes, s, [&, c](cudaStream_t st_) { leaf(c, dM, st_); }, matches(ref_full))});
     // the correction applied to the uncorrected leaf's output; the control writes the leaf's output only
     auto arm = [&, c](cudaStream_t st_) { leaf(0, dM, st_); corr(c, dM, st_); };
     auto ctl = [&](cudaStream_t st_) { leaf(0, dM, st_); };
-    gates.push_back({c == 1 ? "corr+imad" : "corr+pack", gk::poison_gate(dM, mbytes, s, arm, matches(ref_full), ctl)});
+    gates.push_back({std::string("corr+") + names[c], gk::poison_gate(dM, mbytes, s, arm, matches(ref_full), ctl)});
   }
   for (auto& r : gates) {
-    printf("{\"gate\": \"%s\", \"accepted\": %s, \"control_rejected\": %s, \"poison_left\": %zu}\n", r.name,
+    printf("{\"gate\": \"%s\", \"accepted\": %s, \"control_rejected\": %s, \"poison_left\": %zu}\n", r.name.c_str(),
            r.g.accepted ? "true" : "false", r.g.control_rejected ? "true" : "false", r.g.left);
     ok &= r.g.ok();
   }
@@ -431,16 +569,27 @@ int main(int argc, char** argv) {
 
   GK_CK(cudaMemcpy(dS, dM, mbytes, cudaMemcpyDeviceToDevice));
   gk::Nvml nv(dev);
-  std::vector<gk::Arm> arms = {
-      {"leaf", [&](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) leaf(0, dM, st_); }},
-      {"leaf+imad", [&](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) leaf(1, dM, st_); }},
-      {"leaf+pack", [&](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) leaf(2, dM, st_); }},
-      {"corr+imad", [&](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) corr(1, dS, st_); }},
-      {"corr+pack", [&](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) corr(2, dS, st_); }},
-      {"empty", [&](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) empty_kernel<<<cgrid, THREADS, 0, st_>>>(nullptr); }},
-      {"peak", [&](cudaStream_t st_, int k) {
-         for (int i = 0; i < k; i++) peak_kernel<<<peak_blocks, THREADS, 0, st_>>>(peak_iters, 1u + i, dpeak);
-       }},
+  std::vector<gk::Arm> arms = {{"leaf", [&](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) leaf(0, dM, st_); }}};
+  for (int c = 1; c <= 4; c++)
+    arms.push_back({std::string("leaf+") + names[c],
+                    [&, c](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) leaf(c, dM, st_); }});
+  for (int c = 1; c <= 4; c++)
+    arms.push_back({std::string("corr+") + names[c],
+                    [&, c](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) corr(c, dS, st_); }});
+  arms.push_back({"empty", [&](cudaStream_t st_, int k) {
+                    for (int i = 0; i < k; i++) empty_kernel<<<cgrid, THREADS, 0, st_>>>(nullptr);
+                  }});
+  arms.push_back({"empty16", [&](cudaStream_t st_, int k) {
+                    for (int i = 0; i < k; i++) empty_kernel<<<cgrid16, THREADS, 0, st_>>>(nullptr);
+                  }});
+  arms.push_back({"peak", [&](cudaStream_t st_, int k) {
+                    for (int i = 0; i < k; i++) peak_kernel<<<peak_blocks, THREADS, 0, st_>>>(peak_iters, 1u + i, dpeak);
+                  }});
+  auto arm_index = [&](const std::string& name) {
+    for (size_t a = 0; a < arms.size(); a++)
+      if (arms[a].name == name) return (int)a;
+    fprintf(stderr, "no arm %s\n", name.c_str());
+    exit(2);
   };
   gk::Timing t = gk::timed_items(arms, reps, s, nv);
   GK_CK(cudaGetLastError());
@@ -460,10 +609,13 @@ int main(int argc, char** argv) {
     cyc[a] = ms[a] * mhz[a] * 1e3;
   }
   const double peak_macs = (double)peak_blocks * (THREADS / 32) * peak_iters * PEAK_CHAINS * 16 * 8 * 32;
-  const double peak_measured = peak_macs / (cyc[6] * sms);
+  const int P = arm_index("peak"), L0 = arm_index("leaf");
+  const double peak_measured = peak_macs / (cyc[P] * sms);
   const double peak = peak_override > 0 ? peak_override : peak_measured;  // MAC per SM-clock: W1 per SM-clock
   const double leaf_macs = (double)m * n * K, pairs = (double)m * nnz;
   auto writes = [&](double cycles) { return cycles * sms * peak / (32.0 * pairs); };
+  // the same by time alone, each arm at its own clock, against the peak arm's MAC a ms (no NVML needed)
+  auto writes_t = [&](double dms) { return dms * (peak_macs / ms[P]) / (32.0 * pairs); };
   printf(
       "{\"result\": \"leaf_corr\", \"gpu\": \"%s\", \"cc\": \"%d.%d\", \"sms\": %d, \"occupancy\": %d, \"m\": %d, \"n\": %d, "
       "\"K\": %d, \"nnz\": %lld, \"cols\": %zu, \"pairs\": %.0f, \"steady\": %s, \"peak_mac_per_sm_clk_measured\": %.2f, "
@@ -472,20 +624,22 @@ int main(int argc, char** argv) {
       peak_measured, peak);
   for (size_t a = 0; a < arms.size(); a++)
     printf(", \"%s\": {\"ms\": %.6f, \"sm_mhz\": %.0f, \"cycles\": %.1f}", arms[a].name.c_str(), ms[a], mhz[a], cyc[a]);
-  const double eff = leaf_macs / (cyc[0] * sms * peak);
-  printf(
-      ", \"leaf_efficiency\": %.4f, \"writes\": {\"leaf+imad_marginal\": %.4f, \"leaf+pack_marginal\": %.4f, "
-      "\"corr+imad\": %.4f, \"corr+pack\": %.4f, \"corr+imad_less_launch\": %.4f, \"corr+pack_less_launch\": %.4f, "
-      "\"empty\": %.4f}}\n",
-      eff, writes(cyc[1] - cyc[0]), writes(cyc[2] - cyc[0]), writes(cyc[3]), writes(cyc[4]), writes(cyc[3] - cyc[5]),
-      writes(cyc[4] - cyc[5]), writes(cyc[5]));
-  // the same by time alone, each arm at its own clock, against the peak arm's MAC a ms (no NVML needed)
-  auto writes_t = [&](double dms) { return dms * (peak_macs / ms[6]) / (32.0 * pairs); };
-  printf(
-      "{\"result\": \"leaf_corr_by_time\", \"peak_mac_per_ms\": %.4e, \"leaf_efficiency\": %.4f, \"writes\": "
-      "{\"leaf+imad_marginal\": %.4f, \"leaf+pack_marginal\": %.4f, \"corr+imad\": %.4f, \"corr+pack\": %.4f, "
-      "\"corr+imad_less_launch\": %.4f, \"corr+pack_less_launch\": %.4f, \"empty\": %.4f}}\n",
-      peak_macs / ms[6], leaf_macs / (ms[0] * peak_macs / ms[6]), writes_t(ms[1] - ms[0]), writes_t(ms[2] - ms[0]),
-      writes_t(ms[3]), writes_t(ms[4]), writes_t(ms[3] - ms[5]), writes_t(ms[4] - ms[5]), writes_t(ms[5]));
+  printf(", \"leaf_efficiency\": %.4f, \"leaf_efficiency_by_time\": %.4f", leaf_macs / (cyc[L0] * sms * peak),
+         leaf_macs / (ms[L0] * peak_macs / ms[P]));
+  // writes a (row, nonzero): a leaf+ arm's marginal over the leaf, a corr+ arm alone and less its grid's empty launch
+  for (int by_time = 0; by_time < 2; by_time++) {
+    auto price = [&](int a, int b) {
+      return by_time ? writes_t(ms[a] - (b >= 0 ? ms[b] : 0)) : writes(cyc[a] - (b >= 0 ? cyc[b] : 0));
+    };
+    printf(", \"%s\": {", by_time ? "writes_by_time" : "writes");
+    for (int c = 1; c <= 4; c++) {
+      const int lc = arm_index(std::string("leaf+") + names[c]), cc = arm_index(std::string("corr+") + names[c]);
+      const int e = arm_index(c <= 2 ? "empty" : "empty16");
+      printf("%s\"leaf+%s_marginal\": %.4f, \"corr+%s\": %.4f, \"corr+%s_less_launch\": %.4f", c > 1 ? ", " : "",
+             names[c], price(lc, L0), names[c], price(cc, -1), names[c], price(cc, e));
+    }
+    printf("}");
+  }
+  printf("}\n");
   return 0;
 }
