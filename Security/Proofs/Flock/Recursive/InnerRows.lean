@@ -232,7 +232,7 @@ theorem rows_commit {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (hsc : p
     unfold FormOk at hform
     split at hform
     · rename_i tu htu
-      obtain ⟨-, -, -, -, -, -, -, hI, -⟩ := FailClosed.unrolled_scope ht hc0 htu hform
+      obtain ⟨-, -, -, -, -, -, -, -, hI, -⟩ := FailClosed.unrolled_scope ht hc0 htu hform
       exact hI
     · rename_i htu
       rw [hh] at hform
