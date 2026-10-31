@@ -532,7 +532,7 @@ def dispatch(n: int, uniform_decode: bool, capture_sizes: list[int], max_num_seq
 
 
 def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int, int]], logits_kn: tuple[int, int], heads: tuple[int, int, int],
-               routes: dict[str, Any], *, capture_sizes: list[int], max_num_seqs: int, split_cap: int, device: SD.Device,
+               routes: dict[str, Any], *, capture_sizes: list[int], max_num_seqs: int, split_cap: int, device: SD.DeviceBindings,
                moe: Any = None) -> tuple[list[dict[str, Any]], list[list[int]]]:
     """Each engine step's batch, CUDA-graph mode and the Definitions it selects on `device` (`moe`(M): the fused-MoE expert GEMMs' at M
     rows, `served_moe.expert_plans`); and the (M, K, N) GEMM routes `routes` lacks."""
@@ -590,7 +590,7 @@ def identities_of(plans: list[dict[str, Any]], values: dict[str, dict[str, Any]]
 
 
 def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any], routes: dict[str, Any], schedule: list[dict[str, Any]],
-          steps: int, capture_sizes: list[int], max_num_seqs: int, device: SD.Device, split_cap: int = SPLIT_CAP, backbone: str = "model",
+          steps: int, capture_sizes: list[int], max_num_seqs: int, device: SD.DeviceBindings, split_cap: int = SPLIT_CAP, backbone: str = "model",
           lm_head: str = "lm_head.weight", rank: int = 0, moe: dict[str, Any] | None = None) -> dict[str, Any]:
     """The served Build (module docstring) on `device` (`served_device.device_of`); `moe` the serving process's fused-MoE record
     (`served_moe.expand`), required when a piece calls the fused-MoE op."""
@@ -623,7 +623,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
 
 def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kernels: dict[str, dict[str, Any]], won: dict[str, Any], *,
              source: dict[str, Any], schedule: list[dict[str, Any]], steps: int, routes: dict[str, Any], capture_sizes: list[int],
-             max_num_seqs: int, device: SD.Device, split_cap: int, lm_head: str, rank: int) -> dict[str, Any]:
+             max_num_seqs: int, device: SD.DeviceBindings, split_cap: int, lm_head: str, rank: int) -> dict[str, Any]:
     """The Build of a wired Program (`wire`, `served_moe.expand`) with its kernel records and autotune winners `won`: its step plans,
     identities and artifact; `source` says what the Program was read from (the trace's wrappers, or `predict.compiled`'s pins)."""
     if not wired["attention"]:

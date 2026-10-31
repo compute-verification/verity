@@ -795,14 +795,7 @@ KNOWN: dict[str, str] = {
     # integrations/
     "integrations/vllm/verity_vllm/acquire/committer_api.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (circuits)",
-    "integrations/vllm/verity_vllm/acquire/plan.py::Site": "homonym, a quantisation site: rename (circuits)",
-    "integrations/vllm/verity_vllm/acquire/served_device.py::Device":
-        "homonym, a served build's device: rename (circuits)",
     "integrations/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
-    "integrations/vllm/verity_vllm/commit/row_tables_device.py::Device":
-        "homonym, one CUDA device's build of a kernel library: rename (circuits)",
-    "integrations/vllm/verity_vllm/commit/served_record.py::Record":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes an execution block's committed values (circuits)",
     "integrations/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
