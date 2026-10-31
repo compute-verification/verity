@@ -178,12 +178,14 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/ml/flock/verifier/'s
-                    tracked files, which pin the upstream build and inputs, the interpreter, the environment)
+                    tracked files, which pin the upstream build and inputs, the interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
-                    the live crate, that toolchain's `rustc -vV`, the environment), so only a change to those pays for the Rust
-                    tests
-    preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the environment); a tree
-                    with uncommitted changes has no key, and runs them
+                    the live crate, that toolchain's `rustc -vV`, the platform, the environment), so only a change to those pays
+                    for the Rust tests
+    preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the platform, the
+                    environment); a tree with uncommitted changes has no key, and runs them
+                    The platform is `suites.platform_id` (not the kernel release) and the environment `_env_key` (the
+                    switches and the locale, not paths), so a pass is reused on any node for the same inputs, as a suite's is
     ratchet-gate    the gate's own, under `ratchet-gate/` ($RATCHET_GATE_CACHE): each change's verdict, keyed by the gate's bytes
                     and the change's commits (and BASE, for a verdict that read it)
 
@@ -218,7 +220,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import platform
 import re
 import shlex
 import shutil
@@ -238,13 +239,6 @@ FLOCK_VERIFIER = ROOT / "verity" / "ml" / "flock" / "verifier"
 #: the Lean verifier of record, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
 #: the Lean package away from the scripts rewrites it)
 FLOCK_LEAN = ROOT / "verity" / "core" / "service" / "flock"
-#: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
-VOLATILE = frozenset({"_", "OLDPWD", "PWD", "SHLVL", "TERM", "COLUMNS", "LINES", "TMUX", "TMUX_PANE", "SSH_CLIENT", "SSH_CONNECTION",
-                      "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER", "HOSTNAME", "PUBLIC_KEY",
-                      "CHECK_STORE_CUSTODY"})
-#: variables naming the machine rather than what a step computes: a pod's id, address and pod-scoped key (so a verdict one pod
-#: stored stays valid on another; `verdicts.py`)
-MACHINE_PREFIXES = ("RUNPOD_",)
 #: the recording run's custody dir, for `store_io` (not VERITY_-prefixed: the suites' cache keys on those, and the path is per run)
 CUSTODY_ENV = "CHECK_STORE_CUSTODY"
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
@@ -1493,12 +1487,13 @@ def circuit_combine(dirs: list[Path], out: Path) -> subprocess.CompletedProcess:
 
 #: What reaches the steps from this process's environment, Turborepo's strict mode being the model: where things are (PATH, HOME,
 #: the temporary and XDG directories, the Rust and Lean toolchains' homes), the locale, how this machine reaches the network (its
-#: proxies and certificate bundles), uv and the environment it runs in, and the switches tests read (`VERITY_*`, `FLOCK_*`).
+#: proxies and certificate bundles), uv and the environment it runs in, the GPUs the run may use (`research run` hides those
+#: gpu-lease hands out), and the switches tests read (`VERITY_*`, `FLOCK_*`).
 #: Nothing else: not the store's, RunPod's or GitHub's credentials, not what the recording run gives its workload (`RESEARCH_*`,
 #: the machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them).
 ENV_PASS = frozenset({"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LANGUAGE", "VIRTUAL_ENV", "CARGO_HOME", "RUSTUP_HOME",
                       "ELAN_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
-                      "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY"})
+                      "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "CUDA_VISIBLE_DEVICES"})
 ENV_PASS_PREFIXES = ("LC_", "XDG_", "UV_", "VERITY_", "FLOCK_")
 #: What check sets for its steps from its own state, never from the environment: a check run inside a step (its own tests) would
 #: otherwise pass its parent's on.
@@ -1528,10 +1523,19 @@ def env() -> dict[str, str]:
     return out
 
 
+#: what a step's key holds of its environment beside the switches tests read (`SUITES.keyed_variables`): the locale's, which say
+#: what encoding text without a declared one is read in, and the tree's own PYTHONPATH entries (`env`), which say what is imported
+KEYED_ENV = ("LANG", "LC_ALL", "LC_CTYPE", "PYTHONPATH")
+
+
 def _env_key(e: dict[str, str]) -> dict[str, str]:
-    """The environment as a key: without the shell's bookkeeping or the machine's identity, and with this tree's path written `<tree>`
-    (a machine keeps each commit's tree at its own path, and `uv run` puts that path in PATH, VIRTUAL_ENV and PYTHONPATH)."""
-    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(e.items()) if k not in VOLATILE and not k.startswith(MACHINE_PREFIXES)}
+    """The environment as a key: what a step's verdict can turn on (`KEYED_ENV`, `SUITES.keyed_variables`), with this tree's path
+    written `<tree>` (a machine keeps each commit's tree at its own path). Not where a machine keeps things (PATH, HOME, the
+    temporary and XDG directories, uv's and the toolchains' homes, a check slot's test cache), how it reaches the network or what
+    names it, which differ between nodes for the same inputs: what a step runs that the PATH finds is keyed by itself (the
+    interpreter, `rustc -vV`, the Lean toolchain's pin in the tree)."""
+    keep = {k: v for k, v in e.items() if k in KEYED_ENV} | SUITES.keyed_variables(e)
+    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(keep.items())}
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
@@ -1542,7 +1546,7 @@ def agreement_key(e: dict[str, str]) -> str | None:
     files = tracked_files()
     if files is None:
         return None
-    h = hashlib.sha256(json.dumps([sys.version, platform.platform(), _env_key(e)]).encode())
+    h = hashlib.sha256(json.dumps([sys.version, SUITES.platform_id(), _env_key(e)]).encode())
     for f in agreement_closure(files):
         p = ROOT / f
         h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
@@ -1578,7 +1582,7 @@ def rust_tests_key(e: dict[str, str]) -> str | None:
                        capture_output=True, text=True)
     if r.returncode:
         return None
-    h = hashlib.sha256(json.dumps([r.stdout, platform.platform(), _env_key(e)]).encode())
+    h = hashlib.sha256(json.dumps([r.stdout, SUITES.platform_id(), _env_key(e)]).encode())
     for f in rust_tests_inputs(files):
         p = ROOT / f
         h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
@@ -1593,7 +1597,7 @@ def lints_key(e: dict[str, str]) -> str | None:
     tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, capture_output=True, text=True)
     if st.returncode or st.stdout.strip() or tree.returncode:
         return None
-    return hashlib.sha256(json.dumps([tree.stdout.strip(), list(LINTS), sys.version, platform.platform(), _env_key(e)]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([tree.stdout.strip(), list(LINTS), sys.version, SUITES.platform_id(), _env_key(e)]).encode()).hexdigest()
 
 
 #: the steps whose pass is kept under a key of everything they read, and reused while it holds

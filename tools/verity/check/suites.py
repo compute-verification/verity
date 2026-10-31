@@ -14,12 +14,15 @@ the directories of the workspace packages it depends on (its dependencies, extra
 transitively without their dependency groups, which are their own tests' tooling; a package that lists `exports` under
 `[tool.verity.tests]` is those paths of it, what its dependents read, in place of its directory), the paths it lists under
 `[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
-tests read a little of a large dependency), the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
+tests read a little of a large dependency), the build outputs it lists under `artifacts` (git ignores them: one a Lake package
+builds by what it is built from, `built_from`, any other by its digest), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
-groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
-os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
-and the `VERITY_*` and `FLOCK_*` variables tests switch on (all but the `where` ones `settings.py` declares), and the code that
-runs the suites (`RUNNER`: this runner, its settings and its guard, not the rest of check, so an edit to `check.py` reruns its own suite alone). The cache key hashes all
+groups, which bring pytest) and the installed version of each, and the environment (`environment`): Python, the platform, the
+base image (the os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake` and `cargo` are on the PATH and
+whether the tests may use a GPU, and the `VERITY_*` and `FLOCK_*` variables tests switch on (all but the `where` ones
+`settings.py` declares), and the code that runs the suites (`RUNNER`: this runner, its settings and its guard, not the rest of
+check, so an edit to `check.py` reruns its own suite alone). Nothing in it names the machine, the checkout's path or the run, so
+the same inputs key alike on every node. The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
@@ -170,7 +173,7 @@ CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.
 RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard/verity_suite_guard.py",
           "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
 XDIST = importlib.util.find_spec("xdist") is not None
-TOOLS = ("lake", "cargo", "nvidia-smi")
+TOOLS = ("lake", "cargo")
 #: the variables a pass is keyed on: those of these prefixes whose role isn't `where` (`settings.py`: not where results are kept,
 #: which are kept, or the runner's own `VERITY_SUITE_*` it sets for the tests)
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
@@ -415,25 +418,53 @@ def discover() -> list[Suite]:
             if s.path != "." else s for s in suites]
 
 
-#: the git tree of the Lean verifier's sources, per checkout (`built_from`): they don't change while a run keys its suites
-_SOURCES: dict[Path, str] = {}
+#: what each Lake package's build is keyed by, per checkout and package (`built_from`), and under the package "" the checkout's tree
+#: they were read from: its sources don't change while a run keys its suites
+_SOURCES: dict[tuple[Path, str], str | None] = {}
+
+
+def lake_sources(pkg: str) -> list[str] | None:
+    """The repository paths `lake build` in the Lake package at ``pkg`` reads: the package and each package it requires by path
+    (its lakefile's `require ... path` and its manifest's path entries, which list the inherited ones too). A package it requires
+    from git is fetched at the revision its manifest pins, which the package's tree holds. None when its build may read anything
+    else: a `lakefile.lean` (not parsed here), a require its manifest pins no revision for, or a path outside the tree."""
+    d = ROOT / pkg
+    if not (d / "lakefile.toml").is_file() or (d / "lakefile.lean").exists():
+        return None
+    reqs = [r for r in tomllib.loads((d / "lakefile.toml").read_text()).get("require", []) if isinstance(r, dict)]
+    m = d / "lake-manifest.json"
+    entries = [e for e in json.loads(m.read_text()).get("packages", []) if isinstance(e, dict)] if m.is_file() else []
+    pinned = {e.get("name") for e in entries if e.get("type") == "git" and e.get("rev")}
+    if any(not isinstance(r.get("path"), str) and r.get("name") not in pinned for r in reqs):
+        return None
+    out = {pkg}
+    for s in [r["path"] for r in reqs if isinstance(r.get("path"), str)] + [e["dir"] for e in entries
+                                                                           if e.get("type") == "path" and isinstance(e.get("dir"), str)]:
+        rel = os.path.relpath(os.path.normpath(d / s), ROOT)
+        if rel.startswith("..") or not ((ROOT / rel / "lakefile.toml").is_file() or (ROOT / rel / "lakefile.lean").is_file()):
+            return None
+        out.add(rel)
+    return sorted(out)
 
 
 def built_from(artifact: str) -> str | None:
-    """What a build output the Lean verifier's `lake build` makes (under its `.lake/build/`) is keyed by: the git tree of the
-    verifier's directory (its sources, lakefile, manifest and toolchain pin), not the bytes built, while its lakefile requires no
-    other package.
-    check runs a suite that declares one only after its lean-build step has built them from that tree (`AFTER_LEAN`), and this
-    runner builds them first (`lean_build`), so a plan that builds nothing (`check.py --plan`) keys such a suite as the check
-    does.  None for any other output, or with no verifier."""
-    lean = flock_lean()
-    if not (lean / "lakefile.toml").is_file() or not (ROOT / artifact).resolve().is_relative_to((lean / ".lake" / "build").resolve()):
+    """What a build output under a Lake package's `.lake/build/` is keyed by: the git trees of what its build reads
+    (`lake_sources`), not the bytes built or whether a node's tree holds them yet. A test that runs one builds it first (`lake
+    build`, as the difftest harness's `build` and `pouw.verifier` do), and Lake rebuilds it from those sources whatever an earlier
+    run left in the tree; the Lean verifier's are built before the suites that declare them, by check's lean-build step
+    (`AFTER_LEAN`) or this runner's `lean_build`. So a node that built them, one that didn't, and a plan that builds nothing
+    (`check.py --plan`) key such a suite alike. None for any other output."""
+    pkg, sep, _ = artifact.partition("/.lake/build/")
+    if not sep:
         return None
-    if "require" in (lean / "lakefile.toml").read_text():          # the build reads another package then, which its tree misses
-        return None
-    if ROOT not in _SOURCES:
-        _SOURCES[ROOT] = object_ids(worktree(), [lean.relative_to(ROOT).as_posix()])[lean.relative_to(ROOT).as_posix()]
-    return f"built from {_SOURCES[ROOT]}"
+    if (ROOT, pkg) not in _SOURCES:
+        src = lake_sources(pkg)
+        if src is not None and (ROOT, "") not in _SOURCES:
+            _SOURCES[ROOT, ""] = worktree()
+        ids = object_ids(_SOURCES[ROOT, ""], src) if src is not None else {}
+        _SOURCES[ROOT, pkg] = (None if src is None or "absent" in ids.values()
+                               else f"built from {ids[pkg] if len(ids) == 1 else _digest(ids)}")
+    return _SOURCES[ROOT, pkg]
 
 
 def artifact_ids(suite: Suite) -> dict[str, str]:
@@ -637,7 +668,11 @@ def lean_on_path() -> None:
     p = subprocess.run(["bash", "-c", ELAN + "command -v lake"], capture_output=True, text=True)
     lake = p.stdout.strip().splitlines()[-1] if p.returncode == 0 and p.stdout.strip() else ""
     if lake and shutil.which("lake") is None:
-        os.environ["PATH"] = os.pathsep.join([str(Path(lake).parent), SETTINGS.PATH])
+        _on_path(Path(lake).parent)
+
+
+def _on_path(d: Path) -> None:
+    os.environ["PATH"] = os.pathsep.join([str(d), SETTINGS.PATH])
 
 
 def lean_build(log: Path) -> str | None:
@@ -660,11 +695,40 @@ def base_image() -> dict:
     return {"os": f"{release.get('ID', '?')} {release.get('VERSION_ID', '?')}", "libc": " ".join(platform.libc_ver())}
 
 
+def platform_id() -> dict:
+    """The platform as a key sees it: the system, the CPU architecture and the base image (`base_image`). Not the kernel release
+    (`platform.platform()` names it), which differs between nodes of one image, nor the host."""
+    return {"system": platform.system(), "machine": platform.machine(), "image": base_image()}
+
+
+def gpus(env) -> bool:
+    """Whether a process with environment ``env`` may use a GPU: `nvidia-smi` is on the PATH and `CUDA_VISIBLE_DEVICES` doesn't
+    hide every GPU, which is what a GPU test runs or skips on. A run on a node whose GPUs gpu-lease hands out sees none (`research
+    run` sets the variable empty, and check passes it to its steps), so it keys its suites as a run on a node without GPUs does."""
+    return shutil.which("nvidia-smi") is not None and SETTINGS.raw("CUDA_VISIBLE_DEVICES", env) != ""
+
+
+def cargo_on_path() -> None:
+    """Put rustup's `cargo` on this process's PATH where rustup installs it (~/.cargo/bin, which flock's `check_build.sh` puts first
+    too) and the PATH lacks it (a login shell's profile puts it there, `uv run` from a runner doesn't), so the key's `cargo` says
+    whether the machine has it, not how the run was started."""
+    if shutil.which("cargo") is None and (b := Path.home() / ".cargo" / "bin").joinpath("cargo").is_file():
+        _on_path(b)
+
+
+def keyed_variables(env) -> dict[str, str]:
+    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less the `where` ones (`settings.py`)."""
+    return {k: v for k, v in sorted(env.items()) if k.startswith(ENV_PREFIXES) and SETTINGS.role_of(k) != SETTINGS.WHERE}
+
+
 def environment() -> dict:
-    return {"python": platform.python_version(), "system": platform.system(), "machine": platform.machine(), "image": base_image(),
-            "tools": {t: shutil.which(t) is not None for t in TOOLS},
-            "variables": {k: v for k, v in sorted(SETTINGS.environ().items())
-                          if k.startswith(ENV_PREFIXES) and SETTINGS.role_of(k) != SETTINGS.WHERE}}
+    """The environment a suite's key holds, each part one a verdict can turn on: the interpreter's version (`.python-version` pins
+    one for every machine), the platform (`platform_id`), whether `lake` and `cargo` are on the PATH (`cargo_on_path`) and whether
+    this process may use a GPU (`gpus`), which tests skip on, and the variables they switch on (`keyed_variables`). Nothing that
+    names the machine, the checkout's path or the run."""
+    env = SETTINGS.environ()
+    return {"python": platform.python_version(), **platform_id(),
+            "tools": {**{t: shutil.which(t) is not None for t in TOOLS}, "gpus": gpus(env)}, "variables": keyed_variables(env)}
 
 
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
@@ -1363,12 +1427,14 @@ def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
             a, b = wr.get(d) or [None, None], nr.get(d) or [None, None]
             out.append(f"dependency {d}: " + (f"{a[1]} -> {b[1]}" if a[1] != b[1] else "its uv.lock entry changed"))
     we, ne = was.get("environment", {}), now["environment"]
-    for k in ("python", "system", "machine"):
+    for k in ("python", "system", "machine", "image"):
         if we.get(k) != ne.get(k):
-            out.append(f"{k}: {we.get(k)} -> {ne.get(k)}")
+            out.append(f"{'base image' if k == 'image' else k}: {we.get(k)} -> {ne.get(k)}")
     for t in sorted(set(we.get("tools", {})) | set(ne.get("tools", {}))):
-        if we.get("tools", {}).get(t) != ne.get("tools", {}).get(t):
-            out.append(f"tool {t}: {'on the PATH' if we.get('tools', {}).get(t) else 'absent'} -> {'on the PATH' if ne.get('tools', {}).get(t) else 'absent'}")
+        a, b = we.get("tools", {}).get(t), ne.get("tools", {}).get(t)
+        if a != b:
+            out.append(f"GPUs: {'usable' if a else 'none'} -> {'usable' if b else 'none'}" if t == "gpus" else
+                       f"tool {t}: {'on the PATH' if a else 'absent'} -> {'on the PATH' if b else 'absent'}")
     wv, nv = we.get("variables", {}), ne.get("variables", {})
     for v in sorted(set(wv) | set(nv)):
         if wv.get(v) != nv.get(v):
@@ -2160,6 +2226,7 @@ def main(argv: list[str] | None = None) -> int:
                   and (flock_lean() / "lakefile.toml").exists())
     if build_lean:
         lean_on_path()
+    cargo_on_path()
     env = environment()
     inputs = {s: inputs_of(s, pkgs) for s in chosen}
     cuts = {s: dropped(s, inputs[s]) for s in chosen}

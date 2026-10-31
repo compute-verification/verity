@@ -775,7 +775,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
-    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
+    assert CHECK._env_key({"PYTHONPATH": f"{ROOT}/x", "VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"PYTHONPATH": "<tree>/x"}
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -1836,7 +1836,8 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     e = {"PATH": "/usr/bin"}
     one = CHECK.lints_key(e)
-    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) == one
+    assert CHECK.lints_key({**e, "VERITY_SLOW": "1"}) != one
     (tmp_path / "b.md").write_text("b\n")
     assert CHECK.lints_key(e) is None
     git("add", "-A")
