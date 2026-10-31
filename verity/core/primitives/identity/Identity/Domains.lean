@@ -65,7 +65,7 @@ abbrev POUW_H1_ROUND_A : String := "verity/pouw/h1/round-a/v1"
 abbrev POUW_H1_COMMIT : String := "verity/pouw/h1/commit/v1"
 abbrev POUW_H1_REQUEST_IDS : String := "verity/pouw/h1/requests/ids/v1"
 abbrev POUW_H1_WEIGHTS : String := "verity/pouw/h1/weights/v1"
-abbrev POUW_H1_OK_ROW_SALT : String := "verity/pouw/h1-prove/ok-row-salt/v0"
+abbrev POUW_H1_OK_ROW_SALT : String := "verity/pouw/h1-prove/ok-row-salt/v1"
 
 -- PoUW: noise, seeds and receipts
 abbrev POUW_SEED : String := "verity/pouw/seed/v2"

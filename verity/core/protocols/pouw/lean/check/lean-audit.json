@@ -80,7 +80,8 @@
   "PouwCheck.Credit": {
    "imports": [
     "Std.Data.HashMap",
-    "Flock.Keccak",
+    "Flock.Bytes",
+    "Flock.Hash",
     "Flock.Program",
     "Flock.RegKnown",
     "PouwCommit.Frame",
