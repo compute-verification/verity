@@ -10,6 +10,7 @@ import json
 
 import pytest
 import remote_bandwidth_vectors as rv
+from remote_bandwidth_fakes import Clock
 
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
@@ -274,14 +275,6 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
             assert len({p["sign_bits_sha512"] for p in c["passes"]}) == 3   # the signs are re-keyed every pass
             assert all(len(bytes.fromhex(s)) == 4 * rows for p in c["passes"] for s in p["sigma"].values())
     assert len({c["passes"][0]["root"] for c in chains.values()}) == 5
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
 
 
 @pytest.mark.slow
