@@ -32,7 +32,7 @@ def slots(tmp_path, monkeypatch):
     f = tmp_path / "lean-slots"
     f.write_text("# vy-nebius-1: 4, split for proofs and the lander\naudit 2\ncheck 2   # check's lean-audit step\n")
     monkeypatch.setattr(LS, "SLOTS", f)
-    for v in (LS.HELD, "LEAN_SLOT_POOL", "CHECK_SLOT", "RESEARCH_LANE", "RESEARCH_RUN_ID", "RESEARCH_AGENT_URL"):
+    for v in (LS.HELD, "LEAN_SLOT_POOL", "CHECK_SLOT", "RESEARCH_LANE", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR", "RESEARCH_AGENT_URL"):
         monkeypatch.delenv(v, raising=False)
     return tmp_path
 
@@ -104,6 +104,33 @@ def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots
     assert who == {"pid": me, "run": "r-me", "tree": os.getcwd(), "by": None, "took": "2026-10-03T17:00Z"}
     os.close(held.pop())
     os.close(got[2])
+
+
+def test_a_run_s_wait_for_a_slot_moves_its_timeout_later_by_as_long(slots, monkeypatch, tmp_path):
+    """A records run that takes a pool slot with a 60-min --timeout and then waits longer than that in line for a Lean audit slot
+    would end before its audit began. The wait moves the run's timeout later by the time it took: a 3600 s run that waits 3700 s
+    has 3600 s left for its audit when it gets the slot. A request that gets a slot at once leaves the timeout alone."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "status.json").write_text(json.dumps({"state": "running", "timeout_s": 3600, "started_mono": 0.0}))
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    at_once = LS.wait("audit", now=lambda: NOW, log=lambda s: None, mono=lambda: 100.0)
+    assert not (run / LS.SLOT.RUN_TIMEOUT).exists()
+    held, clock, lines = _hold(slots / "lean-audit-1.lock"), [100.0], []
+
+    def sleep(_s):
+        clock[0] += 1850
+        if clock[0] >= 3800:
+            os.close(held)
+
+    got = LS.wait("audit", now=lambda: NOW, sleep=sleep, log=lines.append, mono=lambda: clock[0])
+    assert got[:2] == ("audit", 1)
+    doc = json.loads((run / LS.SLOT.RUN_TIMEOUT).read_text())
+    assert doc == {"timeout_s": 7300.0, "actor": "timeout", "reason": "3600 s, plus 3700 s waited in lean-slot: the line for pool audit"}
+    assert lines[-1] == ("lean-slot: the line for pool audit: the run's timeout is now 7300 s from its start: 3600 s, plus the "
+                         "3700 s it waited here")
+    for fd in (at_once[2], got[2]):
+        os.close(fd)
 
 
 def test_a_waiter_goes_behind_the_live_waiters_that_came_first(slots):
