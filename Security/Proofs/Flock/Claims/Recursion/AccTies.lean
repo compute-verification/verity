@@ -222,6 +222,11 @@ theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedu
       have hA : RecVStar.accReads r.shape (.cap l N) = .ok none := rfl
       unfold accRead at hR
       simp [hA, Except.toOption] at hR
+    | link UB PB N =>
+      exfalso
+      have hA : RecVStar.accReads r.shape (.link UB PB N) = .ok none := rfl
+      unfold accRead at hR
+      simp [hA, Except.toOption] at hR
 
 /-- **A level unit's `acc_out` is its next row's slot**: where it holds row `p` at `acc`, its `acc_out` reads `p + 1`. -/
 theorem slotAt_out {r : XR} (hstk : r.shape.stacked = none) {sch : Schedule} (hsch : fast100 r.shape.m = some sch)
