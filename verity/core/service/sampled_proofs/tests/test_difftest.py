@@ -909,6 +909,25 @@ def slots(j):
     return {"checked": [[v, 0] for v, r in enumerate(rus) if r["unit"] is None or r["unit"] in proved], "classes": classes}
 
 
+def pop_order(j):
+    """`Slots.popOk` as it runs (`Slots.popOkRanges`: the strata's segments chain `0, ..., n - 1` and every unit has its
+    gates) and as it is stated (the layout's population is units `0, ..., n - 1` in slot order): both `partition.in_order`."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc, query = _obj(j.get("program"), "program"), _obj(j.get("query"), "query")
+    n = j.get("population")
+    if not (_int(n) and n >= 0):
+        raise D.Reject("population is not a natural number")
+    if not desc:
+        raise D.Reject("not a program descriptor")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    ok = P.in_order(PROGRAMS[sha], query, n)
+    return {"layout": ok, "ranges": ok}
+
+
 def bound(j):
     j = _json(j)
     ss = j.get("strata") if isinstance(j, dict) else None
@@ -2354,6 +2373,9 @@ def changed_selections(draw, most: int = 2) -> dict:
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
+POP_ORDER = D.Port(PIECES, "pop_order", pop_order, st.one_of(*[st.builds(
+    lambda part, dn: {"population": max(0, part[2] + dn), "program": part[0], "query": part[1]}, partitions(),
+    st.sampled_from([0, 0, 0, -1, 1]))] * 3, JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -3014,7 +3036,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -3105,6 +3127,54 @@ def test_the_slots_follow_the_strata(pieces):
     units = [r["unit"] for r in rus]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
+
+
+#: Templates of templates: `NEST` calls `PAIR` twice and `DEEP` calls `NEST` and `PAIR`, so a unit's gates and every
+#: offset before it are walks of nested Definitions.
+NEST = bind(CompositeDefinition("CoreSampledProofsNest", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+                                lambda B, S, x: B.call(XOR8, B.call(PAIR, x), B.call(PAIR, x)), register=False))
+DEEP = bind(CompositeDefinition("CoreSampledProofsDeep", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+                                lambda B, S, x: B.call(XOR8, B.call(NEST, x), B.call(PAIR, x)), register=False))
+
+
+def test_the_slots_of_a_population_of_nested_templates(pieces):
+    """On 2,000 units in seven root batches of four templates, two of them nested two deep and three of them in two
+    batches apart, Lean's slots (`Partition.unitGates`, each callee's gates and each batch's offset read off one table) are
+    the Python's whole (`TemplatePartition.gates` per unit), and the population's and the input class's gates are every
+    gate of the program once."""
+    program = P.mixed_population_program([(DEEP, 300), (PAIR, 250), (NEST, 400), (DEEP, 170), (QUAD, 500), (NEST, 90),
+                                          (PAIR, 290)])
+    PROGRAMS[PO.program_sha512(program)] = program
+    query = _json(P.template_instances_query([DEEP.id, PAIR.id, NEST.id, QUAD.id]))
+    case = {"closure": None, "program": _json(codec.encode_program(program)), "query": query,
+            "rule": {"law": "subset:16", "rule": "law"}, "source": hashlib.shake_256(b"nested").hexdigest(400),
+            "work_table": None}
+    out = slots(copy.deepcopy(case))
+    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
+    assert [len(s) for s in out["classes"][0]] == [470, 540, 490, 500]
+    rus = [r for c in out["classes"] for s in c for r in s]
+    gates = sorted(g for r in rus for lo, hi in r["pus"] for g in range(lo, hi))
+    assert gates == list(range(program.circuit.size))
+
+
+def test_the_population_order_from_the_ranges_is_the_layouts(pieces):
+    """`Slots.popOk`, which runs from the ranges (`Slots.popOkRanges`), is its statement read off the layout's population,
+    and the Python's (`partition.in_order`), at the registration's `n` and either side of it: on 2,000 units in seven root
+    batches, whose strata put units apart and so fail it, on one batch of each of those templates, which passes at `n`
+    only, and on `SETUPS`, out of order and in order."""
+    apart = P.mixed_population_program([(DEEP, 300), (PAIR, 250), (NEST, 400), (DEEP, 170), (QUAD, 500), (NEST, 90),
+                                        (PAIR, 290)])
+    blocks = P.mixed_population_program([(DEEP, 470), (PAIR, 540), (NEST, 490), (QUAD, 500)])
+    query = _json(P.template_instances_query([DEEP.id, PAIR.id, NEST.id, QUAD.id]))
+    cases = [(apart, query, 2000, False), (blocks, query, 2000, True)]
+    cases += [(s.program, _json(s.query), s.population, ok)
+              for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True), (SETUPS[2], True), (SETUPS[6], True))]
+    for program, query, n, ok in cases:
+        PROGRAMS[PO.program_sha512(program)] = program
+        for m, want in ((n, ok), (n - 1, False), (n + 1, False)):
+            case = {"population": m, "program": _json(codec.encode_program(program)), "query": query}
+            assert pop_order(copy.deepcopy(case)) == {"layout": want, "ranges": want}, (m, want)
+            assert D.replay(POP_ORDER, case, pieces) == ("output", D.canonical({"layout": want, "ranges": want})), (m, want)
 
 
 def test_the_call_queries_cut_call_by_call(pieces):

@@ -55,6 +55,23 @@ def inputGates (d : Desc) : Array Nat := Id.run do
     at_ := at_ + n
   return out
 
+/-- `inputGates` with each root callee's gates read off `Partition.gTable`, computed once. -/
+def inputGatesFast (d : Desc) : Array Nat := Id.run do
+  let some root := d.def? d.root | return #[]
+  let G := Partition.gTable d
+  let mut out := #[]
+  let mut at_ := 0
+  for x in root.nodes do
+    let tid := d.callees.getD x.fn ""
+    let n := x.members * Partition.look d G tid
+    if Flock.TemplateQuery.isInput tid then out := out ++ (Array.range n).map (at_ + ·)
+    at_ := at_ + n
+  return out
+
+@[csimp] theorem inputGates_eq_inputGatesFast : @inputGates = @inputGatesFast := by
+  funext d
+  simp only [inputGates, inputGatesFast, Partition.look_gTable]
+
 /-- The claims' partition over the verifier's own program `p` under `query` (`Partition.evaluate`): the population's
 strata, then the input class. An error where the query doesn't apply. -/
 def layout (p : Program) (query : Json) : V Layout := do
