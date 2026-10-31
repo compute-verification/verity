@@ -14,20 +14,20 @@ Every later carry is a function of the session's decisions so far: a value, comm
 - Window 0's row 0 is the priors' row under the value's public salt (`registered.supplied_salts`), whose opening the
   verifier computes from the registered book.
 - Row 1 is under a fresh salt.
-- The charging unit reads both rows. `ChargeLink_v1{N}` is `ChargeCount_v1{N}` run from row 0's carry, and its ok also
-  requires that the charge's carry' is row 1.
+- The charging proof block reads both rows. `ChargeLink_v1{N}` is `ChargeCount_v1{N}` run from row 0's carry, and its ok
+  also requires that the charge's carry' is row 1.
 - The verifier checks the openings on every session (`check_chain`): `CH-first`, window 0's carry-in isn't the priors
   under their public salt; `CH-carry`, a window's carry-in isn't the previous window's carry-out; `CH-rows`, a window
   isn't two rows.
 
 **A restart is refused.** By induction over the windows, the carry each window is charged from is the one `code_v1`
 carries over the whole session. Window 0's carry-in is the priors (`CH-first`). Each window's carry-out is its charge's
-carry' from its carry-in (the unit's ok). Each later carry-in is the previous carry-out (`CH-carry`). A prover that
-restarts the counts mid-session, at the priors or at counts fitted to the coming window, either breaks the chain, which
-the verifier refuses, or claims a unit whose ok is 0, which fails that unit's proof. On the fixture's
-async-kv-pressure stream, window 1 costs 23 bits from window 0's carry, 20 from the priors and 16 from fitted counts.
-The tests check that each forged carry is refused, whether it is committed under a fresh salt or under the public
-start salt, and whether window 0's carry-out claims it.
+carry' from its carry-in (the proof block's ok). Each later carry-in is the previous carry-out (`CH-carry`). A prover
+that restarts the counts mid-session, at the priors or at counts fitted to the coming window, either breaks the chain,
+which the verifier refuses, or claims a proof block whose ok is 0, which fails that proof block's proof. On the
+fixture's async-kv-pressure stream, window 1 costs 23 bits from window 0's carry, 20 from the priors and 16 from fitted
+counts. The tests check that each forged carry is refused, whether it is committed under a fresh salt or under the
+public start salt, and whether window 0's carry-out claims it.
 
 **Why a value of its own.** The carry-out isn't a field of `replay_chain`'s window row. `ReplayLoad` writes that row
 and checks it in full at the window's start, before any decision is coded, so a carry-out there would need ReplayLoad
@@ -36,23 +36,23 @@ leaves the scan's chain as it is.
 
 **The compile slice takes the chain** ([compile-slice.md](compile-slice.md)):
 
-- ``cin`` and ``cout`` are the unit's reads of `replay-charge` rows 0 and 1 (`charge_chain.reads()`).
+- ``cin`` and ``cout`` are the proof block's reads of `replay-charge` rows 0 and 1 (`charge_chain.reads()`).
 - Its charge is `charge_chain.build_link(C, D, book, cin, cout, en, bits)`, `ChargeLink_v1{D}`, over the decisions
   the window loads (next section). `book` is `book_fields(D)`, the public tables without the carry. `bits` are `adv`'s
   D decisions, and en_i = i < its `count`. Its ok is the verdict's `code` bit, and its bits are held to c_w (`charge`).
 - The verifier runs `charge_chain.check_chain` on the charge rows' openings.
 - The prover commits each window with `commit_window(program, book, carry', registration, carry=previous)`.
 
-## One carry for units and windows
+## One carry for proof blocks and windows
 
 The charge's one carried representation is `replay-charge`'s two rows above, and `replay_chain`'s state row holds none
-of it: the charge runs whole in the window's load unit, so no step unit carries a coder state, KT counts, a context or
-a code position.
+of it: the charge runs whole in the window's load proof block, so no step proof block carries a coder state, KT counts,
+a context or a code position.
 
-- **Where.** The load unit (unit 0, `ReplayLoad`'s) runs `ChargeLink_v1{D}` from row 0 to row 1 on the decisions it
-  loads: `adv`'s `dec`, en_i = i < `count`, bit_i = dec_i. Those are the window's own decisions, the ones A5 charges to
-  it. The carried decisions at the front of window row 1's `dec` were charged by the window that loaded them.
-  `code_v1` codes the decisions in session order, the order the loads append them, and a slot with en 0 changes
+- **Where.** The load proof block (proof block 0, `ReplayLoad`'s) runs `ChargeLink_v1{D}` from row 0 to row 1 on the
+  decisions it loads: `adv`'s `dec`, en_i = i < `count`, bit_i = dec_i. Those are the window's own decisions, the ones
+  A5 charges to it. The carried decisions at the front of window row 1's `dec` were charged by the window that loaded
+  them. `code_v1` codes the decisions in session order, the order the loads append them, and a slot with en 0 changes
   nothing (the tests check this on the fixture's 41 windows at D = 32). So the load's charge is `code_v1`'s. A per-ask
   charge, the compile slice's earlier one, is the same only when no decision carries: it codes a carried decision in
   the window that reads it.
@@ -61,12 +61,12 @@ a code position.
   the decisions since the last 1, over decisions only, so a forced admission doesn't reset it as it does the replay's
   `pc`. The session starts at the registered book's priors and run 0, under the value's public salt. Every window
   carries all of it.
-- **What resets.** The count's state (low 32, high 32, used 1, ok 1, bits 20) starts afresh in each window's unit:
-  n_arrived (en's popcount) first, then each decision (`BookKT_v1{3}` under `run`, `ArithCountStep_v1{18, 1, 20}` on
-  its frequencies, `run`'s update), then `ZERO_COUNTS`' four 0s and `ArithCountFinish_v1{20}`. None of it leaves the
-  unit. There is no segment and no position: `ArithCountStep` counts the bits a segment would hold, so the slice has
-  no ``seg`` and calls neither `ArithEncodeStep_v1` nor `ArithEncodeFinish_v1`.
-- **The end check** is in the same unit: its ok (each model's and the count's, the finish's, and carry' = row 1)
+- **What resets.** The count's state (low 32, high 32, used 1, ok 1, bits 20) starts afresh in each window's proof
+  block: n_arrived (en's popcount) first, then each decision (`BookKT_v1{3}` under `run`, `ArithCountStep_v1{18, 1, 20}`
+  on its frequencies, `run`'s update), then `ZERO_COUNTS`' four 0s and `ArithCountFinish_v1{20}`. None of it leaves the
+  proof block. There is no segment and no position: `ArithCountStep` counts the bits a segment would hold, so the slice
+  has no ``seg`` and calls neither `ArithEncodeStep_v1` nor `ArithEncodeFinish_v1`.
+- **The end check** is in the same proof block: its ok (each model's and the count's, the finish's, and carry' = row 1)
   joins ``code``, and bits ≤ c_w is ``charge``. `ReplayClose` checks no charge.
 - **The reference** is `charge_chain.reference_link` (`arith_encode.reference_charge` with carry' = row 1), and the
   circuit is `build_link`. The replay's 228 carried bits (coder 68, KT counts 3 × 24 each for n0 and n1, `pc` 2,
@@ -76,7 +76,7 @@ a code position.
 (pinned), 97,159 at the class's D = 32, and 1,256,873 per ask at its P·A = 486. In a lowering, `ChargeCount_v1` adds copies of the words it carries from one
 decision to the next, about 175 rows a decision (`size`'s ``carry``). Without them, each carried word's form, and so
 the build, grows with every decision before it. With them, no AND operand is wider than 2,166 terms at any N. Per
-window: two rows, the charging unit's two reads (each a frame-v3 path of depth 1) and 256 record bytes.
+window: two rows, the charging proof block's two reads (each a frame-v3 path of depth 1) and 256 record bytes.
 
 ## The whole window (`window_charge`)
 
@@ -119,7 +119,7 @@ The window's charge is the bits counted, the length of `code_v1`'s segment for t
   - 1 < n ≤ 2^16: (u, 1, n);
   - n > 2^16: put_uniform(⌊u / 2^15⌋, ⌊(n − 1) / 2^15⌋ + 1), then (u mod 2^15, 1, 2^15).
 
-| value | hi | its table's bins in the unit | offset steps by bin j |
+| value | hi | its table's bins in the proof block | offset steps by bin j |
 |---|---|---|---|
 | a count over S slots (n_arrived, n_hits, n_order) | the book's cap for it | 0 … bitlen(S) | j ≤ 1 none; else one, n_j = 2^(j−1) |
 | n_resumes, n_lag | the book's cap | 0 | none |
@@ -127,14 +127,16 @@ The window's charge is the bits counted, the length of `code_v1`'s segment for t
 | a gap | 2^24 (`gap`) | 0 … 25 | j ≤ 1 none; 2 … 17 one; 18 … 24 two; 25 none |
 | a rank step | 2^25 + 1 (2·`index` + 1) | 0 … 26 | j ≤ 1 none; 2 … 17 one; 18 … 25 two; 26 one (n = 2) |
 
-- **T.** T is always the sum to the cap's top bin, even when the unit holds fewer bins.
+- **T.** T is always the sum to the cap's top bin, even when the proof block holds fewer bins.
 - **A count's offset.** The book's cap for a count is at least 2^bitlen(S) − 1 (`window_book` refuses one that isn't), so
-  n_j = 2^(j−1) for every bin a count of at most S reaches. The unit uses 2^bitlen(S) − 1 for hi, with the same n_j.
+  n_j = 2^(j−1) for every bin a count of at most S reaches. The proof block uses 2^bitlen(S) − 1 for hi, with the same
+  n_j.
 - **A wide offset's first chunk.** When n_j = 2^(j−1) > 2^16, that chunk is (⌊u / 2^15⌋, 1, 2^(j−16)).
 
 **The book** (`window_book`) is the registered book's Exp-Golomb tables (`lo` 0, a frequency for every bin up to the
 cap's), held to v1's value caps (`v1.TABLE_CAPS`: hit_units 2^16, gap and index 2^24, order_len 1), with
-0 ≤ N, H, O < 2^16. The unit's public inputs are each symbol's frequencies at the bins it reaches, and T, 17 bits each.
+0 ≤ N, H, O < 2^16. The proof block's public inputs are each symbol's frequencies at the bins it reaches, and T, 17 bits
+each.
 
 **The circuit.** For each value:
 - A one-hot of bitlen(v) comes from its prefix ORs.
@@ -164,10 +166,10 @@ widens with the slots before it, and the build is linear in N + H + O.
 - an enabled entry with p < pos, a gap past 2^24, r past 2^24, or p = 2^32 − 1, whose pos wouldn't fit;
 - a selected cumulative frequency past 2^16.
 
-**The bound.** The unit's charge is `code_v1`'s segment length for the whole window, so "The bound" (PROTOCOL.md) covers
+**The bound.** The proof block's charge is `code_v1`'s segment length for the whole window, so "The bound" (PROTOCOL.md) covers
 every advice v1 window, not just decisions-only ones: `encode` is injective on the values and its strings are
-prefix-free. Lean proves it (`SecurityProofs.EncardChargedLeWhole` and the three bounds `…V1Whole`, in
-`Security/Proofs/NetworkCertifier/WindowCharge.lean`) from two facts:
+prefix-free. The sampled leak bound takes the count this gives, at most `2^c` advice values charged `c` or less, as its
+premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`). It rests on two facts:
 - *Each count's code is prefix-free under a public prior.* The prior is the registered table, fixed before the session.
   The ideal length of v is ℓ(v) = −log2(f_j / T) + log2 m_j. Here m_j is n_j when n_j ≤ 2^16, and
   (⌊(n_j − 1) / 2^15⌋ + 1) · 2^15 ≥ n_j for the two chunks. So
@@ -187,11 +189,8 @@ prefix-free. Lean proves it (`SecurityProofs.EncardChargedLeWhole` and the three
   At each step the coder splits its interval among the alphabet in proportion to the frequencies, which sum to at most
   the total: bins 0 … bitlen(S) of a count's table reach at most T.
 
-In Lean each fact is a lemma over the coder's symbols: two windows' symbol sequences from one carry split, after a
-common prefix, at one model's disjoint outcomes (`syms_split`), and sequences that pairwise split weigh at most the
-coder's first state (`sum_owt_codeAll_le`), a weight being an interval's width over `2^bits`. The Lean definitions
-(`Security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one, and the window
-difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
+The Lean definitions (`Security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one,
+and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 random instances (`lean/scripts/window_vectors.py`).
 
 **The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
@@ -207,12 +206,12 @@ A class whose windows send hits or order entries does the following:
 - It holds the returned bits to c_w as now. The tests check this inline: c_w equal to the charge accepts, and one bit
   less refuses.
 - Its H and O are fixed per class, like D. A window that sends more hits or entries than its slots can't be charged,
-  so that window's unit fails.
+  so that window's proof block fails.
 
 **Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins Flock's lowering, which adds one row for each commit
 copy of the carry: 53,734 at `{1, 1, 1}` and 40,280 at `{2, 2, 0}`.
 
-| unit | ANDs |
+| proof block | ANDs |
 |---|---|
 | `ChargeCount_v2{2, 0, 0}` | 19,560 (`ChargeCount_v1{2}` and 24 for the rank check) |
 | `ChargeCount_v2{1, 1, 1}` | 53,287 |

@@ -13,7 +13,7 @@ from verity_vllm.protocols.remote_bandwidth.binder import (  # noqa: E402
     Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
 )
 from verity_vllm.protocols.remote_bandwidth.interface import Append  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.registry import Store  # noqa: E402
+from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory  # noqa: E402
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
 
@@ -98,7 +98,7 @@ def test_a_layer_of_a_shared_storage_reads_as_its_own_pages():
 
 @pytest.mark.parametrize("shared,interleaved", [(False, False), (True, False), (False, True)])
 def test_registration_from_a_runner(shared, interleaved):
-    s = Store()
+    s = NodeMemory()
     b = Binder(s, block_bytes=1024)
     r = runner(shared, interleaved)
     b.on_load(r)
@@ -113,7 +113,7 @@ def test_registration_from_a_runner(shared, interleaved):
 def test_a_registered_tensor_moved_or_reshaped_since_registration_is_named():
     """`Binder.moved`: an in-place reader holds each registered tensor's device address, so a parameter whose data
     is reallocated, or a KV cache the runner rebinds, is named; one left where it was is not."""
-    s, r = Store(), runner()
+    s, r = NodeMemory(), runner()
     b = Binder(s, block_bytes=1024)
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
@@ -126,7 +126,7 @@ def test_a_registered_tensor_moved_or_reshaped_since_registration_is_named():
 
 @pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])
 def test_a_weight_block_budget_registers_the_tensors_that_fit_and_counts_the_rest(budget, registered):
-    s = Store()
+    s = NodeMemory()
     b = Binder(s, block_bytes=1024, weight_blocks=budget)
     r = runner()
     b.on_load(r)
@@ -141,7 +141,7 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     every region is under the driver's sketch-sha512 receipt, no registered byte is a KV cache's, and a step that
     writes KV (its appends, its frees) writes no registered block: the memory map numbers the step and records no
     line."""
-    s = Store()
+    s = NodeMemory()
     b = Binder(s, passes=False, kv=False)
     r = runner()
     b.on_load(r)
@@ -184,7 +184,7 @@ def memory_map_lines(m) -> list:
 
 
 def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
-    s = Store()
+    s = NodeMemory()
     b = Binder(s, block_bytes=1024)
     r = runner()
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
@@ -222,7 +222,7 @@ EMPTY = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNames
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
     from verity_vllm.protocols.remote_bandwidth.registry import chain
-    s, recs = Store(), []
+    s, recs = NodeMemory(), []
     sigma = [bytes([t]) * 32 for t in range(3)]
     b = Binder(s, block_bytes=1024, messages=Every(2, sigma.__getitem__, windows=3), on_window=recs.append,
                reader=lambda segments: b"\x01" * 64)
@@ -243,7 +243,7 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
     """The verifier's message ends the window at the next pass's start, however many passes it held; σ_0's window
     chains from the registration digest the binder was given."""
     from verity.core.protocols.remote_bandwidth import receipts as rb
-    s, recs, inbox = Store(), [], Inbox()
+    s, recs, inbox = NodeMemory(), [], Inbox()
     digest = bytes(range(64))
     b = Binder(s, block_bytes=1024, messages=inbox, registration=digest, on_window=recs.append,
                reader=lambda segments: b"\x02" * 64)
@@ -276,7 +276,7 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     same."""
     from verity.core.protocols.remote_bandwidth import codec, memory_map
 
-    s = Store()
+    s = NodeMemory()
     b = Binder(s, passes=passes)
     r = runner()
     r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
@@ -315,7 +315,7 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt
     from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
-    s, recs, tiles = Store(salt_key=bytes(32)), [], audit.NoiseTiles()
+    s, recs, tiles = NodeMemory(salt_key=bytes(32)), [], audit.NoiseTiles()
     b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
     assert isinstance(b.receipt, RemoteBandwidthReceipt)
     r = runner()

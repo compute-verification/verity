@@ -1,8 +1,9 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's link-window and the scan's
-answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its Lean.
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a network certifier run's execution phase
+and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror
+and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
@@ -12,7 +13,8 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
   three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
   ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
-  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries.
+  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries and its ``scan/state``
+  that audit's.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
@@ -21,9 +23,17 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
   answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
-  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`slotEntryPins`: the scan's
-  `prog` must be `io_shell.SlotEntry_v1`'s own entries), so the honest case passes every check before the wiring and
-  is refused there. ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`entryPins`: the scan's
+  `prog` is a ``scan/prog<j>`` a lane, and lane j's must be chunk j, ``<descriptor id>/c<j>/o0``, of a pinned
+  `SlotEntry_v1`'s or `SelectEntry_v1`'s own entries, as the block round's lane-j o0 is of the stand-in's), so the
+  honest case passes every check before the wiring and is refused there; its registration names the scan's state tree
+  as ``scan/state``, the state the stand-in's `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files
+  and ``period.json``, each case's answers.
+* **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
+  ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
+  and its `SCAN_STATE` the scan's ``scan/state``. The honest case is then accepted at any sample of V3c's (``subset:1``
+  included): the period check is the consistency check, the committed I/O against the certificates, and what a
+  sample of one or two proof blocks leaves unproved is covert capacity, which K charges.
 """
 from __future__ import annotations
 
@@ -32,6 +42,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -46,7 +57,7 @@ CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "windo
 
 
 def certificates(run: Path, w: int) -> list[dict]:
-    """Link-window w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
+    """Execution phase w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
     responses, fails: `warden_serve.CERTIFIED`), each the certificate's own fields."""
     docs = [json.loads(x)["certificate"] for x in SZ._found(run, "certified.jsonl").read_text().splitlines()
             if "certificate" in json.loads(x)]
@@ -60,12 +71,16 @@ def certificates(run: Path, w: int) -> list[dict]:
     return out
 
 
-def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
+def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
-    (tampered, chain), that round's registration and its refusal."""
+    (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
+    ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
+    in place of ``answers.json``'s."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     doc = json.loads((scan / "answers.json").read_text())
+    if v3c is not None:
+        doc["audits"] = [json.loads(v3c.read_text())]
     if len(doc["windows"]) != 1:
         raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
                          "units, and the rows form reads one link-window's 2T: prove each with scan_zk.py --group 1")
@@ -93,14 +108,17 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
-def lean_check(exe: str, case: dict, d: Path) -> dict:
-    """``network-period check`` on the case's three files in ``d``: its answer (its last line)."""
+def lean_check(exe: str, case: dict, d: Path,
+               run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
+    """``network-period check`` on the case's three files in ``d``: its answer (its last line). ``run`` runs it with its
+    output captured as text (`subprocess.run`'s ``capture_output=True, text=True`` by default)."""
     d.mkdir(parents=True, exist_ok=True)
     files = [d / "params.json", d / "commitment.bin", d / "evidence.json"]
     files[0].write_bytes(canonical_json(case["params"]))
     files[1].write_bytes(bytes.fromhex(case["commitment"]))
     files[2].write_bytes(bytes.fromhex(case["evidence"]))
-    p = subprocess.run([exe, "check", *map(str, files)], capture_output=True, text=True)
+    argv = [exe, "check", *map(str, files)]
+    p = run(argv) if run else subprocess.run(argv, capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
         raise SystemExit(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
@@ -118,6 +136,9 @@ def main(argv=None) -> int:
     ap.add_argument("--mirror", type=Path, required=True, help="the period's mirror (period_case.py, its tests')")
     ap.add_argument("--lean", required=True, help="network-period, built")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--v3c", type=Path, metavar="PERIOD",
+                    help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
+                         "trees (scan_zk.py --v3c)")
     ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
     m = mirror(a.mirror)
@@ -126,15 +147,21 @@ def main(argv=None) -> int:
     for spec in a.cases:
         name, _, rest = spec.partition("=")
         run, scan, *round_ = rest.split(",")
-        case = rows_case(Path(run), Path(scan), *round_)
+        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c)
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
-        why = m.UNWIRED if not round_ and scan_said == {"accept"} else None
-        want = "reject" + (" at the wiring" if why else "")
-        good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
-                and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
+        honest = not round_ and scan_said == {"accept"}
+        if honest and a.v3c:
+            want = "accept"
+            good = (py.get("verdict") == lean.get("verdict") == "accept"
+                    and py.get("public") == lean.get("public"))
+        else:
+            why = m.UNWIRED if honest else None
+            want = "reject" + (" at the wiring" if why else "")
+            good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
+                    and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
         got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}

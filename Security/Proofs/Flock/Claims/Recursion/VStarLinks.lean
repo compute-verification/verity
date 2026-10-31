@@ -421,13 +421,14 @@ theorem resPartAny_of_resPart {c : Flock.Circuit} {S : Flock.RecOpen.GfS} {ns : 
 
 /-- **The circuit's unit is one of V*'s, its copies' outputs at what their inputs read being `K`**: a level under
 either name (`LevelOuts`), a table of residuals (`ResOuts`), the RecSparse unit (`SparseReadOuts`), or RecCap
-(`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level), of whose outputs nothing is stated (`K` true). -/
+(`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level) or RecLink (`rec-link/u<UB>-p<PB>`), of whose outputs
+nothing is stated (`K` true). -/
 def UnitOuts (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
   (∃ LANES H : ℕ, (Flock.RecOpen.params c.unit.name = some (LANES, H) ∨
     Flock.RecOpen.stackedParams c.unit.name = some (LANES, H)) ∧ K = fun v => LevelOuts v LANES H) ∨
   (∃ (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ), ResPartAny c S ns nv ∧ K = ResOuts S ns nv) ∨
   (∃ sh : Flock.RecSparse.Shape, Flock.RecSparse.params c.unit.name = some sh ∧ K = SparseReadOuts sh) ∨
-  ∃ l N : ℕ, c.unit.name = VStar.capName l N ∧ K = fun _ => True
+  ∃ l N : ℕ, (c.unit.name = VStar.capName l N ∨ c.unit.name = VStar.linkName l N) ∧ K = fun _ => True
 
 /-- **The output tie from `Flock.check`**: at the deployed parser, wherever the outer relation holds at an untyped
 statement without public input words, every copy of a V* unit holds its outputs at the values its input columns read
@@ -640,7 +641,8 @@ theorem checkPart_inner {j : ℕ} {nm : String} {pt : VStar.Part} {c : Flock.Cir
 /-- **A table of V\*'s statement `sv`, its copies' outputs at what their inputs read being `K`** (`UnitOuts`), at
 `sv`'s own numbers: a level's climb at `sv`'s `LANES` and `H` (`.recOpen`, `.recOpenStacked`), the residuals of the
 algebra's part the unit's name, shape and META give (`.inner`), of R's opening's part at `sv`'s `m`, claims and `j`
-(`.opening`), the RecSparse unit's at `sv`'s shape (`.sparse`), or RecCap's, of which nothing is stated (`.cap`). -/
+(`.opening`), the RecSparse unit's at `sv`'s shape (`.sparse`), or RecCap's or RecLink's, of which nothing is stated
+(`.cap`, `.link`). -/
 def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
   UnitOuts c K ∧
     match sv with
@@ -654,6 +656,7 @@ def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop)
         RecOpening.shape? m cl = some sh ∧ RecOpening.part sh j = .ok (S, ns, nv) ∧ K = ResOuts S ns nv
     | .sparse sh _ => K = SparseReadOuts sh
     | .cap .. => K = fun _ => True
+    | .link .. => K = fun _ => True
 
 /-- **A table named as V\*'s statement `sv` that the parser and the part check accepted is a table of `sv`**: the
 unit's own check (`ParseFacts`) reads the name back at `sv`'s numbers (`params_of_check`, `stackedParams_of_check`,
@@ -675,7 +678,9 @@ theorem stmtUnit_of_check {tags : Flock.Tags} {pre : Array (String × Flock.Net)
   | sparse sh hRound =>
     exact ⟨_, Or.inr (Or.inr (Or.inl ⟨sh, sparseParams_of_check P.recSparse hn, rfl⟩)), rfl⟩
   | cap l N =>
-    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨l, N, hn, rfl⟩)), rfl⟩
+    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨l, N, Or.inl hn, rfl⟩)), rfl⟩
+  | link UB PB N =>
+    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨UB, PB, Or.inr hn, rfl⟩)), rfl⟩
   | opening m cl j S ports nv =>
     have hq := openingParams_of_check P.recOpening hn
     obtain ⟨sh, hsh⟩ := openingShape_of_check P.recOpening hq
@@ -1028,7 +1033,7 @@ part's recorded calls, or a tie with the setup's evaluations at `xO`). -/
 def PartReadsTo (H : Msg → Msg) (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
     (G : Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     PartReads decode L s x xO fun w ms => G x c w ms ∨ PartColl H D L s x xO w
 
 /-- **The goal from a part's links, or the fallback** (`goal_of_links` for `PartReadsTo`). -/
@@ -1036,7 +1041,7 @@ theorem goal_of_partReadsTo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Depl
     {decode : Msg → Option Flock.Readable.Read} {L : Layout} {shape : Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {G : Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop} {s : ℕ}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (h : PartReadsTo H D decode L shape shows G s) (x : Msg) (st : Stmt) (hst : D.parse x = some st)
+    (h : PartReadsTo H D decode L shape shows G s) (x : Msg) (st : CompiledStatement) (hst : D.parse x = some st)
     (hf : shape st.form) (xO : Msg) (w : Flock.Wit) (hck : Flock.check DO.parse xO w = true) :
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg, Agrees L x s w ms → G x c w ms) ∨
       PartColl H D L s x xO w := by
@@ -1770,7 +1775,7 @@ one table) and, at each witness, every copy of every table of `sv` holding its k
 layout's messages at the copies' columns, `agrees_colsHold`) and the goal from the outputs. -/
 def StmtReadsTo (L : Layout) (shape : Form → Prop)
     (G : Msg → (ℕ → FlockDeploy.Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
     ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart untr b s x xO c →
     ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →
@@ -1796,7 +1801,7 @@ every copy's gadgets (`copyForm` at `unitCol`, read by `readLin`); or the fallba
 the circuit's (`LevelCalls`, `levelCalls_recorded`). -/
 def LevelLogReads (L : Layout) (shape : Form → Prop)
     (logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
     ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart untr b s x xO c →
     ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →

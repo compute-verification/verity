@@ -66,6 +66,7 @@ def test_a_party_signs_roots_and_liveness_that_verify_under_the_identity(device)
     """The party's lower key, certified by the identity for the party in the deployment, signs a period's root and a
     block's liveness, and both verify under the identity alone."""
     party = device.issue(DEPLOYMENT, "memory-challenger")
+    party.start(ATTACHMENT)
     root = party.period_root(ATTACHMENT, "server-3", 7, 5, ROOT)
     I_low = party.lower[:16]
     m = R.period_root_message(I_low, DEPLOYMENT, "memory-challenger", ATTACHMENT, "server-3", 7, 5, ROOT)
@@ -78,6 +79,7 @@ def test_a_party_signs_roots_and_liveness_that_verify_under_the_identity(device)
 
 def test_a_signature_is_refused_off_its_party_deployment_or_fields(device, tmp_path) -> None:
     party = device.issue(DEPLOYMENT, "memory-challenger")
+    party.start(ATTACHMENT)
     live = party.liveness(ATTACHMENT, "server-3", 7, 2)
     ok = dict(params=SMALL, identity=device.public, deployment=DEPLOYMENT, party="memory-challenger", attachment=ATTACHMENT,
               link="server-3", period=7, block=2, sig=live)
@@ -87,6 +89,7 @@ def test_a_signature_is_refused_off_its_party_deployment_or_fields(device, tmp_p
                 dict(attachment=ATTACHMENT[::-1]), dict(link="server-4"), dict(period=8), dict(block=3)]:
         assert not R.verify_liveness(**(ok | bad)), bad
     stranger = other.issue(DEPLOYMENT, "memory-challenger")
+    stranger.start(ATTACHMENT)
     forged = R.HssSignature(stranger.lower, stranger.certificate, stranger.liveness(ATTACHMENT, "server-3", 7, 2).signature)
     assert not R.verify_liveness(**(ok | dict(sig=forged)))
     swapped = R.HssSignature(live.lower, live.certificate, party.period_root(ATTACHMENT, "server-3", 7, 2, ROOT).signature)
@@ -127,6 +130,7 @@ def test_a_lower_key_whose_certificate_is_not_the_identitys_is_refused(device, t
 
 def test_a_used_up_lower_key_refuses_to_sign(device) -> None:
     party = device.issue(DEPLOYMENT, "memory-challenger")
+    party.start(ATTACHMENT)
     for b in range(2 ** SMALL.H):
         party.liveness(ATTACHMENT, "server-3", 0, b)
     with pytest.raises(R.StateError, match="used"):
@@ -137,3 +141,27 @@ def test_a_used_up_lower_key_refuses_to_sign(device) -> None:
 def test_a_party_name_outside_the_alphabet_is_refused(device, name) -> None:
     with pytest.raises(ValueError):
         device.issue(DEPLOYMENT, name)
+
+
+def test_a_party_signs_only_for_the_attachment_it_started_and_a_restart_signs_nothing_more_of_it(device) -> None:
+    """`start` records the attachment on the key's leaf state before any signature of it. The key signs for that
+    attachment only; the same key reopened (a restart of its party) is refused the attachment, so it signs nothing more
+    of it, and may start another."""
+    party = device.issue(DEPLOYMENT, "memory-challenger")
+    with pytest.raises(R.StateError, match="not the one this key started"):
+        party.liveness(ATTACHMENT, "server-3", 7, 0)
+    party.start(ATTACHMENT)
+    party.start(ATTACHMENT)
+    party.liveness(ATTACHMENT, "server-3", 7, 0)
+    with pytest.raises(R.StateError, match="not the one this key started"):
+        party.period_root(ATTACHMENT[::-1], "server-3", 7, 1, ROOT)
+    restarted = device.party(DEPLOYMENT, "memory-challenger")
+    assert restarted.lower == party.lower
+    with pytest.raises(R.StateError, match="already started"):
+        restarted.start(ATTACHMENT)
+    with pytest.raises(R.StateError, match="not the one this key started"):
+        restarted.liveness(ATTACHMENT, "server-3", 7, 1)
+    restarted.start(ATTACHMENT[::-1])
+    live = restarted.liveness(ATTACHMENT[::-1], "server-3", 0, 0)
+    assert R.verify_liveness(SMALL, device.public, DEPLOYMENT, "memory-challenger", ATTACHMENT[::-1], "server-3", 0, 0, live)
+    assert live.signature.q == 1

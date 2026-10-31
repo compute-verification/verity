@@ -54,6 +54,15 @@ them out of an audit (its summary says so), for a run of several audits of one c
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
+    records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
+
+``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
+the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
+registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
+``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
+terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
+values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
+the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
 from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
@@ -82,7 +91,7 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it prints ``{"bits": N}`` as its last stdout line: the advice's length in bits it charges;
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
-``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
+``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
 party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
@@ -118,7 +127,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
@@ -496,26 +507,24 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
     return {name: {"refused": not v["ok"], "codes": v["codes"]} for name, v in out.items()}
 
 
-def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None,
-                      coins: str = "verifier") -> dict[str, Any]:
+def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None) -> dict[str, Any]:
     """That the circuit, its compiler and its advice were fixed before the coins, checked rather than assumed: the digest of the
     registration (which covers the window's ``circuit``, ``compiler`` and ``advice``) is the one the sample's receipt names, the
-    receipt the stream wrote when it received the registration and before its select read any coin (on the challenger's
-    coins, ``coins="challenger"``, the coins also commit to that digest before any is read: a5_coins); and that registration
+    receipt the stream wrote when it received the registration and before its select read any coin (the challenger's
+    coins also commit to that digest before any is read: a5_coins); and that registration
     binds the compiler and advice the compile check verified (``bound``, None for a circuit with none). -> {ok, codes, detail}:
     ``after-the-draw`` where the sample followed another registration or another stream's, ``compiler`` or ``advice`` where the
     registration binds another."""
     import a5 as A5
 
     w, b = rec.get("window") or {}, bound or {}
-    drew = {"verifier": A5.VERIFIER, "challenger": A5.CHALLENGER}[coins]
-    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == drew,
+    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
           "compiler": w.get("compiler") == b.get("compiler"), "advice": w.get("advice") == b.get("advice")}
     return _verdict(ok, {"drawn_after": receipt.get("registration"), "registration": R.digest(rec),
                          "received": receipt.get("received")})
 
 
-def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping[str, Any], coins: str = "verifier") -> dict:
+def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping[str, Any]) -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
     in a registration binding that root, with its opening. Every check before the sample passes on it (the new opening opens
     the new root, the same advice compiles to the same circuit, `source` holds), and `fixed_before_draw` refuses it
@@ -527,7 +536,7 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
     advice = {**rec["window"]["advice"], "root": late.root.hex()}
     late_rec = {**rec, "window": {**rec["window"], "advice": advice}}
     src = source(late_rec["window"], {**held, "advice": advice})
-    v = fixed_before_draw(receipt, late_rec, {"compiler": held["compiler"], "advice": advice}, coins)
+    v = fixed_before_draw(receipt, late_rec, {"compiler": held["compiler"], "advice": advice})
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": opens and src["ok"]}
 
 
@@ -545,6 +554,39 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
             FC.IL.write_tables(Path(out).parent / "tables")
         return {"subcircuit": s.meta.get("subcircuit"), "pin": s.pin, "class_sha512": s.class_sha512, "k_log": s.meta["k_log"]}
     return compose
+
+
+#: the window value the network certifier's period ties to its scan's state tree (``stateTied``): the scan's state rows
+TIED = SCAN_STATE
+
+
+def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
+    """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
+    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
+    circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
+    Program or another than the registration names, or its answer commits to another registration."""
+    import served_integrity as SI
+
+    rec = json.loads((window / "registration.json").read_text())
+    body, own = (window / "circuit.json").read_bytes(), rec.get("window") or {}
+    if hashlib.sha512(body).hexdigest() != own.get("circuit"):
+        raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
+    doc = json.loads(body)
+    ties, untied = window_pins(own, doc)
+    if TIED not in ties | untied:
+        raise ValueError(f"the window commits no {TIED} its circuit reads: the period has no state to tie to its scan's")
+    count = declared_count(doc, 0, pins={**pins, **pin_roots({**ties, **untied})}, roots=window_roots(own),
+                           untied=set(untied) - {TIED})
+    try:
+        program = json.loads((audit / "window" / "program.json").read_text())
+    except OSError:
+        raise ValueError(f"the audit under {audit} wrote no Program: it stopped before staging its members") from None
+    if program_digest(program) != rec.get("program"):
+        raise ValueError(f"the audit's Program ({program_digest(program)[:16]}…) isn't the one the registration names")
+    answer = SI.answer(audit, rec)
+    if answer["commitment"] != R.digest(rec):
+        raise ValueError("the audit's answer commits to another registration than the window's")
+    return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
 
 
 def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:
@@ -684,19 +726,17 @@ def audit(a: argparse.Namespace) -> int:
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=set(ties) | set(untied))
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
-    if a.challenger:
-        manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                              peer=a.peer, key_record=a.challenger_key)
+    manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
+                                          peer=a.peer, key_record=a.challenger_key)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
                          more, rank=0, registered=reads or None, ports=a.ports)
     finally:
-        if a.coins is not None:
-            a.coins.skip(0)
-            finisher.join()
-            published = a.coins.evidence()
-            manager.shutdown()
+        a.coins.skip(0)
+        finisher.join()
+        published = a.coins.evidence()
+        manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
@@ -713,16 +753,14 @@ def audit(a: argparse.Namespace) -> int:
         row["activations"] = acts
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
-    if a.challenger:
-        row["coins_session"] = {"trusted": published.get("trusted"), "error": published.get("error")}
+    row["coins_session"] = {"trusted": published.get("trusted"), "error": published.get("error")}
     if s.get("draw") is not None:
-        coins = "challenger" if a.challenger else "verifier"
         rec, receipt = (json.loads((out / "window" / f).read_text()) for f in ("registration.json", "receipt.json"))
         bound = {"compiler": held["compiler"], "advice": held["advice"]} if held["compiler"] is not None else None
-        row["fixed_before_draw"] = fixed_before_draw(receipt, rec, bound, coins)
+        row["fixed_before_draw"] = fixed_before_draw(receipt, rec, bound)
         ordered = row["fixed_before_draw"]["ok"]
         if bound is not None:
-            row["after_draw"] = after_draw(receipt, rec, held, coins)
+            row["after_draw"] = after_draw(receipt, rec, held)
             row["negatives"] = {**(row["negatives"] or {}), "advice-root-after-the-draw": row["after_draw"]["refused"]}
             ordered = ordered and row["after_draw"]["refused"]
     else:
@@ -740,8 +778,7 @@ def audit(a: argparse.Namespace) -> int:
             pe = row["proof_edits"] = proof_edits(a.lean, out / "window", mine.members, out / "proof-edits", a.flip_proofs)
             row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
             print("PROOF-EDITS " + json.dumps({x: pe.get(x) for x in ("edits", "refused", "member", "session")}))
-    if a.challenger:
-        row["ok"] = row["ok"] and not row["coins_session"]["error"]
+    row["ok"] = row["ok"] and not row["coins_session"]["error"]
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
@@ -790,7 +827,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
-    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, loopback:HOST:PORT or "
+    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
                    "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
@@ -815,7 +852,25 @@ def main(argv: list[str] | None = None) -> int:
                    "window_weights.weights_registration), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
+    p = sub.add_parser("period", help="a window's audit as one compute audit of the network certifier's period (`period`)")
+    p.add_argument("--window", required=True, type=Path, help="the window's directory: circuit.json, registration.json")
+    p.add_argument("--audit", required=True, type=Path, help="the audit's --out: summary.json, window/program.json, "
+                   "window/audit.json")
+    p.add_argument("--out", required=True, type=Path, help="the period's audit entry, JSON")
+    p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
     a = ap.parse_args(argv)
+    if a.cmd == "period":
+        try:
+            got = period(a.window, a.audit, pins_of(a.pin, a.pins))
+        except (ValueError, RuntimeError) as e:
+            print(f"records_audit.py period: {e}", file=sys.stderr)
+            return 1
+        a.out.write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
+        print("PERIOD " + json.dumps({"verdict": got["answer"]["verdict"], "reason": got["answer"]["reason"],
+                                      "free": got["free"], "commitment": got["answer"]["commitment"],
+                                      "program": got["registration"]["program"]}, sort_keys=True))
+        return 0
     if a.cmd == "count":
         for m in a.catalog:
             importlib.import_module(m)
@@ -829,6 +884,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
+    if not a.challenger:
+        ap.error("audit draws on the auditor's challenger's coins, never the verifier's own: give --challenger local --main FILE")
     if a.challenger:
         if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
             ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")

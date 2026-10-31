@@ -71,11 +71,11 @@ theorem signed_mem {pk : ByteArray} {c : SessionCommitment} {e : String} {rounds
       sessionStrings pk c e rounds := by
   simp [sessionStrings, hm, hI]
 
-theorem own_mem {s : SignedSession} {dev : Device} {x : ByteArray}
+theorem own_mem {s : SignedSession} {dev : Challengers} {x : ByteArray}
     (hx : x ∈ sessionStrings s.publicKey s.commitment s.ended s.rounds) : x ∈ runStrings s dev :=
   List.mem_append_left _ hx
 
-theorem device_mem {s : SignedSession} {dev : Device} {r : Run} (hr : r ∈ dev.sessions s.publicKey) {e : String}
+theorem device_mem {s : SignedSession} {dev : Challengers} {r : Run} (hr : r ∈ dev.sessions s.publicKey) {e : String}
     (he : r.recorded.ended = some e) {x : ByteArray}
     (hx : x ∈ sessionStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ runStrings s dev := by
   refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩)
@@ -92,7 +92,7 @@ theorem commitment_ext {c c' : SessionCommitment} (h1 : c.session = c'.session) 
 
 /-- Under no collision among the run's strings, a session whose message the device signed for one of its sessions is
 that session. -/
-theorem same_session {s : SignedSession} {dev : Device} (cf : CF (runStrings s dev)) (he : s.ended = COMPLETE)
+theorem same_session {s : SignedSession} {dev : Challengers} (cf : CF (runStrings s dev)) (he : s.ended = COMPLETE)
     {m M : ByteArray} (hm : s.message = .ok m)
     (hM : memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session m = .ok M)
     (hsig : Signed dev s.publicKey M) :
@@ -123,7 +123,7 @@ theorem same_session {s : SignedSession} {dev : Device} (cf : CF (runStrings s d
   exact (Inputs.rounds_inj hvs hvs').symm
 
 /-- **A verifying signature is the device's, or the run carries a break.** -/
-theorem signedByDevice_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedSession} (dev : Device)
+theorem signedByDevice_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedSession} (dev : Challengers)
     {p : Lms.Params} (hp : schemes.lookup s.scheme = some p) (ht : s.publicKey ∈ trusted) {m : ByteArray}
     (hm : s.message = .ok m) (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true)
     (he : s.ended = COMPLETE) : SignedByDevice schemes trusted s dev := by
