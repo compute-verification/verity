@@ -49,7 +49,7 @@ structure Params where
   base : OneStage.Params
   own : Own
 
-structure Session where
+structure RunFiles where
   name : String
   record : String
   reps : Array (String × String)
@@ -57,7 +57,7 @@ structure Session where
 structure Evidence where
   base : OneStage.Evidence
   pub : String
-  sessions : Array Session
+  sessions : Array RunFiles
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
@@ -116,7 +116,7 @@ def ownOfJson (j : Json) : V Own := do
     | throw "the program and the partition are not objects"
   pure { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered }
 
-private def sessionOf (j : Json) : V Session := do
+private def sessionOf (j : Json) : V RunFiles := do
   exactly j #["name", "record", "reps"] "a session of the proofs"
   let (.str name, .str record, .obj _) := (getD j "name", getD j "record", getD j "reps")
     | throw "a session of the proofs is not a name, its record's digest and its rep files' digests"
@@ -126,7 +126,7 @@ private def sessionOf (j : Json) : V Session := do
   pure { name, record, reps }
 
 /-- The evidence's `proofs`: the public file's digest and the sessions. -/
-def proofsOf (pr : Json) : V (String × Array Session) := do
+def proofsOf (pr : Json) : V (String × Array RunFiles) := do
   exactly pr #["public", "sessions"] "the evidence's proofs"
   let .str pub := getD pr "public" | throw "proofs: public is not a SHA-512 digest"
   let .arr ss := getD pr "sessions" | throw "proofs: sessions is not a list"
@@ -197,7 +197,7 @@ def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
 session's verdict (`flock-verify/<name>`, of record), with the units an accepted one proved. A refusal for what
 `proofs.verify` refuses: registered values read without the verifier's registered file, a file no blob holds, an
 accepted session naming another program than the partition object's, or proved units other than the evidence's. -/
-def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat))
+def verdicts (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat))
     (bs : Core.Blobs) : V (Array (String × Json)) := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
