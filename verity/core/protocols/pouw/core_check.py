@@ -735,9 +735,9 @@ def public_row_salt(context: str, position: int) -> bytes:
     return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
 
 
-#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`, #3124)
+#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`)
 OK_ROW = (1,)
-#: the ok row's hm96 salt tag (h1_prove's, #3124)
+#: the ok row's hm96 salt tag (h1_prove's)
 OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
 
 
@@ -925,12 +925,12 @@ MANIFEST_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
 #: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW window's reveal: only a certified window's
 #: verifier, which holds the reveal, reads it, and that verifier reads no other
 MANIFEST_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
-#: the e2e-service passes' coin commitment (r20261006-19… to -22…), whose binding and weights' root are the first 32 bytes
+#: the e2e-service passes' coin commitment, whose binding and weights' root are the first 32 bytes
 #: of `tagged`: only a replay of a recorded pass reads it
 COINS_RECORDED = "verity/pouw/epoch-coins/v2"
 #: a coin commitment's scheme: (the bytes of `tagged` its binding and the weights' root keep, the weights' root's tag)
 COIN_VERSIONS = {Co.SCHEME: (64, "verity/pouw/weights/v1"), COINS_RECORDED: (32, "verity/pouw/weights/v2")}
-#: the e2e-service's first coin commitments (r20261006-08…, -19… to -21…), named `coins.SCHEME` but on SHA-256 as core
+#: the e2e-service's first coin commitments, named `coins.SCHEME` but on SHA-256 as core
 #: was then: bound by `tagged_sha256`, and the draw's key and stream `derive_v1`'s.  Only a replay of a recorded draw
 #: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
 COIN_EARLY = Co.SCHEME
@@ -1308,7 +1308,7 @@ SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the
                "(`challenger.trusted_commitment`), not a bare commitment")
 
 
-#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin (RT4-INT-5)
+#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin
 COIN_KEY = "coin-key"
 NO_PINNED_KEY = "the window's parameters pin no challenger key for its draw's record"
 OTHER_KEY = "the challenger record is signed under a key other than the challenger key the window's parameters pin"
@@ -1527,8 +1527,8 @@ def _salt_epoch(key: Any, ledger: Any, pins: Any, main: Any, session: Any, r: by
 def values_root(g: Any) -> bytes | None:
     """The root of a group of committed values the window names (`WINDOW_VALUES`), or None when `g` is not one: ``{program,
     values}``, ``program`` a string and ``values`` a non-empty object of entries by value name, each naming its value
-    (``value``) and its ``domain`` and ``root``, SHA-512 digests (core's ``registered`` entries: #4426's
-    `loop.activations` and its weights' pin's ``values``).  The root is SHA-512(`VALUES_TAG` ‖ u64be(len program) ‖
+    (``value``) and its ``domain`` and ``root``, SHA-512 digests (core's ``registered`` entries: the served
+    loop's `loop.activations` and its weights' pin's ``values``).  The root is SHA-512(`VALUES_TAG` ‖ u64be(len program) ‖
     program ‖ for each name in sorted order: u64be(len name) ‖ name ‖ domain ‖ root), strings as UTF-8, so it fixes
     every value's root under its domain.  An entry's other fields (its rows, words and width) are bound by its domain,
     which the records' audit holds to them (`records_audit.committed_activations`, `pinned`)."""
