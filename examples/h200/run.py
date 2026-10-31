@@ -92,7 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--weights-file", default="", help="W itself, checked tensor by tensor against --weights-manifest")
     ap.add_argument("--weights-manifest", default="", help="the manifest (with sha256) --weights-file is checked against")
     ap.add_argument("--salt", default="")
-    ap.add_argument("--stage-lib", default="")
+    ap.add_argument("--stage-lib", default="", help="libp2v1.so's directory (benchmarks/torch_gpu/p2_stage/build.sh's "
+                                                     "lib/): a --store p2:PATH stages on the GPU")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--commit", default="slots", choices=("slots", "reference", "host", "device"))
     ap.add_argument("--salt-keys", default="fresh", choices=("fresh", "fixture"))
