@@ -2,6 +2,7 @@
 //! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1).
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
+//!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
@@ -32,6 +33,7 @@ use flock_field::F128;
 use flock_live::{
     circuit::*,
     firewall::{Framer, Gate},
+    run_record::RunLog,
     session_verify as sverify,
     zk_hooks::{Hooks, NoMask, ProverSeed},
     zk_veil::{self as zkv, InnerProof, Layout},
@@ -5414,7 +5416,7 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         let ts = Instant::now();
         std::thread::scope(|sc| {
             for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
-                flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
+                flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, None, || {
                     let mut s = server(st, inst);
                     fix_verifier_coins(&mut s, [9; 32]);
                     s
@@ -5671,7 +5673,27 @@ fn firewall_outcome(fw: &ReleaseArgs, seen: usize, v: &Value) -> Value {
     json!({"session": fw.session, "part": fw.part, "outcome": outcome, "why": why})
 }
 
-fn serve_loop(make: impl Fn() -> Server) {
+/// `serve --rec-run FILE --rec-part J`: the recursive run's record the challenger's operator staged at FILE before any
+/// session (`flock_live::run_record`), where each Hello this server answers with coins is logged as an open for V*'s part J
+/// before the answer leaves.
+fn run_log(st: &Stmt) -> Option<RunLog> {
+    let (file, part) = (arg("--rec-run", ""), arg("--rec-part", ""));
+    if file.is_empty() && part.is_empty() {
+        return None;
+    }
+    let Ok(part) = part.parse::<usize>() else {
+        refuse("--rec-run FILE takes --rec-part J: the V* part (0, 1, ..) this server's sessions are opened for".into())
+    };
+    if file.is_empty() {
+        refuse("--rec-part J takes --rec-run FILE: the run's record its sessions are logged in".into());
+    }
+    if !is_zk(st) {
+        refuse("--rec-run: the run's record logs each session's coin-tree key, which only --zk's keyed coin tree draws".into());
+    }
+    Some(RunLog::new(file, part).unwrap_or_else(|e| refuse(e)))
+}
+
+fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Server) {
     let listen = arg("--listen", "127.0.0.1:7500");
     let out = std::path::PathBuf::from(arg("--out", "sessions"));
     let l = std::net::TcpListener::bind(&listen).unwrap();
@@ -5682,12 +5704,14 @@ fn serve_loop(make: impl Fn() -> Server) {
     // the bound address: --listen 127.0.0.1:0 serves on a port the system picks
     let bound = l.local_addr().unwrap().to_string();
     println!("SERVING {bound}");
-    serve_on(&l, &out, max, concurrency, &bound, make);
+    serve_on(&l, &out, max, concurrency, &bound, log, make);
 }
 
 /// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`); each
-/// session's record, proofs and verifier file under `out/<session>`, its line in `out/index.jsonl` and on stdout.
-fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize, listen: &str, make: impl Fn() -> Server) {
+/// session's record, proofs and verifier file under `out/<session>`, its line in `out/index.jsonl` and on stdout. With a
+/// run's record (`log`), each session's Hello answered with coins is logged there first.
+fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize, listen: &str,
+            log: Option<&RunLog>, make: impl Fn() -> Server) {
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
     let free = (Mutex::new(concurrency), std::sync::Condvar::new());
@@ -5699,9 +5723,10 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let id = format!("l{:04}-{}", i, std::process::id());
         loop {
             let Ok(b) = read_frame(&mut r) else { break };
-            let resp = match Req::decode(&b) {
-                Ok(req) => s.handle(req),
-                Err(e) => Resp::Refused(e),
+            let resp = match (Req::decode(&b), log) {
+                (Ok(req), Some(log)) => log.handle(&mut s, &id, req),
+                (Ok(req), None) => s.handle(req),
+                (Err(e), _) => Resp::Refused(e),
             };
             let done = matches!(resp, Resp::Verdict(_));
             if write_frame(&mut w, &resp.encode()).is_err() || done {
@@ -5976,8 +6001,9 @@ fn main() {
         "zkgk" => zkgk(&st, &inst),
         "replay" => replay(&st, &inst, tables),
         "serve" => {
+            let log = run_log(&st);
             let sv = serving(&st, &inst, tables);
-            serve_loop(move || server_of(&sv, &st, &inst, tables))
+            serve_loop(log.as_ref(), move || server_of(&sv, &st, &inst, tables))
         }
         "prove" => {
             if firewall_on(&st) {
