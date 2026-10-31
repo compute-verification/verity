@@ -235,7 +235,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
     requests, so a server takes at most 291,440 bits in a 3.2 s window, 91.1 kbit/s in and 2.7 kbit/s out, against the
     warden's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
-    equals only at T = D + 1. A faulty ingress unit, which this honest-δ form excludes, would add 356,592 bits
+    equals only at T = D + 1. An incorrect ingress unit, which this honest-δ form excludes, would add 356,592 bits
     (8 · 512 · 16 + 2 · 4 · 36,382), 122% of a window. `regime.onsite` doesn't take it."""
     assert envelopes.REQUEST_HEAD == {"connection ordinal": 32, "content-length": 32, "max_tokens": 32, "seed": 32,
                                       "temperature": 24, "top_p": 24, "model": 406, "user": 406}

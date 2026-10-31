@@ -11,8 +11,8 @@ argmax), each id `stub:` until its Definition lands, its ANDs composed from pinn
 **The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
 session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
 (m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
-fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S sampling blocks of the block split delta), and by
-`IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
+fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta), and by
+`IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The incorrect ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
 (`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
