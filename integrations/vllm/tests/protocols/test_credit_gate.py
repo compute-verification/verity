@@ -180,19 +180,36 @@ def _linear_is_the_stand_in(monkeypatch):
 
 
 AUDITOR = "vy-challenger-1:7811"
+#: where the window's draw's challenge phase is reached (`challenger_host.DRAW_PORT`, the gate's answer's ``port``)
+DRAW_AT = f"vy-challenger-1:{CH.DRAW_PORT}"
 #: the gate's reserve answer for the window's challenge phase, and the gate that opens it on the window's open root
 RESERVED = {"session": CH.session_id(1)}
+#: the gate's reserve answer for the window's draw's challenge phase, which the gate opens withheld on its draw root
+DRAW_RESERVED = {"session": CH.session_id(0xd)}
 GATE: dict = {}
+
+
+def _gate(session, root, withhold=False):
+    """The gate of the host `GATE` holds: its window's challenge phase, or with `withhold` its draw's
+    (`challenger_host.Host.open_draw`)."""
+    host = GATE["host"]
+    return host.open_draw(session, root) if withhold else host.open(session, root)
+
+
+def _reach(monkeypatch, host):
+    """Route `AUDITOR` to `host`'s challenge phase and `DRAW_AT` to its draw's, and make it the host `_gate` opens on."""
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(
+        lambda cls, at, secret=None: host.client if at == AUDITOR else
+        host.draw.client if at == DRAW_AT and host.draw is not None else None))
+    monkeypatch.setitem(GATE, "host", host)
 
 
 @pytest.fixture
 def auditor(tmp_path, monkeypatch):
     """The auditor host's challenger, one challenge phase over a one-round live epoch, reached at `AUDITOR`, reserved as
-    `RESERVED` and opened by `GATE`'s ``open``."""
+    `RESERVED` and opened by `_gate`, which opens the window's draw's challenge phase (`DRAW_RESERVED`) withheld."""
     host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, gated=True)
-    monkeypatch.setattr(R.RemoteChallenger, "connect",
-                        classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
-    monkeypatch.setitem(GATE, "open", host.open)
+    _reach(monkeypatch, host)
     return host
 
 
@@ -266,20 +283,19 @@ def _served(**kw) -> SV.Served:
 
 @pytest.fixture
 def periodic(tmp_path, monkeypatch):
-    """`auditor` with its challenge phase reserved inside lane vllm's period `PERIOD`, whose open commits `_circuit` and (unless
+    """`auditor` with its challenge phase and its draw's reserved inside lane vllm's period `PERIOD` (cap 2, the one
+    window's two challenge phases), whose open commits `_circuit` and (unless
     None) the draw K ``draw_k`` and the fixed length `LENGTH`, opened with ``--model`` `CH.MODEL` (unless ``model`` is
     False) on ``registry`` (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
     ``host.ledger.period_close`` once the challenge phase has ended."""
     def make(draw_k, model=True, files=None, registry=None):
         leaves = itertools.count()
         ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves, registry=registry or _registry())
-        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, rows=ROWS, circuit_files=files,
+        ledger.period_open(PERIOD, circuit=_circuit(), cap=2, draw_k=draw_k, rows=ROWS, circuit_files=files,
                            model=CH.MODEL if model else None, length=LENGTH)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
-        monkeypatch.setattr(R.RemoteChallenger, "connect",
-                            classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
-        monkeypatch.setitem(GATE, "open", host.open)
+        _reach(monkeypatch, host)
         return host
     return make
 
@@ -306,7 +322,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
         served.tap = CT.CommitTap(port=PORT)
     runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None, decode_query_len=1)
     if remote:
-        coins = {"challenger": AUDITOR, "session": RESERVED, "gate": lambda session, root: GATE["open"](session, root)}
+        coins = {"challenger": AUDITOR, "session": RESERVED, "draw_session": DRAW_RESERVED, "gate": _gate}
     else:
         coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
@@ -609,7 +625,12 @@ def _record(run):
 def _credit(host, rec, statements=(), k=None, descriptor=None, run=None, live=None):
     return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key,
                              _descriptor() if descriptor is None else descriptor, statements, k, run=run,
-                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live)
+                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live, draw_directory=_draw_dir(host))
+
+
+def _draw_dir(host):
+    """The ``out/`` of the draw's challenge phase `host`'s gate opened for its window, None when it opened none."""
+    return None if host.draw is None else host.draw.directory
 
 
 def _live(d, rec):
@@ -1008,7 +1029,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
     auditor.ledger.period_close(PERIOD)
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live)
+    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live, _draw_dir(auditor))
     got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
     assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
                                    "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
@@ -1041,9 +1062,11 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     assert out["window"][0] == "budget" and "commits no draw K" in out["window"][1]
     auditor.ledger.period_close(PERIOD)
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id], [auditor.window["root"]])
+    reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id, auditor.draw.session_id],
+                                [auditor.window["root"], rec["commitment"]["draw"]["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor())
+    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor(),
+                                   draw_directory=_draw_dir(auditor))
     assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
         PHC.draw_k(None)
@@ -1103,23 +1126,25 @@ def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_
 
 
 def _two_window_period(tmp_path):
-    """Lane vllm's closed period `PERIOD` of two windows, each reserved, opened on its root and ended complete, as the
-    auditor's ledger (its record leaves between each open's and end's), and their challenge phases and roots, in order."""
+    """Lane vllm's closed period `PERIOD` of two windows, each reserved, opened on its root and ended complete and then
+    its draw's challenge phase, opened withheld on its draw root, as the auditor's ledger (its record leaves between each
+    open's and end's), and their challenge phases and roots, in the close's order: window, draw, window, draw."""
     leaves = itertools.count()
     ledger = CH.Ledger(tmp_path / "w.jsonl", 1, leaves)
-    ledger.period_open(PERIOD, circuit=_circuit(), cap=2, draw_k=1)
+    ledger.period_open(PERIOD, circuit=_circuit(), cap=4, draw_k=1)
     sessions, roots = [], []
     for i in (1, 2):
-        s, root = CH.session_id(i), hashlib.sha512(bytes([i])).hexdigest()
-        ledger.reserve(s)
-        ledger.open(s, {"root": root})
-        d = tmp_path / s
-        d.mkdir()
-        (d / R.RECORD).write_text(json.dumps({"signature": f"{next(leaves):08x}", "commitment": {"root": "ab" * 64}}))
-        (d / R.HELLOS).write_text("")
-        ledger.end(s, d, True)
-        sessions.append(s)
-        roots.append(root)
+        for s, root, withheld in ((CH.session_id(i), hashlib.sha512(bytes([i])).hexdigest(), False),
+                                  (CH.session_id(0xd0 + i), hashlib.sha512(bytes([0xd0 + i])).hexdigest(), True)):
+            ledger.reserve(s)
+            ledger.open(s, {"root": root}, withheld=withheld)
+            d = tmp_path / s
+            d.mkdir()
+            (d / R.RECORD).write_text(json.dumps({"signature": f"{next(leaves):08x}", "commitment": {"root": "ab" * 64}}))
+            (d / R.HELLOS).write_text("")
+            ledger.end(s, d, True)
+            sessions.append(s)
+            roots.append(root)
     ledger.period_close(PERIOD)
     return PHC.Ledger.of([ledger.lines], ledger.key, pins=[CH.PINS], main=CH.MAIN), sessions, roots
 
@@ -1127,28 +1152,35 @@ def _two_window_period(tmp_path):
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):
     """A period earns only as its close lists it (`credit.period`): exactly its windows, each once, in the
     close's order. Presented out of order, with one missing, with one past the close, or with a window not its own, the
-    period is refused, by `period_reason` and by `period_credit` before any window is read."""
-    ledger, sessions, (a, b) = _two_window_period(tmp_path)
+    period is refused, by `period_reason` and by `period_credit` before any window is read. Each window's draw
+    challenge phase is one of the close's, right after its window, presented as its draw root."""
+    ledger, sessions, (a, da, b, db) = _two_window_period(tmp_path)
     other = hashlib.sha512(b"another window").hexdigest()
-    assert PHC.period_reason(ledger, PERIOD, sessions, [a, b]) == []
+    assert PHC.period_reason(ledger, PERIOD, sessions, [a, da, b, db]) == []
 
     def why(presented):
         (reason,) = PHC.period_reason(ledger, PERIOD, sessions, presented)
         return reason
-    assert why([b, a]).startswith(f"order: window 0 of period {PERIOD} is {b[:16]}...")
-    assert why([a]).startswith(f"missing: window 1 of period {PERIOD}")
-    assert why([a, b, a]).startswith("period: the windows presented run past the 2")
-    assert why([other, a, b]).startswith(f"period: window {other[:16]}... is not one of period {PERIOD}'s windows")
+    assert why([b, db, a, da]).startswith(f"order: session 0 of period {PERIOD} is {b[:16]}...")
+    assert why([a, da]).startswith(f"missing: session 2 of period {PERIOD}")
+    assert why([a, b, da, db]).startswith(f"order: session 1 of period {PERIOD} is {b[:16]}...")
+    assert why([a, da, b, db, a]).startswith("period: the sessions presented run past the 4")
+    assert why([other, a, da, b, db]).startswith(
+        f"period: session {other[:16]}... is not one of period {PERIOD}'s sessions")
     stub = dict.fromkeys(CR.PERIOD_KEYS)
-    got, refused = PHC.period_credit(ledger, PERIOD, [{**stub, "window": {"root": b}}, {**stub, "window": {"root": a}}])
+
+    def window(root, draw):
+        return {**stub, "window": {"root": root}, "draw": {"root": draw}}
+    got, refused = PHC.period_credit(ledger, PERIOD, [window(b, db), window(a, da)])
     assert got is None and refused[0] == "order"
-    assert PHC.period_credit(ledger, PERIOD, [{**stub, "window": {"root": a}}])[1][0] == "missing"
+    assert PHC.period_credit(ledger, PERIOD, [window(a, da)])[1][0] == "missing"
 
 
 def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):
     """The credit bit is under calls_root and so under the draw root the draw coin followed: flipping it after
-    the draw is refused, whether the draw root is left (it is no longer over the manifest) or recomputed (it is no longer
-    the one root the challenger's log shows its draw coin followed); the honest record gets past them to its proofs."""
+    the draw is refused, whether the draw root is left (it is no longer over the manifest) or recomputed (no draw
+    challenge phase of the auditor's ledger is opened on it, so it has no draw coin of the challenger's); the honest
+    record gets past them to its proofs."""
     auditor = periodic(1, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None
@@ -1164,7 +1196,8 @@ def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):
     served = SV.digest_of(c["served"]["entries"], c["served"]["refused"])
     root = CR.draw_root(CR.calls_root(salt, rows, served, CT.digest(c["commit"])), bytes.fromhex(c["draw"]["receipts"]),
                         c["rounds"])
-    assert credited({**c, "draw": {**c["draw"], "root": root.hex()}}, rows) == ("draw", CR.CHANGED)
+    kind, why = credited({**c, "draw": {**c["draw"], "root": root.hex()}}, rows)
+    assert kind == "coin" and why.startswith("the draw's session is not trusted: "), why
     assert credited(c, [{k: v for k, v in rec["calls"][0].items() if k != CR.CREDIT}]) == ("credit", CR.no_bit(0))
     no_z = [{**rec["calls"][0], "tables": {**rec["calls"][0]["tables"], "z": None}}]
     assert credited(c, no_z) == ("credit", CR.no_z(0))

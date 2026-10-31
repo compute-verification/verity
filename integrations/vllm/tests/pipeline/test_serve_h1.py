@@ -273,11 +273,12 @@ class _GateAuditor(_Auditor):
 
 def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, monkeypatch):
     """``--challenger-gate`` and ``--challenger-peer``: each window reserves a session of its own (H1's scheme and
-    families for S rounds, as this peer), round 0 opens it on the window's open root once its port listens, and the
-    window's close waits for its end entry, closed and complete. The window's salt, round and draw coins are that
-    session's, its record carries the session without its secret, and the verifier's check of the record against the
-    auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file the windows wrote holds the weight trees' salt
-    key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
+    families for S rounds, as this peer) and a draw session (the draw coin's family alone), round 0 opens the session on
+    the window's open root once its port listens, the draw opens the draw session withheld on the window's draw root,
+    and the window's close waits for both end entries, closed and complete. The window's salt and round coins are its
+    session's and its draw coin its draw session's, its record carries the sessions without their secrets, and the
+    verifier's check of the record against the auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file
+    the windows wrote holds the weight trees' salt key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
     sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
@@ -296,16 +297,23 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
         assert {k: out["session"][k] for k in ("window", "peer", "port", "listen_polls", "unopened", "closed", "end")} == {
             "window": w, "peer": PEER, "port": 7811, "listen_polls": 0, "unopened": None, "closed": {"closed": True},
             "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
+        draw = out["session"]["draw"]
+        assert {k: draw[k] for k in ("port", "listen_polls", "end")} == {
+            "port": 7811, "listen_polls": 0, "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
+        assert auditor.gate._opens[draw["session"]]["withheld"] is True
         record = json.loads((tmp_path / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())
-        given = record["commitment"]["session"]
-        assert given["session"] == sid and "secret" not in given
+        given, drawn = record["commitment"]["session"], record["commitment"]["draw_session"]
+        assert given["session"] == sid and drawn["session"] == draw["session"] and "secret" not in given | drawn
         assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
         ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)
-        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s == sid else None) is None
+        mine = {sid, draw["session"]}
+        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s in mine else None) is None
         assert run.details["challenger"] == {"closed": True}
-    assert len(set(sids)) == 2 and ports == [7811, 7811]
+    assert len(set(sids)) == 2 and ports == [7811] * 4
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]
-    assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)]] * 2
+    assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)],
+                        ["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
+                         "--withhold"]] * 2
     written = [f.read_bytes() for f in tmp_path.rglob("*") if f.is_file()]
     assert written and not any(PH.WEIGHT_KEY in b or PH.WEIGHT_KEY.hex().encode() in b for b in written)
     srv.src.uninstall()
@@ -416,10 +424,11 @@ def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp
         assert set(out["seconds"]) == {"reserve", "install", "close_on_loop", "queued", "release", "ended"}
     assert outs[0]["session"]["session"] != outs[1]["session"]["session"]
     arm.drain()
-    assert [verb for verb, off in calls if not off] == ["reserve"] + ["open", "status"] * 2, \
-        "window 0's reserve, then round 0's open and its commitment by status"
-    assert [verb for verb, _off in calls].count("reserve") == 3, "window 2's, reserved ahead, is never opened"
-    assert arm.summary()["unused"] == [sessions.held[-1]["session"]] and sessions.held[-1]["window"] == 2
+    assert [verb for verb, off in calls if not off] == ["reserve"] * 2 + ["open", "status"] * 2, \
+        "window 0's reserve and its sampling session's, then round 0's open and its commitment by status"
+    assert [verb for verb, _off in calls].count("reserve") == 6, "window 2's, reserved ahead, is never opened"
+    assert arm.summary()["unused"] == [sessions.held[-1]["session"], sessions.held[-1]["draw"]["session"]] \
+        and sessions.held[-1]["window"] == 2
     srv.src.uninstall()
 
 
@@ -431,11 +440,16 @@ def test_a_reserve_ahead_that_expires_before_its_window_is_replaced_and_none_is_
     answers = iter([{"expires_utc": "2026-10-27T20:04:00Z", "period": None},
                     {"expires_utc": "2026-10-27T22:00:00Z", "period": "p1"}])
     seen: list[str] = []
+    last: dict = {}
 
     def gate(argv: list[str]) -> tuple[int, str]:
-        seen.append(shlex.split(argv[-1])[0])
+        words = shlex.split(argv[-1])
+        seen.append(words[0])
+        if "--withhold" not in words:
+            last.update(next(answers))
         return 0, json.dumps({"session": f"s20261027T2000{len(seen):02d}Z-{len(seen):04x}", "seq": len(seen),
-                              "peer": PEER, "by": "vllm", **next(answers)})
+                              "peer": PEER, "by": "vllm", **last,
+                              **({"withheld": True} if "--withhold" in words else {})})
     ahead = Later()
     sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, ahead=ahead,
                                now=lambda: datetime(2026, 10, 27, 20, 0, tzinfo=UTC))
@@ -443,7 +457,8 @@ def test_a_reserve_ahead_that_expires_before_its_window_is_replaced_and_none_is_
     ahead.run()
     got = sessions.take(0)
     assert got["period"] == "p1" and sessions.held[0]["unused"].startswith("its reserve expires at 2026-10-27T20:04:00Z")
-    assert seen == ["reserve", "reserve"] and not ahead.jobs, "none ahead inside a period"
+    assert seen == ["reserve"] * 4 and not ahead.jobs, "none ahead inside a period"
+    assert sessions.held[0]["draw"]["unused"] == sessions.held[0]["unused"], "its sampling session goes unused with it"
 
 
 class Now(Later):
@@ -458,8 +473,8 @@ class Now(Later):
 def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     """`arm_of` reserves window 0's session off the loop, and `H1Windows.ready` computes the weights' roots, builds the
     call tables' hasher, compiles the z/y kernels, builds the Lean verifier and waits for that reserve, all before
-    serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session is the
-    one reserved at startup."""
+    serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session (with
+    its sampling session, reserved withheld beside it) is the one reserved at startup."""
     from verity.core.protocols.pouw import verifier
     from verity_vllm.protocols.pouw.h1 import hooks as PHK
     from verity_vllm.protocols.pouw.h1 import tables_device as TD
@@ -487,7 +502,8 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     (held,) = sessions.held
     assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
                                        "seconds": {"roots": 1, "tables": 1, "kernels": 1, "lean": 1, "reserve": 1}}
-    assert held["window"] == 0 and calls == ["reserve"] and roots == [0, 1] and warmed == [(2, ROWS)] and built == [1]
+    assert held["window"] == 0 and calls == ["reserve"] * 2 and held["draw"]["session"] != held["session"]
+    assert roots == [0, 1] and warmed == [(2, ROWS)] and built == [2]
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
@@ -495,7 +511,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     assert [h["window"] for h in sessions.held] == [0, 1], "window 1's reserved ahead at window 0's open, none for 0"
     assert roots == [0, 1], "window 0's install reuses the roots computed before the server listened"
     arm.drain()
-    assert arm.summary()["unused"] == [sessions.held[1]["session"]]
+    assert arm.summary()["unused"] == [sessions.held[1]["session"], sessions.held[1]["draw"]["session"]]
     srv.src.uninstall()
 
 
