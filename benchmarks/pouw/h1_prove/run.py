@@ -366,8 +366,8 @@ def credit_descriptor(win: SimpleNamespace) -> bytes:
 
 
 def findings_of(doc: dict) -> dict:
-    """A ``--registered`` file's ports as a session verified against it states them (flock-verify's VERDICT
-    ``registered``, `Registered.finding`: ``{port: {value, root}}``)."""
+    """A ``--registered`` file's ports' values and roots, which a session verified against it states (flock-verify's
+    VERDICT ``registered``, `Registered.finding`: ``{port: {value, root, ...}}``)."""
     return {p: {"value": e["value"], "root": e["root"]} for p, e in doc["ports"].items()}
 
 

@@ -27,8 +27,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
-* `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
-  registration only its own values' (`Record.ownRegistered`);
+* `session_registered`: the registered reads the verifiers of record report, each its root, domain and shape
+  (`Record.sessionRegistered`), and with a registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
@@ -459,7 +459,7 @@ def matchesPublic (j : Json) : V Json := do
     throw "scheme is not a string, roots or domains not an object of strings, or population not an integer"
   return (Record.matchesPublic rec_ (getD j "scheme") (getD j "roots") (getD j "domains") (getD j "population")).toJson
 
-/-- `{"verdicts", "registration"?}` to `{"registered": {value: root} or null}` (`Record.sessionRegistered`, with a
+/-- `{"verdicts", "registration"?}` to `{"registered": {value: read} or null}` (`Record.sessionRegistered`, with a
 registration `Record.ownRegistered`); refused where `inputOf` refuses the verdicts, and a registration whose roots are not
 a list of objects with a string port or whose registered values, if any, are not a list of objects with a string value. -/
 def sessionRegistered (j : Json) : V Json := do

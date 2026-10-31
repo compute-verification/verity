@@ -37,8 +37,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 * **check** (`checkLive`, at the coins `checkAt`): with coins, that the draw's units are the ones their raw bytes draw
   under the law (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R7 (`Registration.check`), then the
   record's checks (`Record.checks`: the draw, the proved units, the receipt, the served draw, the sessions' roots, and the
-  roots the verifiers of record report opening the sessions' registered reads against, `Record.sessionRegistered`, each
-  the registered one). It rejects when one fails or
+  roots the verifiers of record report opening the sessions' registered reads against with their domains and shapes,
+  `Record.sessionRegistered`, each the registered entry's). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier of record accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound.boundOf`,
@@ -290,9 +290,9 @@ def evidenceOf (b : ByteArray) : V Evidence := do
              | x => some <$> nats x "served",
            sessionRoots := ← opt "session_roots" (obj · "session_roots"), coins := getD j "coins" }
 
-/-- `audit_record`'s checks after the draw's (`Record.checks`): the names of those that fail. The registered roots the
-sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
-values (`Record.ownRegistered`). -/
+/-- `audit_record`'s checks after the draw's (`Record.checks`): the names of those that fail. The registered reads the
+sessions' reads were opened against (each root with its domain and shape) are the verdicts' own
+(`Record.sessionRegistered`), for the registration's own values (`Record.ownRegistered`). -/
 def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
   let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
   let roots := e.sessionRoots.map entries

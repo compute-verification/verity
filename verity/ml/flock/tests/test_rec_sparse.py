@@ -16,6 +16,7 @@ import pytest
 from verity.ml.circuits.ops.boolean.gf2k import mul
 from verity_flock import rec_sparse as RS
 from verity_flock.rec_algebra import skip_weights
+from registered_finding import finding
 
 eq_table = RS.eq_table
 
@@ -426,7 +427,7 @@ def test_a_sessions_statement_reads_tau_at_row_0_and_every_other_port_at_row_r(t
     p = _lean_statement(tmp_path / "honest")
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])
-    assert line["registered"] == {nm: {"value": e["value"], "root": e["root"]} for nm, e in reads.items()}
+    assert line["registered"] == finding(reads)
     p = _lean_statement(tmp_path / "forged")
     assert p.returncode == 1 and "sc0" in p.stdout, p.stdout + p.stderr
 

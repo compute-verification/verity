@@ -29,7 +29,9 @@ R6-prover). On the program whose verifier's circuit also registers `C`, no param
 the verifier names `C`'s leaves (`circuit_params`), which R7 counts its rows from. A verifier may name its window's open
 root (`window_root`, `WROOT`) and the values it holds across windows
 (`held`): the record registers every other value it doesn't fill, pin or take as an output under `WROOT`'s domain, and
-the log's earlier record under another window's (`EARLIER_WROOT`), its own or none.
+the log's earlier record under another window's (`EARLIER_WROOT`), its own or none. The verifier of record reports the
+sessions' reads of each registered value at its entry's root, domain and shape (`reads`, `Flock.Registered.finding`),
+and the changes to them read another (`_other_reads`).
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, and integer
 populations in a sample.
@@ -1401,9 +1403,11 @@ def _record_of(s: Setup, values, law: dict, window: dict, log=(), binding=None, 
 
 
 def reads(rec: dict) -> dict:
-    """A Lean verdict's `registered`: per port of the statement, the value it reads and the root it opened against (the
-    record's)."""
-    return {f"{e['value']}.{i}": {"root": e["root"], "value": e["value"]} for e in rec["registered"] for i in range(2)}
+    """A Lean verdict's `registered` (`Flock.Registered.finding`): per port of the statement, the value it reads, the root it
+    opened against and that root's domain and shape (the record's)."""
+    return {f"{e['value']}.{i}": {"value": e["value"], "root": e["root"], "domain": e["domain"], "leaves": e["leaves"],
+                                  "words": e["words"], "word_bits": e.get("word_bits", G.WORD_BITS)}
+            for e in rec["registered"] for i in range(2)}
 
 
 @st.composite
@@ -1720,7 +1724,7 @@ def _earlier(a: dict) -> str:
     return R.digest(a["params"]["log"][-1]) if a["params"]["log"] else "ee" * 64
 
 
-def _registered(value):
+def _expects(value):
     """The verifier's registered values changed, its held values and circuit parameters the ones still among them (one it
     doesn't expect registered is a malformed parameter, which `registration._window` and `_circuit_params` refuse whatever
     else changed)."""
@@ -1735,10 +1739,10 @@ def _registered(value):
 
 
 REGISTERED_PARAMS = [
-    _registered(lambda a, x: [{"W": 4}, {"W": 0}, {"E": 1}, {"M": 1}, {"V": 1}, {"nope": 1}, {"T": 3},
-                              {"U": 2}, {"W": -1}, {"W": True}, {"W": "2"}, [], "W", {}, {"T": 2}, {"C": 5}][x % 16]),
-    _registered(lambda a, x: {**a["params"]["registered"],
-                              **[{"D": 1}, {"x": 1}, {"T": 4}, {"U": 3}, {"W": 6}, {"x": 3}, {"C": 6}][x % 7]}),
+    _expects(lambda a, x: [{"W": 4}, {"W": 0}, {"E": 1}, {"M": 1}, {"V": 1}, {"nope": 1}, {"T": 3},
+                           {"U": 2}, {"W": -1}, {"W": True}, {"W": "2"}, [], "W", {}, {"T": 2}, {"C": 5}][x % 16]),
+    _expects(lambda a, x: {**a["params"]["registered"],
+                           **[{"D": 1}, {"x": 1}, {"T": 4}, {"U": 3}, {"W": 6}, {"x": 3}, {"C": 6}][x % 7]}),
     lambda a, x: (a["params"].pop("parameters"), a["params"].update(registered=None), a["params"].pop("held", None),
                   a["params"].pop("circuit_params", None)),
     lambda a, x: a["params"].pop("parameters"),
@@ -1778,15 +1782,19 @@ REGISTERED_PARAMS = [
 
 
 def _other_reads(r: dict, x: int) -> dict:
-    """The verdict of record's registered reads, changed: one port's root another (so its value's two ports disagree), every
-    root upper case, a value missing or added (one the record names as a root port, or one it doesn't name), only one
-    port's, none."""
+    """The verdict of record's registered reads, changed: one port's root another (so its value's two ports disagree), or
+    every port of its value read under another domain, leaf count, row width or word width, or with its leaves `true`;
+    every root upper case; every read without its domain and shape; a value missing or added (one the record names as a
+    root port, or one it doesn't name); only one port's; none."""
     ports = sorted(r)
     p = ports[x % len(ports)]
     v = r[p]["value"]
+    every = lambda **kw: {k: {**e, **kw} if e["value"] == v else e for k, e in r.items()}  # noqa: E731
     return [{**r, p: {**r[p], "root": "12" * 64}}, {k: e for k, e in r.items() if e["value"] != v}, {},
             {**r, "extra.0": {"root": "ab" * 64, "value": "extra"}}, {**r, "x.0": {"root": ROOTS["x"], "value": "x"}},
-            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]}][x % 7]
+            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]},
+            every(domain="cd" * 64), every(leaves=(r[p].get("leaves") or 0) + 1), every(words=None), every(word_bits=32),
+            every(leaves=True), {k: {"value": e["value"], "root": e["root"]} for k, e in r.items()}][x % 13]
 
 
 REGISTERED_EVIDENCE = [
@@ -3540,15 +3548,21 @@ def test_every_public_items_code_is_reached(pieces):
 
 def test_a_v2_audit_reads_the_sessions_registered_roots(server):
     """A v2 audit of each program accepts when the verifier of record reports the sessions' registered reads opened against
-    the registered roots (and a value the registration doesn't name is not its to read), and rejects them opened against
-    another root, a value's reads missing, a root port's value read as registered, or none reported."""
+    the registered roots, under their domains and in their shapes (and a value the registration doesn't name is not its to
+    read), and rejects them opened against another root, under another domain, in another leaf count, row width or word
+    width, reported without their domains and shapes, a value's reads missing, a root port's value read as registered, or
+    none reported."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
         opened = a["evidence"]["verdicts"]["lean"]["registered"]
         p = sorted(opened)[0]
         v = opened[p]["value"]
+        every = lambda **kw: {k: {**e, **kw} if e["value"] == v else e for k, e in opened.items()}  # noqa: E731
         for got, want in ((opened, "accept"), ({**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}}, "accept"),
-                          ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"),
+                          ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"), (every(root="12" * 64), "reject"),
+                          (every(domain="cd" * 64), "reject"), (every(leaves=opened[p]["leaves"] + 1), "reject"),
+                          (every(words=None), "reject"), (every(word_bits=32), "reject"),
+                          ({k: {"value": e["value"], "root": e["root"]} for k, e in opened.items()}, "reject"),
                           ({k: e for k, e in opened.items() if e["value"] != v}, "reject"),
                           ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
             lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}

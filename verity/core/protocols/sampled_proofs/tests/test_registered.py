@@ -710,23 +710,37 @@ def test_a_record_without_registered_values_keeps_v1s_bytes():
     assert R.digest(v1) == hashlib.sha512(b"verity/registration/v1\0" + canonical_json(v1)).hexdigest()
 
 
+def _finding(reg, **kw) -> dict:
+    """The Lean verdict's registered finding of a port reading `reg` (`Flock.Registered.finding`), with `kw` changed."""
+    e = reg.entry()
+    return {"value": e["value"], "root": e["root"], "domain": e["domain"], "leaves": e["leaves"], "words": e["words"],
+            "word_bits": e.get("word_bits", G.WORD_BITS), **kw}
+
+
 def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
+    """The reads are held to each value's entry on its root, that root's domain and its shape: another root, domain,
+    leaf count, row width or word width fails, and so does a root reported alone."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
-    ok = audit.audit_record(*args, session_registered={"W": reg.root.hex()})
+    read = audit.read_of(reg.entry())
+    assert read == {k: v for k, v in _finding(reg).items() if k != "value"}
+    ok = audit.audit_record(*args, session_registered={"W": read})
     assert ok["accepted"] and "registered" not in ok["checks"]
     assert ok["integrity_profile"]["inputs"]["registered"] == [{k: reg.entry()[k] for k in ("value", "root", "leaves", "domain")}]
-    for opened in (None, {}, {"W": "cd" * 64}, {"W": reg.root.hex(), "V": "cd" * 64}):
+    for opened in (None, {}, {"W": {**read, "root": "cd" * 64}}, {"W": read, "V": read}, {"W": {**read, "domain": "cd" * 64}},
+                   {"W": {**read, "leaves": read["leaves"] + 1}}, {"W": {**read, "words": read["words"] + 1}},
+                   {"W": {**read, "words": None}}, {"W": {**read, "word_bits": 32}}, {"W": {**read, "leaves": True}},
+                   {"W": reg.root.hex()}, {"W": None}):
         r = audit.audit_record(*args, session_registered=opened)
-        assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"] and r["integrity_profile"] is None
+        assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"] and r["integrity_profile"] is None, opened
     v1 = R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED)
     plain = audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:])
     assert plain["accepted"] and "registered" not in plain["integrity_profile"]["inputs"]
-    assert not audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:], session_registered={"W": reg.root.hex()})["accepted"]
+    assert not audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:], session_registered={"W": read})["accepted"]
 
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
@@ -736,21 +750,28 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
-    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64, "registered": {"w": {"value": "W", "root": reg.root.hex()}}}
-    assert audit.session_registered({"lean": lean}) == {"W": reg.root.hex()}
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64, "registered": {"w": _finding(reg)}}
+    read = audit.read_of(reg.entry())
+    assert audit.session_registered({"lean": lean}) == {"W": read}
     for v in ({**lean, "accepted": False}, {**lean, "accepted": None}, {**lean, "of_record": False}, {**lean, "registered": None},
               {k: x for k, x in lean.items() if k != "registered"}):
         assert audit.session_registered({"lean": v}) is None, v
-    other = {**lean, "registered": {"w": {"value": "W", "root": "cd" * 64}}}
+    other = {**lean, "registered": {"w": _finding(reg, root="cd" * 64)}}
     assert audit.session_registered({"lean": lean, "lean-2": other}) == {"W": None}
-    assert audit.session_registered({"lean": lean, "lean-2": lean}) == {"W": reg.root.hex()}
+    assert audit.session_registered({"lean": lean, "lean-2": lean}) == {"W": read}
+    assert audit.session_registered({"lean": lean, "lean-2": {**lean, "registered": {"w": _finding(reg, leaves=True)}}}) == {
+        "W": None}, "true is not 1"
 
     def decide(verdicts):
         return audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, verdicts,
                                   0.25, session_registered=audit.session_registered(verdicts))
 
     assert decide({"lean": lean})["accepted"]
-    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}}):
+    changed = [{"w": _finding(reg, **kw)} for kw in ({"domain": "cd" * 64}, {"leaves": reg.entry()["leaves"] * 2},
+                                                      {"words": None}, {"word_bits": 32})]
+    old = {"w": {"value": "W", "root": reg.root.hex()}}
+    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}},
+                     *({"lean": {**lean, "registered": r}} for r in [*changed, old])):
         r = decide(verdicts)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"], verdicts
 

@@ -17,6 +17,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 from verity_flock import rec_algebra as A
 from verity_flock import rec_live as RL
 from verity_flock import rec_residuals as RR
+from registered_finding import finding
 
 HERE = Path(__file__).resolve().parent
 BIN = HERE.parents[3] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
@@ -375,7 +376,7 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     p = statement(tmp_path / "circuit.txt")
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])
-    assert line["registered"] == {nm: {"value": e["value"], "root": e["root"]} for nm, e in reads.items()}
+    assert line["registered"] == finding(reads)
     text = (tmp_path / "circuit.txt").read_text()
     head = text.index("\n", text.index("CIRCUIT unit ")) + 1
     end = text.index("\n", head)

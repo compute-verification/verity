@@ -22,6 +22,7 @@ from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 from verity_flock import rec_sparse as RS
 
+from registered_finding import finding, opened
 from test_rec_sparse import _template, session
 
 BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
@@ -463,6 +464,7 @@ def test_the_opening_statement_reads_rec_claim_at_rows_0_and_1(sess, tmp_path):
     p = _lean_statement(d)
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])
-    assert line["registered"]["claim1"] == {"value": "rec-claim", "root": claim.root.hex()}
+    assert line["registered"]["claim1"] == finding(reads)["claim1"]
+    assert opened(line["registered"])["claim1"] == {"value": "rec-claim", "root": claim.root.hex()}
     p = _lean_statement(tmp_path / "forged" / "p0")
     assert p.returncode == 1 and "claim" in p.stdout, p.stdout + p.stderr

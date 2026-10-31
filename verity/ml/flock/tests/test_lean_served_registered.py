@@ -29,6 +29,7 @@ import pytest
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree, register_served
+from registered_finding import finding, opened
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
@@ -93,7 +94,8 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     assert sr.partition == json.loads((fx / "stage" / "partition.json").read_text())
     ok = _verify(fx, sr.write(tmp_path / "registered.json"))
     assert (ok["accepted"], ok["why"]) == (True, ""), ok
-    assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}}
+    assert ok["registered"] == finding(json.loads((tmp_path / "registered.json").read_text())["ports"])
+    assert opened(ok["registered"]) == {"cs": {"value": SR.VALUE, "root": tree.root}}
     assert ok["program_sha512"] == sr.partition["program"]
     moved = register_served(program, query, [dataclasses.replace(tree, root="00" * 64)])
     bad = _verify(fx, moved.write(tmp_path / "registered-root.json"))
@@ -177,7 +179,7 @@ def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its
     mode = ("--stratified", str(PLAIN_K), "--coins", "os")
     ok = _verify(plain, register_served(program, query, [tree]).write(tmp_path / "registered.json"), mode)
     assert ok["accepted"] is True, ok
-    assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}}
+    assert opened(ok["registered"]) == {"cs": {"value": SR.VALUE, "root": tree.root}}
     moved = register_served(program, query, [dataclasses.replace(tree, root="00" * 64)])
     bad = _verify(plain, moved.write(tmp_path / "registered-root.json"), mode)
     assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
