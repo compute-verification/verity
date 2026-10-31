@@ -91,7 +91,6 @@
     {"file": "benchmarks/network_traces/tests/test_warden_serve_phase10.py", "rule": "BLE001", "count": 1},
     {"file": "benchmarks/network_traces/tests/test_window_chain.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/network_traces/torch_loop_stub.py", "rule": "RUF100", "count": 1},
-    {"file": "benchmarks/network_traces/transfer_zk.py", "rule": "B018", "count": 1},
     {"file": "benchmarks/network_traces/warden_chain.py", "rule": "E402", "count": 9},
     {"file": "benchmarks/network_traces/warden_zk.py", "rule": "B018", "count": 1},
     {"file": "benchmarks/numerical/python/verity_numerical/bench/cell.py", "rule": "RUF100", "count": 2},
