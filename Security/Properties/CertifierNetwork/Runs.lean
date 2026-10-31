@@ -35,7 +35,8 @@ runs.
 
 `Proofs.Properties.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
-count it gives, `EncardAcceptedObservationsLe`.
+count it gives, `EncardAcceptedObservationsLe`; `Proofs.NetworkCertifier.Causal` proves `ExpectedGridCausal` and the
+count over the first `m` windows, `EncardProgramRunsLeWindows`.
 -/
 
 open NetworkCheck hiding Params
@@ -256,4 +257,68 @@ def EncardAcceptedObservationsLe : Prop :=
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (D : Nat),
     NetTiming.DeviceIntact device deviceCode → ObservationsBounded cfg key device frames op linkOf D
 
+/-! ## (5c) What a window's sync reaches -/
+
+/-- **A later window's sync never changes an earlier window's grid.** The grid the check expects of an egress link in
+window `w` (`expectedGrid`, whose `record_head` digest `egressVerdict` compares) reads only the syncs the link declares
+for windows `0 … w`: two links with the same frames whose syncs agree there (`early`, window `w` among them) get the
+same grid in window `w`, whatever each declares after it (`later`, `later'`: any clock-sync values, in Σ_sync or not).
+A frame is eligible no earlier than its anchor, its hand tick (`NetworkCertifier.handingBuckets`) is never before the
+one before it, and the queue carries forward, so a window's sync moves only hand ticks at or after the window's start. -/
+def ExpectedGridCausal : Prop :=
+  ∀ (g : NetworkCheck.Check.Grid) (W : Nat) (frames : List NetworkCertifier.LogicalFrame)
+    (early later later' : Array ClockSync) (w : Fin early.size),
+    expectedGrid g W ⟨frames, early ++ later⟩ w = expectedGrid g W ⟨frames, early ++ later'⟩ w
+
+/-- **The program's runs over its first `m` windows (Theorem 3 for the program, window by window).** The reference's
+constant-rate Program of one execution block of the `W` windows, each frame sent at the program's hand tick under the
+syncs its advice names (`programFrames`, the Program `RunIsProgramRun` reads an accepted run by), accepts at most
+`#Ac · |Σ_sync|^min(W, m) · D^(m·T)` sequences of the first `m` windows' `m·T` buckets with jitter classes below `D`,
+`|Σ_sync|` the count of its δs times the count of its ρs: a window's sync changes no bucket before the window
+(`ExpectedGridCausal`), so the content advice and the first `m` windows' syncs fix those buckets' rows. The syncs are
+`log2 |Σ_sync|` bits per window opened, 7 at 16 × 8, counted from the run's first window. A window on its own, given
+the run before it, may carry more: the queue and the hand ticks carry across windows. -/
+def EncardProgramRunsLeWindows : Prop :=
+  ∀ (cfg : Config) {K : Nat} {In Ac : Type} [Fintype Ac]
+    (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame)
+    (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (m D : Nat),
+    (NetTiming.AccSeqs (NetTiming.constantRate (S := cfg.egress.allocation) cfg.egress.buckets cfg.windows 1
+      (programFrames cfg frames)) op (m * cfg.egress.buckets) D).encard ≤
+      ((Fintype.card Ac * (cfg.syncSet.deltas.length * cfg.syncSet.rhos.length) ^ min cfg.windows m *
+        D ^ (m * cfg.egress.buckets) : ℕ) : ℕ∞)
+
 end Properties.NetworkCertifier
+
+/-! ## A one-window instance
+
+The configuration the completeness statements' honest cases run (`Proofs.Properties.CertifierNetwork.Instance`), and
+the honest network certifier's record that `EncardProgramRunsLeWindows`'s honest lemma counts at it. -/
+
+namespace Properties.CertifierNetwork.Instance
+
+def grid : _root_.CertifierDevice.Params := ⟨1, 1, 9, 1, 1⟩
+
+def syncSet : _root_.NetworkCertifier.SyncSet := ⟨[0], [1], by simp, by simp, by decide, by simp, by simp⟩
+
+def sync : _root_.NetworkCertifier.ClockSync := ⟨0, 1, by decide⟩
+
+/-- One window of one bucket on each grid, its sync declared. -/
+def config : _root_.CertifierDevice.Config :=
+  { egress := grid, ingress := grid, syncSet, syncs := #[sync], windows := 1, origin := 0, slack := 0 }
+
+/-- One frame of content `[true]`, anchored at bucket 0. -/
+def oneFrame : List Unit → Unit → Fin 1 → List _root_.NetworkCertifier.LogicalFrame := fun _ _ _ => [⟨[true], 0, 0⟩]
+
+/-- The advice of `config`'s one window: the content `()` and Σ_sync's one value, δ = 0 and ρ = 1. -/
+def oneAdvice : Fin 1 → Unit × (Fin config.windows → Properties.NetworkCertifier.SyncValue config.syncSet) :=
+  fun _ => ((), fun _ => (⟨0, List.mem_toFinset.mpr (List.mem_singleton_self 0)⟩,
+    ⟨1, List.mem_toFinset.mpr (List.mem_singleton_self 1)⟩))
+
+/-- The honest network certifier's record of `config`'s one bucket: the Program's row of `oneFrame` under `oneAdvice`,
+jitter class 0, its boundary link complete. -/
+def honestObs : List (NetTiming.Obs 1 1 config.egress.allocation) :=
+  [⟨(NetTiming.constantRate (S := config.egress.allocation) config.egress.buckets
+      config.windows 1 (Properties.NetworkCertifier.programFrames config oneFrame)).rows 0 [()] oneAdvice, 0,
+    fun _ => .complete⟩]
+
+end Properties.CertifierNetwork.Instance
