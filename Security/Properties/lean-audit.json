@@ -7690,7 +7690,7 @@
     "Properties.Evaluator.TC.zero"
    ]
   },
-  "Definitions.Hash.Assumptions": {
+  "Definitions.Hash.Assumptions.Prf": {
    "digest": "b83985bbe9f93402e3f0cbebf4c0a96289357e5f389aea0dd3bc932f2327e130",
    "definitions": {
     "Hash.Assumptions.Sha512Prf": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
