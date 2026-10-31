@@ -284,13 +284,13 @@
   ]
  },
  "unwitnessed": {
-  "Flock.Firewall.Contract.holds_coins": "f7c75fc8ff69fd14d2eb14fdf528503aa90514b4631c436a3973c0793267c6eb",
-  "Flock.Firewall.Contract.holds_coins_binding": "2f38b70ba9aae0ea55033e2810725f001faa26ae99c11c7b348a0a78f2c07c06",
-  "Flock.Firewall.Contract.holds_commit": "9e86b324d2e725880221dddee14f20fb05839f5e4ffff11ada6ddabd2f2b0361",
-  "Flock.Firewall.Contract.holds_computed": "9c0c81dfbc7167b19c682b77768e00765a7a0a77b778d97ca5f45f0eef5fd3a4",
-  "Flock.Firewall.Contract.holds_finish": "aa67703052894f171a7b02e9bb4cc0ac0b3da1a2da9592ca3ebf2c136a3accc5",
-  "Flock.Firewall.Contract.holds_fixed": "01861c4768c06289a8317df2c471999f9378506a0c7c59972ed9bab24531ec36",
-  "Flock.Firewall.Contract.holds_masked": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
+  "Flock.Firewall.Contract.holds_coins": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df",
+  "Flock.Firewall.Contract.holds_coins_binding": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711",
+  "Flock.Firewall.Contract.holds_commit": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d",
+  "Flock.Firewall.Contract.holds_computed": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59",
+  "Flock.Firewall.Contract.holds_finish": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027",
+  "Flock.Firewall.Contract.holds_fixed": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4",
+  "Flock.Firewall.Contract.holds_masked": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
  },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
