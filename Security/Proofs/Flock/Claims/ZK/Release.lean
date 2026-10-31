@@ -382,7 +382,7 @@ def cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (j : ℕ) : Cfg 
   Cfg.ofDraws (L.lay x (L.rep x j)) (L.drawsAt x ρ (L.rep x j)) (L.slot x (L.rep x j))
 
 /-- **Who takes the coins of round `n - 1`**, as the session loop routes them (`Session.relay`): `Hello`'s and the
-`Commit`'s go to the session, not to a frame (`Registry.link`), so round `n` starts at its rep's first-round state
+`Commit`'s go to the session, not to a frame (`Sessions.link`), so round `n` starts at its rep's first-round state
 `fresh`; else the frame of the rep that released round `n - 1`, at its state `prog` and configuration `cP`
 (`Frames.coins`), whose refusal stops the session. Where round `n` is that rep's (`same`), it is checked at the state
 the coins leave, at its configuration `cN`; else it is the first round of its rep, which takes no coins, at `fresh`. -/
