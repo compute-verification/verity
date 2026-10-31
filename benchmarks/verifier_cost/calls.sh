@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # One verifier call's cost on a large program, step by step: calls.py builds population.py's population of N units with
 # every composite padded by K XORs (K = 290 at the default hierarchy is a descriptor of about 300 MB over about 8,100
-# Definitions) and a valid v1 registration of it, and times the Python reference, the program's encoding, the request
-# line and `verifier.check` through `sampled-proofs-verifier`, C calls in one process; calls-time (calls/Main.lean,
-# built in a scratch Lake package against the checkout's verifier) times each step the Lean takes on that request line.
+# Definitions) and a valid v1 registration of it, and times the Python reference, the program's digest and encoding, the
+# request line, C calls through one `sampled-proofs-verifier` process (the first loads the program, the rest name it),
+# one carrying it whole, and C `verifier.check`s; calls-time (calls/Main.lean, built in a scratch Lake package against the
+# checkout's verifier) times each step the Lean takes on that request line, then the load and the request naming it.
 # Run from a clone (the build writes the verifier's .lake):
 #   research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone --mem-gb 90 -- \
 #     bash benchmarks/verifier_cost/calls.sh 6963296 290 3
