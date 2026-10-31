@@ -77,7 +77,7 @@ local notation "𝔽" => FlockLevel3.GF128
 of one rep's level-`ℓ` entries**, through `keep`: `laterEntriesClashK_ofJ`'s proof, which reads no leaf;
 `laterEntriesClashKLf_ofJ` at `leafPlain`. -/
 theorem laterEntriesClashK_ofUJ (keep : Bool → Bool)
-    {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : TranscriptJ}
+    {sch : FlockSoundness.Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : TranscriptJ}
     {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAtJK keep sch I d t out r)
     (hcl : FlockDeploy.KS.LaterClashLU sch out) : LaterEntriesClashJK keep I d t :=
   laterEntriesClashKLf_ofJ keep leafPlain he hcl

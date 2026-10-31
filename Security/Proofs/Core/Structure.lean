@@ -31,7 +31,7 @@ theorem isPrefix_computed (C : Circuit) : IsPrefix C C.computed := by
   | false => exact absurd (show a ∈ C.computed from Finset.mem_filter.2 ⟨Finset.mem_univ _, hi⟩) h
 
 /-- Fresh input is external plus produced reads, in wire bits. -/
-theorem fresh_eq_external_add_produced (d : Declaration) (B : Finset (Fin d.D.N)) :
+theorem fresh_eq_external_add_produced (d : RegisteredCircuit) (B : Finset (Fin d.D.N)) :
     d.D.width (d.unregistered B) = d.D.width (externalIn d B) + d.D.width (producedIn d B) :=
   (Finset.sum_filter_add_sum_filter_not (d.unregistered B) (fun a => d.D.isInput a = true) d.D.w).symm
 

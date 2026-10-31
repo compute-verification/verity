@@ -33,7 +33,7 @@ It is adopted, with `PackedTrainingIncompressible`, as the `k`-generalization of
 covers a reference training circuit with at most `k` of the chain's products to a gate, such as one in `Dot16` steps,
 whose weights and first inputs depend on more than `Γ` work of training since the commitment, as
 `ActivationsIncompressible` does, and is false on a declared circuit, whose wiring the prover controls. -/
-def PackedActivationsIncompressible {k : ℕ} (D : Declaration) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
+def PackedActivationsIncompressible {k : ℕ} (D : RegisteredCircuit) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, D.D.size R ≤ Γ → (novelReads D R : ℝ) ≤ K →
     b_w * (c.weightsUsed R).card +
         b_a * ((c.inputsUsed R).filter fun x => ¬ c.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ novelReads D R

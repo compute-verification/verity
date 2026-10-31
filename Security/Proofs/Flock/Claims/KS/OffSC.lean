@@ -50,7 +50,7 @@ of the output verifies against its own cap `cap₀` and sits below `2^d`, every 
 opening's position and row, and every opening's is one, an output that opens a position off the oracle of `C` and does
 not self-clash has the reader look up a column off `C`. -/
 theorem exists_ne_of_off₀L_sc {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : Accounting.Schedule) (cap₀ : Model.Cap D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : FlockSoundness.Accounting.Schedule) (cap₀ : Model.Cap D)
     (out : Model.OutCL 𝔽 D Sl) {N : ℕ} (hN : N = 2 ^ (lvOf sch 0).logLen) (C : Fin N → List 𝔽) (d : ℕ)
     (os : List (ℕ × List 𝔽)) (hcap : out.cap₀ = cap₀)
     (hver : ∀ x ∈ opens₀L sch out, VerifiedL H E Lf cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) x)
@@ -110,7 +110,7 @@ theorem verified_slotOpensL {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc
 /-- **An accepted salted table's level-0 openings verify** against its cap, at level 0's lanes and path length, when
 both reps' level-0 requests have them: acceptance is both reps' `OpensOKL` at the cap. -/
 theorem verified_opens₀L {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : Accounting.Schedule) (cap : Model.Cap D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : FlockSoundness.Accounting.Schedule) (cap : Model.Cap D)
     (pend : Model.PendL 𝔽 D × Model.PendL 𝔽 D) (os : Model.Opens 𝔽 D × Model.Salts Sl)
     (hacc : (tableOutL H E Lf cap pend os).accepted = true)
     (h0 : ∀ r < 2, ∀ R ∈ (if r = 0 then pend.1 else pend.2).reqs, R.level = 0 →

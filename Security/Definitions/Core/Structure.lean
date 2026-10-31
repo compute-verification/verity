@@ -63,7 +63,7 @@ open Finset
 gates and other (external) input gates left open. -/
 structure Method where
   /-- the circuit and its registered gates -/
-  d : Declaration
+  d : RegisteredCircuit
   /-- the registered values, read at `θ` only -/
   registered : d.D.Transcript
   /-- the coin gates -/
@@ -102,7 +102,7 @@ def Evaluation.trace (e : Evaluation) : e.M.d.D.Transcript := e.M.d.D.eval (e.M.
 `Actual.Run` is one once its baseline is given; `Accounting.Requirement.Execution` is a schedule, not this. -/
 structure Execution where
   /-- the circuit that ran and its registered gates -/
-  d : Declaration
+  d : RegisteredCircuit
   /-- the values its gates held -/
   val : d.D.Transcript
   /-- each computed gate's value is its operation on them (`Placed.Faithful`) -/
@@ -155,27 +155,27 @@ inductive Provenance (Λ L : Type) where
 
 /-- **The provenance of gate `a`** in the partition `P` of `d`: registered in `θ`, else produced by its block, else
 external from `source a`. -/
-def provenance (d : Declaration) {Λ : Type} {n : ℕ} (source : Fin d.D.N → Λ) (P : Partition d.D n) (a : Fin d.D.N) :
-    Provenance Λ (Fin n) :=
+def provenance (d : RegisteredCircuit) {Λ : Type} {n : ℕ} (source : Fin d.D.N → Λ) (P : Partition d.D n)
+    (a : Fin d.D.N) : Provenance Λ (Fin n) :=
   if a ∈ d.θ then .registered else
     match P.unit a with
     | some u => .produced u
     | none => .external (source a)
 
 /-- **The registered reads** of `B`: the gates of `in(B)` in `θ`. -/
-def registeredIn (d : Declaration) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) := d.D.into B ∩ d.θ
+def registeredIn (d : RegisteredCircuit) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) := d.D.into B ∩ d.θ
 
 /-- **The external reads** of `B`: the input gates of `in(B)` outside `θ`. -/
-def externalIn (d : Declaration) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
+def externalIn (d : RegisteredCircuit) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   (d.unregistered B).filter fun a => d.D.isInput a = true
 
 /-- **The produced reads** of `B`: the computed gates of `in(B)`. -/
-def producedIn (d : Declaration) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
+def producedIn (d : RegisteredCircuit) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   (d.unregistered B).filter fun a => ¬ d.D.isInput a = true
 
 open Classical in
 /-- **The reads of `B` from the source `s`**: its external reads that `source` tags `s`. -/
-noncomputable def externalFrom (d : Declaration) {Λ : Type} (source : Fin d.D.N → Λ) (s : Λ)
+noncomputable def externalFrom (d : RegisteredCircuit) {Λ : Type} (source : Fin d.D.N → Λ) (s : Λ)
     (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   (externalIn d B).filter fun a => source a = s
 
@@ -280,7 +280,7 @@ noncomputable def infoHandsOn (I : List Bool → ℕ∞) (X : C.Transcript) (t :
 end TimeOrdered
 
 /-- **A crossing's three labels**, independent of each other: provenance, destination and timing. -/
-def labels (d : Declaration) {n m : ℕ} {Loc Λ : Type} (F : TimeOrdered d.D n Loc m) (source : Fin d.D.N → Λ)
+def labels (d : RegisteredCircuit) {n m : ℕ} {Loc Λ : Type} (F : TimeOrdered d.D n Loc m) (source : Fin d.D.N → Λ)
     (x : Crossing F.toPartition) : Provenance Λ (Fin n) × Destination n × Option Timing :=
   (provenance d source F.toPartition x.gate, x.dest, F.timing x.gate x.dest)
 
@@ -308,7 +308,8 @@ instance instLEResources : LE Resources where
     r.carried ≤ r'.carried ∧ r.sent ≤ r'.sent
 
 /-- **The resource vector** of the time-ordered partition `F` of `d`, in wire bits. -/
-noncomputable def resources (d : Declaration) {n m : ℕ} {Loc : Type} (F : TimeOrdered d.D n Loc m) : Resources where
+noncomputable def resources (d : RegisteredCircuit) {n m : ℕ} {Loc : Type} (F : TimeOrdered d.D n Loc m) :
+    Resources where
   blocks := n
   work := d.D.size d.D.computed
   fresh := total F.toPartition fun B => d.D.width (d.unregistered B)
@@ -319,7 +320,7 @@ noncomputable def resources (d : Declaration) {n m : ℕ} {Loc : Type} (F : Time
 /-- **A family of decompositions**: the time-ordered partitions, at locations `Loc`, it admits of each declaration. -/
 structure Family (Loc : Type) where
   /-- the decompositions it admits -/
-  admits : (d : Declaration) → (n m : ℕ) → TimeOrdered d.D n Loc m → Prop
+  admits : (d : RegisteredCircuit) → (n m : ℕ) → TimeOrdered d.D n Loc m → Prop
 
 namespace Family
 

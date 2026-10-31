@@ -94,7 +94,7 @@ theorem tableAt_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ}
   dsimp only at hy
   subst hy
   have hs := Option.some.inj (yhsch.symm.trans hsch)
-  simp only [Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
+  simp only [FlockSoundness.Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
   obtain ⟨rfl, rfl, ⟨rfl, rfl, rfl⟩, rfl⟩ := hs
   rfl
 

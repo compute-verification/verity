@@ -102,7 +102,7 @@ def DampenerRemotePeriod : Prop :=
     (β ι : Type) [DecidableEq ι] (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T)
     (I : Finset ι) (idW : Fin T → ι) (τw : Fin T → ℝ) (w : β → ℝ) (ks : Fin T → ℝ) (K : ℕ)
     (Φ Δ H q B εW κ C U χ mfu : ℝ) (W : ((t : Fin T) → Ω t) → ℝ) (M Mu Mr Mx : ((t : Fin T) → Ω t) → ℕ)
-    (R : Type) [Fintype R] (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (Γ : ℕ) (α b_w b_a Λ : ℝ)
+    (R : Type) [Fintype R] (r d : R → RegisteredCircuit) (Th : (i : R) → Threading (r i)) (Γ : ℕ) (α b_w b_a Λ : ℝ)
     (dd e : ℕ),
     -- PoUW, per window
     0 ≤ p → 0 < ε → (∀ t, 0 ≤ c t) → ∑ t, c t ≤ C →
@@ -160,7 +160,7 @@ def DampenerRemotePeriod_honest : Prop :=
     (β ι : Type) (_ : DecidableEq ι) (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T)
     (I : Finset ι) (idW : Fin T → ι) (τw : Fin T → ℝ) (w : β → ℝ) (ks : Fin T → ℝ) (K : ℕ)
     (Φ Δ H q B εW κ C U χ mfu : ℝ) (W : ((t : Fin T) → Ω t) → ℝ) (M Mu Mr Mx : ((t : Fin T) → Ω t) → ℕ)
-    (R : Type) (_ : Fintype R) (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (Γ : ℕ) (α b_w b_a Λ : ℝ)
+    (R : Type) (_ : Fintype R) (r d : R → RegisteredCircuit) (Th : (i : R) → Threading (r i)) (Γ : ℕ) (α b_w b_a Λ : ℝ)
     (dd e : ℕ),
     -- PoUW, per window
     0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ c t) ∧ ∑ t, c t ≤ C ∧
@@ -238,8 +238,8 @@ abbrev Mr : (Fin 1 → Bool) → ℕ := fun _ => 1
 abbrev Mx : (Fin 1 → Bool) → ℕ := fun _ => 0
 
 /-- No declared run. -/
-abbrev r : Empty → Declaration := fun i => i.elim
-abbrev d : Empty → Declaration := fun i => i.elim
+abbrev r : Empty → RegisteredCircuit := fun i => i.elim
+abbrev d : Empty → RegisteredCircuit := fun i => i.elim
 abbrev Th : (i : Empty) → Threading (r i) := fun i => i.elim
 
 end AcceptAll
