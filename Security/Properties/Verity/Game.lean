@@ -23,7 +23,7 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 
 | subprotocol | `Audit` | onsite's component | remote's component |
 | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `SampledProofs.OneStageZk.protocol` (v2) | the same |
+| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | the same |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.protocol` (its window) |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
@@ -33,16 +33,19 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 
 The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
 
-* **A causal game.** The prover sends the parameters `θ`, the committed files `F` (one blob) and the
+* **A causal game.** The prover sends the parameters `θ`, the committed files `F` (any number of blobs) and the
   commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays `play (rounds θ) θ F c`, a
   `Verity.Game`: in each of the device's rounds the prover sends the bytes (a root, a transcript digest) that the
   round's release answers, and then the device draws and releases that round's coins (`releases`); the evidence comes
-  last. A strategy (`Verity.Game.Strategy`) is a function of the coins released so far and never of later ones.
-* **The claims read the committed files.** The circuit, its units and its constants are what the verifier reads
-  from the files (`Flock.Bridge.circuitOfFile`, `unitsOfFile`, `partsOfFile` at v2's reading of the blob, `read`), and
-  the positions are the files' and the commitment's (`place`), never the prover's world. The params hold the circuit
-  file's digest (`programDigest`): a file whose SHA-512 isn't it is refused (`Registered`, conjoined beside the
-  composite's acceptance). The committed file is the blob the composite reads (`Exchange.sent`).
+  last, with its own blobs (the record, its rep files, the proofs). A strategy (`Verity.Game.Strategy`) is a function
+  of the coins released so far and never of later ones. The composite reads the committed files and then the
+  evidence's blobs (`Exchange.sent`), so every input whose blobs begin with the committed files is what some strategy
+  sends (`Verity.sent_reachable`).
+* **The claims read the circuit file.** The circuit file is the committed file the parameters name by its digest
+  (`programDigest`, `namedFile`, as v2 looks it up). The circuit, its units and its constants are what the verifier
+  reads from it (`Flock.Bridge.circuitOfFile`, `unitsOfFile`, `partsOfFile` at v2's reading of the file, `read`), and
+  the positions are the files' and the commitment's (`place`), never the prover's world. Committed files none of which
+  has the parameters' digest are refused (`Registered`, conjoined beside the composite's acceptance).
 * **Sampled proofs' claim reads one fixed extractor's transcript.** The extractor (`extract`, the one
   `SampledKSLive*` is stated with, `XplurZC`) is a construction applied to the strategy, never chosen per strategy.
   The claim is that at most an `ε` share of the file's units are unbound in its transcript (`Accounting.unbound`): wrong
@@ -70,8 +73,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
   at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s), and `a`'s compiled component's acceptance of its own case.
-  That the releases each component's check read (`coinsRead`) are the device's at the rounds the parameters assign them
-  is the targets' to bound (`Logged`): membership alone would let a prover keep the better of two rounds' coins.
+  The releases each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
 
@@ -80,7 +82,7 @@ Each subprotocol's target (`SampledProofsSound`, `PouwSound`, `InferenceOnlySoun
 verdict at `k` accepts while its claim fails is at most its error there. `Verity.Soundness` and `Verity.RemoteSoundness`
 (`Properties.Verity.Soundness`) compose them, onsite's seven and remote's three.
 
-The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the blob), `place`, `programDigest` and
+The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the circuit file), `place`, `programDigest` and
 `registered`, `rounds` and `coinsRead`, `extract`, the finders and the forgers, `computed`, `world` (the runs PoUS,
 PoUB-P2 and the network certifier realize), the declaration's registered inputs and the policy's budgets, the wipe at the
 period's boundary and the run read as its game, and `certOf`, `foreignBits`, `signatures`, `delta`, `epsForge` and
@@ -145,14 +147,14 @@ def ties : Verity.Registration.Composite → List Composition.Tie
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
 def component : Verity.Registration.Composite → Subprotocol → Option BlobProtocol
-  | .onsite, .sampled => some SampledProofs.OneStageZk.protocol
+  | .onsite, .sampled => some SampledProofs.OneStage.protocol
   | .onsite, .pouw => some PouwCheck.Period.protocol
   | .onsite, .inferenceOnly => some NciCheck.Protocol.protocol
   | .onsite, .pous => some PousCheck.RunProtocol.protocol
   | .onsite, .poub => some RemoteAudit.P2Protocol.protocol
   | .onsite, .network => some NetworkCheck.Period.protocol
   | .onsite, .wipe => some MemoryChallenger.WipeProtocol.protocol
-  | .remote, .sampled => some SampledProofs.OneStageZk.protocol
+  | .remote, .sampled => some SampledProofs.OneStage.protocol
   | .remote, .pouw => some PouwCheck.protocol
   | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remote, _ => none
@@ -217,22 +219,23 @@ def releases : List ℕ → Game (List Release)
       (releases ns).map fun log => ⟨b, List.ofFn x⟩ :: log
 
 /-- How a play ends: the parameters, the committed files and the commitment sent first, the device's log, and the
-evidence sent last. -/
+evidence sent last with its blobs. -/
 structure Exchange where
   params : ByteArray
-  file : ByteArray
+  files : Array ByteArray
   commitment : ByteArray
   log : List Release
   evidence : ByteArray
+  blobs : Array ByteArray
 
-/-- What the prover sent the composite in the play that ended with `o`; the blob its components read is the committed
-file. -/
-def Exchange.sent (o : Exchange) : Sent := ⟨o.params, o.commitment, o.evidence, #[o.file]⟩
+/-- What the prover sent the composite in the play that ended with `o`: the blobs its components read are the committed
+files, then the evidence's blobs. -/
+def Exchange.sent (o : Exchange) : Sent := ⟨o.params, o.commitment, o.evidence, o.files ++ o.blobs⟩
 
 /-- **The causal game after the parameters `θ`, the committed files `F` and the commitment `c`**: the device's rounds
-`ns`, each release after the bytes it answers, then the evidence. -/
-def play (ns : List ℕ) (θ F c : ByteArray) : Game Exchange :=
-  (releases ns).bind fun log => .send ByteArray fun e => .ret ⟨θ, F, c, log, e⟩
+`ns`, each release after the bytes it answers, then the evidence with its blobs. -/
+def play (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) : Game Exchange :=
+  (releases ns).bind fun log => .send (ByteArray × Array ByteArray) fun e => .ret ⟨θ, F, c, log, e.1, e.2⟩
 
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
@@ -241,6 +244,12 @@ def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toAr
 (`Claims.ExpectedCR`) read. -/
 def sha512Msg (m : Claims.Msg) : Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
 
+open Classical in
+/-- **The committed file the parameters name**: the first of the committed files `F` whose SHA-512 is `h`, the circuit
+file's digest the parameters hold, as v2 looks the circuit file up by its digest; empty when none is. -/
+noncomputable def namedFile (h : Option Hash.Digest) (F : Array ByteArray) : ByteArray :=
+  (F.find? fun f => decide (h = some (sha512 f.data.toList))).getD .empty
+
 /-- **The compiled LMS verifier** at the deployed parameters (`Lms.deployed`), on a public key, a message and a
 signature's bytes: the signature decodes and verifies under the key. The device's releases are signed under it. -/
 def lmsVerify (pub m sig : Hash.Msg) : Bool :=
@@ -248,7 +257,7 @@ def lmsVerify (pub m sig : Hash.Msg) : Bool :=
   | .ok b => b
   | .error _ => false
 
-/-- **How v2 reads the committed blob**: its statement's tags (derived from the circuit file), the circuit file, its
+/-- **How v2 reads the circuit file**: its statement's tags (derived from the circuit file), the circuit file, its
 lookup tables and the public file. -/
 structure FileRead where
   tags : Flock.Tags
@@ -299,8 +308,8 @@ structure Place where
 the window, the device schedule, and what the network certifiers saw (`Accounting.PeriodWorld`, the one definition). -/
 abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.PeriodWorld d α
 
-/-- **The names the subprotocols define.** v2's reading of the committed blob; the positions from the files and
-the commitment, the circuit file's digest in the parameters and the registered blob; the device's rounds, and the
+/-- **The names the subprotocols define.** v2's reading of the circuit file; the positions from the files and
+the commitment, the circuit file's digest in the parameters and the registered file; the device's rounds, and the
 releases each component's check read, decoded from the device's signed log entries in what the prover sent; the
 extractor applied to a strategy, and each subprotocol's collision finder and forger of the device's signature, with
 their SHA-512 calls bounded by the strategy's (`finder_calls`, `forger_calls`) and the device's signatures the forger saw
@@ -313,22 +322,28 @@ and losses the composite publishes, from the parameters and the strategy's SHA-5
 `cost θ F c σ` is the strategy's SHA-512 calls in one run (`t' τ`): `Verity.Game` has no call model of
 strategies, so it is declared, as `Claims.Finder.cost` is. -/
 structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
+  /-- v2's reading of a circuit file -/
   read : ByteArray → FileRead
-  place : (θ F c : ByteArray) → Fin (read F).circuit.N → Option Place
+  /-- the circuit file's digest the parameters hold -/
   programDigest : ByteArray → Option Hash.Digest
+  place : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Fin (read (namedFile (programDigest θ) F)).circuit.N → Option Place
   registered : ByteArray → ByteArray
   rounds : ByteArray → List ℕ
   coinsRead : Subprotocol → Sent → List Release
-  extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → (read F).circuit.Transcript
-  finder : Subprotocol → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
-  cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → ℕ
+  extract : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) →
+    (read (namedFile (programDigest θ) F)).circuit.Transcript
+  finder : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
+  cost : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → ℕ
   callsMul : ByteArray → Subprotocol → ℕ
   callsAdd : ByteArray → Subprotocol → ℕ
   /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
   finder_calls : ∀ a θ F c σ (x : (finder a θ F c σ).S),
     (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
   /-- each subprotocol's forger of the device's signature, applied to the strategy -/
-  forger : Subprotocol → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Hash.Assumptions.LmsForger
+  forger : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (rounds θ) θ F c) → Hash.Assumptions.LmsForger
   /-- **The forger's SHA-512 calls are at most `c · calls(τ) + d`**, the finder's budget, on every coin of the
   forger. -/
   forger_calls : ∀ a θ F c σ (x : (forger a θ F c σ).S),
@@ -337,8 +352,10 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   signatures : ByteArray → ℕ
   /-- the forger saw at most `Q` of the device's signatures -/
   forger_signed : ∀ a θ F c σ, (forger a θ F c σ).signed.length ≤ signatures θ
-  computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Exchange → Finset (Fin (read F).circuit.N)
-  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Exchange → World d α
+  computed : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) →
+    Exchange → Finset (Fin (read (namedFile (programDigest θ) F)).circuit.N)
+  world : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) →
+    Exchange → World d α
   /-- the window PoUS's and PoUB-P2's claims read, fixed by the parameters before any coin -/
   window : ByteArray → Accounting.Window
   /-- the account PoUS's claim charges device memory to, fixed by the parameters before any coin -/
@@ -347,31 +364,31 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   world_window : ∀ θ F c σ o, (world θ F c σ o).win = window θ
   /-- every play's world charges device memory to the parameters' account, never one PoUS's own coins chose -/
   world_capacity : ∀ θ F c σ o, (world θ F c σ o).acct Accounting.Resource.capacity = capacity θ
-  /-- the declaration's registered inputs `θ`, input gates of the committed circuit -/
-  theta : (θ F : ByteArray) → Finset (Fin (read F).circuit.N)
-  theta_input : ∀ θ F, ∀ g ∈ theta θ F, (read F).circuit.isInput g = true
+  /-- the declaration's registered inputs `θ`, input gates of the circuit file's circuit -/
+  theta : (θ f : ByteArray) → Finset (Fin (read f).circuit.N)
+  theta_input : ∀ θ f, ∀ g ∈ theta θ f, (read f).circuit.isInput g = true
   /-- the inference-only policy's maximum inference block size `Γ`, in gates -/
   gates : ByteArray → ℕ
   /-- the inference-only policy's limit `α` on fresh input, in bits per gate -/
   fresh : ByteArray → ℝ
-  /-- the number of blocks of the committed circuit's schedule -/
+  /-- the number of blocks of the circuit file's schedule -/
   spans : ByteArray → ℕ
-  /-- the schedule of the committed circuit's blocks the wipe sits in -/
-  schedule : (F : ByteArray) → Verity.Blocks (read F).circuit (spans F)
+  /-- the schedule of the circuit file's blocks the wipe sits in -/
+  schedule : (f : ByteArray) → Verity.Blocks (read f).circuit (spans f)
   /-- the boundary the wipe opens -/
-  boundary : (F : ByteArray) → Fin (spans F)
+  boundary : (f : ByteArray) → Fin (spans f)
   /-- the wipe's seeds -/
   Seed : Type
   /-- the wipe's spot reads -/
   Spots : Type
   /-- the wipe that opens the period, on the device -/
-  wipe : (θ F : ByteArray) → Verity.Wipe d (schedule F) (boundary F) Seed Spots
+  wipe : (θ f : ByteArray) → Verity.Wipe d (schedule f) (boundary f) Seed Spots
   /-- each play, read at the wipe's boundary as the wipe's game, with the strategy's moves there -/
-  wipeRun : (θ F c : ByteArray) → (σ : Game.Strategy (play (rounds θ) θ F c)) →
-    (wipe θ F).OfRun (play (rounds θ) θ F c)
+  wipeRun : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Game.Strategy (play (rounds θ) θ F c)) →
+    (wipe θ (namedFile (programDigest θ) F)).OfRun (play (rounds θ) θ F c)
   /-- the survivor threshold the wipe publishes with an accepted verdict -/
   foreignBits : ByteArray → ℕ
-  honest : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c)
+  honest : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (play (rounds θ) θ F c)
   certOf : ByteArray → Certificates
   crBound : ByteArray → Subprotocol → ℕ → ℝ
   delta : ByteArray → Subprotocol → ℕ → ℝ≥0∞
@@ -385,45 +402,52 @@ namespace Vocab
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
 /-- The game after `θ`, `F` and `c`. -/
-def game (θ F c : ByteArray) : Game Exchange := play (V.rounds θ) θ F c
+def game (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) : Game Exchange := play (V.rounds θ) θ F c
 
-/-- The committed files' circuit. -/
-noncomputable def circuitOf (F : ByteArray) : Verity.Circuit := (V.read F).circuit
+/-- **The circuit file**: the committed file the parameters name by its digest (`namedFile`). -/
+noncomputable def circuitFile (θ : ByteArray) (F : Array ByteArray) : ByteArray := namedFile (V.programDigest θ) F
 
-/-- The committed files' number of units. -/
-noncomputable def units (F : ByteArray) : ℕ := (V.read F).units
+/-- The circuit file's circuit. -/
+noncomputable def circuitOf (θ : ByteArray) (F : Array ByteArray) : Verity.Circuit := (V.read (V.circuitFile θ F)).circuit
 
-/-- The committed files' units. -/
-noncomputable def partsOf (F : ByteArray) : Verity.Partition (V.circuitOf F) (V.units F) := (V.read F).parts
+/-- The circuit file's number of units. -/
+noncomputable def units (θ : ByteArray) (F : Array ByteArray) : ℕ := (V.read (V.circuitFile θ F)).units
+
+/-- The circuit file's units. -/
+noncomputable def partsOf (θ : ByteArray) (F : Array ByteArray) : Verity.Partition (V.circuitOf θ F) (V.units θ F) :=
+  (V.read (V.circuitFile θ F)).parts
 
 /-- **The declaration the inference-only policy judges**: the committed circuit, with its registered inputs. -/
-noncomputable def declaration (θ F : ByteArray) : Declaration := ⟨V.circuitOf F, V.theta θ F, V.theta_input θ F⟩
+noncomputable def declaration (θ : ByteArray) (F : Array ByteArray) : Declaration :=
+  ⟨V.circuitOf θ F, V.theta θ (V.circuitFile θ F), V.theta_input θ (V.circuitFile θ F)⟩
 
-/-- **The commit phase's file check**: the committed blob's SHA-512 is the digest the parameters hold. -/
-def Registered (θ F : ByteArray) : Prop := V.programDigest θ = some (sha512 F.data.toList)
+/-- **The commit phase's file check**: one of the committed files has the SHA-512 the parameters hold. -/
+def Registered (θ : ByteArray) (F : Array ByteArray) : Prop :=
+  ∃ f ∈ F, V.programDigest θ = some (sha512 f.data.toList)
 
 /-- **The commitment `c` opens gate `g` to `v`**: a registered constant to its constant; any other gate by an opening
 of the row leaf at its registered position that the row-leaf verifier accepts under SHA-512, whose row holds `v`'s bits
 from the position's offset. -/
-def Opens (θ F c : ByteArray) (g : Fin (V.circuitOf F).N) (v : BitVec ((V.circuitOf F).w g)) : Prop :=
-  match (V.read F).consts g with
-  | some b => ∀ i : Fin ((V.circuitOf F).w g), v.getLsbD i.val = b
+def Opens (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (g : Fin (V.circuitOf θ F).N)
+    (v : BitVec ((V.circuitOf θ F).w g)) : Prop :=
+  match (V.read (V.circuitFile θ F)).consts g with
+  | some b => ∀ i : Fin ((V.circuitOf θ F).w g), v.getLsbD i.val = b
   | none => ∃ p, V.place θ F c g = some p ∧ ∃ o : Hash.RowLeaf.Opening,
       Hash.RowLeaf.accepts sha512 sha512 p.verifier p.root p.rank o ∧
-        ∀ i : Fin ((V.circuitOf F).w g), o.row[p.offset + i.val]? = some (v.getLsbD i.val)
+        ∀ i : Fin ((V.circuitOf θ F).w g), o.row[p.offset + i.val]? = some (v.getLsbD i.val)
 
-/-- **Subprotocol `a`'s verdict at composite `k`**: the committed blob passed the commit phase's check, `k` accepted
+/-- **Subprotocol `a`'s verdict at composite `k`**: the committed files passed the commit phase's check, `k` accepted
 what the prover sent as a `same` composition, and `a`'s compiled component accepts its own case in it. -/
 def Verdict (k : Verity.Registration.Composite) (a : Subprotocol) (o : Exchange) : Prop :=
-  V.Registered o.params o.file ∧ SameAccepts k o.sent ∧ ComponentAccepts k a o.sent
+  V.Registered o.params o.files ∧ SameAccepts k o.sent ∧ ComponentAccepts k a o.sent
 
 /-- **The period after `θ`, `F` and `c` at composite `k`, as the one vocabulary's `Accounting.PeriodLive`**: the
 committed files' units, the commitment's openings, the extractor, the finders, the gates computed, the world and the
 verdicts. -/
-noncomputable def live (k : Verity.Registration.Composite) (θ F c : ByteArray) :
-    PeriodLive d α (V.circuitOf F) (V.game θ F c) where
-  units := V.units F
-  parts := V.partsOf F
+noncomputable def live (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    PeriodLive d α (V.circuitOf θ F) (V.game θ F c) where
+  units := V.units θ F
+  parts := V.partsOf θ F
   opens := V.Opens θ F c
   extract σ _ := V.extract θ F c σ
   finder a σ := V.finder (.ofAudit a) θ F c σ
@@ -440,7 +464,7 @@ network certifiers), whose window and capacity account are the parameters' (`wor
 own coins choose neither. The inference-only policy's: the declaration complies with `Nci.Complies` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
 published survivor threshold (`Verity.Wipe.OfRun.Kept`). -/
-def Holds (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
+def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
     Subprotocol → Exchange → Prop
   | .sampled, o => (V.live k θ F c).Holds (V.certOf θ) σ .sampled o
   | .pouw, o => (V.live k θ F c).Holds (V.certOf θ) σ .pouw o
@@ -451,30 +475,32 @@ def Holds (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.St
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- **Each release `a`'s check read is the device's at its round**: the `k`-th release `a`'s check read is the log's
-release at round `pos k`, the round the parameters assign it. Out of place, it is a forgery of the device's LMS
-signature over its ledger or a session's close, which `a`'s error bounds where its forger meets
-`Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`). -/
+release at round `pos k`, the round the parameters assign it, since membership in the log alone would let a prover keep
+the better of two rounds' coins. Out of place, it is a forgery of the device's LMS signature over its ledger or a
+session's close, which `a`'s error bounds where its forger meets `Hash.Assumptions.LmsUnforgeable`
+(`Vocab.Unforgeable`, `Vocab.epsForge`). -/
 def Logged (pos : ℕ → ℕ) (a : Subprotocol) (o : Exchange) : Prop :=
   ∀ k r, (V.coinsRead a o.sent)[k]? = some r → o.log[pos k]? = some r
 
-/-- **The finder for a second file with the registered digest**: on its one coin it hashes the committed blob and the
-registered one, and outputs them when they differ, a SHA-512 collision when the blob passed the file check. -/
-def fileFinder (θ F : ByteArray) : Claims.Finder where
+/-- **The finder for a second file with the registered digest**: on its one coin it hashes the circuit file and the
+registered one, and outputs them when they differ, a SHA-512 collision when the files passed the file check. -/
+noncomputable def fileFinder (θ : ByteArray) (F : Array ByteArray) : Claims.Finder where
   S := Unit
-  out _ := if F = V.registered θ then none else some (F.data.toList, (V.registered θ).data.toList)
+  out _ := if V.circuitFile θ F = V.registered θ then none
+    else some ((V.circuitFile θ F).data.toList, (V.registered θ).data.toList)
   cost _ := 2
 
 /-- **`B^τ`'s collision premise, quantitative**: subprotocol `a`'s finder applied to the strategy outputs a SHA-512
 collision with probability at most the published bound at the strategy's SHA-512 calls (`ε_cr`). `ecr/sha-512` is asked
 at the finder's budget, `callsMul θ a * cost θ F c σ + callsAdd θ a` calls (`finder_calls`), a defined function of the
 strategy's `cost` as `qF`/`qS` are of `t'`. -/
-def FinderCR (a : Subprotocol) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
+def FinderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
 
 /-- **`B^τ`'s forgery premise**: subprotocol `a`'s forger applied to the strategy meets
 `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier, at the finder's budget of SHA-512 calls
 (`callsMul θ a * cost θ F c σ + callsAdd θ a`, `forger_calls`) and the device's `Q` signatures (`forger_signed`). -/
-def Unforgeable (a : Subprotocol) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
+def Unforgeable (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   Hash.Assumptions.LmsUnforgeable lmsVerify (V.epsForge θ) (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a)
     (V.signatures θ) (V.forger a θ F c σ)
 
@@ -484,19 +510,19 @@ its forgery premise (`Unforgeable`), its published `δ` at the strategy's SHA-51
 the finder outputs a collision, the form of `Accounting.PeriodLive.error` with the forgery term beside `δ`; elsewhere no
 bound (`⊤`), as `Accounting.condError` reads it. C-Flock's conditional bound is the case `loss = 0`, the additive one
 the case `crBound = 1`. -/
-noncomputable def error (a : Subprotocol) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
+noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
   condError (fun σ => V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
     (fun σ => V.delta θ a (V.cost θ F c σ) +
       ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a) (V.signatures θ)) +
       V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) σ
 
 /-- **Soundness at composite `k` for the acceptance `acc`, in the causal game.** At all parameters `θ`, committed files
-`F` and commitments `c`, and for every strategy, the probability that `acc` holds of what the prover sent for a blob
+`F` and commitments `c`, and for every strategy, the probability that `acc` holds of what the prover sent for files
 that passed the commit phase's check while the claim of one of `k`'s subprotocols fails is at most their errors at that
 strategy summed. -/
 def SoundnessFor (k : Verity.Registration.Composite) (acc : Sent → Prop) : Prop :=
-  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
-    Game.prob (fun o => acc o.sent ∧ V.Registered o.params o.file ∧ ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o)
+  ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+    Game.prob (fun o => acc o.sent ∧ V.Registered o.params o.files ∧ ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o)
         (V.game θ F c) σ ≤
       ∑ a ∈ subprotocols k, V.error a θ F c σ
 
@@ -507,7 +533,7 @@ def SoundnessAt (k : Verity.Registration.Composite) : Prop := V.SoundnessFor k (
 `a`'s verdict at `k` accepts while its claim fails is at most its error at that strategy. For a subprotocol that decides
 `Audit` `b` it is the per-period guarantee `Accounting.PeriodLive.Sound` at `live` (`Vocab.target_audit`). -/
 def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
-  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+  ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
 /-- **Sampled proofs' target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
@@ -537,7 +563,7 @@ def WipeSound (k : Verity.Registration.Composite) : Prop := V.Target k .wipe
 `a`'s claim at composite `k` on almost every play. Each subprotocol's piece proves its own (sampled proofs from
 `Flock.Bridge.card_wrong_lt_of_relS_honest`; the others from their owners' `_honest` lemmas). -/
 def HonestHolds (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
-  ∀ θ F c : ByteArray, V.Registered θ F →
+  ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray), V.Registered θ F →
     Game.prob (fun o => ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0
 
 end Vocab

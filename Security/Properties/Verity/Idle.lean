@@ -5,11 +5,11 @@ import Properties.Verity.Game
 
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-committed blob is read as empty files under the netlist tags (`fileRead`); there are no device rounds, no releases, no
+circuit file is read as empty files under the netlist tags (`fileRead`); there are no device rounds, no releases, no
 commitment openings and no gates computed; the world charges nothing over an empty window (`world`); the schedule is one
 empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
-on its one coin. The circuit file's digest in the parameters is the parameters' own SHA-512, so the files pass the commit
-phase's check exactly when they are the parameters.
+on its one coin. The circuit file's digest in the parameters is the parameters' own SHA-512, so the committed files pass
+the commit phase's check exactly when one of them is the parameters.
 
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
 term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
@@ -26,7 +26,7 @@ noncomputable section
 /-- **The device**: no on-chip state, no memory, no ops, no bandwidth, and one side channel that carries nothing. -/
 def device : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
 
-/-- **The committed blob as v2 reads it**: empty files under the netlist tags. -/
+/-- **The circuit file as v2 reads it**: empty files under the netlist tags. -/
 def fileRead : FileRead := ⟨Flock.Tags.netlistV1, .empty, [], .empty⟩
 
 /-- The step that charges nothing. -/
@@ -115,7 +115,7 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   wipe _ _ := wipe
   wipeRun θ F c _ := ofRun (play [] θ F c)
   foreignBits _ := 0
-  honest _ _ _ := ⟨.empty, ⟨⟩⟩
+  honest _ _ _ := ⟨(.empty, #[]), ⟨⟩⟩
   certOf _ := ⟨0, W, 0, 0, 0⟩
   crBound _ _ _ := 0
   delta _ _ _ := δ

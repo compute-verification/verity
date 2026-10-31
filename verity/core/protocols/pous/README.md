@@ -59,9 +59,10 @@ print(v.profile().statement())                                                 #
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
 on a machine the prover doesn't control at the prover's site (the auditor's own VM or box, under the auditor's account),
-never a process on the prover's node. It commits its indices in a coin tree before the session, hashes each whole
-answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
-`answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's root of `C*`.
+never a process on the prover's node. It commits its indices in a coin tree it keeps until the session is signed, hashes
+each whole answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's
+leaf, which `answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's
+root of `C*`; only then does it release the coin tree's root (`commitment`) and its openings.
 A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used. `verdict` checks a
 signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
 (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused. `verdict_circuit`'s
@@ -74,8 +75,10 @@ compiled circuit to that code.
 
 As an auditor party with a device identity, the challenger reports its sessions under its party's per-period root
 instead (`period_reports`, on `verity.core.attest`): each session is a sampling block whose one public output is its
-liveness record, and the period's root is signed once at its close, for the prover only. `period_reports.PERIOD` is not
-in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads `MemoryChallenger.Attest.check`.
+liveness record, and the period's root is signed once at its close, for the prover only. The party starts its
+attachment on its key once (`lms.PartyKey.start`), so a challenger restarted within the attachment signs no more of its
+sessions. `period_reports.PERIOD` is not in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads
+`Attest.accepts`.
 
 ~~~python
 from verity.ml.crypto import lms
@@ -197,7 +200,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `P2RingAuditSecureOfReduces`, `P2RingAuditSecureOfRoundSecure` and `P2RingGradedOfRoundSecure`; `P2ContentAbsorbs`
   (`Guarantees/Obligation.lean`); above `2^23` blocks, `Pous.Period.SecurityProofs.periodHeldAt`. The named
   assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`,
-  `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
+  and `P2RingRoundSecureWide`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
 - **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
   `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,

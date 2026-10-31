@@ -97,7 +97,7 @@ theorem symbolic_bumpA (sh : Shape) : (symbolic sh).map (Lin.ren (bumpA sh.claim
          | rfl)
     | rfl
 
-theorem residualLins_bumpA {sh : Shape} {coins : Coins} {extras : Array Claim} {lins : Array Lin}
+theorem residualLins_bumpA {sh : Shape} {coins : CoinSource} {extras : Array Claim} {lins : Array Lin}
     {info : Info Lin} (h : residualLins sh coins extras = .ok (lins, info)) :
     lins.map (Lin.ren (bumpA sh.claims)) = lins := by
   cases hr : run sh (symbolic sh) extras 0 coins with
@@ -376,7 +376,7 @@ plain shape. -/
 theorem structureOf_accLow {sh : Shape} (hh : sh.holo = false) {S : GfS} (h : structureOf sh = .ok S) :
     S.AccLow (nR sh) := by
   unfold structureOf at h
-  cases hl : residualLins sh Coins.zeros (extrasLike sh) with
+  cases hl : residualLins sh CoinSource.zeros (extrasLike sh) with
   | error e => rw [hl] at h; cases h
   | ok p =>
     obtain ⟨lins, info⟩ := p

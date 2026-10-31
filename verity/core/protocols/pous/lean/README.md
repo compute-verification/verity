@@ -54,6 +54,7 @@ Definitions/Pous/Guarantees/Obligation.lean
                                     `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from its widening to `2^27`
                                     blocks, `P2RingRoundSecureWide` (`ObligationOfRoundSecureWide`), and the demo's
                                     memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
+                                    and a 320-read window at `2^-20` from `2^19` to `2^27` blocks (`ObligationWide320`),
                                     proved in `Proofs/Pous/Obligation.lean`
 Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 40 lemmas, the
                                     completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
@@ -109,6 +110,10 @@ bash check.sh                       # the audit and the grader's controls
 and the lemmas' statements in `Proofs/Pous/Statements.lean` that grade.sh grades against;
 Lean's kernel; the Mathlib pin; the grader and its sandbox. Everything else is checked by machine. Docstring paths such
 as `lean/submissions/…` and `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
+
+`ObligationWide320` is stated at uniform indices. The 320-read certificate (`p2.wide320_certificate`, and
+`PousCheck.RunProtocol.wide320Certificate` in Lean) adds `ε_prf = 2^-127` for the memory challenger's SHA-512
+indices (`Hash.Assumptions.Sha512Prf`, claim `prf/sha-512`).
 
 **The audit.** `tools/verity/lean/check.py` audits every declaration of PoUS's modules: allowed axioms, named assumptions,
 escapes, orphan files, import layers (Definitions imports no assumption, guarantee or proof; Assumptions only

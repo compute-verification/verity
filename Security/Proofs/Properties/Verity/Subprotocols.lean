@@ -11,8 +11,9 @@ import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 /-!
 # PoUW's, PoUS's, PoUB-P2's and the network certifier's targets from their period guarantees
 
-`Verity.soundness_of_legs` and `Verity.remote_soundness_of_legs` take each subprotocol's target at a composite `k` in
-the causal game (`Vocab.PouwSound k`, `PousSound k`, `BandwidthAuditSound k`, `NetworkCertifierSound k` among them).
+`Verity.soundness_of_subprotocols` and `Verity.remote_soundness_of_subprotocols` take each subprotocol's target at a
+composite `k` in the causal game (`Vocab.PouwSound k`, `PousSound k`, `BandwidthAuditSound k`, `NetworkCertifierSound k`
+among them).
 Each follows from its component-level bound (`Vocab.ComponentBound k a`, `Properties.Verity.Subprotocols`) by
 monotonicity, since `Vocab.Verdict k a` includes `a`'s component's acceptance at `k` (`sound_of`, at every subprotocol;
 `pouwSound_of`, `pousSound_of`, `poubSound_of`, `networkSound_of`). Beside them, rule 3's checks: `pouwSound_of_honest`
@@ -28,7 +29,9 @@ through a coupling (`Vocab.Coupling k a`) at each `θ F c σ`:
 
 * **The coins.** A period run whose coins are in bijection with the device's rounds' coins
   (`Subprotocol.CoinsOf (V.rounds θ)`): every event of the game has the probability over the run's coins of the outcome
-  they lead to (`Vocab.prob_eq_pr`, from `Subprotocol.prob_play`), so a bound over the coins is one in the game.
+  they lead to (`Vocab.prob_eq_pr`, from `Subprotocol.prob_play`), so a bound over the coins is one in the game. The
+  committed files come before any coin and the evidence's blobs with the evidence, so the outcome's `sent` is what
+  the composite reads, the committed files then the evidence's blobs (`Exchange.sent`).
 * **The world.** The run's claim for `a` at the coupling's price implies the game's at `k` at that outcome (`world`, the
   world each play realizes).
 * **The verdict at the code** (`Coupling.verdict`): `a`'s component at `k` accepts, every release its check read is the
@@ -131,11 +134,13 @@ theorem prob_releasesK (q : α → Prop) : ∀ (ns : List ℕ) (K : List Release
         (fun xs => Game.prob q (K (outK (n :: ns) K s xs).1) (outK (n :: ns) K s xs).2)).symm
 
 /-- **The outcome of the play of `σ` at the device's coins `xs`.** -/
-def playOut (ns : List ℕ) (θ F c : ByteArray) (σ : Game.Strategy (play ns θ F c)) (xs : CoinsOf ns) : Exchange :=
+def playOut (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (play ns θ F c))
+    (xs : CoinsOf ns) : Exchange :=
   let o := outK ns _ (cast (congrArg Game.Strategy (releases_bind ns _)) σ) xs
-  ⟨θ, F, c, o.1, o.2.1⟩
+  ⟨θ, F, c, o.1, o.2.1.1, o.2.1.2⟩
 
-theorem prob_play (q : Exchange → Prop) (ns : List ℕ) (θ F c : ByteArray) (σ : Game.Strategy (play ns θ F c)) :
+theorem prob_play (q : Exchange → Prop) (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (play ns θ F c)) :
     Game.prob q (play ns θ F c) σ = Game.prCoin fun xs => q (playOut ns θ F c σ xs) :=
   (prob_cast q (releases_bind ns _) σ).trans (prob_releasesK q ns _ _)
 
@@ -161,7 +166,8 @@ theorem outK_coins : ∀ (ns : List ℕ) (K : List Release → Game α) (s : Gam
   | _ :: ns, _, s, (x, xs) => congrArg (List.ofFn x :: ·) (outK_coins ns _ (s.2 x) xs)
 
 /-- **The play's log holds each round's coins at its round**, whatever the strategy. -/
-theorem playOut_coins (ns : List ℕ) (θ F c : ByteArray) (σ : Game.Strategy (play ns θ F c)) (xs : CoinsOf ns) :
+theorem playOut_coins (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (play ns θ F c)) (xs : CoinsOf ns) :
     (playOut ns θ F c σ xs).log.map Release.coins = CoinsOf.bits ns xs :=
   outK_coins ns _ _ xs
 
@@ -186,27 +192,30 @@ theorem outK_forwardK (b : ByteArray) : ∀ (ns : List ℕ) (K : List Release �
       simp only [outK, forwardK, logOf]
       rw [outK_forwardK b ns]
 
-/-- **The forwarding strategy**: it sends `b` before every round, and then, as its evidence, `enc` of the device's
-log, as a prover that forwards the device's records does. -/
-def forward (ns : List ℕ) (θ F c b : ByteArray) (enc : List Release → ByteArray) : Game.Strategy (play ns θ F c) :=
-  cast (congrArg Game.Strategy (releases_bind ns _)).symm
-    (forwardK b ns (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange))
-      fun log => ⟨enc log, PUnit.unit⟩)
+/-- The game's last move after the log `log`: the evidence with its blobs, then the play's end. -/
+abbrev evidenceK (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (log : List Release) : Game Exchange :=
+  Game.send (ByteArray × Array ByteArray) fun e => Game.ret ⟨θ, F, c, log, e.1, e.2⟩
 
-/-- **The forwarding strategy's play**: the device's log, and `enc` of it as the evidence. -/
-theorem playOut_forward (ns : List ℕ) (θ F c b : ByteArray) (enc : List Release → ByteArray) (xs : CoinsOf ns) :
-    playOut ns θ F c (forward ns θ F c b enc) xs = ⟨θ, F, c, logOf b ns xs, enc (logOf b ns xs)⟩ := by
+/-- **The forwarding strategy**: it sends `b` before every round, and then, as its evidence and the evidence's blobs,
+`enc` of the device's log, as a prover that forwards the device's records does. -/
+def forward (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c b : ByteArray)
+    (enc : List Release → ByteArray × Array ByteArray) : Game.Strategy (play ns θ F c) :=
+  cast (congrArg Game.Strategy (releases_bind ns _)).symm
+    (forwardK b ns (evidenceK θ F c) fun log => ⟨enc log, PUnit.unit⟩)
+
+/-- **The forwarding strategy's play**: the device's log, and `enc` of it as the evidence and its blobs. -/
+theorem playOut_forward (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c b : ByteArray)
+    (enc : List Release → ByteArray × Array ByteArray) (xs : CoinsOf ns) :
+    playOut ns θ F c (forward ns θ F c b enc) xs =
+      ⟨θ, F, c, logOf b ns xs, (enc (logOf b ns xs)).1, (enc (logOf b ns xs)).2⟩ := by
   have h : cast (congrArg Game.Strategy (releases_bind ns _)) (forward ns θ F c b enc) =
-      forwardK b ns (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange))
-        fun log => ⟨enc log, PUnit.unit⟩ :=
+      forwardK b ns (evidenceK θ F c) fun log => ⟨enc log, PUnit.unit⟩ :=
     eq_of_heq ((cast_heq _ _).trans (cast_heq _ _))
-  have hout := outK_forwardK b ns
-    (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange))
-    (fun log => ⟨enc log, PUnit.unit⟩) xs
+  have hout := outK_forwardK b ns (evidenceK θ F c) (fun log => ⟨enc log, PUnit.unit⟩) xs
   unfold playOut
   rw [h]
-  exact congrArg (fun o : (log : List Release) × Game.Strategy
-    (Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange)) => (⟨θ, F, c, o.1, o.2.1⟩ : Exchange)) hout
+  exact congrArg (fun o : (log : List Release) × Game.Strategy (evidenceK θ F c log) =>
+    (⟨θ, F, c, o.1, o.2.1.1, o.2.1.2⟩ : Exchange)) hout
 
 end Coins
 
@@ -239,7 +248,7 @@ theorem sound_atCode_of_imp {r : PeriodRun d α C Ω} {A : Audit → ((i : I) �
 
 /-- **PoUW's refinement: its compiled component accepts only where the source game does.** At every
 value `ξ` of the period's coins where PoUW's verdict `A .pouw` holds (at the code, `Vocab.Coupling.verdict`: the
-composite's PoUW component, onsite's `PouwCheck.Period.protocol` or remote's `PouwCheck.protocol`, accepts its case in
+composite's PoUW component, `Verity.component k .pouw`, accepts its case in
 what the prover sent, every release it read is logged, and the coupling's break is absent), the source game the
 realization names (`acc`; for H1's checked credit, the play's acceptance) accepts at PoUW's coins there. -/
 def PouwRefines {r : PeriodRun d α C Ω} {c : Certificates} {p : Price} {m u bUnit : ℕ} {X : Type}
@@ -338,7 +347,7 @@ def _root_.Accounting.RealizesSpaceOfPeriodHeld.atCode {r : PeriodRun d α C Ω}
 
 /-- **PoUS at the code**: `SpaceOfPeriodHeld` at `atCode r A`, from a realization at `r` (its own
 `accepts` not read), `PousAccepts` and `PousNoBreak`. -/
-theorem pous_atCode (hd : AcceptsDecodes) (hp : PublishesRoot) (hH : P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ENNReal) ^ 131))
+theorem pous_atCode (hd : AcceptsDecodes) (hp : PublishesRoot)
     {D Q L : ℕ} (hP : P2.Assumptions.P2RingAuditSecure D Q L) [Fintype ι] {r : PeriodRun d α C Ω} {ΩW ΩQ : Type}
     {run : Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)} {P : Audits ΩW ΩQ}
     {τ : Pous.Period.Strategy ΩW ΩQ} {round : ℕ} {c : Certificates} {p : Price}
@@ -347,7 +356,7 @@ theorem pous_atCode (hd : AcceptsDecodes) (hp : PublishesRoot) (hH : P2.Assumpti
     (hS : c.S * (run.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S)
     {A : Audit → ((i : I) → Ω i) → Prop} (hA : PousAccepts R A P) (hB : PousNoBreak R A P) :
     (atCode r A).Sound c p .pous ((Params.δ : ℝ) + Params.εMax.toReal) :=
-  Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld hd hp hH D Q L hP ι α d C I Ω (atCode r A) ΩW ΩQ run P τ round c p
+  Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld hd hp D Q L hP ι α d C I Ω (atCode r A) ΩW ΩQ run P τ round c p
     (R.atCode A fun ξ hx => ⟨hA ξ hx, hB ξ hx⟩) hdev hinst hS
 
 end Space
@@ -359,8 +368,8 @@ section Comm
 open Claims Claims.Sampling NetTiming Accounting.JointBridge
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-  {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : Stmt → Layout L S} {k : Stmt → ℕ} {δ : ℝ}
-  {decode : List (ℕ × Col) → List T} {reg : Stmt → Finset ℕ} {Dj n : ℕ}
+  {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : AuditStatement → BoundaryGates L S}
+  {k : AuditStatement → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T} {reg : AuditStatement → Finset ℕ} {Dj n : ℕ}
 
 /-- **The network certifier's refinement: the network certifier's per-window bound at its compiled component.** At every
 window `i` and every value `ξ` of the other coins, the probability over the network audit's own coins that
@@ -452,7 +461,7 @@ theorem sound_of (k : Verity.Registration.Composite) (a : Subprotocol) (h : V.Co
 deployment's honest prover meets `ComponentBound`'s event with probability `0`, within `a`'s error, and the target's
 event with probability `0`. -/
 theorem sound_of_honest (k : Verity.Registration.Composite) (a : Subprotocol) (h : V.HonestHolds k a)
-    (θ F c : ByteArray) (hreg : V.Registered θ F) :
+    (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k a o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c)
         (V.honest θ F c) ≤ V.error a θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c)
@@ -470,8 +479,9 @@ theorem sound_of_honest (k : Verity.Registration.Composite) (a : Subprotocol) (h
 /-- **The target fails for a verifier that accepts everything**: at a strategy on whose every play subprotocol `a`'s
 claim at composite `k` fails, with its error there below one (so its finder meets `FinderCR` and its forger
 `Unforgeable`, and its `ε_forge` and collision terms are below one). -/
-theorem sound_of_nontrivial (k : Verity.Registration.Composite) (a : Subprotocol) (θ F c : ByteArray)
-    (σ : Game.Strategy (V.game θ F c)) (hfail : ∀ o, ¬ V.Holds k θ F c σ a o) (hlt : V.error a θ F c σ < 1) :
+theorem sound_of_nontrivial (k : Verity.Registration.Composite) (a : Subprotocol) (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    (hfail : ∀ o, ¬ V.Holds k θ F c σ a o) (hlt : V.error a θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k a := by
   intro h
   have h1 := prob_play_eq_one (V.rounds θ) θ F c
@@ -495,7 +505,8 @@ theorem poubSound_of (h : V.ComponentBound k .poub) : V.BandwidthAuditSound k :=
 theorem networkSound_of (h : V.ComponentBound k .network) : V.NetworkCertifierSound k := V.sound_of k .network h
 
 /-- **At the honest deployment, PoUW**: `sound_of_honest` at `.pouw`. -/
-theorem pouwSound_of_honest (h : V.HonestHolds k .pouw) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+theorem pouwSound_of_honest (h : V.HonestHolds k .pouw) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k .pouw o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .pouw o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .pouw θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k .pouw o ∧ ¬ V.Holds k θ F c (V.honest θ F c) .pouw o) (V.game θ F c)
@@ -503,7 +514,8 @@ theorem pouwSound_of_honest (h : V.HonestHolds k .pouw) (θ F c : ByteArray) (hr
   V.sound_of_honest k .pouw h θ F c hreg
 
 /-- **At the honest deployment, PoUS**: `sound_of_honest` at `.pous`. -/
-theorem pousSound_of_honest (h : V.HonestHolds k .pous) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+theorem pousSound_of_honest (h : V.HonestHolds k .pous) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k .pous o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .pous o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .pous θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k .pous o ∧ ¬ V.Holds k θ F c (V.honest θ F c) .pous o) (V.game θ F c)
@@ -511,7 +523,8 @@ theorem pousSound_of_honest (h : V.HonestHolds k .pous) (θ F c : ByteArray) (hr
   V.sound_of_honest k .pous h θ F c hreg
 
 /-- **At the honest deployment, PoUB-P2**: `sound_of_honest` at `.poub`. -/
-theorem poubSound_of_honest (h : V.HonestHolds k .poub) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+theorem poubSound_of_honest (h : V.HonestHolds k .poub) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k .poub o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .poub o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .poub θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k .poub o ∧ ¬ V.Holds k θ F c (V.honest θ F c) .poub o) (V.game θ F c)
@@ -519,7 +532,8 @@ theorem poubSound_of_honest (h : V.HonestHolds k .poub) (θ F c : ByteArray) (hr
   V.sound_of_honest k .poub h θ F c hreg
 
 /-- **At the honest deployment, the network certifier**: `sound_of_honest` at `.network`. -/
-theorem networkSound_of_honest (h : V.HonestHolds k .network) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+theorem networkSound_of_honest (h : V.HonestHolds k .network) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k .network o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .network o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .network θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k .network o ∧ ¬ V.Holds k θ F c (V.honest θ F c) .network o) (V.game θ F c)
@@ -527,26 +541,30 @@ theorem networkSound_of_honest (h : V.HonestHolds k .network) (θ F c : ByteArra
   V.sound_of_honest k .network h θ F c hreg
 
 /-- **PoUW's target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.pouw`. -/
-theorem pouwSound_of_nontrivial (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+theorem pouwSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c))
     (hfail : ∀ o, ¬ V.Holds k θ F c σ .pouw o) (hlt : V.error .pouw θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k .pouw :=
   V.sound_of_nontrivial k .pouw θ F c σ hfail hlt
 
 /-- **PoUS's target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.pous`. -/
-theorem pousSound_of_nontrivial (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+theorem pousSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c))
     (hfail : ∀ o, ¬ V.Holds k θ F c σ .pous o) (hlt : V.error .pous θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k .pous :=
   V.sound_of_nontrivial k .pous θ F c σ hfail hlt
 
 /-- **PoUB-P2's target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.poub`. -/
-theorem poubSound_of_nontrivial (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+theorem poubSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c))
     (hfail : ∀ o, ¬ V.Holds k θ F c σ .poub o) (hlt : V.error .poub θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k .poub :=
   V.sound_of_nontrivial k .poub θ F c σ hfail hlt
 
 /-- **The network certifier's target fails for a verifier that accepts everything**: `sound_of_nontrivial` at
 `.network`. -/
-theorem networkSound_of_nontrivial (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+theorem networkSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c))
     (hfail : ∀ o, ¬ V.Holds k θ F c σ .network o) (hlt : V.error .network θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k .network :=
   V.sound_of_nontrivial k .network θ F c σ hfail hlt
@@ -557,24 +575,27 @@ end
 
 /-- **The outcome the coins `ξ` lead to** in the play of `σ`, through the bijection `e` of a period run's coins with
 the device's rounds' coins. -/
-def outcome {I : Type} {Ω : I → Type} (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+def outcome {I : Type} {Ω : I → Type} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c))
     (e : ((i : I) → Ω i) ≃ Subprotocol.CoinsOf (V.rounds θ)) (ξ : (i : I) → Ω i) : Exchange :=
   Subprotocol.playOut (V.rounds θ) θ F c σ (e ξ)
 
 /-- **The game's probability of an event is the coins'**: a period run's coins in bijection `e` with the device's
 rounds' coins realize the play of `σ`, each leading to the outcome its rounds' coins do. -/
 theorem prob_eq_pr {I : Type} {Ω : I → Type} [Fintype I] [DecidableEq I] [∀ i, Fintype (Ω i)]
-    (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (e : ((i : I) → Ω i) ≃ Subprotocol.CoinsOf (V.rounds θ))
+    (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    (e : ((i : I) → Ω i) ≃ Subprotocol.CoinsOf (V.rounds θ))
     (q : Exchange → Prop) :
     Game.prob q (V.game θ F c) σ = ENNReal.ofReal (Pouw.pr fun ξ => q (V.outcome θ F c σ e ξ)) :=
   (Subprotocol.prob_play q (V.rounds θ) θ F c σ).trans ((Subprotocol.prCoin_eq_ofReal_pr _).trans
     (congrArg ENNReal.ofReal (Pouw.pr_equiv e fun xs => q (Subprotocol.playOut (V.rounds θ) θ F c σ xs)).symm))
 
-/-- **The honest play meets `Logged`**: where `a`'s check reads back, from the evidence `enc log`, releases of `log`
-at the rounds `pos` assigns them, the strategy that forwards the device's log as its evidence (`Subprotocol.forward`)
-meets `Logged pos a` at every coin. -/
-theorem logged_forward (θ F c b : ByteArray) (enc : List Release → ByteArray) (pos : ℕ → ℕ) (a : Subprotocol)
-    (h : ∀ log k r, (V.coinsRead a ⟨θ, c, enc log, #[F]⟩)[k]? = some r → log[pos k]? = some r)
+/-- **The honest play meets `Logged`**: where `a`'s check reads back, from the evidence and its blobs `enc log` after
+the committed files, releases of `log` at the rounds `pos` assigns them, the strategy that forwards the device's log as
+its evidence (`Subprotocol.forward`) meets `Logged pos a` at every coin. -/
+theorem logged_forward (θ : ByteArray) (F : Array ByteArray) (c b : ByteArray)
+    (enc : List Release → ByteArray × Array ByteArray) (pos : ℕ → ℕ) (a : Subprotocol)
+    (h : ∀ log k r, (V.coinsRead a ⟨θ, c, (enc log).1, F ++ (enc log).2⟩)[k]? = some r → log[pos k]? = some r)
     (xs : Subprotocol.CoinsOf (V.rounds θ)) :
     V.Logged pos a (Subprotocol.playOut (V.rounds θ) θ F c (Subprotocol.forward (V.rounds θ) θ F c b enc) xs) := by
   rw [Subprotocol.playOut_forward]
@@ -585,8 +606,8 @@ the coins model whose coins are in bijection with the device's rounds' coins (`c
 the device's log each release a subprotocol's check reads sits at (`pos`), a break on the coins (`brk`, the
 subprotocol's events its finder answers for), whose claim for `a` implies the game's at `k` at the outcome the coins
 lead to (`world`). -/
-structure Coupling (k : Verity.Registration.Composite) (a : Audit) (θ F c : ByteArray)
-    (σ : Game.Strategy (V.game θ F c)) where
+structure Coupling (k : Verity.Registration.Composite) (a : Audit) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) where
   C : Verity.Circuit
   I : Type
   Ω : I → Type
@@ -605,7 +626,8 @@ attribute [instance] Coupling.fintypeI Coupling.decEqI Coupling.fintypeΩ Coupli
 
 namespace Coupling
 
-variable {V} {k : Verity.Registration.Composite} {a : Audit} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+variable {V} {k : Verity.Registration.Composite} {a : Audit} {θ c : ByteArray} {F : Array ByteArray}
+  {σ : Game.Strategy (V.game θ F c)}
   (q : V.Coupling k a θ F c σ)
 
 /-- **The verdict at the code**: the component at composite `k` of the subprotocol that decides `b` accepts its own case

@@ -20,7 +20,7 @@ from verity_flock import firewall_transcript as FT
 from verity_flock import rec_live as RL
 
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
-LEAN = VERIFIER.parents[2] / "core" / "service" / "flock"
+LEAN = VERIFIER.parents[3] / "verity/core/service/flock"
 BIN = LEAN / ".lake/build/bin/flock-firewall"
 
 

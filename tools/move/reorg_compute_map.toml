@@ -1,16 +1,15 @@
-# compute-accounting's rows of the examples-and-benchmarks reorg (note:memory-accounting/20261027T0040Z-draft-reorg-examples-
-# benchmarks, phase 1): what `tools/move/layout.py --map tools/move/reorg_compute_map.toml` moves and rewrites. `examples/<name>/`
-# holds one end-to-end example each, a protocol or composite on a workload and a placement with its commands (Daniel, 25 Oct);
-# `benchmarks/` holds measurement only.
+# The compute-accounting rows of the examples-and-benchmarks reorg, phase 1: what
+# `tools/move/layout.py --map tools/move/reorg_compute_map.toml` moves and rewrites. `examples/<name>/` holds one end-to-end
+# example each, a protocol or composite on a workload and a placement with its commands; `benchmarks/` holds measurement only.
 #
-# - `benchmarks/all_protocols` (`onsite` on the torch_loop toy) stays: TORCHLOOP-OUT deletes it with the toy.
+# - `benchmarks/all_protocols` (`onsite` on the torch_loop toy) stays, to be deleted with the toy.
 # - `benchmarks/e2e_h200` (the one-H200 walking skeleton's driver and its CPU replay) is `examples/h200/`, and
 #   `benchmarks/e2e_demo` (its interfaces: the drawn-unit replay bundle and the block record, with their schemas) is
 #   `examples/h200/interfaces/`, a suite nested in the example's. Their modules keep their names (`e2e_h200`,
 #   `verity_e2e_demo`), which `benchmarks/one_stage` and `benchmarks/network_traces` reach by path.
 # - PoUW's sub-examples stay for phase 2: `benchmarks/pouw`'s own suite reads them (served_zk, h1_prove, h1_lanes,
 #   pearl_c_vllm's e2e.py, served_h1's coins.py), and `clear` and `hidden_zk` are tools other trees import or run. The window
-#   on stand-in values (`benchmarks/pouw/e2e_120`) is dead, and #5032 deletes it.
+#   on stand-in values (`benchmarks/pouw/e2e_120`) is dead, and is deleted rather than moved.
 # - The judge (`benchmarks/judge.py`) and its latency table stay: benchmarks/numerical's suite runs the judge.
 # - An example's directory spells its name with `_` for `-`, as `verity example NAME` reads it, and as `layout.py` needs for a
 #   module path through it.

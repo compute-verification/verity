@@ -18,8 +18,8 @@ The phases, each a function here:
    blocks before are unchanged) and places it (`placement`: its units on device leaves, theta on a memory leaf, naming
    the layout's head); the block's values are committed; and its record binds the previous record and that placement.
 5. **Audit of declaration k** (`draw`, `prove`, `verify`, `pouw_window`, `inference_only`): live coins after the
-   commitment, sampled proofs' draw at PoUW's size K', each sampled proof block proved behind the ZK server and checked by the
-   verifier; and the inference-only policy's check of the declaration block, which reads no coins.
+   commitment, sampled proofs' draw at PoUW's size K', each sampled proof block proved behind the ZK server and
+   checked by the verifier; and the inference-only policy's check of the execution block, which reads no coins.
 6. **Accounting** (`compose`, `account`): each declaration's composite verdict by the composition's rule, the monitoring
    period's, its pooled bound, and its credit against the compute the layout holds: each subprotocol's accounting is a
    projection of the layout (`Layout.accounting`).
@@ -44,15 +44,13 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
-from verity.core.protocols.pous import wipe_monitoring
-from verity.core.protocols.pous import wipe_period
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
+from verity.core.protocols.pous import wipe_monitoring, wipe_period
 from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
 from verity.core.protocols.sampled_proofs import parties
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.core.protocols.sampled_proofs.one_stage import registered as R
-from verity.core.protocols.sampled_proofs.one_stage.proofs import V2
 from verity.core.wire import Body, Int, Message, Schema
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
@@ -162,7 +160,7 @@ def unit_ands() -> int:
 
 @cache
 def block_program(n: int) -> str:
-    """A declaration block's Program, as descriptor text (`verity.ml.circuits.codec`): its input state wires are the
+    """An execution block's Program, as descriptor text (`verity.ml.circuits.codec`): its input state wires are the
     previous block's output state wires, and theta is a registered input."""
     return json.dumps(codec.encode_program(Program(bind(BLOCK, N=n), registered=("w1", "w2"), theta=("w1", "w2"))))
 
@@ -890,10 +888,10 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
     return hashlib.sha512(b"lifecycle/frame/v1\0" + salt + data).hexdigest()
 
 
-IDS = {**parties.IDS, "sampled-proofs": V2, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
+IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
        "bandwidth": parties.SUBPROTOCOLS["verity/onsite/v0"]["bandwidth"]}
-"""Each subprotocol's id as the composites run it (`products`): integrity is one-stage v2 (`SampledProofs.OneStageZk`) in
-both, onsite's work is PoUW's period, its PoUB the one over PoUS's P2 store, and onsite's memory challenger also runs a
+"""Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`SampledProofs.OneStage`)
+in both, onsite's work is PoUW's period, its PoUB the one over PoUS's P2 store, and onsite's memory challenger also runs a
 wipe."""
 
 
@@ -956,7 +954,7 @@ def _nci() -> Any:
 
 @cache
 def policy(n: int, gamma: int, alpha: tuple[int, int]) -> dict[str, Any]:
-    """The policy's check (`check_desc`) on an n-unit declaration block: theta the root's registered input nodes (w1 and
+    """The policy's check (`check_desc`) on an n-unit execution block: theta the root's registered input nodes (w1 and
     w2), and the division B makes, each unit (one request) an inference block of its own."""
     nci, text = _nci(), block_program(n)
     inputs, registered, _ = nci.root_nodes(text)
@@ -1285,7 +1283,7 @@ class Verifier:
     accounts for the monitoring period. Its outcome is every phase's public output."""
 
     work = IDS["pouw"]
-    """The composite's PoUW component, which answers the window check."""
+    """The composite's PoUW subprotocol, which answers the window check."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.protocol, self.total = params["protocol"], params["declarations"]
@@ -1310,7 +1308,7 @@ class Verifier:
             self.public["refused"] = {"name": refused, "detail": detail}
         self.public["lines"] = self.lines
         out = [Send(p, msg("Done", 0)) for p in self.peers()]
-        return [*out, Record(self.public, "output"), Finish(self.public, refused)]
+        return [*out, LogEntry(self.public, "output"), Finish(self.public, refused)]
 
     def on(self, r: Received) -> list[Any]:
         try:
@@ -1414,7 +1412,7 @@ class Verifier:
                 "answers": {i: {"verdict": a["verdict"], "reason": a["reason"]} for i, a in answers.items()},
                 "composite": compose(self.protocol, answers)}
         self.lines.append(line)
-        return [Record(line, "output")]
+        return [LogEntry(line, "output")]
 
     def statement(self, k: int, u: int) -> Statement:
         """Unit u of declaration k's statement, from what the verifier holds: the record, the previous record and the

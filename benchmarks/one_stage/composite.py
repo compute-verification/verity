@@ -5,7 +5,7 @@
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
 ``case.json``: ``{"params", "commitment", "evidence"}`` with the commitment and evidence hex, and ``blobs``, the paths
-of the files it reads (sampled proofs v2's ``case-v2.json`` is one); beside its own Lean answer on that case,
+of the files it reads; beside its own Lean answer on that case,
 ``answer.json``, whose ``protocol`` is its id and ``commitment`` its digest (null when its commitment didn't decode, and
 then the case's own commitment stands in, which a rejection never binds). The inference-only policy's case
 (`verity/inference-only/v0`) is one subprotocol's like any other; its record's digest must be the one sampled proofs'
@@ -20,7 +20,7 @@ query, digests, profile and reason are private too (a partition's digest is the 
 ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
 params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
 refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, composed in the clear for one run of record
-only, by Daniel's ruling); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
+only); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
 ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
 with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
 contain the private one.
@@ -48,8 +48,8 @@ PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
 #: the missing ones.
 COMPONENTS = {
     "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
-               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"),
-    "remote": ("verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
+               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v1", "verity/wipe/v0"),
+    "remote": ("verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v1"),
 }
 #: The subprotocols a product composes in the clear, as a stated exception to everything-zero-knowledge, each with the
 #: line its record carries (`Core.Remote`'s and `Core.Onsite`'s docstrings say the same).

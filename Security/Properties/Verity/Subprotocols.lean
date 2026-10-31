@@ -29,13 +29,13 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 strategy, the probability that `a`'s component at `k` accepts its own case in what the prover sent while `a`'s claim
 fails is at most `a`'s error at that strategy. -/
 def ComponentBound (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
-  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+  ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => ComponentAccepts k a o.sent ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
 /-- **Subprotocol `a`'s target at composite `k` at the verdict `acc`**: at all `θ`, `F` and `c`, and for every
 strategy, the probability that `acc` holds while `a`'s claim fails is at most `a`'s error at that strategy. -/
 def TargetFor (acc : Exchange → Prop) (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
-  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+  ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => acc o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
 end Vocab
