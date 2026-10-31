@@ -151,8 +151,11 @@ session's inner statement, checked without `--zk`; `+seed-injection` on any of t
 it, which `verify` checks and then refuses. The names pinned at older commits (`verity/flock-circuit@<commit>`, back to `verity/flock-netlist/v1`) are still
 parsed, so recorded sessions keep their names, and each one before hm96-sha512 rows is refused for its form. Those with
 keyed-BLAKE3 row leaves and SHA-256 trees (`@19c7269a`, `@fd02e847`, `@631567f7` and `verity/flock-netlist/v1`) need
-`--comp`, the BLAKE3 compression circuit, and the verifier and `hash-test` carry BLAKE3 for them alone. The pure-block and
-IR-frame statements are not in the Lean verifier.
+`--comp`, the BLAKE3 compression circuit, and the verifier and `hash-test` carry BLAKE3 for them alone. The pure-block,
+IR-frame (v2 and v3), IR-sampling, IR-block and vllm-block statements are legacy: their checks evaluate part of the
+computation and make intermediate values public, so the Lean verifier sets none of them up and refuses every session of
+one before it reads a file (`Flock.ProvedScope.legacyStatements`, `ProvedScope.legacyWhy`). `Flock.Test.Legacy` pins
+that, and that every statement before hm96-sha512 rows is refused once every check has passed.
 
 The other `flock-verify` subcommands run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
 `verity/ml/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the unit
@@ -253,7 +256,8 @@ Each holds one Lean part to its Python or Rust counterpart, or generates inputs 
 | `tool.py` | the agreement job's store declaration: `ci-pod.sh` with its settings, the shipped bundle as its input |
 
 `vectors.json` lists the honest sessions, the record-level negatives, the forgeries and the replayable and live sets; the
-bytes stay in the evidence store. `lookup_v2_vectors.json` holds `Flock.Lookup.buildV2`'s tables and their
+bytes stay in the evidence store. Its honest cells are upstream's alone (`honest_upstream_only`): their statements are
+legacy or before hm96-sha512 rows, so Lean refuses each and no agreement job replays them. `lookup_v2_vectors.json` holds `Flock.Lookup.buildV2`'s tables and their
 `rows_sha512`, which the Rust and Python mirrors must reproduce.
 
 ## Tests

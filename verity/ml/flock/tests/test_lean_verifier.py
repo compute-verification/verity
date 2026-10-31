@@ -1638,3 +1638,33 @@ def test_net_parser_refuses_rows_out_of_order(tmp_path):
     got = {Path(j["file"]).stem: j for j in (json.loads(l.split(" ", 1)[1]) for l in out.splitlines() if l.startswith("NETCHECK "))}
     for name, (_, why) in cases.items():
         assert got[name]["ok"] == (why is None) and (why is None or why in got[name]["error"]), (name, got[name])
+
+
+#: the legacy statements (PROTOCOL.md §16.9, `ProvedScope.legacyStatements`), by the family `vectors.json`'s honest cells name
+LEGACY = {"flock-pure-block": ["verity/flock-pure-block/v2"],
+          "flock-ir-frame": ["verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3"],
+          "flock-ir-sampling": ["verity/flock-ir-sampling/v1"], "flock-ir-block": ["verity/flock-ir-block/v1"],
+          "flock-vllm-block": ["verity/flock-vllm-block/v1"]}
+
+
+def test_every_honest_cell_is_a_statement_the_lean_verifier_refuses():
+    """`vectors.json`'s honest cells are upstream's: each is a legacy statement, or the netlist one before hm96-sha512 rows,
+    and none is a vector the Lean verifier accepts (`honest_upstream_only`)."""
+    v = json.loads((VERIFIER / "vectors.json").read_text())
+    assert "the Lean verifier refuses each" in v["honest_upstream_only"]
+    for c in v["honest"]:
+        assert c["statement"] in LEGACY or "verity/flock-netlist/v1" in c["detail"], c["cell"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_legacy_statement_is_refused_at_every_session(tmp_path):
+    """`verify` refuses every session of a legacy statement before it reads a file, with or without `--zk`."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    for name in (n for ns in LEGACY.values() for n in ns):
+        for zk in ((), ("--zk",)):
+            p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--statement", name, *zk, "--circuit",
+                                str(tmp_path / "c.txt"), "--public", str(tmp_path / "pub.bin"), "--session",
+                                str(tmp_path / "a"), str(tmp_path / "b")], capture_output=True, text=True)
+            vs = [json.loads(ln.split(" ", 1)[1]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+            why = f"refused: {name}, a legacy statement (§16.9): a statement form the soundness proof does not cover"
+            assert p.returncode == 1 and [(x["accepted"], x["why"]) for x in vs] == [(False, why)] * 2, p.stdout + p.stderr

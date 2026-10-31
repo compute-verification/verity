@@ -71,6 +71,7 @@
   "Flock.Test.PlainHidden",
   "Flock.Test.Served",
   "Flock.Test.RequireLink",
+  "Flock.Test.Legacy",
   "VStar"
  ],
  "exempt": {

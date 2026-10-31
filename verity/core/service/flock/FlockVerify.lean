@@ -733,7 +733,8 @@ def coinTreeCmd (path : String) : IO UInt32 := do
   return (if all then 0 else 1)
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
-names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
+names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`), and every session of a legacy
+statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (`Stmt.setupTables`), which split one draw of fixed count, a
 subset or a stratified one, into `J` equal parts (`Draw.tablesWhy`). A session with a work draw needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
@@ -818,6 +819,11 @@ public file is refused. Without it a plain session has at most one table. Not wi
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
+  if let some why := (argOf args "--statement").bind ProvedScope.legacyWhy then
+    for dir in (args.dropWhile (· != "--session")).drop 1 do
+      let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool false), ("why", Lean.Json.str why)]
+      IO.println s!"VERDICT {line.compress}"
+    return 1
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
   let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
