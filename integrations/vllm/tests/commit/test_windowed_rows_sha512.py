@@ -32,7 +32,7 @@ from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 from verity_vllm.commit.committer import native_host as nh  # noqa: E402
 
 RUN_ID = "windowed-rows"
-PD, GEO = hashlib.sha256(b"program").digest(), hashlib.sha256(b"geo").digest()
+PD, GEO = hashlib.sha512(b"program").digest(), hashlib.sha512(b"geo").digest()
 LAYERS, H, BN, VOCAB = 3, 1000, 16, 1003
 WINDOW_MB = str(8 / 1024)                                       # 8 KiB: two rows a window
 ENV = ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_WINDOW_SLOTS", "VERITY_STAGING_BOUNDED", "VERITY_LEARN_HOST_BUDGET_MB",
@@ -130,7 +130,6 @@ SCHED = schedule(40, 6)
 def rows_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> bytes:
     """step_rows's step root over the step's packed stream (each tensor at the next ALIGN offset, zero-padded to a row), its layout
     counted in rows."""
-    ref = nh.NativeHostCommitter(None, run_id=RUN_ID, program_digest=PD, geo_digest=GEO, retain_values=False, gpu_tree=True)
     stream, metas, first_leaf = bytearray(), [], 0
     for i, (name, t) in enumerate(tensors):
         raw = t.cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
@@ -143,9 +142,9 @@ def rows_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> 
         first_leaf += n_leaves
     stream.extend(b"\0" * (-len(stream) % R.ROW_BYTES))
     rows = [bytes(stream[o:o + R.ROW_BYTES]) for o in range(0, len(stream), R.ROW_BYTES)]
-    ctx = ref._ctx_digest(step)
+    ctx = R.ctx_digest(RUN_ID, step)
     tree_root = R.levels(R.domain(PD, ctx, GEO, len(rows)), rows, ks, 8 * R.ROW_BYTES)[-1][0]
-    return R.step_root(PD, ctx, GEO, ref.layout_digest(metas), len(rows), tree_root)
+    return R.step_root(PD, ctx, GEO, R.layout_digest(metas), len(rows), tree_root)
 
 
 def reference(keys: dict[int, bytes]) -> list[bytes]:
