@@ -2,9 +2,11 @@
 population of about N units over a layered call hierarchy (a served window's shape): `--roots` root batches cycling over
 `--templates` distinct templates, each template the top of `--levels` levels of composites, every composite calling
 three of the level below (at most `--width` per level) and XOR-ing their results, under `Q_template_instances` over the
-templates.
+templates. `--input-members M` widens each of the root's input nodes to M members (its first ones the population's
+operands, as before), so the root's input gates, which only `Slots.layout`'s input class reads, number about M times
+their width per node.
 
-  python population.py DIR [--roots R] [--templates T] [--levels L] [--width W] N...
+  python population.py DIR [--roots R] [--templates T] [--levels L] [--width W] [--input-members M] N...
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ from pathlib import Path
 
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.circuits import codec
+from verity.ml.circuits.program import input_id
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value
 
@@ -41,13 +44,23 @@ def node(level: int, i: int, width: int):
     return bind(NODE, level=level, i=i, width=width)
 
 
-def case(n: int, roots: int, templates: int, levels: int, width: int) -> dict:
+def widen(desc: dict, members: int) -> dict:
+    """`desc` with each of its root's input nodes `members` wide, where it is narrower."""
+    for x in desc["definitions"][desc["root"]]["body"]["nodes"]:
+        t = desc["types"][x["out"]]
+        if input_id(desc["callees"][x["fn"]]) is not None and x["form"] == "batch" and x["n"] < members:
+            desc["types"].append(["Array", members, t[2]])
+            x["n"], x["out"] = members, len(desc["types"]) - 1
+    return desc
+
+
+def case(n: int, roots: int, templates: int, levels: int, width: int, input_members: int = 0) -> dict:
     tops = [node(levels - 1, t % width, width) for t in range(templates)]
     each, extra = divmod(n, roots)
     members = [(tops[r % templates], each + (1 if r < extra else 0)) for r in range(roots)]
     program = P.mixed_population_program([(t, k) for t, k in members if k > 0])
     query = P.template_instances_query(list(dict.fromkeys(t.id for t, k in members if k > 0)))
-    desc = codec.encode_program(program)
+    desc = widen(codec.encode_program(program), input_members)
     return {"descriptor": desc, "query": query, "population": P.units(program, query)}
 
 
@@ -59,10 +72,11 @@ def main() -> None:
     ap.add_argument("--templates", type=int, default=234)
     ap.add_argument("--levels", type=int, default=6)
     ap.add_argument("--width", type=int, default=1800)
+    ap.add_argument("--input-members", type=int, default=0)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     for n in a.ns:
-        c = case(n, a.roots, a.templates, a.levels, a.width)
+        c = case(n, a.roots, a.templates, a.levels, a.width, a.input_members)
         (a.out / f"pop-{n}.json").write_text(json.dumps(c, sort_keys=True, separators=(",", ":")))
         print(json.dumps({"n": n, "population": c["population"], "definitions": len(c["descriptor"]["definitions"]),
                           "root_nodes": len(c["descriptor"]["definitions"][c["descriptor"]["root"]]["body"]["nodes"])}))
