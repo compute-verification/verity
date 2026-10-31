@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
 import Proofs.Flock.Soundness.Discharge.ZkLink.Link
+import Proofs.Flock.Soundness.LinkCarry
 
 /-!
 # `δ_link` for the compiled `--zk` session, under expected-time collision resistance
@@ -20,8 +21,13 @@ since the link term does not read it, under expected-time collision resistance o
 * **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions (`outCZC_spec`), so under
   A2 the trial's link mass at `c` is at most `2t'(1 + k)/2^256 + 1/(eM)`.
 
+Against the value layer of any values `Xv` (`XlayerZC`), the link term is at most
+`Σ_c π_c (ε_c + k/(eR_w))/(1 − ρ)`, with `ε_c` the trial's binding error at `c` against `Xv c` (`errZC`, `LinkFinder.errAt`;
+`zk_linkSoundC_at`). So a value layer other than the plurality, such as one value of a carried leaf shared by several
+sampling blocks, has its link term from the trials' binding errors there.
+
 A2 is asked of one prover at a time (`LinkCRZC`), and the bound is `⊤` at any other (`linkBoundZC`). With `π c` the
-probability that a draw reads `c` (`zk_linkSoundC`):
+probability that a draw reads `c`, at the plurality (`zk_linkSoundC`):
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2(1+k)\,t'}{2^{256}}+\frac{1}{eM}+
 \frac{k}{eR_w}\Big),\qquad Q_s=\sum_c\pi_c,$$
 with `ρ ≥ N₀/(ek)` for every table, `N₀` its level-0 positions.
@@ -328,18 +334,6 @@ theorem psi_le_oneZC (k Rw : ℕ) (c : vb.Pos) (ω : L.Ω) (bs : List (List (Out
     psiZC A Hs P planZ tab vb R τ k Rw c ω bs ≤ 1 := by
   unfold psiZC; split_ifs <;> norm_num
 
-theorem trialVal_psiZC (k Rw : ℕ) (c : vb.Pos) (e : TrialOutZC F L D Sl) :
-    trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c) e =
-      ind (fun e => ∃ v ∈ rdTZC A Hs P planZ tab vb R τ c e,
-        v ≠ XvalZC A Hs P planZ tab vb R τ k Rw c) e := by
-  classical
-  unfold trialValZC rdTZC
-  by_cases ha : accωZC planZ R e.1 e.2.1
-  · cases hf : firsts (accωZC planZ R e.1) e.2.2 with
-    | none => simp [ind, ha, hf]
-    | some bs => simp [ind, ha, hf, psiZC]
-  · simp [ind, ha]
-
 theorem Xval_maxZC (k Rw : ℕ) (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)] (v : vb.Val) :
     pRd (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
         (rdTZC A Hs P planZ tab vb R τ c) v ≤
@@ -358,39 +352,192 @@ theorem readsAt_eq_emptyZC {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsDrawZ A P planZ
   rintro ⟨o, u, hu, hrd, -⟩
   exact h ⟨u, hu, hrd⟩
 
-/-- **The trial's link mass at `c`**, under A2 for the finder: at most
-`2t'(1 + k)/2^256 + 1/(eM)`. -/
-theorem trial_mass_leZC (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
+/-! ## The binding error against any value -/
+
+/-- **The value layer of a value at each commit string**: each wire's bit in the value `Xv` gives its commit
+string. The plurality value layer is the one at `XvalZC` (`XplurZC`). -/
+noncomputable def XlayerZC (Xv : vb.Pos → vb.Val) : Fin C.N → Bool := fun g => vb.bit (Xv (vb.pos g)) g
+
+open Classical in
+/-- **The binding error at `c` against the value `x`**: the trial's (`LinkFinder.errAt`), the probability that it
+reads two values or one other than `x`, and `0` when no draw reads `c`. -/
+noncomputable def errZC (c : vb.Pos) (k Rw : ℕ) (x : vb.Val) : ℝ :=
+  if h : Nonempty (ΩcZ A P planZ tab vb L c) then
+    haveI := h
+    errAt (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
+      (rdTZC A Hs P planZ tab vb R τ c) x
+  else 0
+
+omit [Fintype K] in
+theorem errZC_nonneg (c : vb.Pos) (k Rw : ℕ) (x : vb.Val) : 0 ≤ errZC A Hs P planZ tab vb R τ c k Rw x := by
+  unfold errZC
+  split_ifs
+  · exact errAt_nonneg _ _ _ x
+  · exact le_rfl
+
+omit [Fintype K] in
+theorem errZC_of (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw : ℕ) (x : vb.Val) :
+    errZC A Hs P planZ tab vb R τ c k Rw x =
+      errAt (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
+        (rdTZC A Hs P planZ tab vb R τ c) x := by
+  unfold errZC
+  rw [dite_eq_left_of_eq_true (eq_true hne)]
+
+open Classical in
+/-- **The link event's trace at commit string `c` against the value `x`**: the extraction from the reruns `bs` reads a
+value other than `x` there. -/
+noncomputable def psiAtZC (x : vb.Val) (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) : ℝ :=
+  if ∃ v ∈ readsAtZC A Hs P planZ tab vb R τ ω bs c, v ≠ x then 1 else 0
+
+omit [Fintype K] in
+theorem psiAt_nonnegZC (x : vb.Val) (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) :
+    0 ≤ psiAtZC A Hs P planZ tab vb R τ x c ω bs := by
+  unfold psiAtZC; split_ifs <;> norm_num
+
+omit [Fintype K] in
+theorem psiAt_le_oneZC (x : vb.Val) (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) :
+    psiAtZC A Hs P planZ tab vb R τ x c ω bs ≤ 1 := by
+  unfold psiAtZC; split_ifs <;> norm_num
+
+omit [Fintype K] in
+theorem trialVal_psiAtZC (x : vb.Val) (c : vb.Pos) (e : TrialOutZC F L D Sl) :
+    trialValZC planZ R (psiAtZC A Hs P planZ tab vb R τ x c) e =
+      ind (fun e => ∃ v ∈ rdTZC A Hs P planZ tab vb R τ c e, v ≠ x) e := by
+  classical
+  unfold trialValZC rdTZC
+  by_cases ha : accωZC planZ R e.1 e.2.1
+  · cases hf : firsts (accωZC planZ R e.1) e.2.2 with
+    | none => simp [ind, ha, hf]
+    | some bs => simp [ind, ha, hf, psiAtZC]
+  · simp [ind, ha]
+
+/-- **The trace's mass in the trial is the binding error**: the trial's reruns read, at `c`, two values or one other
+than `x` with probability `errAt` there. -/
+theorem expect_psiAtZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw : ℕ) (x : vb.Val) :
+    expect (trialValZC planZ R (psiAtZC A Hs P planZ tab vb R τ x c)) (trialGZC A Hs P planZ tab vb R τ c k Rw)
+        (trialStratZC A Hs P planZ tab vb R τ c k Rw) =
+      errAt (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
+        (rdTZC A Hs P planZ tab vb R τ c) x := by
+  set T := trialGZC A Hs P planZ tab vb R τ c k Rw
+  set sT := trialStratZC A Hs P planZ tab vb R τ c k Rw
+  set rd := rdTZC A Hs P planZ tab vb R τ c
+  rw [show trialValZC planZ R (psiAtZC A Hs P planZ tab vb R τ x c) =
+      fun e => ind (fun e => (rd e).Nonempty) e - ind (fun e => rd e = {x}) e from
+    funext fun e => (trialVal_psiAtZC A Hs P planZ tab vb R τ x c e).trans (ind_exists_ne rd x e),
+    expect_sub]
+  have := rRd_eq T sT rd
+  unfold rRd at this
+  rw [this]
+  unfold errAt pRd
+  ring
+
+/-- **The trial's binding error at the plurality**, under A2 for the finder: at most `2t'(1 + k)/2^256 + 1/(eM)`. -/
+theorem trial_err_leZC (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     [Nonempty (ΩcZ A P planZ tab vb L c)]
     (hCR : Assumptions.SHA512CRExpected Hc (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
       (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) (outCZC A Hs P planZ tab vb R τ c)
       (finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t'))) :
-    expect (trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c))
-        (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤
+    errAt (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
+        (rdTZC A Hs P planZ tab vb R τ c) (XvalZC A Hs P planZ tab vb R τ k Rw c) ≤
       2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) := by
-  set T := trialGZC A Hs P planZ tab vb R τ c k Rw
-  set sT := trialStratZC A Hs P planZ tab vb R τ c k Rw
-  set rd := rdTZC A Hs P planZ tab vb R τ c
-  set Xv := XvalZC A Hs P planZ tab vb R τ k Rw c
-  have hmass := link_mass_le T sT rd Hc (outCZC A Hs P planZ tab vb R τ c) (cTZC planZ R t')
+  have hmass := link_mass_le (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
+    (rdTZC A Hs P planZ tab vb R τ c) Hc (outCZC A Hs P planZ tab vb R τ c) (cTZC planZ R t')
     (cT_nonnegZC planZ R ht) M hM (outCZC_spec A Hs P planZ tab vb R τ c) hCR
     (Xval_maxZC A Hs P planZ tab vb R τ k Rw c)
   have hcost := expect_cT_leZC A Hs P planZ tab vb R τ c k Rw ht
-  have heq : expect (trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c)) T sT =
-      sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) := by
-    rw [show trialValZC planZ R (psiZC A Hs P planZ tab vb R τ k Rw c) =
-        fun e => ind (fun e => (rd e).Nonempty) e - ind (fun e => rd e = {Xv}) e from
-      funext fun e => (trialVal_psiZC A Hs P planZ tab vb R τ k Rw c e).trans (ind_exists_ne rd Xv e),
-      expect_sub]
-    have := rRd_eq T sT rd
-    unfold rRd at this
-    rw [this]
-    unfold pRd
-    ring
-  have h2 : 2 * expect (cTZC planZ R t') T sT / 2 ^ (256 : ℝ) ≤
-      2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) :=
+  have h2 : 2 * expect (cTZC planZ R t') (trialGZC A Hs P planZ tab vb R τ c k Rw)
+      (trialStratZC A Hs P planZ tab vb R τ c k Rw) / 2 ^ (256 : ℝ) ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) :=
     div_le_div_of_nonneg_right (by linarith) (by positivity)
+  unfold errAt
   linarith
+
+/-- **The binding error at the plurality**, under A2 for the finder whenever a draw reads `c`. -/
+theorem errZC_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
+    (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), Assumptions.SHA512CRExpected Hc
+      (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
+      (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) (outCZC A Hs P planZ tab vb R τ c)
+      (finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t'))) :
+    errZC A Hs P planZ tab vb R τ c k Rw (XvalZC A Hs P planZ tab vb R τ k Rw c) ≤
+      2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) := by
+  by_cases hne : Nonempty (ΩcZ A P planZ tab vb L c)
+  · rw [errZC_of]
+    exact trial_err_leZC A Hs P planZ tab vb R τ k Rw M hM ht c (hCR hne)
+  · unfold errZC
+    rw [dite_eq_right_of_eq_false (eq_false hne)]
+    positivity
+
+/-- **The ideal link mass at `c` against the value `x`**: the audit extractor's reading of `c` other than `x`,
+jointly with acceptance and averaged over the draw, is at most `π c` times the binding error there plus `k/(eRw)` for
+the waits that give up. -/
+theorem ideal_mass_le_atZC (x : vb.Val) (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) :
+    (∑ ω : L.Ω, expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
+        expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+          (psiAtZC A Hs P planZ tab vb R τ x c ω)) / Fintype.card L.Ω ≤
+      (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+        (errZC A Hs P planZ tab vb R τ c k Rw x + k / (Real.exp 1 * Rw)) := by
+  classical
+  set E := errZC A Hs P planZ tab vb R τ c k Rw x with hE
+  set f : L.Ω → ℝ := fun ω => expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω)
+      (stratωZC A Hs planZ R τ ω).2 *
+    expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+      (psiAtZC A Hs P planZ tab vb R τ x c ω) with hf
+  have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
+  have hB : 0 ≤ E + k / (Real.exp 1 * Rw) := add_nonneg (errZC_nonneg A Hs P planZ tab vb R τ c k Rw x) (by positivity)
+  -- off the draws that read `c`, the trace vanishes
+  have hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → f ω = 0 := by
+    intro ω hω
+    have hpsi : psiAtZC A Hs P planZ tab vb R τ x c ω = fun _ => 0 := funext fun bs => by
+      simp [psiAtZC, readsAt_eq_emptyZC A Hs P planZ tab vb R τ hω bs]
+    simp only [hf, hpsi, expectAcc_zero, mul_zero]
+  have hsum : ∑ ω : L.Ω, f ω = ∑ w : ΩcZ A P planZ tab vb L c, f w.1 := by
+    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsDrawZ A P planZ tab vb c ω)
+      (fun ω _ hne => by by_contra h; exact hne (hoff ω h))]
+    exact Finset.sum_subtype _ (fun ω => by simp) f
+  rw [hsum, div_le_iff₀ hΩ]
+  by_cases hne : Nonempty (ΩcZ A P planZ tab vb L c)
+  · have hw : ∀ w : ΩcZ A P planZ tab vb L c, f w.1 ≤
+        expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2 *
+            geom (expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
+              (stratωZC A Hs planZ R τ w.1).2) Rw ^ k *
+            expectN (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2 k
+              (fun bs => (bs.map (ind (accωZC planZ R w.1))).prod *
+                psiAtZC A Hs P planZ tab vb R τ x c w.1 bs) + k / (Real.exp 1 * Rw) := fun w =>
+      expectAcc_le_waits _ _ _ k Rw hRw _ (psiAt_nonnegZC A Hs P planZ tab vb R τ x c w.1)
+        (psiAt_le_oneZC A Hs P planZ tab vb R τ x c w.1)
+    have htr := expect_trialValZC A Hs P planZ tab vb R τ c k Rw (psiAtZC A Hs P planZ tab vb R τ x c)
+    have hmass : expect (trialValZC planZ R (psiAtZC A Hs P planZ tab vb R τ x c))
+        (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤ E := by
+      rw [expect_psiAtZC, hE, errZC_of]
+    have hcard : (0 : ℝ) < Fintype.card (ΩcZ A P planZ tab vb L c) := by exact_mod_cast Fintype.card_pos
+    rw [htr, div_le_iff₀ hcard] at hmass
+    calc ∑ w : ΩcZ A P planZ tab vb L c, f w.1
+        ≤ ∑ w : ΩcZ A P planZ tab vb L c, (expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
+              (stratωZC A Hs planZ R τ w.1).2 *
+            geom (expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
+              (stratωZC A Hs planZ R τ w.1).2) Rw ^ k *
+            expectN (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2 k
+              (fun bs => (bs.map (ind (accωZC planZ R w.1))).prod *
+                psiAtZC A Hs P planZ tab vb R τ x c w.1 bs) + k / (Real.exp 1 * Rw)) :=
+          Finset.sum_le_sum fun w _ => hw w
+      _ = (∑ w : ΩcZ A P planZ tab vb L c, expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
+              (stratωZC A Hs planZ R τ w.1).2 *
+            geom (expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
+              (stratωZC A Hs planZ R τ w.1).2) Rw ^ k *
+            expectN (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2 k
+              (fun bs => (bs.map (ind (accωZC planZ R w.1))).prod *
+                psiAtZC A Hs P planZ tab vb R τ x c w.1 bs)) +
+          Fintype.card (ΩcZ A P planZ tab vb L c) * (k / (Real.exp 1 * Rw)) := by
+        rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+      _ ≤ E * Fintype.card (ΩcZ A P planZ tab vb L c) +
+          Fintype.card (ΩcZ A P planZ tab vb L c) * (k / (Real.exp 1 * Rw)) := by linarith
+      _ = _ := by field_simp
+  · have hempty : ∀ w : ΩcZ A P planZ tab vb L c, False := fun w => hne ⟨w⟩
+    have h0 : (∑ w : ΩcZ A P planZ tab vb L c, f w.1) = 0 :=
+      Finset.sum_eq_zero fun w _ => (hempty w).elim
+    rw [h0]
+    have : 0 ≤ (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω * (E + k / (Real.exp 1 * Rw)) :=
+      mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB
+    nlinarith
 
 /-- **The ideal link mass at `c`**: the audit extractor's reading of `c` other than the
 plurality, jointly with acceptance and averaged over the draw, is at most `π c` times the trial's
@@ -406,83 +553,23 @@ theorem ideal_mass_leZC (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ
           (psiZC A Hs P planZ tab vb R τ k Rw c ω)) / Fintype.card L.Ω ≤
       (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
         (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) := by
-  classical
-  set f : L.Ω → ℝ := fun ω => expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω)
-      (stratωZC A Hs planZ R τ ω).2 *
-    expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
-      (psiZC A Hs P planZ tab vb R τ k Rw c ω) with hf
-  have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
-  have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) +
-      k / (Real.exp 1 * Rw) := by positivity
-  -- off the draws that read `c`, the trace vanishes
-  have hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → f ω = 0 := by
-    intro ω hω
-    have hpsi : psiZC A Hs P planZ tab vb R τ k Rw c ω = fun _ => 0 := funext fun bs => by
-      simp [psiZC, readsAt_eq_emptyZC A Hs P planZ tab vb R τ hω bs]
-    simp only [hf, hpsi, expectAcc_zero, mul_zero]
-  have hsum : ∑ ω : L.Ω, f ω = ∑ w : ΩcZ A P planZ tab vb L c, f w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsDrawZ A P planZ tab vb c ω)
-      (fun ω _ hne => by by_contra h; exact hne (hoff ω h))]
-    exact Finset.sum_subtype _ (fun ω => by simp) f
-  rw [hsum, div_le_iff₀ hΩ]
-  by_cases hne : Nonempty (ΩcZ A P planZ tab vb L c)
-  · have hw : ∀ w : ΩcZ A P planZ tab vb L c, f w.1 ≤
-        expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2 *
-            geom (expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
-              (stratωZC A Hs planZ R τ w.1).2) Rw ^ k *
-            expectN (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2 k
-              (fun bs => (bs.map (ind (accωZC planZ R w.1))).prod *
-                psiZC A Hs P planZ tab vb R τ k Rw c w.1 bs) + k / (Real.exp 1 * Rw) := fun w =>
-      expectAcc_le_waits _ _ _ k Rw hRw _ (psi_nonnegZC A Hs P planZ tab vb R τ k Rw c w.1)
-        (psi_le_oneZC A Hs P planZ tab vb R τ k Rw c w.1)
-    have htr := expect_trialValZC A Hs P planZ tab vb R τ c k Rw (psiZC A Hs P planZ tab vb R τ k Rw c)
-    have hmass := trial_mass_leZC A Hs P planZ tab vb R τ k Rw M hM ht c (hCR hne)
-    have hcard : (0 : ℝ) < Fintype.card (ΩcZ A P planZ tab vb L c) := by exact_mod_cast Fintype.card_pos
-    rw [htr, div_le_iff₀ hcard] at hmass
-    calc ∑ w : ΩcZ A P planZ tab vb L c, f w.1
-        ≤ ∑ w : ΩcZ A P planZ tab vb L c, (expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
-              (stratωZC A Hs planZ R τ w.1).2 *
-            geom (expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
-              (stratωZC A Hs planZ R τ w.1).2) Rw ^ k *
-            expectN (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2 k
-              (fun bs => (bs.map (ind (accωZC planZ R w.1))).prod *
-                psiZC A Hs P planZ tab vb R τ k Rw c w.1 bs) + k / (Real.exp 1 * Rw)) :=
-          Finset.sum_le_sum fun w _ => hw w
-      _ = (∑ w : ΩcZ A P planZ tab vb L c, expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
-              (stratωZC A Hs planZ R τ w.1).2 *
-            geom (expect (ind (accωZC planZ R w.1)) (gameωZC A Hs planZ R τ w.1)
-              (stratωZC A Hs planZ R τ w.1).2) Rw ^ k *
-            expectN (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2 k
-              (fun bs => (bs.map (ind (accωZC planZ R w.1))).prod *
-                psiZC A Hs P planZ tab vb R τ k Rw c w.1 bs)) +
-          Fintype.card (ΩcZ A P planZ tab vb L c) * (k / (Real.exp 1 * Rw)) := by
-        rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
-      _ ≤ (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M)) *
-            Fintype.card (ΩcZ A P planZ tab vb L c) +
-          Fintype.card (ΩcZ A P planZ tab vb L c) * (k / (Real.exp 1 * Rw)) := by linarith
-      _ = _ := by field_simp
-  · have hempty : ∀ w : ΩcZ A P planZ tab vb L c, False := fun w => hne ⟨w⟩
-    have h0 : (∑ w : ΩcZ A P planZ tab vb L c, f w.1) = 0 :=
-      Finset.sum_eq_zero fun w _ => (hempty w).elim
-    rw [h0]
-    have : 0 ≤ (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
-        (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) :=
-      mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB
-    nlinarith
+  refine (ideal_mass_le_atZC A Hs P planZ tab vb R τ (XvalZC A Hs P planZ tab vb R τ k Rw c) k Rw hRw c).trans ?_
+  refine mul_le_mul_of_nonneg_left ?_ (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+  linarith [errZC_le A Hs P planZ tab vb R τ k Rw M hM ht c hCR]
 
 /-! ## The link theorem -/
 
 /-- **The link event leaves a trace**: if drawn unit `u`'s extracted table is committed but every
-close satisfying message decodes, on `u`'s wires, differently from the value layer, then some commit
-string reads a value other than its plurality. -/
-theorem linkEv_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
+close satisfying message decodes, on `u`'s wires, differently from the value layer of `Xv`, then some commit
+string `c` reads a value other than `Xv c`. -/
+theorem linkEv_le_psiAtZC (Xv : vb.Pos → vb.Val) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
     (bs : List (List (OutZC F D Sl))) :
-    ind (fun bs => LinkEvZK A P planZ tab decode (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw)
-      (tabExtZC A Hs planZ tab R τ ω u bs)) bs ≤ ∑ c, psiZC A Hs P planZ tab vb R τ k Rw c ω bs := by
+    ind (fun bs => LinkEvZK A P planZ tab decode (L.draw ω) R u (XlayerZC A P planZ tab vb Xv)
+      (tabExtZC A Hs planZ tab R τ ω u bs)) bs ≤ ∑ c, psiAtZC A Hs P planZ tab vb R τ (Xv c) c ω bs := by
   classical
-  have hsum0 : 0 ≤ ∑ c, psiZC A Hs P planZ tab vb R τ k Rw c ω bs :=
-    Finset.sum_nonneg fun c _ => psi_nonnegZC A Hs P planZ tab vb R τ k Rw c ω bs
-  by_cases hL : LinkEvZK A P planZ tab decode (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw)
+  have hsum0 : 0 ≤ ∑ c, psiAtZC A Hs P planZ tab vb R τ (Xv c) c ω bs :=
+    Finset.sum_nonneg fun c _ => psiAt_nonnegZC A Hs P planZ tab vb R τ (Xv c) c ω bs
+  by_cases hL : LinkEvZK A P planZ tab decode (L.draw ω) R u (XlayerZC A P planZ tab vb Xv)
       (tabExtZC A Hs planZ tab R τ ω u bs)
   · obtain ⟨hc, hall⟩ := hL
     have hspec := Classical.choose_spec hc
@@ -497,22 +584,21 @@ theorem linkEv_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw 
         readsAtZC A Hs P planZ tab vb R τ ω bs (vb.pos g) := by
       unfold readsAtZC; exact Finset.mem_filter.2 ⟨Finset.mem_univ _, _, hop⟩
     have hbit := (vb.opening_spec (L.draw ω) R u hu (Classical.choose hc) hspec.2 g hg).2
-    have hne : vb.val (vb.opening (L.draw ω) R u (Classical.choose hc) (vb.pos g)) ≠
-        XvalZC A Hs P planZ tab vb R τ k Rw (vb.pos g) := by
+    have hne : vb.val (vb.opening (L.draw ω) R u (Classical.choose hc) (vb.pos g)) ≠ Xv (vb.pos g) := by
       intro heq
       apply hdec
       rw [← hbit, heq]
       rfl
-    have hpsi : psiZC A Hs P planZ tab vb R τ k Rw (vb.pos g) ω bs = 1 := by
-      unfold psiZC; rw [ite_eq_left ⟨_, hmem, hne⟩]
+    have hpsi : psiAtZC A Hs P planZ tab vb R τ (Xv (vb.pos g)) (vb.pos g) ω bs = 1 := by
+      unfold psiAtZC; rw [ite_eq_left ⟨_, hmem, hne⟩]
     have h1 : ind (fun bs => LinkEvZK A P planZ tab decode (L.draw ω) R u
-        (XplurZC A Hs P planZ tab vb R τ k Rw) (tabExtZC A Hs planZ tab R τ ω u bs)) bs = 1 := by
+        (XlayerZC A P planZ tab vb Xv) (tabExtZC A Hs planZ tab R τ ω u bs)) bs = 1 := by
       unfold ind; rw [ite_eq_left ⟨hc, hall⟩]
     rw [h1, ← hpsi]
-    exact Finset.single_le_sum (fun c _ => psi_nonnegZC A Hs P planZ tab vb R τ k Rw c ω bs)
-      (Finset.mem_univ (vb.pos g))
+    exact Finset.single_le_sum (f := fun c => psiAtZC A Hs P planZ tab vb R τ (Xv c) c ω bs)
+      (fun c _ => psiAt_nonnegZC A Hs P planZ tab vb R τ (Xv c) c ω bs) (Finset.mem_univ (vb.pos g))
   · have h0 : ind (fun bs => LinkEvZK A P planZ tab decode (L.draw ω) R u
-        (XplurZC A Hs P planZ tab vb R τ k Rw) (tabExtZC A Hs planZ tab R τ ω u bs)) bs = 0 := by
+        (XlayerZC A P planZ tab vb Xv) (tabExtZC A Hs planZ tab R τ ω u bs)) bs = 0 := by
       unfold ind; rw [ite_eq_right hL]
     rw [h0]
     exact hsum0
@@ -543,13 +629,106 @@ noncomputable def linkBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
+/-- **The link bound against the value layer of `Xv`, prover by prover**: `Σ_c π_c (ε_c + k/(eR_w))/(1 − ρ)`, with
+`ε_c` the binding error at `c` against `Xv R τ c` (`errZC`). -/
+noncomputable def errBoundZC (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val)
+    (k Rw : ℕ) (ρ : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) : ℝ≥0∞ :=
+  ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+    (errZC A Hs P planZ tab vb R τ c k Rw (Xv R τ c) + k / (Real.exp 1 * Rw))) / (1 - ρ))
+
+/-- **The link theorem against any value layer.** For the batched audit with the expected-time extractor
+(`analysisZC`, at any knowledge bound) and the value layer of any values `Xv` (`XlayerZC`), given the binding of wires
+to commit strings (`ValueBindingZ`), at every prover
+$$\delta_{\rm link}\le\frac{1}{1-\rho}\sum_c\pi_c\Big(\varepsilon_c+\frac{k}{eR_w}\Big),$$
+with `ε_c` the trial's binding error at `c` against `Xv c` (`errZC`), `π_c` the probability that a draw reads `c`,
+`ρ` a bound on every table's `N₀/(ek)` and `Rw` the waits' length. -/
+theorem zk_linkSoundC_at
+    (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw : ℕ} (hRw : 1 ≤ Rw)
+    {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a)
+    (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val) :
+    (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+      (errBoundZC A Hs P planZ tab vb Xv k Rw ρ) := by
+  intro R τ tgt
+  unfold errBoundZC
+  have hρ1 : 0 < 1 - ρ := by linarith
+  set f : vb.Pos → L.Ω → ℝ := fun c ω => expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω)
+      (stratωZC A Hs planZ R τ ω).2 *
+    expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+      (psiAtZC A Hs P planZ tab vb R τ (Xv R τ c) c ω) with hf
+  set Λ : L.Ω → ℝ := fun ω => (∑ c, f c ω) / (1 - ρ) with hΛ
+  have hf0 : ∀ c ω, 0 ≤ f c ω := fun c ω => mul_nonneg (expect_nonneg (ind_nonneg _) _ _)
+    (expectAcc_nonneg _ _ _ _ (psiAt_nonnegZC A Hs P planZ tab vb R τ (Xv R τ c) c ω))
+  have hΛ0 : ∀ ω, 0 ≤ Λ ω := fun ω =>
+    div_nonneg (Finset.sum_nonneg fun c _ => hf0 c ω) hρ1.le
+  have step1 : ∀ ω, atTgt (L.draw ω) (tgt ω) (fun u =>
+      (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).link (L.draw ω) R (τ ω) u
+        ((analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
+          (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).committed R τ)) ≤ ENNReal.ofReal (Λ ω) := by
+    intro ω
+    refine atTgt_le (fun u hu => ?_) (tgt ω)
+    show ENNReal.ofReal (accProbZC A Hs (planZ (L.draw ω) R) (zcStrat A Hs planZ (τ ω)) *
+        extractProbAccZ A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
+          (zcStrat A Hs planZ (τ ω))
+          (LinkEvZK A P planZ tab decode (L.draw ω) R u (XlayerZC A P planZ tab vb (Xv R τ))) /
+        (1 - rateZ (planZ (L.draw ω) R) (tab (L.draw ω) R u) k)) ≤ ENNReal.ofReal (Λ ω)
+    apply ENNReal.ofReal_le_ofReal
+    have hε0 : 0 ≤ accProbZC A Hs (planZ (L.draw ω) R) (zcStrat A Hs planZ (τ ω)) := expect_nonneg (ind_nonneg _) _ _
+    have hLp0 := extractProbAccZ_nonneg A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
+      (zcStrat A Hs planZ (τ ω))
+      (LinkEvZK A P planZ tab decode (L.draw ω) R u (XlayerZC A P planZ tab vb (Xv R τ)))
+    have hLp : extractProbAccZ A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
+        (zcStrat A Hs planZ (τ ω))
+        (LinkEvZK A P planZ tab decode (L.draw ω) R u (XlayerZC A P planZ tab vb (Xv R τ))) ≤
+          expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+            (fun bs => ∑ c, psiAtZC A Hs P planZ tab vb R τ (Xv R τ c) c ω bs) :=
+      expectAcc_mono _ _ _ _ fun bs => linkEv_le_psiAtZC A Hs P planZ tab vb R τ (Xv R τ) hu bs
+    have hrr : 1 - ρ ≤ 1 - rateZ (planZ (L.draw ω) R) (tab (L.draw ω) R u) k := by
+      linarith [hr (L.draw ω) R (tab (L.draw ω) R u)]
+    have hsum : expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
+        expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+          (fun bs => ∑ c, psiAtZC A Hs P planZ tab vb R τ (Xv R τ c) c ω bs) = ∑ c, f c ω := by
+      rw [expectAcc_sum, Finset.mul_sum]
+    calc accProbZC A Hs (planZ (L.draw ω) R) (zcStrat A Hs planZ (τ ω)) *
+          extractProbAccZ A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
+            (zcStrat A Hs planZ (τ ω))
+            (LinkEvZK A P planZ tab decode (L.draw ω) R u (XlayerZC A P planZ tab vb (Xv R τ))) /
+          (1 - rateZ (planZ (L.draw ω) R) (tab (L.draw ω) R u) k)
+        ≤ accProbZC A Hs (planZ (L.draw ω) R) (zcStrat A Hs planZ (τ ω)) *
+          extractProbAccZ A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
+            (zcStrat A Hs planZ (τ ω))
+            (LinkEvZK A P planZ tab decode (L.draw ω) R u (XlayerZC A P planZ tab vb (Xv R τ))) /
+          (1 - ρ) := div_le_div_of_nonneg_left (mul_nonneg hε0 hLp0) hρ1 hrr
+      _ ≤ expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
+          expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
+            (fun bs => ∑ c, psiAtZC A Hs P planZ tab vb R τ (Xv R τ c) c ω bs) / (1 - ρ) :=
+          div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hLp hε0) hρ1.le
+      _ = Λ ω := by rw [hsum]
+  refine (avg_mono step1).trans ?_
+  rw [avg_ofReal Λ hΛ0]
+  apply ENNReal.ofReal_le_ofReal
+  have hc : ∀ c, (∑ ω, f c ω) / Fintype.card L.Ω ≤
+      (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
+        (errZC A Hs P planZ tab vb R τ c k Rw (Xv R τ c) + k / (Real.exp 1 * Rw)) := fun c =>
+    ideal_mass_le_atZC A Hs P planZ tab vb R τ (Xv R τ c) k Rw hRw c
+  calc (∑ ω, Λ ω) / Fintype.card L.Ω
+      = (∑ c, (∑ ω, f c ω) / Fintype.card L.Ω) / (1 - ρ) := by
+        simp only [hΛ, div_eq_mul_inv, ← Finset.sum_mul]
+        rw [Finset.sum_comm]
+        ring
+    _ ≤ _ := div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
+
 /-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** For the batched audit
 with the expected-time extractor (`analysisZC`, at any knowledge bound) and the plurality value layer (`XplurZC`), given
 the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRZC`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
 with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on every table's `N₀/(ek)`,
 `t'` the SHA-512 evaluations of one session run, `M` the finder's further trials and `Rw` the waits' length. At any other
-prover the bound is `⊤` (`linkBoundZC`). -/
+prover the bound is `⊤` (`linkBoundZC`). It is `zk_linkSoundC_at` at the plurality, each binding error bounded under
+A2 (`errZC_le`). -/
 theorem zk_linkSoundC
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -563,76 +742,14 @@ theorem zk_linkSoundC
   split_ifs with hCR
   swap
   · exact le_top
-  set B := 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)
-    with hBdef
-  have hρ1 : 0 < 1 - ρ := by linarith
-  set f : vb.Pos → L.Ω → ℝ := fun c ω => expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω)
-      (stratωZC A Hs planZ R τ ω).2 *
-    expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
-      (psiZC A Hs P planZ tab vb R τ k Rw c ω) with hf
-  set Λ : L.Ω → ℝ := fun ω => (∑ c, f c ω) / (1 - ρ) with hΛ
-  have hf0 : ∀ c ω, 0 ≤ f c ω := fun c ω => mul_nonneg (expect_nonneg (ind_nonneg _) _ _)
-    (expectAcc_nonneg _ _ _ _ (psi_nonnegZC A Hs P planZ tab vb R τ k Rw c ω))
-  have hΛ0 : ∀ ω, 0 ≤ Λ ω := fun ω =>
-    div_nonneg (Finset.sum_nonneg fun c _ => hf0 c ω) hρ1.le
-  have step1 : ∀ ω, atTgt (L.draw ω) (tgt ω) (fun u =>
-      (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).link (L.draw ω) R (τ ω) u
-        ((analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-          (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).committed R τ)) ≤ ENNReal.ofReal (Λ ω) := by
-    intro ω
-    refine atTgt_le (fun u hu => ?_) (tgt ω)
-    show ENNReal.ofReal (accProbZC A Hs (planZ (L.draw ω) R) (zcStrat A Hs planZ (τ ω)) *
-        extractProbAccZ A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
-          (zcStrat A Hs planZ (τ ω))
-          (LinkEvZK A P planZ tab decode (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw)) /
-        (1 - rateZ (planZ (L.draw ω) R) (tab (L.draw ω) R u) k)) ≤ ENNReal.ofReal (Λ ω)
-    apply ENNReal.ofReal_le_ofReal
-    have hε0 : 0 ≤ accProbZC A Hs (planZ (L.draw ω) R) (zcStrat A Hs planZ (τ ω)) := expect_nonneg (ind_nonneg _) _ _
-    have hLp0 := extractProbAccZ_nonneg A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
-      (zcStrat A Hs planZ (τ ω))
-      (LinkEvZK A P planZ tab decode (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw))
-    have hLp : extractProbAccZ A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
-        (zcStrat A Hs planZ (τ ω))
-        (LinkEvZK A P planZ tab decode (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw)) ≤
-          expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
-            (fun bs => ∑ c, psiZC A Hs P planZ tab vb R τ k Rw c ω bs) :=
-      expectAcc_mono _ _ _ _ fun bs => linkEv_le_psiZC A Hs P planZ tab vb R τ k Rw hu bs
-    have hrr : 1 - ρ ≤ 1 - rateZ (planZ (L.draw ω) R) (tab (L.draw ω) R u) k := by
-      linarith [hr (L.draw ω) R (tab (L.draw ω) R u)]
-    have hsum : expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
-        expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
-          (fun bs => ∑ c, psiZC A Hs P planZ tab vb R τ k Rw c ω bs) = ∑ c, f c ω := by
-      rw [expectAcc_sum, Finset.mul_sum]
-    calc accProbZC A Hs (planZ (L.draw ω) R) (zcStrat A Hs planZ (τ ω)) *
-          extractProbAccZ A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
-            (zcStrat A Hs planZ (τ ω))
-            (LinkEvZK A P planZ tab decode (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw)) /
-          (1 - rateZ (planZ (L.draw ω) R) (tab (L.draw ω) R u) k)
-        ≤ accProbZC A Hs (planZ (L.draw ω) R) (zcStrat A Hs planZ (τ ω)) *
-          extractProbAccZ A Hs (planZ (L.draw ω) R) (tab (L.draw ω) R u) k
-            (zcStrat A Hs planZ (τ ω))
-            (LinkEvZK A P planZ tab decode (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw)) /
-          (1 - ρ) := div_le_div_of_nonneg_left (mul_nonneg hε0 hLp0) hρ1 hrr
-      _ ≤ expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
-          expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k
-            (fun bs => ∑ c, psiZC A Hs P planZ tab vb R τ k Rw c ω bs) / (1 - ρ) :=
-          div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hLp hε0) hρ1.le
-      _ = Λ ω := by rw [hsum]
-  refine (avg_mono step1).trans ?_
-  rw [avg_ofReal Λ hΛ0]
+  refine (zk_linkSoundC_at A Hs P planZ tab vb hlow hRw hρ hr hj
+    (fun R τ => XvalZC A Hs P planZ tab vb R τ k Rw) R τ tgt).trans ?_
+  unfold errBoundZC
   apply ENNReal.ofReal_le_ofReal
-  have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
-  have hc : ∀ c, (∑ ω, f c ω) / Fintype.card L.Ω ≤
-      (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω * B := fun c =>
-    ideal_mass_leZC A Hs P planZ tab vb R τ k Rw M hRw hM ht c (hCR c)
-  calc (∑ ω, Λ ω) / Fintype.card L.Ω
-      = (∑ c, (∑ ω, f c ω) / Fintype.card L.Ω) / (1 - ρ) := by
-        simp only [hΛ, div_eq_mul_inv, ← Finset.sum_mul]
-        rw [Finset.sum_comm]
-        ring
-    _ ≤ (∑ c, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω * B) / (1 - ρ) :=
-        div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
-    _ = _ := by rw [← Finset.sum_mul]
+  have hρ1 : 0 < 1 - ρ := by linarith
+  rw [Finset.sum_mul]
+  refine div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => ?_) hρ1.le
+  refine mul_le_mul_of_nonneg_left ?_ (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+  linarith [errZC_le A Hs P planZ tab vb R τ k Rw M hM ht c (hCR c)]
 
 end FlockSoundness.Discharge.ZkLink

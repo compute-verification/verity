@@ -73,8 +73,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
   at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s), and `a`'s compiled component's acceptance of its own case.
-  That the releases each component's check read (`coinsRead`) are the device's at the rounds the parameters assign them
-  is the targets' to bound (`Logged`): membership alone would let a prover keep the better of two rounds' coins.
+  The releases each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
 
@@ -476,9 +475,10 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- **Each release `a`'s check read is the device's at its round**: the `k`-th release `a`'s check read is the log's
-release at round `pos k`, the round the parameters assign it. Out of place, it is a forgery of the device's LMS
-signature over its ledger or a session's close, which `a`'s error bounds where its forger meets
-`Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`). -/
+release at round `pos k`, the round the parameters assign it, since membership in the log alone would let a prover keep
+the better of two rounds' coins. Out of place, it is a forgery of the device's LMS signature over its ledger or a
+session's close, which `a`'s error bounds where its forger meets `Hash.Assumptions.LmsUnforgeable`
+(`Vocab.Unforgeable`, `Vocab.epsForge`). -/
 def Logged (pos : ℕ → ℕ) (a : Subprotocol) (o : Exchange) : Prop :=
   ∀ k r, (V.coinsRead a o.sent)[k]? = some r → o.log[pos k]? = some r
 

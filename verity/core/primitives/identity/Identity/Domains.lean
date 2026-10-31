@@ -258,8 +258,6 @@ abbrev FLOCK_ZK_TAU : String := "verity/flock-zk/tau/v1"
 abbrev LAYOUT : String := "verity/layout/v1"
 abbrev REC_COINS : String := "verity/rec-coins/v1"
 abbrev REC_INNER : String := "verity/rec-inner/v1"
-abbrev REC_V0_VERIFIER_SALT : String := "verity/rec-v0/verifier-salt/v0"
-abbrev REC_V0_ZERO_RESIDUAL_SALT : String := "verity/rec-v0/zero-residual-salt/v0"
 
 -- Not yet read from here: PoUS, the wipe and the memory challenger
 abbrev CHAIN_DENSE_H : String := "chain-dense-H/v1"
@@ -335,7 +333,7 @@ abbrev REMOTE_BANDWIDTH_TIMING_JITTER : String := "verity/remote-bandwidth/timin
 abbrev REMOTE_BANDWIDTH_PROTOCOL : String := "verity/remote-bandwidth/v0"
 abbrev REMOTE_BANDWIDTH_PERIOD : String := "verity/remote-bandwidth/window/v1"
 abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-salts/v0"
-abbrev STORE_SALT : String := "verity/store/salt/v0"
+abbrev STORE_SALT : String := "verity/store/salt/v1"
 
 -- Not yet read from here: the network certifier and network accounting
 abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"
@@ -353,7 +351,7 @@ abbrev CERTIFIER_OUT : String := "verity-network-certifier/out/v1"
 abbrev CERTIFIER_PAIR_ENC : String := "verity-network-certifier/pair/v1/enc"
 abbrev CERTIFIER_PAIR_MAC : String := "verity-network-certifier/pair/v1/mac"
 abbrev CERTIFIER_PARAMETERS_V1 : String := "verity-network-certifier/parameters/v1"
-abbrev CERTIFIER_PERIOD_SAMPLING : String := "verity-network-certifier/period-draw/v0"
+abbrev CERTIFIER_PERIOD_SAMPLING : String := "verity-network-certifier/period-draw/v1"
 abbrev CERTIFIER_PERIOD : String := "verity-network-certifier/period/v0"
 abbrev CERTIFIER_RECORD_V2 : String := "verity-network-certifier/record/v2"
 abbrev CERTIFIER_RECORDS : String := "verity-network-certifier/records/v2"

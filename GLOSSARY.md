@@ -130,7 +130,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "C-Flock"; the stored candidate label `C-Flock`, backend ids `C-interactive`, `C-fs` | Flock (Succinct's is "upstream Flock") |
 | `verity.ml.circuits.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
-| "backend", "backend family", "configured backend" for Flock; `backends/` (Flock's directory before the platform layout), `verity_flock.backend`, `BACKENDS` | the proof system |
+| "backend", "backend family", "configured backend" for Flock; `backends/` (Flock's old directory), `verity_flock.backend`, `BACKENDS` | the proof system |
 | "IR", "Verity IR", "IR primitives", "IR evaluator"; `verity.ir` | circuit, Program; `verity.ml.circuits` |
 | "instance", "instance set"; the `bench-instances/*` datasets and `fixtures/bench-instances/`, the fingerprint's `instances` (`contract.instances_ref`) and its tier (`vu-k1536`, …), the `instance-equiv/v1` and `vllm-vu-set/v1` kinds, the `instances_dataset` / `instances_tier` labels, `instances_per_second` | input, input set |
 | "configuration" meaning a backend with a scheme; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | a proof system and a statement |
@@ -165,7 +165,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until renamed; BLAKE3's own terms | chunk (a compression's 1024 bits) |
 | "block" for a piece of a counter-mode stream (coins, noise); `Randomness.block`, `J10R.noiseBlock`, `verity.ml.randomness`'s `blocks()`, until renamed | chunk (of the stream) |
 | "block" for a unit of the encoded store of proof of useful space (PoUS); `blocks_per_segment`, `block_bytes`, until a format version | label (a segment's top label) |
-| "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `Tag.Block`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
+| "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
 | "block", "block-scaled" for entries under one FP8 or NVFP4 scale; the checkpoint id `verity-fp8-block128/v1`, the Definitions `ScaledMmFp8Block_v1`, `ScaledMmFp8BlockSharedScale_v1`, `MoeExpertFp8BlockCoordinate_v2`, `BlockScaledAlignAdd`, `SiluMulFp8BlockQuant_v1`, vLLM's `weight_block_size` | scale group |
 | "block" for a range of a GEMM's inner dimension; the Lean's `D1.nBlocks`, `ThreeBlock` | segment |
 | "block" for a page of vLLM's KV cache, and its block pool; vLLM's `block_size`, `block_table`, `num_gpu_blocks` | KV page, page pool |
@@ -198,7 +198,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜; set; the initial state a |
 | "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
 | "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
-| "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; the network certifier's `blocks.Server`, `Blocks.window` and `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
+| "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap`, until renamed | the slowdown lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
 | "registered computation" | the registered circuit |
@@ -287,8 +287,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
     statements). A matrix's row stays plain English. A workload or a server block is never a row (Older names).
   - **Transcript**: the messages of a proof or a session, what its verifier sees (C-Flock's, PoUS's transcript hash).
-    The values of a run's gates are its trace; `evaluate_call`'s `transcript` argument and `ExecutionTranscript` keep
-    the old word until they are renamed.
+    The values of a run's gates are its trace (`evaluation.reference.Trace`); the Python and Lean evaluators'
+    shared refusal text keeps the old word.
   - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
     sense (above).
@@ -308,7 +308,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   is one proof block. An element is one member, such as 16 bits. A leaf serializes whole elements, but a partition counts
   bits, so a proof block may commit some of an element's bits and not others.
 - **Format**: a label on a port's elements (BF16, FP32, E4M3, int32, token id) saying how their bits encode a number or a
-  symbol; metadata, outside the content digest (`verity.ml.circuits.annotations`).
+  symbol; metadata, outside the content digest (`verity.ml.circuits.metadata`).
 - **Boolean Definition** and **word view**: a Boolean Definition's gates are only gates (`verity.ml.circuits.boolean.is_boolean`),
   so its meaning is its gates; a *word Definition*'s gates output w-bit words whose meaning is registry code, and the word
   library migrates to Boolean Definitions under new versions of the same names. The word view reads each element's bits as

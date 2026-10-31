@@ -59,39 +59,39 @@ def launches(a) -> list[dict]:
     words = store.numel() // wt.s
     nch, sketched, frags = kd // 512, sketch_specs(a.sketch), {}
     if sketched:
-        BW.set_sketch_tag(wt)
+        BW.set_receipt_prefix(wt)
     for rows in sorted({r for r, _, _ in sketched}):
         BW.set_pass(wt, 8, rows=rows)
         bits = BW.sketch_bits(wt, BW.window_seed(wt), rows, BW.SKT.vector_bytes(wt.sb, 8))
         signs = torch.from_numpy(BW.pass_signs(wt, bits, 8).view(np.int32)).cuda()
         frags[rows] = BW.sign_frags(wt, torch, signs, 8, st)
     if sketched:
-        BW.set_sketch_tag(wt)
+        BW.set_receipt_prefix(wt)
     out = []
     for k in map(int, a.ks.split(",")):
         key = BW.lib_key(wt, k)
         BW.set_key(wt, torch, key)
         KB.set_key(kv, KB.lib_key(kv, k))
         launched = ctypes.c_int(0)
-        wt.call("wt_fused_sketch", k, None, None, None, a.m, n, kd, 0, 0, d, s, 0, 0, None, None, 0, 0, None, None, 8,
+        wt.call("wt_fused_sketch", k, None, None, None, a.m, n, kd, 0, 0, d, s, 0, None, None, 0, 0, None, None, 8,
                 0, ctypes.byref(launched), st)
         gr = launched.value // (kd // 512)
         steps = BW.tsteps(wt, torch, key, d, gr, kd // 512)
         wt.call("wt_fused_sketch", k, BW.ptr(store), BW.ptr(x.view(torch.uint8)), BW.ptr(y), a.m, n, kd, 0, 0, d, s,
-                gr, 0, BW.ptr(steps), None, wt.jbase, 0, None, None, 8, 0, None, st)
+                gr, BW.ptr(steps), None, wt.jbase, 0, None, None, 8, 0, None, st)
         wt.call("wt_decode", BW.ptr(store), None, words, 0, k, BW.ptr(xr), sms * a.grid_mult, st)
         kv.call("kv_decode", BW.ptr(store), None, words, 0, k, sms * a.grid_mult, BW.ptr(xr), st)
         order = [f"fused_k{k}_d{d}s{s}", "wt_decode", "kv_decode"]
         sk = []
         for rows, sd, ss in sketched:
-            wt.call("wt_fused_sketch", k, None, None, None, a.m, n, kd, 0, 0, sd, ss, 0, 0, None, None, 0, rows, None,
+            wt.call("wt_fused_sketch", k, None, None, None, a.m, n, kd, 0, 0, sd, ss, 0, None, None, 0, rows, None,
                     None, 8, 2, ctypes.byref(launched), st)
             sgr = launched.value // nch
             ssteps = BW.tsteps(wt, torch, key, sd, sgr, nch)
             nvec = wt.so.wt_sketch_vectors(n, kd, sgr, 8)
             tags = torch.empty(nvec * wt.tag_bytes, dtype=torch.uint8, device="cuda")
             wt.call("wt_fused_sketch", k, BW.ptr(store), BW.ptr(x.view(torch.uint8)), BW.ptr(y), a.m, n, kd, 0, 0, sd,
-                    ss, sgr, 0, BW.ptr(ssteps), BW.ptr(tags), wt.jbase, rows, BW.ptr(frags[rows]), None, 8, 2, None, st)
+                    ss, sgr, BW.ptr(ssteps), BW.ptr(tags), wt.jbase, rows, BW.ptr(frags[rows]), None, 8, 2, None, st)
             order.append(f"fused_k{k}_d{sd}s{ss}w2sk{rows}")
             sk.append({"rows": rows, "fused": [sd, ss], "groups": sgr, "vectors": nvec})
         torch.cuda.synchronize()

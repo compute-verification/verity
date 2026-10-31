@@ -50,7 +50,7 @@ opened like any other, but not credited.
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U^{c}_t b / (R\Sigma)\), \(U^{c}_t\) window \(t\)'s credited receipts: the span the credited receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out, post-seed blocks without a verdict) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`GammaTerms.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`GammaTerms.horizon`, §10) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
+| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Accounting.Guarantees.Remote.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
@@ -568,8 +568,8 @@ default, and a registration names 64 to use it.
 
 What each kind rests on:
 
-- **block-sha512** needs only the random oracle. A correct receipt is a query at the block's bytes after the seed,
-  so it bounds the reads by AuditRO (`Bandwidth.Guarantees.AuditRO`, applied per pass), with λ's slack. It assumes
+- **block-sha512** needs only the random oracle. A correct receipt is a query at the block's bytes after the seed, so it
+  bounds the reads by AuditRO (`Accounting.Guarantees.Remote.AuditRO`, applied per pass), with λ's slack. It assumes
   nothing about the device: the prover may hold any function of the store.
 - **sketch-sha512** also rests on `RateAuditSketch` (proved). The random oracle takes a
   correct receipt to a correct \(\sigma_j\). `RateAuditSketch` takes a correct \(\sigma_j\) to the block's 128
@@ -1319,13 +1319,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   registered KV block under the registration's block layout, committed in the pass's one tree and listed in its one
   plan with the weights'. A KV block is a registered block like any other: 4,096 bytes of the encoded store, 32 whole
   codec words, \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\) (§3), and its kernel's vectors pass `plan_of`
-  (§4). The device's KV receipt as it stands (word_codec's `kv.cu`, its `rc_sha8_kernel`)
-  is a third kind:
-  its own SHA-512 domain (`verity/word-codec/kv-receipt/sha512/v0`), ro-sketch-blake3 signs, and half-block vectors
-  that take their 4,096 bytes from 16 tokens' head shares, zero-padded to whole blocks. The verifier can open
-  none of it, so none of it is credited: no pass's plan holds a KV block until its receipts are the registration's kind
-  over the registered KV layout, and a step that commits KV receipts of another kind keeps them out of its plan and
-  its credited bytes.
+  (§4). The device's KV receipt is `kv.cu`'s attention form 13: sketch-sha512 of each token-layer, a store block
+  (store-order/v0), under the pass's signs. No pass's plan holds a KV block whose receipts aren't the registration's
+  kind over the registered KV layout, and a step that commits KV receipts of another kind keeps them out of its plan
+  and its credited bytes.
 - **The challenger's state.** The challenger keeps every coin of a session until it releases it and never releases one
   twice. Persisting that across challenger restarts, and committing coins that outlive one session, is out of scope.
 - **Keeping receipts for the draws.** Any receipt of a window may be drawn once its roots are final, so the prover

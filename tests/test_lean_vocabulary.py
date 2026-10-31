@@ -109,7 +109,8 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
     "Partition": (f"{CORE}Partition.lean::Verity.Partition",),
     "Period": (),
-    "Placement": (f"{REQ}::CircuitRequirement.Placement", f"{REQ_PY}::Placement"),
+    "Placement": (f"{CORE}Requirement.lean::Accounting.Requirement.Placement", f"{REQ}::CircuitRequirement.Placement",
+                  f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
     "Program": ("verity/ml/circuits/program.py::Program",),
     "Record": (),
@@ -121,7 +122,8 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Site": (f"{CORE}Site.lean::Verity.Site", f"{SITE_LEAN}::Core.Site", f"{SITE_PY}::Site"),
     "Statement": (),
     "Stmt": (f"{FLOCK}Statement.lean::Flock.Stmt",),
-    "Store": (f"{REQ}::CircuitRequirement.Store", f"{REQ_PY}::Store"),
+    "Store": (f"{CORE}Requirement.lean::Accounting.Requirement.Store", f"{REQ}::CircuitRequirement.Store",
+              f"{REQ_PY}::Store"),
     "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Transcript", f"{FLOCK}Transcript.lean::Flock.Transcript"),
     "Verdict": (f"{PROTOCOL}::Core.Verdict",),
     "Window": (),
@@ -396,8 +398,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/CoinFlow.lean::Accounting.CoinFlow.Program":
         "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
-    "Security/Definitions/Accounting/Compose.lean::Accounting.Compose.Certificate":
-        "homonym, a credit certificate: rename (lean)",
     "Security/Definitions/Accounting/ComposePeriod.lean::Accounting.Compose.Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Device":
@@ -460,15 +460,11 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "Security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
-    "Security/Definitions/Accounting/Tag/PolyHash.lean::Accounting.Tag.Block":
-        "homonym, a chunk of the store: rename (lean)",
     "Security/Definitions/Claims.lean::Claims.Circuit":
         "duplicate of `Verity.Circuit`: becomes it (the claims layer's AND/XOR wire circuit) (lean)",
     "Security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
     "Security/Definitions/Claims.lean::Claims.Gate":
         "duplicate of `Verity.Circuit`'s gate: becomes it (the AND/XOR gate) (lean)",
-    "Security/Definitions/Claims/Recursion.lean::Claims.Recursion.Draw":
-        "duplicate of `Verity.Draw`: becomes it, as a V* session's record holds it (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Partition":
@@ -597,16 +593,12 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, here the challenger property's: rename (soundness)",
     "Security/Properties/Challenger.lean::Properties.Challenger.Witness":
         "duplicate of `Verity.TC.Relation.Witness`: becomes it (soundness)",
-    "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
-        "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
         "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
-    "Security/Properties/RemoteAudit/Live.lean::Properties.RemoteAudit.Live.Answer":
-        "homonym, a live answer: rename (lean)",
     # benchmarks/
     "benchmarks/bandwidth/gpu.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
@@ -644,8 +636,6 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
     "benchmarks/network_sim/workload/placement.py::Placement":
         "duplicate of `CircuitRequirement.Placement`: becomes a client of it (network-accounting)",
-    "benchmarks/network_traces/n2_advised_zk.py::Challenger":
-        "duplicate of `parties.Challenger`: becomes a client of it (network-accounting)",
     "benchmarks/network_traces/transfer_zk.py::Block":
         "homonym, a server block's one template: rename (network-accounting)",
     "benchmarks/numerical/python/verity_numerical/bench/lowerings.py::Registry":
@@ -836,7 +826,6 @@ KNOWN: dict[str, str] = {
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
     "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
-    "tools/verity/lean/run_daily.py::Node": "homonym, node 1's paths for the daily Lean run: rename (lean)",
     # verity/core/
     "verity/core/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
@@ -891,12 +880,6 @@ KNOWN: dict[str, str] = {
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/core/protocols/certifier/service.py::Opening":
         "homonym, a link-window's witness: rename (network-accounting)",
-    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
-        "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
-    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
-        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
-    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Site":
-        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
     "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
@@ -909,6 +892,12 @@ KNOWN: dict[str, str] = {
         "homonym, the certifier's bucket and slot schedule: rename (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the log's projection (deleted) (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
+        "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Site":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
     "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a sampling period (proofs)",
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean::NciCheck.Circuit":
