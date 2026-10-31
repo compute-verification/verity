@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -62,21 +63,22 @@ def load_points(out: Path) -> list[dict]:
     return rows
 
 
-def samples(out: Path) -> list[tuple[float, float, float, int]]:
-    """(unix time, SM MHz, W, clock-event reasons) per nvidia-smi line"""
+def samples(out: Path) -> tuple[list[tuple[float, float, float, int]], list[str]]:
+    """(unix time, SM MHz, W, clock-event reasons) per nvidia-smi line, and the lines that aren't one (smi.csv also takes
+    nvidia-smi's errors)"""
     p, f = out / "smi.csv", out / "found.json"
     if not p.exists():
-        return []
+        return [], []
     tz = json.loads(f.read_text()).get("tz", "+0000") if f.exists() else "+0000"
-    rows = []
+    rows, unread = [], []
     for line in p.read_text().splitlines():
         v = [x.strip() for x in line.split(",")]
         try:
             t = datetime.strptime(f"{v[0]} {tz}", "%Y/%m/%d %H:%M:%S.%f %z").timestamp()
             rows.append((t, float(v[1]), float(v[3]), int(v[6], 16)))
-        except (ValueError, IndexError):
-            continue
-    return rows
+        except (ValueError, IndexError) as e:
+            unread.append(f"{p}: {line[:80]!r}: {e}")
+    return rows, unread
 
 
 def join(r: dict, smi: list) -> None:
@@ -190,9 +192,10 @@ def main(argv=None) -> int:
     ap.add_argument("outs", nargs="+", type=Path)
     ap.add_argument("--json", type=Path)
     a = ap.parse_args(argv)
-    pts = []
+    pts, unread = [], []
     for out in a.outs:
-        smi = samples(out)
+        smi, skipped = samples(out)
+        unread += skipped
         for r in load_points(out):
             join(r, smi)
             pts.append(r)
@@ -200,7 +203,10 @@ def main(argv=None) -> int:
         print("no points")
         return 2
     v, lines, doc = report(pts)
+    doc["smi_unread"] = len(unread)
     print("\n".join(lines))
+    if unread:
+        print(f"\n{len(unread)} nvidia-smi line(s) not read as samples:", *unread[:5], sep="\n", file=sys.stderr)
     if a.json:
         a.json.write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if v == "PASS" else 1

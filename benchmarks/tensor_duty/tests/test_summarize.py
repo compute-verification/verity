@@ -74,6 +74,19 @@ def test_the_gpus_own_timers_do_not_judge(tmp_path: Path) -> None:
     assert run(tmp_path, slow, name="slow")[1]["verdict"] == "REFUTED"
 
 
+def test_nvidia_smi_lines_are_read_and_the_rest_counted(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "smi.csv").write_text("1970/01/01 00:16:40.500, 1830, 1980, 690.5, 700.00, 61, 0x0000000000000000\n"
+                                 "Unable to determine the device handle for GPU0: Unknown Error\n")
+    (out / "points.jsonl").write_text(json.dumps(point(0.5)) + "\n")
+    assert S.main([str(out), "--json", str(tmp_path / "v.json")]) == 0
+    v = json.loads((tmp_path / "v.json").read_text())
+    assert (v["verdict"], v["smi_unread"]) == ("PASS", 1)
+    smi, unread = S.samples(out)
+    assert [s[1:] for s in smi] == [(1830.0, 690.5, 0)] and len(unread) == 1
+
+
 def test_no_points_is_no_verdict(tmp_path: Path) -> None:
     (tmp_path / "out").mkdir()
     assert S.main([str(tmp_path / "out")]) == 2
