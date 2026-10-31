@@ -1417,8 +1417,8 @@ def verifier_failures(rule: dict | None, found: dict | None, update: bool = Fals
     if not update:
         used = set()
         for kind, e in compiled(found):
-            if a := allowed_by(allow, e):
-                used.add(a)
+            if admitting := [a for a in allow if allowed_by([a], e)]:
+                used.update(admitting)
             else:
                 fails.append(Failure(f"verifier.{kind.replace('_', '-')}", e["name"], f"verifier: {e['name']} (@[{kind}], in "
                                      f"{e.get('module')}) is on the path from {entries}: compiled code no proof sees; if it "

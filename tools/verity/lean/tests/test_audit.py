@@ -1636,6 +1636,22 @@ def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
     assert A.statement_changes(notes) == notes
 
 
+def test_verifier_allow_with_a_name_and_its_prefix_passes_both_modes():
+    """`--update` writes `Nat.gcd` and `Nat.gcd._unary` by name when both are on the path, and `Nat.gcd` also admits
+    `Nat.gcd._unary` as a name prefix: the check without `--update` counts every entry that admits a constant as used, so
+    the record `--update` writes passes it, and neither entry reads as one that admits nothing."""
+    path = {"missing": [], "reached": 40, "hash": [], "csimp": [], "implemented_by": [],
+            "extern": [{"name": "Nat.gcd", "module": "Init.Data.Nat.Gcd"},
+                       {"name": "Nat.gcd._unary", "module": "Init.Data.Nat.Gcd"}]}
+    rule = {"entries": ["P.verify"], "stop": [], "hash": "P.Sha512", "allow": []}
+    f = facts(); f["verifier"] = path
+    fails, pol = A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)
+    assert fails == [] and pol["verifier"]["allow"] == ["Nat.gcd", "Nat.gcd._unary"]
+    assert A.verifier_failures(pol["verifier"], path) == []
+    assert A.verifier_failures({**rule, "allow": ["Nat.gcd", "Nat.gcd._unary", "Nat.lcm"]}, path) == [
+        "verifier: `verifier.allow` lists Nat.lcm, which admits nothing on the path from P.verify; run `check.py --update`"]
+
+
 def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():
     """Each predicate the spec declares under `claims.modules` names a `fails` theorem stating `¬ C …` with that
     claim at the head, and `meets` theorems that are not `C` itself, each a guarantee; one without witnesses fails unless
