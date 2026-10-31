@@ -297,7 +297,8 @@ def report(m: Shape, share: float, *, tiles: bool = False, pad: bool = False, se
         "shape": asdict(m), "block_s": m.block_s, "share": share, "tiles": tiles, "pad": pad, "units": units,
         "ands": sum(t.units * t.ands for t in ts), "rates": asdict(r),
         "windows": [{"template": w.template.id, "real": w.template.real, "units": w.template.units, "k": w.k,
-                     "tables": w.tables, "ands": w.template.ands, "proved_ands": w.template.proved,
+                     "tables": w.tables, "ands": w.template.ands, "rows": list(w.template.rows),
+                     "proved_ands": w.template.proved,
                      "statements": w.statements, "drawn": w.drawn, "cost": w.cost, "K0": w.K0, "pooled": w.pooled}
                     for w in ws],
         "cost": {"statements": sum(w.statements for w in ws), "drawn": sum(w.drawn for w in ws),
