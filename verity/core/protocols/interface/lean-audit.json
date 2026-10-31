@@ -44,6 +44,11 @@
    "imports": ["CoreProtocol.Period", "Difftest", "Lean.Data.Json", "Flock.Canon"],
    "except": [],
    "why": "the difftest's functions reach Lean only through the code's periods and the harness"
+  },
+  "CoreProtocol.Site": {
+   "imports": ["Lean.Data.Json", "Flock.Canon", "Flock.Hash", "CoreProtocol.Ratio"],
+   "except": [],
+   "why": "the Site in code is spec: its properties (`Properties.Core.Site`) are stated over its fold, check and types, so it imports only Lean's JSON, C-Flock's canonical JSON and SHA-512, for its digests and decoders, and the interface's `Ratio`, which reads its figures"
   }
  },
  "dependencies": {
