@@ -34,8 +34,9 @@ While `next`'s lowest member waits at its head for a land verdict, unheld, holdi
 since it became the lowest or since its ready mark, whichever is later, @ci (who staffs the reviewers) and @top are rung,
 and again every `BOTTOM_WAIT_S` while it waits (`_bottom`).
 A `main` pushed outside drive (a pure move, on its own check) is merged into `checked` (`_absorb`).  Two gates cut the prefix
-first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
-of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked by the
+first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, the spec, `Security/`'s Definitions and
+Models, or a Lean source outside `Security/` of a package that has one, Lean that runs as code: `queue.lean_change`, code
+touching no lock exempt in a two-demos PR: `Driver._lean_change`; Lean proofs alone land on the verdict, checked by the
 after-landing run) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
 check (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it), or any
 recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
@@ -179,7 +180,8 @@ LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lak
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
-#: a PR whose title holds this lands on its land verdict without a Lean check first (`Driver._lean_change`)
+#: a PR whose title holds this lands on its land verdict without a Lean check first when its Lean is code that touches no lock
+#: and no spec (`Driver._lean_change`, `queue.LEAN_SPEC`)
 TWO_DEMOS = "two demos"
 #: the steps of a check (`tools/verity/check/check.py`)
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
@@ -2892,11 +2894,14 @@ class Driver:
         return {m.owner, self._owner(m), self.ready_by(m.pr, m.head)}
 
     def _lean_change(self, m: Member) -> bool:
-        """Whether ``m`` waits for a Lean check before it lands: its own change is a Lean change (`queue.lean_change`) and its
-        title doesn't say ``two demos`` (`TWO_DEMOS`).  A two-demos PR's Lean is checked by the after-landing run's
-        lean-audit instead, which reverts it if it fails; its ready mark already passed the records gate."""
+        """Whether ``m`` waits for a Lean check before it lands: its own change is a Lean change (`queue.lean_change`), and
+        its title doesn't say ``two demos`` (`TWO_DEMOS`) or it touches a lock or the spec (`queue.lean_change` with ``code``
+        off), whose records the after-landing lean-audit (`--no-regenerate`) would find stale.  A two-demos PR's other Lean,
+        code, is checked by the after-landing run's lean-audit instead, which reverts it if it fails; its ready mark already
+        passed the records gate."""
         if m.commit not in self._lean_of:
-            self._lean_of[m.commit] = lean_change(self.repo, m.commit) and not self._two_demos(m)
+            self._lean_of[m.commit] = lean_change(self.repo, m.commit) and (not self._two_demos(m)
+                                                                             or lean_change(self.repo, m.commit, code=False))
         return self._lean_of[m.commit]
 
     def _two_demos(self, m: Member) -> bool:
