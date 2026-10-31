@@ -53,7 +53,7 @@ reads while it is resident is in no record, so the line its write would be in, t
 lists its index in `withdrawn` instead.  A line's writes and withdrawals take the store's next fresh indices together,
 each once and in index order, so a withdrawn index is never written.  Its slot holds nothing in the record from the
 step that reached it until a later write, and the writer records no free of it.  The prover releases the index
-(`Change.released` covers it) and names it withdrawn (`Change.withdrawn`, `Session.release(released, withdrawn)`), and
+(`Change.released` covers it) and names it withdrawn (`Change.withdrawn`, `AuditRun.release(released, withdrawn)`), and
 the verifier checks that no plan held it, so it was never written.
 
 Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
@@ -69,8 +69,8 @@ L ≥ 2 (`audit.Params.deferred`).
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
 The prover's audit side commits the digests of the blocks serving completes in an append tree (`audit.append_tree`,
-under fresh salts) and sends its root and size (`Session.append`) once they are complete, and the released blocks'
-indices as runs (`Session.release`); the verifier sees those and the plans, never the record.  The verifier replies
+under fresh salts) and sends its root and size (`AuditRun.append`) once they are complete, and the released blocks'
+indices as runs (`AuditRun.release`); the verifier sees those and the plans, never the record.  The verifier replies
 to each append with its first index and its coin, and the device encodes the append's blocks in place under the coin
 once it arrives.  Residency waits for that encode, so the coin's round trip is off serving's critical path: the
 writer records the blocks' writes, in their appends' order and at the indices they took, at the step before the first
@@ -85,7 +85,7 @@ append order chosen after the seed would otherwise be advice.  So a step's appen
 step's root and before the next pass's, and a re-key's old index is below the stale bound of the pass after its step
 (`WindowRecord.stale`, a value the unit recomputes inside its proof from the committed appends).
 
-Passes and steps.  Each pass of the audit covers one step `s`, which it names with its root (`Session.receive(...,
+Passes and steps.  Each pass of the audit covers one step `s`, which it names with its root (`AuditRun.receive(...,
 step=s)`, public), and the steps of a session's passes strictly increase.  Its plan holds every complete block the
 circuit reads at `s`, filler beside them allowed: here the blocks resident at `s`, registered or written at a step
 before `s` and not freed or overwritten at one (`Store.resident` and `PlanMatches`, in the Lean module
@@ -93,14 +93,14 @@ before `s` and not freed or overwritten at one (`Store.resident` and `PlanMatche
 A step's record takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step
 did and the device has since encoded, and its frees are of blocks whose values' last structural reader it is.
 `Replay.take(s)` is the plan's change for the pass at `s` since the last pass (`Plan.changed`, the root's
-`Session.receive(..., change=...)`), the blocks appended and released between them, of which a block appended and
+`AuditRun.receive(..., change=...)`), the blocks appended and released between them, of which a block appended and
 released in between is in neither; it refuses a step at or before one already applied or taken.  That a pass's plan
 holds every complete block the circuit reads at its step is the plan's proof block's to check, against this record and
 the circuit's requirement, inside zero knowledge.
 
 The schedule.  `schedule` turns the map into the schedule the prover publishes (each block's write and free, the
 appends' extents and the passes' steps, `schedule.py`), from which the verifier computes every pass's plan and which it
-requires before it credits an appended block (`audit.Session.scheduled`): the plans `take` gives are that schedule's.
+requires before it credits an appended block (`audit.AuditRun.scheduled`): the plans `take` gives are that schedule's.
 """
 
 from __future__ import annotations
@@ -240,7 +240,7 @@ class Change:
     """What one step does to the audit's store: from `first`, the step's fresh indices, the blocks it writes, with
     digests `digests` (none if empty) at `indices`, and those it withdraws (`withdrawn`, canonical runs); and the store
     indices it releases, freed, overwritten or withdrawn, as canonical runs (`released`, which covers `withdrawn`: the
-    prover sends both, `Session.release(released, withdrawn)`)."""
+    prover sends both, `AuditRun.release(released, withdrawn)`)."""
 
     step: int
     first: int
@@ -260,7 +260,7 @@ class Change:
 
     def append_tree(self, registration: bytes, salts: Sequence[bytes]) -> MerkleTree | None:
         """The step's append tree under fresh `salts`, a salt a block (`audit.append_tree`), whose root and `count`
-        go to `Session.append`; None if the step wrote nothing.  A step that withdraws a block has none: its writes
+        go to `AuditRun.append`; None if the step wrote nothing.  A step that withdraws a block has none: its writes
         are not the whole of the append its blocks went out in when they completed, whose tree is the one sent."""
         if self.withdrawn:
             raise MemoryMapError(f"step {self.step} withdraws a block, so its writes are not one append's whole: the "
@@ -345,7 +345,7 @@ class Replay:
 
 def schedule(head: Header, steps: Iterable[Step], appends: Sequence[tuple[int, int]],
              passes: Sequence[int]) -> _schedule.Schedule:
-    """The schedule the prover publishes for `Session.scheduled` (`schedule.Schedule`), from its memory map: each
+    """The schedule the prover publishes for `AuditRun.scheduled` (`schedule.Schedule`), from its memory map: each
     registered block's free, each appended block's write and free (a block's free is the step that freed its slot or
     wrote over it), the appended blocks grouped as the session's `appends` (first, count) went out, and the passes'
     steps.  A block the map never writes (withdrawn, or appended and not encoded by the map's end) is never resident.

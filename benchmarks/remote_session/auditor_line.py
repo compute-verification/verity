@@ -14,7 +14,7 @@ rounded for display. `--line-by python` computes it in `line.py` alone, a readin
 
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming it by place (`auditor_seen`). Openings coin g's request
-names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
+names it (`audit.AuditRun.close` asks for the coin after the window's last root), and a paced window is drawn at its
 k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. At
 one window in flight (`audit.Pace.in_flight` 1) σ_(g+1)'s request names it and openings coin g's leaves once σ_(g+1)
 is back, so this reading, which doesn't take f, ends L_g about a round trip to the challenger past s_(g+1). Drawn
@@ -193,7 +193,7 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
     "differently, taken as 0; the prover is sent no coin commitment before the session's end (coins.Released, "
-    "audit.Session.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
+    "audit.AuditRun.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
     "is the statement that the play fixes each window's receipts by its cut (PROTOCOL.md §8)")}
 """What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
 statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is
@@ -738,7 +738,7 @@ def clock_rate_ppm(Rv: list[int], Ra: list[int]) -> float | None:
     """The auditor's clock's rate over the verifier's, less 1, in ppm, from each coin's release on both (`Rv`, `Ra`):
     the median of the rates between each coin and the one half the session after it. The verifier stamps a coin it
     fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.SessionCoins.ahead`) after it came
-    back (`audit.Session._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
+    back (`audit.AuditRun._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
     that round trip over the session's span (−441 ppm at 60 s and −8989 ppm at 1 s on gate run 7); here it moves two
     of the pairs. None for a session of fewer than four coins."""
     h = len(Rv) // 2
