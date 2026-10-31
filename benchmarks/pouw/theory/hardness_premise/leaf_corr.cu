@@ -207,6 +207,82 @@ __device__ __forceinline__ void correct16(int4 (&v)[4], int j, int m0, int lane,
   }
 }
 
+// The deep-batched corrections (CORR 5: int8 E, 8 nonzeros a batch; CORR 6: 2-bit forms, 16): as correct16, but a
+// batch's E^T loads are all in flight before any is used, and the tile t (shared or global; null: none) is read and
+// written only after the last batch. Batches past the warp's longest column are skipped (maxc is warp-uniform).
+template <int BITS, int NB>
+__device__ __forceinline__ void correct16b(int4* t, int j, int m0, int lane, const HiB& h) {
+  const int l8 = lane & 7;
+  const int beg = j >= 0 ? __ldg(h.colptr + j) : 0, cnt = j >= 0 ? __ldg(h.colptr + j + 1) - beg : 0;
+  const int maxc = __reduce_max_sync(0xffffffffu, cnt);
+  if (maxc == 0) return;
+  const int2 c = j >= 0 ? __ldg(h.colc + j) : make_int2(0, 0);
+  constexpr int W = BITS == 8 ? 8 : 4;
+  u32 acc[W];
+  const u32 b = BITS == 8 ? (u32)c.x * 0x10001u : (u32)c.x * 0x01010101u;
+#pragma unroll
+  for (int w = 0; w < W; w++) acc[w] = b;
+  const size_t base = (size_t)(m0 >> 4) + l8;
+#pragma unroll 1
+  for (int q0 = 0; q0 < maxc; q0 += NB) {
+    u32 mine[(NB + 7) / 8];
+#pragma unroll
+    for (int r = 0; r < (NB + 7) / 8; r++) {
+      const int q = q0 + 8 * r + l8;
+      mine[r] = q < cnt ? __ldg(h.ent + beg + q) : 0u;  // 0: offset 0, hi 0
+    }
+    u32 e[NB];
+#pragma unroll
+    for (int i = 0; i < NB; i++) e[i] = __shfl_sync(0xffffffffu, mine[i >> 3], i & 7, 8);
+    if constexpr (BITS == 8) {
+      uint4 x[NB];
+#pragma unroll
+      for (int i = 0; i < NB; i++)
+        if (q0 + i < maxc) x[i] = __ldg(reinterpret_cast<const uint4*>(h.Et) + base + (e[i] >> 8));
+#pragma unroll
+      for (int i = 0; i < NB; i++)
+        if (q0 + i < maxc) {
+          const u32 d = (u32)(int)(int8_t)(e[i] & 255);
+          const u32 xs[4] = {x[i].x, x[i].y, x[i].z, x[i].w};
+#pragma unroll
+          for (int w = 0; w < 4; w++) {
+            acc[2 * w] += d * __byte_perm(xs[w], 0, 0x4140);
+            acc[2 * w + 1] += d * __byte_perm(xs[w], 0, 0x4342);
+          }
+        }
+    } else {
+      u32 x[NB];
+#pragma unroll
+      for (int i = 0; i < NB; i++)
+        if (q0 + i < maxc) x[i] = __ldg(reinterpret_cast<const u32*>(h.Et) + base + (e[i] >> 8));
+#pragma unroll
+      for (int i = 0; i < NB; i++)
+        if (q0 + i < maxc) {
+          const u32 d = (u32)(int)(int8_t)(e[i] & 255);
+#pragma unroll
+          for (int s = 0; s < 4; s++) acc[s] += d * ((x[i] >> (2 * s)) & 0x03030303u);
+        }
+    }
+  }
+  if (!t) return;
+#pragma unroll
+  for (int w = 0; w < 4; w++) {
+    int4 v = t[w];
+    if constexpr (BITS == 8) {
+      v.x += ((int)(acc[2 * w] & 0xffff) - c.y) * 256;
+      v.y += ((int)(acc[2 * w] >> 16) - c.y) * 256;
+      v.z += ((int)(acc[2 * w + 1] & 0xffff) - c.y) * 256;
+      v.w += ((int)(acc[2 * w + 1] >> 16) - c.y) * 256;
+    } else {
+      v.x += ((int)(acc[w] & 0xff) - c.y) * 256;
+      v.y += ((int)((acc[w] >> 8) & 0xff) - c.y) * 256;
+      v.z += ((int)((acc[w] >> 16) & 0xff) - c.y) * 256;
+      v.w += ((int)(acc[w] >> 24) - c.y) * 256;
+    }
+    t[w] = v;
+  }
+}
+
 template <int CORR>
 __global__ void __launch_bounds__(THREADS, 2) leaf_kernel(const int8_t* __restrict__ E, const int8_t* __restrict__ L, int m,
                                                           int K, int* __restrict__ Mt, Hi h, HiB hb) {
@@ -274,7 +350,20 @@ __global__ void __launch_bounds__(THREADS, 2) leaf_kernel(const int8_t* __restri
         }
     }
     __syncthreads();
-    if constexpr (CORR >= 3) {
+    if constexpr (CORR >= 5) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 1000
+      constexpr int NB2 = 12;  // sm_90a spills at 16 under the 128-register bound
+#else
+      constexpr int NB2 = 16;
+#endif
+#pragma unroll 1
+      for (int round = 0; round < 2; round++) {
+        const int c = warp * 8 + round * 4 + (lane >> 3), j = n0 + half * 64 + c;
+        correct16b<CORR == 5 ? 8 : 2, CORR == 5 ? 8 : NB2>(reinterpret_cast<int4*>(&T[c * TP + 16 * (lane & 7)]), j,
+                                                           m0, lane, hb);
+      }
+      __syncwarp();
+    } else if constexpr (CORR >= 3) {
       // the warp's own 8 columns, 4 at a time, corrected in T (a lane 16 rows) before they are stored
 #pragma unroll 1
       for (int round = 0; round < 2; round++) {
@@ -331,6 +420,16 @@ __global__ void __launch_bounds__(THREADS) corr16_kernel(int* __restrict__ Mt, i
     for (int w = 0; w < 4; w++) p[w] = v[w];
 }
 
+template <int BITS, int NB>
+__global__ void __launch_bounds__(THREADS) corr16b_kernel(int* __restrict__ Mt, int m, const int* __restrict__ cols,
+                                                          int ncols, HiB h) {
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const int m0 = blockIdx.x * BM, ci = blockIdx.y * 32 + warp * 4 + (lane >> 3);
+  const int j = ci < ncols ? __ldg(cols + ci) : -1;
+  correct16b<BITS, NB>(j >= 0 ? reinterpret_cast<int4*>(&Mt[(size_t)j * m + m0 + 16 * (lane & 7)]) : nullptr, j, m0,
+                       lane, h);
+}
+
 __global__ void empty_kernel(int* out) {
   if (out && threadIdx.x == 1u << 30) out[0] = 0;
 }
@@ -385,17 +484,26 @@ static double median_of(const gk::Timing& t, int arm, bool mhz) {
 
 int main(int argc, char** argv) {
   if (argc < 3) {
-    fprintf(stderr, "usage: leaf_corr FIXTURE_DIR OUT_DIR [--m M] [--reps R] [--peak MAC_PER_SM_CLK]\n");
+    fprintf(stderr, "usage: leaf_corr FIXTURE_DIR OUT_DIR [--m M] [--reps R] [--peak MAC_PER_SM_CLK] [--corrs 1,..,6]\n");
     return 2;
   }
   const std::string fx = argv[1], out = argv[2];
   int m_arg = 0, reps = 15;
   double peak_override = 0;
+  std::vector<int> CS = {1, 2, 3, 4, 5, 6};
   for (int i = 3; i + 1 < argc; i += 2) {
     if (!strcmp(argv[i], "--m")) m_arg = atoi(argv[i + 1]);
     else if (!strcmp(argv[i], "--reps")) reps = atoi(argv[i + 1]);
     else if (!strcmp(argv[i], "--peak")) peak_override = atof(argv[i + 1]);
-    else { fprintf(stderr, "unknown option %s\n", argv[i]); return 2; }
+    else if (!strcmp(argv[i], "--corrs")) {
+      CS.clear();
+      for (const char* p = argv[i + 1]; *p; p++)
+        if (*p >= '1' && *p <= '6') CS.push_back(*p - '0');
+    } else { fprintf(stderr, "unknown option %s\n", argv[i]); return 2; }
+  }
+  if (CS.empty()) {
+    fprintf(stderr, "--corrs names no correction\n");
+    return 2;
   }
   std::vector<int8_t> lo = read_bin<int8_t>(fx + "/lo.bin");
   std::vector<int> colptr = read_bin<int>(fx + "/colptr.bin"), ent = read_bin<int>(fx + "/ent.bin");
@@ -428,6 +536,8 @@ int main(int argc, char** argv) {
   GK_CK(cudaFuncSetAttribute(leaf_kernel<2>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   GK_CK(cudaFuncSetAttribute(leaf_kernel<3>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   GK_CK(cudaFuncSetAttribute(leaf_kernel<4>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+  GK_CK(cudaFuncSetAttribute(leaf_kernel<5>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+  GK_CK(cudaFuncSetAttribute(leaf_kernel<6>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   int occ = 0;
   GK_CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, leaf_kernel<1>, THREADS, SMEM));
   // m: two full waves of 128 × 128 tiles over the n / 128 column tiles
@@ -535,20 +645,24 @@ int main(int argc, char** argv) {
     if (corr == 2) leaf_kernel<2><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8);
     if (corr == 3) leaf_kernel<3><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8);
     if (corr == 4) leaf_kernel<4><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb2);
+    if (corr == 5) leaf_kernel<5><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8);
+    if (corr == 6) leaf_kernel<6><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb2);
   };
   auto corr = [&](int c, int* M, cudaStream_t st_) {
     if (c == 1) corr_kernel<1><<<cgrid, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), h1);
     if (c == 2) corr_kernel<2><<<cgrid, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), h2);
     if (c == 3) corr16_kernel<8><<<cgrid16, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), hb8);
     if (c == 4) corr16_kernel<2><<<cgrid16, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), hb2);
+    if (c == 5) corr16b_kernel<8, 8><<<cgrid16, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), hb8);
+    if (c == 6) corr16b_kernel<2, 16><<<cgrid16, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), hb2);
   };
-  const char* names[5] = {"", "imad", "pack", "pack16", "bits2"};
+  const char* names[7] = {"", "imad", "pack", "pack16", "bits2", "pack16x8", "bits2x16"};
 
   bool ok = true;
   struct GateRow { std::string name; gk::PoisonGate g; };
   std::vector<GateRow> gates;
   gates.push_back({"leaf", gk::poison_gate(dM, mbytes, s, [&](cudaStream_t st_) { leaf(0, dM, st_); }, matches(ref_lo))});
-  for (int c = 1; c <= 4; c++) {
+  for (int c : CS) {
     gates.push_back({std::string("leaf+") + names[c],
                      gk::poison_gate(dM, mbytes, s, [&, c](cudaStream_t st_) { leaf(c, dM, st_); }, matches(ref_full))});
     // the correction applied to the uncorrected leaf's output; the control writes the leaf's output only
@@ -570,10 +684,10 @@ int main(int argc, char** argv) {
   GK_CK(cudaMemcpy(dS, dM, mbytes, cudaMemcpyDeviceToDevice));
   gk::Nvml nv(dev);
   std::vector<gk::Arm> arms = {{"leaf", [&](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) leaf(0, dM, st_); }}};
-  for (int c = 1; c <= 4; c++)
+  for (int c : CS)
     arms.push_back({std::string("leaf+") + names[c],
                     [&, c](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) leaf(c, dM, st_); }});
-  for (int c = 1; c <= 4; c++)
+  for (int c : CS)
     arms.push_back({std::string("corr+") + names[c],
                     [&, c](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) corr(c, dS, st_); }});
   arms.push_back({"empty", [&](cudaStream_t st_, int k) {
@@ -632,10 +746,10 @@ int main(int argc, char** argv) {
       return by_time ? writes_t(ms[a] - (b >= 0 ? ms[b] : 0)) : writes(cyc[a] - (b >= 0 ? cyc[b] : 0));
     };
     printf(", \"%s\": {", by_time ? "writes_by_time" : "writes");
-    for (int c = 1; c <= 4; c++) {
+    for (int c : CS) {
       const int lc = arm_index(std::string("leaf+") + names[c]), cc = arm_index(std::string("corr+") + names[c]);
       const int e = arm_index(c <= 2 ? "empty" : "empty16");
-      printf("%s\"leaf+%s_marginal\": %.4f, \"corr+%s\": %.4f, \"corr+%s_less_launch\": %.4f", c > 1 ? ", " : "",
+      printf("%s\"leaf+%s_marginal\": %.4f, \"corr+%s\": %.4f, \"corr+%s_less_launch\": %.4f", c != CS[0] ? ", " : "",
              names[c], price(lc, L0), names[c], price(cc, -1), names[c], price(cc, e));
     }
     printf("}");

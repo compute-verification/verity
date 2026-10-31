@@ -5,8 +5,9 @@
 #   research run --on vy-nebius-1 --gpus 1 --source TREE --cwd source -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots \
 #     python3 tools/verity/check/slot.py --by LANE -- bash benchmarks/pouw/theory/hardness_premise/leaf_timing.sh
 #
-# ARCH (sm_120a; sm_90a on an H200) and PEAK (the W1 rate, s8 MAC an SM-clock; unset: the card's mma.sync rate, measured)
-# come from the environment (`research run --env`).
+# ARCH (sm_120a; sm_90a on an H200), PEAK (the W1 rate, s8 MAC an SM-clock; unset: the card's mma.sync rate, measured)
+# and CORRS (the corrections to gate and time, leaf_corr's --corrs; unset: all six) come from the environment
+# (`research run --env`).
 set -uo pipefail
 OUT=${OUT:?run under research run}
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -41,7 +42,8 @@ if [ -n "${GPU_LEASE_UUID:-}" ]; then
     --format=csv,noheader -lms 200 >"$OUT/smi.csv" 2>&1 &
   SMI=$!
 fi
-timeout 900 "$WORK/leaf_corr" "$WORK/fx" "$OUT" ${PEAK:+--peak "$PEAK"} >"$OUT/leaf_corr.jsonl" 2>"$OUT/leaf_corr.err"
+timeout 900 "$WORK/leaf_corr" "$WORK/fx" "$OUT" ${PEAK:+--peak "$PEAK"} ${CORRS:+--corrs "$CORRS"} \
+  >"$OUT/leaf_corr.jsonl" 2>"$OUT/leaf_corr.err"
 rc=$?
 [ -n "$SMI" ] && kill "$SMI" 2>/dev/null
 cat "$OUT/leaf_corr.jsonl"
