@@ -6,8 +6,8 @@ and the registered information and so needs no hardware at the site), work by pr
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
 subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
 form its params name: one-stage v1's audit, or the recursive audit, V*'s compiled check run on the recursive session's
-parts, which the caller hands in as blobs; one-stage v2, the audit on the proofs themselves, is not remote's until its
-check reads the challenger's signed coins). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
+parts, which the caller hands in as blobs; one-stage v2, the audit on the proofs themselves, is not remote's until the
+composites switch to it). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
 subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
 commitment and sampled proofs' are the run's record, and both must commit to the same one; every window of the period
 must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
