@@ -79,7 +79,7 @@ theorem feed_size_le {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α)
   | .fail _, _, rs => Nat.le_add_right _ _
 
 theorem placeOf_alg (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Session) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
+    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
     (h : p.coins.size < p.alg.size) :
     _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom =
       .ok (.sched (p.alg[p.coins.size]'h).1, (p.alg[p.coins.size]'h).2, p) := by
@@ -88,7 +88,7 @@ theorem placeOf_alg (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : 
   rfl
 
 theorem placeOf_opened (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Session) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
+    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
     (h : ¬ p.coins.size < p.alg.size) (ho : p.opened = true) :
     _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom = .ok (.own, 0, p) := by
   unfold _root_.Flock.Firewall.Frames.placeOf
@@ -104,7 +104,7 @@ def stepPlace (S : _root_.Flock.Firewall.Drive.Step Unit) (q : _root_.Flock.Fire
   | .fail e => .error e
 
 theorem placeOf_some (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Session) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
+    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
     (h : ¬ p.coins.size < p.alg.size) (ho : p.opened = false) {S : _root_.Flock.Firewall.Drive.Step Unit}
     (hS : p.opening = some S) :
     _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom = stepPlace S { p with opening := some S } := by
@@ -113,7 +113,7 @@ theorem placeOf_some (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 :
   cases S <;> rfl
 
 theorem placeOf_none (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Session) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
+    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
     (h : ¬ p.coins.size < p.alg.size) (ho : p.opened = false) (hS : p.opening = none) {st : Stmt}
     {c : Array F128} {r0 : ByteArray} {q0 : ℕ} {hi : Array ByteArray} {t : Tab}
     (hst : s.sts[p.table]? = some st) (hlink : s.link = some c)
@@ -225,7 +225,7 @@ the table `t`, extras and salts its session and the loop's salts give it, `place
 `p.coins.size`) at the schedule so far on its coins (`placeAt`), and the rep it puts back, after that round's coins
 at any frame state and values (`coinsOf`), keeps `RepInv`. -/
 theorem placeOf_sched (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Session) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray) {t : Tab}
+    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray) {t : Tab}
     {xs : Array (Array F128)} {hi : Array ByteArray} {st : Stmt} {c : Array F128} {r0 : ByteArray} {q0 : ℕ}
     (hst : s.sts[p.table]? = some st) (hlink : s.link = some c)
     (hsalt : salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))

@@ -356,7 +356,7 @@ at the table's `--zk` schedule, its stream has `(m + (kLog − 6)) + (claims + 1
 replay, the ring switch over `claims = 2 + |extras|`, Ligerito over `R + 1` levels, the inner proof), whatever the hashes
 `hs` are. -/
 theorem zkVerifyRepWith_rounds (hs : Hashes V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
-    {sess : Session} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :
     ∃ (stream : StreamRec) (extras : Array Claim),
       sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧

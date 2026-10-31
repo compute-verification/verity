@@ -152,7 +152,7 @@ open Claims.Bridge.Custody (RootField PointField RoundFields)
 /-- **What `Record.decodeJWithK` reads** of the parsed value, whatever the hashes and `keep` (`decodeWithK_ok` without
 the parse). -/
 theorem decodeJWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Lean.Json}
-    {sess : Session} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∃ l recs, Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
@@ -215,7 +215,7 @@ theorem decodeJWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Ses
 (`decodeWithK_live` without the parse): the same `root_B` and link points, and at each rep stream the stream the
 decoder finds by its name, whose rounds are `liveOfJ`'s up to their recorded digests. -/
 theorem decodeJWithK_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Lean.Json}
-    {sess : Session} {lv : Live} (hd : Record.decodeJWithK keep hs spec j = .ok sess)
+    {sess : RunRecord} {lv : Live} (hd : Record.decodeJWithK keep hs spec j = .ok sess)
     (hl : FlockDeploy.liveOfJ spec j = .ok lv) :
     sess.rootB = lv.rootB ∧ sess.points = lv.points ∧ lv.streams.size = spec.repStreams.size ∧
       ∀ q (hq : q < spec.repStreams.size), ∃ y, sess.streams.find? (·.name == spec.repStreams[q].2.2) = some y ∧
