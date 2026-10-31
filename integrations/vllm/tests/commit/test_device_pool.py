@@ -30,11 +30,14 @@ def cs(request):
     return request.param
 
 
-def committed(cs, values=None):
+def committed(cs, values=None, extra=None):
     """Steps committed as --retain host keeps them (their blocks, ``host``), then moved into a device pool as --retain device holds them:
-    ``values`` (`commit_steps`' form), else `steps`'."""
+    ``values`` (`commit_steps`' form), else `steps`'; ``extra`` adds members by step."""
     k = (R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256
-    dev, rc = commit_steps(values or steps(k), commit_scheme=cs)
+    st = dict(values or steps(k))
+    for s, members in (extra or {}).items():
+        st[s] = st[s] + members
+    dev, rc = commit_steps(st, commit_scheme=cs)
     host = {s: bytes(blk.numpy()) for s, (blk, _u) in dev._gpu_blocks.items()}
     dev.device_pool = DP.DevicePool(sum(len(b) for b in host.values()) + 4096 * len(host), device="cpu")
     for s, (blk, used) in list(dev._gpu_blocks.items()):
@@ -182,14 +185,33 @@ def test_freed_pieces_coalesce_first_fit():
 
 
 def opts(retention=(), **kw):
-    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", **dict(retention)}
-    return SimpleNamespace(**{"retention": SimpleNamespace(**r), "commit": True, "scheme": R.NAME, "window_gb": 32.0, **kw})
+    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", "release_after": "pouw_h1", "draws_dir": "",
+         **dict(retention)}
+    return SimpleNamespace(**{"retention": SimpleNamespace(**r), "commit": True, "scheme": R.NAME, "window_gb": 32.0, "seal": True,
+                              **kw})
 
 
 def test_serve_openai_refuses_retain_device_without_the_rows_commit_or_room_for_a_window():
-    from verity_vllm.pipeline import serve_seal as SS
+    from verity_vllm.pipeline import serve_release as SL
 
-    assert SS.retention_refusal(opts()) is None
-    assert "needs the Commit (drop --no-commit)" in SS.retention_refusal(opts(commit=False))
-    assert "is under --window-gb" in SS.retention_refusal(opts(retention={"retain_device_gb": 8.0}))
-    assert SS.retention_refusal(opts(retention={"retain": "host", "retain_device_gb": 1.0})) is None
+    assert SL.retention_refusal(opts()) is None
+    assert "needs the Commit (drop --no-commit)" in SL.retention_refusal(opts(commit=False))
+    assert "is under --window-gb" in SL.retention_refusal(opts(retention={"retain_device_gb": 8.0}))
+    assert SL.retention_refusal(opts(retention={"retain": "host", "retain_device_gb": 1.0, "release_after": ""})) is None
+
+
+def test_a_discarded_window_frees_its_pool_even_when_its_worker_failed(cs):
+    host, _rc, dev = committed(cs)
+
+    def failed():
+        raise RuntimeError("worker failed")
+    dev.wait_absorbed = failed
+    rec = DP.discard(dev, "not sealed: RuntimeError: finalize failed")
+    assert rec["dropped_bytes"] == sum(len(b) for b in host.values()) and rec["kept_bytes"] == 0
+    assert rec["absorb_error"] == "RuntimeError: worker failed"
+    assert dev.device_pool.held == 0 and all(b.retained_bytes == 0 for b, _u in dev._gpu_blocks.values())
+    with pytest.raises(KeyError, match="draw-gated release"):
+        dev._gpu_blocks[2][0][0:dev.chunk]
+    assert DP.discard(dev, "again") is None
+    with pytest.raises(RuntimeError, match="released already"):
+        DP.release(dev, {})
