@@ -18,67 +18,6 @@ namespace Properties.Remote.SecurityProofs
 open Core Core.Composition
 open Lean (Json)
 
-private theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fromUTF8? b = some s) :
-    s.toUTF8 = b := by
-  unfold String.fromUTF8? at h
-  split at h
-  · cases h; rfl
-  · cases h
-
-/-- Canonical bytes are their record's canonical text. -/
-theorem canonical_text {b : ByteArray} {j : Json} (h : canonicalJson b = .ok j) :
-    ∃ s, Flock.canon j = .ok s ∧ s.toUTF8 = b := by
-  unfold canonicalJson at h
-  rcases hu : String.fromUTF8? b with _ | s
-  · simp [hu, throw, throwThe, MonadExceptOf.throw] at h
-    split at h <;> simp [Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-  · simp only [hu] at h
-    rcases hp : Json.parse s with e | j0
-    · simp [hp, throw, throwThe, MonadExceptOf.throw, Bind.bind, Except.bind] at h
-      split at h <;> simp [Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-    · rcases hc : Flock.canon j0 with e | t
-      · simp [hp, hc, Bind.bind, Except.bind, pure, Except.pure] at h
-        split at h <;> simp [Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-      · by_cases ht : t = s
-        · subst ht
-          simp [hp, hc, Bind.bind, Except.bind, pure, Except.pure] at h
-          split at h
-          · cases h
-            exact ⟨_, hc, toUTF8_of_fromUTF8? hu⟩
-          · simp [Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-        · simp [hp, hc, Bind.bind, Except.bind, pure, Except.pure, ht, throw, throwThe, MonadExceptOf.throw] at h
-          split at h <;> simp [Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-
-/-- The policy's commitment: the record its bytes are, and its digest, SHA-512 of the record's format tag and its
-canonical text. -/
-theorem policy_of {b : ByteArray} {c : NciCheck.Protocol.Commitment} (h : NciCheck.Protocol.commitmentOf b = .ok c) :
-    canonicalJson b = .ok c.record ∧ ∃ s, Flock.canon c.record = .ok s ∧
-      c.digest = Flock.Sha512.hash ((if NciCheck.Baseline.strAt c.record "format" == some NciCheck.Baseline.FORMAT_V2
-        then NciCheck.Baseline.FORMAT_V2 else NciCheck.Baseline.FORMAT).toUTF8.push 0 ++ s.toUTF8) := by
-  unfold NciCheck.Protocol.commitmentOf at h
-  rcases hj : canonicalJson b with e | j
-  · simp [hj, Bind.bind, Except.bind] at h
-  rcases hc : Flock.canon j with e | s
-  · cases j <;> simp [hj, hc, Bind.bind, Except.bind, NciCheck.Baseline.digest, pure, Except.pure, throw, throwThe,
-      MonadExceptOf.throw] at h
-  cases j <;> simp [hj, hc, Bind.bind, Except.bind, NciCheck.Baseline.digest, pure, Except.pure, throw, throwThe,
-      MonadExceptOf.throw, FlockComplete.JsonRT.unhex_hexOf] at h
-  subst h
-  exact ⟨rfl, s, hc, by simp⟩
-
-/-- The one-stage audit's commitment: the record its bytes are, and `Registration.digest` of it. -/
-theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
-    (h : SampledProofs.OneStage.commitmentOf b = .ok c) :
-    canonicalJson b = .ok c.record ∧ SampledProofs.Registration.digest c.record = .ok c.digest := by
-  unfold SampledProofs.OneStage.commitmentOf at h
-  rcases hj : canonicalJson b with e | j
-  · simp [hj, Bind.bind, Except.bind] at h
-  rcases hg : SampledProofs.Registration.digest j with e | d
-  · cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
-  cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
-  subst h
-  exact ⟨rfl, hg⟩
-
 /-- A record's own tag (`Flock.WindowRecord.tagOf`) is the one the policy's digest takes: both read its `format` field
 as a string. -/
 theorem tagOf_eq (j : Json) : Flock.WindowRecord.tagOf j =
@@ -95,24 +34,55 @@ theorem push_zero (x : ByteArray) : x.push 0 = x ++ ByteArray.mk #[0] := by
   apply ByteArray.ext
   simp [ByteArray.data_push, ByteArray.data_append]
 
+/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `NciCheck.Baseline.digest` is that
+function, or else tags the record by its `format` as `Flock.WindowRecord.tagOf` does and hashes its canonical text as
+`Flock.WindowRecord.digest` does, and either form is proved here. -/
+theorem baseline_digest (rec : Json) : NciCheck.Baseline.digest rec = Flock.WindowRecord.digestHex rec := by
+  first
+    | rfl
+    | (unfold NciCheck.Baseline.digest Flock.WindowRecord.digestHex Flock.WindowRecord.digest
+       rw [tagOf_eq]
+       cases Flock.canon rec with
+       | error e => rfl
+       | ok s => simp only [Bind.bind, Except.bind, pure, Except.pure, Flock.WindowRecord.digestOf, push_zero] <;> rfl)
+
+/-- The policy's commitment: the record its bytes are, and its digest, the window record's digest of that record. -/
+theorem policy_of {b : ByteArray} {c : NciCheck.Protocol.Commitment} (h : NciCheck.Protocol.commitmentOf b = .ok c) :
+    canonicalJson b = .ok c.record ∧ Flock.WindowRecord.digest c.record = .ok c.digest := by
+  unfold NciCheck.Protocol.commitmentOf at h
+  simp only [baseline_digest, Flock.WindowRecord.digestHex] at h
+  rcases hj : canonicalJson b with e | j
+  · simp [hj, Bind.bind, Except.bind] at h
+  rcases hd : Flock.WindowRecord.digest j with e | d
+  · cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw,
+    FlockComplete.JsonRT.unhex_hexOf] at h
+  subst h
+  exact ⟨rfl, hd⟩
+
+/-- The one-stage audit's commitment: the record its bytes are, and `Registration.digest` of it. -/
+theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
+    (h : SampledProofs.OneStage.commitmentOf b = .ok c) :
+    canonicalJson b = .ok c.record ∧ SampledProofs.Registration.digest c.record = .ok c.digest := by
+  unfold SampledProofs.OneStage.commitmentOf at h
+  rcases hj : canonicalJson b with e | j
+  · simp [hj, Bind.bind, Except.bind] at h
+  rcases hg : SampledProofs.Registration.digest j with e | d
+  · cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  subst h
+  exact ⟨rfl, hg⟩
+
 /-- **One record, one digest**: bytes that the policy's and the one-stage audit's commitment decoders both accept decode
 to one digest under each. -/
 theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : SampledProofs.OneStage.Commitment}
     (hI : NciCheck.Protocol.commitmentOf b = .ok cI) (hS : SampledProofs.OneStage.commitmentOf b = .ok cS) :
     cS.digest = cI.digest := by
-  obtain ⟨hjI, s, hs, hdI⟩ := policy_of hI
+  obtain ⟨hjI, hdI⟩ := policy_of hI
   obtain ⟨hjS, hdS⟩ := stage_of hS
   have e : cS.record = cI.record := by rw [hjI] at hjS; exact (Except.ok.inj hjS).symm
   rw [e] at hdS
-  unfold SampledProofs.Registration.digest at hdS
-  simp only [hs, Bind.bind, Except.bind, pure, Except.pure] at hdS
-  have hdS' := (Except.ok.inj hdS).symm
-  rw [hdI, hdS', tagOf_eq]
-  have hS2 : Flock.WindowRecord.FORMAT_V2 = NciCheck.Baseline.FORMAT_V2 := rfl
-  have hS1 : Flock.WindowRecord.FORMAT = NciCheck.Baseline.FORMAT := rfl
-  rw [hS2, hS1]
-  by_cases hc : (NciCheck.Baseline.strAt cI.record "format" == some NciCheck.Baseline.FORMAT_V2) = true <;>
-    simp [hc, Flock.WindowRecord.digestOf, push_zero]
+  exact Except.ok.inj (hdS.symm.trans hdI)
 
 /-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): the policy's and the
 one-stage audit's cases committing to one record's bytes, which both commitment decoders accept, leave no stray among
