@@ -41,7 +41,8 @@ window of the period's close is credited.
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its sample (`served_commit.Challenger`'s rules); `live_salt`, a live Pearl-C pass's salt from the salt-only session the auditor's ledger reserved, opened on its salt epoch's root (`epochOpenRoot` of its weights' root and its `pass_index`) and ended complete |
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
-| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `live-salt`, `rounds`, `chunks`) |
+| `PouwCheck.Lead` (in `PouwCheck/Opening.lean`) | `circuit/lead.py`'s window: its registration record (`leadRecord?`), its instances' positions and domains, where a unit's words and A rows are committed (`unitOpening`), its per-forward egress (`egressRefused`, `forwardCount`) and the verifier's refusals of the certifier's record (`windowRefusal`) |
+| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `live-salt`, `rounds`, `chunks`, and the lead's `lead-record`, `lead-instance`, `lead-unit`, `lead-egress`, `lead-window`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
 | `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each sampled proof block's proof outcome in place of the proof files they verify themselves, until this runs the verifier of record in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its sampling coin, its round log the challenger's, its A trees tied to its round roots, its sampled proof blocks the sampling coin's over its committed circuit's layout, no partial credit over them, its entries and its sampled proof blocks' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, its served rows the fixed length its period's open committed (`Internal.length`, `committedLength`), and a period counted only closed and complete |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
@@ -180,7 +181,11 @@ sampled proof block's proof of another registration than the window's, an entry 
 period whose B rows, one row's s_w or every code, are not the ones the period's open signed, a period whose open signs
 no weights' root, a window whose request runs past its public max_tokens or stops before it, a period whose open
 commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
-holds each mutation to its refusal.
+holds each mutation to its refusal. Its `lead-record`, `lead-instance`, `lead-unit`, `lead-egress` and `lead-window` go
+against `circuit/lead.py`'s `lead_record`, `instance_domain`, `unit_opening`, `egress_refused` with `forward_count`,
+and `window_refusal`, over `tests/pouw_lead_cases.py`: honest inputs and one mutation per refusal (a record that
+doesn't open, an A root before salt_w, overlapping forwards, a forward the certifier refused, a call or tile off the
+forward's shapes, among them), each reason reached.
 
 `tests/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean
 of record, over `tests/pouw_verified_cases.py` (a window's statements, null or answered as the served path answers,
