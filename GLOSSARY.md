@@ -266,7 +266,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   runs any **private circuit** of the class, whose description is given as a value. Circuit hiding is
   recursion (Flock's `--hide`), not the universal unit.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
-- Flock's statement layout (`verity/ml/flock/verifier/PROTOCOL.md` §16) nests three levels inside one proof:
+- Flock's statement layout (`Flock.Statement`, `Flock.HmRow`, in `verity/core/service/flock/`) nests three levels inside one proof:
   - a **unit copy** is one copy of the statement's unit circuit in one slot of the unit range (the spec's "unit",
     `units_per_vu` ≥ 1 of them per VU);
   - a **VU** is one instance's share of the witness: the slots that lay out one sampled proof block, with its rows' digests,

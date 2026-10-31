@@ -7,7 +7,7 @@ B-byte cells the state renders. Its outputs are ``o0``, a u16 whose bit 0 is 1 (
 a row and whose other 15 bits are 0, and ``o1``, the row, bit 8k + i bit i of byte k. The row is gates of the circuit,
 never an input: the proof block's statement commits o1 under the salt of the network certifier's egress row t of link ℓ
 and registers it as a read of that row (`Flock.Registered.checkPort` accepts a hidden-output statement's output row, the
-verifier's PROTOCOL.md §16.13; `warden_rows.bucket_port`: proof block `reads_from + t` reads row t), so the proof opens
+verifier's `HmOut`; `warden_rows.bucket_port`: proof block `reads_from + t` reads row t), so the proof opens
 the network certifier's registered row only when the row the state renders is it, bit for bit. Only o0 is public: a
 proof block's public output
 is at most 16 bits, and o1 is committed. Every switch is computed from the state, none is witness, so the unit adds

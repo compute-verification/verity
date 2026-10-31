@@ -799,7 +799,7 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
     their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
     template's bits and its bits as them (`_tile_window`): the Lean decoder, which C-Flock's verifier, `NciCheck` and
     PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
-    (PROTOCOL.md §17.1 D22; `qword_program_agree.py --widths`)."""
+    (`verity/ml/flock/verifier/README.md`'s D22; `qword_program_agree.py --widths`)."""
     spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")
     V = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(V)
@@ -1013,7 +1013,7 @@ def bcOf (l : Nat) (row salt : String) : String := Id.run do
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_row_nets_are_the_verifiers(tmp_path):
     """The `sha512x3` and `hm96` sections come from the prover, so setup refuses either unless it is the net the verifier
-    generates (`Flock.HmNets`, PROTOCOL.md §16.10). A composed RoPE circuit is accepted; one AND row changed in either
+    generates (`Flock.HmNets`, `Flock.HmRow`). A composed RoPE circuit is accepted; one AND row changed in either
     section is refused, naming the row."""
     pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
@@ -1048,7 +1048,7 @@ def test_row_nets_are_the_verifiers(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path):
     """A unit named `rec-open/l<LANES>-h<H>` must be the verifier's opening net at those parameters (`Flock.RecOpen`,
-    PROTOCOL.md §16.10), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
+    `Flock.HmRow`), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
     before it builds that net. A toy statement is accepted; with its unit renamed `rec-open/l1000000000-h16` it is refused
     for its bits, in an address space of 8 GiB, far below the net's size. Renamed at the heights `RecOpen_v4` builds, 0
     to 32 (`aux` one row at 0), it is refused for its bits against `max(1, ⌈H/2⌉)` rows of `aux`; at 33, for its height."""
@@ -1235,7 +1235,7 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     """Two statements whose bit-row ports have every residue between them (length 0; length mod 8 of 0, 1 and 7; bytes mod
     128 of 0, 1, 111, 112 and 127) have the statement digests `flock-circuit statement` gives them under its build's identity
     `verity/flock-circuit` (its `row_leaf_in_circuit` naming `hm96-sha512/row/v2`; the output row a bit row of all its words'
-    bits, §16.13), seeded and under `FC_COINS=os` (`--coins os`: the live-OS identity, `Tags.withCoins`, composed with the
+    bits, `HmOut`), seeded and under `FC_COINS=os` (`--coins os`: the live-OS identity, `Tags.withCoins`, composed with the
     bit-row and hidden-output text), so the two verifiers' Δ constants, forced-zero leaf bits, row wires and identities
     agree. A META that differs from what the verifier derives is refused, with the Rust verifier's message: a wrong length
     (its prefix, or its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2,
@@ -1640,7 +1640,7 @@ def test_net_parser_refuses_rows_out_of_order(tmp_path):
         assert got[name]["ok"] == (why is None) and (why is None or why in got[name]["error"]), (name, got[name])
 
 
-#: the legacy statements (PROTOCOL.md §16.9, `ProvedScope.legacyStatements`), by the family `vectors.json`'s honest cells name
+#: the legacy statements (`ProvedScope.legacyStatements`), by the family `vectors.json`'s honest cells name
 LEGACY = {"flock-pure-block": ["verity/flock-pure-block/v2"],
           "flock-ir-frame": ["verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3"],
           "flock-ir-sampling": ["verity/flock-ir-sampling/v1"], "flock-ir-block": ["verity/flock-ir-block/v1"],
