@@ -1627,17 +1627,19 @@ struct RowStep {
 };
 
 struct StepHasher {
-  cudaEvent_t ev0 = nullptr, ev1 = nullptr, ev2 = nullptr, done = nullptr;
+  cudaEvent_t ev0 = nullptr, ev1 = nullptr, ev2 = nullptr, done = nullptr, copy_from = nullptr;
   uint32_t* root_host = nullptr;                 // pinned, 32 B
   uint8_t* root64_host = nullptr;                // pinned, 64 B (rows-sha512)
   StepHasher() {
     cudaEventCreateWithFlags(&ev0, cudaEventDefault); cudaEventCreateWithFlags(&ev1, cudaEventDefault); cudaEventCreateWithFlags(&ev2, cudaEventDefault);
     cudaEventCreateWithFlags(&done, cudaEventDisableTiming);
+    cudaEventCreateWithFlags(&copy_from, cudaEventDisableTiming);
     cudaHostAlloc(reinterpret_cast<void**>(&root_host), 32, cudaHostAllocDefault);
     cudaHostAlloc(reinterpret_cast<void**>(&root64_host), 64, cudaHostAllocDefault);
   }
   ~StepHasher() {
     if (ev0) cudaEventDestroy(ev0); if (ev1) cudaEventDestroy(ev1); if (ev2) cudaEventDestroy(ev2); if (done) cudaEventDestroy(done);
+    if (copy_from) cudaEventDestroy(copy_from);
     if (root_host) cudaFreeHost(root_host);
     if (root64_host) cudaFreeHost(root64_host);
   }
@@ -1963,9 +1965,12 @@ struct StepHasher {
   }
 
   // rows-sha512 absorb: levels 0 .. n_levels-1 of one window's subtree from its leaves (positions first .. first + m - 1, m a power of two
-  // and first a multiple of m, so every pair is inside the window), each level copied D2H into host_dsts[L] when they are given (one event
-  // sync at the end); with none, the levels stay on the device and nothing syncs.  -> the top level (device)
-  at::Tensor rows_tree_window(const RowStep& rs, at::Tensor leaves, int64_t n_levels, int64_t first, int64_t stream_ptr, std::vector<at::Tensor> host_dsts) {
+  // and first a multiple of m, so every pair is inside the window; or several consecutive windows' leaves, whose subtrees are the same
+  // levels side by side), each level copied D2H into host_dsts[L] when they are given (one event sync at the end); with none, the levels
+  // stay on the device and nothing syncs.  copy_stream_ptr: the copies on that stream once these kernels are done, and no sync; the levels
+  // stay allocated until the copies end, and host_dsts may be read only once that stream is joined.  -> the top level (device)
+  at::Tensor rows_tree_window(const RowStep& rs, at::Tensor leaves, int64_t n_levels, int64_t first, int64_t stream_ptr, std::vector<at::Tensor> host_dsts,
+                              int64_t copy_stream_ptr = 0) {
     if (!leaves.is_cuda() || leaves.scalar_type() != at::kByte || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 64)
       throw std::runtime_error("rows_tree_window: leaves must be a contiguous CUDA uint8 [m, 64]");
     if (n_levels < 1 || (!host_dsts.empty() && static_cast<int64_t>(host_dsts.size()) != n_levels))
@@ -1980,17 +1985,27 @@ struct StepHasher {
     std::vector<at::Tensor> levels{leaves};
     for (auto& lv : rows_levels_above(rs.params.data(), leaves, 0, first, n_levels - 1, side, rs.max_blocks)) levels.push_back(lv);
     if (!host_dsts.empty()) {
+      cudaStream_t cp = copy_stream_ptr ? reinterpret_cast<cudaStream_t>(copy_stream_ptr) : side;
+      if (cp != side) {
+        cudaError_t rc = cudaEventRecord(copy_from, side);
+        if (rc == cudaSuccess) rc = cudaStreamWaitEvent(cp, copy_from, 0);
+        if (rc != cudaSuccess) throw std::runtime_error(std::string("rows_tree_window: copy stream wait: ") + cudaGetErrorString(rc));
+      }
+      const c10::cuda::CUDAStream ccs = c10::cuda::getStreamFromExternal(cp, leaves.device().index());
       for (int64_t L = 0; L < n_levels; ++L) {
         const at::Tensor& h = host_dsts[static_cast<size_t>(L)];
         const at::Tensor& cur = levels[static_cast<size_t>(L)];
         if (h.is_cuda() || h.scalar_type() != at::kByte || !h.is_contiguous() || h.numel() != cur.numel())
           throw std::runtime_error("rows_tree_window: level " + std::to_string(L) + " host slice must be contiguous host uint8 of " + std::to_string(cur.size(0)) + " nodes");
-        cudaError_t rc = cudaMemcpyAsync(h.data_ptr(), cur.data_ptr(), static_cast<size_t>(cur.numel()), cudaMemcpyDeviceToHost, side);
+        cudaError_t rc = cudaMemcpyAsync(h.data_ptr(), cur.data_ptr(), static_cast<size_t>(cur.numel()), cudaMemcpyDeviceToHost, cp);
         if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(window level->host): ") + cudaGetErrorString(rc));
+        if (cp != side) cur.record_stream(ccs);
       }
-      cudaEventRecord(done, side);
-      cudaError_t rc = cudaEventSynchronize(done);
-      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
+      if (!copy_stream_ptr) {
+        cudaEventRecord(done, side);
+        cudaError_t rc = cudaEventSynchronize(done);
+        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
+      }
     }
     return levels.back();
   }
@@ -2068,7 +2083,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
            py::arg("stride") = 0, py::arg("salts") = py::none(), py::arg("want_bc") = false)
       .def("rows_frame", &StepHasher::rows_frame, py::arg("rs"), py::arg("hs"), py::arg("first"), py::arg("m"), py::arg("n_total"), py::arg("stream_ptr"))
       .def("rows_tree_window", &StepHasher::rows_tree_window, py::arg("rs"), py::arg("leaves"), py::arg("n_levels"), py::arg("first"), py::arg("stream_ptr"),
-           py::arg("host_dsts"))
+           py::arg("host_dsts"), py::arg("copy_stream_ptr") = 0)
       .def("rows_tree", &StepHasher::rows_tree, py::arg("rs"), py::arg("nodes"), py::arg("level0"), py::arg("stream_ptr"), py::arg("levels_host") = false,
            py::arg("levels_dst") = py::none());
   py::class_<RowStep>(m, "RowStep")
