@@ -70,9 +70,13 @@ theorem honest_trace_other (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest)
   · exact ⟨_, rfl⟩
   · exact ⟨_, rfl⟩
 
+/-- The nominal W1 table meets `H32`. -/
+theorem h32Nominal : H32 h100Nominal :=
+  ⟨fun s => by cases s <;> decide, by decide, by decide, by decide, by decide, by decide⟩
+
 /-- **The honest strategy meets `G`'s premises but `CommitL1w`**, at every layout, hash, data, coin stream,
 commitment format and form classifier: with `Real` the honest strategy alone, the nominal W1 table meets `H32`
-(`h32Sat`), the strategy meets `W1`, `TileGrain`, `OneInstructionMinimal`, `CardWithinAccelW1`, `ShaWrites`,
+(`h32Nominal`), the strategy meets `W1`, `TileGrain`, `OneInstructionMinimal`, `CardWithinAccelW1`, `ShaWrites`,
 `HonestHashRuled` and `OutsourceWithinEgressLead` (it is its own twin), and at an admitted call it is accepted at every
 coin value. -/
 theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
@@ -84,7 +88,7 @@ theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin
       OutsourceWithinEgressLead h100Nominal (betaLead L C) H C κ (· = honestStrategy L H C isA κ) ∧
       honestStrategy L H C isA κ = honestStrategy L H C isA κ ∧
       ∀ ω, Accepted L H C κ (honestStrategy L H C isA κ) ω := by
-  refine ⟨h32Sat, ?_, ?_, ?_, fun _ h => h, ?_, ?_, ?_, rfl, ?_⟩
+  refine ⟨h32Nominal, ?_, ?_, ?_, fun _ h => h, ?_, ?_, ?_, rfl, ?_⟩
   · rintro σ rfl ω o ho
     obtain ⟨f, rfl⟩ := honest_trace_other L H C isA κ ω o ho
     trivial
