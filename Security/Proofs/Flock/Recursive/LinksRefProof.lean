@@ -502,15 +502,22 @@ theorem linkRef_staged : LinkRefStaged := by
   obtain ⟨hs6, hq6, hw6, -, -⟩ :=
     RefStep.port_facts hrows7 (k := 6) (nm := "rout") (wd := 64) (bt := 1024) (by rfl) (by rfl)
   have hP0 : (c.ports.extract 0 0).foldl (· + ·.words) 0 = 0 := by
-    rw [hx0] <;> first | (simp; done) | (simp; omega) | omega
+    rw [hx0]
+    simp
   have hP1 : (c.ports.extract 0 1).foldl (· + ·.words) 0 = 64 := by
-    rw [hx1] <;> first | (simp; done) | (simp; omega) | omega
+    rw [hx1]
+    simp
   have hP2 : (c.ports.extract 0 2).foldl (· + ·.words) 0 = 192 := by
-    rw [hx2] <;> first | (simp; done) | (simp; omega) | omega
+    rw [hx2]
+    simp
   have hP3 : (c.ports.extract 0 3).foldl (· + ·.words) 0 = 192 + VStar.auxWords (UB + PB) := by
-    rw [hx3] <;> first | (simp; done) | (simp; omega) | omega
+    rw [hx3]
+    simp
+    omega
   have hP4 : (c.ports.extract 0 4).foldl (· + ·.words) 0 = 320 + VStar.auxWords (UB + PB) := by
-    rw [hx4] <;> first | (simp; done) | (simp; omega) | omega
+    rw [hx4]
+    simp
+    omega
   have hIW : u.inWords = 320 + 2 * VStar.auxWords (UB + PB) := by
     obtain ⟨-, -, hin, -⟩ := FlockVBridge.RecLink.linkUnit_ok hu
     rw [VStar.UnitC.inWords, hin]
@@ -518,15 +525,15 @@ theorem linkRef_staged : LinkRefStaged := by
       VStar.LINK_Y_WORDS] <;> omega
   have hN0 : 0 < u.inWords := by omega
   have hcol := RefStep.inCol_laid hlaid hnl
-  obtain ⟨c0, l0⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq0 hs0 hP0 hw0 (by rw [hb0] <;> omega)
+  obtain ⟨c0, l0⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq0 hs0 hP0 hw0 (by rw [hb0])
     (by omega) (base := 0) (by omega)
-  obtain ⟨c1, l1⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq1 hs1 hP1 hw1 (by rw [hb1] <;> omega)
+  obtain ⟨c1, l1⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq1 hs1 hP1 hw1 (by rw [hb1])
     (by omega) (base := 1024) (by omega)
-  obtain ⟨c2, l2⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq2 hs2 hP2 hw2 (by rw [hb2] <;> omega)
+  obtain ⟨c2, l2⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq2 hs2 hP2 hw2 (by rw [hb2])
     (by omega) (base := 3072) (by omega)
-  obtain ⟨c3, l3⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq3 hs3 hP3 hw3 (by rw [hb3] <;> omega)
+  obtain ⟨c3, l3⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq3 hs3 hP3 hw3 (by rw [hb3])
     (by omega) (base := 3072 + 16 * VStar.auxWords (UB + PB)) (by omega)
-  obtain ⟨c4, l4⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq4 hs4 hP4 hw4 (by rw [hb4] <;> omega)
+  obtain ⟨c4, l4⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq4 hs4 hP4 hw4 (by rw [hb4])
     (by omega) (base := 5120 + 16 * VStar.auxWords (UB + PB)) (by omega)
   -- the unit's output columns hold `linkOut`'s two rows
   obtain ⟨hO, hsz1, hsz2⟩ := RefStep.unit_out hu hlaid
