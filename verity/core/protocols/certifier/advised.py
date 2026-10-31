@@ -259,6 +259,14 @@ def _named(c: CertifiedClock) -> str:
     return f"{x.link} window {x.window}'s {x.direction.value} clock (key {x.key_id.hex()[:16]}…)"
 
 
+def _why(code: str, key: PublicKey) -> str:
+    """What `CertifiedClock.refusal`'s code says of an opening under `key`."""
+    return {"egress": "it isn't an egress certificate, and a clock is an egress window's",
+            "key": f"another key's, not {key.key_id.hex()[:16]}…",
+            "opening": "its sync and salt don't open the salted digest it signs",
+            "signature": "its signature doesn't verify under the key in its session for the link-window it names"}[code]
+
+
 @dataclass(frozen=True)
 class SignedClocks:
     """The verifier of record's clock source (`ClockSource`): the syncs the network certifier signed, one salted clock
@@ -272,38 +280,48 @@ class SignedClocks:
     not an egress certificate, another key's, a sync and salt that don't open the digest signed (an altered
     digest or sync), a signature that doesn't verify (forged, or another session's, or relabelled to another link or
     window), a salt another link-window's opening has too, or a window with two signed syncs. Whoever delivers the
-    openings, the prover included, can't forge one."""
+    openings, the prover included, can't forge one. `codes` is each opening's refusal by the Lean's code
+    (`NetworkCheck.Period.openingRefusals`), None where it holds: `CertifiedClock.refusal`'s, ``opening`` for what
+    isn't an opening, and ``salt``; `split` the link-windows with two or more signed syncs, by link then window."""
 
     key: PublicKey
     session: bytes
     openings: Sequence[CertifiedClock]
     refused: tuple[str, ...] = field(default=(), init=False)
+    codes: tuple[str | None, ...] = field(default=(), init=False)
+    split: tuple[tuple[str, int], ...] = field(default=(), init=False)
 
     def __post_init__(self) -> None:
-        held: list[CertifiedClock] = []
+        codes: list[str | None] = []
         refused: list[str] = []
         for c in self.openings:
             if type(c) is not CertifiedClock:
+                codes.append("opening")
                 refused.append(f"a {type(c).__name__}: not a salted clock certificate's opening "
                                "(certificate.CertifiedClock), so it gives no sync")
-            elif (why := c.refusal(self.key, self.session)) is not None:
-                refused.append(f"{_named(c)}: {why}")
+            elif (code := c.refusal(self.key, self.session)) is not None:
+                codes.append(code)
+                refused.append(f"{_named(c)}: {_why(code, self.key)}")
             else:
-                held.append(c)
+                codes.append(None)
+        held = [(i, c) for i, c in enumerate(self.openings) if codes[i] is None]
         salts: dict[bytes, list[CertifiedClock]] = {}
-        for c in held:
+        for _, c in held:
             salts.setdefault(c.salt, []).append(c)
         signed: dict[str, dict[int, set[ClockSync]]] = {}
-        for c in held:
+        for i, c in held:
             if (other := next((o for o in salts[c.salt] if o != c), None)) is not None:
+                codes[i] = "salt"
                 refused.append(f"{_named(c)}: its salt is also {other.link} window {other.window}'s, under which two "
                                "windows of one sync sign one digest")
             else:
                 signed.setdefault(c.link, {}).setdefault(c.window, set()).add(c.sync)
-        refused += [f"{link} window {w}: {len(got)} signed syncs, so it has none"
-                    for link, windows in signed.items() for w, got in sorted(windows.items()) if len(got) > 1]
+        split = [(link, w) for link, windows in signed.items() for w, got in sorted(windows.items()) if len(got) > 1]
+        refused += [f"{link} window {w}: {len(signed[link][w])} signed syncs, so it has none" for link, w in split]
         object.__setattr__(self, "_signed", signed)
         object.__setattr__(self, "refused", tuple(refused))
+        object.__setattr__(self, "codes", tuple(codes))
+        object.__setattr__(self, "split", tuple(sorted(split)))
 
     def syncs(self, link: str) -> tuple[ClockSync, ...]:
         windows, out = self._signed.get(link, {}), []
