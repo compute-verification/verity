@@ -253,7 +253,7 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
       : ℚ) : ℝ) = node.rebuildBurst + node.diskBurst + Bl)
     (hsq : SquaringCeiling T node.squarings node.encode node.rebuildBurst) (hd : Disks T node.disk node.diskBurst)
     (hS : ChipCeiling T node.chipBlocks) (hr : Routed T) (hp : Paced T (recordPace node rec)) (hcov : Covers T)
-    (hN : Registered T node) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
+    (hN : T.blocks = node.blocks) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
     (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong) :
     HeldAt T ω node (rec ω) i := by
@@ -497,7 +497,7 @@ theorem read_card {Ω : Type} {T : Trace Ω} (hcov : Covers T) {ω : Ω} (ha : T
 record's line reads, the line credits no more bits read than its groups' passes read: each of the `P` passes reads
 every registered block but its wrong receipts (`read_card`), and the passes are among the credited ones (`Paced`). -/
 theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record} (hp : Paced T (recordPace node rec))
-    (hcov : Covers T) (hN : Registered T node) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
+    (hcov : Covers T) (hN : T.blocks = node.blocks) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
     (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong) :
     ReadAt T ω node (rec ω) := by
@@ -530,14 +530,10 @@ theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record}
   rw [← hNr]
   linarith
 
-/-- **The trace of record is over the registration's blocks**: `Registered` holds of it, with no premise. -/
-theorem registered_ofRecord {Ω : Type} (T : Trace Ω) (node : Node) (rec : Ω → Record) :
-    Registered (ofRecord T node rec) node := rfl
-
 /-- **The memory line of record, in bits read** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
   intro node κ X Cm _ prf rest recs correct com T R δs δnet r F O I hp hcov hk hC hI hL hR hCnt
-  have hN := registered_ofRecord T node r
+  have hN : (ofRecord T node r).blocks = node.blocks := rfl
   have hH := holdsAnd (sketchBound_of_covered hk hC hI)
     (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 fun hq => ?_⟩) hH
@@ -557,7 +553,7 @@ theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {re
       : ℚ) : ℝ) = node.rebuildBurst + node.diskBurst + Bl)
     (hsq : SquaringCeiling T node.squarings node.encode node.rebuildBurst) (hd : Disks T node.disk node.diskBurst)
     (hS : ChipCeiling T node.chipBlocks) (hr : Routed T) (hp : Paced T (recordPace node rec))
-    (hN : Registered T node) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
+    (hN : T.blocks = node.blocks) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
     (hread : ReadAt T ω node (rec ω)) :
     HeldAt T ω node (rec ω) i := by
   intro l hline f hf x hx
@@ -621,6 +617,6 @@ theorem pr_held_le_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {r
     Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ (Q ω → HeldAt (ofRecord T node rec) ω node (rec ω) i)) ≤
       Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ (Q ω → ReadAt (ofRecord T node rec) ω node (rec ω))) :=
   Pouw.pr_mono fun _ hω => ⟨hω.1, fun h => hω.2 fun hq =>
-    heldAt_of_read i hi hβl hl hcr hcb hsq hd hS hr hp (registered_ofRecord T node rec) hω.1 hω.1 (h hq)⟩
+    heldAt_of_read i hi hβl hl hcr hcb hsq hd hS hr hp rfl hω.1 hω.1 (h hq)⟩
 
 end Properties.RemoteAudit.Line.SecurityProofs
