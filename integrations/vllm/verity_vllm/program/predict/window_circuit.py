@@ -16,9 +16,10 @@ length and ``max_tokens``). Every later position's token is `io_shell.TokenFeed_
 prompt cap (the prompt's id below its length, else the previous position's select), and past it the previous position's
 select. Each select is collected in the unit that makes it (`io_shell.SelectCollect_v1`: the select, then
 `io_shell.OutCollect_v1` over it). The last position's makes the slot's entry of the scan's Programs' row instead
-(`io_shell.SelectEntry_v1`: the select, its collector, then `io_shell.SlotEntry_v1`): its output count (up to ``max_tokens``
-and the model's first stop id, that one kept, `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an
-empty slot (the entry reads the occupancy word, so no select is masked on the way); a request the class can't hold (a prompt
+(`io_shell.SelectEntry_v1`: the select, its collector, then `io_shell.SlotEntry_v1`), in the scan's layout: its read bit
+(the occupancy word's bit 0), its output count (up to ``max_tokens`` and the model's first stop id, that one kept,
+`stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot (the entry reads the occupancy
+word, so no select is masked on the way); a request the class can't hold (a prompt
 past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the scan refuses at
 the anchor and the egress never renders. A collector's rows and an entry's are a few words at a small class, too narrow for
 a proof block of their own, so none is a unit of its own. The state rows and the entries are the circuit's external ports.
