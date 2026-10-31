@@ -178,9 +178,31 @@ def scopeWhy (hidden : Bool) (c : Circuit) : String :=
     16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each"
   else "a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk"
 
-/-- The circuit as `Stmt.setupTables` parses it: `HmOut`'s for a statement with hidden outputs, else `HmRow`'s. -/
+/-- **A templated circuit the hidden-output headlines cover** (its statement circuit is the flat
+circuit its template unrolls to, `HmOut.unrolled`), checked on the template's description, never on the rows it unrolls
+to: a `--zk` session of one table at hidden outputs without the verifier's own registered reads, whose unrolled unit
+(`Tmpl.unroll`'s net: the root's columns, the template's ports) reads only its leaf group and returns the outputs, so the
+wires feed neither (`wiresFeed`), at most `2^32` rows, and `scopeOkI`'s rows. `TmplUnit.read` passed `Tmpl.unrollOk`,
+whose `Tmpl.ordered` makes the unrolled unit read only port bits among its inputs (`portReadsB`). -/
+def scopeOkT (hidden zk registered : Bool) (count : Nat) (c : Circuit) (tu : TmplUnit) : Bool :=
+  hidden && zk && !registered && decide (count ≤ 1) && tu.t.inGroups.size == 1 && c.outNet == c.unitNet &&
+    decide (max 7 (log2ceil (tu.t.defs.getD tu.t.root default).cols) ≤ 32) && (v1Ports c || bitRows c)
+
+/-- Which part of `scopeOkT` a templated circuit fails, for the refusal. -/
+def scopeWhyT (hidden zk registered : Bool) (count : Nat) (c : Circuit) (tu : TmplUnit) : String :=
+  if !hidden then "a templated statement without hidden outputs"
+  else if !zk then "a templated statement without --zk"
+  else if registered then "a templated statement with the verifier's registered reads (--registered)"
+  else if count > 1 then s!"a templated statement in {count} tables"
+  else if tu.t.inGroups.size != 1 then s!"a templated unit reading {tu.t.inGroups.size} input groups"
+  else if c.outNet != c.unitNet then "a templated circuit whose outputs a tail stage computes (META out_net)"
+  else if max 7 (log2ceil (tu.t.defs.getD tu.t.root default).cols) > 32 then "a templated unit of more than 2^32 rows"
+  else scopeWhy true c
+
+/-- The circuit as `Stmt.setupTables` parses it: for a statement with hidden outputs the one its session commits
+(`HmOut.parseCommit`: a templated statement's carries its template, `Circuit.tmpl`), else `HmRow`'s. -/
 def circuitOf (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) : V Circuit :=
-  if tags.hiddenOutputs then HmOut.parse tags file tables else HmRow.parse tags file tables
+  if tags.hiddenOutputs then HmOut.parseCommit tags file tables else HmRow.parse tags file tables
 
 /-- The public file as the headlines read it: `HmOut`'s for a statement with hidden outputs, else `HmRow`'s. -/
 def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
@@ -236,6 +258,23 @@ keeps its own rows. `zk` is unread: `--zk` needs `hm96-sha512/v1` leaves (`leafO
 def sharedRowsOk (tags : Tags) (_zk registered : Bool) : Bool :=
   tags.hiddenOutputs && registered && tags.merkleLeaf == "hm96-sha512/v1"
 
+/-- What `check` requires of the circuit and public file it read: a shared-row public file only where `sharedRowsOk`; for a
+templated circuit (`Circuit.tmpl`) `scopeOkT`, on its description; for any other, wherever the wires feed the unit or the
+outputs (`wiresFeed`) an order of the wires that computes every slot (`wiresAcyclic`), and `scopeOk` (`scopeOkI` for a
+statement with hidden outputs). -/
+def circuitRules (tags : Tags) (zk : Bool) (count : Nat) (registered : Bool) (c : Circuit) (pub : Public) :
+    Except String Unit :=
+  if pub.tables.isSome && !sharedRowsOk tags zk registered then
+    .error (refusal "a shared-row public file (header shared_rows)")
+  else match c.tmpl with
+    | some tu =>
+      if scopeOkT tags.hiddenOutputs zk registered count c tu then .ok ()
+      else .error (refusal (scopeWhyT tags.hiddenOutputs zk registered count c tu))
+    | none =>
+      if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
+      else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
+      else .error (refusal (scopeWhy tags.hiddenOutputs c))
+
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
 file as the proof reads them, a shared-row public file only where `sharedRowsOk`, wherever the wires feed the unit or the
 outputs (`wiresFeed`) an order of the wires that computes every slot (`wiresAcyclic`), and `scopeOk` (`scopeOkI` for a
@@ -248,7 +287,9 @@ and any number of stages the verifier evaluates, each reading wires from earlier
 them. Its headlines are at the template instance's program (`instProg`), which needs `wiresAcyclic`. A circuit the wires
 don't feed passes `scopeOkH` and is also covered at the unit's program (`keyProg`). With public outputs `scopeOk` keeps
 `wiresFeed` false: the public-output headlines read the outputs off the unit, so the unit reads only its leaf group and
-returns the outputs. -/
+returns the outputs. A templated statement's circuit (`HmOut.parseCommit`'s, carrying its template) is checked on its
+description (`scopeOkT`): its statement circuit, the flat circuit it unrolls to, is one `scopeOkH` covers at one `--zk`
+table. -/
 def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
     (publicInputs registered : Bool) : Except String Unit :=
   match firstFailure (statementRules tags zk count publicInputs) with
@@ -257,12 +298,7 @@ def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables
     | .error e => .error (refusal s!"a circuit that does not parse ({e})")
     | .ok c => match publicOf tags c publicFile with
       | .error e => .error (refusal s!"a public file that does not load ({e})")
-      | .ok pub =>
-        if pub.tables.isSome && !sharedRowsOk tags zk registered then
-          .error (refusal "a shared-row public file (header shared_rows)")
-        else if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
-        else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
-        else .error (refusal (scopeWhy tags.hiddenOutputs c))
+      | .ok pub => circuitRules tags zk count registered c pub
 
 /-- `check` on its circuit as `circuitOf` returns it (`parsed`), which `verify` parses once for this and the setup
 (`check_eq`). -/
@@ -274,18 +310,30 @@ def checkOf (parsed : V Circuit) (tags : Tags) (zk : Bool) (publicFile : ByteArr
     | .error e => .error (refusal s!"a circuit that does not parse ({e})")
     | .ok c => match publicOf tags c publicFile with
       | .error e => .error (refusal s!"a public file that does not load ({e})")
-      | .ok pub =>
-        if pub.tables.isSome && !sharedRowsOk tags zk registered then
-          .error (refusal "a shared-row public file (header shared_rows)")
-        else if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
-        else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
-        else .error (refusal (scopeWhy tags.hiddenOutputs c))
+      | .ok pub => circuitRules tags zk count registered c pub
 
 theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray))
     (count : Nat) (publicInputs registered : Bool) :
     check tags zk circuitFile publicFile tables count publicInputs registered
       = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
   rfl
+
+theorem circuitOf_hidden {tags : Tags} (hh : tags.hiddenOutputs = true) (file : ByteArray)
+    (tables : List (String × ByteArray)) : circuitOf tags file tables = HmOut.parseCommit tags file tables := by
+  simp only [circuitOf, hh, ↓reduceIte]
+
+/-- At hidden outputs, the circuit `HmOut.parse` reads (a flat statement's: it refuses a templated one's tags) is the one
+`circuitOf` reads. -/
+theorem circuitOf_of_parse {tags : Tags} {file : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hh : tags.hiddenOutputs = true) (h : HmOut.parse tags file tables = .ok c) : circuitOf tags file tables = .ok c := by
+  rw [circuitOf_hidden hh, HmOut.parseCommit, if_neg (by simp [HmOut.parse_isTmpl h])]
+  exact h
+
+/-- At hidden outputs and a flat statement's tags, the circuit `circuitOf` reads is `HmOut.parse`'s. -/
+theorem parse_of_circuitOf {tags : Tags} {file : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hh : tags.hiddenOutputs = true) (hi : tags.isTmpl = false) (h : circuitOf tags file tables = .ok c) :
+    HmOut.parse tags file tables = .ok c := by
+  rwa [circuitOf_hidden hh, HmOut.parseCommit, if_neg (by simp [hi])] at h
 
 /-- What `--plain-tables` refuses of a statement: hidden outputs with leaves other than `hm96-sha512/v1` (the plain proof
 at several tables reads hm96 leaves; `check` at one table also passes plain SHA-512 leaves at hidden outputs) and more

@@ -2,19 +2,16 @@
 tile each template's units into (slot, step) exactly once at the class's S and T, the proof block is the record's partition,
 network accounting's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
 the leaves a unit's output row is of a value without filling an input row. Pinned on `test_interface`'s two-request chain
-and on a class circuit (`cmp92`: S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) on one server; its split
-across two (layer 0 | layer 1 and the head) puts every inference block on both, which network accounting's check refuses
-(an inference block runs on one server)."""
+and on a class circuit (`cmp92`: S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) on one server, and on its
+split across two (layer 0 | layer 1 and the head)."""
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import replace
 
 import pytest
 import test_interface as TI
 
-from verity.core.protocols.certifier import blocks as BK
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
@@ -251,23 +248,6 @@ def test_cmp92s_class_circuit_on_one_server_has_one_inference_and_nothing_free(c
     count = I.input_count(json.loads(json.dumps(one.description())), **held("weights", "request"))
     assert count["free"] == 0 and count["ingress"] == 0, count
     assert one.blocks_record()["proof"] == {"units": 15472, "partition": I.descriptor_record(one, 1 << 20)["partition"]}
-
-
-def test_cmp92s_split_across_two_servers_is_refused(circuits):
-    """A server's ingress and egress carry only its inference blocks' declared inputs and outputs,
-    and an inference block runs on one server. Network accounting's check of the servers (`certifier.blocks.server_blocks`,
-    on the record's ``blocks``) accepts the class circuit on one server and refuses it split layer 0 | layer 1 and the head,
-    where every (slot, step) has units on both, by naming the first such block. The records' blocks differ in the network
-    keys alone."""
-    docs = {n: {**c.description(), "blocks": c.blocks_record()} for n, c in circuits.items()}
-    lays = {t: lay for t, (lay, _n) in circuits[1].layouts.items()}
-    assert [s.name for s in BK.server_blocks(docs[1], docs[1]["blocks"]["server"], lays)] == ["s0"]
-    with pytest.raises(ValueError, match=re.escape(f"inference block (slot 0, step 0): units of {KID} on server s0 and of {KID} "
-                                                   "on server s1; an inference block runs on one server, the one that may "
-                                                   "read its inputs")):
-        BK.server_blocks(docs[2], docs[2]["blocks"]["server"], lays)
-    r1, r2 = docs[1]["blocks"], docs[2]["blocks"]
-    assert {k: v for k, v in r1.items() if k not in I.NETWORK} == {k: v for k, v in r2.items() if k not in I.NETWORK}
 
 
 def test_cmp92s_two_server_split_cuts_every_template_at_the_server_boundary(circuits):

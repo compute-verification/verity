@@ -56,7 +56,7 @@ def _slots() -> tuple[Any, Any]:
 
 
 def layout(shape: Shape, fused: frozenset[str] = frozenset()) -> Any:
-    """The step's `slots.Layout`: each group of the map, its tensors the tables' codes (and a quantizer's scale after its
+    """The step's `slots.CommitShape`: each group of the map, its tensors the tables' codes (and a quantizer's scale after its
     codes), one commit unit each unit of the map, its rows that unit's output rows."""
     return _layout(shape, fused)[0]
 
@@ -93,7 +93,7 @@ def _layout(shape: Shape, fused: frozenset[str] = frozenset()) -> tuple[Any, dic
         groups.append(g)
         bases.update({name: u0 + k for name, k in firsts})
         u0 += len(g.units)
-    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families{fusion_tag(fused)}/v1", tuple(groups)), bases
+    return S.CommitShape(f"e2e-h200/{shape.name}/c{shape.context}/families{fusion_tag(fused)}/v1", tuple(groups)), bases
 
 
 def _firsts(entries: list[Entry]) -> list[tuple[str, int]]:
