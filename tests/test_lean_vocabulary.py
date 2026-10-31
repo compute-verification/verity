@@ -84,7 +84,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
     "CoinTree": (),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
-    "Collision": ("Security/Definitions/Hash/Basic.lean::Hash.Collision",),
+    "Collision": ("Security/Definitions/Core/Hash.lean::Hash.Collision",),
     "Commitment": ("verity/ml/commitments/merkle.py::Commitment",),
     "Dag": (),
     "Device": (),
