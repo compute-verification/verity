@@ -50,7 +50,9 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 
 ## Files
 
-- `rows.cuh`: the formats as host+device functions.
+- `rows.cuh`: the row digest and the schedule (the layout `engine.py` fills, the salts, each lane's column order) as
+  host+device functions. The frame-v3-sha512 leaf, node and pad and the hm96 leaf's mask, salt digest and value are
+  `verity/ml/kernels/row_commit.cuh`'s.
 - `rows.cu`: the kernels.
 - `rows_host.cpp`: the host twin.
 - `engine.py`: the call.
