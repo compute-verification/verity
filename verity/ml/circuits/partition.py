@@ -2,7 +2,7 @@
 
 Partitionhood is not a property of queries: a `Family` (an ordered sequence of `GateSet`s, `query_ast`) may overlap or
 omit gates, and nothing in the query model forbids it.  It is a property checked here, when a family is used as the
-decomposition of a Program into proof blocks.  Three checks, one verdict each, composed by `validate_vu_partition`:
+decomposition of a Program into proof blocks.  Three checks, one verdict each, composed by `validate_block_partition`:
 
 * `validate_partition` -- every gate of the Program (Input and constant gates included) in exactly one set.
   Fast path (tier A, design §4): the family's structural description `Family.tiling()` is checked by per-body
@@ -140,7 +140,7 @@ class ReadinessReport:
 
 
 @dataclass(frozen=True)
-class VuVerdict:
+class BlockVerdict:
     """`status`: "ok" | "fail" (overlap/gap or a proven width violation) | "not-ready" (a gate wider than `w_max`
     exists; partition and width did not fail) | "unsupported" (nothing failed, something could not be decided)."""
     partition: PartitionVerdict
@@ -1147,7 +1147,7 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
     return CutVerdict(not codes, codes, detail)
 
 
-def vu_status(partition: PartitionVerdict, width: WidthVerdict, readiness: ReadinessReport) -> str:
+def block_status(partition: PartitionVerdict, width: WidthVerdict, readiness: ReadinessReport) -> str:
     if partition.status in ("overlap", "outside", "gap") or width.status == "violation":
         return "fail"
     if not readiness.ok:
@@ -1157,7 +1157,7 @@ def vu_status(partition: PartitionVerdict, width: WidthVerdict, readiness: Readi
     return "ok"
 
 
-def validate_vu_family(program: "Program", fam, w_max: int = 32, limits: Limits = LIMITS) -> VuVerdict:
+def validate_block_family(program: "Program", fam, w_max: int = 32, limits: Limits = LIMITS) -> BlockVerdict:
     """Both validators and the readiness report over an already evaluated family."""
     partition = validate_partition(program, fam, limits)
     width = validate_width(program, fam, w_max, limits)
@@ -1165,17 +1165,17 @@ def validate_vu_family(program: "Program", fam, w_max: int = 32, limits: Limits 
     count = _family_count(fam)
     if count is None:
         count = sum(1 for _ in fam)
-    return VuVerdict(partition, width, count, readiness, vu_status(partition, width, readiness))
+    return BlockVerdict(partition, width, count, readiness, block_status(partition, width, readiness))
 
 
-def validate_vu_partition(program: "Program", query, w_max: int = 32) -> VuVerdict:
-    """evaluate -> validate_partition + validate_width + readiness -> VuVerdict.  `query` is a `query_ast.Query`
+def validate_block_partition(program: "Program", query, w_max: int = 32) -> BlockVerdict:
+    """evaluate -> validate_partition + validate_width + readiness -> BlockVerdict.  `query` is a `query_ast.Query`
     (or anything `query_ast.evaluate` accepts)."""
     fam = evaluate(program, query)
-    return validate_vu_family(program, fam, w_max)
+    return validate_block_family(program, fam, w_max)
 
 
-__all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "VuVerdict",
-           "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "vu_status",
-           "validate_vu_family", "validate_vu_partition", "CutVerdict", "INPUT_UNIT", "MAX_LISTED", "RECOMPUTE_RULES", "validate_unit_cut",
+__all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "BlockVerdict",
+           "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "block_status",
+           "validate_block_family", "validate_block_partition", "CutVerdict", "INPUT_UNIT", "MAX_LISTED", "RECOMPUTE_RULES", "validate_unit_cut",
            "Level", "Hierarchy", "RefinementVerdict", "validate_refinement", "members_per_parent"]
