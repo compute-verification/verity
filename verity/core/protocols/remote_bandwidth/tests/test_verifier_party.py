@@ -1,6 +1,6 @@
 """The bandwidth session split across a connection (`verifier_party`): the verifier's side and the prover's, each in its
-own thread over a socket pair, make exactly the case and answer `period.run` makes in one process, and the party follows
-`period.json`'s challenger host."""
+own thread over a socket pair, or the verifier's in a process of its own (`period_with`), make exactly the case and
+answer `period.run` makes in one process, and the side follows `period.json`'s challenger host."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import threading
 
 import pytest
 
+from verity.core.deploy.stream import Side
 from verity.core.protocols.remote_bandwidth import audit, codec, verifier_party
 from verity.core.protocols.remote_bandwidth import period as P
 
@@ -97,21 +98,55 @@ def test_the_split_session_is_the_periods(monkeypatch, cheat, verdict) -> None:
     assert split.verdict == verdict and passes == 2
 
 
+SIDE = f"""
+import functools, json, socket, sys
+from verity.core.protocols.remote_bandwidth import audit, verifier_party
+audit.register = functools.partial(audit.register, nonce=bytes(audit.NONCE_BYTES))
+class Clock:
+    now = 10 ** 9
+    def __call__(self):
+        self.now += 1_000
+        return self.now
+    def sleep_until(self, clock, t):
+        self.now = max(self.now, t)
+request, c = json.loads(sys.stdin.readline()), Clock()
+with socket.create_server(("127.0.0.1", 0)) as srv:
+    print(json.dumps({{"listening": srv.getsockname()[1]}}), flush=True)
+    conn, _ = srv.accept()
+    with conn, conn.makefile("rwb") as f:
+        p = verifier_party.serve(f, request, coins=bytes.fromhex("{COINS.hex()}"), clock=c, sleep_until=c.sleep_until)
+print(json.dumps({{"answer": p.answer, "case": p.case, "host": "auditor"}}, sort_keys=True), flush=True)
+"""
+
+
+def test_period_with_runs_the_session_against_its_side(monkeypatch) -> None:
+    """`period_with` against a side of its own process on the verifier's clock (`SIDE`): the period `period.run` makes
+    in one process, and the side's host; a side that exits before it listens is refused."""
+    monkeypatch.setattr(audit, "register", functools.partial(audit.register, nonce=bytes(audit.NONCE_BYTES)))
+    request = verifier_party.request_of("n0")
+    period, side = verifier_party.period_with(Side("auditor", (sys.executable, "-c", SIDE)), request, STORE,
+                                              entropy=Entropy(b"salts"))
+    assert period == _in_process() and side == {"host": "auditor", "passes": 2}
+    with pytest.raises(RuntimeError, match="the side on auditor exited 3 before it listened"):
+        verifier_party.period_with(Side("auditor", (sys.executable, "-c", "import sys; sys.stdin.readline(); sys.exit(3)")),
+                                   request, STORE)
+
+
 def test_the_registration_round_trips() -> None:
     reg = audit.register(COINS, b"n0", 3, bytes(64))
     assert P.registration_of(P.registration_json(reg)) == reg
 
 
 def test_the_party_follows_period_json() -> None:
-    local = verifier_party.Party.of({}, "n0")
+    local = verifier_party.side_of({}, "n0")
     assert local.host == "n0" and local.address is None
     assert local.command == (sys.executable, "-m", verifier_party.MODULE, "--listen", "127.0.0.1:0")
-    assert verifier_party.Party.of({"challenger_host": "n0"}, "n0") == local
+    assert verifier_party.side_of({"challenger_host": "n0"}, "n0") == local
     with pytest.raises(RuntimeError, match="auditor-host isn't wired for bandwidth"):
-        verifier_party.Party.of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"]}}}, "n0")
-    wired = verifier_party.Party.of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {
+        verifier_party.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"]}}}, "n0")
+    wired = verifier_party.side_of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {
         "command": ["ssh", "auditor-host", "verifier"], "address": "192.0.2.7:7961"}}}, "n0")
-    assert wired == verifier_party.Party("auditor-host", ("ssh", "auditor-host", "verifier"), ("192.0.2.7", 7961))
+    assert wired == Side("auditor-host", ("ssh", "auditor-host", "verifier"), ("192.0.2.7", 7961))
     assert verifier_party.placement("n0", "n0")["trusted-host"].startswith("unmet: ")
     held = verifier_party.placement("n0", "auditor-host")
     assert held["parties"] == {"challenger": "auditor-host", "prover": "n0", "verifier": "auditor-host"}
