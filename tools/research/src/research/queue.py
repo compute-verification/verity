@@ -3503,10 +3503,11 @@ class RecordsGate:
     byte for byte (a merge that resolved to its own side, the parent vouched); one whose one parent is vouched and has the
     package's inputs (`_inputs`, non-Lean tests and docs aside: a tests-only fix above a record commit); one that commits
     exactly the record a records run of its one parent regenerated for a package that passed there (`--update`'s
-    `record/<path>/lean-audit.json`, PKG's or a requirer's), changing nothing but locks; and one that only merged `main` into a
-    vouched commit, every file it changed being main's whole but a lock, which is main's or `tools/verity/lean/merge.py`'s merge
-    of the two sides (the fast path reports `path: reused` for it: a candidate, which the train's Lean check rebuilds and
-    regenerates where it differs).
+    `record/<path>/lean-audit.json`, PKG's or a requirer's), changing nothing but locks, or of a commit below a chain of such
+    commits (Security's record on top of Security/Proofs'), each lock each of them changes being a record a records run that
+    passed its package regenerated below it in the chain; and one that only merged `main` into a vouched commit, every file it
+    changed being main's whole but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast
+    path reports `path: reused` for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
     A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): every file of
     the package's directory, lock included, and of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
@@ -3830,10 +3831,29 @@ class RecordsGate:
             how = self._vouch(below, pkg, depth + 1)
             return how and f"{commit[:12]} changes only other packages' locks over {below[:12]}, where {how}"
         sha = hashlib.sha256(_blob(self.repo, commit, lock) or b"").hexdigest()
-        for run in self._at(below)[0]:
-            if run.kept_record(pkg) == sha and self._audited(run, pkg)[0]:
-                return f"{commit[:12]} commits the record records run {run.id} of {below[:12]} regenerated, where {pkg} passed"
-        return None
+        chain, steps = [below], []        # steps[i]: {lock: its sha} of each lock chain[i] changes over chain[i + 1]
+        while True:
+            base = chain[-1]
+            if all(self._kept(chain[i + 1:], f, s) for i, step in enumerate(steps) for f, s in step.items()):
+                for run in self._at(base)[0]:
+                    if run.kept_record(pkg) == sha and self._audited(run, pkg)[0]:
+                        via = f", over {len(steps)} commit(s) of records runs' records," if steps else ""
+                        return (f"{commit[:12]} commits the record records run {run.id} of {base[:12]}{via} regenerated, "
+                                f"where {pkg} passed")
+            if depth + len(chain) >= RECORDS_WALK:
+                return None
+            parents = _out(self.repo, "rev-list", "--parents", "-n", "1", base).split()[1:]
+            files = _out(self.repo, "diff", "--name-only", "--no-renames", parents[0], base).splitlines() if len(parents) == 1 else []
+            if not files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
+                return None
+            steps.append({f: hashlib.sha256(_blob(self.repo, base, f) or b"").hexdigest() for f in files})
+            chain.append(parents[0])
+
+    def _kept(self, commits: list[str], lock: str, sha: str) -> bool:
+        """Whether a records run at one of ``commits`` passed ``lock``'s package and kept ``sha`` as the record `--update` wrote."""
+        pkg = posixpath.dirname(lock) or "."
+        return any(run.kept_record(pkg) == sha and self._audited(run, pkg)[0]
+                   for c in commits for run in self._at(c)[0])
 
     def _passed(self, commit: str, pkg: str) -> tuple[str, str, str] | None:
         """(`records run` or `Lean check`, its id, a records run's `path`) of the first run of ``commit`` that passed ``pkg`` on
