@@ -12,6 +12,7 @@ import pytest
 
 import verity_difftest
 from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
+from verity.ml.circuits import codec
 from verity.ml.circuits.codec import canonical_json
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
@@ -250,6 +251,96 @@ def test_floats_reach_the_lean_as_python_wrote_them():
     for delta in (DELTA, 0.05, 0.1):
         assert V.audit_record(**_args(reg, draw, statement=floats, delta=delta))["verifiers"]["agree"]
     assert not V.audit_record(**_args(reg, draw, statement={"x": -0.0}))["verifiers"]["agree"]
+
+
+def _sent(monkeypatch, answer=None) -> list[tuple[str, dict]]:
+    """Every request line the server writes, as `(fn, input)`, from a fresh process; `answer(fn, input)`, where it
+    returns a line, answers in the Lean's place."""
+    V._server.close()
+    sent, real = [], V._Server._exchange
+
+    def exchange(self, fn, line):
+        sent.append((fn, json.loads(line)["input"]))
+        return (answer and answer(fn, sent[-1][1])) or real(self, fn, line)
+    monkeypatch.setattr(V._Server, "_exchange", exchange)
+    return sent
+
+
+def _checked(program, ports=None) -> Verdict:
+    """`check` on `program`, held to the Python's."""
+    law = {"law": "subset", "k": 2}
+    v = V.check(_record(), program, QUERY, law, S.SCHEME, ports or _ports(6))
+    py = R.check(_record(), program, QUERY, law, S.SCHEME, ports or _ports(6))
+    assert v == py and v.verifiers["lean"] == v.verifiers["python"], (v, py)
+    return v
+
+
+def test_a_program_is_loaded_once_and_named_after(monkeypatch):
+    """The server process loads a program the first time a call passes it and names it by digest and annotations after,
+    for every call on it (a check on a Program built afresh, the stream's draw and run): each decides as the Python
+    does. Another program, or the same under other annotations, is loaded beside it; a process that ends forgets them."""
+    sent = _sent(monkeypatch)
+    six, five = P.population_program(PAIR, 6), P.population_program(PAIR, 5)
+    named = {"annotations": dict(six.annotations), "loaded": codec.program_digest(six)}
+    assert _checked(six).ok
+    assert [fn for fn, _ in sent] == ["program", "registration"] and sent[0][1] == json.loads(V._dumps(codec.encode_program(six)))
+    assert sent[1][1]["params"]["program"] == named
+    sent.clear()
+    assert _checked(P.population_program(PAIR, 6)).ok and [fn for fn, _ in sent] == ["registration"]
+    sent.clear()
+    stream, reg, draw = _drawn()
+    stream.deliver(draw, [SESSION])
+    assert stream.outcome(draw, _lean(), {"statement": "stub"}).accepted
+    programs = [x["program"] if fn == "select" else x["params"]["program"] for fn, x in sent if fn in ("registration", "select", "run")]
+    assert [fn for fn, _ in sent if fn in ("program", "registration", "select", "run")] == ["registration", "select", "run"]
+    assert programs == [named] * 3
+    sent.clear()
+    assert not _checked(five).ok and [fn for fn, _ in sent] == ["program", "registration"]
+    sent.clear()
+    noted = P.population_program(PAIR, 6)
+    noted.annotations["note"] = 1
+    assert _checked(noted).ok and [fn for fn, _ in sent] == ["program", "registration"]
+    assert sent[1][1]["params"]["program"] == {**named, "annotations": {"note": 1}}
+    sent.clear()
+    V._server.close()
+    assert _checked(six).ok and [fn for fn, _ in sent] == ["program", "registration"]
+
+
+def test_past_loaded_max_a_fresh_process_loads_anew(monkeypatch):
+    sent = _sent(monkeypatch)
+    monkeypatch.setattr(V, "LOADED_MAX", 1)
+    six, five = P.population_program(PAIR, 6), P.population_program(PAIR, 5)
+    _checked(six)
+    first = V._server._proc.pid
+    _checked(five)
+    assert V._server._proc.pid != first and [fn for fn, _ in sent] == ["program", "registration"] * 2
+    sent.clear()
+    _checked(six)
+    assert [fn for fn, _ in sent] == ["program", "registration"]
+
+
+def test_a_program_the_lean_will_not_load_is_sent_whole(monkeypatch):
+    """Where the Lean refuses a program or answers another digest for it, the call carries the descriptor and decides as
+    before; nothing is named by a digest the Lean hasn't answered."""
+    six = P.population_program(PAIR, 6)
+    for reply in ('{"reject":"no"}\n', '{"output":"' + "00" * 64 + '"}\n', 'not json\n'):
+        sent = _sent(monkeypatch, lambda fn, x, reply=reply: reply if fn == "program" else None)
+        assert _checked(six).ok and [fn for fn, _ in sent] == ["program", "registration"]
+        assert sent[1][1]["params"]["program"] == json.loads(V._dumps(codec.encode_program(six)))
+        sent.clear()
+        assert _checked(six).ok and [fn for fn, _ in sent] == ["program", "registration"]
+        monkeypatch.undo()
+
+
+def test_a_reference_the_process_has_not_loaded_is_refused():
+    """A process that hasn't loaded the program a reference names refuses the call: it reads the reference as a
+    descriptor, which it isn't, never as another program."""
+    V._server.close()
+    six = P.population_program(PAIR, 6)
+    params = V._params(six, QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6), None, (), [], None, None, None)
+    params["program"] = {"annotations": dict(six.annotations), "loaded": codec.program_digest(six)}
+    kind, _ = V._server.call("registration", {"params": params, "record": _record()})
+    assert kind == "reject"
 
 
 def test_a_stream_rules_disagreement_stops_the_stream(monkeypatch):

@@ -23,6 +23,12 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
   float in the inputs, as Python's `repr` does. A float the Lean can't read back (`-0.0`, NaN, an infinity) makes the two
   disagree.
 
+`check`, `select` and `run` read the population program. The one server process (`_Server`) loads each program once and
+the calls after name it by its digest and annotations, so a session's checks, draws, runs and negatives on one program
+parse it once; each piece reads from a reference the program it would read from the descriptor (`Loaded.parse_ref`,
+under SHA-512's collision resistance), and a reference the process hasn't loaded is refused, never read as another
+program.
+
 Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`, which `test_verifier.py` holds this one to): Lake
 builds the path requires in place, and two builds at once would rewrite one module's C under each other. This package
 imports only the standard library and `verity`, so the convention is restated here rather than imported.
@@ -40,7 +46,7 @@ import tempfile
 import threading
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.ml.circuits import codec
 from verity.ml.circuits.codec import canonical_json
@@ -80,12 +86,25 @@ def executable() -> Path:
     return PACKAGE / ".lake" / "build" / "bin" / EXE
 
 
-def _dumps(value: Any) -> str:
+class _Program:
+    """A program in a request to the Lean: written as its descriptor (`codec.encode_program`), or as `{"annotations",
+    "loaded"}` naming the one the server process has loaded (`_Server`, the Lean's `Loaded.ref?`)."""
+
+    __slots__ = ("program",)
+
+    def __init__(self, program: Program) -> None:
+        self.program = program
+
+
+def _dumps(value: Any, program: Callable[[Program], Any] = codec.encode_program) -> str:
     """`value` as one JSON line the Lean reads back as Python wrote it: a float of 10^16 or more, which Python writes in
-    exponent form and `Json.parse` would read as an integer, is written with its digits and `.0`."""
+    exponent form and `Json.parse` would read as an integer, is written with its digits and `.0`; a `_Program` is written
+    as `program` gives it."""
     nonce, big = secrets.token_hex(8), {}
 
     def walk(x: Any) -> Any:
+        if isinstance(x, _Program):
+            return walk(program(x.program))
         if isinstance(x, float) and math.isfinite(x) and abs(x) >= 1e16:
             token = f"\0{nonce}:{len(big)}\0"
             big[json.dumps(token)] = format(x, ".1f")
@@ -102,36 +121,91 @@ def _dumps(value: Any) -> str:
     return text
 
 
+#: The most programs one server process holds loaded; past it, the process ends and a fresh one loads anew.
+LOADED_MAX = 4
+
+
 class _Server:
-    """One `sampled-proofs-verifier serve` process per Python process (`Difftest.serve`: a request line, an answer line),
-    started at the first call and again after it dies."""
+    """One `sampled-proofs-verifier serve` process per Python process (`Verifier.serve`: a request line, an answer line),
+    started at the first call and again after it dies. A request's program (`_Program`) is loaded into the process once
+    (`{"fn": "program"}`, the Lean's `Loaded.Store.load`) under its digest and annotations as this call writes them, and
+    named by them from then on (`{"annotations", "loaded"}`), so the process parses each program once rather than on every
+    call. The digest is the program's as it is at each call (`codec.program_digest`), so a reference names the program the
+    call passes; where the Lean refuses the program or answers another digest, the request carries the descriptor, as it
+    would have without the store."""
 
     def __init__(self) -> None:
         self._proc: subprocess.Popen | None = None
         self._stderr: Any = None
         self._lock = threading.Lock()
+        self._loaded: set[tuple[str, str]] = set()
+        self._named = False
+
+    def _start(self) -> None:
+        self._stderr = tempfile.TemporaryFile()
+        self._proc = subprocess.Popen([str(executable())], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                      stderr=self._stderr, text=True, encoding="utf-8")
+        self._loaded = set()
+
+    def _end(self) -> None:
+        if self._proc is not None and self._proc.poll() is None:
+            self._proc.stdin.close()
+            self._proc.wait()
+        self._proc = None
+        self._loaded = set()
+
+    def _exchange(self, fn: str, line: str) -> str:
+        """The process's answer line to `line`; raises `LeanError` where it ends first."""
+        try:
+            self._proc.stdin.write(line + "\n")
+            self._proc.stdin.flush()
+            reply = self._proc.stdout.readline()
+        except BrokenPipeError:
+            reply = ""
+        if not reply.endswith("\n"):
+            self._proc.kill()
+            self._proc.wait()
+            self._stderr.seek(0)
+            err = self._stderr.read().decode("utf-8", "replace")[-2000:]
+            self._proc = None
+            self._loaded = set()
+            raise LeanError(f"{EXE} ended on {fn}: {err}")
+        return reply
+
+    def _program(self, program: Program) -> Any:
+        """`program` as the request writes it: the reference to it, loaded first where this process hasn't loaded it, or
+        its descriptor."""
+        try:
+            digest = codec.program_digest(program)
+        except Exception:  # noqa: BLE001 - the descriptor raises as it would have, or is written whole
+            return codec.encode_program(program)
+        annotations = dict(program.annotations)
+        key = (digest, _dumps(annotations))
+        if key not in self._loaded:
+            if len(self._loaded) >= LOADED_MAX:
+                if self._named:
+                    return codec.encode_program(program)
+                self._end()
+                self._start()
+            desc = codec.encode_program(program)
+            reply = self._exchange("program", _dumps({"fn": "program", "input": desc}))
+            try:
+                loaded = json.loads(reply) == {"output": digest}
+            except ValueError:
+                loaded = False
+            if not loaded:
+                return desc
+            self._loaded.add(key)
+        self._named = True
+        return {"annotations": annotations, "loaded": digest}
 
     def call(self, fn: str, value: Any) -> tuple[str, Any]:
         """`("output", JSON)` or `("reject", reason)`; anything else raises `LeanError`."""
-        line = _dumps({"fn": fn, "input": value})
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
-                self._stderr = tempfile.TemporaryFile()
-                self._proc = subprocess.Popen([str(executable())], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                              stderr=self._stderr, text=True, encoding="utf-8")
-            try:
-                self._proc.stdin.write(line + "\n")
-                self._proc.stdin.flush()
-                reply = self._proc.stdout.readline()
-            except BrokenPipeError:
-                reply = ""
-            if not reply.endswith("\n"):
-                self._proc.kill()
-                self._proc.wait()
-                self._stderr.seek(0)
-                err = self._stderr.read().decode("utf-8", "replace")[-2000:]
-                self._proc = None
-                raise LeanError(f"{EXE} ended on {fn}: {err}")
+                self._start()
+            self._named = False
+            reply = self._exchange(fn, _dumps({"fn": fn, "input": value}, self._program))
         try:
             msg = json.loads(reply)
         except ValueError:
@@ -143,12 +217,9 @@ class _Server:
         raise LeanError(f"{EXE} on {fn}: {reply[:500]}")
 
     def close(self) -> None:
-        """End the server: `Difftest.serve` stops at the end of its input."""
+        """End the server: `Verifier.serve` stops at the end of its input."""
         with self._lock:
-            if self._proc is not None and self._proc.poll() is None:
-                self._proc.stdin.close()
-                self._proc.wait()
-            self._proc = None
+            self._end()
 
 
 _server = _Server()
@@ -226,10 +297,11 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
-    """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
+    """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJsonAt`), the program as the server writes
+    it (`_Program`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
-         "ports": {k: dict(v) for k, v in ports.items()}, "program": codec.encode_program(program), "query": dict(query),
+         "ports": {k: dict(v) for k, v in ports.items()}, "program": _Program(program), "query": dict(query),
          "registered": None if registered is None else dict(registered), "scheme": scheme,
          "work_table": None if work_table is None else dict(work_table)}
     if registered is not None:
@@ -318,7 +390,7 @@ def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], prog
     agree when the Lean draws the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
     they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the sample returned is Python's, and the
     caller refuses it)."""
-    got = lean("select", {"rule": dict(rule), "program": codec.encode_program(program), "query": dict(query),
+    got = lean("select", {"rule": dict(rule), "program": _Program(program), "query": dict(query),
                           "work_table": None if work_table is None else dict(work_table),
                           "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
                           "source": read.hex()})
