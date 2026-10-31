@@ -195,7 +195,7 @@ def metaOf (b : ByteArray) : V Json := do
       let e := lineEnd b at_
       let some line := String.fromUTF8? (b.extract at_ e) | throw "rec inner circuit: not UTF-8"
       if line.startsWith "META " then
-        match Json.parse (line.drop 5).toString with
+        match Flock.JsonParse.parse (line.drop 5).toString with
         | .ok m => return m
         | .error err => throw s!"rec inner circuit: META is not JSON: {err}"
       at_ := e + 1
@@ -245,7 +245,7 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   let coins := Flock.Coins.os
   let rtags := tags.withCoins coins
   let some t := String.fromUTF8? drawB | throw "draw: not UTF-8"
-  let draw := some (Flock.norm (← (Json.parse t).mapError fun e => s!"draw: not JSON: {e}"))
+  let draw := some (Flock.norm (← (Flock.JsonParse.parse t).mapError fun e => s!"draw: not JSON: {e}"))
   let partition := some o.partition
   let program := some o.program
   let (_, n) ← Flock.HmRow.stratifiedLaw o.partition o.program 1
@@ -298,14 +298,14 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
     let some s := String.fromUTF8? (← bs.get d "rec inner registration") | throw "rec inner registration: not UTF-8"
     pure s
   let commits ← Flock.RecSetup.commits (some shape) (pure t) (pure reg) bound record
-  let link ← match Json.parse t with
+  let link ← match Flock.JsonParse.parse t with
     | .ok j => Flock.RecVStar.innerLink j record
     | .error e => throw s!"rec inner transcript: not JSON: {e}"
   let rowsB ← bs.get pr.rows "the staged rows"
   fits rowsB "the staged rows"
   let rows ← (do
       let some t := String.fromUTF8? rowsB | throw "not UTF-8"
-      pure (← registeredOf (← (Json.parse t).mapError (s!"not JSON: " ++ ·))).1).mapError (s!"rec rows: " ++ ·)
+      pure (← registeredOf (← (Flock.JsonParse.parse t).mapError (s!"not JSON: " ++ ·))).1).mapError (s!"rec rows: " ++ ·)
   pure { shape, src, bound, commits, link, rows }
 
 /-- One part's verdict: `verifyCmd`'s `--zk` path at part `j`'s recursive inputs and the inner session held, on its one
@@ -446,8 +446,8 @@ def statementFits (limit : Nat) (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Co
 `Inner.ofJson`): that `Names`' canonical pins agree with its parsed ones at these inputs. The difftest's, at the honest
 session. -/
 def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Bool := do
-  let back (j : Json) : V Bool := do pure ((Json.parse (← Flock.canon j)).toOption == some j)
-  let shapeOk := (do Flock.RecVStar.Inner.ofJson (← Json.parse (← Flock.canon h.shape.toJson))).toOption == some h.shape
+  let back (j : Json) : V Bool := do pure ((Flock.JsonParse.parse (← Flock.canon j)).toOption == some j)
+  let shapeOk := (do Flock.RecVStar.Inner.ofJson (← Flock.JsonParse.parse (← Flock.canon h.shape.toJson))).toOption == some h.shape
   let mut ok := shapeOk && (← back o.partition)
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   for (p, s) in o.parts.zip pr.parts do
@@ -458,7 +458,7 @@ def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Boo
     let draw := if tags.hm96Rows then Flock.Witness.recordDraw record else none
     let drawOk ← match draw with
       | none => pure true
-      | some d => do pure ((Json.parse (← Flock.canon d)).toOption.map Flock.norm == some d)
+      | some d => do pure ((Flock.JsonParse.parse (← Flock.canon d)).toOption.map Flock.norm == some d)
     let regOk ← match p.registered with
       | none => pure true
       | some r => back r

@@ -14,6 +14,7 @@ accepts, and each names the digest of the one staged rows file, of the compositi
 first part's inner session and transcript.
 -/
 import Lean.Data.Json
+import Flock.JsonParse
 
 namespace Flock
 namespace RecCompose
@@ -24,7 +25,7 @@ open Lean (Json)
 def verdicts (log : String) : Except String (Array Json) :=
   (log.splitOn "\n").foldlM (init := #[]) fun out line =>
     if line.startsWith "VERDICT " then
-      match Json.parse (line.drop 8).toString with
+      match JsonParse.parse (line.drop 8).toString with
       | .ok j => pure (out.push j)
       | .error e => throw s!"a VERDICT line that is not JSON: {e}"
     else pure out

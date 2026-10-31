@@ -1170,11 +1170,11 @@ structure RecAt (Coin : Type) [Inhabited Coin] where
   runs : ∀ (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin ((record IV).V.k x) → Coin) (ws : List Flock.Wit),
     (record IV).innerView H x r ws = (run H (replay (msgs x ws)) IV (xI x) () fun i => coinSeq r i.val).seen
 
-/-- **The recursion: KS at the representation V\* binds**: `KS` at the compiled record whose inner view runs
-`IVStar` (`D.record Bd.IVStar`), over the bound record (`Bound.deploy`), at every inner and outer decoder that meets the
-spec. `E*`'s inner views are what the compiled verifier reads off the outer witnesses (`Deploy.innerView`): at each
-round before the last, the inner session's commit strings, and at the last, their openings with `DE`'s last message.
-`IVStar` is the verifier that accepts them, and `KS` reads its acceptance there (`RecAt.runs`). At the deployment `D` is
+/-- **The recursion: KS at the representation V\* binds**: `KS` at the compiled record whose inner view runs `IVStar`
+(`D.record Bd.IVStar`), over the bound record (`Bound.deploy`), at every inner and outer decoder that meets the spec.
+`E*`'s inner views are what the compiled verifier reads off the outer witnesses (`Deploy.innerView`): at each round
+before the last, the inner session's commit strings, and at the last, their openings with `DE`'s last message. `IVStar`
+is the verifier that accepts them, and `KS` reads its acceptance there (`RecAt.runs`). At the deployment `D` is
 `deployRec · ivScope b` at V*'s bound layout and the guarantee is `RecDeploy.KSBoundDeployed`, in its ∀-form
 `RecDeploy.KSBoundRouteCols`, at the deployed bound record `RecDeploy.bdCover` (`γ`'s weight at `IVStar` at `coverW`,
 ASK-72), where (P3) holds (`RecDeploy.ksBoundRouteCols_cover`). Its level (`lam`) is about 65 bits per SHA-512 call at the

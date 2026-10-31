@@ -120,7 +120,7 @@ theorem innerHeld_reads {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
       simp only [htu] at hh
       obtain ⟨_, -, hh⟩ := bind_ok hh
       obtain ⟨_, -, hh⟩ := bind_ok hh
-      cases hjp : Json.parse t with
+      cases hjp : Flock.JsonParse.parse t with
       | error err =>
         simp only [hjp] at hh
         obtain ⟨_, hl, -⟩ := bind_ok hh
@@ -139,7 +139,7 @@ population `n`, and the inner statement's tags (`verity/flock-circuit+plain-leav
 program and `--stratified n`, and the scope check. -/
 theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
     (h : VStar.Recursive.innerOk o cB pB dB = .ok ()) :
-    ∃ t j L n spec sts, String.fromUTF8? dB = some t ∧ Json.parse t = .ok j ∧
+    ∃ t j L n spec sts, String.fromUTF8? dB = some t ∧ Flock.JsonParse.parse t = .ok j ∧
       Flock.HmRow.stratifiedLaw o.partition o.program 1 = .ok (L, n) ∧
       (Flock.Tags.circuitPlainLeaves.withCoins .os).hm96Rows = true ∧
       Flock.RecSetup.checkInner none none (pure (none, none)) = .ok () ∧
@@ -203,7 +203,7 @@ theorem ins_inner {ri : FlockDeploy.Raw} {o : VStar.Recursive.Own} {dB : ByteArr
     (hpart : ri.partition.map (FlockDeploy.jsonOf "partition") = some (.ok o.partition))
     (hprog : ri.program = some o.program) (hd : ri.draw = some dB) (hwk : ri.work = none) (hwt : ri.workTable = none)
     (hst : ri.stratified = some n) (hcl : ri.closure = none) (hreg : ri.registered = none)
-    (hpi : ri.publicInputs = none) (ht : String.fromUTF8? dB = some t) (hj : Json.parse t = .ok j) :
+    (hpi : ri.publicInputs = none) (ht : String.fromUTF8? dB = some t) (hj : Flock.JsonParse.parse t = .ok j) :
     ri.ins = .ok (innerIns ri.circuit ri.publicFile o j n) := by
   have hf : Flock.Tags.byName? ri.statement = some Flock.Tags.circuitPlainLeaves :=
     Flock.Tags.byName?_of_find? (by rw [hs]; rfl)

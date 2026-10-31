@@ -130,8 +130,10 @@ theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j
   have hin : RecSetup.checkInner i.inner i.src i.bound = .ok () := by
     rw [hm.inner, hm.src, checkInner_dense hsparse]
     exact hc.inner
+  have hbr : RecBudget.regs i.inner i.base.registered = .ok () := by rw [hm.inner, hm.registered]; exact hc.regs
+  have hbs : RecBudget.statements i.inner = .ok () := by rw [hm.inner]; exact hc.statements
   unfold RecIns.setup
-  simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hin, hset, bind, Except.bind, pure, Except.pure]
+  simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hin, hbr, hbs, hset, bind, Except.bind, pure, Except.pure]
   rw [forIn_ok_of_all fun a ha u => by simp only [(hregs a ha).1, (hregs a ha).2]]
   simp only [hfull]
   simp only [hm.zk, hm.stmtTags, hm.tags, hm.tables, hm.circuitFile, hm.partition, hm.program, hm.registered,

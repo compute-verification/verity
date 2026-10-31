@@ -362,10 +362,12 @@ theorem capPorted_of {parts : List PartX} {vs : Array VStar.Stmt} {sh : RecVStar
     (hvs : RecVStar.statements sh = .ok vs) (hl : parts.length = vs.size)
     (hp : ∀ s (hs : s < vs.size), ∃ c, parts[s]?.bind partCircuit = some c ∧ RecVStar.checkParsed vs[s] c = .ok ()) :
     capPorted parts = true := by
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, -, -, hss⟩ := FlockC3.Reps.list_ok hvs
-  have hpush : vs = (A ++ C ++ K).push (VStar.Stmt.cap 0 N) := by
-    rw [hss, Array.push_eq_append]
-    simp only [Array.append_assoc]
+  obtain ⟨P, N, hpush⟩ : ∃ (P : Array VStar.Stmt) (N : Nat), vs = P.push (VStar.Stmt.cap 0 N) := by
+    first
+      | (obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, -, -, hss⟩ := FlockC3.Reps.list_ok hvs
+         exact ⟨A ++ C ++ K, N, by rw [hss, Array.push_eq_append]; simp only [Array.append_assoc]⟩)
+      | (obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, L, N, -, -, -, hss⟩ := FlockC3.Reps.list_ok hvs
+         exact ⟨A ++ C ++ K ++ L, N, by rw [hss, Array.push_eq_append]; simp only [Array.append_assoc]⟩)
   have hlt : vs.size - 1 < vs.size := by rw [hpush, Array.size_push]; omega
   have hlast : vs[vs.size - 1] = VStar.Stmt.cap 0 N := by
     have h? : vs[vs.size - 1]? = some (VStar.Stmt.cap 0 N) := by

@@ -426,7 +426,7 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
   refine ⟨⟨_, hsetO⟩, ?_⟩
   exact nextO_acc_of_partVerdict (hparts s (hlt s _ hq).1 (hlt s _ hq).2) ha hT hP.circuit hpubS
     (Part.partIns_tags _ _ _ _ _ _ _ _ _ _) rfl rfl rfl rfl hreg rfl
-    (by unfold innerOfO; rw [hinsO]; try rfl)
+    (by unfold innerOfO; rw [hinsO]; try rfl) hdn
     (by unfold srcOfO; rw [hinsO]; try rfl)
     (by rw [hrecord]; exact hrd.symm)
     (by rw [Part.partIns_tags]; exact hbuild)

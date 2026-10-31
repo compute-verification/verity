@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Proofs.Flock.Claims.Complete.Walk
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The masked session's reps, by index
@@ -81,7 +82,7 @@ def RepRunZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : S
 `j`th stream and proof file being rep `j`'s rounds and proof (`RepRunZk`). -/
 theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
-    (hown : Json.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
+    (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hC : ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad
@@ -215,7 +216,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 streams whose every round is retained, rep `r`'s recorded rounds are its stream's as the decoder reads them back, the
 verifier's extra claims are the prover's, the table has `25 ≤ m`, and rep `r`'s decoded masked proof is the proof it
 returned, ending at that stream. -/
-theorem RunZk.walk (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+theorem RunZk.walk (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) (o : RunZk H rel) :
     ∃ (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (streams : Array (Array Round)),
       o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = v.1 ∧ streams.size = 2 ∧
@@ -225,7 +226,7 @@ theorem RunZk.walk (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 
         streams[r]! fun p => o.zp 0 r = p := by
   obtain ⟨st, hst, hsp, h25, -⟩ := o.table
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS o.toCaseZk
-  obtain ⟨hz, hc, -⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hc, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, hRk⟩ := hP o.toCaseZk st (by rw [hst]; simp)
@@ -247,7 +248,7 @@ theorem RunZk.walk (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 
   have hdec : Record.decodeWith o.hs o.spec o.record = .ok (sessOf o.spec (Claims.hOf H) #[flat cm.cap]
       (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) := by
     rw [hrec]
-    exact decode_recordObjZk S (hOf_size h64) ht hct hH hdraw hsig hrb hpts hpm (by rw [hss, hrs1]; rfl) hrs
+    exact decode_recordObjZk (hOf_size h64) ht hct hH hdraw hsig hrb hpts hpm (by rw [hss, hrs1]; rfl) hrs
       o.proofs
   have hsess : o.sess = sessOf o.spec (Claims.hOf H) #[flat cm.cap] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
       o.proofs := by

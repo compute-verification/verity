@@ -35,7 +35,7 @@ theorem check_round {n : ℕ} {coins : Array F128} {b c : Bool} {why : String} {
 
 set_option maxHeartbeats 1000000 in
 /-- **S12: every decoded round has at least one coin, and as many as its count.** -/
-theorem decodeJWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : Session}
+theorem decodeJWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ rd ∈ s.rounds.toList, 1 ≤ rd.n ∧ rd.coins.size = rd.n := by
   rw [Record.decodeJWith_eq_decodeJWithK] at h
@@ -73,7 +73,7 @@ theorem find_of_any {ss : Array StreamRec} {w : String} (h : ss.any (·.name == 
 
 set_option maxHeartbeats 1000000 in
 /-- **S11: the decoder finds a stream at each rep stream's name.** -/
-theorem decodeJWith_finds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : Session}
+theorem decodeJWith_finds (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec j = .ok sess) :
     ∀ x ∈ spec.repStreams.toList, ∃ s, sess.streams.find? (·.name == x.2.2) = some s := by
   rw [Record.decodeJWith_eq_decodeJWithK] at h
