@@ -21,8 +21,8 @@ names the whole log. An entry is one of two formats, each under its own versione
 
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))` over the entry's canonical JSON, its format and `previous`
 among its keys; a card's is the same under `verity/registration/card/v1`, and the genesis of a composite's log is the
-same under `verity/registration/genesis/v1` over `{"composite": NAME}`. Registration is ASCII-only: a log or
-parameters holding any other character is refused as `ascii` before any digest is taken.
+same under `verity/registration/genesis/v1` over `{"composite": NAME}`. Registration is ASCII-only without DEL: a
+log or parameters holding any other character is refused as `ascii` before any digest is taken.
 
 The check (`check`) holds each entry to the log before it, and refuses the first entry that fails by the first check it
 fails, in this order:
@@ -297,10 +297,11 @@ private def keysOf : Json → Option (List String)
 def exactly (j : Json) (ks : List String) (what : String) : V Unit :=
   if keysOf j == some ks then pure () else throw s!"{what}: the keys must be [{", ".intercalate ks}]"
 
-/-- Registration is ASCII-only: `j`'s strings, keys included, hold no other character (read in `Flock.canonUtf8`,
-since `Flock.canon` escapes them), so its digest is the same however a canonical JSON escapes the rest. -/
+/-- Registration is ASCII-only without DEL: `j`'s strings, unescaped (`Flock.canonUtf8`), hold no character from 0x7f
+up, so its digest is the same however a canonical JSON escapes the rest. `Flock.canon` escapes such a character, so it
+can't be the test: a `\u00e9` in the committed text is refused here as `é` is. -/
 def ascii (j : Json) (what : String) : V Unit :=
-  if ((Flock.canonUtf8 j).toOption.getD "").all (fun (c : Char) => c.toNat < 128) then pure ()
+  if ((Flock.canonUtf8 j).toOption.getD "").all (fun (c : Char) => c.toNat < 127) then pure ()
   else throw s!"ascii: {what} holds a character outside ASCII"
 
 def hex64 (j : Json) (what : String) : V String := do
