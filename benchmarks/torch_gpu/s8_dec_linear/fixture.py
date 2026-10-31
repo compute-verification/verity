@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pou
 from p2_v1 import reference as R
 
 PARAMS = S.P2Params(*S.POINT)
-SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+SPEC = R.Params.of(PARAMS)
 ROW = PARAMS.block_bytes          # 2,056
 PAYLOAD = PARAMS.payload_bytes    # 2,054
 FLAG_T = 1                        # t's first candidate >= p
