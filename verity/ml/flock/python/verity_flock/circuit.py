@@ -63,6 +63,8 @@ from pathlib import Path
 
 import numpy as np
 
+from verity.ml.windows.interface import K_MAX, K_MIN, MASK_LOG, PER_SLOT, SLOT_LOG
+
 from . import ir_lower as IL
 
 FORMAT = "flock-circuit"
@@ -98,10 +100,8 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
 #: ZK off only: ``flock-circuit --zk`` refuses it (``live/src/circuit.rs``'s ``leaf_scheme_plain`` is the same object).
 LEAF_SCHEME_PLAIN = {"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
                      "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"}
-SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
-SHA_LOG = HM_LOG = 18
-MASK_LOG = 14
-K_MAX = 27
+SHA_NET, HM_NET = "sha512x3", "hm96"
+SHA_LOG = HM_LOG = SLOT_LOG
 #: The partition is a named query of the program, P = Q(C): its digest is SHA-512 over the tag and
 #: canon({program, query, version, params}). Without a verity/partition/v1 object, the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
@@ -400,7 +400,7 @@ def _ranges(items: list[tuple[str, int, int, dict]]) -> tuple[list[dict], int]:
         at = -(-at // (1 << sl)) << sl
         out[i] = {"type": typ, "slot_log": sl, "pos0": at >> sl, "count": n, **extra}
         at += n << sl
-    return out, max(20, (at - 1).bit_length())
+    return out, max(K_MIN, (at - 1).bit_length())
 
 
 #: MUFU lookup slots: low decoder bits per table (``lookup.rs``); the high decoder takes the rest
