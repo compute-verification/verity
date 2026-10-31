@@ -207,6 +207,17 @@ def replan9():
             {**b, "name": "w384-Bd0.44-rint8-D180M", "size": "w384", "tokens": 180_000_000, "lr": 2e-3, "threads": 12}]
 
 
+def replan10():
+    """B's lr optimum falls as runs lengthen (w256 B ρ = 0.25: best at 2e-3 at 20M and 40M, at 1e-3, the lowest run,
+    at 80M), so one step lower at the 25.4 points: B ρ = 0.25 at 5e-4 and B ρ = 0.44 (int8 R, diagonals) at 1e-3."""
+    b = {"design": "B", "rho": 0.25}
+    d = {"design": "B", "diag": True, "rho": 0.44, "r_dist": "int8", "lr": 1e-3}
+    return [{**b, "name": "w256-B0.25-D80M-lr0.0005", "size": "w256", "tokens": 80_000_000, "lr": 5e-4, "threads": 4},
+            {**b, "name": "w384-B0.25-D180M-lr0.0005", "size": "w384", "tokens": 180_000_000, "lr": 5e-4, "threads": 16},
+            {**d, "name": "w256-Bd0.44-rint8-D80M-lr0.001", "size": "w256", "tokens": 80_000_000, "threads": 4},
+            {**d, "name": "w384-Bd0.44-rint8-D180M-lr0.001", "size": "w384", "tokens": 180_000_000, "threads": 12}]
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -218,6 +229,7 @@ PRESETS = {
     "replan7": replan7,
     "replan8": replan8,
     "replan9": replan9,
+    "replan10": replan10,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
