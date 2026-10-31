@@ -7,7 +7,8 @@ The honest prover sends its session record as JSON, and the verifier reads it ba
 prints it, then `Json.parse` reads it, and what the verifier compares is `Json`'s `==` and the canonical printer's
 output (`canon`, the verifier's `Flock.canon`). `Json.parse`, `==` and `canon` are `partial` definitions: Lean runs
 them, and the kernel sees each as an opaque constant, so no proof unfolds them. `JsonSpec` states what completeness
-needs of them, over JSON values that are alike (`Json.Same`), printable (`Json.Good`) and well-formed (`Json.Wf`).
+needs of them, over JSON values that are alike (`Json.Same`), printable (`Json.Good`) and well-formed (`Json.Wf`), and
+texts of ASCII without DEL (`Json.Ascii`), which is all `canon` prints.
 
 * **Alike values** (`Same`): equal leaves, arrays alike element by element, and objects that are well-formed trees with
   one key set and alike values at each key. A Lean object is a tree whose shape is the order its keys were inserted in:
@@ -48,6 +49,10 @@ inductive Good : Json → Prop
   | arr {a : Array Json} (h : ∀ x ∈ a, Good x) : Good (.arr a)
   | obj {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get? k = some v → Good v) : Good (.obj m)
 
+/-- **A text of ASCII without DEL**: every character below `0x7f`, so every byte is. Canonical JSON escapes every other
+character, so its texts are. -/
+def Ascii (s : String) : Prop := ∀ c ∈ s.toList, c.toNat < 0x7f
+
 /-- **A well-formed JSON value**: every object a well-formed tree. -/
 inductive Wf : Json → Prop
   | null : Wf .null
@@ -62,7 +67,7 @@ end Json
 /-- **`JsonSpec`: the JSON library does what its source says**, at the prover's printer `print` and the canonical
 printer `canon`: `Json.parse` reads back what `print` printed of a printable value, and what `canon` printed; `parse`
 builds only well-formed trees; `Json`'s `==` holds of alike values; `canon` is the same on alike values, and returns on
-printable ones.
+printable ones a text of ASCII without DEL.
 
 It can't be proved: `Json.parse`, `Json`'s `==` and `canon` are `partial` definitions, opaque to the kernel, so no proof
 unfolds them. It affects completeness only, never soundness: it says that the honest prover's record reads back, and no
@@ -73,6 +78,6 @@ structure JsonSpec (print : Json → String) (canon : Json → Except String Str
   parse_wf : ∀ s j, Json.parse s = .ok j → Json.Wf j
   beq_same : ∀ a b, Json.Same a b → (a == b) = true
   canon_same : ∀ a b, Json.Same a b → canon a = canon b
-  canon_ok : ∀ j, Json.Good j → ∃ s, canon j = .ok s
+  canon_ok : ∀ j, Json.Good j → ∃ s, canon j = .ok s ∧ Json.Ascii s
 
 end Claims

@@ -57,11 +57,13 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   You hear back only if yours is held, ejected or reverted.
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
-  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
-  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
-  hold still keeps what is above it). A change to a
+  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
+  moves reviewed members below those awaiting a verdict (above any Lean check's prefix), so a PR waiting for review holds only itself; a
+  held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
-  passed at or above it; Lean proofs alone land on the verdict.
+  passed at or above it; Lean proofs alone land on the verdict. A PR whose merge onto `checked` changes nothing drive.toml's
+  `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
+  with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick, the Lean checks of `next` moved to its rebuild).
 - One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
   suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move. A red
   circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
@@ -147,5 +149,9 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   in its body what it deletes or unifies, or why nothing can go.
 - **Parked work gets done.** A lead starts each Backlog or Todo issue worth doing on its own worker and closes the rest
   with a reason. Being busy is no reason to park one. Set more goals, not fewer.
+- **An issue tracks an ask; only its outcome answers it.** Daniel's asks carry `asker:daniel`, have a worker within the
+  hour, and only he parks them (the coordinating skill); the Linear audit rings each that breaks this, hourly, with @top.
+  A hand operation done twice, and each incident, gets a class-fix issue filed `--asker daniel` (his standing ask) with
+  a worker that hour: the lead builds or staffs the fix rather than repeating the operation.
 - **A ruling rolls out in the change that records it**, as AGENTS.md says; when code must change first, the ruling's
   relay names the owner and the PR that changes the docs with it.
