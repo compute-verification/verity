@@ -1,0 +1,277 @@
+"""Strassen-hostile QAT (HT-USEFUL): a short distillation pass that keeps every block linear's int8 codes spread to a
+target Strassen overflow rate, then its quality and its exported codes.
+
+The student is the model with every block linear a `quant.QLinear` calibrated to --target (a Strassen level-1 overflow
+rate; `absmax` is stock per-channel int8, `bf16` evaluates the unquantized model and trains nothing). The teacher is the
+same model in bf16, frozen. The loss is the forward KL(teacher ‖ student) at temperature 1 over every position, on
+FineWeb-Edu packed into --seq windows in file order (`prep.py`); every arm reads the same tokens in the same order.
+AdamW (0.9, 0.95), no weight decay, linear warmup then cosine to 0, gradients clipped at 1. Every --recal steps each
+matrix's c is solved again, so the overflow stays at the target as the weights move.
+
+Quality, before training (the post-training quantization at the same scales) and after:
+- perplexity at --seq on WikiText-2's test split (raw, joined by blank lines, non-overlapping windows) and on the first
+  --val-tokens of the FineWeb-Edu val shard;
+- zero-shot accuracy with lm-eval (--tasks), the model evaluated as served: codes and scales frozen.
+
+Outputs in --out: result.json (config, per-matrix c and overflow profile, evals, the loss curve, throughput),
+codes.safetensors (each matrix's int8 codes `NAME.q` and fp32 scales `NAME.s`) and, with --price, the route pricing of
+those codes (`price.py`, run on the CPU while zero-shot runs on the GPU).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import quant  # noqa: E402
+
+TASKS = "arc_easy,arc_challenge,hellaswag,piqa,winogrande"
+KD_CHUNK = 2048
+
+
+def log(*a):
+    print(time.strftime("%H:%M:%S", time.gmtime()), *a, flush=True)
+
+
+class KD(torch.autograd.Function):
+    """Mean over positions of KL(teacher ‖ student); the gradient is formed chunk by chunk in the forward and kept in
+    the logits' dtype, so no fp32 vocabulary-sized activation is saved."""
+
+    @staticmethod
+    def forward(ctx, sl, tl):
+        shape = sl.shape
+        s2, t2 = sl.reshape(-1, shape[-1]), tl.reshape(-1, shape[-1])
+        n = s2.shape[0]
+        grad = torch.empty_like(s2)
+        loss = torch.zeros((), device=sl.device, dtype=torch.float64)
+        for i in range(0, n, KD_CHUNK):
+            ls = F.log_softmax(s2[i:i + KD_CHUNK].float(), -1)
+            lt = F.log_softmax(t2[i:i + KD_CHUNK].float(), -1)
+            pt = lt.exp()
+            loss += (pt * (lt - ls)).sum(dtype=torch.float64)
+            grad[i:i + KD_CHUNK] = ((ls.exp() - pt) / n).to(grad.dtype)
+        ctx.save_for_backward(grad)
+        ctx.shape = shape
+        return (loss / n).float()
+
+    @staticmethod
+    def backward(ctx, g):
+        (grad,) = ctx.saved_tensors
+        return (grad * g.to(grad.dtype)).reshape(ctx.shape), None
+
+
+def wikitext_ids(tok) -> np.ndarray:
+    from datasets import load_dataset
+
+    ds = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")
+    return np.asarray(tok("\n\n".join(ds["text"]))["input_ids"], dtype=np.int64)
+
+
+@torch.no_grad()
+def perplexity(model, ids: np.ndarray, seq: int, bs: int = 4, max_windows: int | None = None) -> dict:
+    n = len(ids) // seq
+    if max_windows:
+        n = min(n, max_windows)
+    was = model.training
+    model.eval()
+    nll, cnt = 0.0, 0
+    for i in range(0, n, bs):
+        x = torch.from_numpy(ids[i * seq:min(i + bs, n) * seq].astype(np.int64).reshape(-1, seq)).cuda()
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            logits = model(x).logits
+        nll += F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]), x[:, 1:].reshape(-1),
+                               reduction="sum").item()
+        cnt += x[:, 1:].numel()
+        del logits
+    model.train(was)
+    return {"ppl": math.exp(nll / cnt), "nll": nll / cnt, "tokens": cnt}
+
+
+def zeroshot(model, tok, tasks: list[str], bs: int, limit: int | None) -> dict:
+    import lm_eval
+    from lm_eval.models.huggingface import HFLM
+
+    model.eval()
+    lm = HFLM(pretrained=model, tokenizer=tok, batch_size=bs, max_length=2048)
+    out = {}
+    for t in tasks:
+        t0 = time.time()
+        try:
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                r = lm_eval.simple_evaluate(model=lm, tasks=[t], num_fewshot=0, limit=limit, log_samples=False,
+                                            bootstrap_iters=0)
+            out[t] = {k: v for k, v in r["results"][t].items() if isinstance(v, (int, float))}
+            out[t]["n"] = r.get("n-samples", {}).get(t, {}).get("effective")
+        except Exception as e:  # noqa: BLE001 — a task that can't load is reported, not fatal
+            out[t] = {"error": f"{type(e).__name__}: {e}"}
+        out[t]["seconds"] = time.time() - t0
+        log("zeroshot", t, json.dumps(out[t]))
+    return out
+
+
+def evaluate(model, tok, wt_ids, val_ids, args, zs: bool) -> dict:
+    t0 = time.time()
+    ev = {"wikitext2": perplexity(model, wt_ids, args.seq),
+          "fineweb_val": perplexity(model, val_ids, args.seq, max_windows=args.val_tokens // args.seq)}
+    log("eval", json.dumps({k: round(v["ppl"], 4) for k, v in ev.items()}), f"{time.time() - t0:.0f}s")
+    if zs:
+        ev["zeroshot"] = zeroshot(model, tok, args.tasks.split(","), args.zs_batch, args.zs_limit)
+    return ev
+
+
+def export(model, path: Path) -> dict:
+    from safetensors.torch import save_file
+
+    model.eval()
+    tensors = {}
+    for name, parent, attr in quant.block_linears(model):
+        q, s = getattr(parent, attr).frozen()
+        tensors[name[: -len(".weight")] + ".q"] = q.to(torch.int8).cpu().contiguous()
+        tensors[name[: -len(".weight")] + ".s"] = s.float().cpu().contiguous()
+    save_file(tensors, str(path))
+    return {"file": path.name, "bytes": path.stat().st_size, "matrices": len(tensors) // 2}
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--model", default="unsloth/Llama-3.2-1B")
+    ap.add_argument("--target", required=True, help="bf16, absmax or a Strassen level-1 overflow rate (0.02 = 2%%)")
+    ap.add_argument("--tokens", type=int, default=100_000_000, help="training tokens; 0 = no training")
+    ap.add_argument("--seq", type=int, default=2048)
+    ap.add_argument("--batch", type=int, default=64, help="sequences a step")
+    ap.add_argument("--micro", type=int, default=4, help="sequences a forward")
+    ap.add_argument("--lr", type=float, default=1e-5)
+    ap.add_argument("--warmup", type=float, default=0.03, help="share of steps")
+    ap.add_argument("--recal", type=int, default=50, help="steps between solving every matrix's c again")
+    ap.add_argument("--eval-every", type=int, default=100)
+    ap.add_argument("--val-tokens", type=int, default=1_048_576)
+    ap.add_argument("--data", type=Path, default=Path(os.environ.get("HU_DATA", "data")))
+    ap.add_argument("--tasks", default=TASKS)
+    ap.add_argument("--zs-batch", type=int, default=64)
+    ap.add_argument("--zs-limit", type=int, default=None)
+    ap.add_argument("--no-zs-before", action="store_true", help="skip zero-shot before training")
+    ap.add_argument("--max-steps", type=int, default=None, help="stop after this many steps (smoke tests)")
+    ap.add_argument("--price", action="store_true", help="price the exported codes with price.py on the CPU")
+    ap.add_argument("--price-workers", type=int, default=6)
+    ap.add_argument("--price-args", default="", help="more arguments for price.py")
+    ap.add_argument("--out", type=Path, required=True)
+    args = ap.parse_args(argv)
+    args.out.mkdir(parents=True, exist_ok=True)
+    torch.manual_seed(0)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    t_start = time.time()
+    tok = AutoTokenizer.from_pretrained(args.model)
+    meta = json.loads((args.data / "meta.json").read_text())
+    train_ids = np.memmap(args.data / "train.bin", dtype=np.uint32, mode="r")
+    val_ids = np.memmap(args.data / "val.bin", dtype=np.uint32, mode="r")
+    wt_ids = wikitext_ids(tok)
+    res = {"config": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()}, "data": meta,
+           "gpu": torch.cuda.get_device_name(0), "torch": torch.__version__,
+           "wikitext2_tokens": int(len(wt_ids))}
+    import transformers
+
+    res["transformers"] = transformers.__version__
+    model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32, attn_implementation="sdpa").cuda()
+    model.config.use_cache = False
+    target = None if args.target in ("absmax", "bf16") else float(args.target)
+    steps = 0 if args.target == "bf16" else args.tokens // (args.batch * args.seq)
+    if args.max_steps is not None:
+        steps = min(steps, args.max_steps)
+    res["steps"] = steps
+    assert steps * args.batch * args.seq <= len(train_ids), \
+        f"{steps} steps need {steps * args.batch * args.seq} tokens, {args.data} has {len(train_ids)}: prep more shards"
+    if args.target != "bf16":
+        res["calibration_before"] = quant.wrap(model, target, log)
+        res["matrices_before"] = quant.stats(model)
+    res["eval_before"] = evaluate(model, tok, wt_ids, val_ids, args, zs=steps == 0 or not args.no_zs_before)
+    (args.out / "result.json").write_text(json.dumps(res, indent=1))
+
+    if steps > 0:
+        teacher = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16,
+                                                       attn_implementation="sdpa").cuda().eval()
+        teacher.config.use_cache = False
+        for p in teacher.parameters():
+            p.requires_grad_(False)
+        params = [p for p in model.parameters() if p.requires_grad]
+        opt = torch.optim.AdamW(params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.0, eps=1e-8, fused=True)
+        warm = max(1, int(args.warmup * steps))
+        accum = args.batch // args.micro
+        curve, recals = [], []
+        model.train()
+        torch.cuda.reset_peak_memory_stats()
+        t0 = time.time()
+        for step in range(steps):
+            lr = args.lr * min(1.0, (step + 1) / warm) * 0.5 * (1 + math.cos(math.pi * step / steps))
+            for g in opt.param_groups:
+                g["lr"] = lr
+            tot = 0.0
+            for j in range(accum):
+                off = (step * args.batch + j * args.micro) * args.seq
+                x = torch.from_numpy(train_ids[off:off + args.micro * args.seq].astype(np.int64)
+                                     .reshape(args.micro, args.seq)).cuda(non_blocking=True)
+                with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+                    tl = teacher(x).logits
+                with torch.autocast("cuda", dtype=torch.bfloat16):
+                    sl = model(x).logits
+                loss = KD.apply(sl, tl) / accum
+                loss.backward()
+                tot += loss.item()
+                del tl, sl, loss
+            gn = torch.nn.utils.clip_grad_norm_(params, 1.0).item()
+            opt.step()
+            opt.zero_grad(set_to_none=True)
+            if target is not None and (step + 1) % args.recal == 0:
+                info = quant.recalibrate(model, target)
+                ovs = sorted(v["strassen1"] for v in info.values())
+                recals.append({"step": step + 1, "min": ovs[0], "median": ovs[len(ovs) // 2], "max": ovs[-1]})
+            rec = {"step": step + 1, "kd": tot, "lr": lr, "grad_norm": gn,
+                   "tok_s": (step + 1) * args.batch * args.seq / (time.time() - t0)}
+            if (step + 1) % args.eval_every == 0 or step + 1 == steps:
+                rec["fineweb_val_64"] = perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]
+            curve.append(rec)
+            if (step + 1) % 10 == 0 or "fineweb_val_64" in rec or step < 3:
+                log("step", json.dumps({k: (round(v, 6) if isinstance(v, float) else v) for k, v in rec.items()}))
+        res["train"] = {"curve": curve, "recalibrations": recals, "seconds": time.time() - t0,
+                        "tokens": steps * args.batch * args.seq,
+                        "peak_mem_gb": torch.cuda.max_memory_allocated() / 2**30}
+        del teacher, opt
+        torch.cuda.empty_cache()
+        if target is not None:
+            res["calibration_after"] = quant.recalibrate(model, target)
+    model.eval()
+    pricer = None
+    if args.target != "bf16":
+        res["matrices_after"] = quant.stats(model)
+        res["codes"] = export(model, args.out / "codes.safetensors")
+        if args.price:
+            cmd = [sys.executable, str(HERE / "price.py"), "--codes", str(args.out / "codes.safetensors"),
+                   "--out", str(args.out / "price"), "--workers", str(args.price_workers), "--full-check",
+                   *args.price_args.split()]
+            log("price:", " ".join(cmd))
+            pricer = subprocess.Popen(cmd, stdout=open(args.out / "price.log", "w"), stderr=subprocess.STDOUT)
+    res["eval_after"] = evaluate(model, tok, wt_ids, val_ids, args, zs=True) if steps > 0 else res["eval_before"]
+    if pricer is not None:
+        res["price_rc"] = pricer.wait()
+        log("price rc", res["price_rc"])
+    res["seconds"] = time.time() - t_start
+    (args.out / "result.json").write_text(json.dumps(res, indent=1))
+    log("done", json.dumps({k: res["eval_after"][k]["ppl"] for k in ("wikitext2", "fineweb_val")}))
+    return 0 if res.get("price_rc", 0) == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
