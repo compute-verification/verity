@@ -86,7 +86,7 @@ class Leak(Exception):
 
 def canonical(x: Any) -> bytes:
     """`x` as `Core.canonicalJson` reads it, for the integers, strings, lists and objects of ASCII keys cases hold."""
-    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
+    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
 
 
 def bind(id: str, digests: Sequence[tuple[str, bytes]]) -> bytes:

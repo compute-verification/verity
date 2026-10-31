@@ -28,7 +28,7 @@ def test_an_answer_reads_back_from_its_json(a):
 def test_the_canonical_form_is_the_lean_one():
     a = A.Answer.undecided(ID, "é \"q\"", ROOT)
     assert a.canonical() == ('{"commitment":"' + ROOT.hex() + '","profile":null,"protocol":"verity/example/v0",'
-                             '"public":null,"reason":"é \\"q\\"","verdict":"undecided"}')
+                             '"public":null,"reason":"\\u00e9 \\"q\\"","verdict":"undecided"}')
     assert A.outcome(ID, "undecided", "é \"q\"", ROOT) == a.to_json()
 
 
@@ -56,7 +56,7 @@ def test_an_accept_has_its_public_outputs_and_profile():
         A.Answer.accept(ID, ROOT, None, PROFILE)
 
 
-@pytest.mark.parametrize("b", [b'{"b":1,"a":2}', b'{"a": 1}', b'{"a":1.5}', b"\xff", b"{"])
+@pytest.mark.parametrize("b", [b'{"b":1,"a":2}', b'{"a": 1}', b'{"a":1.5}', b"\xff", b"{", '"\u00e9"'.encode()])
 def test_canonical_json_refuses_any_other_spelling(b):
     with pytest.raises(A.Refused):
         A.canonical_json(b)
