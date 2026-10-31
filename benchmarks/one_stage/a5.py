@@ -170,6 +170,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
+import a5_memo as AM  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
@@ -509,6 +510,7 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
+@AM.memoized
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
@@ -525,7 +527,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     Definition, a member of bit rows too; a bit-row member's template with no composer is vLLM's (`vllm_template`). ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
-    (`port_refusal`); None for no reservation to hold them to."""
+    (`port_refusal`); None for no reservation to hold them to. Each check by the verifier is asked once per input
+    (`a5_memo.memo`), the summary's ``verifier_checks`` counting those asked and those reused."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
@@ -851,6 +854,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if outs:
         summary["outputs"] = {"units": len(outs), "proved": set(outs) <= set(proved) <= set(D.proved(union_draw)),
                               "drawn": len(drawn), "closure": len(union_draw.get("closure", ()))}
+    summary["verifier_checks"] = AM.counts()
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
         and summary.get("outputs", {"proved": True})["proved"]
