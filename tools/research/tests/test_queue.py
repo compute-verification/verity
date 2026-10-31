@@ -2557,6 +2557,29 @@ def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_f
         assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
 
 
+def test_a_change_to_checker_files_no_records_run_reads_leaves_a_same_input_pass_standing(world, capsys):
+    """A test or a doc of `tools/verity/lean/` made every records run at another commit vouch for nothing, as the whole
+    directory was one input.  Its tests, its Markdown and `RECORDS_TOOL_UNREAD` are no records input; a file of it a run
+    reads (`merge.py`, which merges a lock across a merge of `main`) still is, and so is a new one until it is listed."""
+    world.with_store_remote()
+    _move_main(world, {"tools/verity/lean/check.py": "# the checker\n", "tools/verity/lean/merge.py": "# the lock driver\n",
+                       "tools/verity/lean/tool.py": "# the scheduled runs\n", "tools/verity/lean/README.md": "the checker\n",
+                       "tools/verity/lean/tests/test_check.py": "x = 1\n"})
+    c = world.change({LOCK: _lock(A="2")})
+    rid = _published(world, c, files={"lean-audit/audit.json": _audit()})
+    for n, files in ((1, {"tools/verity/lean/tests/test_check.py": "x = 2\n", "tools/verity/lean/tests/fixtures/T.lean": "def t := 1\n"}),
+                     (2, {"tools/verity/lean/README.md": "the checker, said again\n", "tools/verity/lean/NOTES.md": "notes\n"}),
+                     (3, {"tools/verity/lean/tool.py": "# the scheduled runs, changed\n"})):
+        assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 0
+        assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
+
+    for n, files in ((4, {"tools/verity/lean/merge.py": "# the lock driver, changed\n"}),
+                     (5, {"tools/verity/lean/new.py": "x = 1\n"})):
+        capsys.readouterr()
+        assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 1
+        assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
+
+
 def test_the_same_inputs_search_reads_every_candidate_to_its_bound_newest_first_splitting_a_fetch_the_remote_refuses(world, capsys):
     """A search bounded to a few dozen commits would refuse carried locks with 'N commit(s) with runs can't be read here'.
     It fetches every candidate up to `RECORDS_FETCH`, in chunks, and a chunk the
