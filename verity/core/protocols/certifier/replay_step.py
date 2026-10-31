@@ -1,4 +1,5 @@
-"""One vLLM v1 scheduler step as a Boolean Definition: the compile unit's core, between advice validity and the Programs.
+"""One vLLM v1 scheduler step as a Boolean Definition: the compile slice's proof block's core, between advice validity
+and the Programs.
 
     ReplayStep_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW} (state, arrivals, bits, prefix[, row_pfx])
         -> (ok, taken, used[, looked], rows, state')
@@ -32,7 +33,7 @@ synchronous or async scheduling, FCFS, one full-attention KV group, as `replay._
   frees its blocks. A request reaching O sets `fin` and keeps its slot. A `fin` victim frees its blocks at preemption
   and isn't requeued, but the step still preempted, so its waiting loop doesn't run. The certified O forces every lag
   row, so async costs no decision.
-- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width; the certifier's PROTOCOL.md, "The rows"): each running slot's
+- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width): each running slot's
   `pfx` moves with its request through the compaction and placement. A slot with a row takes that row's entry after
   its `CacheStep_v1` calls (a running row's one, an admitted row's second), a kept slot without one keeps its own, and
   a preempted or stopped request drops its own, since it resumes as an admitting row from the root. The step also
@@ -79,11 +80,11 @@ this circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM
 `_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
 and KV connectors.
 
-**Composition** (the compile unit, all inside one ZK proof under the advice's hiding root; the certifier's PROTOCOL.md,
-"Advice v1"):
+**Composition** (the compile slice's proof block, all inside one ZK proof under the advice's hiding root):
 1. the committed advice is the decision bits themselves, one per open-step ask in the scan's order, read directly;
 2. a scan of this step over the session's steps, from the empty engine, the arrivals' cursor moving by `taken` and
-   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the warden's release order;
+   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the network certifier's release
+   order;
 3. the charge: advice v1's arithmetic code run forward over the same decisions (`arith_encode`), each window's coded
    length at most its declared charge, so no decoder runs in the circuit;
 4. `compile_steps` (`integrations/vllm/verity_vllm/program/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
@@ -145,8 +146,8 @@ def widths(S) -> SimpleNamespace:
 
 
 def _state_fields(S) -> list[tuple[str, int, int]]:
-    """The committed state, as the step reads and writes it: the sync step's part, with EW's `run_pfx` after `run_comp`
-    (PROTOCOL.md, "The rows"), then async's group (AS)."""
+    """The committed state, as the step reads and writes it: the sync step's part, with EW's `run_pfx` after `run_comp`,
+    then async's group (AS)."""
     Z = widths(S)
     R, W = S.R, S.W
     return ([("run_valid", R, 1), ("run_id", R, S.IW), ("run_P", R, Z.LW), ("run_O", R, Z.LW), ("run_out", R, Z.LW),
@@ -835,7 +836,7 @@ def _bits(v: int, w: int) -> list[int]:
 
 
 def arguments(S, st: State, inp: Inputs) -> list[list[int]]:
-    """The unit's arguments (each a flat list of bits, as `evaluate_bits` takes one instance)."""
+    """The proof block's arguments (each a flat list of bits, as `evaluate_bits` takes one instance)."""
     Z = widths(S)
     vals: dict[str, list[int]] = {}
 
@@ -856,7 +857,7 @@ def arguments(S, st: State, inp: Inputs) -> list[list[int]]:
 
 
 def decode(S, flat: Sequence[int]) -> Out:
-    """The unit's output bits as an `Out` (rows by slot, the states' valid slots)."""
+    """The proof block's output bits as an `Out` (rows by slot, the states' valid slots)."""
     at, f = 0, {}
     for name, n, w in _out_fields(S):
         f[name] = [sum(int(flat[at + e * w + j]) << j for j in range(w)) for e in range(n)]
@@ -877,7 +878,7 @@ def decode(S, flat: Sequence[int]) -> Out:
 
 
 def evaluate(st_: dict, cases: Sequence[tuple[State, Inputs]]) -> list[Out]:
-    """The unit at statics `st_` on each (state, inputs), in one evaluation."""
+    """The proof block at statics `st_` on each (state, inputs), in one evaluation."""
     S = SimpleNamespace(**st_)
     args = [list(rows) for rows in zip(*(arguments(S, s, i) for s, i in cases))]
     out = evaluate_bits(unit(**st_), *args)
@@ -942,7 +943,7 @@ def _staged(key: tuple) -> dict[str, int]:
 
 
 def size(**st_) -> dict[str, int]:
-    """The unit's ANDs by stage at statics `st_` (traced on a counting circuit, no gates written)."""
+    """The proof block's ANDs by stage at statics `st_` (traced on a counting circuit, no gates written)."""
     out = dict(_staged(tuple(st_[k] for k in STATICS)))
     out["ands"] = sum(out.values())
     return out

@@ -22,7 +22,7 @@ hiding leaves before the check coin, and the sampled cells are opened after it; 
 The served PoUW moves to this receipt, and `SharedNoiseLucks`, the premise its folds' detection rests on, has no place in
 Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
 
-Under "One proof service" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
+Under "One proof system" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
 each must pass, and what it does with the outcome. Coins, selection, timing, proving, verifying and the record are the
 service's. The second half of this document states what Dither needs from the service, each need as a requirement on the
 challenger, the certifier or the firewall, with the premise it makes true.
@@ -232,7 +232,7 @@ which is what its draw established, and a fleet's W_F or W_cap beside W_S.
 **The bound.** Except with probability δ_coin + δ_crypto + k(κ_dmm + κ_dsha), the credited work plus any other work the
 replica's devices did in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg (`WorkSound`). Here:
 - δ_coin is the draw's failure probability;
-- δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof service's soundness error, and SHA-512's as a random oracle in the
+- δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof system's soundness error, and SHA-512's as a random oracle in the
   extraction and in `SAKSha`;
 - κ_dmm and κ_dsha are `SAKMatmul`'s and `SAKSha`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
   per sampling block.
@@ -512,8 +512,13 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
 - **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
   certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
   implemented.
-- **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
-  keys set at provisioning), and whether ML-KEM may bend the one-hash rule.
+- **Keyed transport**, for a channel that can't meet `WitnessPathPrivate c`, the per-channel premise:
+  `verity.ml.crypto.transport`, with `Guarantees.TransportPassiveZk` taking either that premise or `ChannelHides`
+  (`Security/Definitions/Core/Guarantees/Transport.lean`). An onsite device holds an imprint key (a shared secret
+  installed over the cable once per device, then a SHA-512 ratchet), and a remote party with no cable adds ML-KEM-1024,
+  the one-hash rule's exception for transport, always XORed with the SHA-512 chain key's PRF output and never on pair
+  links. The premise here is the zero-knowledge one: it lets the prover's own machines read a private frame, so where
+  a coin must not reach an outside machine early, `CoinsConfidential` still needs the MVP's placement.
 - **The firewall** (with C-Flock's ZK server):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, queued check coins are the
     fix, and `Timed` must then read the check coin's time apart from the selection's;

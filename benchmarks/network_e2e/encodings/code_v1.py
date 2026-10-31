@@ -2,7 +2,7 @@
 
 Advice v1 (`derived.py`) charges nothing for what is certified (the warden's admission order, the request records, the
 release buckets), replayed (the scheduler replay, `replay.py`) or derived (`derived.py`'s rules), and sends only the
-residual, one `Window` (the certifier's `window_charge.Window`) per sampling block, each field's values in the
+residual, one `Advice` (the certifier's `window_charge.Advice`) per sampling block, each field's values in the
 order its reader asks for them:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`replay.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails
@@ -13,25 +13,24 @@ order its reader asks for them:
   the run (`Residual.order`);
 - `lag`: async mode's bit per request (`Residual.lag`).
 
-Which window a value is charged to is the caller's, by I1's rule: no later than the first window whose rows it can change
-(the certifier PROTOCOL's A5).
+Which window a value is charged to is the caller's, by I1's rule: no later than the first window whose rows it can change.
 
 **The code.** Each window's part is one segment of `code.py`'s 32-bit arithmetic coder: the window's count of each field,
 then the field's values, under the registered `Book`. Each count and integer is coded with an Exp-Golomb bin table
 (`code.Binned`), and a field that increases over the run is coded as its gap. Each bit is coded with a public adaptive
 Krichevsky–Trofimov estimate per context (`KT`): counts start from the book's prior, are updated as the bits are decoded,
 and are halved past 2^16, so the model is public. `Encoder` and `Decoder` take the same symbols online, for a reader that
-codes with contexts of its own (the replay's egress contexts). `encode` and `decode` drive them over `Window`s, where a
+codes with contexts of its own (the replay's egress contexts). `encode` and `decode` drive them over `Advice`s, where a
 window's `arrived` bits take as context the run of decisions since the last arrival.
 
-**Prefix-free, canonical, self-delimiting.** LEAK-LEAN's `BitsCount` (#3533) holds when the charge is at least the length
-of a prefix-free encoding.
+**Prefix-free, canonical, self-delimiting.** The sampled leak bound's count (`hAs`: at most 2^c advice values charged c
+or less) holds when the charge is at least the length of a prefix-free encoding.
 - A segment's symbols are fixed by its counts, so the decoder knows where the segment's message ends. The coder's
   termination (`code.ArithEncoder.finish`: the pending bits and two more) names a dyadic interval inside the message's
   final interval. Distinct messages have disjoint final intervals, so no encoder output is a prefix of another's, and
   Kraft's sum over them is at most 1. A run's string is its windows' segments in order, each prefix-free given the earlier
   ones, so the whole string is too.
-- The WNC decoder alone takes 2 to 4 strings for one message (the certifier PROTOCOL's attack 10): any whose interval
+- The WNC decoder alone takes 2 to 4 strings for one message: any whose interval
   meets the final interval, after reading 32 bits past the segment. `code.ArithDecoder.finish` makes it canonical. It
   re-encodes each segment's decoded intervals and refuses the segment unless the bits are the encoder's, bit for bit.
   `Decoder` also refuses:
@@ -45,7 +44,7 @@ of a prefix-free encoding.
 
 **The registered codebook.** `Book` holds the caps and every model, and is fit on historical traces (`fit_book`), never on
 the run: a codebook fit to the run would be advice. Its digest (`Book.digest`, SHA-512 of its canonical JSON) is
-registered with the codec, `compile` and the cap c before the audit's first window (the certifier PROTOCOL's A7). The
+registered with the codec, `compile` and the cap c before the audit's first window. The
 decoder reads the book that digest names. It is integer only and uses no hash.
 """
 
@@ -61,7 +60,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.core.protocols.certifier.window_charge import Window
+from verity.core.protocols.certifier.window_charge import Advice
 
 HERE = Path(__file__).resolve().parent
 
@@ -345,7 +344,7 @@ class _State:
         self.run, self.resume, self.step, self.index = 0, -1, -1, -1
 
 
-def _window(c: Any, win: Window | None, st: _State) -> Window:
+def _window(c: Any, win: Advice | None, st: _State) -> Advice:
     """One window's symbols, written once for every direction: `win` is None when decoding."""
     caps = c.book.caps
 
@@ -379,13 +378,13 @@ def _window(c: Any, win: Window | None, st: _State) -> Window:
             got.append(i)
         order.append((st.step, tuple(got)))
     lag = [c._flag("lag", None if win is None else win.lag[j], 0) for j in range(count("n_lag", win.lag if win else ()))]
-    return Window(tuple(arrived), tuple(hits), tuple(resumes), tuple(order), tuple(lag))
+    return Advice(tuple(arrived), tuple(hits), tuple(resumes), tuple(order), tuple(lag))
 
 
 # ------------------------------------------------------------------------------------------------------------ API
 
 
-def encode(windows: Sequence[Window], book: Book) -> Encoded:
+def encode(windows: Sequence[Advice], book: Book) -> Encoded:
     """The run's residual, window by window; `lens[w]` is window w's charge."""
     e, st = Encoder(book), _State()
     for win in windows:
@@ -394,7 +393,7 @@ def encode(windows: Sequence[Window], book: Book) -> Encoded:
     return e.finish()
 
 
-def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Window]:
+def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Advice]:
     """The windows back, refusing (ValueError) any string `encode` wouldn't produce."""
     d, st = Decoder(bits, nbits, book), _State()
     out = []
@@ -405,7 +404,7 @@ def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Window]:
     return out
 
 
-def ideal_bits(windows: Sequence[Window], book: Book) -> list[float]:
+def ideal_bits(windows: Sequence[Advice], book: Book) -> list[float]:
     """Each window's model cost: its charge less the coder's termination and rounding."""
     c, st, out = _Ideal(book), _State(), []
     for win in windows:
@@ -415,7 +414,7 @@ def ideal_bits(windows: Sequence[Window], book: Book) -> list[float]:
     return out
 
 
-def fit_book(history: Iterable[Sequence[Window]], caps: Caps = Caps(), prior_weight: int = 32) -> Book:
+def fit_book(history: Iterable[Sequence[Advice]], caps: Caps = Caps(), prior_weight: int = 32) -> Book:
     """The book to register, fit on historical runs (each a sequence of windows), never on the audited run: each integer
     symbol's bin table from its samples, and each bit context's prior from its counts, scaled to at most `prior_weight`
     observations."""

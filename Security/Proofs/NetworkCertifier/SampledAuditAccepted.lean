@@ -8,12 +8,12 @@ import Proofs.Flock.Claims.Prob
 bound with a stronger relation on a smaller scope, so it is `KS` once `R δ x w` gives `RAcc δ x w` at every statement in
 the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mono`). On that scope:
 
-* **No faulty unit is drawn `all`** (`disjoint_allSlots`): a set that meets a class drawn `all` has that class's
-  `P_a` factor `0` (`classesPa_eq_zero`), so it is in no `M_δ` at `δ ≥ 0`.
-* **The advice** (`heldAdv`): every faulty unit's committed gate (`FaultyGate`) held at the trace's value there, and the
-  other inputs the trace's values.
+* **No faulty proof block is sampled `all`** (`disjoint_allSlots`): a set that meets a class sampled `all` has that
+  class's `P_a` factor `0` (`classesPa_eq_zero`), so it is in no `M_δ` at `δ ≥ 0`.
+* **The advice** (`heldAdv`): every faulty proof block's committed gate (`FaultyGate`) held at the trace's value there,
+  and the other inputs the trace's values.
 * **`Accepted`** (`accepted_of`): at each step before the horizon, `C` run on the ingress up to the step and the advice
-  holds the trace's value at every egress gate (`valOver_out`). A gate of a unit that isn't faulty computes what its
+  holds the trace's value at every egress gate (`valOver_out`). A gate of a proof block that isn't faulty computes what its
   proof unit computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every unit
   correct there, `runIn_ne_none`), and a value it reads from outside its proof unit is a committed one: the reading
   gate's own replay unit's, a held gate's or another correct unit's boundary value, each the trace's. An input reads
@@ -25,7 +25,7 @@ namespace NetTiming.SampledAuditProof
 
 open Claims Claims.Sampling
 
-/-! ## A gate's unit is unique -/
+/-! ## A gate's proof block is unique -/
 
 theorem idx_eq_of_mem_flatten {α : Type} {L : List (List α)} (h : L.flatten.Nodup) {i j : ℕ} (hi : i < L.length)
     (hj : j < L.length) {a : α} (ha : a ∈ L[i]) (hb : a ∈ L[j]) : i = j := by
@@ -157,8 +157,8 @@ theorem val_ne_none {rd : ℕ → Option Bool} {o : Option Bool} {x : BGate} (hx
   | and ws => simpa [BGate.val] using mapM_ne_none (ws := ws) h
   | xor ws => simpa [BGate.val] using mapM_ne_none (ws := ws) h
 
-/-- **A correct proof unit computes every gate of it**: at a topological program, each gate of a correct unit `u` has a
-value computed in `u`. -/
+/-- **A correct proof block computes every gate of it**: at a topological program, each gate of a correct proof block
+`u` has a value computed in `u`. -/
 theorem runIn_ne_none {C : Prog} (hT : C.Topological) {ref : ℕ → Option Bool} {u : List ℕ} (hc : C.Correct ref u)
     (hlen : ∀ g ∈ u, g < C.gates.length) : ∀ g ∈ u, C.runIn ref u g ≠ none := by
   intro g
@@ -180,7 +180,7 @@ theorem runIn_ne_none {C : Prog} (hT : C.Topological) {ref : ℕ → Option Bool
     · simp only [hiu, ite_false]
       exact (hc g hg).1 x hx i hi hiu
 
-/-! ## `C` run with the faulty units' gates held -/
+/-! ## `C` run with the faulty proof blocks' gates held -/
 
 theorem valOver_held {C : Prog} {inp : ℕ → Bool} {free : ℕ → Option Bool} {g : ℕ} {b : Bool} (h : free g = some b) :
     valOver C inp free g = b := by
@@ -199,7 +199,7 @@ theorem valOver_const {C : Prog} {inp : ℕ → Bool} {free : ℕ → Option Boo
   rfl
 
 open Classical in
-/-- **The advice's held gates**: every faulty unit's committed gate, at the trace's value. -/
+/-- **The advice's held gates**: every faulty proof block's committed gate, at the trace's value. -/
 noncomputable def heldAdv (C : Prog) (P : Partition) (F : Finset ℕ) (ref : ℕ → Option Bool) (g : ℕ) : Option Bool :=
   if FaultyGate C P F g then some (traceVal C ref g) else none
 
@@ -303,7 +303,7 @@ theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉
     rw [hb] at hc
     exact Option.some.inj hc
 
-/-- **At a returned gate, `C` run with the faulty units' gates held has the trace's value.** -/
+/-- **At a returned gate, `C` run with the faulty proof blocks' gates held has the trace's value.** -/
 theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
     valOver C inp (heldAdv C P F ref) g = traceVal C ref g := by
   by_cases hfg : FaultyGate C P F g
@@ -327,12 +327,12 @@ end Run
 
 /-- **An input reads the ingress the trace carries**: at step `t` before the horizon, on the ingress up to `t` and the
 trace's values as the other inputs, a gate in no later step's ingress reads the trace's value. -/
-theorem inputOf_eq {L K S : ℕ} {lay : Layout L S} {C : Prog} {ref : ℕ → Option Bool}
+theorem inputOf_eq {L K S : ℕ} {lay : BoundaryGates L S} {C : Prog} {ref : ℕ → Option Bool}
     {op : ℕ → List (Obs L K S) → List Bool} {k : ℕ} {o : List (Obs L K S)} {t : ℕ} (hcar : Carries lay C ref op k o)
     (ht : t < k) {g : ℕ} (hgd : ∀ t', t < t' → t' < k → g ∉ lay.ingress t') :
     lay.inputOf k (ingressUpTo op o t) (traceVal C ref) g = traceVal C ref g := by
   have hlen : (ingressUpTo op o t).length = t + 1 := by simp [ingressUpTo]
-  unfold Layout.inputOf
+  unfold BoundaryGates.inputOf
   split
   · rename_i i j h
     obtain ⟨i', hi', he⟩ := List.exists_of_findSome?_eq_some h
@@ -361,7 +361,7 @@ theorem inputOf_eq {L K S : ℕ} {lay : Layout L S} {C : Prog} {ref : ℕ → Op
     · exact hno i hit hg
     · exact hgd i (by omega) hik hg
 
-/-! ## No faulty unit is drawn `all` -/
+/-! ## No faulty proof block is sampled `all` -/
 
 /-- **A set that meets a class drawn `all` has acceptance probability `0`**: that class's factor is `0`. -/
 theorem classesPa_eq_zero : ∀ (rs : List Rule) (cs : List (List (List RU))) (o : ℕ) (B : Finset ℕ),
@@ -402,7 +402,7 @@ theorem disjoint_allSlots {d : Design} {P : Partition} {δ : ℝ} {B : Finset �
 
 open Classical in
 /-- **Every unit that isn't faulty has interior values making its proof units correct.** -/
-theorem correct_of_not_faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) :
+theorem correct_of_not_faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) :
     ∃ ι : ℕ → ℕ → Bool, ∀ v r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
       ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) (ι v)) u := by
   have : ∀ v, ∃ ι : ℕ → Bool, ∀ r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
@@ -423,10 +423,10 @@ theorem correct_of_not_faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt
   exact ⟨ι, hι⟩
 
 /-- **The trace's transfer gates carry what the Program accepts**: at a topological program that the partition
-partitions and the layout fits, with every unit outside `F` correct at some interior, the advice holding `F`'s
+partitions and the layout fits, with every proof block outside `F` correct at some interior, the advice holding `F`'s
 committed gates at the trace's values and the other inputs at the trace's makes `Accepted` every observation sequence
 and operator the trace carries with every status complete. -/
-theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : Layout L S} {k : ℕ} (hT : C.Topological)
+theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ} (hT : C.Topological)
     (hP : P.Partitions C) (hfit : lay.Fits C k) {ref : ℕ → Option Bool} {F : Finset ℕ} (ι : ℕ → ℕ → Bool)
     (hι : ∀ v r, P.rus[v]? = some r → v ∉ F → ∀ u ∈ r, C.Correct (RU.ref C r ref (ι v)) u)
     {op : ℕ → List (Obs L K S) → List Bool} {o : List (Obs L K S)} (hcar : Carries lay C ref op k o)
@@ -458,7 +458,7 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : Layout L S} 
 variable {Coin Col T : Type}
 
 /-- **On the audit's scope the sampling relation gives the audit's**: at `δ ≥ 0`, `R δ x w` gives `RAcc δ x w`. -/
-theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stmt → ℕ)
+theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     {δ : ℝ} (hδ : 0 ≤ δ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit}
     (hR : R H D.commit D.parse D.partition δ x w) : RAcc H D.commit D.parse D.partition L K S lay k δ x w := by
   obtain ⟨s, P, hs, hP, hM⟩ := hR

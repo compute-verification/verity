@@ -1,11 +1,11 @@
 """The verifier's check: exact, slot by slot, with record-and-reject.
 
-An egress link-window (`check_link`) is **accepted** if three things hold:
+An egress execution phase (`check_link`) is **accepted** if three things hold:
 - its status is complete;
 - every slot of its grid equals the Program's grid;
 - the window's declared clock sync is in the protocol's set, and is the spatial unit's sync for that window.
 
-It must also have exactly one record, settled by the verdict deadline: a link-window with more than one record is a
+It must also have exactly one record, settled by the verdict deadline: an execution phase with more than one record is a
 `duplicate` violation, whatever the records say. Anything else is a **violation**. It is recorded and the run is
 rejected, as a policy signal. There is no halt: later windows are still checked and recorded. Every bound in
 `capacity` holds on accepted runs only; a rejected window may already have carried up to its unbound capacity before it
@@ -14,7 +14,8 @@ was rejected.
 A spatial unit has one clock. The audit keeps each window's sync (`Audit.syncs`), set by the first egress link checked
 for that window, and a link that declares a different sync for the window is an `advice` violation there. The bound on
 accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows (Lean
-`SecurityProofs.EncardAccSeqsLeSync`, whose timing advice is `Fin W → Sync`): 7 bits per window at 16 × 8. A sync per
+`Properties.NetworkCertifier.EncardAcceptedObservationsLe`, whose timing advice is `Fin W → Σ_sync`): 7 bits per window
+at 16 × 8. A sync per
 link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
 
 The Program's grids are computed from the syncs as declared, out-of-set values included, so a declared sync outside the
@@ -26,32 +27,38 @@ compares its digest with the digest of the Program's grid, which is exact up to 
 
 A record may also come certified (`certificate`): the record head, the certifier's salt for it and the network
 certificate, which signs the head's digest under that salt; the head and the salt are witness. The audit checks that
-the certificate names the head's link-window and signs the head's salted digest (`certificate_digest`), and its
+the certificate names the head's execution phase and signs the head's salted digest (`certificate_digest`), and its
 signature against the network certifier's public key (`key`) over its message in the certifier session (`session`,
 the id the challenger sampled for it); a certificate that fails, one from another session included, is a `signature`
 violation. A head settled after the verdict deadline is a `no-verdict`. The status is the head's, which the signed
 digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
 under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier
 every certificate verifies, and the verdicts are those of the raw records. N2 (`service.LinkWindows`) makes no grid
-comparison: `check_link(grid=False)` leaves the grid to its unit's head check (`head_check`), which holds the head's
-status, grid parameters and counts on every link-window, so N2's claim is counts only, and nothing here holds the
-frames.
+comparison: `check_link(grid=False)` leaves the grid to its proof block's head check (`head_check`), which holds the
+head's status, grid parameters and counts on every execution phase, so N2's claim is counts only, and nothing here holds
+the frames.
 
 An ingress link's rows are the Program's input, which it reads rather than predicts, so `check_ingress_link` checks only
-its statuses: a link-window is accepted if it has exactly one record and its status is complete (Lean `StatusComplete`).
-On a committed record it reads the status in the clear, which the digest binds. With no Program grid to recompute the
-digest from, it can't catch a published status that disagrees with the digest, as the egress check does. A certified
-ingress record's status is the signed head's, and its grid parameters and parameters digest must be `params`'s, or it
+its statuses: an execution phase is accepted if it has exactly one record and its status is complete (Lean
+`StatusComplete`). On a committed record it reads the status in the clear, which the digest binds. With no Program grid
+to recompute the digest from, it can't catch a published status that disagrees with the digest, as the egress check
+does. A certified ingress record's status is the signed head's, and its grid parameters and parameters digest must be
+`params`'s, or it
 is a `mismatch`.
+
+A client holds its copy of one window's certificates, as a reveal endpoint served them, to the key and the session
+(`certificate_refusals`, whose Lean is `NetworkCheck.LinkWindow.refusals`): it refuses a certificate of another key or
+link-window, a clock certificate that isn't egress, one whose signature doesn't verify (`Certificate.verify`), a second
+of its direction, and a clock certificate signing a digest that an earlier kept one signs, whose salt was reused.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 
-from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, PublicKey,
+from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction, PublicKey,
                                                                           parameters_digest, record_head)
 from verity.core.protocols.certifier.commitment import CommittedRecord, record_digest
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record
@@ -75,7 +82,7 @@ class Verdict:
 @dataclass
 class Audit:
     """Every verdict of a run, in order, and the spatial unit's clock: each window's sync, set by the first egress link
-    checked for that window. The run is accepted only if every link-window is."""
+    checked for that window. The run is accepted only if every execution phase is."""
 
     verdicts: list[Verdict] = field(default_factory=list)
     syncs: dict[int, ClockSync] = field(default_factory=dict)
@@ -95,8 +102,8 @@ class Audit:
         """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
         declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
         `advice` violation. Certified records are checked against the certifier's `key` in its `session`. With `grid`
-        False no grid is compared: each certified head's check in N2's unit (`head_check`) holds its status, grid and
-        counts instead, and nothing holds its frames, so a raw or committed record, which has neither, raises
+        False no grid is compared: each certified head's check in N2's proof block (`head_check`) holds its status, grid
+        and counts instead, and nothing holds its frames, so a raw or committed record, which has neither, raises
         `ValueError`. N2 checks with `grid` False."""
         by_window = _by_window(link, records, Direction.EGRESS, key, session)
         if not grid and any(not isinstance(r, CertifiedRecord) for rs in by_window.values() for r in rs):
@@ -151,7 +158,7 @@ class Audit:
 def _by_window(link: str, records: Sequence[Published], direction: Direction, key: PublicKey | None,
                session: bytes | None) -> dict[int, list[Published]]:
     """The link's records by window. A certificate names its direction, so one for the other direction is another
-    link-window's."""
+    execution phase's."""
     by_window: dict[int, list[Published]] = defaultdict(list)
     for r in records:
         if isinstance(r, CertifiedRecord):
@@ -177,8 +184,8 @@ def _mismatch(record: Published, link: str, window: int, expected, params: GridP
 
 
 def _status_violation(found: Sequence[Published], key: PublicKey | None, session: bytes | None) -> str | None:
-    """The violations every link-window can have, in order: no record, more than one, a certificate that doesn't verify,
-    a record settled after the deadline, or an incomplete status."""
+    """The violations every execution phase can have, in order: no record, more than one, a certificate that doesn't
+    verify, a record settled after the deadline, or an incomplete status."""
     if not found:
         return "no-verdict"
     if len(found) > 1:
@@ -192,3 +199,29 @@ def _status_violation(found: Sequence[Published], key: PublicKey | None, session
     if not record.status.complete:
         return f"status:{record.status.reason.value}"
     return None
+
+
+def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int, certificates: Sequence[Certificate],
+                         clocks: Sequence[Certificate], seen: Collection[bytes] = ()
+                         ) -> tuple[list[str | None], list[str | None]]:
+    """Each certificate's refusal in one window's answer, then each clock certificate's, None where the client keeps
+    it, each read against those kept before it: another key's (``key``), another link-window's than `link`'s window
+    `window` (``link-window``), a clock certificate that isn't egress (``clock``), a signature that doesn't verify under
+    `key` in certifier session `session` (``signature``), a second of its direction (``second``), or a clock certificate
+    signing a digest that a kept one signs, earlier in the window or among `seen`'s (``reused``)."""
+
+    def refusals(xs: Sequence[Certificate], clock: bool) -> list[str | None]:
+        kept, signed, out = set(), set(seen), []
+        for c in xs:
+            why = ("key" if c.key_id != key.key_id else "link-window" if (c.link, c.window) != (link, window)
+                   else "clock" if clock and c.direction is not Direction.EGRESS
+                   else "signature" if not c.verify(key, session) else "second" if c.direction in kept
+                   else "reused" if clock and c.digest in signed else None)
+            out.append(why)
+            if why is None:
+                kept.add(c.direction)
+                if clock:
+                    signed.add(c.digest)
+        return out
+
+    return refusals(certificates, False), refusals(clocks, True)

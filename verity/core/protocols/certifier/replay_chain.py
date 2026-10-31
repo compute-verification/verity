@@ -1,25 +1,26 @@
-"""The replay's state chain: vLLM's scheduler state handed from one step unit to the next under hiding commitments
-(PROTOCOL.md, "The replay's state chain").
+"""The replay's state chain: vLLM's scheduler state handed from one step proof block to the next under hiding
+commitments.
 
-The compile unit replays the scheduler from advice v1 and the certified record, one step unit per engine step, each
-`replay_step.ReplayStep_v1` (the replay's step): the committed queue state, the next A certified arrivals and the next A
-decisions in, the step's rows and the next state out. A window is many steps, so the state passes between units as
+The compile slice's proof block replays the scheduler from advice v1 and the certified record, one step proof block per
+engine step, each `replay_step.ReplayStep_v1` (the replay's step): the committed queue state, the next A certified
+arrivals and the next A decisions in, the step's rows and the next state out. A window is many steps, so the state
+passes between proof blocks as
 rows of produced values, each unit reading its rows at public positions. This module is that chain: the rows (`Shape`,
-`Row`, `Window`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the verifier's check of how
+`Row`, `QueueRow`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the verifier's check of how
 the windows join (`check_chain`), and the three Boolean parts it puts in the units, `ReplayAdvance` beside each step,
 `ReplayLoad` once a window and `ReplayClose` once a session, with `advance`, `load` and `close` their specifications.
 
 **Why a window has a row of its own.** The step reads its arrivals and decisions at the scan's cursors, which move by
 its `taken` and `used`, and the cursors are private: a step's position in the certified arrivals or the window's
-decisions is the schedule itself. A registered read is at a position the verifier derives, so no unit can read the
-arrival record at the cursor. So each window has one window row, the certified arrivals not yet taken when it starts
+decisions is the schedule itself. A registered read is at a position the verifier derives, so no proof block can read
+the arrival record at the cursor. So each window has one window row, the certified arrivals not yet taken when it starts
 followed by the window's own (`queue`, at most Q) and the window's decoded decisions (`dec`, at most D), and every step
-unit reads it at the same public position. The state row carries the two cursors as private heads (`qh`, `dh`), and
-`ReplayAdvance` checks that the step's A arrivals and A decision bits are the window row's at the heads, with a log
+proof block reads it at the same public position. The state row carries the two cursors as private heads (`qh`, `dh`),
+and `ReplayAdvance` checks that the step's A arrivals and A decision bits are the window row's at the heads, with a log
 shifter that computes only the A entries it returns. Once a window `ReplayLoad` writes the window row: the last
-window row past its heads, then the window's certified arrivals (K slots, the warden's) and its decoded decisions,
-which it reads at public positions. So every read in the chain is at a public position, and no gate hashes a row: the
-Lean verifier checks each read's path (`registered.verify_read`).
+window row past its heads, then the window's certified arrivals (K slots, the network certifier's) and its decoded
+decisions, which it reads at public positions. So every read in the chain is at a public position, and no gate hashes a
+row: the Lean verifier checks each read's path (`registered.verify_read`).
 
 **The rows**, each field's elements in turn and each element least significant bit first, then zero bits to a whole
 16-bit word. A state row (`row_fields`, `Shape.width` bits) and a window row (`window_fields`, `Shape.window_width`):
@@ -39,7 +40,7 @@ Lean verifier checks each read's path (`registered.verify_read`).
   width, 0 for none) each running slot's walk entry `run_pfx` follows `run_comp`. With AS (async scheduling) the
   state ends with each running slot's `fin` and `cap` and each waiting slot's `cap`, and an arrival carries its
   `cap` (O is its max_tokens): `q_cap` here, the step's `arr_cap` and the load's `a_cap`.
-- A `Row`'s and a `Window`'s entries are tuples of their fields in `replay_step.Req`'s order, those the shape has:
+- A `Row`'s and a `QueueRow`'s entries are tuples of their fields in `replay_step.Req`'s order, those the shape has:
   running (id, P, O, out, computed[, cap, fin][, pfx]), waiting (id, P, O, out[, cap]) and an arrival
   (id, P, O[, cap]) (`running_names`, `waiting_names`, `arrival_names`).
 - `qh` and `dh` are how many of the window row's arrivals and decisions the window's steps so far took and read;
@@ -50,15 +51,15 @@ Lean verifier checks each read's path (`registered.verify_read`).
   QW = bitlen(Q), DW = bitlen(D), PW = bitlen(P), bitlen(0) being 1; IW is a request id's and EW a walk entry's.
 - In every row the valid elements of each group are a prefix and the rest are zero bits, as are `dec`'s bits past
   `left`. `decode` refuses any other row. The circuit needs no such check: the first rows are the empty ones, and every
-  later row is a proved unit's output.
+  later row is a proved proof block's output.
 
 **A window** is two produced values (`one_stage.produced`) in `hm96-sha512/row/v2` bit rows: `VALUE`, its state rows
-S_0 … S_{P+1}, and `WINDOW`, the last window's row and its own; P, the step units a window, is a public cap. Unit 0 is
-the load: it reads state rows 0 and 1 and window rows 0 and 1 with the window's arrivals, decisions and step count
-n ≤ P. Unit u ≥ 1 is step u: ReplayStep_v1 on state row u's state with the arrivals and bits `ReplayAdvance` checks
-against window row 1, which also checks state row u + 1, so a row two units read is the one row `produced.shared`
-holds them to. Steps past the window's n are idle (`steps` = 0): the next row is the row, and the unit's rows are
-dropped (`ReplayAdvance`'s `active` = 0).
+S_0 … S_{P+1}, and `WINDOW`, the last window's row and its own; P, the step proof blocks a window, is a public cap.
+Proof block 0 is the load: it reads state rows 0 and 1 and window rows 0 and 1 with the window's arrivals, decisions and
+step count n ≤ P. Proof block u ≥ 1 is step u: ReplayStep_v1 on state row u's state with the arrivals and bits
+`ReplayAdvance` checks against window row 1, which also checks state row u + 1, so a row two proof blocks read is the
+one row `produced.shared` holds them to. Steps past the window's n are idle (`steps` = 0): the next row is the row, and
+the proof block's rows are dropped (`ReplayAdvance`'s `active` = 0).
 
 - **The carry.** Window w's state row 0 is window w − 1's state row P + 1, and its window row 0 is window w − 1's
   window row 1, each committed under the same salt (`commit_window(carry=…)`), so its opening b‖c is the same, and the
@@ -77,10 +78,10 @@ dropped (`ReplayAdvance`'s `active` = 0).
 about 2·width for the idle select and the equality), three reads and one state row. Per window: P steps, one
 `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3 path of depth ⌈log2(P + 2)⌉ or 1.
 Per session one `ReplayClose` and its two reads.
-On the trace corpus's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md, before
-the carry). AS and EW widen the rows by the step's own fields, and the parts with them: at the served vLLM run's engine
+On the trace corpus's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8, before the
+carry. AS and EW widen the rows by the step's own fields, and the parts with them: at the served vLLM run's engine
 class (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, `ReplayAdvance` is 1,761 ANDs sync, 1,814 at AS = 1 and 2,102 with
-17-bit walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (protocol/served-shape.md).
+17-bit walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144.
 """
 
 from __future__ import annotations
@@ -121,8 +122,8 @@ def _bitlen(v: int) -> int:
 class Shape:
     """The public size class: ReplayStep_v1's R running slots, W waiting slots and A arrivals a step, the engine's
     max_model_len L and num_gpu_blocks NB, a request id's width IW; the chain's Q pending arrivals, D decisions and P
-    steps a window, and the warden's K arrival slots a window; ReplayStep_v1's async_scheduling AS (0 or 1) and its
-    walk entries' width EW (0 for none)."""
+    steps a window, and the network certifier's K arrival slots a window; ReplayStep_v1's async_scheduling AS (0 or 1)
+    and its walk entries' width EW (0 for none)."""
 
     R: int
     W: int
@@ -192,7 +193,7 @@ def waiting_names(S) -> tuple[str, ...]:
 
 
 def arrival_names(S) -> tuple[str, ...]:
-    """An arrival's fields, in `Window.queue`'s tuples, the step's and the load's arrivals."""
+    """An arrival's fields, in `QueueRow.queue`'s tuples, the step's and the load's arrivals."""
     return ("id", "P", "O") + (("cap",) if S.AS else ())
 
 
@@ -250,7 +251,8 @@ Arrival = tuple[int, ...]   # (id, P, O[, cap]): `arrival_names`
 
 @dataclass(frozen=True)
 class Row:
-    """A state row: the scheduler and the window's heads between two units (the module's docstring, "The rows")."""
+    """A state row: the scheduler and the window's heads between two proof blocks (the module's docstring, "The
+    rows")."""
 
     running: tuple[Running, ...] = ()
     waiting: tuple[Waiting, ...] = ()
@@ -261,7 +263,7 @@ class Row:
 
 
 @dataclass(frozen=True)
-class Window:
+class QueueRow:
     """A window row: the arrivals the window's steps may take, in certified order, and its decisions."""
 
     queue: tuple[Arrival, ...] = ()
@@ -300,7 +302,7 @@ def _values(row: Row, S) -> dict[str, list[int]]:
     return vals
 
 
-def _window_values(win: Window, S) -> dict[str, list[int]]:
+def _window_values(win: QueueRow, S) -> dict[str, list[int]]:
     if len(win.queue) > S.Q or len(win.decisions) > S.D or any(b not in (0, 1) for b in win.decisions):
         raise MalformedRow("the window exceeds the size class, or a decision isn't a bit")
     vals: dict[str, list[int]] = {}
@@ -327,7 +329,7 @@ def encode(row: Row, S) -> tuple[int, ...]:
     return _padded(_flatten(_values(row, S), row_fields(S)), width(S))
 
 
-def encode_window(win: Window, S) -> tuple[int, ...]:
+def encode_window(win: QueueRow, S) -> tuple[int, ...]:
     """The window row's `window_width(S)` bits."""
     return _padded(_flatten(_window_values(win, S), window_fields(S)), window_width(S))
 
@@ -337,7 +339,7 @@ def state_bits(row: Row, S) -> tuple[int, ...]:
     return tuple(_flatten(_values(row, S), state_fields(S)))
 
 
-def front(S, win: Window, row: Row) -> tuple[tuple[Arrival, ...], tuple[int, ...]]:
+def front(S, win: QueueRow, row: Row) -> tuple[tuple[Arrival, ...], tuple[int, ...]]:
     """The step's arrivals and its A decision bits: the window row's at the row's heads (zeros past `left`)."""
     bits = win.decisions[row.dh:row.dh + S.A]
     return win.queue[row.qh:row.qh + S.A], tuple(bits) + (0,) * (S.A - len(bits))
@@ -388,13 +390,13 @@ def decode(bits: Sequence[int], S) -> Row:
     return Row(_items(f, "run", running_names(S)), _items(f, "wait", waiting_names(S)), f["free"][0], qh, dh, steps)
 
 
-def decode_window(bits: Sequence[int], S) -> Window:
+def decode_window(bits: Sequence[int], S) -> QueueRow:
     """The window row `bits` encode; `MalformedRow` for any other bits."""
     f = _fields_of(bits, window_fields(S), window_width(S))
     left = f["left"][0]
     if left > S.D or any(f["dec"][left:]):
         raise MalformedRow(f"left {left} of {S.D} with no decision past it")
-    return Window(_items(f, "q", arrival_names(S)), tuple(f["dec"][:left]))
+    return QueueRow(_items(f, "q", arrival_names(S)), tuple(f["dec"][:left]))
 
 
 def row(bits: Sequence[int]) -> tuple[int, ...]:
@@ -408,11 +410,11 @@ def unrow(words: Sequence[int]) -> tuple[int, ...]:
     return tuple((int(w) >> i) & 1 for w in words for i in range(WORD_BITS))
 
 
-# --- the specification of the units -----------------------------------------------------------------------------------------
+# --- the specification of the proof blocks ----------------------------------------------------------------------------
 
-def advance(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int], taken: int,
+def advance(S, win: QueueRow, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int], taken: int,
             used: int) -> Row | None:
-    """The state row after step unit u: `cur` when the window's steps are done (idle), else the step's next state
+    """The state row after step proof block u: `cur` when the window's steps are done (idle), else the step's next state
     (`stepped`'s running, waiting and free) with the heads past what it took and read and one step fewer. None refuses:
     the step's ok is 0, its arrivals or bits aren't the window row's at the heads, it took more than A or than are
     left, or it read more than A or than are left. Decisions the window's last step leaves unread carry (`load`)."""
@@ -427,8 +429,8 @@ def advance(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence
     return Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, dh, cur.steps - 1)
 
 
-def load(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Sequence[int],
-         steps: int) -> tuple[Row, Window] | None:
+def load(S, prev: Row, last: QueueRow, arrivals: Sequence[Arrival], decisions: Sequence[int],
+         steps: int) -> tuple[Row, QueueRow] | None:
     """The window's state row 1 and window row: state row 0 (`prev`, the last window's last) with its heads reset and
     the window's executed step count, and the last window's arrivals and decisions past `prev`'s heads with the
     window's certified arrivals and its decisions appended. None refuses: the last window left steps, or read past its
@@ -441,10 +443,10 @@ def load(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Seq
     if len(kept) + len(decisions) > S.D or steps > S.P:
         return None
     return (Row(prev.running, prev.waiting, prev.free, 0, 0, steps),
-            Window(rest + tuple(tuple(a) for a in arrivals), kept + tuple(decisions)))
+            QueueRow(rest + tuple(tuple(a) for a in arrivals), kept + tuple(decisions)))
 
 
-def close(S, row: Row, win: Window) -> bool:
+def close(S, row: Row, win: QueueRow) -> bool:
     """Whether a session may end in state row `row` and window row `win` (its last window's P + 1 and 1): the window's
     steps all run and its decisions, the carried ones among them, all read."""
     return not row.steps and row.dh == len(win.decisions)
@@ -465,7 +467,7 @@ def _opening(words: Sequence[int], salt: bytes) -> bytes:
 def empty_openings(program: str, S) -> tuple[bytes, bytes]:
     """b‖c of the empty state row and the empty window row under `empty_salts`, which the verifier computes."""
     s, w = empty_salts(program)
-    return _opening(row(encode(empty(S), S)), s), _opening(row(encode_window(Window(), S)), w)
+    return _opening(row(encode(empty(S), S)), s), _opening(row(encode_window(QueueRow(), S)), w)
 
 
 @dataclass(frozen=True)
@@ -476,7 +478,7 @@ class Committed:
     window: G.Registered
 
 
-def commit_window(program: str, rows: Sequence[Row], window: Window, S, registration: str, carry: Committed | None = None,
+def commit_window(program: str, rows: Sequence[Row], window: QueueRow, S, registration: str, carry: Committed | None = None,
                   salts: Sequence[bytes] | None = None) -> Committed:
     """A window's produced values: its P + 2 state rows, and the last window's window row with `window`. `carry`: the
     previous window's, whose last state row and window row are this window's first, under the same salts; for the
@@ -489,7 +491,7 @@ def commit_window(program: str, rows: Sequence[Row], window: Window, S, registra
         if rows[0] != empty(S):
             raise ValueError("the session's first row is the empty state")
         first, last_salt = empty_salts(program)
-        last = row(encode_window(Window(), S))
+        last = row(encode_window(QueueRow(), S))
     else:
         if carry.state.rows[-1] != words[0]:
             raise ValueError("a window starts in the state row the previous one ended in")
@@ -504,8 +506,8 @@ def commit_window(program: str, rows: Sequence[Row], window: Window, S, registra
 
 
 def reads(S) -> list[dict[str, dict[str, int]]]:
-    """Each unit's rows: the load's state rows `prev` 0 and `next` 1 and window rows `last` 0 and `window` 1; step u's
-    state rows `row` u and `next` u + 1 and window row `window` 1."""
+    """Each proof block's rows: the load's state rows `prev` 0 and `next` 1 and window rows `last` 0 and `window` 1;
+    step u's state rows `row` u and `next` u + 1 and window row `window` 1."""
     return ([{VALUE: {"prev": 0, "next": 1}, WINDOW: {"last": 0, "window": 1}}]
             + [{VALUE: {"row": u, "next": u + 1}, WINDOW: {"window": 1}} for u in range(1, S.P + 1)])
 
@@ -717,7 +719,7 @@ def _statics(S) -> dict[str, int]:
     return {k: getattr(S, k) for k in STATICS}
 
 
-def advance_arguments(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int],
+def advance_arguments(S, win: QueueRow, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int],
                       taken: int, used: int, nxt: Sequence[int]) -> list[list[int]]:
     """`ReplayAdvance`'s arguments, each a flat bit list: `arrivals` and `bits` the step's (`front`), `nxt` the next
     state row's bits."""
@@ -731,7 +733,7 @@ def advance_arguments(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals
             list(front_bits(S, arrivals)), list(bits) + [0] * (S.A - len(bits)), tb, ub, list(nxt)]
 
 
-def load_arguments(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Sequence[int], count: int, steps: int,
+def load_arguments(S, prev: Row, last: QueueRow, arrivals: Sequence[Arrival], decisions: Sequence[int], count: int, steps: int,
                    nxt: Sequence[int], window: Sequence[int]) -> list[list[int]]:
     """`ReplayLoad`'s arguments: `decisions` the D-bit field as given (bits past `count` included), `nxt` and `window`
     the next state row's and the window row's bits."""
@@ -747,7 +749,7 @@ def load_arguments(S, prev: Row, last: Window, arrivals: Sequence[Arrival], deci
             list(decisions) + [0] * (S.D - len(decisions)), cb, sb, list(nxt), list(window)]
 
 
-def close_arguments(S, row: Row, win: Window) -> list[list[int]]:
+def close_arguments(S, row: Row, win: QueueRow) -> list[list[int]]:
     """`ReplayClose`'s arguments: the session's last state row's bits and its window row's."""
     return [list(encode(row, S)), list(encode_window(win, S))]
 
@@ -800,7 +802,7 @@ def size(S) -> dict[str, int]:
 
 
 __all__ = ["Arrival", "Committed", "MalformedRow", "ReplayAdvance", "ReplayClose", "ReplayLoad", "Row", "Running", "STATICS",
-           "Shape", "VALUE", "WINDOW", "Waiting", "Window", "advance", "advance_arguments", "advance_unit", "arrival_fields",
+           "Shape", "VALUE", "WINDOW", "Waiting", "QueueRow", "advance", "advance_arguments", "advance_unit", "arrival_fields",
            "arrival_names", "check_chain", "close", "close_arguments", "close_reads", "close_unit", "commit_window",
            "decode", "decode_window", "empty", "empty_openings", "empty_salts", "encode", "encode_window",
            "evaluate_advance", "evaluate_close", "evaluate_load", "front", "front_bits", "front_fields", "load",

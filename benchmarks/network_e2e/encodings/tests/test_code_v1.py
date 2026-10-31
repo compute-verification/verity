@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier.window_charge import Window as W
+from verity.core.protocols.certifier.window_charge import Advice as W
 
 HERE = Path(__file__).resolve().parent
 
@@ -131,7 +131,7 @@ def _tiny_windows():
 def test_decode_accepts_exactly_the_encoders_strings(prior):
     """Exhaustive over a small alphabet: of every bit string up to the longest codeword, `decode` accepts exactly the
     encoder's codewords, each back to its residual. They are prefix-free with Kraft's sum at most 1, so v1's charge
-    meets `BitsCount`."""
+    meets the sampled leak bound's `hAs`."""
     book = V.Book(TINY, V.Book.uniform(TINY).models, prior)
     words = {}
     for win in _tiny_windows():
@@ -206,7 +206,7 @@ def _plain(bits: list[int], n: int):
 
 
 def test_one_codeword_per_residual_where_the_plain_decoder_takes_several():
-    """Attack 10 (the certifier PROTOCOL): over the strings that differ from a residual's encoding only in its last 3 bits,
+    """Two strings that decode alike: over the strings that differ from a residual's encoding only in its last 3 bits,
     the plain WNC decoder takes 2 to 4 as that residual, and `decode` takes the encoder's one."""
     most = 0
     for seed in range(1000, 1060):

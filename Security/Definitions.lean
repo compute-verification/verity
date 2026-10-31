@@ -1,6 +1,7 @@
 import Definitions.Core
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
+import Definitions.Core.Transport
 import Definitions.Core.Blocks
 import Definitions.Core.Site
 import Definitions.Core.Period
@@ -20,9 +21,7 @@ import Definitions.Pouw
 import Definitions.NetworkCertifier
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
-import Definitions.NetworkCertifier.AdviceString
-import Definitions.NetworkCertifier.Guarantees.AdviceV1Kraft
-import Definitions.NetworkCertifier.Guarantees.WindowChargeKraft
+import Definitions.NetworkCertifier.WindowCharge
 import Definitions.NetworkCertifier.Warden
 import Definitions.NetworkCertifier.Tap
 import Definitions.NetworkCertifier.RecordRows
