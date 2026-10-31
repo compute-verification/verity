@@ -218,6 +218,21 @@ def replan10():
             {**d, "name": "w384-Bd0.44-rint8-D180M-lr0.001", "size": "w384", "tokens": 180_000_000, "threads": 12}]
 
 
+def replan11():
+    """A (frozen R plus rank-r U·V, with D₁RD₂) along the 25.4 series with its lr tuned: w128 20M at 4e-3, 8e-3 and
+    1.6e-2 (it ran at 2e-3 only), w256 80M at 2e-3 and 8e-3 around its 4e-3, A 1/4 at w256 80M, and w384 180M at 2e-3
+    beside its 3e-3."""
+    a = {"design": "A", "rank_frac": 1 / 8, "diag": True}
+    cfgs = [{**a, "name": f"w128-A8-diag-lr{lr:g}", "size": "w128", "tokens": 20_000_000, "lr": lr, "threads": 2}
+            for lr in (4e-3, 8e-3, 1.6e-2)]
+    cfgs += [{**a, "name": f"w256-A8-diag-D80M-lr{lr:g}", "size": "w256", "tokens": 80_000_000, "lr": lr, "threads": 4}
+             for lr in (2e-3, 8e-3)]
+    cfgs += [{**a, "name": "w256-A4-diag-D80M-lr0.004", "size": "w256", "tokens": 80_000_000, "lr": 4e-3, "threads": 4,
+              "rank_frac": 1 / 4},
+             {**a, "name": "w384-A8-diag-D180M-lr0.002", "size": "w384", "tokens": 180_000_000, "lr": 2e-3, "threads": 12}]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -230,6 +245,7 @@ PRESETS = {
     "replan8": replan8,
     "replan9": replan9,
     "replan10": replan10,
+    "replan11": replan11,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
