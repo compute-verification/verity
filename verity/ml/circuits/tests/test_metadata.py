@@ -1,11 +1,11 @@
-"""`verity/annotations/v0` (`verity.ml.circuits.annotations`): keys resolve against a descriptor's structure, stem keys in every
-specialization, guards report staleness, groups close and their members resolve, and attaching annotations moves no program
+"""`verity/metadata/v0` (`verity.ml.circuits.metadata`): keys resolve against a descriptor's structure, stem keys in every
+specialization, guards report staleness, groups close and their members resolve, and attaching metadata moves no program
 digest."""
 from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits import annotations as A
+from verity.ml.circuits import metadata as A
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
