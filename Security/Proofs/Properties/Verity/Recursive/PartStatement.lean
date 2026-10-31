@@ -428,7 +428,7 @@ theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.o
 /-- The model's reading of the lines `L`: their first `META` line among `n`, as JSON. -/
 def metaRead (n : Nat) (L : List (List UInt8)) : V Json := do
   let t ← metaLine n L
-  match Json.parse (t.drop 5).toString with
+  match Flock.JsonParse.parse (t.drop 5).toString with
   | .error e => throw s!"rec inner circuit: META is not JSON: {e}"
   | .ok m => pure m
 
@@ -461,7 +461,7 @@ def metaBody (b : ByteArray) : Nat → Option Json × Nat → V (ForInStep (Opti
     match String.fromUTF8? (b.extract s.2 (VStar.Recursive.lineEnd b s.2)) with
     | some line =>
       if line.startsWith "META " = true then
-        match Json.parse (line.drop 5).toString with
+        match Flock.JsonParse.parse (line.drop 5).toString with
         | .ok m => pure (.done (some m, s.2))
         | .error err => throw (toString "rec inner circuit: META is not JSON: " ++ toString err)
       else pure (.yield (none, VStar.Recursive.lineEnd b s.2 + 1))
@@ -504,7 +504,7 @@ theorem loop_eq (b : ByteArray) : ∀ (l : List Nat) (i : Nat),
         by_cases hm : line.startsWith "META " = true
         · simp only [hm, if_true]
           rw [ok_bind]
-          cases hp : Json.parse (line.drop 5).toString <;> rfl
+          cases hp : Flock.JsonParse.parse (line.drop 5).toString <;> rfl
         · simp only [hm, Bool.false_eq_true, if_false]
           have := loop_eq b l (VStar.Recursive.lineEnd b i + 1)
           simpa [metaRead] using this
@@ -536,7 +536,7 @@ theorem jsonOf_what {a a' : String} {b : ByteArray} {j : Json} (h : jsonOf a b =
     intro h
     dsimp only at h ⊢
     revert h
-    cases Json.parse t with
+    cases Flock.JsonParse.parse t with
     | error e => intro h; cases h
     | ok j' => intro h; exact h
 
@@ -592,7 +592,7 @@ theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : 
 theorem rows_model {b : ByteArray} {rows : Array Registered.Port}
     (h : ((do
         let some t := String.fromUTF8? b | throw "not UTF-8"
-        pure (← VStar.Recursive.registeredOf (← (Json.parse t).mapError (s!"not JSON: " ++ ·))).1) : Flock.V _).mapError
+        pure (← VStar.Recursive.registeredOf (← (Flock.JsonParse.parse t).mapError (s!"not JSON: " ++ ·))).1) : Flock.V _).mapError
           (s!"rec rows: " ++ ·) = .ok rows) :
     (some b).mapM (fun b => do
       (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok (some rows) := by
@@ -635,7 +635,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
             | throw "rec inner registration: not UTF-8"
           pure s : Flock.V (Option String)) = .ok reg ∧
       RecSetup.commits (some h.shape) (pure t) (pure reg) h.bound record = .ok h.commits ∧
-      (match Json.parse t with
+      (match Flock.JsonParse.parse t with
         | .ok j => RecVStar.innerLink j record
         | .error e => throw s!"rec inner transcript: not JSON: {e}") = .ok h.link ∧
       bs.get pr.rows "the staged rows" = .ok rowsB ∧
@@ -665,7 +665,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
       obtain ⟨reg, hreg, hh⟩ := bind_ok hh
       obtain ⟨commits, hcm, hh⟩ := bind_ok hh
       simp only at hh
-      cases hj : Json.parse t with
+      cases hj : Flock.JsonParse.parse t with
       | error e =>
         rw [hj] at hh
         obtain ⟨_, hl, _⟩ := bind_ok hh
@@ -877,7 +877,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
       rw [hpb]; exact mapM_some_ok hpbj
     have hnone : ∀ {α β : Type} (f : α → Except String β), (none : Option α).mapM f = .ok none := fun _ => rfl
     subst hSp hd2 hPc
-    simp only [FlockDeploy.Raw.ins, partRaw, hst, htags, hzk, hplain, hos, hcnt, htab, hwk, hwt, hcl, hpi, hstr,
+    simp only [FlockDeploy.Raw.ins, partRaw, hst, Tags.byName?_of_find? htags, hzk, hplain, hos, hcnt, htab, hwk, hwt, hcl, hpi, hstr,
       hPprog, hd1, hpm, hreg', hnone, ok_bind, Bool.and_false, Bool.and_true, Bool.false_eq_true, ite_false,
       ite_true]
     rfl
@@ -919,12 +919,12 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
       rw [etr]; unfold textOf; rw [ht]
     unfold linkInputOf
     rw [hsrc]
-    show (do match Json.parse (← textOf "rec inner transcript" (st.transcript x ms)) with
+    show (do match Flock.JsonParse.parse (← textOf "rec inner transcript" (st.transcript x ms)) with
       | .ok j => some <$> RecVStar.innerLink j record
       | .error e => .error s!"rec inner transcript: not JSON: {e}") = _
     rw [htx, ok_bind]
     revert hl
-    cases Json.parse t with
+    cases Flock.JsonParse.parse t with
     | ok j => intro hl; dsimp only at hl ⊢; rw [hl]; rfl
     | error e => intro hl; cases hl
   have h7 : (partRaw r st x ms s q).recRows.mapM (fun b => do

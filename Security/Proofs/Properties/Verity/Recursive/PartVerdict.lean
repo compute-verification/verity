@@ -278,7 +278,7 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     (hpi : s.read.publicInputs = none)
     (hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = s.registered)
     (hreadReg : s.read.registered = s.registered.isSome)
-    (hinner : innerOfO xO = some h.shape)
+    (hinner : innerOfO xO = some h.shape) (hdn : VStar.Recursive.dense h.shape = true)
     (hsrc : (srcOfO xO).map (·.record) = some h.src.record)
     (hdraw : s.read.draw = Flock.Witness.recordDraw f.record)
     (hD : SampledProofs.OneStageZk.buildSessionOf
@@ -337,9 +337,14 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     refine ok_bind hdl ?_
     exact hrt
   · obtain ⟨src, hsrcEq, hrecEq⟩ := Option.map_eq_some_iff.1 hsrc
+    have hho : h.shape.holo = false ∧ h.shape.sparse = none := by
+      unfold VStar.Recursive.dense at hdn
+      cases hh : h.shape.holo <;> cases hs : h.shape.sparse <;> simp [hh, hs] at hdn ⊢
     unfold fullDrawO
     rw [hinner, hsrcEq, fullDraw_some, hfd, innerDrawn_record hrecEq, hid]
-    all_goals rfl
+    all_goals first
+      | rfl
+      | simp [Flock.RecSetup.denseOnly, hho.1, hho.2, bind, Except.bind, Except.isOk, Except.toBool]
 
 /-- **The outer verifier accepts the session** where the compiled part does, under the hypotheses of
 `decide_of_partVerdict` (`RecDeploy.nextO_decide_sha512`). -/
@@ -357,7 +362,7 @@ theorem nextO_acc_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : Pa
     (hpi : s.read.publicInputs = none)
     (hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = s.registered)
     (hreadReg : s.read.registered = s.registered.isSome)
-    (hinner : innerOfO xO = some h.shape)
+    (hinner : innerOfO xO = some h.shape) (hdn : VStar.Recursive.dense h.shape = true)
     (hsrc : (srcOfO xO).map (·.record) = some h.src.record)
     (hdraw : s.read.draw = Flock.Witness.recordDraw f.record)
     (hD : SampledProofs.OneStageZk.buildSessionOf
@@ -373,8 +378,8 @@ theorem nextO_acc_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : Pa
     (hlive : (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()) :
     ((nextO xO as' cs').eval sha512).1 = .acc :=
   (RecDeploy.nextO_decide_sha512 ha).2
-    (decide_of_partVerdict hpart hfind hcirc hpub htags hzk htables hcount hpi hreg hreadReg hinner hsrc hdraw hD hstmt
-      hrec hreps hnp hlive)
+    (decide_of_partVerdict hpart hfind hcirc hpub htags hzk htables hcount hpi hreg hreadReg hinner hdn hsrc hdraw hD
+      hstmt hrec hreps hnp hlive)
 
 /-- **`FlockDeploy.decisionAt`'s verdict at SHA-512 is `.ok ()`** at the session where the compiled part's is, under the
 hypotheses of `decide_of_partVerdict` (`FlockDeploy.decisionAt_eval`, `RecDeploy.verdictWithO_sha512`). -/
@@ -392,7 +397,7 @@ theorem decisionAt_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : P
     (hpi : s.read.publicInputs = none)
     (hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = s.registered)
     (hreadReg : s.read.registered = s.registered.isSome)
-    (hinner : innerOfO xO = some h.shape)
+    (hinner : innerOfO xO = some h.shape) (hdn : VStar.Recursive.dense h.shape = true)
     (hsrc : (srcOfO xO).map (·.record) = some h.src.record)
     (hdraw : s.read.draw = Flock.Witness.recordDraw f.record)
     (hD : SampledProofs.OneStageZk.buildSessionOf
@@ -408,7 +413,7 @@ theorem decisionAt_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : P
     (hlive : (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()) :
     ((FlockDeploy.decisionAt true s spec sts xO link c₁ mids f).run.eval sha512).1 = .ok () := by
   obtain ⟨hv, hc, -⟩ := decide_of_partVerdict hpart hfind hcirc hpub htags hzk htables hcount hpi hreg hreadReg hinner
-    hsrc hdraw hD hstmt hrec hreps hnp hlive
+    hdn hsrc hdraw hD hstmt hrec hreps hnp hlive
   obtain ⟨i, hi, -⟩ := RecDeploy.actO_decide ha
   rw [(FlockDeploy.decisionAt_eval sha512 true s spec sts xO link c₁ mids f).1, RecDeploy.verdictWithO_sha512 hi, hv]
   all_goals exact hc
@@ -432,7 +437,7 @@ theorem next_of_partVerdict {IV : Claims.Verifier Coin} {st : RecDeploy.Stage} {
     (hpi : s.read.publicInputs = none)
     (hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = s.registered)
     (hreadReg : s.read.registered = s.registered.isSome)
-    (hinner : innerOfO xO = some h.shape)
+    (hinner : innerOfO xO = some h.shape) (hdn : VStar.Recursive.dense h.shape = true)
     (hsrc : (srcOfO xO).map (·.record) = some h.src.record)
     (hdraw : s.read.draw = Flock.Witness.recordDraw f.record)
     (hD : SampledProofs.OneStageZk.buildSessionOf
@@ -448,7 +453,7 @@ theorem next_of_partVerdict {IV : Claims.Verifier Coin} {st : RecDeploy.Stage} {
     (hlive : (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()) :
     ((RecDeploy.next IV st x as cs).eval sha512).1 = (if i + 1 = RecDeploy.nS x then .acc else .msg []) :=
   (RecDeploy.next_decide_sha512 hs ha).2
-    ⟨hlast, decide_of_partVerdict hpart hfind hcirc hpub htags hzk htables hcount hpi hreg hreadReg hinner hsrc hdraw hD
-      hstmt hrec hreps hnp hlive⟩
+    ⟨hlast, decide_of_partVerdict hpart hfind hcirc hpub htags hzk htables hcount hpi hreg hreadReg hinner hdn hsrc
+      hdraw hD hstmt hrec hreps hnp hlive⟩
 
 end Verity.Recursive

@@ -66,7 +66,8 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
   rows : i.rows = rows
 
 /-- **The compiled part's checks block** after Flock's session and the checks `BaseSetup` matches, each as the compiled
-part `j`'s check calls it on the session's tables `sts`: the inner checks, V\*'s checks, one full table, `Zk.shapeOk`,
+part `j`'s check calls it on the session's tables `sts`: the inner checks, the recursion's budget (`RecBudget`: the
+registered reads, V\*'s list and the table), V\*'s checks, one full table, `Zk.shapeOk`,
 check 5, the public rows, the link rounds, the top rows, the link, the labels, and the draw's law where there is a
 draw. -/
 structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB : ByteArray)
@@ -74,9 +75,12 @@ structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) (draw : Option Lean.Json)
     (sts : Array Stmt) : Prop where
   inner : RecSetup.checkInner (some h.shape) (some h.src) h.bound = .ok ()
+  regs : RecBudget.regs (some h.shape) registered = .ok ()
+  statements : RecBudget.statements (some h.shape) = .ok ()
   checks : RecSetup.checks (some h.shape) (some h.commits) tags0 [] sts circuitB (some partition) (some program)
     registered (some j) (some bindings) rows = .ok ()
   oneFull : RecSetup.oneFull (some h.shape) sts = .ok ()
+  table : RecBudget.table (some h.shape) sts = .ok ()
   shapeOk : sts.forM Zk.shapeOk = .ok ()
   coins : sts.forM (RecCoins.check · registered (RecCoins.Source.atC3 (some h.src) (some h.shape) (some h.commits))
     (RecSetup.c3 (some h.shape) (some h.commits))) = .ok ()
@@ -127,14 +131,17 @@ theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j
   have hin : RecSetup.checkInner i.inner i.src i.bound = .ok () := by
     rw [hm.inner, hm.src, checkInner_dense hsparse]
     exact hc.inner
+  have hbr : RecBudget.regs i.inner i.base.registered = .ok () := by rw [hm.inner, hm.registered]; exact hc.regs
+  have hbs : RecBudget.statements i.inner = .ok () := by rw [hm.inner]; exact hc.statements
+  have hbt : RecBudget.table i.inner sts = .ok () := by rw [hm.inner]; exact hc.table
   unfold RecIns.setup
-  simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hin, hset, bind, Except.bind, pure, Except.pure]
+  simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hin, hbr, hbs, hset, bind, Except.bind, pure, Except.pure]
   rw [forIn_ok_of_all fun a ha u => by simp only [(hregs a ha).1, (hregs a ha).2]]
   simp only [hfull]
   simp only [hm.zk, hm.stmtTags, hm.tags, hm.tables, hm.circuitFile, hm.partition, hm.program, hm.registered,
     hm.part, hm.bindings, hm.rows, hm.inner, hm.commits, hm.link, hm.src, hm.draw, hm.count, ↓reduceIte,
-    Option.isSome_some, hc.checks, hc.oneFull, hc.shapeOk, hc.coins, hc.pubRows, hc.linkRounds, hc.topRows, hc.link,
-    hc.labels]
+    Option.isSome_some, hc.checks, hc.oneFull, hbt, hc.table, hc.shapeOk, hc.coins, hc.pubRows, hc.linkRounds,
+    hc.topRows, hc.link, hc.labels]
   by_cases hd : draw.isSome = true
   · simp only [hd, ↓reduceIte, hc.law hd]
   · simp only [hd, Bool.false_eq_true, ↓reduceIte]
@@ -349,8 +356,10 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
         | ok u => rfl
       obtain ⟨⟨⟩, hprog, hb1⟩ := bind_ok hb0
       obtain ⟨⟨⟩, hinn, hb2⟩ := bind_ok hb1
-      obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb2
-      clear hb0 hb1 hb2 hst hv
+      obtain ⟨⟨⟩, hbr, hb3⟩ := bind_ok hb2
+      obtain ⟨⟨⟩, hbs, hb4⟩ := bind_ok hb3
+      obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb4
+      clear hb0 hb1 hb2 hb3 hb4 hst hv
       subst hT
       cases complete <;> simp only [Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at hb
       on_goal 2 => obtain ⟨⟨⟩, hcomp, hb⟩ := bind_ok hb
@@ -359,6 +368,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
         obtain ⟨⟨⟩, hkn, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hchk, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hone, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hbt, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hshape, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hcoins, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hpub, hb⟩ := bind_ok hb
@@ -368,7 +378,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
         obtain ⟨⟨⟩, hlab, hb⟩ := bind_ok hb
         refine ⟨tags0, circuitB, pubB, registered, _, known, regParams, bindings, recordB, record, d, spec0,
           sts0, rfl, hpl, hcB, hpB, hfp, hPR, hbind, hrecB, hrec, hhm, hrd, hprog, hbuild, ?_, hcov, hkn,
-          ⟨hinn, hchk, hone, hshape, hcoins, hpub, hlr, htop, hlink, hlab, fun _ => hlaw⟩, hscope⟩
+          ⟨hinn, hbr, hbs, hchk, hone, hbt, hshape, hcoins, hpub, hlr, htop, hlink, hlab, fun _ => hlaw⟩, hscope⟩
       · intro hc
         cases hc
       · intro _
