@@ -532,7 +532,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if (why := plain_refusal(a, mine, registered)) is not None:
         raise SystemExit(f"--plain: {why}")
     if not streamed(a) and law.get("law") != "subset":
-        raise SystemExit(f"a5 draws by the subset law with Lean's own coins; the partition file's is {law}: draw it through "
+        raise SystemExit(f"a5 draws by the subset law with Lean on a development challenger's coins; the partition file's is {law}: draw it through "
                          "a rank's service.Stream (--challenger or --coins verifier, a TP Commit)")
     drawn_law = D.derive(program, query, law, table)
     if (why := output_refusal(a, mine, drawn_law)) is not None:
@@ -647,7 +647,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     # one sample over the whole population; each member serves its share under --zk
     if not streamed(a):
-        p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(law["k"])], out / "draw.log")
+        p = a0.challenger_draw(a.lean, ["--population", str(n_all), "--k", str(law["k"])], {"law": "subset", "k": law["k"]},
+                               n_all, R.digest(rec), out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
         stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
