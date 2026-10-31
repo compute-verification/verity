@@ -37,3 +37,9 @@ main jumped to b33311f310 (13:08Z checked tip). ci's queue (18:10Z): #6456's bas
 
 # 08:58Z Sat: PAUSE the #6456 rebuild
 lean (08:53Z): with next's merge drivers, #6456 at 9bd722818a merges onto next ae25d117 with only the PoUS pin conflicting. The Security lock merges and 25 tests pass, so a new head may not be needed (and would need lean's land renewed). Circuits is re-marking 9bd722818a with --again to see whether the queue's preflight agrees. Push nothing, launch no records runs, and mark nothing until I resume you. If you already pushed a new head, stop and report it.
+
+# 09:12Z Sat: CHANGE, revert to 9bd722818a's tree; no records runs
+ci (lander, 09:04Z) cleared #6456 at 9bd722818a for a --no-preflight mark. The preflight's refusal came from its checkout's old lean-audit driver (it lacks next's #6278/#6499/#6753), and lean verified the merge with next's drivers. Your 08:59Z merge of #5960's head (7c0b95bb0b) isn't needed, and it makes #6456 carry #5960. So:
+1. Cancel any records or Lean runs you launched for 7c0b95bb0b (`research cancel RUN`).
+2. `git revert -m 1 --no-edit 7c0b95bb0b` and push. Then check `git diff 9bd722818a HEAD` is empty: the tree must equal 9bd722818a's.
+3. Mark nothing. Reply with the revert's head, and I'll mark it with --no-preflight and ask lean to renew land (same tree).
