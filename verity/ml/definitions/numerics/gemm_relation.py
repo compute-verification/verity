@@ -302,7 +302,7 @@ class GemmUnresolved(GemmRelationError):
 # (K, N, bias?) shape families of Qwen2.5-1.5B (merged projections as vLLM runs them) plus the
 # synthetic masked-K-tail shape, each bit-exact under vLLM's batch-invariant
 # ``matmul_kernel_persistent`` on the A100 for every natural and stress case that was run
-# (results/numerics-a100-20260907T0615Z/table2.jsonl, profile a100-vllm-bi1; M in 1..2048).
+# (the A100 numerics campaign's table 2, profile a100-vllm-bi1; M in 1..2048).
 # ``epilogues`` lists the epilogues measured on that family (the GEMM inside the engine,
 # ``verity.bi_mm``, never carries a bias: the add is a separate node).
 VALIDATED_BI_FAMILIES: dict[tuple[int, int], dict[str, Any]] = {
