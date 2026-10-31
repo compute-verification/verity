@@ -225,3 +225,60 @@ Everything else is engineering on parts we have.
   It is a verifier draw, and so public under "everything zero-knowledge".
 - **GPUs:** "Surely we have GPUs. You can just use them." The node and budget line are asked of infra on INF-393: an
   8-GPU node for about 48 h, about $700.
+
+## §prelim: the coordinator's synthesis (00:15Z Sat 31 Oct), module by module
+
+**The answer.** Trained hardness does not replace the lead, but it can *shrink* it.
+- In the one design whose premise survived attack (A′), a share κ of the linears' MACs is a frozen uniform-int8 random
+  product. That share is credited at about 0.9 hash ANDs a MAC, against the lead's 127.5.
+- The trained remainder (1 − κ) is uncredited by trained hardness. So the **hybrid** is: credit the κ share by trained
+  hardness, and run only the trained remainder through the lead's noised, hashed path.
+- The lead's hashing overhead then applies to (1 − κ) of the MACs instead of all of them.
+- The price is A′'s quality penalty P(κ, N). Whether P shrinks with N decides the program. HT-SCALE measures it on
+  vy-nebius-1 now.
+
+**Module by module:**
+- **M1 (beacon):** R comes from one live coin after the architecture is registered, with no redraw. Daniel rules that a
+  public R is a verifier draw (4:41 PM PDT).
+- **M2 (hardening):**
+  - **A′ holds,** preserving hardness for every trained U, V via the reduction, given rules C1–C4.
+  - **Dead:** B, the ball (cheap matrices from ρ ≈ 0.03); A-LSB (< 0.9 at every b); D0 with a small R (≤ 0.76);
+    A-iterated (adds nothing); E with natural weights (Strassen in s8 at 0.963–0.968 on 7B and 8B, and down_proj at
+    0.88–0.93).
+  - E also needs public data and a full replay, because planned jumps survive spot checks.
+- **M3 (premise):** P1 holds for uniform int8 R with b_E = 2, w = 16 and K ≤ 4,096, by a margin of at least 8.5% on the
+  H200 and 6.0% on sm_120.
+  - The margin comes only from additions, so every Lean statement must price additions.
+  - b = 1 and w = 8 are false.
+  - P1 splits into a finite schedule check (extending NaiveStrassen.lean) and a conjecture for every other kind of
+    program.
+- **M4 (operand entropy):** x is committed before E. E is 2-bit (k ≈ 1–2), which costs 1.03× in quality on the toy; the
+  knee is at k ≈ 4–8.
+- **M5 (utility):** the evidence conflicts.
+  - HT-ML's CPU toys (1.3–14.7M parameters, 20M tokens) show A's penalty *falling* with width: A 1/8 goes 1.92×, 1.42×,
+    1.32× at κ ≈ 0.44.
+  - GaLore and ReLoRA (LoRA from a random init) read 3–6× at 130M and up, and growing.
+  - R adds little: low rank alone is 1.34×.
+  - HT-SCALE also tests reservoir layers and per-feature splits.
+- **M6 and M7 (integrity, provenance):** sampled proofs, about 2M ANDs a unit, 2,773 draws at ε 1% and δ 2⁻⁴⁰.
+  Provenance is structural for A′, since R is a public input.
+- **M8 (coverage):**
+  - Only the hardened linears are covered. Attention is 28–60% of MACs at 128K, and there's no HBM or network claim.
+  - The K ≤ 4,096 cap costs ×1.09–4.94 in committed outputs.
+  - Coins are 1.6–15 GB/s a GPU, like the lead's.
+- **M9 (hardware):** the H200 has b1 at 8× s8. int8 is 1.4–3.4% of FP8 on B300 and Rubin, so beyond Hopper A′ needs an
+  FP8 analogue.
+
+**Smells still open:**
+1. **D-OUT** (HASH, outputs only over public natural weights) likely has the Strassen hole, which would put its
+   "99.2–99.45% capacity" in doubt. HT-PREMISE round 4 checks it by 01:45Z.
+2. **The lead** commits every k32 word, which should block Strassen (int8 MMA has no k16). That is demo-critical, so it
+   is being priced, not argued (also round 4).
+3. The overflow-correction price behind "natural weights are not hard" is counted, not timed. It will be timed on
+   vy-nebius-1.
+4. All utility numbers so far are toys.
+
+**Running:** HT-SCALE (GPU, first signal Sat 12:00Z, final Sun 22:00Z); HT-PREMISE round 4 (01:45Z); HT-ML's last CPU
+waves (to 03:00Z).
+**Next for the swarm:** price the hybrid, i.e. total overhead as a function of κ, P(κ, N) and the lead's h on the
+uncredited remainder.
