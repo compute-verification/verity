@@ -25,6 +25,11 @@ a streamed instance sequence, or a synthetic graph without converting it: a Prog
 (id, definition id, output ports, the Values each read), the Values its prescribed inputs produce, and its outputs.
 Prescribed inputs are modelled as *Values of a producer that is not a Call* (``ValueRef.call`` is the input's id, which
 the Program lists in ``inputs``), exactly as a Program gives ``Input`` gates their own canonical references.
+
+The canonical partition (``verity.ml.circuits.partition_object``: ``Partition``, ``CallPartition``) cuts inside each Call and commits
+every Call output, read or not.  With every Call a unit (the query of record, ``required.Population``), the boundary here leaves out
+an output nothing reads; the policy requires those a module returns, and a Call it leaves out too is ``unreturned``.
+``integrations/vllm/tests/query/test_units_canonical.py`` holds what serving commits to the canonical object on a served Program.
 """
 
 from __future__ import annotations
@@ -33,8 +38,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import NamedTuple, Protocol, runtime_checkable
 
-__all__ = ["ValueRef", "Call", "CallGraph", "VerificationUnit", "Query", "Partition", "partition_by", "unit_boundary",
-           "boundary_values", "Policy", "RequiredValues", "required_values", "admissibility", "PartitionError"]
+__all__ = ["ValueRef", "Call", "CallGraph", "VerificationUnit", "Query", "Partition", "partition_by", "boundary_values",
+           "Policy", "RequiredValues", "required_values", "admissibility", "PartitionError"]
 
 
 class ValueRef(NamedTuple):
@@ -95,8 +100,8 @@ class VerificationUnit:
 
 #: ``Q(P) -> units``.  A ``Query`` is any callable of this shape; :func:`partition_by` builds one from a Call -> unit-id map.
 Query = Callable[[CallGraph], Sequence[VerificationUnit]]
-#: A query whose units are a partition of the Program's Calls (every Call in exactly one unit); :func:`unit_boundary` and
-#: :func:`boundary_values` require this and check it (:class:`PartitionError`).
+#: A query whose units are a partition of the Program's Calls (every Call in exactly one unit); :func:`boundary` requires this and
+#: checks it (:class:`PartitionError`).
 Partition = Query
 
 
@@ -145,29 +150,6 @@ def _check_partition(P: CallGraph, units: Sequence[VerificationUnit]) -> dict[in
     if unknown:
         raise PartitionError(f"units name {len(unknown)} id(s) that are not Calls (first: {unknown[:4]})")
     return owner
-
-
-def unit_boundary(P: CallGraph, unit: VerificationUnit, owner: Mapping[int, str] | None = None) -> tuple[frozenset[ValueRef], frozenset[ValueRef]]:
-    """``(in(V), out(V))`` of one unit.  ``owner`` (Call id -> unit id, from the partition) lets the outputs be decided; without
-    it, every read from outside the unit's own Calls counts as outside (correct for a partition, computed per call)."""
-    by_id, _inputs = _index(P)
-    inside = unit.calls
-    ins: set[ValueRef] = set()
-    for cid in inside:
-        for v in by_id[cid].reads:
-            if v.call not in inside:                     # produced by another unit's Call or by a prescribed input
-                ins.add(v)
-    outs: set[ValueRef] = set()
-    for c in P.calls:
-        if c.id in inside:
-            continue
-        for v in c.reads:
-            if v.call in inside:
-                outs.add(v)
-    for v in P.outputs:
-        if v.call in inside:
-            outs.add(v)
-    return frozenset(ins), frozenset(outs)
 
 
 @dataclass(frozen=True)
