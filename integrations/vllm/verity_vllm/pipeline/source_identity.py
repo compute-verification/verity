@@ -15,9 +15,9 @@ A shipped tree has no .git and no EXPORT.json, so its sha comes from `--sha` or,
 `research` runner from request.json's tree_sha; see research.result.ENV_SOURCE_SHA).  Packages that resolve from the requested tree but
 whose tree carries no sha of its own are recorded with that sha (git_sha_source names where it came from).
 
-In-process: `precheck(stage)` is called by the Commit (commit_delta.main, before the engine is built -> before any inference) and by
-native_host._gpu_ext_load after `import hidden_gpu` (the module that actually loaded must be this tree's).  Both raise
-research.telemetry.source_identity.SourceIdentityError, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY.
+In-process: `precheck(stage)` is called by the Commit (commit_delta.main, before the engine is built -> before any inference), and
+`assert_loaded_module_is_ours` after an import a sys.path insertion made possible (the module that actually loaded must be this tree's).
+Both raise research.telemetry.source_identity.SourceIdentityError, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY.
 
 Import layout: the generic half is `research.telemetry.source_identity` and must be importable as such -- on a pod row_pod.sh exports
 PYTHONPATH=<integration root>:<repo>:<repo>/tools/research/src.  No sys.path is manipulated here: a `research` that
@@ -53,8 +53,8 @@ FAIL_CLASS = _sid.FAIL_CLASS
 SourceIdentityError = _sid.SourceIdentityError
 tree_identity = _sid.tree_identity
 
-# hidden_gpu is imported by native_host._gpu_ext_load from <integration>/out/gen/r9/cmt-hidden/src (materialised by pod_hidden_gpu.sh from
-# the shipped copy verity_vllm/commit/committer/hidden_gpu_src); both are candidates, the r9 path first because that is what native_host inserts
+# hidden_gpu resolves from <integration>/out/gen/r9/cmt-hidden/src (materialised by pod_hidden_gpu.sh from the shipped copy
+# verity_vllm/commit/committer/hidden_gpu_src) or from that shipped copy; both are candidates, the r9 path first
 HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py")
 # package name -> (import name, the sys.path entries it must resolve from, relative to the repo root); core's are the requested tree's
 # workspace roots that ship it (research.pythonpath.package_dirs)
@@ -188,7 +188,7 @@ def precheck(stage: str, tree: str | os.PathLike[str] | None = None, *, sha: str
 
 
 def assert_loaded_module_is_ours(mod: Any, name: str, tree: str | os.PathLike[str] | None = None) -> dict[str, Any]:
-    """After an import that a sys.path insertion made possible (native_host: `import hidden_gpu`), the module that LOADED must live in
+    """After an import that a sys.path insertion made possible (`import hidden_gpu` from the r9 directory), the module that LOADED must live in
     the requested tree -- the by-construction guard at the import site itself."""
     root = normalise_tree(tree)
     f = getattr(mod, "__file__", None)

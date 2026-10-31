@@ -440,7 +440,7 @@ class DumpedStore(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     name = "dumped-store"
     hiding = None
     retain = "host"
-    layout_digest = staticmethod(NativeHostCommitter.layout_digest)
+    layout_digest = NativeHostCommitter.layout_digest
     _block_holds = staticmethod(NativeHostCommitter._block_holds)
     _ctx_digest = NativeHostCommitter._ctx_digest
     _gpu_layout = NativeHostCommitter._gpu_layout

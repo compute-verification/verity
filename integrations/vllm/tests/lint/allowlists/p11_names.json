@@ -17,7 +17,6 @@
     {"file": "verity_vllm/check/gates.py", "kind": "def-name", "symbol": "<module>", "detail": "gate_G8"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "def-name", "symbol": "<module>", "detail": "_runs_fast"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "module-name", "symbol": "<module>", "detail": "global_match_fast"},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "flag-name", "symbol": "Options", "detail": "--fast-copy"},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "flag-name", "symbol": "WriteOptions", "detail": "--tp3"},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "flag-name", "symbol": "Options", "detail": "--tp2-match"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "module-name", "symbol": "<module>", "detail": "m1_capture"},

@@ -500,9 +500,12 @@ def test_manifest_edited_after_digesting_is_refused(tmp_path):
     doc["identities"].pop(7)                                              # rows changed, manifest_digest kept
     with pytest.raises(ValueError, match="edited after digesting"):
         B.load_required_manifest(_write(tmp_path, "edited.json", doc), PD)
-    doc["manifest_digest"] = "0" * 64
+    doc["manifest_digest"] = "0" * 128
     with pytest.raises(ValueError, match="edited after digesting"):
         B.load_required_manifest(_write(tmp_path, "edited2.json", doc), PD)
+    doc["manifest_digest"] = "0" * 64
+    with pytest.raises(ValueError, match="a 64-hex SHA-256 digest: .* so rebuild it"):
+        B.load_required_manifest(_write(tmp_path, "sha256.json", doc), PD)
     doc["schema"] = "verity-sweep/required-manifest/v0"
     with pytest.raises(ValueError, match="schema"):
         B.load_required_manifest(_write(tmp_path, "schema.json", doc), PD)

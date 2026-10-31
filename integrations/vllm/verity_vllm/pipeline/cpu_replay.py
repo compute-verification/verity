@@ -195,8 +195,8 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
 
 def folded_root(tree: dict[str, Any]) -> str:
     """The root the tree's tensor roots fold to under its scheme."""
-    geo, nd, roots = bytes.fromhex(tree["geo_digest"]), scheme.names_digest(tree["names"]), [bytes.fromhex(r) for r in tree["tensor_roots"]]
-    return (step_rows.weights_root(geo, nd, roots) if tree_scheme(tree) == step_rows.NAME else scheme.weights_root(geo, nd, roots)).hex()
+    S = step_rows if tree_scheme(tree) == step_rows.NAME else scheme
+    return S.weights_root(bytes.fromhex(tree["geo_digest"]), S.names_digest(tree["names"]), [bytes.fromhex(r) for r in tree["tensor_roots"]]).hex()
 
 
 def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str, int] | None = None, rw: Any = None,
