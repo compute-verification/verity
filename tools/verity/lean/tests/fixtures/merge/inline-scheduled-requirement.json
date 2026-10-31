@@ -1,5 +1,15 @@
 {
  "base": {
+  "guarantees": {
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+    "owner": "@compute-accounting",
+    "signature": [
+     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement : Properties.DeclaredCircuit.ScheduledRequirement"
+    ],
+    "assumptions": [],
+    "type_hash": "fd5936396afb5519138efa2c4956c708c1409dbaedcfe8815f9176deada0fa37"
+   }
+  },
   "shape": {
    "inline": {
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
@@ -21,6 +31,16 @@
   }
  },
  "ours": {
+  "guarantees": {
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+    "owner": "@compute-accounting",
+    "signature": [
+     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement : Properties.DeclaredCircuit.ScheduledRequirement"
+    ],
+    "assumptions": [],
+    "type_hash": "fd5936396afb5519138efa2c4956c708c1409dbaedcfe8815f9176deada0fa37"
+   }
+  },
   "shape": {
    "inline": {
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
@@ -44,6 +64,16 @@
   }
  },
  "theirs": {
+  "guarantees": {
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+    "owner": "@compute-accounting",
+    "signature": [
+     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement : Properties.DeclaredCircuit.ScheduledRequirement"
+    ],
+    "assumptions": [],
+    "type_hash": "fd5936396afb5519138efa2c4956c708c1409dbaedcfe8815f9176deada0fa37"
+   }
+  },
   "shape": {
    "inline": {
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
