@@ -22,10 +22,14 @@ in-process certifier that stands in for the certifier's coin link (`CoinLink`).
 
   The kernel reads lane words and column sources at the stride of its computed columns N (`Feed.lanes`,
   `Feed.sources`), with zeros past C; rows from R on read zero row words.
-* **The in-process certifier** (`InProcessCertifier`): samples a call's coins only once it holds the call's root,
-  releases them once, and refuses a second release of a call, a root that isn't 64 bytes and a call the lead doesn't
-  admit. Its coins are the serving process's own bytes, so a pass under it is a measurement and credits nothing (source
-  ``in-process``, as `pipeline.commit_coins` names it).
+* **The in-process certifier** (`InProcessCertifier`):
+  - It samples a window's salt salt_w only once it holds the window's key leaf, weights' root and call count
+    (`CoinLink.open`), and samples once a window.
+  - It samples a call's coins only once it holds the call's root, and releases them once.
+  - It refuses a call before its window's salt or past its call count, a second release of a call, a root that isn't
+    64 bytes and a call the lead doesn't admit.
+  - Its coins are the serving process's own bytes, so a pass under it is a measurement and credits nothing (source
+    ``in-process``, as `pipeline.commit_coins` names it).
 """
 from __future__ import annotations
 
@@ -258,26 +262,60 @@ class Feed:
 
 
 class CoinLink(Protocol):
-    """The serving side's coin link: ``release(call, root)`` sends the call and its root(A_j) up and returns its feed."""
+    """The serving side's coin link. ``open(pass_index, key_leaf, weights_root, calls)`` sends a window's key leaf,
+    weights' root and call count up and returns the window's salt salt_w, sampled after them. ``release(call, root)``
+    sends a call of an open window and its root(A_j) up and returns its feed."""
 
     source: str
+
+    def open(self, pass_index: int, key_leaf: bytes, weights_root: bytes, calls: int) -> bytes: ...
 
     def release(self, call: Call, root: bytes) -> Feed: ...
 
 
+@dataclass(frozen=True)
+class WindowSalt:
+    """What a certifier holds of a window before it samples the window's salt, and the salt."""
+
+    key_leaf: bytes
+    weights_root: bytes
+    calls: int
+    salt: bytes
+
+
 class InProcessCertifier:
-    """`CoinLink` on the serving process's own bytes (``rand``): a measurement, whose coins credit nothing."""
+    """`CoinLink` on the serving process's own bytes (``rand``): a measurement, whose coins credit nothing. It samples a
+    window's salt only once it holds the window's key leaf, weights' root and call count, and releases a call's coins only
+    in an open window, at an index below its call count."""
 
     source = IN_PROCESS
 
     def __init__(self, rand: Rand = secrets.token_bytes) -> None:
         self.rand = rand
+        #: pass -> its window
+        self.windows: dict[int, WindowSalt] = {}
         #: (pass, call) -> the root each released call's coins followed
         self.roots: dict[tuple[int, int], bytes] = {}
+
+    def open(self, pass_index: int, key_leaf: bytes, weights_root: bytes, calls: int) -> bytes:
+        if pass_index in self.windows:
+            raise FeedError(f"pass {pass_index}: its window is open already; a window's salt is sampled once")
+        if len(key_leaf) != ROOT_BYTES or len(weights_root) != ROOT_BYTES:
+            raise FeedError(f"pass {pass_index}: a key leaf of {len(key_leaf)} bytes and a weights' root of "
+                            f"{len(weights_root)}; each is {ROOT_BYTES}")
+        if calls < 1:
+            raise FeedError(f"pass {pass_index}: a window of {calls} calls")
+        salt = _bytes(self.rand, ROOT_BYTES).tobytes()
+        self.windows[pass_index] = WindowSalt(bytes(key_leaf), bytes(weights_root), calls, salt)
+        return salt
 
     def release(self, call: Call, root: bytes) -> Feed:
         if len(root) != ROOT_BYTES:
             raise FeedError(f"call {call.index}: a root of {len(root)} bytes; root(A_j) is {ROOT_BYTES}")
+        if (window := self.windows.get(call.pass_index)) is None:
+            raise FeedError(f"pass {call.pass_index} call {call.index}: before its window's salt")
+        if call.index >= window.calls:
+            raise FeedError(f"pass {call.pass_index} call {call.index}: past the window's {window.calls} calls")
         if (key := (call.pass_index, call.index)) in self.roots:
             raise FeedError(f"pass {key[0]} call {key[1]}: released already; a call's coins are released once")
         if (why := call.shape.refusal()) is not None:

@@ -60,6 +60,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/protocols/interface.py",
           "integrations/vllm/verity_vllm/protocols/pous.py",
           "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/lead",
+          "integrations/vllm/verity_vllm/protocols/pouw/operands.py",
           "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
           "integrations/vllm/verity_vllm/protocols/pouw/device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py",
