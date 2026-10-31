@@ -41,7 +41,7 @@ class Clock:
         return self.now
 
 
-def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], bytes]:
+def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]:
     """`period.run` in one process under a test signer at the small point: its period, point, published setup, `C*`'s
     labels and table."""
     point = period.point_for(len(STORE), period.W, period.C0)
