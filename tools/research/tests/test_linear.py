@@ -39,6 +39,7 @@ class FakeLinear:
         self.visible, self.team_key = None, "INF"
         self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
         self.relations, self.wrote = [], []
+        self.project_teams = {"PJ3": [{"id": "T-infra", "key": "INF"}]}
         self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
         self.asked, self.ask_filter, self.tags = [], None, {}
 
@@ -66,7 +67,7 @@ class FakeLinear:
             raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b'{"errors": [{"message": "auth"}]}'))
         user = "the app" if headers["Authorization"].startswith("Bearer") else "Daniel"
         if m := re.search(r"\{ (issueRelationCreate|issueRelationDelete|projectUpdateCreate|projectCreate|projectMilestoneCreate|"
-                          r"projectMilestoneUpdate)\(", q):
+                          r"projectMilestoneUpdate|projectUpdate)\(", q):
             self.wrote.append((m[1], v))
             if m[1] == "issueRelationCreate":
                 self.relations.append({"id": f"R{len(self.wrote)}", "type": v["i"]["type"], "issue": self._issue(v["i"]["issueId"]),
@@ -80,6 +81,8 @@ class FakeLinear:
             return {"data": {"a": {**a, "relations": {"nodes": [r for r in self.relations if r["issue"] == a]},
                                    "inverseRelations": {"nodes": [r for r in self.relations if r["relatedIssue"] == a]}},
                              "b": self._issue(v["b"])}}
+        if "project(id:" in q:
+            return {"data": {"project": {"teams": {"nodes": self.project_teams.get(v["id"], [])}}}}
         if "projects(filter" in q:
             return {"data": {"projects": {"nodes": [{"name": p["name"]} for p in self.projects if p["name"].lower() == v["n"].lower()]}}}
         if "users(first" in q:
@@ -869,6 +872,20 @@ def test_project_create_sends_its_teams_lead_date_and_body_and_refuses_a_name_ta
     assert len(fake.wrote) == 1 and stateless(fake)
 
 
+def test_project_edit_adds_teams_and_keeps_the_ones_it_has(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(APP, fake, cache=tmp_path / "t")
+    assert lin.project_teams("Full s", ["INF", "comms"]) == "Full stack: added teams COM"
+    assert fake.wrote == [("projectUpdate", {"id": "PJ3", "i": {"teamIds": ["T-infra", "T-comms"]}})]
+    assert lin.project_teams("Full s", ["INF"]) == "Full stack: has every team given already" and len(fake.wrote) == 1
+    for args, says in ((("Full s", []), "project edit: give the team to add, --team KEY (more: repeat it)"),
+                       (("Full s", ["NOPE"]), "no Linear team named 'NOPE'"),
+                       (("Full", ["INF"]), "active project 'Full' matches 2 of")):
+        with pytest.raises(linear.LinearError, match=re.escape(says)):
+            lin.project_teams(*args)
+    assert len(fake.wrote) == 1 and stateless(fake)
+
+
 def test_milestone_create_and_edit_by_prefix_and_refuse_a_name_the_project_has_in_any_case(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(APP, fake, cache=tmp_path / "t")
@@ -912,12 +929,13 @@ def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_w
             (["project", "create", "Smaller", "Lean", "--team", "INF", "--team", "COM", "--target", "2026-11-30",
               "--description-file", str(body)],
              "project Smaller Lean created: teams INF COM, targetDate 2026-11-30, content 15 characters https://linear.app/x/project/1"),
+            (["project", "edit", "Full", "stack", "--team", "COM"], "Full stack: added teams COM"),
             (["milestone", "create", "E2E", "M4 · served", "--date", "2026-11-02"], f"{e2e} / M4 · served: created, targetDate 2026-11-02"),
             (["milestone", "edit", "E2E", "M3", "--rename", "M3 · served", "--description-file", str(body)],
              f"{e2e} / M3 · composed: set name M3 · served, description 15 characters")):
         assert run(capsys, "linear", *argv) == (0, want + "\n", "")
     assert [w for w, _ in lin.wrote] == ["issueRelationCreate", "issueRelationDelete", "projectUpdateCreate", "projectCreate",
-                                         "projectMilestoneCreate", "projectMilestoneUpdate"]
+                                         "projectUpdate", "projectMilestoneCreate", "projectMilestoneUpdate"]
     assert lin.wrote[2][1]["i"]["body"] == "M3 slips a day\n" and lin.wrote[3][1]["i"]["content"] == "M3 slips a day\n"
     for argv, says in ((["relate", "INF-1", "INF-2"], "linear relate: give ISSUE blocks|blocked-by|related|duplicate OTHER"),
                        (["relate", "INF-1", "blocks", "INF-1"], "INF-1 and INF-1 are one issue"),
@@ -926,14 +944,15 @@ def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_w
                        (["update", "--health", "onTrack", "--body-file", str(body)], "linear update: give the PROJECT"),
                        (["update", "E2E", "--health", "onTrack", "--body-file", str(tmp_path / "missing.md")], "No such file"),
                        (["update", "E2E", "--body-file", str(body)], "--health: give one of onTrack, atRisk, offTrack"),
-                       (["project", "edit", "Smaller", "Lean"], "linear project: give `create NAME`"),
+                       (["project", "rename", "Smaller", "Lean"], "linear project: give `create NAME` or `edit PROJECT --team KEY`"),
+                       (["project", "edit", "Full", "s"], "project edit: give the team to add, --team KEY"),
                        (["project", "create", "--team", "INF"], "linear project: give the project's NAME"),
                        (["milestone", "rename", "E2E", "M3"], "linear milestone: give `create` or `edit`, then PROJECT NAME"),
                        (["milestone", "create", "E2E"], "linear milestone create: give PROJECT"),
                        (["relate", "INF-1", "blocks", "INF-2", "--dry-run"], "linear relate has no --dry-run (it would write)")):
         rc, _, err = run(capsys, "linear", *argv)
         assert rc == 2 and says in err, (argv, err)
-    assert len(lin.wrote) == 6 and stateless(lin)
+    assert len(lin.wrote) == 7 and stateless(lin)
 
 
 def slack_bot(registry) -> str:
