@@ -21,9 +21,9 @@ whose verifier accepts everything.
   witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
   with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
   trace carries; the one unit is drawn `all`, so no possible faulty set holds it, and no witness is in `RLeak`.
-* `PooledWrongUnitsLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its soundness
-  hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
-  `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
+* `PooledIncorrectBlocksLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its
+  soundness hypothesis at `ε = 0` when no block is incorrect. At one window of one block, that block incorrect, an audit
+  that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
 The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
 -/
@@ -355,8 +355,8 @@ end Toy
 
 /-! ## The monitoring period -/
 
-/-- **`PooledWrongUnitsLe`'s draw hypotheses at the honest instance**: the uniform `k`-subset draw draws `k` units
-and each `k`-subset with share `1 / C(n, k)`. -/
+/-- **`PooledIncorrectBlocksLe`'s draw hypotheses at the honest instance**: the uniform `k`-subset draw draws `k`
+blocks and each `k`-subset with share `1 / C(n, k)`. -/
 theorem uniform_draw (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →
@@ -368,17 +368,18 @@ theorem uniform_draw (n k : ℕ) :
     simp [Subtype.ext_iff]
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-- **`PooledWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset draw
-(`uniform_draw`) with no unit wrong, every acceptance event meets a wrong unit with probability `0`, so `ε = 0`. -/
-theorem PooledWrongUnitsLe_honest (n k : ℕ) :
+/-- **`PooledIncorrectBlocksLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset draw
+(`uniform_draw`) with no block incorrect, every acceptance event meets an incorrect block with probability `0`, so
+`ε = 0`. -/
+theorem PooledIncorrectBlocksLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
   intro m acc i
   simp [Pr]
 
-/-- **`PooledWrongUnitsLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
-that unit wrong, `q = F = 1`. -/
-theorem PooledWrongUnitsLe_nontrivial :
+/-- **`PooledIncorrectBlocksLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one
+block, that block incorrect, `q = F = 1`. -/
+theorem PooledIncorrectBlocksLe_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) := by
