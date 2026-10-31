@@ -1,5 +1,6 @@
 import Difftest
 import Lms.Sign
+import MemoryChallenger.Attest
 import MemoryChallenger.Protocol
 import MemoryChallenger.WipeJudge
 
@@ -8,9 +9,11 @@ import MemoryChallenger.WipeJudge
 
 The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` through `verity_difftest.Port`, each over JSON
 in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
-`MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, and the streamed
-wipe's signed message and egress count. `memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own
-difftest drives the executable its callers run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
+`MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the streamed wipe's
+signed message and egress count, and a device's HSS role digests and checks (`Lms.Hss`, `MemoryChallenger.Attest`: the
+period tree's root, the period check and the liveness check). `memory-challenger-difftest` serves them
+(`Difftest.serve`). Each verdict's own difftest drives the executable its callers run, `memory-challenger-verdict` and
+`streamed-wipe-verdict`.
 -/
 
 namespace MemoryChallenger.Difftest
@@ -92,10 +95,57 @@ def wipeMessageFn (j : Json) : V Json := do
 def wipeEgressUnitsFn (j : Json) : V Json := do
   pure (Lean.toJson (StreamedWipe.egressUnits (← J.asInt (← J.get j "egress_bits" "input") "egress_bits")))
 
+/-- `lms.party_key_message(I, deployment, party, lower)`. -/
+def partyKeyMessageFn (j : Json) : V Json := do
+  pure (hexJ (← Lms.partyKeyMessage (← hex j "I") (← hex j "deployment") (← J.str j "party" "input") (← hex j "lower")))
+
+/-- `lms.period_root_message(I, deployment, party, attachment, link, period, count, root)`. -/
+def periodRootMessageFn (j : Json) : V Json := do
+  pure (hexJ (← Lms.periodRootMessage (← hex j "I") (← hex j "deployment") (← J.str j "party" "input")
+    (← hex j "attachment") (← J.str j "link" "input") (← J.nat j "period" "input") (← J.nat j "count" "input")
+    (← hex j "root")))
+
+/-- `lms.liveness_message(I, deployment, party, attachment, link, period, block)`. -/
+def livenessMessageFn (j : Json) : V Json := do
+  pure (hexJ (← Lms.livenessMessage (← hex j "I") (← hex j "deployment") (← J.str j "party" "input")
+    (← hex j "attachment") (← J.str j "link" "input") (← J.nat j "period" "input") (← J.nat j "block" "input")))
+
+/-- `lms.Params(64, W, H)`. -/
+private def params (j : Json) : V Lms.Params := do Lms.Params.make 64 (← J.nat j "W" "input") (← J.nat j "H" "input") false
+
+/-- `lms.hss_verify(Params(64, W, H), identity, deployment, party, HssSignature.decode(signature), message)`. -/
+def hssVerifyFn (j : Json) : V Json := do
+  let p ← params j
+  let s ← Lms.HssSignature.decode p (← hex j "signature")
+  pure (.bool (← Lms.hssVerify p (← hex j "identity") (← hex j "deployment") (← J.str j "party" "input") s
+    (← hex j "message")))
+
+/-- `attest.root(records)`. -/
+def attestRootFn (j : Json) : V Json := do pure (hexJ (Attest.root (← hexes j "records")))
+
+private def readOf (x : Json) : V Attest.Read := do
+  pure ⟨← J.nat x "position" "read", ← hex x "record", ← hexes x "path"⟩
+
+/-- `Attest.check` on a signed root whose signature is decoded at `Params(64, W, H)`, and the reads. -/
+def attestCheckFn (j : Json) : V Json := do
+  let p ← params j
+  let s : Attest.SignedRoot := ⟨← hex j "attachment", ← J.str j "link" "input", ← J.nat j "period" "input",
+    ← J.nat j "count" "input", ← hex j "root", ← Lms.HssSignature.decode p (← hex j "signature")⟩
+  let reads ← (← J.arr j "reads" "input").mapM readOf
+  pure (.bool (← Attest.check p (← hex j "identity") (← hex j "deployment") (← J.str j "party" "input") s reads))
+
+/-- `Attest.checkLiveness` at `Params(64, W, H)`. -/
+def attestLivenessFn (j : Json) : V Json := do
+  pure (.bool (← Attest.checkLiveness (← params j) (← hex j "identity") (← hex j "deployment")
+    (← J.str j "party" "input") (← hex j "attachment") (← J.str j "link" "input") (← J.nat j "period" "input")
+    (← J.nat j "block" "input") (← hex j "signature")))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("coin_digest", coinDigestFn), ("coin_tree", coinTreeFn), ("verify_coin", verifyCoinFn),
   ("records_root", recordsRootFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
   ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("wipe_message", wipeMessageFn),
-  ("wipe_egress_units", wipeEgressUnitsFn)]
+  ("wipe_egress_units", wipeEgressUnitsFn), ("party_key_message", partyKeyMessageFn),
+  ("period_root_message", periodRootMessageFn), ("liveness_message", livenessMessageFn), ("hss_verify", hssVerifyFn),
+  ("attest_root", attestRootFn), ("attest_check", attestCheckFn), ("attest_liveness", attestLivenessFn)]
 
 end MemoryChallenger.Difftest
