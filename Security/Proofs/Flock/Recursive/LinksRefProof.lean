@@ -566,8 +566,10 @@ theorem linkRef_staged : LinkRefStaged := by
   have hopU : u.outWords = 128 := by
     obtain ⟨-, -, -, hop2⟩ := FlockVBridge.RecLink.linkUnit_ok hu
     rw [VStar.UnitC.outWords, hop2] <;> rfl
-  rw [FlockVBridge.OfVStar.foldl_replicate, hopU, show (FlockSoundness.Rows.ofNet hU).nIn +
+  rw [FlockVBridge.OfVStar.foldl_replicate, show (FlockSoundness.Rows.ofNet hU).nIn +
     (FlockSoundness.Rows.ofNet hU).nComp = c.unit.constPos from FlockSoundness.Rows.ofNet_one hU] at hE
+  have hE' : FlockSoundness.Discharge.Hm.outStart u.st (Array.replicate u.inWords 16)
+      (Array.replicate u.outWords 16) + 2048 ≤ c.unit.constPos := by omega
   obtain ⟨hR0, hL0⟩ := RefStep.colsHold_linkOut h1 h0p hc0 P ho hop' hlo hw56 hor hB (by omega) w n
     (jo := 0) (by omega) (q := 5) (by omega)
   obtain ⟨hR1, hL1⟩ := RefStep.colsHold_linkOut h1 h0p hc0 P ho hop' hlo hw56 hor hB (by omega) w n
