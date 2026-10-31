@@ -1341,31 +1341,6 @@ constexpr int MNB = 2, MDW = MMA_OK ? MT * HW / 32 : 1, MWT = 32 * (MDW + MW);
 constexpr int mws_smem() { return MNB * MT * MTS + 2 * MNB * 8 + NL * 4; }
 static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's words in one warp");
 
-// Receipts inside mma-ws (RC = 1 unbound, 2 bound). A block is RT tiles of one (sequence, KV head) pair, at absolute
-// tile offsets of RT. Each decoder lane feeds its raw word of each tile, before decoding it, to mma.m16n8k32.s8 as the A
-// operand: step s (0..RS - 1, RS = NL / 4) is registers x[4s..4s+3], so the warp's 16 A rows are its 16 vectors of
-// 32 RS bytes a tile (the sketch tag's fragment order: A register 2h + e is row g + 8e, column 16h + 4tq + b of lane
-// 4g + tq, byte b), and its B operand, the 16 sketch columns, is register q = 2 blk + h of step s, loaded from shared
-// memory: word (512 i mod ZW) + 128 s + 4 l + q of the tile's B slot (RC = 1: offset 0, not 512 i). kRcB holds a
-// block's sign rows, word 128 s + 4 l + q of tile τ (kv_receipt.rows): ±1 bytes (RC = 1), or 0x00/0xFF masks M (RC = 2,
-// ro-bound-sketch/v0, only at 64-byte words,
-// B = R ⊕ M with R's word the z word of the same index, z the MMA warps' PV accumulators after tile j - RLAG: word
-// (w 16 + 2 g + t4) 32 + 4 mt + e of warp w's o[mt][e] at lane 4g + t4, t4 < GROUP / 2; R = 0 for a CTA's first RLAG
-// tiles). The MMA warps fill tile j's slot after folding tile j - RLAG (the first RLAG before their first tile), so the
-// decoder warps spend a tile RS LDS and 2 RS IMMA on the sketch. A block's sketch, 16 int32 a vector, goes to
-// rc_sk[vector][16], vector ((pair NBLK + block) MDW + warp) 16 + row; rc_tag_kernel hashes each into its receipt.
-#ifndef KV_RT
-#define KV_RT 16
-#endif
-#ifndef KV_RLAG
-#define KV_RLAG MNB
-#endif
-constexpr int RT = KV_RT, RLAG = KV_RLAG, ZB = RLAG, ZW = MW * 8 * (GROUP / 2) * 32;
-static_assert(RLAG >= 1 && (ZW & (ZW - 1)) == 0 && ZW >= 512 && GROUP % 2 == 0, "B slots outlive their readers");
-// RC = 1's B slot is a tile's RCW sign words; RC = 2's is ZW words, its z indexing assuming 512 sign words (64-byte
-// words). Sizing RC = 1's by RCW keeps two CTAs an SM at 70B's GROUP = 8 (ZW = 2048 words would take 16 KiB of slots).
-constexpr int RS = NL / 4, RCW = 128 * RS;
-constexpr bool RC1_OK = MMA_OK, RC2_OK = MMA_OK && RS == 4;
 // Form 13 (RC = 3) is the PoUB driver's sketch-sha512 receipt of each token-layer, the store's 4 KiB block
 // of whole words (store-order/v0), under the pass's own 16 sign rows S (wt.cu's wt_pass). A decoder lane's raw word of
 // each tile is B, column g' its token 8 i + g' of warp i's eight: k-step κ (0..RK - 1) is registers x[2κ], x[2κ + 1],
@@ -1375,12 +1350,7 @@ constexpr bool RC1_OK = MMA_OK, RC2_OK = MMA_OK && RS == 4;
 // which go to rc_sk[(slot KV_HEADS + g) 16 + row]; rc_receipt_kernel sums a slot's KV_HEADS shares and hashes σ.
 constexpr int RK = WB / 8;
 constexpr bool RC3_OK = MMA_OK && HW == 4 && TLE == 4096 && TL_BYTES == 4096;
-__host__ __device__ constexpr int rc_slot(int rc) { return rc == 2 ? ZW : RCW; }
-constexpr int rc_smem(int rc) {
-  return mws_smem() + (rc == 3 ? RK * 32 * 16 : rc ? ZB * rc_slot(rc) * 4 + ZB * 8 : 0);
-}
-__device__ uint4 kRcB[2][RT * RCW / 4];
-__constant__ uint32_t kRcKey[2][8];
+constexpr int rc_smem(int rc) { return mws_smem() + (rc == 3 ? RK * 32 * 16 : 0); }
 __device__ uint4 kRcA[KV_HEADS][RK][32];
 __constant__ u64 kKvMid[8];
 
@@ -1389,25 +1359,6 @@ __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u
       "{%0, %1, %2, %3};"
       : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
       : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
-}
-
-// One tile of a lane's sketch: br its B words in the tile's slot (shared), step s at br + 128 s.
-__device__ __forceinline__ void rc_sketch(const u32 (&x)[NL], int (&acc)[2][4], const u32 *br) {
-#pragma unroll
-  for (int s = 0; s < RS; ++s) {
-    const uint4 b = *reinterpret_cast<const uint4 *>(br + 128 * s);
-    imma16832(acc[0], x[4 * s], x[4 * s + 1], x[4 * s + 2], x[4 * s + 3], b.x, b.y);
-    imma16832(acc[1], x[4 * s], x[4 * s + 1], x[4 * s + 2], x[4 * s + 3], b.z, b.w);
-  }
-}
-
-// The MMA warps' share of tile jt's B slot bs: R = 0, so B is kRcB's rows (both halves of ZW for RC = 2).
-template <int RC>
-__device__ __forceinline__ void rc_fill(u32 *bs, int jt, int mlane) {
-  const uint4 *rows = kRcB[RC - 1] + jt % RT * (RCW / 4);
-#pragma unroll
-  for (int v = mlane; v < (RC == 2 ? ZW : RCW) / 4; v += 32 * MW)
-    reinterpret_cast<uint4 *>(bs)[v] = rows[v % (RCW / 4)];
 }
 
 __device__ __forceinline__ void ldg_word(const u32 *p, u32 (&x)[NL]) {
@@ -1433,27 +1384,21 @@ template <int RC = 0>
 __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__restrict__ kv,
                                                             const uint16_t *__restrict__ q, float *__restrict__ part,
                                                             int ctx, int layers, int layer, int per_split, int splits,
-                                                            int k, int *__restrict__ rc_sk = nullptr,
-                                                            u32 *__restrict__ zdump = nullptr) {
+                                                            int k, int *__restrict__ rc_sk = nullptr) {
   if constexpr (MMA_OK) {
     extern __shared__ __align__(16) uint8_t sm[];
     uint64_t *full = reinterpret_cast<uint64_t *>(sm + MNB * MT * MTS), *empty = full + MNB;
     u32 *td = reinterpret_cast<u32 *>(empty + MNB);
     u32 *bbuf = td + NL;
-    constexpr int SLOT = rc_slot(RC);
-    uint64_t *bfull = reinterpret_cast<uint64_t *>(bbuf + ZB * SLOT);
     const int g = blockIdx.x % KV_HEADS, sq = blockIdx.x / KV_HEADS, seq = sq / splits, split = sq % splits;
     const int t0 = split * per_split, t1 = min(ctx, t0 + per_split);
     const int ntiles = t1 > t0 ? (t1 - t0 + MT - 1) / MT : 0;
     const int w = threadIdx.x / 32, lane = threadIdx.x % 32;
-    constexpr bool RCB = RC == 1 || RC == 2;
     if (threadIdx.x == 0) {
       for (int b = 0; b < MNB; ++b) {
         mbar_init(full + b, 32 * MDW);
         mbar_init(empty + b, 32 * MW);
       }
-      if (RCB)
-        for (int b = 0; b < ZB; ++b) mbar_init(bfull + b, 32 * MW);
       u32 s[NL];
       tweak((u64)MT * layers * TLW, s);
 #pragma unroll
@@ -1470,7 +1415,6 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
       // the decode doesn't hold it (at 1,024 bits it spilled 96-104 bytes at 168 registers).
       const auto has = [&](int tile) { return tile < ntiles && t < min(MT, t1 - t0 - tile * MT); };
       u32 x[NL], tw[NL];
-      int acc[2][4] = {};
       tweak(word(0), tw);
       if (has(0)) ldg_word(reinterpret_cast<const u32 *>(kv) + word(0) * NL, x);
       for (int tile = 0; tile < ntiles; ++tile) {
@@ -1494,35 +1438,6 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
             if (8 * i + n < nt) rc_sk[((s0 + n) * KV_HEADS + g) * 16 + gid + 8 * (e >> 1)] = c[e];
           }
         }
-        if constexpr (RCB) {
-          const int i = w - MW;
-          if (t >= nt)
-            for (int l = 0; l < NL; ++l) x[l] = 0u;
-          mbar_wait(bfull + tile % ZB, (tile / ZB) & 1);
-          rc_sketch(x, acc, bbuf + tile % ZB * SLOT + (RC == 2 ? 512 * i & (ZW - 1) : 0) + 4 * lane);
-          const int at = t0 / MT + tile;
-          if (at % RT == RT - 1 || tile == ntiles - 1) {
-            const int nblk = (ctx + RT * MT - 1) / (RT * MT), blk = at / RT, gid = lane >> 2, t4 = lane & 3;
-            int *vp = rc_sk + ((((size_t)seq * KV_HEADS + g) * nblk + blk) * MDW + i) * 16 * 16;
-            // A block another split shares is summed into sketches the host zeroed; int32 sums in any order are exact.
-            const bool whole = blk * RT * MT >= t0 && min(ctx, (blk + 1) * RT * MT) <= t1;
-#pragma unroll
-            for (int h = 0; h < 2; ++h) {
-              int *v0 = vp + (gid + 8 * h) * 16 + 2 * t4, *v1 = v0 + 8;
-              if (whole) {
-                *reinterpret_cast<int2 *>(v0) = make_int2(acc[0][2 * h], acc[0][2 * h + 1]);
-                *reinterpret_cast<int2 *>(v1) = make_int2(acc[1][2 * h], acc[1][2 * h + 1]);
-              } else {
-                atomicAdd(v0, acc[0][2 * h]);
-                atomicAdd(v0 + 1, acc[0][2 * h + 1]);
-                atomicAdd(v1, acc[1][2 * h]);
-                atomicAdd(v1 + 1, acc[1][2 * h + 1]);
-              }
-            }
-#pragma unroll
-            for (int v = 0; v < 4; ++v) acc[0][v] = acc[1][v] = 0;
-          }
-        }
         if (t < nt) decode_word_t<true>(x, tw, k);
         else for (int l = 0; l < NL; ++l) x[l] = 0u;
         if (tile >= MNB) mbar_wait(empty + tile % MNB, (tile / MNB - 1) & 1);
@@ -1537,226 +1452,22 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
     float m_own = -INFINITY, l_own = 0.f;
     mma_load_q(q, seq, g, lane, qa);
     const int rem = t1 - t0;
-    if constexpr (RCB) {
-      for (int jt = 0; jt < RLAG && jt * MT < rem; ++jt) {
-        rc_fill<RC>(bbuf + jt * SLOT, t0 / MT + jt, 32 * w + lane);
-        mbar_arrive(bfull + jt);
-      }
-    }
     for (int tile = 0; tile * MT < rem; ++tile) {
       const int b = tile % MNB, nt = min(MT, rem - tile * MT);
       mbar_wait(full + b, (tile / MNB) & 1);
       if (nt > 16 * w)
         mma_chunk(smem_u32(sm + b * MT * MTS + 16 * w * MTS), qa, lane, min(16, nt - 16 * w), o, m_own, l_own);
       mbar_arrive(empty + b);
-      if constexpr (RCB) {
-        const int jt = tile + RLAG;
-        const bool next = jt * MT < rem;
-        u32 *bs = bbuf + tile % ZB * SLOT;
-        if (RC == 1 && next) rc_fill<1>(bs, t0 / MT + jt, 32 * w + lane);
-        if constexpr (RC == 2) {
-          constexpr int ZL = GROUP / 2;
-          const int gid = lane >> 2, t4 = lane & 3;
-          if (t4 < ZL) {
-            const int zi = (w * 8 * ZL + gid * ZL + t4) * 32;
-            const uint4 *rows = kRcB[1] + jt % RT * (RCW / 4) + (zi & (RCW - 1)) / 4;
-            u32 *zd = zdump ? zdump + ((size_t)blockIdx.x * (per_split / MT) + tile) * ZW + zi : nullptr;
-#pragma unroll
-            for (int mt = 0; mt < 8; ++mt) {
-              const uint4 v = make_uint4(__float_as_uint(o[mt][0]), __float_as_uint(o[mt][1]),
-                                         __float_as_uint(o[mt][2]), __float_as_uint(o[mt][3]));
-              if (next) {
-                const uint4 m = rows[mt];
-                *reinterpret_cast<uint4 *>(bs + zi + 4 * mt) = make_uint4(v.x ^ m.x, v.y ^ m.y, v.z ^ m.z, v.w ^ m.w);
-              }
-              if (zd) *reinterpret_cast<uint4 *>(zd + 4 * mt) = v;
-            }
-          }
-        }
-        if (next) mbar_arrive(bfull + tile % ZB);
-      }
     }
     mma_out(part + ((size_t)sq * MW + w) * PART, g, lane, o, m_own, l_own);
   }
 }
-
-// A receipt a vector: BLAKE3-keyed(kRcKey[rc - 1], u64be(jbase + v) ‖ rc_sk[v] as 16 int32 LE), 32 bytes.
-#define B3_IV0 0x6A09E667u
-#define B3_IV1 0xBB67AE85u
-#define B3_IV2 0x3C6EF372u
-#define B3_IV3 0xA54FF53Au
-constexpr u32 B3_CHUNK_START = 1, B3_CHUNK_END = 2, B3_ROOT = 8, B3_KEYED = 16;
-
-#define B3_G(a, b, c, d, x, y)   \
-  a += b + (x);                  \
-  d = __funnelshift_r(d ^ a, d ^ a, 16); \
-  c += d;                        \
-  b = __funnelshift_r(b ^ c, b ^ c, 12); \
-  a += b + (y);                  \
-  d = __funnelshift_r(d ^ a, d ^ a, 8);  \
-  c += d;                        \
-  b = __funnelshift_r(b ^ c, b ^ c, 7)
-
-// One compression of the message words m (permuted in place) from chaining value cv (`tagger.cu`'s b3_compress).
-__device__ __forceinline__ void b3_compress(const u32 cv[8], u32 m[16], u32 len, u32 flags, u32 out[8],
-                                            u32 counter = 0) {
-  u32 v0 = cv[0], v1 = cv[1], v2 = cv[2], v3 = cv[3], v4 = cv[4], v5 = cv[5], v6 = cv[6], v7 = cv[7];
-  u32 v8 = B3_IV0, v9 = B3_IV1, v10 = B3_IV2, v11 = B3_IV3, v12 = counter, v13 = 0, v14 = len, v15 = flags;
-#pragma unroll
-  for (int r = 0; r < 7; ++r) {
-    B3_G(v0, v4, v8, v12, m[0], m[1]);
-    B3_G(v1, v5, v9, v13, m[2], m[3]);
-    B3_G(v2, v6, v10, v14, m[4], m[5]);
-    B3_G(v3, v7, v11, v15, m[6], m[7]);
-    B3_G(v0, v5, v10, v15, m[8], m[9]);
-    B3_G(v1, v6, v11, v12, m[10], m[11]);
-    B3_G(v2, v7, v8, v13, m[12], m[13]);
-    B3_G(v3, v4, v9, v14, m[14], m[15]);
-    if (r < 6) {
-      const u32 t[16] = {m[2], m[6], m[3], m[10], m[7], m[0], m[4], m[13], m[1], m[11], m[12], m[5], m[9], m[14], m[15], m[8]};
-#pragma unroll
-      for (int i = 0; i < 16; ++i) m[i] = t[i];
-    }
-  }
-  out[0] = v0 ^ v8, out[1] = v1 ^ v9, out[2] = v2 ^ v10, out[3] = v3 ^ v11;
-  out[4] = v4 ^ v12, out[5] = v5 ^ v13, out[6] = v6 ^ v14, out[7] = v7 ^ v15;
-}
-
-__global__ void __launch_bounds__(128) rc_tag_kernel(int rc, const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
-                                                     u64 jbase) {
-  const u64 v = (u64)blockIdx.x * 128 + threadIdx.x;
-  if (v >= n) return;
-  const uint4 *p = reinterpret_cast<const uint4 *>(sk + v * 16);
-  u32 m[16], key[8], cv[8], out[8];
-  const u64 j = jbase + v;
-  m[0] = __byte_perm((u32)(j >> 32), 0, 0x0123), m[1] = __byte_perm((u32)j, 0, 0x0123);
-  const uint4 a = p[0], b = p[1], c = p[2], d = p[3];
-  m[2] = a.x, m[3] = a.y, m[4] = a.z, m[5] = a.w, m[6] = b.x, m[7] = b.y, m[8] = b.z, m[9] = b.w;
-  m[10] = c.x, m[11] = c.y, m[12] = c.z, m[13] = c.w, m[14] = d.x, m[15] = d.y;
-#pragma unroll
-  for (int i = 0; i < 8; ++i) key[i] = kRcKey[rc - 1][i];
-  b3_compress(key, m, 64, B3_KEYED | B3_CHUNK_START, cv);
-  m[0] = d.z, m[1] = d.w;
-#pragma unroll
-  for (int i = 2; i < 16; ++i) m[i] = 0u;
-  b3_compress(cv, m, 8, B3_KEYED | B3_CHUNK_END | B3_ROOT, out);
-  uint4 *o = reinterpret_cast<uint4 *>(tags + v * 8);
-  o[0] = make_uint4(out[0], out[1], out[2], out[3]);
-  o[1] = make_uint4(out[4], out[5], out[6], out[7]);
-}
-
-// A receipt a decoder warp's block of 16 vectors, the candidate that hashes 18 blocks where 16 vector receipts hash 32:
-// BLAKE3-keyed(kRcKey[rc - 1], u64be(jbase + u) ‖ rc_sk[16 u .. 16 u + 15] as 256 int32 LE), 1,032 bytes, so chunk 0's
-// 16 blocks (each the previous block's last two sketch words and 14 of its own), chunk 1's last 8 bytes, and their
-// parent.
-__global__ void __launch_bounds__(128) rc_tag16_kernel(int rc, const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
-                                                       u64 jbase) {
-  constexpr u32 B3_PARENT = 4;
-  const u64 u = (u64)blockIdx.x * blockDim.x + threadIdx.x;
-  if (u >= n) return;
-  const uint4 *p = reinterpret_cast<const uint4 *>(sk + u * 256);
-  u32 m[16], key[8], cv[8], c1[8], out[8];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) cv[i] = key[i] = kRcKey[rc - 1][i];
-  const u64 j = jbase + u;
-  u32 h0 = __byte_perm((u32)(j >> 32), 0, 0x0123), h1 = __byte_perm((u32)j, 0, 0x0123);
-#pragma unroll 1
-  for (int t = 0; t < 16; ++t) {
-    const uint4 a = p[4 * t], b = p[4 * t + 1], c = p[4 * t + 2], d = p[4 * t + 3];
-    m[0] = h0, m[1] = h1, m[2] = a.x, m[3] = a.y, m[4] = a.z, m[5] = a.w, m[6] = b.x, m[7] = b.y, m[8] = b.z;
-    m[9] = b.w, m[10] = c.x, m[11] = c.y, m[12] = c.z, m[13] = c.w, m[14] = d.x, m[15] = d.y;
-    h0 = d.z, h1 = d.w;
-    b3_compress(cv, m, 64, B3_KEYED | (t == 0 ? B3_CHUNK_START : 0) | (t == 15 ? B3_CHUNK_END : 0), out);
-#pragma unroll
-    for (int i = 0; i < 8; ++i) cv[i] = out[i];
-  }
-  m[0] = h0, m[1] = h1;
-#pragma unroll
-  for (int i = 2; i < 16; ++i) m[i] = 0u;
-  b3_compress(key, m, 8, B3_KEYED | B3_CHUNK_START | B3_CHUNK_END, c1, 1);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) m[i] = cv[i], m[8 + i] = c1[i];
-  b3_compress(key, m, 64, B3_KEYED | B3_PARENT | B3_ROOT, out);
-  uint4 *o = reinterpret_cast<uint4 *>(tags + u * 8);
-  o[0] = make_uint4(out[0], out[1], out[2], out[3]);
-  o[1] = make_uint4(out[4], out[5], out[6], out[7]);
-}
-
-// Two receipts a block, over 8 vectors each: BLAKE3-keyed(kRcKey[rc - 1], u64be(jbase + u) ‖ rc_sk[8 u .. 8 u + 7] as
-// 128 int32 LE), 520 bytes in one chunk, so 9 blocks: the same 18 compressions a block of 16 as rc_tag16_kernel, twice
-// the threads and half the chain.
-__global__ void __launch_bounds__(128) rc_tag8_kernel(int rc, const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
-                                                      u64 jbase) {
-  const u64 u = (u64)blockIdx.x * blockDim.x + threadIdx.x;
-  if (u >= n) return;
-  const uint4 *p = reinterpret_cast<const uint4 *>(sk + u * 128);
-  u32 m[16], cv[8], out[8];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) cv[i] = kRcKey[rc - 1][i];
-  const u64 j = jbase + u;
-  u32 h0 = __byte_perm((u32)(j >> 32), 0, 0x0123), h1 = __byte_perm((u32)j, 0, 0x0123);
-#pragma unroll 1
-  for (int t = 0; t < 8; ++t) {
-    const uint4 a = p[4 * t], b = p[4 * t + 1], c = p[4 * t + 2], d = p[4 * t + 3];
-    m[0] = h0, m[1] = h1, m[2] = a.x, m[3] = a.y, m[4] = a.z, m[5] = a.w, m[6] = b.x, m[7] = b.y, m[8] = b.z;
-    m[9] = b.w, m[10] = c.x, m[11] = c.y, m[12] = c.z, m[13] = c.w, m[14] = d.x, m[15] = d.y;
-    h0 = d.z, h1 = d.w;
-    b3_compress(cv, m, 64, B3_KEYED | (t == 0 ? B3_CHUNK_START : 0), out);
-#pragma unroll
-    for (int i = 0; i < 8; ++i) cv[i] = out[i];
-  }
-  m[0] = h0, m[1] = h1;
-#pragma unroll
-  for (int i = 2; i < 16; ++i) m[i] = 0u;
-  b3_compress(cv, m, 8, B3_KEYED | B3_CHUNK_END | B3_ROOT, out);
-  uint4 *o = reinterpret_cast<uint4 *>(tags + u * 8);
-  o[0] = make_uint4(out[0], out[1], out[2], out[3]);
-  o[1] = make_uint4(out[4], out[5], out[6], out[7]);
-}
-
-__constant__ u64 kRcMid[8];
 
 // One SHA-512 compression of the big-endian words w (clobbered) into s: five passes of one 16-round body, the schedule in
 // place.
 __host__ __device__ __forceinline__ void sha512_compress(u64 s[8], u64 w[16]) { sx::compress<0, 2>(s, w); }
 
 using sx::be64;
-
-// The half-block receipt as SHA-512, the remote driver's hash (receipts.py's y, seed-first): SHA512(P ‖ u64be(jbase + u)
-// ‖ rc_sk[8 u .. 8 u + 7] as 128 int32 LE), P one 128-byte block whose midstate kRcMid holds (kv_rc_sha_set). After P
-// the message is 520 bytes, so 5 compressions with the padding; the digest's 64 bytes go to tags[16 u ..].
-__global__ void __launch_bounds__(128) rc_sha8_kernel(const int *__restrict__ sk, u32 *__restrict__ tags, u64 n,
-                                                      u64 jbase) {
-  const u64 u = (u64)blockIdx.x * blockDim.x + threadIdx.x;
-  if (u >= n) return;
-  const uint4 *p = reinterpret_cast<const uint4 *>(sk + u * 128);
-  u64 s[8], w[16], c = jbase + u;
-#pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kRcMid[i];
-#pragma unroll 1
-  for (int t = 0; t < 4; ++t) {
-    w[0] = c;
-#pragma unroll
-    for (int v = 0; v < 8; ++v) {
-      const uint4 q = p[8 * t + v];
-      w[1 + 2 * v] = be64(q.x, q.y);
-      if (v < 7) w[2 + 2 * v] = be64(q.z, q.w); else c = be64(q.z, q.w);
-    }
-    sha512_compress(s, w);
-  }
-  w[0] = c, w[1] = 0x8000000000000000ull;
-#pragma unroll
-  for (int i = 2; i < 15; ++i) w[i] = 0;
-  w[15] = (128 + 520) * 8;
-  sha512_compress(s, w);
-  uint4 *o = reinterpret_cast<uint4 *>(tags + u * 16);
-#pragma unroll
-  for (int i = 0; i < 4; ++i) {
-    const u64 x = s[2 * i], y = s[2 * i + 1];
-    o[i] = make_uint4(__byte_perm((u32)(x >> 32), 0, 0x0123), __byte_perm((u32)x, 0, 0x0123),
-                      __byte_perm((u32)(y >> 32), 0, 0x0123), __byte_perm((u32)y, 0, 0x0123));
-  }
-}
 
 // Form 13's A table (kv_rc_pass) from the pass's sign bits, row c's 512 bytes at bits + 512 c (bit u of byte u / 8 set
 // for −1): kRcA[g][κ][lane] for lane (g', t') of head g's word wi, the signs of rows g' and g' + 8 at block positions
@@ -2342,19 +2053,15 @@ int kv_attn_occ(int *out) {
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(out + 2, kv::attn_occ_kernel<true>, kv::OWT, kv::occ_smem());
   out[1] = kv::MDW;
   out[3] = kv::ODW;
-  cudaFuncSetAttribute(kv::attn_mma_ws_kernel<1>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::rc_smem(1));
-  cudaOccupancyMaxActiveBlocksPerMultiprocessor(out + 4, kv::attn_mma_ws_kernel<1>, kv::MWT, kv::rc_smem(1));
   return launched();
 }
 
 static int *rc_sk = nullptr;
-static uint32_t *rc_tags = nullptr, *rc_zdump = nullptr;
 
-// Receipts' shape: tiles a block, the bound form's lag in tiles, z's words, decoder warps a CTA, tokens a tile, the
-// sketch's steps a tile (a word's bytes / 16), and the forms this build runs (bit rc - 1).
+// Form 13's receipt shape: decoder warps a CTA, tokens a tile, the sketch's k-steps a word (its bytes / 8), and the
+// receipt forms this build runs (bit rc - 1: 4 for form 13).
 void kv_rc_shape(int *out) {
-  out[0] = kv::RT; out[1] = kv::RLAG; out[2] = kv::ZW; out[3] = kv::MDW; out[4] = kv::MT; out[5] = kv::RS;
-  out[6] = (kv::RC1_OK ? 1 : 0) | (kv::RC2_OK ? 2 : 0) | (kv::RC3_OK ? 4 : 0);
+  out[0] = kv::MDW; out[1] = kv::MT; out[2] = kv::RK; out[3] = kv::RC3_OK ? 4 : 0;
 }
 
 // Form 13's pass: its sign bits (16 rows of 4,096, row c's 512 bytes at bits[128 c ..], bit u of byte u / 8 set for
@@ -2378,64 +2085,10 @@ int kv_rc_receipts(uint32_t *tags, uint64_t n, int layers, int layer, uint64_t j
   return launched();
 }
 
-// kv_attn forms 10 (rc = 1) and 11 (rc = 2): a block's sign rows (RT * RCW u32, kv_receipt.rows) and the BLAKE3 key
-// (8 u32).
-int kv_rc_set(int rc, const uint32_t *rows, const uint32_t *key) {
-  if (rc < 1 || rc > 2) return -1;
-  const size_t ns = sizeof(uint4) * kv::RT * kv::RCW / 4;
-  if (cudaMemcpyToSymbol(kv::kRcB, rows, ns, (rc - 1) * ns) != cudaSuccess) return launched();
-  if (cudaMemcpyToSymbol(kv::kRcKey, key, 32, (rc - 1) * 32) != cudaSuccess) return launched();
+// Form 13's output, each (slot, KV head)'s share of σ (16 int32), which kv_rc_receipts hashes; nullptr none.
+int kv_rc_buffers(int *sk) {
+  rc_sk = sk;
   return 0;
-}
-
-// Forms 10 and 11's outputs: sketches (16 int32 a vector), receipts (8 u32 a vector, nullptr none) and form 11's z
-// (ZW words a tile of each CTA, nullptr none).
-int kv_rc_buffers(int *sk, uint32_t *tags, uint32_t *zdump) {
-  rc_sk = sk, rc_tags = tags, rc_zdump = zdump;
-  return 0;
-}
-
-// The receipts of n vectors of kv_rc_buffers' sketches, alone.
-int kv_rc_tag(int rc, uint64_t n, cudaStream_t s) {
-  if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
-  kv::rc_tag_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
-  return launched();
-}
-
-// rc_tag16_kernel's receipts of the n blocks of 16 vectors of kv_rc_buffers' sketches, into the first n receipt slots.
-// 64 threads a CTA, so one CTA fits on an SM beside mma-ws's two (61,440 of its 65,536 registers).
-int kv_rc_tag16(int rc, uint64_t n, cudaStream_t s) {
-  if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
-  kv::rc_tag16_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
-  return launched();
-}
-
-// rc_tag8_kernel's receipts of the n halves (8 vectors) of blocks of kv_rc_buffers' sketches, 64 threads a CTA.
-int kv_rc_tag8(int rc, uint64_t n, cudaStream_t s) {
-  if (rc < 1 || rc > 2 || !rc_sk || !rc_tags) return -1;
-  kv::rc_tag8_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
-  return launched();
-}
-
-// rc_sha8_kernel's prefix P, one 128-byte block (kv_receipt.sha_prefix): its midstate, computed once a pass.
-int kv_rc_sha_set(const uint8_t *prefix) {
-  uint64_t s[8], w[16];
-  sx::iv(s);
-  for (int i = 0; i < 16; ++i) {
-    w[i] = 0;
-    for (int b = 0; b < 8; ++b) w[i] = w[i] << 8 | prefix[8 * i + b];
-  }
-  kv::sha512_compress(s, w);
-  if (cudaMemcpyToSymbol(kv::kRcMid, s, sizeof s) != cudaSuccess) return launched();
-  return 0;
-}
-
-// rc_sha8_kernel's receipts of the n halves (8 vectors) of blocks of kv_rc_buffers' sketches, 64 bytes each in the
-// receipt slots (tags[16 u ..]), 64 threads a CTA.
-int kv_rc_sha8(uint64_t n, cudaStream_t s) {
-  if (!rc_sk || !rc_tags) return -1;
-  kv::rc_sha8_kernel<<<(unsigned)((n + 63) / 64), 64, 0, s>>>(rc_sk, rc_tags, n, 0);
-  return launched();
 }
 
 // Holds the first `bytes` of kv_rc_buffers' sketches in L2 on stream s (an access policy window over as much of the
@@ -2466,18 +2119,18 @@ int kv_rc_l2(uint64_t bytes, cudaStream_t s, uint64_t *out) {
 // encoded = 3 plain, 4 its words and 5 its words in the warp-specialized form (4 and 5 the same output as 3, not as 0);
 // encoded = 6 the tensor-core form at the decode's occupancy, plain, and 7 its words (the same output as 6); encoded =
 // 8 the persistent warp-specialized form, plain, and 9 its words (the same output as 8), `splits` times the CTAs the
-// SMs hold at once, fewer if a pair would span more than 16 of them; encoded = 10 and 11 mma-ws with the unbound and the
-// bound receipt (the same output as 5 at the same split, in whole blocks of RT tiles), into kv_rc_buffers' sketches,
-// and their receipts if it has a receipt buffer; encoded = 12 mma-ws's work items folded by a CTA pair an SM as a
-// counter hands them out (the same output as 5 at the same split); encoded = 13 mma-ws with the pass's sketch-sha512
-// receipt of each token-layer (kv_rc_pass; the same output as 5 at the same split), each (slot, KV head)'s share of σ
-// into kv_rc_buffers' sketches (batch ctx KV_HEADS 16 int32), which kv_rc_receipts hashes.
+// SMs hold at once, fewer if a pair would span more than 16 of them; encoded = 12 mma-ws's work items folded by a CTA
+// pair an SM as a counter hands them out (the same output as 5 at the same split); encoded = 13 mma-ws with the pass's
+// sketch-sha512 receipt of each token-layer (kv_rc_pass; the same output as 5 at the same split), each (slot, KV
+// head)'s share of σ into kv_rc_buffers' sketches (batch ctx KV_HEADS 16 int32), which kv_rc_receipts hashes.
+// There is no encoded = 10 or 11.
 // q bf16 [batch][HEADS][128] pre-scaled by log2(e)/sqrt(128), out fp32 [batch][HEADS][128], part at least batch *
 // splits * kv_attn_shape's out[6] floats (times out[7] from 3 on; batch * 16 * out[6] * out[7] for 8 and 9). The tokens
 // are split into at most `splits` ranges of whole tiles.
 int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *part, int batch, int ctx, int layers,
             int layer, int splits, int k, cudaStream_t s) {
   if (batch < 1 || ctx < 1 || splits < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 13 ||
+      encoded == 10 || encoded == 11 ||
       (encoded != 0 && encoded != 3 && encoded != 6 && encoded != 8 && (k < 1 || k > kv::KMAX)))
     return -1;
   if (encoded == 13) {
@@ -2491,7 +2144,7 @@ int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *
     const int per = (ctx + splits - 1) / splits, per_split = (per + kv::MT - 1) / kv::MT * kv::MT;
     const int sp = (ctx + per_split - 1) / per_split, grid = batch * sp * kv::KV_HEADS;
     kv::attn_mma_ws_kernel<3><<<grid, kv::MWT, kv::rc_smem(3), s>>>(static_cast<const uint8_t *>(kv_), q, part, ctx,
-                                                                     layers, layer, per_split, sp, k, rc_sk, nullptr);
+                                                                     layers, layer, per_split, sp, k, rc_sk);
     kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp * kv::MW);
     return launched();
   }
@@ -2514,35 +2167,6 @@ int kv_attn(const void *kv_, int encoded, const uint16_t *q, float *out, float *
     kv::attn_dyn_kernel<<<std::min(slots, nitems), kv::MWT, kv::dyn_smem(), s>>>(
         static_cast<const uint8_t *>(kv_), q, part, ctx, layers, layer, per_split, sp, k, nitems, ctr);
     kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp * kv::MW);
-    return launched();
-  }
-  if (encoded >= 10) {
-    if (!kv::MMA_OK || (encoded == 10 && !kv::RC1_OK) || (encoded == 11 && !kv::RC2_OK)) return -2;
-    if (!rc_sk) return -1;
-    static bool set = false;
-    if (!set) {
-      cudaFuncSetAttribute(kv::attn_mma_ws_kernel<1>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::rc_smem(1));
-      cudaFuncSetAttribute(kv::attn_mma_ws_kernel<2>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::rc_smem(2));
-      set = true;
-    }
-    // RC = 2's B takes the CTA's own PV output two tiles back, so its splits hold whole blocks; RC = 1's B is fixed
-    // rows, so its splits end at any tile and a shared block's partial sketches are summed.
-    const int bt = kv::RT * kv::MT, rc = encoded - 9, unit = rc == 1 ? kv::MT : bt;
-    const int per = (ctx + splits - 1) / splits, per_split = (per + unit - 1) / unit * unit;
-    const int sp = (ctx + per_split - 1) / per_split, grid = batch * sp * kv::KV_HEADS;
-    const uint64_t n = (uint64_t)batch * kv::KV_HEADS * ((ctx + bt - 1) / bt) * kv::MDW * 16;
-    const auto *p = static_cast<const uint8_t *>(kv_);
-    if (per_split % bt && cudaMemsetAsync(rc_sk, 0, n * 16 * sizeof(int), s) != cudaSuccess) return launched();
-    if (rc == 1)
-      kv::attn_mma_ws_kernel<1><<<grid, kv::MWT, kv::rc_smem(1), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k,
-                                                                       rc_sk, nullptr);
-    else
-      kv::attn_mma_ws_kernel<2><<<grid, kv::MWT, kv::rc_smem(2), s>>>(p, q, part, ctx, layers, layer, per_split, sp, k,
-                                                                       rc_sk, rc_zdump);
-    kv::attn_combine<<<batch * kv::HEADS, 32 * kv::CW, 0, s>>>(part, out, sp * kv::MW);
-    if (rc_tags) {
-      kv::rc_tag_kernel<<<(unsigned)((n + 127) / 128), 128, 0, s>>>(rc, rc_sk, rc_tags, n, 0);
-    }
     return launched();
   }
   if (encoded >= 8) {

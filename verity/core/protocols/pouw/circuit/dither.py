@@ -85,6 +85,7 @@ from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from . import segment as SG
 
@@ -240,7 +241,7 @@ Rows = list[list[int]]
 
 
 def _digest(what: str, v: bytes) -> bytes:
-    if len(v) != 64:
+    if len(v) != DIGEST_BYTES["sha512"]:
         raise ValueError(f"{what} is a 64-byte digest, not {len(v)} bytes")
     return bytes(v)
 
@@ -278,12 +279,12 @@ def _blocks(seed: bytes, tag: str, idx: Iterable[int]) -> bytes:
 def pad_rows(seeds: Mapping[str, bytes], k: int, rows: Sequence[int]) -> Rows:
     """A filler's A: the pad's rows `rows` at contraction k (len(rows) × k int8 values), row i the first k bytes of
     blocks i ceil(k / 64) .. of the pad stream."""
-    kb = -(-k // 64)
+    kb = -(-k // DIGEST_BYTES["sha512"])
     return [array("b", _blocks(seeds[PAD], PAD, range(i * kb, (i + 1) * kb))[:k]).tolist() for i in rows]
 
 
 def _bits(seed: bytes, tag: str, rows: Sequence[int], k: int) -> Rows:
-    kb = -(-k // 512)
+    kb = -(-k // (8 * DIGEST_BYTES["sha512"]))
     out = []
     for i in rows:
         raw = _blocks(seed, tag, range(i * kb, (i + 1) * kb))
