@@ -4,8 +4,8 @@
     from_json(doc)   -> Query                   inverse
     query_id(query)  -> sha512 hex of canonical_json(to_json(query)); program-independent identity of the query text
 
-Schema name for the wrapping artifact (owned by `query_artifact.py`): `verity-ir/query/v1`.  The query document carries
-no purpose (`kind` / `w_max`) -- that is the use configuration, not the query.
+`SCHEMA` (`verity-ir/query/v1`) names the wrapping artifact, which `verity_vllm.query.query_artifact` writes.  The query
+document carries no purpose (`kind` / `w_max`) -- that is the use configuration, not the query.
 """
 from __future__ import annotations
 
