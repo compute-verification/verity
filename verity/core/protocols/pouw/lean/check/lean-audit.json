@@ -54,8 +54,8 @@
     "PouwCheck.Pass",
     "PouwWindow.Record",
     "PouwWindow.Side",
-    "Flock.FV3",
-    "Identity.Domains"
+    "Identity.Domains",
+    "Flock.FV3"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
