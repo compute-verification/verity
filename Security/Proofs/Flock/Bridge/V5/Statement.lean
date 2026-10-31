@@ -7,6 +7,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 `SampledKSLiveV2` at flock-verify `--zk --public-inputs`, with or without shared rows. `own` is the verifier's own
 recomputation of each proof block's public input words (`HmIn.checkOwn`), and the statement holds at every `own`:
 
+* the circuit file's descriptor `D` (`Flock.Desc.parseStmt`): a flat circuit, or a templated statement whose circuit
+  `D.unroll` is its committed circuit unrolled through its template, read everywhere as the statement circuit;
 * the circuit's public input ports `pi` (`HmIn.parse`) and the population's public file loaded over them
   (`HmIn.loadPublic`), in place of `HmOut.loadPublic` and `pub.tables = none`;
 * the program `Placed.keyProgP`, whose proof blocks read the gates of their keys with public inputs, its outputs
@@ -50,15 +52,15 @@ bytes. -/
 def _root_.Flock.Bridge.OpeningsCanonTargetV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (kd : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀),
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
-    let vb := (rsZHJP (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP (Reg := Reg) dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
@@ -75,7 +77,7 @@ with canonical openings at `constsOfP`. -/
 def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
@@ -100,11 +102,11 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
     (qF qS : ℝ),
     let L := Law.execOS (n := n) src (.subset kd) n
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
-    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parse_flat hD) kd hdiv dj y₀ wr _ hTags hCust) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) kd hdiv dj y₀ wr _ hTags hCust) τ
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
@@ -136,7 +138,7 @@ map at SHA-512. -/
 def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
@@ -155,11 +157,11 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
     (hCust : Assumptions.Zk.RecordCustodyZKJP I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr kd)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJP dj y₀) N wr))),
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
-    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parse_flat hD) kd hdiv dj y₀ wr _ hTags hCust) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) kd hdiv dj y₀ wr _ hTags hCust) τ
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
@@ -181,7 +183,7 @@ probability at most `δ + ε_ks + ε_bind`. Its named assumptions are V2's, with
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
@@ -211,11 +213,11 @@ def SampledKSLiveV5 : Prop :=
     (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
-    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parse_flat hD) kd hdiv dj y₀ wr _ hTags hCust) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) kd hdiv dj y₀ wr _ hTags hCust) τ
     let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
     -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
