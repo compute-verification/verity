@@ -427,7 +427,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "So no served path meets it until the served trees are registered as ports, or a bridge for public-file "
           "binding is stated", "TS accepted live", "standard"),
     Entry("accounting-ts-window-law", "assumption",
-          "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
+          "The proof system's draws and audit coins are the window's live coins: at each round and proof, given what "
           "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
           "coins, fresh and uniform. This rests on five facts: a refused session is never rerun on a fresh draw (no "
           "retry or redraw); the draw is revealed only after the session's registration and prover are fixed; the draw "

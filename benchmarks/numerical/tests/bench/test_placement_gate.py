@@ -1,4 +1,4 @@
-"""The proof service's deployment gate (``bench.placement.gate``): the firewall, network certifiers, memory challengers and
+"""The proof system's deployment gate (``bench.placement.gate``): the firewall, network certifiers, memory challengers and
 challenger each where the architecture puts them, over injected probe records and ``/proc`` readings."""
 from __future__ import annotations
 

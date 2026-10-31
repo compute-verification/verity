@@ -499,7 +499,7 @@ def main(args: Options) -> int:
                     served = SRT.commit(llm, args, root, claimed, world, root_tag) if args.serving_rows and pair == 0 else None
                     per_rank = {}
                     reasons = []
-                    # every rank's root is fixed and the TP run root with them: the pair's coins come now, and every rank's draws derive from them (one RPC: each rank opens its own)
+                    # every rank's root is fixed and the TP run root with them: the pair's coins come now, and every rank's samples derive from them (one RPC: each rank opens its own)
                     coin = CC.tp_draw(coins, root)
                     src_pos, src_id = CC.tp_keys(coin)
                     positions = {str(int(f["rank"])): [list(p) for p in challenge_positions(root, f["leaves_per_step"], args.openings, salt=f"{pair}/rank{int(f['rank'])}".encode(),
@@ -561,7 +561,7 @@ def main(args: Options) -> int:
                         # the per-rank binding maps themselves (not only their digests) into the evidence: binding_map_rank<r>.json
                         dumped = llm.collective_rpc("tp2_commit_binding_map_dump", timeout=args.rpc_timeout, kwargs={"out_dir": str(out)})
                         print(f"[tp2commit] binding maps: {[(d_.get('rank'), str(d_.get('digest') or d_.get('skipped'))[:16], d_.get('entries_n')) for d_ in dumped]}", flush=True)
-                    # population-drawn openings per rank (bind's challenge_identities from the COMBINED root + the rank's map digest)
+                    # population-sampled openings per rank (bind's challenge_identities from the COMBINED root + the rank's map digest)
                     pop_open = {}
                     if all((f.get("binding") or {}).get("map_digest") for f in fin):
                         po = []
