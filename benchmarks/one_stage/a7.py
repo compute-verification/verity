@@ -199,7 +199,8 @@ def lay_out(req: RQ.Requirement, positions, seed: int):
         payload[j] = payload.get(j, 0) | req.values[v] << offset[v]
     for j in set(block.values()):
         freed.setdefault(max(req.last[v] for v, k in block.items() if k == j), set()).add(j)
-    return RQ.Layout(block, offset), RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload)
+    return (RQ.Store.Placement(block, offset),
+            RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload))
 
 
 # --- the canonical commitments ----------------------------------------------------------------------------------------------
@@ -455,7 +456,7 @@ class UnitsLink:
     they are set, the link credits nothing."""
     holds: bool
     req: RQ.Requirement
-    layout: RQ.Layout
+    layout: RQ.Store.Placement
     appends: bytes | None = None
     proved: bool = False
     epsilon: float = 1.0
