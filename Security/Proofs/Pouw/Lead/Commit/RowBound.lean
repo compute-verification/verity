@@ -17,6 +17,15 @@ namespace Pouw.SecurityProofs.Lead.Commit
 open PouwCommit Properties.Pouw.Lead.Commit
 open FlockSoundness.Randomness (natLen natBytes_toList natBytes_inj)
 
+/-- frame-v3's fixed prefix, `veritor/protocol/merkle/frame/v3\0`. -/
+def frameMagic : ByteArray := "veritor/protocol/merkle/frame/v3".toUTF8.push 0
+
+/-- `Properties.Pouw.Commit.frameBytes_data` with the prefix as `frameMagic`, the bytes PoUW's `FRAME` holds. -/
+theorem frameBytes_data' (tag : String) (parts : List ByteArray) :
+    (frameBytes tag parts).data.toList = frameMagic.data.toList ++ (Flock.be32 tag.toUTF8.size.toUInt32).data.toList ++
+      tag.toUTF8.data.toList ++ Properties.Pouw.Commit.framed parts :=
+  (Properties.Pouw.Commit.frameBytes_data tag parts).trans (by rfl)
+
 theorem natBytes_size (n : Nat) : (natBytes n).size = natLen n := by
   simp [natBytes, natLen, ByteArray.size]
 
@@ -51,13 +60,13 @@ theorem take_append_long {α : Type} {a b : List α} {n : Nat} (h : a.length ≤
 /-- The leaf message's bytes: the 41 fixed bytes, the id's frame, the position's frame, then the rest. -/
 theorem leafMessage_data (d : PouwCommit.Domain) (rank : Nat) (schema : String) (v : ByteArray) :
     (leafMessage d rank schema v).data.toList =
-      (FRAME.data.toList ++ (Flock.be32 "leaf".toUTF8.size.toUInt32).data.toList ++ "leaf".toUTF8.data.toList) ++
+      (frameMagic.data.toList ++ (Flock.be32 "leaf".toUTF8.size.toUInt32).data.toList ++ "leaf".toUTF8.data.toList) ++
         ((be8 d.id.size).data.toList ++ (d.id.data.toList ++ ((be8 (natBytes rank).size).data.toList ++
           ((natBytes rank).data.toList ++ Properties.Pouw.Commit.framed [natBytes rank, schema.toUTF8, v])))) := by
-  simp [leafMessage, Properties.Pouw.Commit.frameBytes_data, Properties.Pouw.Commit.framed, List.append_assoc]
+  simp [leafMessage, frameBytes_data', Properties.Pouw.Commit.framed, List.append_assoc]
 
 theorem prefix_length :
-    (FRAME.data.toList ++ (Flock.be32 "leaf".toUTF8.size.toUInt32).data.toList ++ "leaf".toUTF8.data.toList).length =
+    (frameMagic.data.toList ++ (Flock.be32 "leaf".toUTF8.size.toUInt32).data.toList ++ "leaf".toUTF8.data.toList).length =
       41 := by
   decide +kernel
 
@@ -65,7 +74,7 @@ theorem prefix_length :
 rest, when the position takes at most 7 bytes. -/
 theorem firstBlock_leaf (d : PouwCommit.Domain) (rank : Nat) (schema : String) (v : ByteArray) (hid : d.id.size = 64)
     (hr : natLen rank ≤ 7) : ∃ k, (firstBlock (leafMessage d rank schema v)).data.toList =
-      (FRAME.data.toList ++ (Flock.be32 "leaf".toUTF8.size.toUInt32).data.toList ++ "leaf".toUTF8.data.toList) ++
+      (frameMagic.data.toList ++ (Flock.be32 "leaf".toUTF8.size.toUInt32).data.toList ++ "leaf".toUTF8.data.toList) ++
         ((be8 d.id.size).data.toList ++ (d.id.data.toList ++ ((be8 (natBytes rank).size).data.toList ++
           ((natBytes rank).data.toList ++
             (Properties.Pouw.Commit.framed [natBytes rank, schema.toUTF8, v]).take k)))) := by
@@ -98,6 +107,25 @@ theorem leafFirstBlock : LeafFirstBlock := by
   obtain ⟨hN, -⟩ := List.append_inj h (by simp [hs])
   exact ⟨ByteArray.ext (Array.toList_inj.1 hI), natBytes_inj hN⟩
 
+/-- A SHA-512 domain's leaf is the SHA-512 digest of `leafMessage`. The first case reads `Domain.leaf` as a frame over
+`natBytes`, the second as `Flock.FV3`'s leaf, whose `FV3.uint` is `natBytes`. -/
+theorem leaf_eq_hash {d : PouwCommit.Domain} (hh : d.hash = .sha512) (rank : Nat) (schema : String) (v : ByteArray) :
+    d.leaf rank schema v = Flock.Sha512.hash (leafMessage d rank schema v) := by
+  first
+  | unfold PouwCommit.Domain.leaf frameHash leafMessage; rw [hh]; rfl
+  | have hu : ∀ n, Flock.FV3.uint n = natBytes n := by
+      intro n
+      have hl : (Nat.log2 n + 8) / 8 = max 1 (((if n = 0 then 0 else Nat.log2 n + 1) + 7) / 8) := by
+        by_cases h0 : n = 0
+        · subst h0; simp
+        · rw [if_neg h0, Nat.max_eq_right (show 1 ≤ (Nat.log2 n + 1 + 7) / 8 by omega)] <;> omega
+      simp only [Flock.FV3.uint, natBytes]
+      rw [hl]
+    obtain ⟨h, c, i⟩ := d
+    cases hh
+    show Flock.Sha512.hash (Flock.FV3.input "leaf" [i, Flock.FV3.uint rank, Flock.FV3.uint rank, schema.toUTF8, v]) = _
+    rw [hu] <;> rfl
+
 theorem rowBound : RowBound := by
   intro binding owner count binding' owner' count' d d' rank rank' schema schema' v v' x hd hd' hx hx' hr hr'
   obtain ⟨-, hh⟩ := domain_sha512 hd
@@ -106,10 +134,6 @@ theorem rowBound : RowBound := by
   · exact .inl (leafFirstBlock binding owner count binding' owner' count' d d' rank rank' schema schema' v v'
       (firstBlock (leafMessage d rank schema v)) hd hd' rfl (by rw [hm]) hr hr')
   · refine .inr ⟨hm, ?_⟩
-    have e : d.leaf rank schema v = Flock.Sha512.hash (leafMessage d rank schema v) := by
-      unfold PouwCommit.Domain.leaf frameHash leafMessage; rw [hh]; rfl
-    have e' : d'.leaf rank' schema' v' = Flock.Sha512.hash (leafMessage d' rank' schema' v') := by
-      unfold PouwCommit.Domain.leaf frameHash leafMessage; rw [hh']; rfl
-    rw [← e, ← e', hx, hx']
+    rw [← leaf_eq_hash hh rank schema v, ← leaf_eq_hash hh' rank' schema' v', hx, hx']
 
 end Pouw.SecurityProofs.Lead.Commit
