@@ -15,7 +15,8 @@ binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and t
 - `verity/flock-circuit/tmpl`: the templated statement, which the verifier parses and refuses until its proof lands;
 - `verity/flock-circuit+plain-leaves`: a recursive session's inner statement, plain SHA-512 leaves, checked without
   `--zk` (§16.16);
-- `+seed-injection` on any of them: the statement as the prover's selftest build pins it, for its recorded cases.
+- `+seed-injection` on any of them: the statement as the prover's selftest build pins it, for its recorded cases, which
+  `verify` checks and then refuses (below).
 
 `verify` fails closed (§16.15): a session whose statement form, draw or setting no soundness theorem covers is refused,
 once every check has passed, with `refused: <why>: …`, so a session that fails a check keeps that check's reason.
@@ -23,6 +24,13 @@ once every check has passed, with `refused: <why>: …`, so a session that fails
 that includes a session at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`: `RecursiveKS` covers the dense
 form only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`) and a recursive session without
 `--zk` (`Flock.RecSetup.zkOnly`).
+
+`verify` accepts a session only at `verity/flock-circuit` or `verity/flock-circuit+plain-leaves` (`ProvedScope.served`), on
+live coins (`--coins os`, or under `--zk` the keyed coin tree). Every other version it sets up and checks, so the agreement
+corpus and the recorded fixtures replay, and then refuses the session (`ProvedScope.servedForm`, last, once every check has
+passed): a `+seed-injection` one as a selftest build's statement, the rest as superseded; a plain session on seed coins
+(`--coins seed`, the default without `--zk`) is refused the same way. A typed version, or one before hm96 rows, is refused
+earlier, for its form (`ProvedScope.check`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
 (`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file it read
@@ -71,7 +79,8 @@ flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables D
   cannot know what it verifies.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
 - `--coins os` binds the identity of a proving build's session on per-round OS coins (`FC_COINS=os`); `seed`, the
-  default, a seeded one (§7). A `--zk` session's coins are its coin tree.
+  default, a seeded one (§7), which `verify` refuses once every check has passed. A `--zk` session's coins are its coin
+  tree.
 - Each plain proof file is taken in one form (§8.1): by default the deployed prover's, which writes a `zk_level0 = None`
   byte after the pair; `--upstream-plain` takes upstream's builds' form, as the agreement job's sessions from upstream's
   binaries are.
