@@ -406,21 +406,23 @@ def test_shape_entries_and_frozen_names_merge_one_by_one():
 
 def test_two_sides_restating_one_guarantee_s_inline_premises_merge_premise_by_premise():
     """`Security/Properties/lean-audit.json`'s `shape.inline` entry for `scheduledRequirement` at c92bc0a53f (ours),
-    5e3e9ea235 (theirs) and their merge base fc4958a86b: both sides add the two premises restated over `sessionLayout`, ours
-    keeping the two texts they restate and theirs dropping them.  Compared whole, the guarantee's map refused; premise by
-    premise the dropped texts go and the added ones stay.  The sides gave each added premise a different reason, and those two
-    still refuse, each named; with ours' reasons as theirs', the guarantee merges to theirs' map."""
+    5e3e9ea235 (theirs) and their merge base fc4958a86b, where all three list the guarantee with one record: both sides add
+    the two premises restated over `sessionLayout`, ours keeping the two texts they restate and theirs dropping them.
+    Compared whole, the guarantee's map refused; premise by premise the added ones stay, and so do the two texts ours has as
+    the base had them (`held`), each named.  The sides gave each added premise a different reason, and those two still
+    refuse, each named; with ours' reasons as theirs', the guarantee merges to ours' map with theirs' reasons."""
     sides = json.loads((FIXTURES / "inline-scheduled-requirement.json").read_text())
     g = "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"
+    assert sides["base"]["guarantees"] == sides["ours"]["guarantees"] == sides["theirs"]["guarantees"] and g in sides["base"]["guarantees"]
     base, ours, theirs = (sides[n]["shape"]["inline"][g] for n in ("base", "ours", "theirs"))
     added, dropped = [p for p in theirs if p not in base], [p for p in base if p not in theirs]
     assert len(added) == len(dropped) == 2 and all(p in ours for p in added) and all(ours[p] == base[p] for p in dropped)
     _, why = M.merge(sides["base"], sides["ours"], sides["theirs"])
     assert why == [f"shape[inline][{g}][{p}]: added on both sides, differently" for p in ours if p in added]
-    agreed = {"shape": {"inline": {g: ours | {p: theirs[p] for p in added}}}}
-    merged, why = M.merge(sides["base"], agreed, sides["theirs"])
-    assert why == [] and merged["shape"]["inline"][g] == theirs
-    assert merged["shape"]["inline"][g] == {p: w for p, w in base.items() if p not in dropped} | {p: theirs[p] for p in added}
+    agreed = sides["ours"] | {"shape": {"inline": {g: ours | {p: theirs[p] for p in added}}}}
+    merged, why = M.merge(sides["base"], agreed, sides["theirs"], candidate := [])
+    assert why == [] and merged["shape"]["inline"][g] == theirs | {p: base[p] for p in dropped}
+    assert candidate == [f"shape[inline][{g}][{p}] (kept)" for p in dropped]
 
 
 def test_an_inline_premise_both_sides_add_differently_refuses_and_the_other_shape_sections_still_refuse_whole():
@@ -446,10 +448,73 @@ def test_an_inline_premise_both_sides_add_differently_refuses_and_the_other_shap
     _, why = M.merge(base, inline(b="why b"), inline(a="changed", b="why b"))
     assert why == ["shape[inline][P.t][a]: removed on one side and changed on the other"]
     merged, why = M.merge(base, inline(b="why b"), inline(a="why a"))
-    assert why == [] and "inline" in merged["shape"] and merged["shape"]["inline"] == {}, "a guarantee left with no premise goes"
+    assert why == [] and "inline" in merged["shape"] and merged["shape"]["inline"] == {}, \
+        "a guarantee the record doesn't list, left with no premise, goes"
     assert M.merge(base, frozen("restatable"), frozen("open"))[1] == ["shape[frozen][P.z]: changed on both sides, differently"]
     assert M.merge(base, prop_(function="P.g"), prop_(outcome="refuse"))[1] == [
         "shape[properties][P.p]: changed on both sides, differently"]
+
+
+def test_a_branch_regenerated_on_an_older_tree_keeps_the_inline_texts_next_still_prints(tmp_path, capsys):
+    """`Security/lean-audit.json` at 3be133850d (theirs), a branch whose `--update` ran on a tree based on 538c00f54e (the base),
+    merged onto `next` at ab4de4a2d2 (ours).  The branch's tree prints two of `LiveCoinsDrawn`'s five premises, so its
+    `--update` dropped the other three, renamed `Coins` texts that `next`'s tree still prints; premise by premise the merge
+    applied the drop, and the merged lock failed `next`'s Lean check on all three.  `next` in turn re-keyed one of
+    `ComputeOfPouw`'s texts under `Accounting.OpClass.oracle`, dropping the `Accounting.Op.oracle` one the branch has as the
+    base had it.  Every side lists both guarantees with one record, so each dropped premise stays, named on stderr, beside
+    `next`'s new text: the old `Op.oracle` one is an entry that `--update` drops again."""
+    sides = json.loads((FIXTURES / "inline-live-coins-onto-next.json").read_text())
+    live, pouw = "Accounting.SecurityProofs.Remote.LiveCoinsDrawn", "Accounting.SecurityProofs.ComputeOfPouw"
+    assert sides["base"]["guarantees"] == sides["ours"]["guarantees"] == sides["theirs"]["guarantees"]
+    inline = {n: sides[n]["shape"]["inline"] for n in sides}
+    assert inline["ours"][live] == inline["base"][live] and inline["theirs"][pouw] == inline["base"][pouw]
+    gone = {live: [p for p in inline["base"][live] if p not in inline["theirs"][live]],
+            pouw: [p for p in inline["base"][pouw] if p not in inline["ours"][pouw]]}
+    assert len(gone[live]) == 3 and all("Draw.Coins" in p or "Draw.DrawCoins" in p for p in gone[live])
+    assert [p for p in inline["ours"][pouw] if p not in inline["base"][pouw]] == [
+        p.replace("Accounting.Op.oracle", "Accounting.OpClass.oracle") for p in gone[pouw]]
+    for n in ("base", "ours", "theirs"):
+        (tmp_path / n).write_text(A.text(sides[n]))
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    err = capsys.readouterr().err.strip().splitlines()
+    kept = "; ".join(f"shape[inline][{g}][{p}] (kept)" for g in (pouw, live) for p in gone[g])
+    assert err == ["merge.py: Security/lean-audit.json: kept shape.inline premises one side dropped and the other has as the "
+                   "base had them, which `check.py --update` drops where the merged tree's premise no longer offends: " + kept]
+    merged = json.loads((tmp_path / "ours").read_text())
+    assert merged["shape"]["inline"] == {live: inline["base"][live], pouw: inline["ours"][pouw] | inline["base"][pouw]}
+    assert merged["guarantees"] == sides["base"]["guarantees"]
+
+
+def test_an_inline_premise_one_side_dropped_stays_while_the_merged_record_lists_its_guarantee():
+    """A premise one side dropped and the other has with the base's reason stays (`held`), alone or as a guarantee's whole
+    entry, whichever side dropped it; with the other side adding a premise of its own, both are there.  A guarantee one
+    side removed from the record loses its entry, a premise both sides dropped goes, and a reason one side changed while the
+    other dropped the premise still refuses."""
+    rec = {"owner": "@lean", "signature": ["P.t : P.T"], "assumptions": [], "type_hash": "a" * 64}
+    t, u, kept_a = {"a": "why a", "b": "why b"}, {"c": "why c"}, ["shape[inline][P.t][a] (kept)"]
+    base = {"guarantees": {"P.t": rec, "P.u": rec}, "shape": {"inline": {"P.t": t, "P.u": u}}}
+
+    def inline(**ps: dict) -> dict:
+        """``base`` with `shape.inline` holding ``ps``, P.t's premises as ``t`` and P.u's as ``u``."""
+        return base | {"shape": {"inline": {f"P.{g}": v for g, v in ps.items()}}}
+    no_a = inline(t={"b": "why b"}, u=u)
+    for ours, theirs in ((no_a, base), (base, no_a)):
+        merged, why = M.merge(base, ours, theirs, candidate := [])
+        assert why == [] and merged["shape"]["inline"] == {"P.t": t, "P.u": u} and candidate == kept_a
+    merged, why = M.merge(base, inline(t=t), base, candidate := [])
+    assert why == [] and merged["shape"]["inline"] == {"P.t": t, "P.u": u} and candidate == ["shape[inline][P.u][c] (kept)"]
+    merged, why = M.merge(base, base | {"shape": {}}, base, candidate := [])
+    assert why == [] and merged["shape"]["inline"] == {"P.t": t, "P.u": u} and len(candidate) == 3
+    merged, why = M.merge(base, no_a, inline(t=t | {"d": "why d"}, u=u), candidate := [])
+    assert why == [] and merged["shape"]["inline"] == {"P.t": t | {"d": "why d"}, "P.u": u} and candidate == kept_a
+
+    unlisted = {"guarantees": {"P.u": rec}, "shape": {"inline": {"P.u": u}}}
+    merged, why = M.merge(base, unlisted, base, candidate := [])
+    assert why == [] and list(merged["guarantees"]) == ["P.u"] and merged["shape"]["inline"] == {"P.u": u} and candidate == []
+    merged, why = M.merge(base, no_a, inline(t={"b": "why b"}, u=u | {"d": "why d"}), candidate := [])
+    assert why == [] and merged["shape"]["inline"] == {"P.t": {"b": "why b"}, "P.u": u | {"d": "why d"}} and candidate == []
+    _, why = M.merge(base, no_a, inline(t={"a": "changed", "b": "why b"}, u=u))
+    assert why == ["shape[inline][P.t][a]: removed on one side and changed on the other"]
 
 
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():

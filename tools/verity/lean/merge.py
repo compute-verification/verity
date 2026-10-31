@@ -26,7 +26,10 @@ both sides changed differently), and names each in one line on stderr. Whether a
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
 refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
 premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`), a dependency's
-revision, a policy entry (a layer's field, a `compile_time` digest).
+revision, a policy entry (a layer's field, a `compile_time` digest). A `shape.inline` premise one side dropped while the
+other has it as the base had it stays, while the merged record lists its guarantee (`held`): a side whose `--update` ran on
+an older tree drops a text the other side's tree still prints, and the Lean check fails on a missing entry but not on one
+whose premise no longer offends, which the next `--update` drops.
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
@@ -351,7 +354,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     """(the merged record, why it is refused: empty when it merged).  A pure function of the three records.  ``candidate``
     collects the records the build determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions'
     digests) merged although the sides disagree on them: the union or ours' value, which the train's Lean check
-    regenerates."""
+    regenerates; and the `shape.inline` premises `held` keeps."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
     out = {}
@@ -375,6 +378,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
             v = one(k, o, a, b, why)
         if v is not MISSING:
             out[k] = v
+    held(base, ours, theirs, out, candidate)
     kept = set(out.get("guarantees", {}))
     for m, g in list(out.get("reads", {}).items()):
         if extra := sorted(set(g["guarantees"]) - kept):
@@ -384,6 +388,38 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
             del out["reads"][m]
             candidate.append(f"reads[{m}]")
     return out, why
+
+
+def held(base: dict, ours: dict, theirs: dict, out: dict, candidate: list[str]) -> None:
+    """Put back into the merged record ``out`` each `shape.inline` premise of a guarantee ``out`` lists that one side dropped
+    while the other has it with the base's reason, each named in ``candidate`` as `shape[inline][G][P] (kept)`.  A side whose
+    `--update` ran on an older tree drops a text the other side's tree still prints (a renamed definition's old and new texts
+    are both listed until no tree prints the old one), and the lock doesn't say which side's tree the merged tree prints
+    like.  The Lean check fails on an offending premise of a listed guarantee that `shape.inline` doesn't list, and
+    `--update` adds none, while an entry whose premise no longer offends fails nothing and the next `--update` drops it
+    (`check.py`'s `inline_failures`), so the premise stays.  A guarantee ``out`` doesn't list gets nothing back: `--update`
+    keeps an unlisted guarantee's entries until the lock lists it."""
+    def inline(s: dict) -> dict:
+        spec = s.get("shape")
+        v = spec.get("inline") if isinstance(spec, dict) else None
+        return v if isinstance(v, dict) else {}
+
+    def premises(s: dict, g: str) -> dict | None:
+        v = s.get(g, {})
+        return v if isinstance(v, dict) else None
+    spec, listed = out.get("shape"), out.get("guarantees")
+    if not isinstance(spec, dict) or not isinstance(listed, dict) or not isinstance(spec.get("inline", {}), dict):
+        return
+    o, a, b, merged = inline(base), inline(ours), inline(theirs), dict(spec.get("inline", {}))
+    for g in o:
+        x, y, z, m = premises(o, g), premises(a, g), premises(b, g), premises(merged, g)
+        if g not in listed or None in (x, y, z, m):
+            continue
+        if keep := {p: w for p, w in x.items() if (p in y) != (p in z) and (y if p in y else z)[p] == w}:
+            merged[g] = m | keep
+            candidate.extend(f"shape[inline][{g}][{p}] (kept)" for p in keep)
+    if merged != spec.get("inline", {}):
+        spec["inline"] = merged
 
 
 def kept(o: set, a: set, b: set) -> set:
@@ -755,9 +791,14 @@ def main(argv: list[str]) -> int:
         print(f"merge.py: {path}: refused; regenerate the record on the merged tree (`check.py --update`):", file=sys.stderr)
         print("\n".join(f"  {w}" for w in why), file=sys.stderr)
         return 1
-    if candidate:
+    named = list(dict.fromkeys(candidate))
+    if rest := [c for c in named if not c.endswith(" (kept)")]:
         print(f"merge.py: {path}: merged derived records as a candidate (the union, or ours' value where marked), which the "
-              f"train's Lean check regenerates: {'; '.join(dict.fromkeys(candidate))}", file=sys.stderr)
+              f"train's Lean check regenerates: {'; '.join(rest)}", file=sys.stderr)
+    if inline := [c for c in named if c.endswith(" (kept)")]:
+        print(f"merge.py: {path}: kept shape.inline premises one side dropped and the other has as the base had them, which "
+              f"`check.py --update` drops where the merged tree's premise no longer offends: {'; '.join(inline)}",
+              file=sys.stderr)
     ours.write_text(A.text(merged))
     return 0
 
