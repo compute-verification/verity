@@ -21,9 +21,13 @@ library's own flags (bit 0: a tweak's first candidate at or above p, where the s
 With a pass of the remote bandwidth audit attached (`store.sketch = sketch.Pass(...)`), `decode_rows` sketches the units
 each chunk's blocks lie in from the same rows on the device before the decode reads them (`sketch.py`); the rows then
 hold whole units.
+
+`timed` is the drivers' one timer (`layer.py`, `full.py`, `bw_check.py`).
 """
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -193,3 +197,29 @@ def encode_rows(kernels: Any, payload: Any, first: int) -> Any:
     if f:
         raise StoreError(f"p2v1_encode raised flags {f:#x} on blocks [{first}, {first + n})", f)
     return c
+
+
+def timed(fn: Callable[[], Any], reps: int, device: torch.device, before: Callable[[], Any] | None = None,
+          warmup: int = 0) -> list[float]:
+    """The seconds of `reps` runs of `fn` on `device`, each timed alone (by CUDA events on a GPU, else the host's clock),
+    after `warmup` untimed runs and a sync, with `before` run untimed ahead of each timed one."""
+    for _ in range(warmup):
+        fn()
+    if warmup and device.type == "cuda":
+        torch.cuda.synchronize()
+    times = []
+    for _ in range(reps):
+        if before is not None:
+            before()
+        if device.type == "cuda":
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            fn()
+            b.record()
+            b.synchronize()
+            times.append(a.elapsed_time(b) / 1e3)
+        else:
+            t0 = time.perf_counter()
+            fn()
+            times.append(time.perf_counter() - t0)
+    return times

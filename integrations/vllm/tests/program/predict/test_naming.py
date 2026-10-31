@@ -136,6 +136,31 @@ def test_compile_steps_names_each_program_the_same_on_every_compile_with_no_vllm
         "layers": [f"model.layers.{i}.self_attn.attn" for i in range(TINY["num_hidden_layers"])]}]
 
 
+def test_a_named_build_declares_what_the_manifest_reads_from_a_traces_record(tmp_path):
+    """`write_build`'s `result.json` declares the target and each attention layer under vLLM's layer name with its heads, where a
+    trace's `attention_impls_observed` stands: the manifest's correspondence takes the wrapper's ``model.`` off each op path, its
+    profile follows the declared target, and the Commit's X-03 reads each layer's statics from it."""
+    from verity_vllm.acquire import fa2_plane_classes as FP
+    from verity_vllm.correspondence.reader_for_query import Correspondence
+    from verity_vllm.query.program_view import from_instances
+    from verity_vllm.query.required import _profile
+    reg, (advice, ingress) = _registered(), _hit(16)
+    c = compile_steps(reg, advice, ingress, named=True)
+    dg, n = next(iter(c.named.items()))
+    d = tmp_path / "build_request_LP24_T3"
+    write_build(str(d), c.programs[dg], n)
+    res = json.loads((d / "result.json").read_text())
+    layers = [f"model.layers.{i}.self_attn.attn" for i in range(TINY["num_hidden_layers"])]
+    tp = reg.phi.target_profile()
+    assert res["target"] == {"declared": tp.to_json(), "declared_source": "declared"} and sorted(res["attention_impls_declared"]) == layers
+    assert Correspondence.of(from_instances(str(d / "instances.json.gz")), str(d),
+                             implementation_paths=Correspondence.implementation_paths_of(res)).prefix == WRAPPER
+    assert _profile(res, None)[0] == ("hopper" if tp.effective_flash_attn_version() == 3 else "ampere")
+    impls, path = FP.attention_impls_of_record(programs_root=str(tmp_path))
+    assert path == str(d / "result.json") and [(x.layer, x.NH, x.KVH, x.D, x.window) for x in FP.declarations_from_attention_impls(impls)] == [
+        (i, 4, 2, 16, None) for i in range(TINY["num_hidden_layers"])]
+
+
 @pytest.mark.parametrize("config,fact", [("qwen25-05b", "a q/k/v bias"), ("qwen3-4b", "q/k norms")])
 def test_what_the_naming_does_not_reach_is_refused_by_name(config, fact):
     phi = Phi.from_json({**_registered(json.loads((FIX / f"{config}.config.json").read_text())).phi.to_json(), "sampling": {"kind": "greedy"}})

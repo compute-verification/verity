@@ -1,4 +1,4 @@
-# The remote bandwidth audit's verifier on its auditor host (vy-auditor-1): `host.py`, the gate every key of the host's research is
+# The remote bandwidth audit's verifier on its auditor host: `host.py`, the gate every key of the host's research is
 # forced to, and the run, replay and store put its units run as `auditor` (pods/nebius/verifier/). Not a package: the suite runs the
 # gate in this process with its root steps (chown, systemctl) injected, holds its whitelist to verifier.py's own parser, and runs a
 # run through `tests/stub_verifier.py` (a real session over the remote audit's in-process harness, `test_session.run`, at the

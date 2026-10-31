@@ -63,7 +63,7 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
             (o.extras i) o.ω i r streams[2 * i + r]!
             (1 + ((streams.toList.take (2 * i + r)).flatMap Array.toList).length) fun p => o.zp i r = p := by
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := id hS
-  obtain ⟨hz, hcz⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hcz, -⟩ := S.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hcz⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   have hn := o.toCase.tables_nodup

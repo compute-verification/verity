@@ -11,7 +11,7 @@ owner = "ci"
 part = "tests"
 group = 1
 
-# Group 2: C-Flock's Rust build and tests, and the property checks every circuit passes.
+# Group 2: Flock's Rust build and tests, and the property checks every circuit passes.
 [[job]]
 name = "flock-circuit-build"
 owner = "proofs"
@@ -24,6 +24,16 @@ name = "circuit-check"
 owner = "circuits"
 part = "circuits"
 group = 2
+# its targets in 4 shards by the hash of each one's id, parts circuit-check:1/4 .. 4/4: a check that holds all four runs
+# `circuit-check --all` whole; one that holds some runs `--all --shard K/4` for each, and `check.py --combine` joins the shards
+# (`circuit-check --combine`), whose verdict is the unsharded run's
+shards = 4
+# Off the merge gate: a recorded check, whole or a shard, skips it (the plans keep it, so putting it back is deleting this line),
+# `research merge` requires it of no check, and drive moves `main` without it. It runs after landing, in drive's after-landing
+# run on `checked`'s tip (`--deferred`, every job), where a red reverts its culprit at once and lands no PR touching its
+# inputs until it passes. It returns to
+# the gate once `circuit-check --all` fits inside the rest of the check (under 30 minutes).
+gate = false
 
 [[job]]
 name = "flock-rust-tests"
@@ -83,6 +93,18 @@ merge_requires = ["verity/ml/flock/python/verity_flock/rec_vstage.py", "verity/m
                   "verity/core/protocols/sampled_proofs/one_stage/registered.py", "verity/core/service/flock/VStar/In.lean",
                   "verity/core/service/vstar/"]
 
+# Group 7: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
+# on a train, each `Queue: #N` merge against the one below, so a failure names its PR.
+[[job]]
+name = "ratchet-gate"
+owner = "vllm"
+part = "tests"
+group = 7
+# Off the merge gate and out of the plans: it reports and blocks no merge. It runs in drive's after-landing run on `main`'s
+# tip (`--deferred`, every job, its base the last verified `main`; sharded, in its last shard), where a red reverts the
+# landing whose merge it names.
+gate = false
+
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
 # shards). Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
@@ -98,6 +120,16 @@ shards = [
     ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+]
+
+# 4 pods: the 3-pod plan with pytest on a pod of its own, and circuit-check's four shards one to each pod, so a cold
+# circuit-check (about 4 h whole on one pod, drive.toml) is no single pod's long pole.
+[[plan]]
+shards = [
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "circuit-check:1/4"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed", "circuit-check:2/4"],
+    ["pytest", "circuit-check:3/4"],
+    ["flock-circuit-build", "flock-rust-tests", "circuit-check:*"],
 ]
 
 # 5 pods: each of those apart.

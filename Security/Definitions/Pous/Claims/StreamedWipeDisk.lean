@@ -8,7 +8,7 @@ parameter `V` (`Pous.StreamedWipe.Verdict`), as `Security/Definitions/Pous/Claim
 wipe per server. Each guarantee there is its claim at the wipe's own verdict, `StreamedWipe.Accepts`. The lock lists,
 for each claim, a `fails` theorem (the claim is false at `StreamedWipe.acceptAll`, where a prover inside the physical
 model that keeps all its prior content is accepted with probability 1) and a `meets` theorem (the claim's numeric
-antecedents hold at the deployed session as measured: vy-dc-h200-2's card, `StreamedWipe.h200`, with its disks,
+antecedents hold at the deployed session as measured: the deployed H200's card, `StreamedWipe.h200`, with its disks,
 `StreamedWipe.h200Disks`).
 -/
 

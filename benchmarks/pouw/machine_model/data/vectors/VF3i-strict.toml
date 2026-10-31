@@ -2,7 +2,6 @@
 name = "VF3i-strict"
 epoch = "VF3i-strict"
 summary = "The strict VF3i on corrected LDSM/STSM rows (RS-W′ round 9)."
-note = "note:20261016T1640Z-draft-rs-vf3j-strict-closure"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

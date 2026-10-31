@@ -110,7 +110,7 @@ theorem size_blocks {N : ℕ} (t : Fin N) : (blocks N).size ∅ t = 1 := by
 section Witnesses
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → Registered)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **`RightValues`'s bound at the honest J10-R period**: `j10r_meets` gives every
@@ -216,7 +216,7 @@ theorem credit_pos {σ ε S : ℝ} (hS : 0 < S) (hσ : σ = 1) (hε : ε < 1) : 
 section Witnesses
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → Registered)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **The skipping period's live words are `N·n`** when every window is credited. -/

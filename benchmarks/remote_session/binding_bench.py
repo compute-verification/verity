@@ -23,8 +23,7 @@ disagree, or that decides otherwise than its row says, fails the bench. Writes O
 
 The defaults are a whole node's 130M chunks: eight arenas of an 8B BF16 model's 4M weights chunks.
 
-    research run --on vy-nebius-cpu-1 --project verity --cwd source -- bash -lc \
-      'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/remote_session/binding_bench.py --out "$OUT"'
+    uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/remote_session/binding_bench.py --out OUT
 """
 from __future__ import annotations
 

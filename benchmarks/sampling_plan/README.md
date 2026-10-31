@@ -1,6 +1,6 @@
 # sampling_plan
 
-The sampling plan for one served workload under C-Flock, from the planner in `verity.core.protocols.sampled_proofs`
+The sampling plan for one served workload under Flock, from the planner in `verity.core.protocols.sampled_proofs`
 (`optimize`, `candidates`, `costfit`): the cost model fitted from proving measurements, the cuts the candidate generator
 finds, the frontier of ε (at δ = 2^-40, against the workload's MACs, W_ref's proxy) over the verification overhead B, the
 break-even granularity, and how the plan moves with each input. A model, not a measurement: every input carries its
@@ -17,7 +17,7 @@ zero-work subcircuits at their floor.
 - `inputs.py`: the models (Llama-3.1-8B, Qwen3-8B); each scheme's serve-time rows a token a layer, with their leaf
   chains; the row's inputs (price ratio, rounds, throughput, replay and commitment speeds, PoUB's receipts
   and passes, decode's step and its compression latency), each with a low and a
-  high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, C-Flock's
+  high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, Flock's
   zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of PoUB's
   opening unit, `BlockOpeningCheck_v1`, at twice their ANDs, its proving only), with the builds and
   hardware they key.
@@ -39,7 +39,7 @@ zero-work subcircuits at their floor.
   them), attention `GemmCoordinate_v2` on the BF16 step, the residual `Bf16Add_v1`, and the row ops (RMSNorm, the s8
   quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id `stub:`, until they land, row ops whole, shared,
   chunked or recomputed. The harm is faulty ANDs, the same whatever the cut, with the faulty proof blocks (IntegrityPeriod's W)
-  beside it. It writes the frontier of expected C-Flock cost (every serve-time commitment and the replay in it) against
+  beside it. It writes the frontier of expected Flock cost (every serve-time commitment and the replay in it) against
   certified faulty ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
   the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at
   δ = 1% and 1e-6, the pooled bound over a week, a month and a year on one server and on an assumed 10,000 (an assumed
@@ -57,7 +57,7 @@ zero-work subcircuits at their floor.
   guarantee).
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
   6.35 s step, 32 steps a request, on the Definition map (`examples/h200/e2e_h200/plan.py`: every subcircuit a
-  Definition C-Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
+  Definition Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
   (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
   per sampling block. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half
   weighted at each budget by the least bound that budget certifies for it alone;
@@ -76,7 +76,7 @@ uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [-
 
 - `cpu_budget.py`: the block's draw sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
   templates, their n, S and proved ANDs), prices each template's statements (up to 8 drawn units each) from measured
-  firewalled C-Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
+  firewalled Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
   `--slots` x `--hours`. It writes the per-template k and cost and the certified units per window and per period, pooled
   and each block, at δ = 1% and 1e-6 (`cpu-budget.json`, `cpu-budget.md`).
 

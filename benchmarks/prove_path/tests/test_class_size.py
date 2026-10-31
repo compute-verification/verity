@@ -9,7 +9,7 @@
 * a probe that doesn't divide evenly is refused, and so is a template `size` has no measurement for; m is the log of the
   cells;
 * a unit of few ANDs takes its rows' k_log (an hm96 slot each), as composed at every W + 1 rows measured, and a unit of
-  257 rows needs a block of 2^28 bits, which `size` refuses as C-Flock does;
+  257 rows needs a block of 2^28 bits, which `size` refuses as Flock does;
 * with no ``--class``, ``prove_path.py`` takes the class of record.
 """
 from __future__ import annotations

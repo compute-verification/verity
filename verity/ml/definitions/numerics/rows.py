@@ -637,7 +637,7 @@ def _words(rng: np.random.Generator, shape: tuple[int, ...], width: int) -> np.n
 
 def _sample(index: dict[int, str] | None = None) -> Callable[..., list[np.ndarray]]:
     """A self-check sampler: `_words` per parameter; `index` maps a parameter position to the static bounding it (a token or expert
-    id), drawn in range but for one in sixteen."""
+    id), sampled in range but for one in sixteen."""
     def sample(rng: np.random.Generator, n: int, params: Sequence[Any], **statics: Any) -> list[np.ndarray]:
         out = []
         for j, pt in enumerate(params):

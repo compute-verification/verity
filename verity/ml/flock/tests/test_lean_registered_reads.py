@@ -367,9 +367,9 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
 def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(staged, value):
     """U4 (§16.10, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
     committed tops `rec-top-L0`, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
-    when the record's draw does not draw every unit reading it in full, with one table and with two (`buildSession`'s call:
+    when the record's sample does not sample every unit reading it in full, with one table and with two (`buildSession`'s call:
     `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path serves `statement`, which
-    has no draw). The full draw passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
+    has no sample). The full draw passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
     verifier holds no inner transcript to check them against. U4's Lean test (`Flock.Test.Full`) checks the function; this
     checks that `verify` calls it."""
     c = G.Registered.commit(P.program_digest(staged.program), value,

@@ -14,7 +14,7 @@ lane (whose 8-bit admit row C-Flock refuses), and with `VERITY_POUW_WINDOW_LOWER
 served lane at K = 448.
 
 A J10-R leaf's statements (`j10r_lane_ports`, `j10r_combine_ports`: `PouwH1LaneZy_v2`, `PouwH1LaneZyChunk_v2` and
-`PouwH1Combine_v2` over `PouwH1Tile_v5`, as `leaf_lanes` reads them with ``j10r``) are drawn the same way at
+`PouwH1Combine_v2` over `PouwH1Tile_v5`, as `leaf_lanes` reads them with ``j10r``) are sampled the same way at
 n = `weights.chunks`(K), chunk indices in and out of range, and fixed at the served leaf in 1, 2, 4 and 16 chunks (K = 448,
 4096, 8192, 16384 and 65536) and the sidecar's in 2, every statement; the combine's lowering at 8 × 16, K = 448 and 8192.
 """
@@ -272,7 +272,7 @@ def _tiles_k(k: int) -> bool:
 
 def _j10r_leaf(rng: random.Random) -> dict:
     """A leaf as `_leaf` draws it, or at a served J10-R K, with ``n`` its lanes' chunks: `weights.chunks`(K) at every K a
-    leaf's tile takes (a K there that `chunks` refuses is drawn again), any small n at one it doesn't."""
+    leaf's tile takes (a K there that `chunks` refuses is sampled again), any small n at one it doesn't."""
     while True:
         x = _leaf(rng)
         if rng.random() < 0.5:

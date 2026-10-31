@@ -137,7 +137,7 @@ EXPECT = {
     "case-commitment-type": "case: the case.commitment: not a string", "case-not-object": "case: the case: params missing",
     "noncanonical-record": "commitment: not canonical JSON",
     "noncanonical-answer": "evidence: not canonical JSON", "float-answer": "evidence: canonical JSON: a non-integer number",
-    "utf8-record": "commitment: not UTF-8", "honest": None,
+    "utf8-record": "commitment: not ASCII without DEL", "honest": None,
     **{n: f"params: {CC.LIVE_PARAMS}" for n in ("live-missing", "live-null", "live-keys", "live-seeded")},
     "live-other-key": "salt: the challenger's session is not trusted: ",
     "live-incomplete": f"salt: {CC.INCOMPLETE}", "live-unreserved": f"salt: {CC.NO_RESERVE}",
@@ -410,7 +410,7 @@ def test_the_opening_reads_what_served_zk_writes():
 
 
 def test_every_pinned_tiles_side_ports_sort_in_port_order():
-    """C-Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
+    """Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
     row's schema by port name and refuses a header whose keys, in key order, don't list the opened side rows first and in
     port order, rather than read the rows in key order (`schemas-between`, `salted-header-order`). It refuses no honest
     header of a pinned template: each one's side ports (Pc8's a0 and b0, the H1 unit's a0..a3 and b0..b7) sort in port
@@ -446,8 +446,10 @@ def test_the_pinned_tiles_are_their_templates():
 
 def test_canonical_json_is_leans():
     assert CC.canonical(b'{"a":[1,null,true],"b":"x"}') == {"a": [1, None, True], "b": "x"}
+    assert CC.canonical(b'{"drawn":1,"d\\u007f":"d\\u00e9\\ud83d\\ude00"}') == {"drawn": 1, "d\x7f": "dé😀"}
     for b, why in ((b'{"b":1,"a":2}', "not canonical"), (b'{"a": 1}', "not canonical"), (b'{"a":1.5}', "non-integer"),
-                   (b"\xff", "not UTF-8"), (b"{", "not JSON")):
+                   (b"\xff", "not ASCII without DEL"), (b"{", "not JSON"), ('"dé"'.encode(), "not ASCII without DEL"),
+                   (b'"\x7f"', "not ASCII without DEL"), (b'"\\u00E9"', "not canonical"), (b'"\\u007e"', "not canonical")):
         with pytest.raises(CC.Refused, match=why):
             CC.canonical(b)
 
@@ -574,7 +576,7 @@ def test_every_draw_mutation_hits_its_refusal():
     refuses each mutation with the refusal it aims at: a bare live commitment, a malformed key, no record, a record
     signed under another key than the one its coins name, a tampered signature or a record whose commitment was
     swapped (``coin``); a record under a key of the prover's own, a pin of another key, no pin or a malformed one, and
-    seeded coins under a pin (``coin-key``). A live draw's coin is ``pouw/draw`` 0, so a seeded opening under live
+    seeded coins under a pin (``coin-key``). A live sample's coin is ``pouw/draw`` 0, so a seeded opening under live
     coins is refused, and so is a live opening under seeded coins."""
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
@@ -592,7 +594,7 @@ def test_every_draw_mutation_hits_its_refusal():
 
 
 def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
-    """The draw's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
+    """The sample's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
     `coins`, its record signed under `sk` and naming that key, in a window whose parameters pin challenger key `pinned`."""
     ch = Wd.live_challenger(0, 1, random.Random(coins).randbytes)
     message = Ch.record_message(lms.public_key(sk)[:16], "provers-node", ch.commitment)

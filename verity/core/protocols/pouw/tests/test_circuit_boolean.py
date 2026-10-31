@@ -71,7 +71,7 @@ def test_the_windows_are_boolean():
 
 
 def test_building_a_tile_check_registers_them():
-    """C-Flock's lowering finds a primitive's Boolean Definition only in core's registry, so importing `pc4` (and `pc8`,
+    """Flock's lowering finds a primitive's Boolean Definition only in core's registry, so importing `pc4` (and `pc8`,
     which imports it) must register all fifteen (the hiding tile's digest calls the four Keccak words, the cap the five
     window words), in a fresh interpreter where nothing else imported `boolean`."""
     import subprocess
@@ -95,7 +95,7 @@ E4M3_EDGES = [0x00, 0x80, 0x01, 0x81, 0x07, 0x87, 0x08, 0x88, 0x38, 0xB8, 0x7E, 
 def test_window_on_finite_cancelling_edge_and_nan_codes(name, ands):
     """A window's masked words on random finite codes, products that cancel pairwise (+0 words, and totals of either sign
     near zero), small codes (subnormal sums), E4M3's ends (largest products, both zeros, NaNs) and finite windows with one
-    NaN code (NaN in exactly the words whose atoms read it).  The bit form's builder runs on a plain circuit, as C-Flock's
+    NaN code (NaN in exactly the words whose atoms read it).  The bit form's builder runs on a plain circuit, as Flock's
     lowering does (no common-subexpression pass), and has exactly the traced Definition's ANDs: each atom's products are
     built once for all its words, where the 15 atom calls are 145,651 ANDs on sm_120 and 109,735 on the H100."""
     rng = np.random.default_rng(20261008)
@@ -124,7 +124,7 @@ def test_window_on_finite_cancelling_edge_and_nan_codes(name, ands):
 @pytest.mark.parametrize("name, ands", [("PouwBlackwellE4m3SaltDead", 2_493), ("PouwHopperE4m3SaltDead", 1_806)])
 def test_salt_dead_on_every_code_and_each_accumulators_edges(name, ands):
     """Every flat code (both signs of β, ±0, subnormals, ±448 and the NaNs) against FP32's edges and random accumulators of
-    the forming's range, and every binade's ends against random codes.  The builder runs on a plain circuit, as C-Flock's
+    the forming's range, and every binade's ends against random codes.  The builder runs on a plain circuit, as Flock's
     lowering does, and has exactly the traced Definition's ANDs: the two ends share their 32 equal products and everything
     that doesn't read F's sign, where two atom calls and casts are 20,062 ANDs on sm_120 and 15,230 on the H100."""
     rng = random.Random(f"salt-dead-{name}")
@@ -304,7 +304,7 @@ def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
 
 
 def test_chi_commits_its_output_in_forms_and_traces_no_gate_for_it():
-    """In `forms` (C-Flock's pieces run ``.build``) each χ output bit is a committed bit of its own, one row more than its AND
+    """In `forms` (Flock's pieces run ``.build``) each χ output bit is a committed bit of its own, one row more than its AND
     (64 for a half-lane); the Definition's gates are its 32 Ands, and its pin counts those."""
     from verity.ml.circuits.boolean.forms import Circuit
 

@@ -1,7 +1,7 @@
 """One-stage audit, run A5, on a transfer-gate stand-in: a window whose transfer-gate units open the warden's signed cells,
 audited by `a5.audit` as rank 0 of a one-rank step through its `service.Stream`, on a local challenger's coins
 (``--challenger local``) or the verifier's own (``--coins verifier``). No served window has transfer gates yet (the I/O
-shell's ingress parse and egress render units have no C-Flock lowering, and no Commit was served behind the warden), so
+shell's ingress parse and egress render units have no Flock lowering, and no Commit was served behind the warden), so
 this window stands in for one, its cells a warden run's (`warden_serve.py rehearse`, ``--run``).
 
 * **The rows** are the warden's, one a bucket (`warden_rows`, registration v2): row t − first_bucket of a link-window is
@@ -36,7 +36,7 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
   the registration's SHA-512, the units' digest, and the reads and rows its units open, and the verifier holds them to its
   own read.
 * **Negatives**, beside a5's (the registered reads' three and the verdict reporting another root, on chunk c0; the
-  transfer-gate negatives; R1 to R4 and the draw's): the prover's own root over the link-window's rows (one byte off) under
+  transfer-gate negatives; R1 to R4 and the sample's): the prover's own root over the link-window's rows (one byte off) under
   the warden's certificate, refused by `check_registration`; the window's provenance naming another root, refused by
   `source`; the reads no honest read is, on the ingress link-window, each refused by `warden_rows.port` by name: a foreign
   read (another connection's cell, under a wiring that drops the connection holding its slot), a duplicate read, a
@@ -45,7 +45,7 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
   Lean's registered reads (`warden_rows.refusal`) by name: made for a pad of the delay where the Program reads a data cell
   ("not another value"), those rows under the Program's value ("reads position"), and two units' cells swapped, at the
   Program's rows ("not another value").
-* **Refused runs**, each to pass every check before the draw, draw the unit and be refused by Lean's registered reads by
+* **Refused runs**, each to pass every check before the sample, draw the unit and be refused by Lean's registered reads by
   name: ``--altered``, unit 0 of c0 reads its row one bit off in its cell, under the warden's salt, its output the same bits
   (the circuit holds) ("does not open"); ``--made-for pad|pad-named|swapped``, c1's statement made for that wiring.
 
@@ -384,7 +384,7 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
 
 
 def composer(defn, bits: int):
-    """``a5.audit``'s composer of the template's circuit: C-Flock's `UnitStager` over its one ``row`` in and ``o0`` out,
+    """``a5.audit``'s composer of the template's circuit: Flock's `UnitStager` over its one ``row`` in and ``o0`` out,
     bound to the window's partition and program."""
     def compose(circuit: Path, partition: str, program: str) -> dict:
         from verity_flock.class_statement import UnitStager
@@ -411,7 +411,7 @@ def free_ports(span: int) -> int:
 
 
 def expected(a: argparse.Namespace, s: dict, ok: bool) -> bool:
-    """Honest: accepted with every negative refused. ``--altered`` (``--made-for``): every check before the draw passed, and
+    """Honest: accepted with every negative refused. ``--altered`` (``--made-for``): every check before the sample passed, and
     Lean's verify of chunk c0 (c1) refused at its registered reads by its named reason, so the audit isn't accepted."""
     if not (a.altered or a.made_for):
         return ok
@@ -425,7 +425,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="a5_warden.py", description=__doc__.splitlines()[0])
     ap.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory (warden_serve.py rehearse)")
     ap.add_argument("--units", type=int, default=16, help="n: each transfer-gate chunk's units")
-    ap.add_argument("--rest", type=int, default=8, help="the rest's units, drawn by the work law")
+    ap.add_argument("--rest", type=int, default=8, help="the rest's units, sampled by the work law")
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
