@@ -786,7 +786,8 @@
    "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
    "missing": "honest",
    "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov"
-  }
+  },
+  "Properties.RemoteAudit.Component.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789"
  },
  "layers": {
   "Properties.Pouw": {
