@@ -55,3 +55,6 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "examples/h200/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
           "examples/h200/interfaces/tests/fixtures/block-record-r2-period0.json",
           "verity/core/protocols/network/tests/period_case.py", "verity/core/difftest/python/verity_difftest"]
+# The Lean verifier, whose statement setup test_warden_zk and test_egress_zk run on their staged members (`check` builds
+# it before this suite).
+artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify"]
