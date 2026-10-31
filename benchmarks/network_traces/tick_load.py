@@ -20,7 +20,7 @@ The rehearsal's own outputs are under
 
 **With `--secret-bit`** the stub times its writes by a secret bit per egress bucket, which is J's question
 (`NetTiming.JitterBounded`): does an offset within a bucket that the prover chooses reach a receiver outside?
-The stub draws a secret of its own, never written, and bucket t's bit and lead (0 … `LEAD_MS` ms) are SHA-512's of it
+The stub samples a secret of its own, never written, and bucket t's bit and lead (0 … `LEAD_MS` ms) are SHA-512's of it
 and t (`SecretBits`). Once `serve` has written the honest run's `deployment.json` (the plan's probes before it are paced
 as without), each token waits from its pacing to the first slot after it: bucket t's is its lead before t's boundary
 when t's bit is 1, and half a bucket more when 0, so both bits write the same tokens a bucket, and they differ only in
@@ -58,7 +58,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-#: the secret-bit stub's lead before its slot's boundary, drawn per bucket from [0, LEAD_MS) ms: the stub's write
+#: the secret-bit stub's lead before its slot's boundary, sampled per bucket from [0, LEAD_MS) ms: the stub's write
 #: reaches the proxy through the shim's process, a hop whose latency the stub doesn't know, so the leads span it
 LEAD_MS = 2.0
 #: how long before its slot the stub stops sleeping on its loop and spins: a loop's sleep ends up to 1 ms late, since

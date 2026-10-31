@@ -310,8 +310,8 @@ def endpoint_step(e: dict | None) -> dict:
     """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
     run's certified I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
     (`chain.tie`), both in the clear. The tie decides a tampered run only where the rehearsal's own check let it
-    through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the link-windows its
-    changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
+    through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the execution phases
+    its changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)", "in_the_clear": CLEAR["endpoint"]}
     chain = e.get("chain") or {}
@@ -357,8 +357,8 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for the warden run of ``dep`` (its ``deployment.json``), as network-e2e's
     `endpoint_advice` makes it for a certifier rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
     (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the warden's bucket unless an index is there, then
-    ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the warden's link-windows, with the
-    model's EOS ids ``eos`` (a warden run records none)."""
+    ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the warden's execution phases, with
+    the model's EOS ids ``eos`` (a warden run records none)."""
     import subprocess
 
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
@@ -403,8 +403,8 @@ def warden_endpoint_step(e: dict | None) -> dict:
 
 
 def tie_step(t: dict | None, job: dict | None = None) -> dict:
-    """`n2_tie_zk.py prove --class warden`'s summary: accepted when its ``ok`` holds (every link-window's verdict its
-    reference's, the tie's on the link, no witness piece leaked), its honest member tied in every link-window it
+    """`n2_tie_zk.py prove --class warden`'s summary: accepted when its ``ok`` holds (every execution phase's verdict
+    its reference's, the tie's on the link, no witness piece leaked), its honest member tied in every execution phase it
     proved and its forged member refused in one or more."""
     job = job or {}
     rc, why = (job.get("rc") or {}).get("tie"), (job.get("why") or {}).get("tie")
@@ -561,10 +561,10 @@ def scan_exit(s: dict | None, job: dict) -> str | None:
 
 
 def free_inputs(circuit: dict) -> int:
-    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``: every unit's input-row bits (each
-    template's units times its statement's ``in_rows`` widths), less each unit's rows whose every port a wire feeds from
-    another unit's output (``wires``) or ``external`` names as the system's I/O. A row the registration's anchors
-    register still counts, an overcount."""
+    """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``: every proof block's input-row
+    bits (each template's proof blocks times its statement's ``in_rows`` widths), less each proof block's rows whose
+    every port a wire feeds from another proof block's output (``wires``) or ``external`` names as the system's I/O. A
+    row the registration's anchors register still counts, an overcount."""
     from verity.ml.windows.interface import Wire
 
     units = {t: n for t, n in circuit["templates"]}
@@ -591,8 +591,9 @@ def free_inputs(circuit: dict) -> int:
 
 
 def audit_of(d: Path) -> dict:
-    """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its units, the
-    units its law draws (a subset law's ``k``, a stratified law's ``Σ k``, as `NetworkCheck.Period` counts them), the
+    """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its proof
+    blocks, the proof blocks its sampling design samples (a subset design's ``k``, a stratified design's ``Σ k``, as
+    `NetworkCheck.Period` counts them), the
     least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
     (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
     within a bucket."""
@@ -839,9 +840,10 @@ def decide_period(case: dict) -> dict:
 
 def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], audits: list[dict]) -> str | None:
     """Why certifier/v0's period ``answer`` on ``case`` isn't this chain's, else None. The answer commits to its case's
-    commitment alone (`PERIOD_TAG`'s digest of each compute audit's and each link-window's one-stage registration, a
-    link-window's naming its index), so each link-window it registers must be one the chain certified (``cert``'s
-    rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by link-window), and its
+    commitment alone (`PERIOD_TAG`'s digest of each compute audit's and each execution phase's one-stage registration, a
+    execution phase's naming its index), so each execution phase it registers must be one the chain certified
+    (``cert``'s rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by execution
+    phase), and its
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
@@ -1058,17 +1060,17 @@ def main(argv=None) -> int:
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
     r.add_argument("--warden-run")
-    r.add_argument("--audit", nargs="*", help="the served units' compute audit windows (registration.json and "
-                                              "circuit.json each), whose draw and free inputs d1's K counts")
+    r.add_argument("--audit", nargs="*", help="the served proof blocks' compute audit windows (registration.json and "
+                                              "circuit.json each), whose sample and free inputs d1's K counts")
     r.add_argument("--period-answer", help="certifier/v0's network-period check answer on the period "
                                            "(certifier.answer.json), the block record's certifier entry's")
     r.add_argument("--period-case", help="the answer's case (default X.case.json beside X.answer.json), held to this "
                                          "chain and re-decided by network-period check")
     r.add_argument("--server", help="the node the block ran on (the block record's server)")
     r.add_argument("--out", required=True, type=Path)
-    k = sub.add_parser("leak", help="K per monitoring period on the warden run, for the scan's class and draw")
+    k = sub.add_parser("leak", help="K per monitoring period on the warden run, for the scan's class and sample")
     k.add_argument("--warden-run", required=True, type=Path, help="the fetched warden gate run (its end.json)")
-    k.add_argument("--scan", help="the scan's summary on that run (its draw); default every unit drawn")
+    k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
     k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
     if a.command == "custody":
