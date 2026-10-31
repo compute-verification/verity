@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.core.periods import MONITORING_PERIODS, Cut, MonitoringPeriod, PeriodError, TickSpan
+from verity.core.periods import MONITORING_PERIODS, Cut, MonitoringPeriod, PeriodError, TickSpan, block_count
 
 
 def test_a_span_stops_after_its_last_tick():
@@ -76,3 +76,23 @@ def test_the_json_round_trips_and_accepts_only_what_it_writes():
 
 def test_the_monitoring_periods_are_a_week_a_month_and_a_year():
     assert MONITORING_PERIODS == (("week", 604800), ("month", 2592000), ("year", 31536000))
+
+
+@pytest.mark.parametrize("seconds, block_s", [(10, 3), (9, 3), (2, 3), (0, 1), (7, 7)])
+def test_the_block_count_is_a_machines_monitoring_periods_execution_blocks(seconds, block_s):
+    n = block_count(seconds, block_s)
+    bounds = list(range(0, n * block_s + 1, block_s))
+    m = MonitoringPeriod.of(TickSpan(0, n * block_s), bounds, [[a, b] for a, b in zip(bounds, bounds[1:])])
+    assert m.execution_blocks == n and n * block_s <= seconds < (n + 1) * block_s
+    assert block_count(seconds, block_s, 5) == 5 * n
+
+
+def test_the_block_count_of_the_reference_deployment():
+    assert {name: block_count(s, 600, 12500) for name, s in MONITORING_PERIODS} == {
+        "week": 12_600_000, "month": 54_000_000, "year": 657_000_000}
+
+
+@pytest.mark.parametrize("seconds, block_s, machines", [(10, 0, 1), (-1, 3, 1), (10, 3, -1), (10.0, 3, 1), (10, True, 1)])
+def test_the_block_count_refuses_what_is_no_count(seconds, block_s, machines):
+    with pytest.raises(PeriodError):
+        block_count(seconds, block_s, machines)
