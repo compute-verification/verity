@@ -148,7 +148,7 @@ def rates(dev: str, seg_absorbs: int = 1 << 14) -> dict:
     words = ft_rounds * 32
     rt_rounds = d["sms"] * d["smsp_per_sm"] * d["vector_hz"]          # full issue, a warp result a round
     segs = (ft_rounds + rt_rounds) / seg_absorbs
-    sha_per_seg = 4                       # salt, chain id, sequence, 1600-bit state, counts: ~3 blocks + aggregation
+    sha_per_seg = 4                       # chain id, sequence, 1600-bit state, counts: ~2 blocks + chain start + tree
     sha_hz = 1.9e9 / 80                   # one round a clock at ~1.9 GHz [E]
     sha_engines = segs * sha_per_seg / sha_hz
     return {"tensor_words_per_s": words, "tensor_bytes_per_s": words * 4, "ft_rounds_per_s": ft_rounds,
