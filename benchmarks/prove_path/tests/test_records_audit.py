@@ -10,7 +10,8 @@
   doesn't hash to the registered digest is refused;
 * the leak bound's count is the circuit's unwired input bits, reported beside the advice's charge and vacuous past it, and
   a record that declares registered reads counts those of a parameter the verifier pinned registered and the rest free
-  (`declared_count`);
+  (`declared_count`); the audit counts a record that lists its members and declares its window's ingress so too, and
+  prints the window figure beside the run figure with its premise;
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
   (`pinned`), and refused before any draw without them;
 * a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
@@ -346,7 +347,7 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
                 ["--pins", str(tmp_path / "other-domain.json")]):
         with pytest.raises(SystemExit):
             RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *bad])
-    with pytest.raises(ValueError, match="counted from its members"):
+    with pytest.raises(ValueError, match="or its listed members"):
         RA.declared_count({"templates": doc["templates"]}, 0)
 
 
@@ -765,6 +766,41 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
         assert seen == want
 
 
+def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
+        written, tmp_path, monkeypatch, capsys):
+    """A record that lists its members and declares its window's ingress (here each coordinate's ``x`` and ``sx``, rows
+    before the window) is counted by `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json``
+    carry the run figure, the window ingress still free in it, and beside it the window figure with its premise
+    (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
+    is the records' alone."""
+    import a5 as A5
+
+    mine, stated, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
+    doc = IF.circuit_record(mine, stated["name"], stated["templates"], stated["statements"], stated["external"],
+                            declared={IF.WINDOW_INGRESS: ingress})
+    body = IF.circuit_bytes(doc)
+    (written.dir / "circuit.json").write_bytes(body)
+    rec = {**written.rec, "window": {**written.rec["window"], "circuit": hashlib.sha512(body).hexdigest()}}
+    (written.dir / "registration.json").write_text(json.dumps(rec))
+    assert "cap" not in doc and IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)[0].members == mine.members
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", lambda *a, **kw: ({"audit": {"accepted": True}}, True))
+    capsys.readouterr()
+    assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", rec["window"]["circuit"], "--run", RUN,
+                    "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+                    "--skip-negatives"]) == 1
+    rows = dict(IF.layout(COORD).rows)
+    inputs, window = 5 * 16 * sum(rows.values()), 5 * 16 * (rows["x"] + rows["sx"])
+    figure = {"ingress": window, "free": inputs - window, "other_inputs": inputs - window, "bound": "vacuous",
+              "premise": RA.WINDOW_PREMISE}
+    printed = [json.loads(x.removeprefix("RECORDS ")) for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS ")]
+    assert [p["leak"] for p in printed] == [{"other_inputs": inputs, "free": inputs, "registered": 0, "advice_bits": 0,
+                                             "bound": "vacuous", "window": figure}]
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text())
+    assert summary["leak"] == RA.declared_count(doc, 0) and summary["leak"]["window"] == figure
+
+
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
@@ -848,7 +884,7 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     loaded = SimpleNamespace(progs={"r0": {}}, dirs={"r0": "d"}, arrivals={"r0": 0})
     monkeypatch.setattr(PP.I2Compiler, "load", lambda self, rank, world, requests: loaded)
     window = IF.Window(IF.Circuit("test", ((COORD, 5),)), "", D.parse_law(LAW), 4).window
-    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, []) if run == "" else None)
+    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, [[]]) if run == "" else None)
     (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": LAW}))
     (tmp_path / "advice.bin").write_bytes(s.data)
     base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"), "--out",

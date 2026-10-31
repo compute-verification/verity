@@ -1207,9 +1207,10 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
         a.builds = builds
         compiler = compiler_of_args(a)
         p = compiler.load(0, 1, compile_advice(compiler, data))
-        window, _rows = SRW.population(p.progs, json.loads(Path(a.partition).read_text()), "", p.dirs, arrivals=p.arrivals,
-                                       transfer_gates=compiler.transfer_gates)
-    Path(a.out).write_bytes(IF.circuit_bytes(SRW.circuit_record(window)))
+        window, rows = SRW.population(p.progs, json.loads(Path(a.partition).read_text()), "", p.dirs, arrivals=p.arrivals,
+                                      transfer_gates=compiler.transfer_gates)
+        record = SRW.circuit_record(window, rows, p.arrivals)
+    Path(a.out).write_bytes(IF.circuit_bytes(record))
     c = AW.codec_of()
     return {"bits": int(c.total_bits(c.decode(data)))}
 
