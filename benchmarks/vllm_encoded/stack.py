@@ -466,7 +466,7 @@ class LmHead:
 
 @dataclasses.dataclass
 class _Layer:
-    lay: P.Layout
+    lay: P.CacheShape
     index: int
 
 
@@ -500,7 +500,7 @@ class Attention:
         self.graph_tab = None
         self.pending: list[tuple] = []          # an eager step's append-table entries, by layer
         self.slots: dict[int, torch.Tensor] = {}
-        self.lay: P.Layout | None = None
+        self.lay: P.CacheShape | None = None
         self.s2 = new_stream()
         self.fwd_done = torch.cuda.Event()
         self.app_done = torch.cuda.Event()
@@ -786,7 +786,7 @@ class Attention:
             st.mark(SP["gather"])
             att.receipt_layer(L.index)
             st.mark(SP["kv_receipts"])
-            lay2 = P.Layout(blocks.shape[0], L.lay.bs, L.lay.sb, L.lay.sh, L.lay.ss)
+            lay2 = P.CacheShape(blocks.shape[0], L.lay.bs, L.lay.sb, L.lay.sh, L.lay.ss)
             P.append(att.lib, torch, scratch, lay2, 0, 1, 0, 0, 0, k2[:s2.shape[0]], v2[:s2.shape[0]], s2)
             st.mark(SP["gather"])
             att.calls["gathered"] += 1
