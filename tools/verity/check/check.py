@@ -12,7 +12,8 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
                                                             with --shard K/N, only those of shard K's parts, the last
                                                             shard's with those no shard holds (ratchet-gate) (drive's
-                                                            `after_landing_shards`: one run per shard, at once)
+                                                            `after_landing_shards`: one run per shard, at once, once the
+                                                            records step passed: `--cc-records`)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
     ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
@@ -69,6 +70,13 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
     uv run python tools/verity/check/check.py --record --combine RUN...
                                                             the shards RUN..., one per K, recorded as one check of this commit
                                                             when they are together a passing one (`research merge` reads them)
+    uv run python tools/verity/check/check.py --record --cc-records --on M
+                                                            circuit-check's records step (`cc_records`): every catalog binding's
+                                                            record built once and tarred into the run's $OUT, recorded without
+                                                            the tool; drive's sharded after-landing run runs it before its
+                                                            shards and gives each its artifact (`--cc-records-from ART@SHA256`:
+                                                            unpacked into circuit-check's cache, and the shard refused unless
+                                                            its bytes have that sha256 and it was built from this tree)
 
 Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
 declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package, `circuit-check` into its `shards`, its
@@ -216,6 +224,7 @@ input or contract that doesn't resolve fails there; only a check `fixtures.toml`
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -226,6 +235,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 import time
@@ -1008,10 +1018,13 @@ def record(argv: list[str]) -> int:
         print(f"check: --pool {e}", file=sys.stderr)
         return 2
     combining = rest[:1] == ["--combine"]
+    records = "--cc-records" in rest
     parts = None
     deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
     try:
-        if "--shard" in rest[:-1]:
+        if records:                                    # circuit-check's records alone: its memory, no Lean
+            parts = ["circuit-check"]
+        elif "--shard" in rest[:-1]:
             parts = shard(rest[rest.index("--shard") + 1], gated=deferred is None)["parts"]
             if deferred is not None:
                 parts = [p for p in parts if p in deferred_parts(deferred)]
@@ -1056,7 +1069,7 @@ def record(argv: list[str]) -> int:
     # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
-    cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
+    cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
            "--cwd", "clone" if on else "source", *(x for p in DECLARED for x in ("--declared-output", p)), *pooled,
            *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else [])]
     env = dict(os.environ)
@@ -1091,7 +1104,7 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
-    if not combining and ("--no-cache" not in rest or "--circuit-cache" in rest):
+    if not combining and not records and ("--no-cache" not in rest or "--circuit-cache" in rest):
         given = None
         if "--verdicts-in" in rest[:-1]:
             i = rest.index("--verdicts-in")
@@ -1243,6 +1256,98 @@ def circuit_shards(only: list[str] | None) -> list[str] | None:
     held = [p.partition(":")[2] for p in only if p.partition(":")[0] == "circuit-check" and p.partition(":")[2]]
     every = DECLARATION.job_parts(next(j for j in JOBS if j.name == "circuit-check"), {}) or []
     return held if held and sorted(held) != sorted(every) else None
+
+
+#: the records step (`--cc-records`): every catalog binding's record, built once (`circuit-check --all --records-only`) and tarred
+#: under the run's $OUT with the tree it was built from (`CC_RECORDS_TREE`), its sha256 in the result (`CC_RECORDS_KIND`'s
+#: ``records``); drive's sharded after-landing run builds it before the shards and gives each its artifact
+#: (`--cc-records-from ART@SHA256`), so no shard's circuit-check builds the bindings itself
+CC_RECORDS = "out/circuit-records.tar.gz"
+CC_RECORDS_KIND = "circuit-records/v1"
+CC_RECORDS_TREE = "tree"
+
+
+def cc_records(run_dir: Path, n: int | None = None) -> int:
+    """`--cc-records`, inside a recorded run: `circuit-check --all --records-only` into a fresh cache, its report
+    `circuit-records.json`, then the cache and this tree's id tarred to `CC_RECORDS`, and ``result.json`` (`CC_RECORDS_KIND`)
+    naming the tarball's path, sha256 and tree; exit circuit-check's, and no tarball unless it passed."""
+    tree, t0 = _rev("HEAD^{tree}"), time.monotonic()
+    d = Path(tempfile.mkdtemp(prefix="check-cc-records-"))
+    try:
+        gb = slot_mem_gb()
+        cmd = [sys.executable, "-m", "circuit_check", "--all", "--records-only", "-q", "--cache", str(d / "cache"),
+               "--jobs", str(n or cores()), *(["--mem-gb", str(gb)] if gb is not None else []),
+               "--out", str(run_dir / "circuit-records.json")]
+        rc = subprocess.run(cmd, cwd=ROOT, env=env()).returncode
+        records = None
+        if rc == 0 and tree:
+            (d / CC_RECORDS_TREE).write_text(tree + "\n")
+            (tar := run_dir / CC_RECORDS).parent.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(tar, "w:gz") as t:
+                t.add(d / CC_RECORDS_TREE, CC_RECORDS_TREE)
+                t.add(d / "cache", "cache")
+            records = {"path": CC_RECORDS, "sha256": _sha256(tar), "tree": tree}
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    secs = round(time.monotonic() - t0, 1)
+    doc = {"schema": "research/result/v0.1", "kind": CC_RECORDS_KIND, "run_id": SETTINGS.require("RESEARCH_RUN_ID"),
+           "workload_fingerprint": {"tree": tree},
+           "validation": {"status": "passed" if records else "failed", "checker": "tools/verity/check/check.py --cc-records",
+                          "detail": f"circuit-check --all --records-only exited {rc}" + ("" if tree else "; no tree")},
+           "measurements": [{"name": "circuit-records_wall", "value": secs, "unit": "s"}],
+           "artifacts": [p for p in (CC_RECORDS, "circuit-records.json") if (run_dir / p).exists()],
+           **({"records": records} if records else {})}
+    (run_dir / "result.json.tmp").write_text(json.dumps(doc, indent=1) + "\n")
+    os.replace(run_dir / "result.json.tmp", run_dir / "result.json")
+    print(f"check: --cc-records: {'records ' + records['sha256'][:12] + ' in ' + CC_RECORDS if records else 'FAILED'} in {secs} s",
+          flush=True)
+    return 0 if records else rc or 1
+
+
+def fetch_records(art: str, d: Path) -> Path:
+    """The records tarball (`CC_RECORDS`) of the run record ``art``, fetched under ``d`` through the run's custody key (the
+    module docstring's "The evidence store") or, outside a recorded run, this machine's store."""
+    from research.store.custody import custody_env
+    from research.store.local import LocalStore
+
+    with custody_env(c) if (c := custody_dir()) else contextlib.nullcontext():
+        return Path(LocalStore().fetch(art, d, paths=[CC_RECORDS])) / CC_RECORDS
+
+
+def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
+    """`--cc-records-from ART@SHA256`: the records step's tarball (`cc_records`), from the run record ART, unpacked into
+    circuit-check's cache ``cache`` once its bytes have that sha256 and the tree it was built from is this one; else why it is
+    refused, and nothing unpacked.  Each record goes in by rename, so a circuit-check reading the cache meanwhile sees it whole
+    or not at all, and one counts only while its own reads still match (`circuit_check.units`)."""
+    art, _, sha = spec.partition("@")
+    if not art.startswith("art:") or not re.fullmatch(r"[0-9a-f]{64}", sha):
+        return f"{spec} is not ART@SHA256"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    d = Path(tempfile.mkdtemp(prefix="cc-records-", dir=cache.parent))
+    try:
+        try:
+            tar = fetch(art, d)
+        except Exception as e:  # noqa: BLE001  (refused, and the reason named)
+            return f"{art} can't be fetched ({type(e).__name__}: {e})"
+        if (got := _sha256(tar)) != sha:
+            return f"its bytes' sha256 is {got}, not {sha}"
+        with tarfile.open(tar) as t:
+            try:
+                built = t.extractfile(CC_RECORDS_TREE).read().decode().strip()
+            except (KeyError, AttributeError):
+                return f"it holds no {CC_RECORDS_TREE}, the tree it was built from"
+            if built != (tree := _rev("HEAD^{tree}")):
+                return f"it was built from tree {built[:12]}, and this tree is {(tree or 'unknown')[:12]}"
+            t.extractall(d / "x", filter="data")
+        n = 0
+        for p in sorted((d / "x" / "cache").rglob("*.json")):
+            (to := cache / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
+            os.replace(p, to)
+            n += 1
+        print(f"check: circuit-check: {n} binding record(s) from {art} ({sha[:12]}) into {cache}", flush=True)
+        return None
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def slot_mem_gb() -> int | None:
@@ -2306,6 +2411,12 @@ def main(argv: list[str]) -> int:
     run_dir = Path(d) if (d := SETTINGS.RESEARCH_RUN_DIR) else None
     if argv[:1] == ["--combine"] and len(argv) > 1:
         return combine(argv[1:], run_dir)
+    if "--cc-records" in argv:
+        if [a for a in argv if a not in ("--cc-records", "--keep-going")] or run_dir is None:
+            print("check: --cc-records takes no other flag and runs inside a recorded run: `check.py --record --cc-records --on M`",
+                  file=sys.stderr)
+            return 2
+        return cc_records(run_dir)
     cache = "--no-cache" not in argv
     circuit_cache = cache or "--circuit-cache" in argv
     keep_going = "--keep-going" in argv
@@ -2315,6 +2426,10 @@ def main(argv: list[str]) -> int:
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
         pack, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
+    records = None
+    if "--cc-records-from" in rest and rest.index("--cc-records-from") + 1 < len(rest):
+        i = rest.index("--cc-records-from")
+        records, rest = rest[i + 1], rest[:i] + rest[i + 2:]
     sharded = None
     if "--shard" in rest and rest.index("--shard") + 1 < len(rest):
         i = rest.index("--shard")
@@ -2380,6 +2495,12 @@ def main(argv: list[str]) -> int:
         print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
     verdicts = {"in": verdicts_in(pack, run_dir, None if cache else CIRCUIT_ENTRIES)} if pack and circuit_cache else {}
+    if records is not None and (only is None or any(p.partition(":")[0] == "circuit-check" for p in only)):
+        why = (cc_records_in(records, cache_dir() / "circuit-check") if circuit_cache
+               else "circuit-check reuses no cache here (--no-cache without --circuit-cache)")
+        if why:
+            print(f"check: --cc-records-from {records} refused: {why}", file=sys.stderr, flush=True)
+            return 2
     before = VERDICTS.snapshot() if run_dir is not None and circuit_cache else None
     t0 = time.monotonic()
     TERMINATED.clear()

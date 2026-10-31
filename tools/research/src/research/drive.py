@@ -75,9 +75,11 @@ time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED
 circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (`gate = false`: `_gating`), its base the last
 verified `checked` commit, below the tip, for ratchet-gate to judge the
 landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
-shard has while there are N: `shard_machines`), passed once every shard passed, a run ci launched in place of a shard's twin
-counting once `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID` adds it to shard K (`queue.drive_shard_add`: only a
-run whose own record is shard K/N of TIP's commit; cancel the twin after);
+shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
+(`_records`: `train.sh TIP MACHINES --cc-records`) passed, each shard given its artifact (`--cc-records-from ART@SHA256`) so no
+shard builds the bindings' records, a run ci launched in place of a shard's twin counting once `/data/infra/drive.sh queue
+drive-shard-add TIP K RUN_ID` adds it to shard K (`queue.drive_shard_add`: only a run whose own record is shard K/N of TIP's
+commit; cancel the twin after);
 `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
 `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
@@ -285,22 +287,44 @@ def authed(auth: tuple[str, ...]):
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
                  detached: bool = False, circuit_cache: bool = False, shard: str | None = None,
-                 base: str | None = None) -> tuple[list[str], str] | dict:
-    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--shard K/N]` from the queue's clone: (the run ids it printed,
+                 base: str | None = None, cc_records: bool = False,
+                 cc_records_from: str | None = None) -> tuple[list[str], str] | dict:
+    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--shard K/N] [--cc-records[-from ART@SHA256]]` from the queue's
+    clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
     `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
     password at the tty)."""
-    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
-            *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
-            *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
-            *(["--base", base] if base else []), *(["--shard", shard] if shard else [])]
+    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
+    if not cc_records:
+        argv += [*(["--agreement"] if agreement else []),
+                 *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
+                 *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
+                 *(["--base", base] if base else []), *(["--shard", shard] if shard else []),
+                 *(["--cc-records-from", cc_records_from] if cc_records_from else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
     if detached:
         return detach(repo, argv, env, script=argv[1])
     r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env)
     m = RUN_RE.search(r.stdout)
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
+
+
+#: how long a sharded after-landing run waits for circuit-check's records step (`_records`, about 8 min cold) before its shards
+#: launch without it, each building the records itself, so a lost step never holds the run
+RECORDS_WAIT_S = 2400
+
+
+def records_artifact(store, rid: str) -> str | None:
+    """``ART@SHA256`` of the records step ``rid`` (`check.py --cc-records`): its run record and the sha256 its result names of
+    the records tarball in it, once custody has published both; else None."""
+    if store is None:
+        return None
+    out = (store.get_attempt(rid) or {}).get("outputs") or {}
+    if not (art := out.get("run_record")) or not (res := out.get("result")):
+        return None
+    sha = ((store.get_manifest(res).meta or {}).get("records") or {}).get("sha256")
+    return f"{art}@{sha}" if isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{64}", sha) else None
 
 
 #: where detached launches (`detach`) keep their output and exit, under drive's TMPDIR
@@ -885,10 +909,13 @@ class Driver:
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
-                    shard=None, base=None:
+                    shard=None, base=None, cc_records=False, cc_records_from=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
-                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base))
+                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
+                          cc_records=cc_records, cc_records_from=cc_records_from))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
+        #: the artifact of circuit-check's records step (`records_artifact`, `_records`) a sharded after-landing run gives its shards
+        self.records_artifact: Callable[[str], str | None] = lambda rid: records_artifact(q.store, rid)
         #: a Lean change's Lean check before a review landing: `train.sh TOP MACHINES --deferred lean-audit`, detached
         self.launch_lean: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine: train_launch(repo, commit, machine, False, auth=q.auth, deferred=LEAN_STEP,
@@ -1582,7 +1609,9 @@ class Driver:
         if not (pl := drive.get("postland")) or pl.get("run"):
             return
         q = self.q
-        main = _out(self.repo, "rev-parse", q.base)
+        # a records step still building is of the tip its shards then check (`_records`)
+        building = pl.get("records")
+        main = building["tip"] if building and "art" not in building else _out(self.repo, "rev-parse", q.base)
         pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, pl["verified"])]
         base = not self._baselined(pl)                            # the first run: `main` itself (`_unbaselined`)
         if not base and (not pl["pending"] or main == pl.get("failed") or main == pl["verified"]):
@@ -1604,17 +1633,21 @@ class Driver:
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{main}^1", check=False).stdout.strip()) or None
         flags = (f" --base {below[:12]}" if below else "") + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
         n = self.after_landing_shards
+        records = n > 1 and "circuit-check" in pl["steps"]
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
-                  + (f" as {n} shards" if n > 1 else ""))
+                  + (f" as {n} shards" if n > 1 else "") + (" after circuit-check's records step" if records else ""))
             return
+        if records and (art := self._records(pl, main)) is None:
+            return
+        cc = {"cc_records_from": art} if records and art else {}
         if n == 1:
             rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra))
         else:
             if len(self.on.split(",")) < n:
                 q.log(f"research queue drive: {n} shards of the post-landing run of {main[:12]} on {self.on}, fewer machines than "
                       "shards: they share them")
-            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **extra, shard=f"{k}/{n}"))
+            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **extra, **cc, shard=f"{k}/{n}"))
                    for k, on in enumerate(shard_machines(self.on, n), 1)]
             rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
             if any(r is None for r, _ in got):
@@ -1629,7 +1662,45 @@ class Driver:
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
                      "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
-              f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}")
+              f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
+              + (f"; circuit-check's records {cc['cc_records_from']}" if cc else ""))
+
+    def _records(self, pl: dict, tip: str) -> str | None:
+        """circuit-check's records step before a sharded after-landing run of ``tip`` (`start_postland`): launched first
+        (`check.py --cc-records`) and followed each tick in ``pl["records"]``.  Its artifact (`records_artifact`, ``ART@SHA256``)
+        once it passed and custody published it, which every shard is given, so each shard's circuit-check builds no binding;
+        "" once it failed, registered no run, or ran past `RECORDS_WAIT_S`, and the shards build the records themselves; None
+        while it runs.  The answer stays the tip's, so a run of it launched again doesn't build the records again."""
+        rec, q = pl.get("records"), self.q
+        if rec and rec["tip"] == tip and "art" in rec:
+            return rec["art"]
+
+        def done(art: str, why: str) -> str:
+            pl["records"] = {"tip": tip, "art": art}
+            q.log(f"research queue drive: circuit-check's records step of {tip[:12]}: {why}")
+            return art
+
+        if not rec or rec["tip"] != tip:
+            got, tail = self._started(self.launch_postland(self.repo, tip, self.on, "circuit-check", cc_records=True))
+            if got is None:
+                return done("", f"registered no run ({tail}); the shards build the records themselves")
+            pl["records"] = {**got, "tip": tip, "at": self.now()}
+            q.log(f"research queue drive: circuit-check's records step of {tip[:12]}: {_ids(got)}; the shards launch once it passed")
+            return None
+        if (tail := self._resolve(rec, f"circuit-check's records step of {tip[:12]}")) is not None:
+            return done("", f"registered no run ({tail}); the shards build the records themselves")
+        states = self._states(rec.get("ids") or [])
+        if passed := [r for r, (_, rc, *_) in states.items() if rc == 0]:
+            if art := self.records_artifact(passed[0]):
+                return done(art, f"{passed[0]} passed: {art}")
+        elif states and not any(st in ACTIVE for st, *_ in states.values()):
+            return done("", f"{' '.join(states)} failed ({', '.join(f'{st} rc={rc}' for st, rc, *_ in states.values())}); "
+                            "the shards build the records themselves")
+        if self.now() - rec["at"] > RECORDS_WAIT_S:
+            if active := [r for r, (st, *_) in states.items() if st in ACTIVE]:
+                self.cancel(self.repo, active, f"drive: circuit-check's records step of {tip[:12]} ran past {RECORDS_WAIT_S // 60} min")
+            return done("", f"{_ids(rec)} gave no artifact in {RECORDS_WAIT_S // 60} min; the shards build the records themselves")
+        return None
 
     def _owner(self, m: Member) -> str | None:
         """The owning lane of a PR the queue landed: its open PR's (`_handle`), else the one its merge's `Owner` names."""

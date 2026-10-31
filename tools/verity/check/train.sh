@@ -27,14 +27,18 @@
 # it (drive's `after_landing_shards`, one launch per shard); alone, a shard Attempt of the check, which `check.py --record
 # --combine` joins with the other N-1 into the commit's check.
 #
+# `--cc-records`: circuit-check's records step alone (`check.py --record --cc-records`), which drive's sharded after-landing run
+# runs first; `--cc-records-from ART@SHA256` (with `--shard`) gives a shard that step's artifact, so its circuit-check builds
+# no binding.
+#
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell with a debug or unknown check setting (`settings.py
 # --of-record`: one that skips the store-backed tests), and a COMMIT that is empty (its tree is its base's: where it leaves
 # origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen= shard= below=
+pass=() deferred= nocache= ccache= noregen= shard= below= records= recfrom=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -47,7 +51,10 @@ while [ $# -gt 0 ]; do
       shard=$2; shift ;;
     --base) [ $# -ge 2 ] || { echo "train: --base needs REF" >&2; exit 2; }
       below=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF and --shard K/N alone" >&2; exit 2 ;;
+    --cc-records) records=1 ;;
+    --cc-records-from) [[ $# -ge 2 && $2 =~ ^art:[0-9a-f]+@[0-9a-f]{64}$ ]] || { echo "train: --cc-records-from needs ART@SHA256" >&2; exit 2; }
+      recfrom=$2; shift ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --shard K/N and --cc-records[-from] alone" >&2; exit 2 ;;
   esac
   shift
 done
@@ -59,6 +66,12 @@ done
   || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates the locks drive commits" >&2; exit 2; }
 [ -z "$below" ] || [ -n "$deferred" ] \
   || { echo "train: --base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
+[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$recfrom${pass[*]+x}" ] \
+  || { echo "train: --cc-records refused with another flag: it builds circuit-check's records alone" >&2; exit 2; }
+[ -z "$recfrom" ] || [ -n "$shard" ] \
+  || { echo "train: --cc-records-from refused without --shard: only a shard's circuit-check takes the records" >&2; exit 2; }
+[ -z "$records" ] || pass+=(--cc-records)
+[ -z "$recfrom" ] || pass+=(--cc-records-from "$recfrom")
 [ -z "$deferred" ] || pass+=(--deferred "$deferred")
 [ -z "$nocache" ] || pass+=(--no-cache)
 [ -z "$ccache" ] || pass+=(--circuit-cache)
@@ -77,7 +90,7 @@ die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
 tell() {
   local rc=$?
   if [ "$rc" -ne 0 ]; then
-    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${deferred:+ --deferred $deferred}${shard:+ --shard $shard} registered no run (exit $rc):"
+    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${records:+ --cc-records}${deferred:+ --deferred $deferred}${shard:+ --shard $shard} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
     uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet --report \
       --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
@@ -109,7 +122,7 @@ else
 fi
 [ -z "$base" ] || [ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse "$base^{tree}")" ] \
   || die "${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check"
-tree="${TMPDIR:-/tmp}/train-${sha:0:12}${shard:+-${shard/\//of}}"
+tree="${TMPDIR:-/tmp}/train-${sha:0:12}${shard:+-${shard/\//of}}${records:+-records}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
 git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
 exec 9>&-
