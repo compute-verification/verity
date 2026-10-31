@@ -181,10 +181,10 @@ def kd(c):
 
 
 def t2(res):
-    """Tier 2 at 350M, one GPU a run, longest first: the baseline at D, D/2, D/4, the two best arrangements at D (and the
-    first at D/4), and distillation from TEACHER of the baseline and the first arrangement at D/4. Its lr is lr20·(384/1536)^p
-    with p the exponent of 60M's pick, as 125M's is: 125M's own lr check would hold the 350M runs, which take about 21 h
-    on a GPU, for its 3 h."""
+    """Tier 2 at 350M, two GPUs a run (one would take about 21 h at D, past a worker's 22 h), longest first: the
+    baseline at D, D/2, D/4, the two best arrangements at D (and the first at D/4), and distillation from TEACHER of the
+    baseline and the first arrangement at D/4. Its lr is lr20·(384/1536)^p with p the exponent of 60M's pick, as 125M's
+    is: 125M's own lr check would hold the 350M runs for its 3 h."""
     s20, lr20 = lr_sweep("20m", LR20, res)
     if lr20 is None:
         return [], True
@@ -194,9 +194,9 @@ def t2(res):
     lr60 = min(s60, key=lambda c: res[c["name"]])["lr"]
     lr = lr20 * (384 / 1536) ** (math.log(lr60 / lr20) / math.log(384 / 640))
     a, b = T2_ARMS
-    out = [cfg("350m", "base", lr), cfg("350m", a, lr), cfg("350m", b, lr)]
-    out += [kd(cfg("350m", "base", lr, 0.25)), kd(cfg("350m", a, lr, 0.25))]
-    out += [cfg("350m", "base", lr, 0.5), cfg("350m", "base", lr, 0.25), cfg("350m", a, lr, 0.25)]
+    out = [cfg("350m", "base", lr, gpus=2), cfg("350m", a, lr, gpus=2), cfg("350m", b, lr, gpus=2)]
+    out += [kd(cfg("350m", "base", lr, 0.25, gpus=2)), kd(cfg("350m", a, lr, 0.25, gpus=2))]
+    out += [cfg("350m", x, lr, dx, gpus=2) for x, dx in (("base", 0.5), ("base", 0.25), (a, 0.25))]
     return out, False
 
 

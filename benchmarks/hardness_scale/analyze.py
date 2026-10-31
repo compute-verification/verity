@@ -52,8 +52,9 @@ def size_of(r):
 
 
 def is_base(r):
+    """A dense int8-QAT baseline trained on the data alone (a distilled one's compute leaves out its teacher's)."""
     c = r["cfg"]
-    return c["arr"] == "none" and c["qat"]
+    return c["arr"] == "none" and c["qat"] and not c.get("teacher")
 
 
 def interp(xs, ys, y):
