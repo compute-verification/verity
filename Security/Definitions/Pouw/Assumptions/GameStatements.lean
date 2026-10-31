@@ -5,13 +5,16 @@ import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Assumptions.Game
 
 /-!
-# Pinned statements (trusted)
+# The game's statements (trusted)
 
-The headline statements, each a `Prop`; the proofs are theorems `Pouw.Proofs.* : Pinned.X`, recorded in
-`lean-audit.json`. (b), (c) and (d) are guarantees, in `Pouw.Guarantees.Game`. Plain-language map: `STATEMENTS.md`.
+The game's headline statements over its named assumptions (`Pouw.Assumptions.TT`), each a `Prop`: `G_γ` from TT, the
+milestone's requirement and exhaustion, the overhead budget, the decode's exactness over the integers and in int32, D1's
+completeness, the witnesses for TT and Nz, and that the game can be lost. Their proofs are the theorems
+`Pouw.Proofs.* : GameStatements.X`. (a) is the guarantee `Pouw.Guarantees.GammaFromTT`; (b), (c) and (d) are guarantees in
+`Pouw.Guarantees.Game`.
 -/
 
-namespace Pouw.Pinned
+namespace Pouw.GameStatements
 
 open Finset
 
@@ -172,4 +175,4 @@ def CopyBound : Prop :=
 def CopyNzWitness : Prop :=
   ∀ M : ℕ, Copy.Nz (fun _ => M) (fun (ω : Fin M → Bool) (_ : ℕ) => Copy.bits ω)
 
-end Pouw.Pinned
+end Pouw.GameStatements
