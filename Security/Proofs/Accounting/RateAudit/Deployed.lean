@@ -304,7 +304,7 @@ variable {N b h ρ S L q : ℕ}
 
 /-- The interactive device that simulates a pass device, its link carrying `L + X` bits: its side sources also answer
 the completed bits from the store. -/
-noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : InteractiveDevice N b h ρ S (L + X) q where
+noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : InteractiveProver N b h ρ S (L + X) q where
   state := A.state
   mem := A.mem
   side E R O := PIChip.sideOf E (A.side E R O)
@@ -330,7 +330,7 @@ theorem toInteractive_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (X : ℕ) (tie
     (by unfold completed at hX; omega) hb.2
   refine ⟨?_, fun t => h₂ t, h₄⟩
   have ht : (A.toInteractive X).tags E R O = A.tags E R O := h₁
-  simp only [InteractiveDevice.correct, PIDevice.correct, ht]
+  simp only [InteractiveProver.correct, PIDevice.correct, ht]
 
 namespace TimeBudget
 

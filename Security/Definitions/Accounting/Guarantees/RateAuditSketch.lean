@@ -76,7 +76,7 @@ def RateAuditSketch : Prop :=
         ((q * g : ℕ) : ℝ≥0∞) / Fintype.card X
 
 /-- **The sketch rate audit with interactive side sources that ignore the oracle.** `RateAuditSketch`'s bound, at its
-floor and its error, for an `InteractiveDevice` (`Security/Definitions/Accounting/RateAuditSketchInteractive.lean`):
+floor and its error, for an `InteractiveProver` (`Security/Definitions/Accounting/RateAuditSketchInteractive.lean`):
 its chip may send any number of bits, however they depend on the signs and on what it read, to side sources that answer
 each read with a whole sector of the store or of the certified stream, as it is, at an address picked from every bit
 sent so far. `L` bounds the sectors that came in over the side link (side sectors and stream sectors together, `w` bits
@@ -97,7 +97,7 @@ Frozen (no-function, hash): as `RateAuditSketch`, a bound in the random-oracle m
 def RateAuditSketchInteractiveRO : Prop :=
   ∀ (N m ρ h S L q w s k F cTag cEnc g : ℕ) (X Sig Dg : Type) [Fintype X] [DecidableEq X] [Fintype Sig]
     [Fintype Dg] [DecidableEq Dg] (dig : Sig → (Fin m → X) → Dg)
-    (A : RateSketch.InteractiveDevice N m ρ h S L q w X Sig Dg),
+    (A : RateSketch.InteractiveProver N m ρ h S L q w X Sig Dg),
     pr (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
         A.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
           A.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < RateSketch.floor m w ρ S L F cTag cEnc k)
