@@ -56,10 +56,10 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from functools import reduce
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
-from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
+from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
