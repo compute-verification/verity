@@ -92,12 +92,12 @@ sampling deployment `D`: `∀ H D L K S lay k, Claims.Sampling.KS H D → KSAcce
 are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0, every decoder within Flock's radius and
 every prover, Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and
 Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
-- the faulty set is in M_δ = {B : P_a(B) > δ} (`RelS`);
-- no faulty proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
+- the incorrect set is in M_δ = {B : P_a(B) > δ} (`RelS`);
+- no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
   (`allSlots`);
 - the advice (`traceVal`, free), its inputs pinned to the trace's committed values and `free` holding values exactly at
-  the faulty proof blocks' committed gates (`FaultyGate`), makes NetTiming's `Accepted` hold over every observation
-  sequence the trace's transfer gates carry (`Carries`), with every status complete (`Covered`). With no unit faulty,
+  the incorrect proof blocks' committed gates (`FaultyGate`), makes NetTiming's `Accepted` hold over every observation
+  sequence the trace's transfer gates carry (`Carries`), with every status complete (`Covered`). With no unit incorrect,
   `free` is empty and `Accepted` is exact.
 
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
@@ -107,17 +107,17 @@ audit's carried sequences, cut at the horizon, number at most 2^c · #faultySets
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
 - c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
   ingress, and the registered inputs, the weights among them, don't count;
-- λ_δ, which units are faulty;
-- β_δ, the faulty proof blocks' committed bits;
+- λ_δ, which units are incorrect;
+- β_δ, the incorrect proof blocks' committed bits;
 - n·log2 D, the timing (J's D classes over n steps).
 
-At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. `SampledLeakRegistered` states the same count at the
+At δ ≥ miss(1) no unit is incorrect, and the bound is c + n·log2 D. `SampledLeakRegistered` states the same count at the
 registered inputs' registration values rather than the trace's, a disagreement being a SHA-512 collision. The bound is
 meaningful only once the advice is the circuit's one free input outside the registration: while a window's circuit is a
 stand-in partition rather than the whole window, its free inputs are its units' inputs, far more bits than the advice
 declares, and `records_audit` labels the bound `vacuous` whenever they exceed the declared charge.
 
-Over a monitoring period, `NetTiming.SecurityProofs.HorizonLeakAccepted` composes the windows. It takes each window's
+Over a monitoring period, `NetTiming.SecurityProofs.PooledLeakAccepted` composes the windows. It takes each window's
 conditional escape and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at the window's
 history would discharge, and doesn't discharge them yet.
 
@@ -128,11 +128,11 @@ history would discharge, and doesn't discharge them yet.
   several windows, c is their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
-  `bound` of the `of` units are faulty, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
+  `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
 - β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
   in `verity/core/protocols/sampled_proofs/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
-  log2 of the at most Σ_{j ≤ bound} C(n, j) faulty sets. `exfiltration_bound` is β_δ + λ_δ.
+  log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 
 **A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified sample, each window one member with no registered

@@ -8,12 +8,12 @@ import dataclasses
 import pickle
 
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.types import Array, Record, Tuple, Value, field_at, field_starts, field_types, range_widths
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value, field_at, field_starts, field_types, range_widths
 
 
 def _type() -> Tuple:
     """Nested tuples, a record, and fields of no leaves between and after the others."""
-    return Tuple(Array(3, Value(8)), Record(("x", Value(16)), ("e", Tuple()), ("y", Array(2, Value(1)))), Array(0, Value(4)),
+    return Tuple(Array(3, Value(8)), RecordType(("x", Value(16)), ("e", Tuple()), ("y", Array(2, Value(1)))), Array(0, Value(4)),
                  Value(32), Tuple(Value(2), Array(2, Tuple(Value(4), Value(8)))), Tuple())
 
 
