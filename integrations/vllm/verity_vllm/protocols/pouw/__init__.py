@@ -764,7 +764,8 @@ def _install_lead(entry: str, settings: Settings, target: Target) -> Option:
         raise ValueError(f"{entry} refused at install: " + "; ".join(off))
     committed = target.weight_commitments.get(entry) or commit_weights(PL.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
-    run = PL.LeadRun(entry, settings.backend, PL.F.InProcessCertifier(), weights_root(roots), len(layers),
+    run = PL.LeadRun(entry, settings.backend, PL.F.InProcessCertifier(), weights_root(roots),
+                     [(int(m.weight.shape[0]), int(m.weight.shape[1])) for m in layers],
                      rank=target.rank, world=target.context.world)
     for w, layer in enumerate(layers):
         settings.backend.load(w, layer)
