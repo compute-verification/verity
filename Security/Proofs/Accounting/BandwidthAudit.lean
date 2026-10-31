@@ -34,7 +34,8 @@ theorem pr_short_le_error {N b h s G k lam : ℕ} {ι α ΩW ΩS : Type} [Fintyp
   calc _ = (Pous.pr (fun y : BandwidthCoins N b h s => Bandwidth.Accepts (real.dev (x, s')) y.1 y.2.1 y.2.2 ∧
           (real.dev (x, s')).ingress y.1 y.2.1 + d.chip + c + G * b + lam < k * b)).toReal := pr_eq_toReal _
     _ ≤ ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam).toReal :=
-        ENNReal.toReal_mono hfin (Bandwidth.SecurityProofs.AuditRO N b h d.chip c G q s k lam (real.dev (x, s')))
+        ENNReal.toReal_mono hfin
+          (Accounting.SecurityProofs.Remote.AuditRO N b h d.chip c G q s k lam (real.dev (x, s')))
     _ = _ := by
         rw [ENNReal.toReal_add (ENNReal.add_ne_top.1 hfin).1 (ENNReal.add_ne_top.1 hfin).2,
           ENNReal.toReal_add (ENNReal.add_ne_top.1 (ENNReal.add_ne_top.1 hfin).1).1
