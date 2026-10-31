@@ -38,8 +38,8 @@ lemma. Which template each part uses:
   `ResReadsAt` (an algebra part at either flag, M's `ResReads` body), `OpeningReadsAt`, `SparseCopyAt`; `PartKindAt` is
   their disjunction. `PartsLinks s` asks it wherever part `s`'s outer relation holds with true recorded calls and its
   coins are shown; `PartsLinksOr s` allows `PartChecks`' fallback instead, a collision among the part's recorded calls
-  (`findColl`) or a tie with the setup's out-of-oracle evaluations at `xO` (`SetupColl`, which `Br` finds: card
-  f93bbff1). `partChecks_of_partsLinks` and `partChecks_of_partsLinksOr` give `PartChecks s` at any shape;
+  (`findColl`) or a tie with the setup's out-of-oracle evaluations at `xO` (`SetupColl`, which `Br`
+  finds). `partChecks_of_partsLinks` and `partChecks_of_partsLinksOr` give `PartChecks s` at any shape;
   `partChecks_holo` at every part of the holo shape. M's dense links are instances (`partsLinks_of_reads`,
   `partsLinks_of_open`).
 * **`PartLogs`** (`partLogs_of_shown_nil`, `partLogs_of_logLinks`, `partLogs_holo`): the algebra, opening and sparse
@@ -332,7 +332,7 @@ def PartsLinks (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T
 /-- **Part `s`'s links, or a collision the finders charge** (`PartsLinks` with `PartChecks`' fallback): at each
 accepted witness with true recorded calls, either some kind of part's links hold at every coins `xO` shows for part
 `s`, or two of the part's recorded calls collide (`findColl`), or one of them ties with an evaluation the setup makes at
-`xO` outside the oracle (`SetupColl`, which `Br` finds at the run: card f93bbff1). The registration ties (`v`, the zero
+`xO` outside the oracle (`SetupColl`, which `Br` finds at the run). The registration ties (`v`, the zero
 output rows, the levels' `coef`, `dirs` and top) are where a link can fail off a recorded collision. -/
 def PartsLinksOr (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)
     (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
