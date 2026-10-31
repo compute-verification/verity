@@ -49,6 +49,8 @@ import Definitions.Accounting.Assumptions.Parties
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Period
+import Definitions.Core.Assumptions.Transport
+import Definitions.Core.Guarantees.Transport
 import Definitions.NetworkCertifier.Guarantees.PooledLeak
 
 /-! Each component's named assumptions and guarantee statements. -/
