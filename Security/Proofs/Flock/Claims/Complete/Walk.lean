@@ -3,9 +3,10 @@ import Proofs.Flock.Claims.Complete.Custody
 import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.Complete.Files
 import Proofs.Flock.Claims.Complete.Link
-import Proofs.Flock.Claims.Complete.Replay
 import Proofs.Flock.Claims.Complete.Runs
 import Proofs.Flock.Claims.Complete.Shape
+import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
+import Proofs.Flock.Claims.Complete.Replay.ProverOk
 
 /-!
 # The session walk
