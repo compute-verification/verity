@@ -54,7 +54,7 @@ class Entry:
         return self.data == (hashlib.sha512(data).digest() if self.elided else bytes(data))
 
 
-class Transcript:
+class PartyLog:
     """One party's transcript: `append` only. With `path`, each entry is also appended to that file as it is made."""
 
     def __init__(self, party: str, path: str | os.PathLike | None = None, keep: int = KEEP) -> None:
@@ -99,9 +99,9 @@ class Transcript:
     def digest(self) -> bytes:
         return hashlib.sha512(self.to_bytes()).digest()
 
-    def public(self) -> Transcript:
+    def public(self) -> PartyLog:
         """The record's part of this transcript: its entries of the public kinds, numbered as here."""
-        out = Transcript(self.party)
+        out = PartyLog(self.party)
         out._entries = [e for e in self._entries if e.kind in PUBLIC]
         return out
 
@@ -109,7 +109,7 @@ class Transcript:
         return [e for e in self._entries if e.channel == channel]
 
     @classmethod
-    def of(cls, party: str, data: bytes) -> Transcript:
+    def of(cls, party: str, data: bytes) -> PartyLog:
         """The transcript `data` holds, parsed as adversarial: entries numbered from 0 without a gap."""
         out = cls(party)
         out._entries = [Entry.of(f) for f in frames(data, REGISTRY.max_head, REGISTRY.max_body)]
@@ -118,12 +118,12 @@ class Transcript:
         return out
 
     @classmethod
-    def read(cls, path: str | os.PathLike, party: str | None = None) -> Transcript:
+    def read(cls, path: str | os.PathLike, party: str | None = None) -> PartyLog:
         p = Path(path)
         return cls.of(party or p.name.split(".")[0], p.read_bytes())
 
 
-def record(transcripts: Mapping[str, Transcript]) -> bytes:
+def record(transcripts: Mapping[str, PartyLog]) -> bytes:
     """A run's record: for each party by name, a `party` entry naming it, then its transcript's public entries."""
     out = bytearray()
     for name in sorted(transcripts):
@@ -132,4 +132,4 @@ def record(transcripts: Mapping[str, Transcript]) -> bytes:
     return bytes(out)
 
 
-__all__ = ["DIRS", "ENTRY", "REGISTRY", "Entry", "Transcript", "record"]
+__all__ = ["DIRS", "ENTRY", "REGISTRY", "Entry", "PartyLog", "record"]
