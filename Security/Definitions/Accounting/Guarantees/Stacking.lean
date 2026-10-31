@@ -310,8 +310,8 @@ def StackedRequirementSketchDeployed : Prop :=
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
     (slot : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Fin N ↪ Fin T × Fin M)
     (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773)
-    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V) (ℓ : Requirement.Layout V)
-    (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
+    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V)
+    (ℓ : Requirement.Store.Placement V) (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
@@ -380,8 +380,8 @@ def StackedRequirementRelay : Prop :=
     [Fintype Ca] (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → Pous.Bits b)
     (choose : Ω → (a : Fin T) → ({c : Fin T // c < a} → Ca) → Ch) (slot : Fin N ↪ Fin T × Fin M)
     (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ)
-    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V) (ℓ : Requirement.Layout V)
-    (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
+    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V)
+    (ℓ : Requirement.Store.Placement V) (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 → 0 < E → 0 < Fc.bytes →
     Assumptions.KeyBinding T M δ enc →
     Assumptions.WorkHardness b rounds cRoot cost →
