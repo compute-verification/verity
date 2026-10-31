@@ -71,5 +71,5 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger",
   "Proofs.Properties.Core.Site", "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness",
-  "Proofs.Properties.Verity.Recursive", "Proofs.Properties.Verity.Recursive.Target",
-  "Proofs.Properties.Verity.Recursive.Refusals"]
+  "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive",
+  "Proofs.Properties.Verity.Recursive.Target", "Proofs.Properties.Verity.Recursive.Refusals"]
