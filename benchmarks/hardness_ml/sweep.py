@@ -197,6 +197,16 @@ def replan8():
     return cfgs
 
 
+def replan9():
+    """B ρ = 0.44 on an int8 R with D₁(R+Δ)D₂ along both width series: w384 at 180M (25.4 tokens per parameter), the
+    12.7 pair (w128 at 10M, w256 at 40M), and w256 80M at 4e-3, the baseline's best lr there."""
+    b = {"design": "B", "diag": True, "rho": 0.44, "r_dist": "int8"}
+    return [{**b, "name": "w128-Bd0.44-rint8-D10M-lr0.008", "size": "w128", "tokens": 10_000_000, "lr": 8e-3, "threads": 2},
+            {**b, "name": "w256-Bd0.44-rint8-D40M", "size": "w256", "tokens": 40_000_000, "lr": 2e-3, "threads": 4},
+            {**b, "name": "w256-Bd0.44-rint8-D80M-lr0.004", "size": "w256", "tokens": 80_000_000, "lr": 4e-3, "threads": 4},
+            {**b, "name": "w384-Bd0.44-rint8-D180M", "size": "w384", "tokens": 180_000_000, "lr": 2e-3, "threads": 12}]
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -207,6 +217,7 @@ PRESETS = {
     "replan6": replan6,
     "replan7": replan7,
     "replan8": replan8,
+    "replan9": replan9,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
