@@ -1,4 +1,4 @@
 order = 345
 path = "`theory/fold_wide3.c`"
 runs_on = "CPU"
-what = "FOLD-OPT's two-word case: whether a word is a word of a program of at most 2 instructions, and whether a program of at most 3 writes a pair as its last instruction's two words (IMAD.WIDE, IADD.64, IMNMX.64, or SEL.64 under any predicate), exhaustive at width 4 over `theory/fold_opt_fx.py`'s modelled ISA (`fold_opt_fx.py --wide3` builds and runs it, with its controls)"
+what = "`FoldOpt`'s two-word case: whether a word is a word of a program of at most 2 instructions, and whether a program of at most 3 writes a pair as its last instruction's two words (IMAD.WIDE, IADD.64, IMNMX.64, or SEL.64 under any predicate), exhaustive at width 4 over `theory/fold_opt_fx.py`'s modelled ISA (`fold_opt_fx.py --wide3` builds and runs it, with its controls)"
