@@ -244,6 +244,20 @@ def replan12():
             {**a, "name": "w256-A8-diag-D40M-lr0.008", "size": "w256", "tokens": 40_000_000, "lr": 8e-3, "threads": 4}]
 
 
+def replan13():
+    """B's lr optimum is still at the lowest lr run at w384 (B ρ = 0.25: 1.653, 1.624, 1.603 at 2e-3, 1e-3, 5e-4) and
+    at w256 for ρ = 0.44 (1.741, 1.719 at 2e-3, 1e-3), so one step lower; the w384 baseline's lr from below; and A 1/4
+    at w384 180M, beside its w256 80M point."""
+    b = {"design": "B", "tokens": 180_000_000, "size": "w384", "threads": 16}
+    d = {"design": "B", "diag": True, "rho": 0.44, "r_dist": "int8", "lr": 5e-4}
+    return [{**b, "name": "w384-B0.25-D180M-lr0.00025", "rho": 0.25, "lr": 2.5e-4},
+            {**b, **d, "name": "w384-Bd0.44-rint8-D180M-lr0.0005"},
+            {**d, "name": "w256-Bd0.44-rint8-D80M-lr0.0005", "size": "w256", "tokens": 80_000_000, "threads": 4},
+            {"name": "w384-base-D180M-lr0.001", "size": "w384", "tokens": 180_000_000, "lr": 1e-3, "threads": 12},
+            {"name": "w384-A4-diag-D180M-lr0.003", "size": "w384", "tokens": 180_000_000, "lr": 3e-3, "threads": 16,
+             "design": "A", "rank_frac": 1 / 4, "diag": True}]
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -258,6 +272,7 @@ PRESETS = {
     "replan10": replan10,
     "replan11": replan11,
     "replan12": replan12,
+    "replan13": replan13,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
