@@ -2,10 +2,11 @@
 Flock prover against a verifier that never sees the hidden statement or the prover's messages.
 
     python -m verity_flock.rec_live --listen 127.0.0.1:PORT --out DIR --schedule FILE [--draw FILE] [--sessions 1]
+        [--coin-tree (--tree-from HOST:PORT [--tree-secret-file F] | --tree-test-os)]
     python -m verity_flock.rec_live --schedule-for STATEMENT         a statement's schedule (flock-circuit statement's output)
     python -m verity_flock.rec_live --schedule-of PUBLIC_JSON        a record's schedule, to compare with the one it was held to
 
-The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=os``) speaks the live protocol (``live/src/lib.rs``) to
+The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=os``, or ``FC_COINS=tree`` with ``--coin-tree``) speaks the live protocol (``live/src/lib.rs``) to
 :class:`Proxy`, which runs on the prover's side. The proxy is the ZK server of the inner phase (live PROTOCOL.md §10.3): it
 answers what the live server would, except that every coin comes from :class:`CoinServer`, the verifier's side, which is shown
 only the session's public schedule and salted hashes:
@@ -55,6 +56,18 @@ points as round 0 of stream ``link``, each to `coin_message` under a fresh salt 
 commitments (``commitments``) stops a session whose coins do not open their commitment or come without an opening, and a
 proxy given none stops one whose coins come with an opening, as the contract decides under the public input's ``coins``.
 
+**The coin tree.** Under the challenger's coin tree (``--coin-tree``, `INNER_COIN_SPEC`; the prover under ``FC_COINS=tree``
+with ``FC_COIN_STREAMS`` naming the streams after the circuit's reps) the coin server takes each session's tree from its
+source (`TreeSource`): the challenger's device (``--tree-from``), which at ``Hello`` draws a nonce of its own, then the tree's
+key and every coin of the session (`verity.ml.commitments.coin_tree`), logs the tree and answers with the nonce, the root and
+the key, and opens each round only once given what the round answers (`link_after`, `round_after`), logging each opening;
+or, in tests alone, this host's generator (``--tree-test-os``, `OsTree`). The proxy answers the prover's ``Hello`` with the
+root and the key, checks each round's coins against the root before it hands them on (`coin_tree.check`; a coin that does
+not open stops the session), and hands on the coins alone, so the firewall's contract sees live coins without an opening.
+The prover's ``Hello`` must name the tree's spec (its own nonce is not the session's); the session record's ``Hello`` is the
+pinned one with Σ and the coins with the challenger's nonce, and its ``coin_tree`` the key, nonce, root and spec
+(`Flock.CoinTree.checkHello`, ``checkRecord``).
+
 **The sample.** ``Register`` is answered with the verifier's sample (``--draw``, `full_draw`: the stratified law at K = the
 population over the verifier's own program and partition object, so every stratum samples all its units), or ``null``
 without one; the session record keeps it as ``unit_draw``. The prover then proves the sampled proof blocks' statement, the
@@ -90,7 +103,9 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
+from verity.ml.commitments import coin_tree as CT
 from verity.ml.commitments import hm96
 
 from .rec_algebra import fast100
@@ -132,6 +147,11 @@ TABLE, REPS, LINK_POINTS, PT_LOCAL = "circuit", 2, 2, 24
 STACKED = "stacked"
 #: candidate 3's sparse phase, a stream a rep (`sparse_rounds`), each its rep's child at the rep's end
 SPARSE = "sparse"
+#: the inner session's coin tree (`RecVStar.innerCoinSpec`): the session's stream, every stream a schedule may open
+#: (`schedule_for`), at ``flock-circuit``'s rounds and block; the prover names it with ``FC_COINS=tree`` and
+#: ``FC_COIN_STREAMS`` set to the streams after the circuit's reps
+INNER_COIN_SPEC = CT.Spec((CT.SESSION, *(f"{TABLE}/rep{r}" for r in range(REPS)), *(f"{SPARSE}/rep{r}" for r in range(REPS)),
+                           f"{STACKED}/rep0"), 9, 512)
 
 
 # --- wire codec (live/src/lib.rs `Req`, `Resp`) -------------------------------------------------------------------------------
@@ -608,12 +628,81 @@ def on_schedule(record: dict, schedule: dict) -> None:
 
 # --- the verifier's side ----------------------------------------------------------------------------------------------------------
 
-class CoinServer:
-    """The verifier's coin server: public data in, coins out, every exchange recorded (``record``). ``rand(n)`` returns n
-    bytes (default the operating system's generator)."""
+class TreeSource(Protocol):
+    """Where the coin server takes a session's coin tree from: the challenger's device (``--tree-from``,
+    `verity.core.protocols.sampled_proofs.remote.RemoteChallenger`), or in tests `OsTree`. ``tree`` draws a tree of spec
+    ``spec`` (its JSON) under ``nonce`` (None: the source draws it) and returns its nonce, root and key; ``tree_open`` opens
+    the first ``n`` coins of round ``rnd`` of stream ``stream`` of the tree under ``root``, once given ``after`` (64 bytes:
+    what the round answers), and returns the coins and their opening words. Each stream's rounds open in order, each once.
+    ``close`` ends the source's session, which the device then signs."""
+
+    def tree(self, spec: dict, nonce: bytes | None = None) -> tuple[bytes, bytes, bytes]: ...
+
+    def tree_open(self, root: bytes, stream: str, rnd: int, n: int, after: bytes) -> tuple[list[int], list[int]]: ...
+
+    def close(self) -> None: ...
+
+
+class OsTree:
+    """A `TreeSource` that draws on this host from ``rand`` (default the operating system's generator), for tests alone
+    (``--tree-test-os``): its coins are this host's, not the challenger's. It refuses what the device refuses: a round out
+    of its stream's order or opened twice, more than a block of coins, and an ``after`` other than 64 bytes."""
 
     def __init__(self, rand: Callable[[int], bytes] = os.urandom):
         self.rand = rand
+        self.trees: dict[bytes, CT.CoinTree] = {}
+        self.opened: dict[tuple[bytes, str], int] = {}
+
+    def tree(self, spec: dict, nonce: bytes | None = None) -> tuple[bytes, bytes, bytes]:
+        t = CT.CoinTree.sample(CT.Spec.of_json(spec), self.rand(CT.NONCE_BYTES) if nonce is None else nonce, self.rand)
+        self.trees[t.root()] = t
+        return t.nonce, t.root(), t.key
+
+    def tree_open(self, root: bytes, stream: str, rnd: int, n: int, after: bytes) -> tuple[list[int], list[int]]:
+        t = self.trees.get(root)
+        if t is None or stream not in t.spec.streams:
+            raise ValueError(f"no coin tree drawn under that root has a stream {stream!r}")
+        if rnd != self.opened.get((root, stream), 0) or not 0 <= n <= t.spec.block or len(after) != 64:
+            raise ValueError(f"{stream} round {rnd}: not the stream's next round, more than a block, or not after 64 bytes")
+        self.opened[(root, stream)] = rnd + 1
+        return t.open(t.spec.streams.index(stream), rnd, n)
+
+    def close(self) -> None:
+        pass
+
+
+def link_after(roots: dict[str, list[bytes]]) -> bytes:
+    """What the link points are opened after: the SHA-512 of ``Commit``'s salted tops as the coin server records them
+    (``link.roots``, `canonical`)."""
+    return hashlib.sha512(canonical({t: [b.hex() for b in bcs] for t, bcs in sorted(roots.items())}).encode()).digest()
+
+
+def round_after(entry: dict) -> bytes:
+    """What a round's coins are opened after: the SHA-512 of the coin server's record of the round (``rounds``' entry,
+    `canonical`) without its coins."""
+    return hashlib.sha512(canonical({k: v for k, v in entry.items() if k != "coins"}).encode()).digest()
+
+
+class CoinServer:
+    """The verifier's coin server: public data in, coins out, every exchange recorded (``record``). ``rand(n)`` returns n
+    bytes (default the operating system's generator). ``tree``: the session's coin tree (`coin_tree.Spec`), from
+    ``source`` (`TreeSource`): at ``Hello`` the source draws the tree under a nonce of its own, and the coin server answers
+    with the nonce and ``Hello``'s answer (the root and the key); each round's coins are then the tree's, opened after what
+    the round answers (`link_after`, `round_after`) and sent with their opening (``tree_openings``). The nonce is the
+    challenger's, not the prover's: the ZK server shows the challenger the schedule's ``Hello`` alone
+    (`Flock.Firewall.Contract`)."""
+
+    def __init__(self, rand: Callable[[int], bytes] = os.urandom, tree: CT.Spec | None = None,
+                 source: TreeSource | None = None):
+        if tree is not None and source is None:
+            raise ValueError("a coin tree is the challenger's: the coin server takes it from a source (--tree-from)")
+        self.rand = rand
+        self.tree_spec = tree
+        self.source = source
+        #: the session record's ``coin_tree`` (key, nonce, root and spec) of the tree sampled at Hello
+        self.tree_record: dict | None = None
+        #: the opening words sent with each round's coins under the coin tree, by (stream, round)
+        self.tree_openings: dict[tuple[str, int], list[int]] = {}
         self.hello: dict | None = None
         self.link: dict | None = None
         self.streams: dict[str, dict] = {}
@@ -642,6 +731,8 @@ class CoinServer:
         schedule's i-th) gets no commitment."""
         if self.committed is not None or self.hello is not None:
             raise ValueError("the challenger commits to its coins once, before Hello")
+        if self.tree_spec is not None:
+            raise ValueError("the coin tree commits to the session's coins at Hello")
         link = check_schedule(schedule)["hello"]["link"]
         plan = [(LINK_COINS, 0, link["points"] * link["m"])] + [(r["stream"], r["k"], r["n"]) for r in schedule["rounds"]]
         self.committed, out = {}, {}
@@ -662,9 +753,16 @@ class CoinServer:
             openings.setdefault(s, []).append(y.hex())
         return {"kind": COINS_KIND, "coins": self.commitments, "openings": openings}
 
-    def _draw(self, stream: str, k: int, n: int) -> list[int]:
-        """Round ``k`` of ``stream``'s ``n`` coins: the committed ones with their opening, or live ones if nothing was
-        committed."""
+    def _draw(self, stream: str, k: int, n: int, after: bytes) -> list[int]:
+        """Round ``k`` of ``stream``'s ``n`` coins: the coin tree's, opened after ``after``, or the committed ones, with their
+        opening, or live ones if nothing was committed."""
+        if self.tree_spec is not None:
+            name = CT.SESSION if stream == LINK_COINS else stream
+            if self.tree_record is None or name not in self.tree_spec.streams or (stream, k) in self.tree_openings:
+                raise ValueError(f"{stream} round {k}: before Hello, outside the coin tree, or opened twice")
+            coins, words = self.source.tree_open(bytes.fromhex(self.tree_record["root"]), name, k, n, after)
+            self.tree_openings[(stream, k)] = words
+            return coins
         if self.committed is None:
             return self._coins(n)
         got = self.committed.get((stream, k))
@@ -673,12 +771,18 @@ class CoinServer:
         self.openings[(stream, k)] = got[1]
         return list(got[0])
 
-    def start(self, hello: dict) -> None:
+    def start(self, hello: dict) -> tuple[bytes, list[int]] | None:
+        """``Hello``; under the coin tree, its nonce and ``Hello``'s answer (`coin_tree.CoinTree.answer_words`)."""
         if self.hello is not None:
             raise ValueError("a second Hello")
         if "sigma" in hello.get("link", {}):
             raise ValueError("the coin server is never shown Σ")
         self.hello = hello
+        if self.tree_spec is None:
+            return None
+        nonce, root, key = self.source.tree(self.tree_spec.to_json())
+        self.tree_record = {"key": key.hex(), "nonce": nonce.hex(), "root": root.hex(), "spec": self.tree_spec.to_json()}
+        return nonce, CT.words(root) + CT.words(key)
 
     def commit(self, roots: dict[str, list[bytes]]) -> list[int]:
         """Each table's level-0 top as its salted commitment (`commit_top`: a ``b || c`` a node) in; the link points out
@@ -686,7 +790,7 @@ class CoinServer:
         if self.hello is None or self.link is not None:
             raise ValueError("the link points are drawn once, after Hello")
         spec = self.hello["link"]
-        pts = self._draw(LINK_COINS, 0, spec["points"] * spec["m"])
+        pts = self._draw(LINK_COINS, 0, spec["points"] * spec["m"], link_after(roots))
         self.link = {"roots": {t: [b.hex() for b in bcs] for t, bcs in sorted(roots.items())}, "points": [f128_hex(c) for c in pts],
                      "y": None}
         return pts
@@ -709,9 +813,10 @@ class CoinServer:
         st = self.streams.get(stream)
         if st is None:
             raise ValueError(f"a round on stream {stream}, never opened")
-        coins = self._draw(stream, st["rounds"], n)
-        self.rounds.append({"stream": stream, "k": st["rounds"], "tops": [[b.hex() for b in t] for t in tops], "level0": level0,
-                            "commits": [c.hex() for c in commits], "n": n, "coins": [f128_hex(c) for c in coins]})
+        entry = {"stream": stream, "k": st["rounds"], "tops": [[b.hex() for b in t] for t in tops], "level0": level0,
+                 "commits": [c.hex() for c in commits], "n": n}
+        coins = self._draw(stream, st["rounds"], n, round_after(entry))
+        self.rounds.append({**entry, "coins": [f128_hex(c) for c in coins]})
         st["rounds"] += 1
         return coins
 
@@ -802,6 +907,11 @@ class Proxy:
         self.private: list[dict] = []
         self.stopped: str | None = None
         self.verdict: dict | None = None
+        #: under the challenger's coin tree (``coins.tree_spec``): its spec, and from ``Hello``'s answer its rules (the
+        #: challenger's nonce, the session key) and root, against which every round's coins are checked (`coin_tree.check`)
+        self.tree_spec: CT.Spec | None = coins.tree_spec
+        self.tree_rules: CT.Rules | None = None
+        self.tree_root: bytes | None = None
         #: the statement digest the circuit reps' binding rounds absorbed, which every other binding round must absorb too
         self.statement_digest: bytes | None = None
         #: the private circuit's registration, the digest META binds (``bound``), and by table the opening of its
@@ -843,8 +953,20 @@ class Proxy:
             raise ValueError(refused(f"{what}: {canonical(got)} where the pinned schedule has {canonical(want)}"))
 
     def _opened(self, stream: str, k: int, coins: list[int]) -> None:
-        """Round ``k`` of ``stream``'s coins open the challenger's commitment to them under the salt sent with them; live
-        coins (no commitments) come with no opening."""
+        """Round ``k`` of ``stream``'s coins open the challenger's commitment to them: under the coin tree, the opening sent
+        with them (`coin_tree.check`), else the salt sent with them; live coins (no commitments) come with no opening."""
+        if self.tree_spec is not None:
+            w = self.coins.tree_openings.get((stream, k))
+            if w is None:
+                raise ValueError(refused(f"{stream} round {k}: coins without their opening of the challenger's coin tree"))
+            name = CT.SESSION if stream == LINK_COINS else stream
+            try:
+                got = CT.check(self.tree_spec, self.tree_rules, self.tree_root, self.tree_spec.streams.index(name), k, len(coins), w)
+            except ValueError as e:
+                raise ValueError(refused(str(e))) from None
+            if got != coins:
+                raise ValueError(refused(f"{stream} round {k}: coins other than the ones the challenger's coin tree opens"))
+            return
         y = self.coins.openings.get((stream, k))
         if not self.commitments:
             if y is not None:
@@ -893,15 +1015,28 @@ class Proxy:
             v = json.loads(r[1])
             if not isinstance(v, dict) or not isinstance(v.get("link"), dict) or not isinstance(v["link"].get("sigma"), str):
                 raise ValueError(refused("Hello: not an object whose link names Σ"))
-            if "coins" in v:
-                raise ValueError("the inner session runs on live OS coins (FC_COINS=os): no seed, no coin tree")
-            pub = {**v, "link": {k: x for k, x in v["link"].items() if k != "sigma"}}
+            if self.tree_spec is None and "coins" in v:
+                raise ValueError("the inner session runs on the challenger's live coins: no seed, no coin tree")
+            if self.tree_spec is not None:
+                c = v.get("coins")
+                if not isinstance(c, dict) or {k: x for k, x in c.items() if k != "nonce"} != self.tree_spec.to_json():
+                    raise ValueError(refused(f"Hello: coins {canonical(c)} where the challenger's coin tree is "
+                                             f"{canonical(self.tree_spec.to_json())}"))
+            pub = {**{k: x for k, x in v.items() if k != "coins"}, "link": {k: x for k, x in v["link"].items() if k != "sigma"}}
             want = self.schedule["hello"]
             self._pinned("Hello", pub, want)
             # the coin server records the schedule's Hello, never the prover's spelling of it
             self.hello, self.hello_v = r[1], {**json.loads(canonical(want)), "link": {**want["link"], "sigma": v["link"]["sigma"]}}
-            self.coins.start(json.loads(canonical(want)))
-            return resp_ok()
+            ans = self.coins.start(json.loads(canonical(want)))
+            if self.tree_spec is None:
+                return resp_ok()
+            # the session's Hello of record names the challenger's nonce, which keys its tree: the prover's own is not the
+            # session's
+            nonce, words = ans
+            root, key = CT.answer_of(words)
+            self.tree_rules, self.tree_root = CT.Rules(nonce, key), root
+            self.hello = canonical({**self.hello_v, "coins": {**self.tree_spec.to_json(), "nonce": nonce.hex()}})
+            return resp_coins(words)
         if t == REQ_COMMIT:
             # refused here, never by the coin server: a call it refuses would reach the auditor
             if self.hello is None or self.commit is not None:
@@ -1029,7 +1164,10 @@ class Proxy:
         return {"kind": SESSION_KIND, "hello": self.hello, "link": link, "link_mode": "exchange",
                 "config": {"profile": h["profile"], "reps": h["reps"], "flavor": h["flavor"], "require_link": True, "prime_live": False,
                            "tables": [{"name": t, "binding": "R1cs (rec proxy: the statement digest is the prover's)"} for t in h["tables"]]},
-                "unit_draw": self.draw, "aborted": None, "verdict": self.verdict, "streams": streams, "prime": None, "coin_tree": None,
+                "unit_draw": self.draw, "aborted": None, "verdict": self.verdict, "streams": streams, "prime": None,
+                "coin_tree": None if self.tree_spec is None else
+                {"key": self.tree_rules.key.hex(), "nonce": self.tree_rules.nonce.hex(), "root": self.tree_root.hex(),
+                 "spec": self.tree_spec.to_json()},
                 "coin_seed": None, "link_sha512": _dg(lb),
                 "proof_sha512": [{"stream": f"{t}/rep{r}", "bytes": len(b), "sha512": _dg(b)} for (t, r), b in sorted(self.proofs.items())]}
 
@@ -1056,15 +1194,27 @@ class Proxy:
         return sess
 
 
+def write_stopped(d: Path, coins: CoinServer) -> None:
+    """A stopped session's directory: the coin server's record, ``public.json``, and its coin tree's record,
+    ``coin_tree.json``, when it has one."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "public.json").write_text(record_bytes(coins.record()))
+    # the challenger logged this tree; an audit refuses a logged tree no session reports
+    if coins.tree_record is not None:
+        (d / "coin_tree.json").write_text(json.dumps(coins.tree_record, indent=1, sort_keys=True))
+
+
 def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
           sessions: int = 1, done: Callable[[dict], None] | None = None, *, schedule: dict, firewall=None,
           parts: list[str] | None = None, stream: str = "rec", budget: int | None = None, release: dict | None = None,
-          now_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000, draw: dict | None = None) -> list[dict]:
+          now_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000, draw: dict | None = None,
+          tree: CT.Spec | None = None, source: TreeSource | None = None) -> list[dict]:
     """Accept connections on ``listen`` until ``sessions`` of them have each carried a session, one connection each (several:
     a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
     return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
     (`Proxy.write`); one that stops (a refusal, or a connection that ends without ``Finish``: closed, reset, or cut inside a
-    frame) has only the coin server's record, ``public.json``, and counts as one of the ``sessions``. Each session's coins
+    frame) has only the coin server's record, ``public.json``, and its coin tree's record, ``coin_tree.json``, when it has
+    one, and counts as one of the ``sessions``. Without ``tree`` each session's coins
     are live: the challenger commits to none. ``ready`` is called with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
     ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
@@ -1076,7 +1226,8 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     connection was accepted, so that no release time depends on how long the inner session took. A recursive session the
     ZK server cannot open as given (other than `Refused`: the caller's fault, such as a schedule for other statements)
     closes the connection unserved, and ``serve`` raises. ``draw``: the verifier's sample every session's ``Register`` is
-    answered with (`Proxy`)."""
+    answered with (`Proxy`). ``tree``: each session's coins are the challenger's coin tree of that spec, drawn by
+    ``source`` at its ``Hello`` (`CoinServer`)."""
     host, port = listen.rsplit(":", 1)
     res: list[dict] = []
     if firewall is not None and parts is None:
@@ -1106,7 +1257,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 except BaseException:
                     conn.close()
                     raise
-            proxy = Proxy(CoinServer(rand), schedule=schedule, draw=draw)
+            proxy = Proxy(CoinServer(rand, tree, source), schedule=schedule, draw=draw)
             try:
                 with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
                     while (req := read_frame(rf)) is not None:
@@ -1123,8 +1274,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
             d = Path(out) / f"s{len(res)}" if sessions > 1 else Path(out)
             if proxy.stopped is not None:
-                d.mkdir(parents=True, exist_ok=True)
-                (d / "public.json").write_text(record_bytes(proxy.coins.record()))
+                write_stopped(d, proxy.coins)
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
                 if firewall is not None:
                     firewall.stop(sid, "inner", proxy.stopped)
@@ -1143,6 +1293,36 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             if done:
                 done(res[-1])
     return res
+
+
+def add_tree_args(ap) -> None:
+    """The coin tree's flags (``--coin-tree`` and where its trees come from), for `tree_source`."""
+    ap.add_argument("--coin-tree", action="store_true",
+                    help="each session's coins the challenger's coin tree (INNER_COIN_SPEC), drawn at its Hello by --tree-from "
+                         "(or, in tests, --tree-test-os): the prover runs under FC_COINS=tree")
+    ap.add_argument("--tree-from", metavar="HOST:PORT",
+                    help="the challenger's session at HOST:PORT, which draws each session's coin tree and opens each round "
+                         "after what it answers, logging both in its signed release log (remote.RemoteChallenger)")
+    ap.add_argument("--tree-secret-file", metavar="FILE", help="with --tree-from: the challenger session's secret, in hex")
+    ap.add_argument("--tree-test-os", action="store_true",
+                    help="tests only: each coin tree drawn on this host from the OS's generator (OsTree), so its coins are "
+                         "this host's, not the challenger's")
+
+
+def tree_source(ap, a) -> TreeSource | None:
+    """The source `add_tree_args`' flags name (None without ``--coin-tree``); the caller closes it."""
+    if a.coin_tree and (a.tree_from is None) == (not a.tree_test_os):
+        ap.error("--coin-tree takes its trees from the challenger (--tree-from HOST:PORT) or, in tests, this host "
+                 "(--tree-test-os)")
+    if not a.coin_tree and (a.tree_from or a.tree_test_os):
+        ap.error("--tree-from and --tree-test-os name where --coin-tree's trees come from")
+    if a.tree_secret_file and not a.tree_from:
+        ap.error("--tree-secret-file is --tree-from's")
+    if a.tree_from:
+        from verity.core.protocols.sampled_proofs import remote
+        secret = bytes.fromhex(Path(a.tree_secret_file).read_text().strip()) if a.tree_secret_file else None
+        return remote.RemoteChallenger.connect(a.tree_from, secret)
+    return OsTree() if a.tree_test_os else None
 
 
 def main(argv=None) -> int:
@@ -1169,6 +1349,7 @@ def main(argv=None) -> int:
     ap.add_argument("--release-windows-ms", metavar="W0,W1,...",
                     help="the release schedule's public window a statement, in ms: statement j leaves at the connection's time "
                          "plus W0 + ... + Wj (--firewall)")
+    add_tree_args(ap)
     a = ap.parse_args(argv)
     if a.schedule_for:
         sparse = None
@@ -1191,10 +1372,17 @@ def main(argv=None) -> int:
     if a.firewall:
         from .firewall import Firewall
         fw = Firewall(Path(a.firewall))
-    serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
-          done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True), schedule=json.loads(Path(a.schedule).read_text()),
-          firewall=fw, parts=None if a.parts is None else a.parts.split(","), stream=a.stream, budget=a.budget, release=release,
-          draw=json.loads(Path(a.draw).read_text()) if a.draw else None)
+    source = tree_source(ap, a)
+    try:
+        serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
+              done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True),
+              schedule=json.loads(Path(a.schedule).read_text()), firewall=fw,
+              parts=None if a.parts is None else a.parts.split(","), stream=a.stream, budget=a.budget, release=release,
+              draw=json.loads(Path(a.draw).read_text()) if a.draw else None, tree=INNER_COIN_SPEC if a.coin_tree else None,
+              source=source)
+    finally:
+        if source is not None:
+            source.close()
     sys.stdout.flush()
     return 0
 
