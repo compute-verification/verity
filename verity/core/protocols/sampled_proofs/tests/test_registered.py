@@ -46,7 +46,7 @@ SEEDED = bind(CompositeDefinition(
 #: the verifier's sources of each seed group's roots: the served port x's root and W's registered root
 SUPPLIED = {"pouw.roots": [[{"port": "x"}, {"value": "W"}], [{"value": "W"}, {"port": "x"}]]}
 #: `supplied_salts("ab" * 64, "pouw.roots", 2)`' row 1, its first 32 bytes
-SUPPLIED_SALT_1 = "09c18346b8d4a7e4a3f0cf7eb02a7460033e89c2e5733eaa24b2b2b53f036839"
+SUPPLIED_SALT_1 = "95efb95ff108c49d1fac7d5f65d112446bf004701d688364ab226995805a68dc"
 
 
 def _digest(bits: int) -> Array:
@@ -771,8 +771,8 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
             G.bytes_leaves(*bad)
     salts = G.supplied_salts("ab" * 64, "pouw.roots", 2)
     assert salts[1][:32].hex() == SUPPLIED_SALT_1
-    assert salts[1] == hashlib.shake_256(b"verity/one-stage/supplied-salt/v0\0" + b"ab" * 64 + b"\0pouw.roots\0"
-                                         + (1).to_bytes(4, "little")).digest(192)
+    head = b"verity/one-stage/supplied-salt/v1\0" + b"ab" * 64 + b"\0pouw.roots\0" + (1).to_bytes(4, "little")
+    assert salts[1] == b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(3))
     for bits in (32, 1):
         rec, check, w, roots = _seeded_case(bits)
         x, wr = bytes.fromhex("ab" * 64), w.root
