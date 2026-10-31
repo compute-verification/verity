@@ -32,6 +32,7 @@
   "Proofs.Properties.CertifierNetwork.Runs",
   "Proofs.Properties.Identity",
   "Proofs.Properties.Evaluate",
+  "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.NetworkScan",
@@ -66,6 +67,8 @@
   "Proofs.Properties.Composition",
   "Proofs.Properties.Challenger",
   "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Pous.WipeSigned"
  ],
  "exempt": {

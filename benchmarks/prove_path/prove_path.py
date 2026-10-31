@@ -76,7 +76,7 @@ Two kinds of committed run:
   and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest is a single-GPU window's I2's (`I2Compiler.digest`) over
-  the tree's code (`source_identity.code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
+  the tree's code (`code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
   tree whose two are the server's; over what the compile reads of ``serve.json`` (its model, revision and that pin's config,
   target, execution and default seed), so the audit runs on the serve.json it was registered under; over ℓ and the transfer
   gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
@@ -117,8 +117,13 @@ Two kinds of committed run:
   root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
-  any other's reads are free; a stand-in scan state a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
-  class's, a function of the class alone, so the verifier's own ``window-circuit`` record is the circuit it holds it to.
+  any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
+  (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
+  only, for the network certifier's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
+  the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
+  the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
+  records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
+  verifier's own ``window-circuit`` record is the circuit it holds it to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -148,6 +153,7 @@ import argparse
 import contextlib
 import functools
 import hashlib
+import importlib
 import json
 import multiprocessing
 import os
@@ -168,16 +174,13 @@ from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registra
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.ml.windows import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
+from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
-CAPPED = "verity/prove-path/capped-compiler/v0"
 I2 = "verity/prove-path/i2-compile-steps/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a TP Commit's few hundred requests (I1 spends tens of
-#: bits a row)
-CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
 LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
@@ -194,33 +197,6 @@ PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_inte
 
 
 @dataclass(frozen=True)
-class Capped:
-    """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` and ``transfer_gates`` are the inner
-    compiler's."""
-
-    inner: Any
-    cap_bits: int = CAP_BITS
-    name: str = CAPPED
-
-    def __post_init__(self) -> None:
-        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8:
-            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
-
-    @property
-    def digest(self) -> str:
-        return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
-                                              "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
-
-    @property
-    def transfer_gates(self) -> tuple[str, ...]:
-        return tuple(getattr(self.inner, "transfer_gates", ()))
-
-    def load(self, rank: int, world: int, requests: Any) -> Any:
-        return self.inner.load(rank, world, requests)
-
-
-@dataclass(frozen=True)
 class I2Compiler:
     """I2 (`predict.steps.compile_steps`) as a single-GPU window's compiler: the requests and their Programs are the ones I2
     compiles from the advice and each request's body by its I1 id (``ingress``; I2's prompts and sampling are values the request
@@ -233,10 +209,10 @@ class I2Compiler:
     (``own``, `own_builds`) and the prover's reads its row dir's. ``transfer_gates`` are the templates it lists as holding
     transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own. Its digest, a single-GPU
     window's and a served one's alike, names its name, its code (``code``: a single-GPU window's I2 runs this tree's,
-    `code_identity`, ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored build outputs don't move it; a
-    served window's, the server's registered compiler, `served_identity`), everything ``registered`` holds that I2 reads (φ:
-    the model, its revision and config, the target and the execution; the default seed; ℓ; the served model name, where it
-    names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
+    `code_identity`; a served window's, the server's registered compiler, `served_identity`; both the verifier's
+    `interface.compiler_digest` over the integration's import closure as git lists it), everything ``registered`` holds
+    that I2 reads (φ: the model, its revision and config, the target and the execution; the default seed; ℓ; the served
+    model name, where it names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
     from the one its advice was registered under names another compiler."""
 
     registered: Any
@@ -323,29 +299,10 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
         write_build(have[dg], program, named)
 
 
-#: the two packages a predicted Program is built from (`score.code_version`'s), by repository path
-CODE_DIRS = ("verity", "integrations/vllm/verity_vllm")
-
-
-@functools.lru_cache(maxsize=1)
 def code_identity() -> str:
-    """The code the compiler runs, once per process: every file git lists under `CODE_DIRS` (tracked, or untracked and not
-    ignored, so a node's build outputs, ``.lake`` under ``verity/``, don't count; docs, ``*.md``, compute nothing), by path and
-    content. Refused where the tree isn't a git work tree: a listing without git's ignore rules is another identity."""
-    import subprocess
-
-    import verity_vllm
-
-    root = Path(verity_vllm.__file__).resolve().parents[3]
-    p = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *CODE_DIRS], cwd=root,
-                       capture_output=True)
-    if p.returncode != 0:
-        raise ValueError(f"the compiler's code identity reads the tree's git listing, and {root} has none: "
-                         f"{p.stderr.decode(errors='replace').strip()[:200]}")
-    h = hashlib.sha256()
-    for rel in sorted({f for f in p.stdout.decode().split("\0") if f and not f.endswith(".md") and (root / f).is_file()}):
-        h.update(rel.encode() + b"\0" + hashlib.sha256((root / rel).read_bytes()).digest())
-    return h.hexdigest()
+    """The code a single-GPU window's I2 runs: the served compiler's digest (`served_identity`), so a single-GPU window's
+    I2 and a served one's name their code by one formula, the verifier's `interface.compiler_digest`."""
+    return served_identity()[1]
 
 
 def bodies_by_digest(programs_root: str) -> dict[str, str]:
@@ -604,11 +561,11 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
 @functools.lru_cache(maxsize=1)
 def served_identity() -> tuple[str, str]:
     """The code a served window's compiler runs, as `verity-vllm advice` names it (``pipeline.advice``'s
-    ``registered_compiler``): compile_steps by its module path, its digest over the tree's code identity
-    (`source_identity.code_identity`: ``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
+    ``registered_compiler``): compile_steps by its module path, its digest the verifier's `interface.compiler_digest` over
+    the integration's import closure (``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
     window's I2 is that name, with this digest as its code (`i2_of_serve`)."""
     try:
-        from verity_vllm.pipeline import advice as ADV
+        ADV = importlib.import_module("verity_vllm.pipeline.advice")
     except ImportError:
         raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), "
                          "which this tree lacks") from None
@@ -1317,16 +1274,151 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
+@contextlib.contextmanager
+def network_traces() -> Iterator[None]:
+    """``benchmarks/network_traces``' modules importable inside, then ``sys.path`` and the module ``replay`` as they were:
+    its ``replay``, which its ``active_replay`` imports, isn't one_stage's, which ``a5`` imports."""
+    path, replay = list(sys.path), sys.modules.pop("replay", None)
+    sys.path.insert(0, str(HERE.parent / "network_traces"))
+    try:
+        yield
+    finally:
+        sys.path[:] = path
+        sys.modules.pop("replay", None)
+        if replay is not None:
+            sys.modules["replay"] = replay
+
+
+def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[list[int]], list[str | None]] | None:
+    """The network certifier's scan of its run the certifier front kept under ``serve_dir``
+    (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
+    state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
+    None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
+    buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
+    certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
+    None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
+    from verity.core.protocols.certifier import warden_rows as WRW
+    from verity_vllm.program.predict import scan_state as SS
+
+    with network_traces():
+        import certifier_piece as CP
+        import warden_chain as WCH
+        import warden_serve as WSV
+
+    if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
+        return None
+    unpacked = None
+    try:
+        run = CP.kept_run(serve_dir)
+        unpacked, kept = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
+        _, params = WCH.deployment(kept)
+        io = WCH.io(kept)
+        records = WSV.read_records(WCH.witness(kept), params)
+    except (SystemExit, CP.NotRun) as e:
+        raise ValueError(f"the certifier front's kept run: {e}") from None
+    finally:
+        if unpacked is not None:
+            CP.rm(unpacked)
+    T = params.window
+    cls.scan.serves(params)
+    if T != cls.buckets:
+        raise ValueError(f"the kept run's link-windows are {T} buckets, not a window of class {cls}'s "
+                         f"{cls.buckets}: serve at the class's scan schedule")
+    if not io["accepted"]:
+        raise ValueError(f"the kept run's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
+    by = {r["user"]: r for r in io["records"]}
+    if missing := [u for u in users if u not in by]:
+        raise ValueError(f"{len(missing)} of the window's {len(users)} requests are no certified request: the window "
+                         "served traffic the network certifier didn't see")
+    if None in (release := [by[u]["release"] for u in users]):
+        raise ValueError("a request of the window has no END in the kept run's ingress")
+    windows = sorted(r.window for r in records[WSV.INGRESS])
+    if windows != list(range(len(windows))):
+        raise ValueError(f"the kept run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
+    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
+    outputs = {r["stream"]: r["output"] for r in io["records"]}
+    anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
+    at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
+    if len(at) != 1 or None in at:
+        raise ValueError(f"the window's requests start in the scan's link-windows {sorted(map(str, at))}, not one")
+    (w,) = at
+    rows, starts = SS.scan_state(cls, ingress, outputs, w * T)
+    user = {r["stream"]: r["user"] for r in io["records"]}
+    if bad := [q for q in starts if q is not None and q not in user]:
+        raise ValueError(f"the scan starts connections {bad[:4]}, whose requests the kept run's certified I/O doesn't hold")
+    return rows, [None if q is None else user[q] for q in starts]
+
+
+def scan_state_opening(value: Any, out: Path) -> Path:
+    """The window's `SCAN_STATE` value ``value`` (`window_rows.state_value`'s) opened whole for the network certifier's
+    scan, which reads it as its state tree (``scan_zk.py --v3c``): ``out``/`scan_zk.SCAN_STATE_FILE`, prover only,
+    every row (u16 little-endian) and then every salt. The window's ``v<j>-private.bin`` holds only the rows its members
+    read."""
+    import numpy as np
+
+    with network_traces():
+        from scan_zk import SCAN_STATE_FILE
+    at, path = np.arange(value.leaves), out / SCAN_STATE_FILE
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        os.fchmod(f.fileno(), 0o600)
+        f.write(np.ascontiguousarray(RW.value_rows(value, at), dtype="<u2").tobytes() + RW.value_salts(value, at))
+    return path
+
+
+def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[str, Any]],
+                scan: tuple[Sequence[str | None], Sequence[tuple[Sequence[int], Sequence[int]]]] | None = None,
+                ) -> list[tuple[str | None, list[int], int]]:
+    """Each slot of a window of class ``cls`` serving the requests of I1 ids ``served``, whose bodies ``ingress`` holds:
+    its request (None for an empty slot), its row (occupancy, prompt length, ids) and its ``max_tokens``. Without a
+    scan, slot k holds the k-th served request, its row its prompt's. With one, ``scan`` is the scan's starts
+    (`kept_scan`'s) and each slot's row and head (`window_rows.scan_slots`'s): slot k holds the request the scan starts
+    there, its row and ``max_tokens`` the scan's. Refused where the scan starts one request in two slots, a served
+    request in none, or a request that wasn't served, and where a slot's prompt or ``max_tokens`` isn't its served
+    request's."""
+    if scan is None:
+        placed, heads = [served[k] if k < len(served) else None for k in range(cls.slots)], None
+    else:
+        placed, heads = list(scan[0]), scan[1]
+        named = [s for s in placed if s is not None]
+        if len(set(named)) != len(named):
+            raise ValueError("the scan starts one request in two slots of the window")
+        if unplaced := set(served) - set(named):
+            raise ValueError(f"{len(unplaced)} of the window's {len(set(served))} served requests start in none of its "
+                             "slots: the scan anchors them in another window")
+        if extra := sorted(set(named) - set(served)):
+            raise ValueError(f"the scan starts certified requests in the window that it didn't serve: {extra[:4]}")
+    out = []
+    for k, u in enumerate(placed):
+        row, max_tokens = [0] * (cls.prompt + 2), 0
+        if heads is not None:
+            row, max_tokens = list(heads[k][0]), int(heads[k][1][1])
+        if u is not None:
+            body = ingress[u]
+            ids = [int(x) for x in body["prompt"]]
+            want = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
+            if heads is None:
+                row, max_tokens = want, int(body["max_tokens"])
+            elif row[:len(ids) + 2] != want[:len(ids) + 2] or max_tokens != int(body["max_tokens"]):
+                raise ValueError(f"slot {k}: the scan's request isn't the served one: its prompt or max_tokens differ")
+        out.append((u, row, max_tokens))
+    return out
+
+
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
-    the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
+    its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
-    slots' rows and ``max_tokens`` give (`window_rows.standin_state`) the window's own value, a stand-in for the network
-    certifier's, whose reads are free. Refused for a registration of another model. -> the window's run root, its circuit record's SHA-512, its
-    population and members, the registered weights whose root the window's is (``held``) and those it isn't, whose reads
-    are free (``free``), and the seconds each part took."""
+    window's own value. Where the certifier front kept the network certifier's run under the serve dir, the scan state is
+    its scan of that run (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
+    Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
+    slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
+    one); else slot k holds the advice's k-th request and the scan state is a stand-in, the rows its slots' rows and
+    ``max_tokens`` give (`window_rows.standin_state`). Refused for a registration of another model. -> the window's run
+    root, its circuit record's SHA-512, its population and members, the scan state's kind (``scanned`` or ``stand-in``),
+    the registered weights whose root the window's is (``held``) and those it isn't, whose reads are free (``free``), and
+    the seconds each part took."""
     import numpy as np
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.oracle_compare import OpenedReader
@@ -1380,17 +1472,17 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
+    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units])
+    state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
+    lap("scan")
+    placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
+                         None if state is None else (scanned[1], WRS.scan_slots(low, state.rows)))
     slots, rows = [], []
-    for k in range(cls.slots):
-        u = units[k] if k < len(units) else None
-        if u is None:
-            row, max_tokens, served_ = [0] * (cls.prompt + 2), 0, None
-        else:
-            body = compiler.inner.ingress[u.id]
-            ids, max_tokens = [int(x) for x in body["prompt"]], int(body["max_tokens"])
-            row = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
-            pi = ProgramIndex(p.progs[u.id], program_dir=p.dirs[u.id])
-            served_ = WRS.Served.of_record(pi, store, u.id, p.arrivals[u.id])
+    for u, row, max_tokens in placed:
+        served_ = None
+        if u is not None:
+            pi = ProgramIndex(p.progs[u], program_dir=p.dirs[u])
+            served_ = WRS.Served.of_record(pi, store, u, p.arrivals[u])
         slots.append(WRS.Slot(low.fn, cls, row, weights, served_))
         rows.append((row, max_tokens))
     lap("slots")
@@ -1400,7 +1492,8 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
     values = {**WW.weight_values(registered, served, key, keep_rows=True),
-              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run)}
+              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run) if state is None
+              else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
     filled = WRS.Rows(low, slots, values)
@@ -1414,10 +1507,12 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)))
+    scan_state_opening(values[SS.SCAN_STATE], Path(a.out))
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
+            "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
             "seconds": seconds}
 

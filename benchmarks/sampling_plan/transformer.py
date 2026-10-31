@@ -30,7 +30,7 @@ sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX 
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
 (`Serving.replay`). A plan is a stratified law, k units of each subcircuit; the chosen one is the cheapest certifying at
-most `TARGET_SHARE` of the block's ANDs wrong. `recertify` recomputes its certificate from the sizes alone through
+most `TARGET_SHARE` of the block's ANDs incorrect. `recertify` recomputes its certificate from the sizes alone through
 core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the incorrect proof blocks over a monitoring period of many
 blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityPeriod` window a subcircuit, or the block as one
 window under the `work:1` law.
@@ -44,12 +44,12 @@ import json
 import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
-from math import ceil, log, log2
+from math import ceil, log
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import I, KEY, observations  # noqa: E402
+from inputs import I, KEY, cap, observations  # noqa: E402
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
@@ -72,7 +72,7 @@ BLOCK_S = 1200
 SERVERS = 10_000
 #: core's monitoring periods (`wipe_monitoring`), seconds by name
 PERIODS = dict(wipe_monitoring.PERIODS)
-#: the target, a share of the block's ANDs certified at most wrong: a share of the work scales with the model where a
+#: the target, a share of the block's ANDs certified at most incorrect: a share of the work scales with the model where a
 #: count of units does not (a coarser cut has fewer units); 1e-3 is the small model's knee (halving it costs about 8%
 #: more, each halving past it over 10%), held fixed for every size
 TARGET_SHARE = 1e-3
@@ -161,16 +161,11 @@ def requests_per_block(sequences: int, step_s: float, positions: int, block_s: f
     return round(block_s / step_s * sequences / positions)
 
 
-def _cap(ands: int) -> int:
-    """A statement's units under m = k_log + nbl <= 35 (`int8_llama.cap`)."""
-    return min(1 << max(0, 35 - (ceil(log2(max(ands, 2))) + 1)), 1 << 20)
-
-
 def _counted(s: Shape, memo: dict[str, Shape]) -> Shape:
-    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows."""
+    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows (`cap`)."""
     if s.id in memo:
         return memo[s.id]
-    out = replace(s, work=s.work or s.ands, cap=_cap(s.ands + sum(row_ands(r) for r in s.rows)),
+    out = replace(s, work=s.work or s.ands, cap=cap(s.ands, s.rows),
                   parts=tuple((_counted(c, memo), k) for c, k in s.parts),
                   ways=tuple((label, tuple((_counted(c, memo), k) for c, k in ps)) for label, ps in s.ways))
     memo[s.id] = out
@@ -504,7 +499,7 @@ def summary(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
     rows = [{"template": dag.template_id(c), "op": c.op, "units": c.units, "k": plan.sizes[c.template],
              "statement": plan.statement_size[c.template], "work": c.work,
              "ands": c.ands + sum(row_ands(r) for r in c.rows)} for c in cands if c.template in plan.sizes]
-    return {"cost": dict(plan.cost), "faulty": plan.certificate.harm if plan.certificate else None,
+    return {"cost": dict(plan.cost), "incorrect": plan.certificate.harm if plan.certificate else None,
             "units": sum(v["units"] for v in rows), "drawn": sum(v["k"] for v in rows),
             "templates": rows, "choice": dict(plan.choice), "floor_only": sorted(plan.floor_only),
             "full": sorted(plan.full)}
@@ -540,7 +535,7 @@ def main(argv=None) -> None:
     ap.add_argument("--replay", type=float, help="GPU-s to replay one drawn request (large: LARGE_REPLAY_S)")
     ap.add_argument("--delta", type=float, default=DELTAS[0])
     ap.add_argument("--share", type=float, default=TARGET_SHARE,
-                    help="the share of the block's ANDs the chosen plan certifies at most wrong")
+                    help="the share of the block's ANDs the chosen plan certifies at most incorrect")
     ap.add_argument("--grid", type=int, default=61)
     args = ap.parse_args(argv)
     large = args.model == "large"
@@ -556,12 +551,12 @@ def main(argv=None) -> None:
     b = budget(front, s.block_s)
     out = {"model": asdict(m), "serving": asdict(s), "delta": args.delta, "target": target, "share": args.share,
            "work": dag.work, "units_dense": dag.units_dense, "parameters": parameters(m, s, args.share),
-           "budget": None if b is None else {"cost": b.cost["total"], "faulty": b.certificate.harm},
+           "budget": None if b is None else {"cost": b.cost["total"], "incorrect": b.certificate.harm},
            "serve": [asdict(c) for c in cm.serve], "serve_cost": cm.serve_cost(),
            "rates": {"statement_fixed": cm.statement_fixed, "statement_per_and": cm.statement_per_and,
                      "staged_per_and": cm.staged_per_and, "per_and": cm.per_and, "commit_per_bit": cm.commit_per_bit},
            "alternatives": alts,
-           "frontier": [{"cost": p.cost["total"], "faulty": p.certificate.harm, "drawn": sum(p.sizes.values()),
+           "frontier": [{"cost": p.cost["total"], "incorrect": p.certificate.harm, "drawn": sum(p.sizes.values()),
                          "choice": dict(p.choice), "floor_only": sorted(p.floor_only)} for p in front]}
     if plan is not None:
         out["chosen"] = summary(plan, cands, dag)
@@ -593,7 +588,7 @@ def parameters(m: Model, s: Serving, share: float) -> list[list[str]]:
          "h1 assumed; commitment rate `inputs.commit_per_byte`"],
         ["cost model", "C-Flock zk sessions of ScaledMmS8Coordinate at K = 4096, 14336 on sm_120",
          "`inputs.observations`; extrapolated past them"],
-        ["target", f"{share:g} of the block's ANDs wrong at most",
+        ["target", f"{share:g} of the block's ANDs incorrect at most",
          "`TARGET_SHARE`: the small model's knee, held fixed" if share == TARGET_SHARE else "given (`--share`)"],
     ]
 
@@ -605,20 +600,20 @@ def render(out: dict) -> str:
              "| parameter | value | source |", "|---|---|---|"]
     lines += [f"| {a} | {b} | {c} |" for a, b, c in out["parameters"]]
     lines += ["", f"a block: {out['work']:.4g} ANDs, {out['units_dense']:,} units in the finest form; serve-time "
-              f"commitments {out['serve_cost']:.3g} GPU-s", "", "| expected cost (GPU-s) | certified faulty ANDs | "
+              f"commitments {out['serve_cost']:.3g} GPU-s", "", "| expected cost (GPU-s) | certified incorrect ANDs | "
               "share of the block's | drawn | floor-only templates |", "|---|---|---|---|---|"]
     for f in out["frontier"]:
-        lines.append(f"| {f['cost']:.4g} | {f['faulty']:.4g} | {f['faulty'] / out['work']:.3g} | {f['drawn']:,} | "
+        lines.append(f"| {f['cost']:.4g} | {f['incorrect']:.4g} | {f['incorrect'] / out['work']:.3g} | {f['drawn']:,} | "
                      f"{len(f['floor_only'])} |")
     b = out["budget"]
     lines += ["", f"the block's own GPU time, {out['serving']['block_s']:g} GPU-s, buys "
-              + ("no plan" if b is None else f"at most {b['faulty'] / out['work']:.3g} of its ANDs wrong ({b['cost']:.4g} "
+              + ("no plan" if b is None else f"at most {b['incorrect'] / out['work']:.3g} of its ANDs incorrect ({b['cost']:.4g} "
                  f"GPU-s)")]
     c = out.get("chosen")
     if c is None:
-        lines += ["", f"no plan certifies {out['target']:.4g} faulty ANDs"]
+        lines += ["", f"no plan certifies {out['target']:.4g} incorrect ANDs"]
         return "\n".join(lines)
-    lines += ["", f"chosen (at most {out['share']:g} of the block's ANDs wrong, {out['target']:.4g}): cost "
+    lines += ["", f"chosen (at most {out['share']:g} of the block's ANDs incorrect, {out['target']:.4g}): cost "
               f"{c['cost']['total']:.4g} GPU-s a block "
               f"({', '.join(f'{k} {v:.3g}' for k, v in c['cost'].items() if k != 'total')}), {c['drawn']:,} drawn of "
               f"{c['units']:,} units", "", "| template | op | units | k | statement | ANDs a unit | proved, rows opened |",
@@ -627,7 +622,7 @@ def render(out: dict) -> str:
         lines.append(f"| {v['template']} | {v['op'].split('{')[0]} | {v['units']:,} | {v['k']:,} | {v['statement']:,} | "
                      f"{v['work']:,} | {v['ands']:,} |")
     lines += ["", "a block, recertified from the sizes (`Stratified.harm_bound`; `count_bound` exact, small model only):", "",
-              "| delta | faulty ANDs | share | faulty proof blocks | count_bound | certify (ANDs) |", "|---|---|---|---|---|---|"]
+              "| delta | incorrect ANDs | share | incorrect proof blocks | count_bound | certify (ANDs) |", "|---|---|---|---|---|---|"]
     for r in out["recertified"]:
         lines.append(f"| {r['delta']:g} | {r['ands']:.4g} | {r['ands'] / out['work']:.3g} | {r['units']:.4g} | "
                      f"{r.get('count_bound', '-')} | {r['certify']:.4g} |")

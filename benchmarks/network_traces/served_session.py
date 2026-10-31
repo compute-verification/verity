@@ -492,7 +492,7 @@ def served_peer(fetch: Path) -> str | None:
 
 
 def first_parent(tree: Path, dest: Path) -> Path:
-    """main's first-parent history from `tree`'s origin, written to `dest` (n2_advised_zk.sh's)."""
+    """main's first-parent history from `tree`'s origin, written to `dest`."""
     git = ["git", "-C", str(tree)]
     shallow = subprocess.run([*git, "rev-parse", "--is-shallow-repository"], capture_output=True, text=True)
     unshallow = ["--unshallow"] if shallow.stdout.strip() == "true" else []

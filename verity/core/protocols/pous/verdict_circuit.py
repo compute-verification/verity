@@ -44,6 +44,7 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import CompositeDefinition
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 __all__ = ["DIGEST_BITS", "RECORD_BITS", "PousVerdict", "chain", "counter_width", "gates", "round_hit", "round_verdict",
            "verdict_value"]
@@ -53,7 +54,7 @@ BIT = BL.BIT
 RECORD_BITS = 8 * 92
 """A round record's bits: ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``."""
 
-DIGEST_BITS = 512
+DIGEST_BITS = 8 * DIGEST_BYTES["sha512"]
 
 J_AT, INDEX_AT, SEND_AT, RECEIPT_AT, DIGEST_AT = 0, 4, 12, 20, 28
 """The record's fields, by byte."""

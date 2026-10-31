@@ -5,6 +5,7 @@
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
+  "Flock.Test.KsScope",
   "Flock.Test.FullDraw",
   "Flock.Test.OneFull",
   "Flock.Test.RegBudget",
@@ -35,6 +36,7 @@
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
+  "Flock.Test.LinkUnits",
   "Flock.Test.RegCover",
   "Flock.Test.RegKnown",
   "Flock.Test.KnownRead",
@@ -65,10 +67,12 @@
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",
   "Flock.Test.Canon",
+  "Flock.Test.ZkIdentity",
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
   "Flock.Test.RequireLink",
+  "Flock.Test.FV3",
   "VStar"
  ],
  "exempt": {

@@ -3,9 +3,9 @@ each proved as IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkI
 registered on the link's own stream, proved by Flock `prove --zk` behind the Lean firewall with each proof block's
 witness row read off the network certifier's
 root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
-and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `advised.IoTieVerdict` on the link
-and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read through
-`tie_service.Ties`, the advised link's tie source).
+and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
+the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
+through `tie_service.Ties`, the verifier's tie source).
 
     python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
@@ -15,7 +15,7 @@ and the stream's registrations built from the stream's outcomes of record alone 
   of r = 2 512-byte cells, request 1's `DATA` in bucket 3 and its `END` in bucket 4, so it spans the windows. The advice
   is v0 of one prefill step, each request one kept output, with the link's `received`; it and the network certifier's release are
   public, and the cells and their salts are witness. ``--class served`` (`CLASSES`) is the served link's ingress
-  instead, `n2_advised_zk`'s: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
+  instead: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
   `IoTieRequest_v1{B=4096,L=1,R=1}`, with the ``honest`` and ``forged`` members alone.
 * **A network certifier's run** (``--class warden --warden-run RUN``, `warden_link`): the gate's ``warden-rehearse``'s
   real ingress in place of the served link, its first K execution phases (``--windows``, 1 by default), every connection
@@ -111,8 +111,8 @@ def _received(T: int) -> dict[str, str]:
 RECEIVED = _received(T)
 WINDOWS = 2
 #: the size classes `use` sets: ``test``, the pinned test class above with every member; ``served``, the served link's
-#: ingress (`n2_advised_zk`: B = 4,096, T = 60 buckets a window, an allocation of one cell, IoTieRequest_v1{B=4096,L=1,
-#: R=1}), one window, honest and forged
+#: ingress (B = 4,096, T = 60 buckets a window, an allocation of one cell, IoTieRequest_v1{B=4096,L=1,R=1}), one
+#: window, honest and forged
 CLASSES = {
     "test": {"B": B, "params": PARAMS, "windows": WINDOWS, "expect": EXPECT},
     "served": {"B": 4096, "params": W.WardenParams(cell_bytes=4096, slots=1, lanes=1, window=60, delay=1),
@@ -161,12 +161,12 @@ def advice(prompt_lens, got) -> TS.LinkAdvice:
     return TS.LinkAdvice(ADV.Advice(reqs, steps, tuple(range(len(prompt_lens)))), tuple(got))
 
 
-def served(prompt_lens, arrivals, rates) -> Q.Link:
+def served(prompt_lens, arrivals, rates) -> Q.ServedIngress:
     """The requests through the warden's own ingress over the class's windows."""
     return Q.serve(PARAMS, requests(prompt_lens), arrivals, rates, buckets=WINDOWS * T)
 
 
-def received(link: Q.Link) -> tuple[int, ...]:
+def received(link: Q.ServedIngress) -> tuple[int, ...]:
     cells = TS.window_cells(link.releases, T)
     return tuple(cells.get(w, 0) for w in range(len(link.records)))
 
