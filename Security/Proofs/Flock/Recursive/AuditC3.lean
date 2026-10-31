@@ -755,11 +755,10 @@ coins of their coin kinds in the run's order (`holoCTs`: the link points, then t
 `holoKinds`) and the verifier's map of its records (`holoMap`: the session's schedule at the verifier's inner shape,
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
 `RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
-`Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape,
-below the 100-bit floor and the `2^-128` target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates
-to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense
-statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
-(`RecDeploy.ksLin2_deployed_open`) and does not reach the Holo statements (i) is about, and `BitsLin2` at the dense
+`Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's
+bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`),
+and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
+(`Flock.SecurityProofs.RecursiveKS`) but does not reach the Holo statements (i) is about, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`).
 -/
 def RecursiveAuditC3 : Prop :=
