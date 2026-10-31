@@ -19,7 +19,7 @@ calls with the same values.
 A producer runs vLLM's own op instead when its call isn't the served one it reproduces: a dispatch mode or a compile is
 active, a CUDA graph is capturing, the norm has no residual, vLLM's op is patched (the norm-scale tap replaces
 ``_C.fused_add_rms_norm``), a shape, dtype or layout differs, or the device's architecture has no measured win at the
-row width (`int8_fused.producer_warps`; Llama-3.1-8B's silu at I 14,336 is slower fused).  Nothing is installed unless
+row width and M (`int8_fused.producer_warps`; Llama-3.1-8B's silu at I 14,336 isn't faster fused).  Nothing is installed unless
 the engine runs vLLM's batch-invariant CUDA forwards (the norm's sum is then its generic kernel's at min(H, 1024) threads,
 `int8_fused.norm_threads`) and ``VERITY_INT8_FUSED_PRODUCERS`` is on.  o_proj's input (attention's output) and layer 0's
 input norm (vLLM's Triton `rms_norm` with no residual) keep the separate quantizer.
@@ -50,7 +50,8 @@ def _norm(norm: Any, original: Any) -> Any:
         w = norm.weight.data
         if (residual is None or not _served(x, residual) or residual.shape != x.shape or not residual.is_contiguous()
                 or not isinstance(torch.ops._C.fused_add_rms_norm, torch._ops.OpOverloadPacket)
-                or F.norm_threads(x.shape[1]) is None or F.producer_warps("norm", x.shape[1], F.arch(x.device.index)) is None
+                or F.norm_threads(x.shape[1]) is None
+                or F.producer_warps("norm", x.shape[0], x.shape[1], F.arch(x.device.index)) is None
                 or w.dtype != torch.bfloat16 or not w.is_contiguous()):
             return original(x, residual)
         xq = torch.empty(x.shape, dtype=torch.int8, device=x.device)
@@ -68,7 +69,7 @@ def _act(act: Any, original: Any) -> Any:
 
     def forward(x: torch.Tensor):
         if (not _served(x) or not x.is_contiguous() or x.shape[1] % 2
-                or F.producer_warps("silu", x.shape[1] // 2, F.arch(x.device.index)) is None
+                or F.producer_warps("silu", x.shape[0], x.shape[1] // 2, F.arch(x.device.index)) is None
                 or not isinstance(torch.ops._C.silu_and_mul, torch._ops.OpOverloadPacket)
                 or act.op is not torch.ops._C.silu_and_mul):
             return original(x)
