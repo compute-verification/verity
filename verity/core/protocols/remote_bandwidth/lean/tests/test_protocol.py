@@ -127,7 +127,7 @@ STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()
 
 
-def periods() -> dict[str, period.Period]:
+def periods() -> dict[str, period.Run]:
     """The small period on node `n0`, honest, under a prover that dropped every other chunk, and one verified only up
     to its first window."""
     out = {}
