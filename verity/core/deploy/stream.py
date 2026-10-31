@@ -32,7 +32,7 @@ from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.core.wire import Message
 
-from .party import Finish, Identity, Params, Party, Received, Record, Send, Timer
+from .party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
 
 T = TypeVar("T")
 
@@ -53,16 +53,16 @@ def sleep_until(clock: Callable[[], int], at: int) -> None:
 
 def run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Codec, *, peer: str,
         clock: Callable[[], int] | None = None, coins: Callable[[int], bytes] | None = None,
-        wait: Callable[[Callable[[], int], int], None] = sleep_until) -> tuple[Finish, list[Record]]:
+        wait: Callable[[Callable[[], int], int], None] = sleep_until) -> tuple[Finish, list[LogEntry]]:
     """`party` against `peer` over `f` until it finishes (module docstring): its finish, and what it recorded."""
-    records: list[Record] = []
+    records: list[LogEntry] = []
     asked: deque[tuple[str, int]] = deque()
 
     def act(actions: list[Any]) -> Finish | None:
         for a in actions:
             if isinstance(a, Finish):
                 return a
-            if isinstance(a, Record):
+            if isinstance(a, LogEntry):
                 records.append(a)
             elif isinstance(a, Timer):
                 asked.append(("ClockAlarm", a.at))
