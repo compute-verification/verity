@@ -427,26 +427,20 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
 
 
-def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False,
-                extra: tuple[tuple[object, list, list], ...] = ()) -> SimpleNamespace:
+def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False) -> SimpleNamespace:
     """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (coordinate u row u % 4),
     committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead, committed
-    under its run root and registered in its ``activations``, as `prove_path.py window-commit` commits the scan's state.
-    ``extra``: further members, each a template, its inputs and its outputs (`_scan_slots`)."""
+    under its run root and registered in its ``activations``, as `prove_path.py window-commit` commits the scan's state."""
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
     value = REG.Registered.commit("test/model", name, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN if own else None)
     read = IF.Read(TID, "wrow", name, 0, (n // 4, 4), 0, (0, K // 2))
-    members = ((COORD, n), *((fn, len(outs[0])) for fn, _ins, outs in extra))
-    win = IF.Window(IF.Circuit("test", members, registered=IF.Registered({name: 4 * K // 2}, reads=(read,))), RUN,
+    win = IF.Window(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,))), RUN,
                     D.parse_law(LAW), cap, registered={name: value})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
-    for fn, fins, fouts in extra:
-        win.record(fn, fins, fouts)
-    assert win.mismatches() == {}
     entry = {"program": "test/model", "values": {name: value.entry()}}
     win.write(win.close(), d, {"label": "test", **({"activations": entry} if own else {})}, registrar=R)
     return SimpleNamespace(dir=d, value=value, pin=entry)
@@ -555,16 +549,32 @@ SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3,
          "OCC": (3, 300), "LP": (40, 340), "MAX": (80, 380), "IDS": (120, 420)}
 
 
-def _scan_slots(n: int) -> tuple[object, list, list]:
-    """``n`` units of an io shell's `ScanSlots_v2` at `SLOTS` on random state rows: the template, its inputs and the
-    outputs its Definition gives them, one array per return field."""
+def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> SimpleNamespace:
+    """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`RA.TIED`), with ``shell`` units
+    of an io shell's `ScanSlots_v2` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
+    gives it."""
     from verity.ml.definitions.registry import boolean_io_shell as BX
 
     fn = bind(BX.ScanSlotsV2, **SLOTS)
-    state = np.random.default_rng(2).integers(0, 1 << 16, (n, SLOTS["NS"]), dtype=np.uint16)
-    got = np.asarray(evaluate_words(fn, state.astype(np.uint32)), dtype=np.uint32).reshape(n, -1)
-    at = np.cumsum([count // 2 for _o, count in IF.layout(fn).outs])[:-1]
-    return fn, [state], [np.ascontiguousarray(f) for f in np.split(got, at, axis=1)]
+    state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)
+    got = np.asarray(evaluate_words(fn, state.astype(np.uint32)), dtype=np.uint32).reshape(shell, -1)
+    outs = np.split(got, np.cumsum([count // 2 for _o, count in IF.layout(fn).outs])[:-1], axis=1)
+    rng = np.random.default_rng(1)
+    rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
+    value = REG.Registered.commit("test/model", RA.TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
+    read = IF.Read(TID, "wrow", RA.TIED, 0, (n // 4, 4), 0, (0, K // 2))
+    registered = IF.Registered({RA.TIED: 4 * K // 2}, reads=(read,))
+    win = IF.Window(IF.Circuit("test", ((COORD, n), (fn, shell)), registered=registered), RUN, D.parse_law(LAW), cap,
+                    registered={RA.TIED: value})
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    win.record(fn, [state], [np.ascontiguousarray(o) for o in outs])
+    assert win.mismatches() == {}
+    entry = {"program": "test/model", "values": {RA.TIED: value.entry()}}
+    win.write(win.close(), d, {"label": "test", "activations": entry}, registrar=R)
+    return SimpleNamespace(dir=d, shell=fn)
 
 
 def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry_definition(tmp_path):
@@ -573,13 +583,12 @@ def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry
     which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates in Verity's
     whole catalog (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
     `interface.resolve` alone refuses the window ("names no Definition in Verity's catalog")."""
-    shell = _scan_slots(3)
-    got = _registered(tmp_path / "w", name=RA.TIED, own=True, extra=(shell,))
+    got = _io_shell_window(tmp_path / "w")
     audit = _audited(got.dir, tmp_path / "a")
     p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),
                         "--audit", str(audit), "--out", str(tmp_path / "p.json")], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
-    coord, state = (sum(16 * w for _p, w in IF.layout(fn).rows) for fn in (COORD, shell[0]))
+    coord, state = (sum(16 * w for _p, w in IF.layout(fn).rows) for fn in (COORD, got.shell))
     period = json.loads((tmp_path / "p.json").read_text())
     assert period["free"] == 8 * coord - 8 * 8 * K + 3 * state and period["answer"]["verdict"] == "accept"
 
