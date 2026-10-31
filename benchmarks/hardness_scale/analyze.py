@@ -18,6 +18,9 @@ For a run of size N (the dense model's non-embedding parameters) on D tokens rea
   with D ≥ 10N, with C*(L) minimized over the width of the 12-block shape at its own FLOPs a token.
 - ``P_dead``: 1/(1 − κ), P_env if the credited MACs bought nothing (dead weight), and ``u`` = 1 − (1 − 1/P_env)/κ, the
   share of credited compute that acts as baseline compute: 1 is free, 0 dead weight, below 0 worse than dead weight.
+- ``gap_kd``: for a distilled arm, L − L of the distilled baseline of its size, tokens and seed. A distilled run's
+  ``gap`` is against the undistilled baseline, so the distilled baseline's gap is what distillation buys, and its P
+  columns count the student's compute only (the teacher's forward is ``teacher_flops``).
 - ``best``: with --best, each arm's lr variants fold into the arm, keeping its lowest loss.
 """
 
@@ -175,6 +178,8 @@ def analyze(runs, best_lr=False):
     fr = frontier(envelope([(r["train_flops_dense"], r["final_val"]) for r in base if r["cfg"]["seed"] == 0
                             and size_of(r) in armed and d_ge_10n(r)]))
     f = fit([r for r in base if r["cfg"]["seed"] == 0 and r["cfg"]["lr"] == lr_star[size_of(r)] and d_ge_10n(r)])
+    kd_base = {(size_of(r), r["tokens"], r["cfg"]["seed"]): r for r in runs.values()
+               if r["cfg"].get("teacher") and r["cfg"]["arr"] == "none" and r["cfg"]["qat"]}
     rows = []
     for name, r in runs.items():
         c, s, L = r["cfg"], size_of(r), r["final_val"]
@@ -183,6 +188,11 @@ def analyze(runs, best_lr=False):
         b0, bs = base_at.get((s, r["tokens"], 0)), base_at.get((s, r["tokens"], c["seed"]))
         if bs or b0:
             row["gap"] = L - (bs or b0)["final_val"]
+        if c.get("teacher"):
+            row["teacher_flops"] = r.get("teacher_flops")
+            kb = kd_base.get((s, r["tokens"], c["seed"]))
+            if kb and kb is not r:
+                row["gap_kd"] = L - kb["final_val"]
         L0 = L - (bs["final_val"] - b0["final_val"]) if bs and b0 else L  # on seed 0's curves, paired by seed
         if len(ladder[s]) >= 2:
             x, ext = interp([math.log(t) for t, _ in ladder[s]], [v for _, v in ladder[s]], L0)
@@ -232,8 +242,8 @@ def fmt(v, nd=3):
 
 
 def table(res):
-    cols = ["name", "kappa", "kappa_lin", "val", "gap", "P_size", "P_env", "P_env_real", "P_front", "P_fit", "P_dead", "u",
-            "d_perm", "d_removed"]
+    cols = ["name", "kappa", "kappa_lin", "val", "gap", "gap_kd", "P_size", "P_env", "P_env_real", "P_front", "P_fit",
+            "P_dead", "u", "d_perm", "d_removed"]
     out = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     for r in sorted(res["rows"], key=lambda r: (int(r["size"][:-1]), not r["base"], r["arm"], r["name"])):
         cells = []
