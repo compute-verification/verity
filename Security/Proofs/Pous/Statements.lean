@@ -686,40 +686,4 @@ open ColumnGame in
 def BandTwoWay220_16 : Prop :=
   ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3
 
-/-! ## Secure erasure (`Security/Definitions/Pous/Guarantees/SecureErasure.lean`'s game) -/
-
-open Pous.Digest in
-/-- **The digest is almost universal.** Two different lists of `R` blocks of `W` words over a finite field `F` have the
-same digest at a uniform key `(g, z)` with probability at most `((W − 1) + (R − 1)) / |F|`: either some block hash
-differs, and the digests agree at at most `R − 1` points `z`, or every block hash agrees, which a block that differs
-allows at at most `W − 1` points `g`. A word enters as an element of `F`: two `uint32` words that agree mod `p` count as
-equal. Unconditional. This is what makes the fill check's digest catch a region that differs from the fill; the
-secure-erasure bounds below hold for every digest and do not use it. Proof: `PousDigest.digestAU`. -/
-def DigestAU : Prop :=
-  ∀ (R W : ℕ) (F : Type) [Field F] [Fintype F] (xs ys : Fin R → Blk W F), xs ≠ ys →
-    pr (fun k : Key F => digest k.1 k.2 xs = digest k.1 k.2 ys) ≤
-      ((W - 1 + (R - 1) : ℕ) : ℝ≥0∞) / Fintype.card F
-
-/-- **Secure erasure from the timed audit (general).** For every scheme whose sequential audit accepts every prover with
-`S'` bits of state at each arrival with probability at most `δ + ε`, the secure-erasure audit over it, with any digest
-`dig`, accepts a prover with `S` bits of volatile memory that keeps `S_φ` bits of foreign content at every spot read's
-arrival with probability at most `δ + ε + s · 2^S / (2^S' · 2^S_φ)`. So at `S_φ ≥ S − S' + λ + log₂ s` the foreign
-content costs the prover `2^-λ`: whatever it keeps of `z` takes the place of the fill.
-
-The proof counts. For each round `j`, the memories from which `keep j` reads `z` are disjoint as `z` varies, so fewer
-than `2^S / 2^S'` values of `z` have more than `2^S'` of them, and a uniform `z` is such a value at some round with
-probability at most `s · 2^S / (2^S' · 2^S_φ)`. For every other `z`, the memories at the arrivals that keep it have an
-`S'`-bit code, and the prover run on the code is an `S'`-bit sequential responder (same programs, same `(D, Q)`), which
-the audit's bound covers.
-
-It rests on what `AuditSecure` rests on for the scheme (for the band: the ideal-primitive model, the keyed fill's
-incompressibility and the `(D, Q)` game), and on nothing else: no named assumption and no bandwidth-separation premise
-(`TwoTierBandwidth`, which is dropped, is not used). The memory is bounded at every spot read's arrival; the fill
-and the digest are unbounded. Proof: `PousErase.secure_erasure_meets`. -/
-def SecureErasureMeets : Prop :=
-  ∀ {M : IdealModel} (sch : Scheme M) (K V : Type) [Fintype K] [Nonempty K] (dig : K → sch.Code → V)
-    (S S' S_φ D Q s : ℕ) (δ ε : ℝ≥0∞),
-    AuditSecure sch .sequential S' D Q s δ ε →
-      EraseSecure sch dig S S_φ D Q s (δ + ε + (s : ℝ≥0∞) * 2 ^ S / (2 ^ S' * 2 ^ S_φ))
-
 end Pous.Guarantees
