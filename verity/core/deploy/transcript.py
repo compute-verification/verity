@@ -1,4 +1,4 @@
-"""A party's transcript, and the record (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §2).
+"""A party's transcript, and the record.
 
 A transcript is one party's view of one run, append-only: its start (its name and parameters), every frame it received
 (`in`) and sent (`out`) in the order it saw them, with its channel and kind, when a peer's frame arrived on the party's

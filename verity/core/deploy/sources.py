@@ -1,5 +1,5 @@
 """Sources: the parties that give a party its clock readings and coins, on the same machine, each on a channel nothing
-else touches (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §2). A party asks and its source answers:
+else touches. A party asks and its source answers:
 
 ~~~text
 clock   ClockRead -> ClockReading {ns};  ClockAlarm {at} (a party's `Timer`) -> ClockTimer {at, ns} once the clock reads at
