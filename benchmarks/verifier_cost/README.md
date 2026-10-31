@@ -117,6 +117,20 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
+`population.sh N...` times the one-stage run's population-order check (`Slots.popOk`) against a template population's
+units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
+batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
+changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
+`Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` and the per-unit
+reference (`TemplateQuery.gates` on every unit, each recomputing its offset and template through an unmemoized walk), and
+fails where the reference's gates differ. The reference runs up to `REF_MAX` units (default 50). `$OUT` gets
+population.jsonl, one row per N and function (units, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
+  bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
+~~~
+
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
 builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines

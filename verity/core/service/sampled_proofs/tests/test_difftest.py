@@ -3266,6 +3266,34 @@ def test_the_slots_follow_the_strata(pieces):
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
 
 
+#: Templates of templates: `NEST` calls `PAIR` twice and `DEEP` calls `NEST` and `PAIR`, so a unit's gates and every
+#: offset before it are walks of nested Definitions.
+NEST = bind(CompositeDefinition("CoreSampledProofsNest", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+                                lambda B, S, x: B.call(XOR8, B.call(PAIR, x), B.call(PAIR, x)), register=False))
+DEEP = bind(CompositeDefinition("CoreSampledProofsDeep", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+                                lambda B, S, x: B.call(XOR8, B.call(NEST, x), B.call(PAIR, x)), register=False))
+
+
+def test_the_slots_of_a_population_of_nested_templates(pieces):
+    """On 2,000 units in seven root batches of four templates, two of them nested two deep and three of them in two
+    batches apart, Lean's slots (`Partition.unitGates`, each callee's gates and each batch's offset read off one table) are
+    the Python's whole (`TemplatePartition.gates` per unit), and the population's and the input class's gates are every
+    gate of the program once."""
+    program = P.mixed_population_program([(DEEP, 300), (PAIR, 250), (NEST, 400), (DEEP, 170), (QUAD, 500), (NEST, 90),
+                                          (PAIR, 290)])
+    PROGRAMS[PO.program_sha512(program)] = program
+    query = _json(P.template_instances_query([DEEP.id, PAIR.id, NEST.id, QUAD.id]))
+    case = {"closure": None, "program": _json(codec.encode_program(program)), "query": query,
+            "rule": {"law": "subset:16", "rule": "law"}, "source": hashlib.shake_256(b"nested").hexdigest(400),
+            "work_table": None}
+    out = slots(copy.deepcopy(case))
+    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
+    assert [len(s) for s in out["classes"][0]] == [470, 540, 490, 500]
+    rus = [r for c in out["classes"] for s in c for r in s]
+    gates = sorted(g for r in rus for lo, hi in r["pus"] for g in range(lo, hi))
+    assert gates == list(range(program.circuit.size))
+
+
 def test_the_call_queries_cut_call_by_call(pieces):
     """On a program of root Calls, Lean's slots are the Python's whole under `Q_word` at `X = 16` and `Q_call` at `X = 8`:
     the strata are the Calls' Definitions, `FORK`'s `Q_word` units two output units and its committed interior value, the
