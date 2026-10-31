@@ -1,15 +1,22 @@
 """The device a served Build vouches for (`acquire.served_device`): cc 9.0 binds FA3 and cc 10.0 and 12.0 FA2, each with its GEMMs' k16
-step and its Triton compile target; a device without one of them is refused with every missing binding by name; and FA2's launch at vLLM's
-defaults: a GQA decode launch swapped and split `fa2_num_splits` ways (at a FULL graph's padded batch and max_model_len), the align
-kernel's kBlockN at one split, and any other launch the split kernel's tile unsplit, causal when a sequence has more than one query
-row.  The split counts here are worked by hand from `set_params_splitkv` (vllm-flash-attn 506341a1)."""
+step and its Triton compile target; a device without one of them is refused with every missing binding by name; a device whose compute
+capability or SM count is not its registered card's is refused naming the field, both values and the card file, and a name registered
+on no card and not excepted is refused; and FA2's launch at vLLM's defaults: a GQA decode launch swapped and split `fa2_num_splits`
+ways (at a FULL graph's padded batch and max_model_len), the align kernel's kBlockN at one split, and any other launch the split
+kernel's tile unsplit, causal when a sequence has more than one query row.  The split counts here are worked by hand from
+`set_params_splitkv` (vllm-flash-attn 506341a1)."""
 from __future__ import annotations
+
+import json
 
 import pytest
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire.inductor_templates import Unmodelled
+from verity_vllm.engine.profiles.devices import CARD, NO_CARD
+from verity_vllm.pipeline import served_match
+from verity.ml.definitions.registry import bf16_gemm_check as BC
 
 #: a GQA model's attention (query heads, KV heads, head dim) at head dim 64 and the cc 12.0 device's SM count
 HEADS, SMS = (32, 8, 64), 188
@@ -53,6 +60,59 @@ def test_a_device_without_a_binding_is_refused_naming_every_one() -> None:
         SD.device_of((9, 0), 132, attention=FA2)
     with pytest.raises(Unmodelled, match="cc=86"):
         T.recognize("k", "@triton.jit\ndef k(x):\n    pass\n", cc=(8, 6))
+
+
+def test_every_pinned_device_is_registered_on_a_card_or_excepted() -> None:
+    """The served targets with a device pin are exactly the names `CARD` and `NO_CARD` list, each in one, and every exception
+    says why."""
+    pinned = {json.loads(p.read_text())["device"] for p in BC.DEVICE_PINS.glob("*.json")}
+    assert not set(CARD) & set(NO_CARD) and set(CARD) | set(NO_CARD) == pinned
+    assert all(why.strip() for why in NO_CARD.values())
+
+
+def test_a_device_with_its_cards_compute_capability_and_sm_count_binds() -> None:
+    """Each registered name is a pinned device's, and that pin's compute capability and SM count are its card's."""
+    for name, card in CARD.items():
+        assert SD.card_of(name) == card
+        pin = BC.device_pin(name)
+        assert SD.device_of(pin["compute_capability"], pin["sms"], card=card, max_model_len=4096) == \
+            SD.device_of(pin["compute_capability"], pin["sms"], max_model_len=4096)
+    assert SD.device_of((12, 0), SMS, card="rtx-pro-6000-server", attention=FA2, max_model_len=4096) == fa2_device()
+
+
+@pytest.mark.parametrize(("cc", "sms", "card", "off"), [
+    ((9, 0), 114, "h200-sxm-141gb", "SM count 114, the card's 132"),
+    ((10, 0), 132, "h200-sxm-141gb", "compute capability 10.0, the card's 9.0"),
+    ((12, 0), 170, "rtx-pro-6000-server", "SM count 170, the card's 188"),
+    ((9, 0), 132, "rtx-pro-6000-server", "compute capability 9.0, the card's 12.0; SM count 132, the card's 188"),
+])
+def test_a_device_that_is_not_its_card_is_refused_naming_each_field(cc: tuple[int, int], sms: int, card: str, off: str) -> None:
+    with pytest.raises(Unmodelled) as e:
+        SD.device_of(cc, sms, card=card, max_model_len=4096)
+    assert str(e.value) == f"the device is not its registered card verity/hardware/cards/{card}.toml: {off}"
+
+
+def test_acquisition_holds_the_engines_device_to_the_card_its_name_registers() -> None:
+    """`served_match.device_of`, which served-match and the Commit's served mode take the served Build's device from: the engine's
+    reported name picks the card, and the one name `NO_CARD` excepts (the B200) is held to none."""
+    facts = {"device": "NVIDIA H200", "cc": [9, 0], "sms": 132, "attention": [{"backend": "FLASH_ATTN", "fa_version": 3}],
+             "max_model_len": 4096}
+    assert served_match.device_of(facts).sms == 132
+    with pytest.raises(Unmodelled, match=r"cards/h200-sxm-141gb\.toml: SM count 114, the card's 132$"):
+        served_match.device_of({**facts, "sms": 114})
+    b200 = {**facts, "device": "NVIDIA B200", "cc": [10, 0], "sms": 148, "attention": FA2}
+    assert SD.card_of("NVIDIA B200") is None and served_match.device_of(b200).sms == 148
+
+
+@pytest.mark.parametrize("name", ["NVIDIA H200 NVL", "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", ""])
+def test_a_device_registered_on_no_card_and_not_excepted_is_refused(name: str) -> None:
+    """A name in neither `CARD` nor `NO_CARD` is refused at acquisition, naming the device, both constants and the fix, even when
+    its compute capability and SM count are a registered card's."""
+    facts = {"device": name, "cc": [9, 0], "sms": 132, "attention": [{"backend": "FLASH_ATTN", "fa_version": 3}], "max_model_len": 4096}
+    with pytest.raises(Unmodelled) as e:
+        served_match.device_of(facts)
+    assert str(e.value) == (f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD "
+                            f"({sorted(NO_CARD)}): add its card under verity/hardware/cards/ and map it in CARD")
 
 
 def test_fa2_full_decode_splits_at_the_capture_batch_and_max_model_len() -> None:
