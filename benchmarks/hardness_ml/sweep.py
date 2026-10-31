@@ -175,6 +175,18 @@ def replan6():
     return cfgs
 
 
+def replan7():
+    """The loosest B that still blocks 2:4 and rank-halving on an int8 R (ρ = 0.44 < 0.447), and B ρ = 0.25 with
+    D₁(R+Δ)D₂, at the two matched points of 25.4 tokens per parameter: w128 at 20M (its best lr) and w256 at 80M."""
+    cfgs = []
+    for size, tokens, lr, threads, tag in (("w128", 20_000_000, 8e-3, 2, "-lr0.008"),
+                                           ("w256", 80_000_000, 2e-3, 4, "-D80M")):
+        b = {"size": size, "tokens": tokens, "lr": lr, "threads": threads, "design": "B", "diag": True}
+        cfgs += [{**b, "name": f"{size}-Bd0.44-rint8{tag}", "rho": 0.44, "r_dist": "int8"},
+                 {**b, "name": f"{size}-Bd0.25{tag}", "rho": 0.25}]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -183,6 +195,7 @@ PRESETS = {
     "replan4": replan4,
     "replan5": replan5,
     "replan6": replan6,
+    "replan7": replan7,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
