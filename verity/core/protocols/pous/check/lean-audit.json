@@ -24,7 +24,7 @@
   "PousCheck": {
    "imports": ["PousCheck", "Flock", "CoreProtocol", "Identity", "Randomness", "MemoryChallenger"],
    "except": ["PousCheck.SetupDifftest"],
-   "why": "the program is code: Lean core, Flock's executable primitives, the core protocol interface, the core primitives (identity, randomness) and the memory challenger's verdict (PousCheck.Run composes it with the setup) only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core, Flock's executable primitives, the core protocol interface, the core primitives (identity, randomness) and the memory challenger's verdict (PousCheck.Run composes it with the setup) only, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {
