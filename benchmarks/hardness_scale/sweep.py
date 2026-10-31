@@ -191,9 +191,9 @@ def resolve(presets, shared: Path):
     return out, pending
 
 
-def someone_waits() -> bool:
-    """Whether anyone waits for a GPU: a queued gpu-lease request (a wait file its waiter holds locked) or a waiter in the
-    GPU slots' line."""
+def someone_waits() -> str | None:
+    """Who waits for a GPU, if anyone: a queued gpu-lease request (a wait file its waiter holds locked, naming it) or a
+    waiter in the GPU slots' line."""
     for f in Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease")).glob("wait.*"):
         try:
             fd = os.open(f, os.O_RDONLY)
@@ -202,11 +202,15 @@ def someone_waits() -> bool:
         try:
             fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
         except BlockingIOError:
-            return True
+            try:
+                return f"gpu-lease {f.name}: {f.read_text(errors='replace').strip()[:200]}"
+            except OSError:
+                return f"gpu-lease {f.name}"
         finally:
             os.close(fd)
     slots = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/gpu/slots"))
-    return bool(slot.waiting(slots.parent / slot.LINE, datetime.now(timezone.utc)))
+    line = slot.waiting(slots.parent / slot.LINE, datetime.now(timezone.utc))
+    return f"slot line: {slot.waiter_text(line[0])}" if line else None
 
 
 def wait_for_data(data):
@@ -312,8 +316,8 @@ def main():
             failed += not ok
         elif not pending:
             break
-        if someone_waits():
-            print("yielding: someone waits for a GPU slot", flush=True)
+        if who := someone_waits():
+            print(f"yielding to {who}", flush=True)
             break
         if c is None:
             time.sleep(POLL_S)
