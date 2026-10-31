@@ -83,6 +83,9 @@ catalog.sqlite                       LOCAL ONLY: rebuildable index (§5); never 
 scratch/<reuse_key>/<name>/          LOCAL ONLY: tool caches namespaced by reuse_key (§6.5)
 steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, the one mutable key, changed by conditional
                                      PUT only (research/steward.py); the store never reads, lists or indexes it
+live/<run id>/<seq>.json             REMOTE ONLY, not a store record: a running check's live record, a new immutable object per
+                                     write with the run's custody key (tools/verity/check/live.py, read by `verity ci`); the store
+                                     never reads, lists or indexes it, and gc leaves it
 ~~~
 
 Python API: `research.store.local.LocalStore(root=None, *, config_path=None, repo=None)` (root from `$RESEARCH_STORE`, config

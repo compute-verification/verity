@@ -1608,6 +1608,7 @@ PREFLIGHT_FILES = {
     "tests/test_no_wall_clock.py": _invariant("WALL_CLOCK", 1),
     "integrations/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 4),
     "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
+    "tools/verity/check/settings.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "settings.py").read_text(),
     "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
                                    "    print('pkg/pins.json is stale (pkg/Main.lean): run `python3 regen.py`', file=sys.stderr)\n"
                                    "    sys.exit(1)\n"),
@@ -3112,8 +3113,7 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
                       (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync and drive only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and drive only"),
-                      (["queue", "drive"], "drive needs --on MACHINE")):
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and drive only")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err

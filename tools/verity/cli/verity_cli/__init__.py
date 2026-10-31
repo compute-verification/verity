@@ -4,6 +4,8 @@
     verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in check/ci.toml)
     verity check --record [ARGS]    the check recorded as an Attempt (check.py --record; a lane's own: --on M --pool NAME)
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
+    verity ci ls [--hours H]        recent check runs, running and ended, from their live records on the store (check/live.py)
+    verity ci inspect RUN           a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
@@ -151,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args[0] == "check":
         return _check(args[1:])
+    if args[0] == "ci":
+        return _run([sys.executable, str(HERE / "check" / "live.py"), *args[1:]])
     if args[0] == "bench":
         return _runner("benchmarks", "bench", args[1:])
     if args[0] in ("run", "config"):

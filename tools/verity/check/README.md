@@ -24,7 +24,8 @@ without blocking a merge.
 A suite is a directory whose `pyproject.toml` configures pytest. Each runs in its own process from its own directory. A pass is
 kept under a hash of its inputs and reused while that hash is unchanged. The inputs are the suite's directory, the workspace
 packages it depends on, what it resolves to in `uv.lock`, the paths it lists under `[tool.verity.tests] inputs`, its fixtures,
-the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables), and the runner itself.
+the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables but those `settings.py` declares
+`where`), and the runner itself.
 Markdown is left out unless a suite lists it. The read guard (`guard/verity_suite_guard.py`) fails a test that opens a
 repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. In a
 `parallel = true` suite each passing test is also kept on its own, under its module's key.
@@ -53,6 +54,11 @@ uv run tools/verity/check/suites.py --explain SUITE       # why a suite would ru
 commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research` from
 the checkout.
 
+A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
+it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
+and ended, and `verity ci inspect RUN` shows a check's steps with their state, elapsed time, an ETA from each step's median
+over recent recorded checks, and its reds so far. What isn't recorded shows as unknown, never as passed.
+
 ## Landing
 
 PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
@@ -62,3 +68,10 @@ with every job, those off the gate too (`train.sh --deferred`), and `main` moves
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red job off the gate reverts its culprit on `checked`
 but doesn't hold `main`. The team skill's "Landing" is the procedure. A pure move that `move_check.py` certifies
 (`verity check move BASE HEAD`) lands ahead of the queue.
+
+## Settings
+
+Every environment variable check reads is declared once in `settings.py`, with its type, default, doc and role: `value` (hashed
+into the run's `result.json` under `settings`), `where` (telemetry there, with the reason it changes no verdict) or `debug`
+(refused in a recorded run, and by `train.sh`). `check.py` and `suites.py` refuse to start with a `CHECK_*` or `LEAN_SLOT*`
+variable it doesn't declare. Reads outside it are held by `tools/verity/check/tests/test_settings.py` to a list that only shrinks.

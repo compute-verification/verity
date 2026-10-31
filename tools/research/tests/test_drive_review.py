@@ -17,7 +17,7 @@ import pytest
 
 import research.queue as Q
 from research import merge
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
 from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_queue import World, _git
@@ -137,23 +137,151 @@ def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(
     that never started launches the run again, whole."""
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = 3
+    art = f"art:{'a' * 64}@{'b' * 64}"
+    h.d.records_artifact = lambda rid: art if rid == "r-post-0" else None
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     assert h.tick().startswith("landed #1"), world.logs
     main = _main(world)
-    assert [(c, kw.get("shard")) for c, _, kw in h.posted] == [(main, "1/3"), (main, "2/3"), (main, "3/3")]
-    h.run_state.update({"r-post-0": ("done", 0, None), "r-post-1": ("running", None, None), "r-post-2": ("done", 0, None)})
-    h.evidence = [_steps_run(world.tmp, "r-post-0", {s: "passed" for s in AFTER_LANDING})]
+    assert h.posted == [(main, "circuit-check", {"cc_records": True})], "circuit-check's records step first"
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert [(c, kw.get("shard"), kw.get("cc_records_from")) for c, _, kw in h.posted[1:]] == [(main, f"{k}/3", art) for k in (1, 2, 3)]
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("running", None, None), "r-post-3": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-post-1", {s: "passed" for s in AFTER_LANDING})]
     h.tick()
     pl = h.postland()
-    assert pl["run"]["groups"] == [["r-post-0"], ["r-post-1"], ["r-post-2"]] and pl["verified"] != main, "one shard runs on"
-    h.run_state["r-post-1"] = ("done", 75, None)
+    assert pl["run"]["groups"] == [["r-post-1"], ["r-post-2"], ["r-post-3"]] and pl["verified"] != main, "one shard runs on"
+    h.run_state["r-post-2"] = ("done", 75, None)
     h.tick()
-    assert h.postland()["verified"] != main and len(h.posted) == 6, "a shard that never started: the run again, whole"
-    h.run_state.update({f"r-post-{i}": ("done", 0, None) for i in (3, 4, 5)})
+    assert h.postland()["verified"] != main and len(h.posted) == 7, "a shard that never started: the run again, whole"
+    assert [kw.get("cc_records_from") for _, _, kw in h.posted[4:]] == [art] * 3, "on the records it had: no second records step"
+    h.run_state.update({f"r-post-{i}": ("done", 0, None) for i in (4, 5, 6)})
     h.tick()
     pl = h.postland()
     assert pl["verified"] == main and pl["run"] is None, world.logs
+
+
+@pytest.mark.parametrize("ends", ["failed", "no artifact", "lost"])
+def test_a_sharded_run_s_shards_build_the_records_themselves_when_the_records_step_gives_none(world, monkeypatch, ends):
+    """The records step holds the shards only while it may still give its artifact: failed, passed without one by
+    `RECORDS_WAIT_S`, or still running then (cancelled), the shards launch without it and each builds the records itself."""
+    from research.drive import RECORDS_WAIT_S
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = 3
+    h.d.records_artifact = lambda rid: None
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    h.run_state["r-post-0"] = {"failed": ("failed", 1, None), "no artifact": ("done", 0, None), "lost": ("running", None, None)}[ends]
+    if ends != "failed":
+        h.tick()
+        assert len(h.posted) == 1, "it waits for the artifact"
+        h.clock += RECORDS_WAIT_S + 1
+    h.tick()
+    assert [(kw.get("shard"), "cc_records_from" in kw) for _, _, kw in h.posted[1:]] == [(f"{k}/3", False) for k in (1, 2, 3)]
+    assert h.cancelled == (["r-post-0"] if ends == "lost" else [])
+
+
+def test_an_unsharded_after_landing_run_has_no_records_step(world, monkeypatch):
+    """One run of every step runs circuit-check's `--all` whole, whose prologue builds the records once anyway."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    [(_, steps, kw)] = h.posted
+    assert steps == ",".join(AFTER_LANDING) and "cc_records" not in kw and "shard" not in kw
+
+
+@pytest.mark.parametrize("on, n, want", [
+    ("m1,m2,m3,m4,m5", 3, ["m1,m4", "m2,m5", "m3"]),
+    ("m1,m2,m3", 3, ["m1", "m2", "m3"]),
+    ("m1,m2", 3, ["m1", "m2", "m1"]),
+    ("auto", 2, ["auto", "auto"]),
+])
+def test_each_shard_of_the_after_landing_run_gets_machines_no_other_shard_has(world, monkeypatch, on, n, want):
+    """train.sh twins only when no slot is free, so shards launched with one machine list all took its one free slot and
+    waited one behind another.  Shard K gets every Nth machine of `on` from the Kth, in `on`'s order; with fewer machines than
+    shards they share, and drive says so once."""
+    h = Review(world, monkeypatch)
+    h.d.on, h.d.after_landing_shards, machines = on, n, []
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or h.launch_post(repo, commit, machine,
+                                                                                                             steps, **kw)
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}"
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    h.run_state["r-post-0"] = ("done", 0, None)                  # circuit-check's records step, on any of `on`
+    h.tick()
+    assert machines == [on, *want] and [kw["shard"] for _, _, kw in h.posted[1:]] == [f"{k}/{n}" for k in range(1, n + 1)]
+    machines = machines[1:]
+    shared = [line for line in world.logs if "fewer machines than shards" in line]
+    if len(on.split(",")) >= n:
+        assert not shared and len({m for ms in machines for m in ms.split(",")}) == sum(len(ms.split(",")) for ms in machines)
+    else:
+        assert len(shared) == 1, world.logs
+
+
+def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
+    """A shard whose twin waits behind another shard: ci launches its run elsewhere and `drive-shard-add TIP K RUN_ID` makes it
+    one of that shard's twins, so its pass passes the shard.  Refused for another tip, a shard out of range, a run already
+    counted, a run still launching, off the control pod, and for a run whose own record isn't that shard of that commit (another
+    commit, shard or steps, no check.py, or no readable record), so a passing run of a mistyped id verifies nothing."""
+    from research.merge import DRIVE_ENV
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = 2
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}"
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    h.run_state["r-post-0"] = ("done", 0, None)                  # circuit-check's records step
+    h.tick()
+    main = _main(world)
+    check = ["uv", "run", "python", "tools/verity/check/check.py", "--keep-going"]
+    steps = ["--deferred", ",".join(AFTER_LANDING)]
+    records = {"r-hand": (main, [*check, *steps, "--shard", "2/2"]),
+               "r-other-commit": (_git(world.origin, "rev-parse", "main^1"), [*check, *steps, "--shard", "2/2"]),
+               "r-other-shard": (main, [*check, *steps, "--shard", "1/2"]),
+               "r-unsharded": (main, [*check, *steps]),
+               "r-other-steps": (main, [*check, "--deferred", "lean-audit", "--shard", "2/2"]),
+               "r-no-check": (main, ["bash", "-lc", "true"])}
+    monkeypatch.setattr(merge, "fetch_run", lambda rid, names, cwd=None, refresh=False: (
+        (world.tmp, {"tree_sha": records[rid][0], "command": records[rid][1]}) if rid in records else None))
+    argv = ["drive-shard-add", main[:12], "2", "r-hand", "--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo",
+            "o/r", "--store", str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml")]
+    with pytest.raises(QueueError, match="still launching"):
+        Q.drive_shard_add(h.q, main, 2, "r-hand")
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("waiting", None, None), "r-hand": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-hand", {s: "passed" for s in AFTER_LANDING})]
+    h.tick()
+    assert h.postland()["verified"] != main, "shard 2's only twin waits"
+    monkeypatch.delenv(DRIVE_ENV, raising=False)
+    assert Q.main(argv) == 1 and h.postland()["run"]["groups"] == [["r-post-1"], ["r-post-2"]]
+    monkeypatch.setenv(DRIVE_ENV, "1")
+    for tip, k, rid, why in ((_git(world.origin, "rev-parse", "main^1"), 2, "r-hand", "is not the tip"),
+                             (main[:6], 2, "r-hand", "is not the tip"), (main, 3, "r-hand", "shard 3 is not one of the run's 2"),
+                             (main, 0, "r-hand", "shard 0 is not one"), (main, 2, "r-post-1", "already a run"),
+                             (main, 2, "r-other-commit", f"r-other-commit checked {records['r-other-commit'][0][:12]}, not"),
+                             (main, 2, "r-other-shard", "r-other-shard is shard 1/2, not shard 2/2"),
+                             (main, 2, "r-unsharded", "r-unsharded is no shard, not shard 2/2"),
+                             (main, 2, "r-other-steps", "ran --deferred lean-audit, not"),
+                             (main, 2, "r-no-check", "is no check.py run"), (main, 2, "r-typo", "can't be read")):
+        with pytest.raises(QueueError, match=why):
+            Q.drive_shard_add(h.q, tip, k, rid)
+    with pytest.raises(SystemExit):
+        Q.main([*argv[:3], *argv[4:]])
+    assert Q.main(argv) == 0
+    run = h.postland()["run"]
+    assert run["groups"] == [["r-post-1"], ["r-post-2", "r-hand"]] and run["ids"] == ["r-post-1", "r-post-2", "r-hand"]
+    h.tick()
+    assert h.postland()["verified"] != main, "drive waits while a twin it replaced still waits: ci cancels it"
+    h.run_state["r-post-2"] = ("done", SIGTERM_RC, None)
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == main and pl["run"] is None, world.logs
+    assert h.cancelled == [] and len(h.posted) == 3
 
 
 def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_the_landings_above_it(world, monkeypatch):
