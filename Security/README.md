@@ -474,8 +474,8 @@ policy and the one-stage audit commit to one record and every window of the peri
 - **Guarantees:** the table's sampled-proofs row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. The composed statement, `Verity.Soundness`, is
   not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol is one-stage v1, which takes
-  the sessions' verdicts as evidence; v2, which runs `flock-verify --zk` on the sessions' files itself, joins once
-  onsite and remote move to it: each reads the challenger's signed coins, and then the composite switches.
+  the sessions' verdicts as evidence; v2, which runs `flock-verify --zk` on the sessions' files itself and reads the
+  challenger's signed coins, joins once onsite and remote move to it and the composite switches.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`,
   `LinkCRZC`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,

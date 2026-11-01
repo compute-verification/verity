@@ -3,17 +3,18 @@ Python reference (`reference.py`: the trial's composition rule with reject domin
 core interface and the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network certifier's period `build`, the inference-only policy's `drawn`, which is
-never undecided, sampled proofs' audits, `empty_draws` and `changed_audits`, the wipe's signed wipes,
-`wipe_protocol_case.case`; space's and bandwidth's from the small periods of their hooks, `periods.py`, all on one
-committed `C*` but PoUS's run on another store, `periods.OTHER_STORE`), often recommits the subprotocols each composite
-ties to one record (`one_record`: the policy to the one-stage audit's registration record, on that audit's own
-declared circuit, `policy_on`, and at remote sometimes every window of the period too, `windows_on`), hands every subprotocol the same blobs
-(`BLOBS`), then often breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a
-case under other params, a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed)
-or the case itself (a field missing or not hex, not an object), and every field of the outcome but its reason must agree
-exactly. Integrity's cases are aimed at undecided at best (an audit that drew nothing), so no product accepts here.
-`product IDS serve` over each composite's subprotocols, the composite `verity run`'s verifier runs, is held to the same
-reference, and `product IDS id` names remote and onsite for their subprotocols and refuses every other set: the same two
+never undecided, sampled proofs' audits as one-stage v1's under the form ``one-stage``, `form_case` over `empty_draws`
+and `changed_audits` with the form's breaks, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
+bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
+store, `periods.OTHER_STORE`), often recommits the subprotocols each composite ties to one record (`one_record`: the
+policy to sampled proofs' registration record, on that audit's own declared circuit, `policy_on`, and at remote
+sometimes every window of the period too, `windows_on`), hands every subprotocol the same blobs (`BLOBS`), then often
+breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other params,
+a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a
+field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. Sampled
+proofs' cases are aimed at undecided at best (an audit that drew nothing), so no product accepts here. `product IDS
+serve` over each composite's subprotocols, the composite `verity run`'s verifier runs, is held to the same reference,
+and `product IDS id` names remote and onsite for their subprotocols and refuses every other set: the same two
 composites a configuration may list (`verity.core.deploy.config.COMPOSITES`)."""
 
 from __future__ import annotations
@@ -81,9 +82,31 @@ def empty_draws(draw) -> dict:
     return OS._json({"params": params, "record": rec, "evidence": evidence})
 
 
-#: The one-stage audit's cases by the verdict they aim at: an audit that drew nothing (undecided, for want of the
-#: verifier of record), and an audit with one or two changes.
-ONE_STAGE_CASES = {R.UNDECIDED: empty_draws().map(OS._case), R.REJECT: OS.changed_audits(most=2, least=1).map(OS._case)}
+#: One break of sampled proofs' form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form, another
+#: form, or the recursive form with none of its files.
+FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
+
+
+def _with_form(x, br: str | None, side: str):
+    """Sampled proofs' form on the params or the evidence (`VStar.Recursive.Sampled`): ``one-stage``, unless `br` breaks
+    it."""
+    if not isinstance(x, dict) or br == f"{side}-no-form":
+        return x
+    return {**x, "form": {f"{side}-form-other": "two-stage", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
+
+
+def form_case(a: dict, br: str | None = None) -> dict:
+    """An audit (`{"params", "record", "evidence"}`) as sampled proofs' case under the form ``one-stage`` (one-stage v1's,
+    `SampledProofs.OneStage`), with `br`, one of `FORM_BREAKS`, when given."""
+    return OS._case({"params": _with_form(a["params"], br, "params"), "record": a["record"],
+                     "evidence": _with_form(a["evidence"], br, "evidence")})
+
+
+#: Sampled proofs' cases by the verdict they aim at: an audit that drew nothing (undecided, for want of the verifier of
+#: record), and an audit with one or two changes or one break of the form.
+SAMPLED_CASES = {R.UNDECIDED: empty_draws().map(form_case),
+                 R.REJECT: st.one_of(OS.changed_audits(most=2, least=1).map(form_case),
+                                     st.builds(form_case, empty_draws(), st.sampled_from(FORM_BREAKS)))}
 
 NP = R.PERIOD
 #: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
@@ -104,7 +127,7 @@ def kinds(C) -> list[str]:
     if C is R.INFERENCE_ONLY:
         return list(INFERENCE_CASES)
     if C is R.SAMPLED_PROOFS:
-        return list(ONE_STAGE_CASES)
+        return list(SAMPLED_CASES)
     if C is R.WIPE:
         return list(R.WIPE_CASES.KINDS)
     if C is R.POUW_PERIOD:
@@ -131,7 +154,7 @@ def component_case(draw, C, kind: str | None) -> dict:
     elif C is R.WIPE:
         case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
     else:
-        case = draw(ONE_STAGE_CASES[R.UNDECIDED if kind == R.ACCEPT else kind])
+        case = draw(SAMPLED_CASES[R.UNDECIDED if kind == R.ACCEPT else kind])
     root = bytes.fromhex(case["commitment"])
     digest = C.answer({**case, "blobs": BLOBS} if getattr(C, "blobs", False) else case)["commitment"]
     return {"id": C.id, "params": case["params"], "root": root, "evidence": bytes.fromhex(case["evidence"]),
@@ -157,7 +180,7 @@ def _declaration(program: str) -> tuple[dict, dict] | None:
 
 
 def policy_on(anchor: dict) -> dict | None:
-    """The policy's case, as `component_case` gives it, on the record and log of the one-stage audit's case `anchor`, declaring the
+    """The policy's case, as `component_case` gives it, on the record and log of sampled proofs' case `anchor`, declaring the
     audit's own circuit (`_declaration`), which the policy accepts when the record chains; None when the audit's params
     name no program it knows."""
     p = anchor["params"]
@@ -185,8 +208,8 @@ def windows_on(evidence: bytes, commit: bytes) -> bytes:
 
 
 def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> list[dict]:
-    """The cases with every subprotocol of ``product.same`` committing to the one-stage audit's registration record,
-    each with its digest as its Python reads it on `BLOBS`, and the policy's case on the audit's own declared circuit
+    """The cases with every subprotocol of ``product.same`` committing to sampled proofs' registration record, each
+    with its digest as its Python reads it on `BLOBS`, and the policy's case on the audit's own declared circuit
     where it can be (`policy_on`): cases that pass `Core.Composition.strays` and leave the verdict to the subprotocols.
     With ``windows``, every window of remote's PoUW period names that record too (`windows_on`), so that remote's
     `windows` tie holds; the period then refuses, since a window's Commit record registers its own tables. Without it,
@@ -328,14 +351,14 @@ def reference(product: R.Product, seen: collections.Counter):
 
 
 class UndecidedPort(D.ProtocolPort):
-    """A product port whose best verdict is undecided: integrity's best case is undecided (`ONE_STAGE_CASES`), so the
-    run's non-vacuity bar is a case every component left undecided or accepted."""
+    """A product port whose best verdict is undecided: sampled proofs' best case is undecided (`SAMPLED_CASES`), so the
+    run's non-vacuity bar is a case every subprotocol left undecided or accepted."""
     accepted = R.UNDECIDED
 
 
 class RejectingPort(D.ProtocolPort):
-    """A product port whose sampled cases reject: every window of its PoUW period must name the policy's record, the
-    one-stage audit's, and a period accepts only when each window names its own Commit record, so the sampled cases
+    """A product port whose sampled cases reject: every window of its PoUW period must name the policy's record, sampled
+    proofs', and a period accepts only when each window names its own Commit record, so the sampled cases
     don't reach undecided. Its bar is the two ways its subprotocols' records meet, counted in `seen`."""
     accepted = R.REJECT
 
@@ -392,7 +415,7 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
            kinds: tuple[str, ...] = (R.REJECT, R.UNDECIDED, "reject, a component undecided",
                                      "reject, no component rejected")) -> None:
     """Lean and Python agree on every case, and the cases reach each of `kinds` (by default each verdict but
-    acceptance: integrity's cases are aimed at undecided at best, so no product accepts)."""
+    acceptance: sampled proofs' cases are aimed at undecided at best, so no product accepts)."""
     seen.clear()
     stats = D.run(p, examples=examples, seed=0, server=server)
     print(f"{p.label}: {stats}, verdicts {dict(seen)}")
@@ -448,7 +471,7 @@ def remote_case(cases: list[dict]) -> dict:
 
 
 def test_remote_refuses_a_period_window_on_another_record(remote_server):
-    """With the policy accepting on the one-stage audit's record, the audit undecided on it and an honest period
+    """With the policy accepting on sampled proofs' record, sampled proofs undecided on it and an honest period
     accepted, remote's verdict would be undecided, but each of the period's windows names its own Commit record, not
     the policy's: remote refuses by its `windows` tie, naming the policy's record and the first window's, in Lean as in
     Python."""

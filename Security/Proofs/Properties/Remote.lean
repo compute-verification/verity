@@ -17,14 +17,16 @@ import Std.Data.TreeMap.Raw.Lemmas
 Remote's check is `Core.Composition.holdTies` of its tie over `Core.Composition.checkSame` over its components on the
 caller's blobs (`remote_check`), so an acceptance is `checkSame`'s with the tie held (`Properties.Composition.acceptTied`),
 and `checkSame`'s is `Core.Composition.check`'s (`checkSame_accept`), which `Properties.Composition.acceptMeans` reduces
-to each component accepting its own case, with the one-stage audit's record the policy's (`strays_two`) and every
+to each component accepting its own case, with sampled proofs' record the policy's (`strays_two`) and every
 Commit record the period's windows name the policy's record too (`windows_tied`). The policy's
 acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
 `NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
 `DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.CompliesCK`, `ExpandComplies` and
 `Verity.Circuit.expand_boolean` give the padded `(c, k)`-partitions. The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
-verdicts are about a parse, a layout, a baseline and a division).
+verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's
+(`OneStage.checkLive`) at its params' form: in the one-stage form directly, in the recursive form on the inner
+statement's params after V*'s compiled check (`recursive_live`), so its record keeps R2 in either (`stage_registered`).
 
 The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
 nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`. Both
@@ -143,12 +145,18 @@ theorem strays_none {ss : List String} {cs : List Protocol} {ev : List Case} {s 
 theorem remote_check (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
       holdTies [Core.Remote.windows] ev (checkSame "verity/remote/v0"
-        ["verity/inference-only/v0", "verity/sampled-proofs/one-stage/v1"]
-        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, SampledProofs.OneStage.protocol] ps c ev) := rfl
+        ["verity/inference-only/v0", "verity/sampled-proofs/v1"]
+        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol,
+          VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := rfl
 
 theorem id_policy : NciCheck.Protocol.protocol.id = "verity/inference-only/v0" := rfl
 theorem id_period : PouwCheck.Period.protocol.id = "verity/pouw/period/v1" := rfl
-theorem id_oneStage : SampledProofs.OneStage.protocol.id = "verity/sampled-proofs/one-stage/v1" := rfl
+theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).id = "verity/sampled-proofs/v1" := rfl
+
+/-- Sampled proofs' commitment and digest are one-stage v1's, on any blobs. -/
+theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
+    Properties.Composition.digestOf (VStar.Recursive.Sampled.protocol.onBlobs bs) b =
+      Properties.Composition.digestOf SampledProofs.OneStage.protocol b := rfl
 
 /-- What the policy's check accepts: a record naming the declared circuit, and a verdict of compliance of the check of
 record. -/
@@ -254,6 +262,19 @@ theorem stage_registered {p : SampledProofs.OneStage.Params} {c : SampledProofs.
       exact hreg.2.1
   · cases h
 
+/-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
+V*'s compiled check computes. -/
+theorem recursive_live {q : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+    (h : VStar.Recursive.checkBlobs q c e bs = .accept pub prof) :
+    ∃ e₀, SampledProofs.OneStage.checkLive q.base c e₀ = .accept pub prof := by
+  unfold VStar.Recursive.checkBlobs at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · exact ⟨_, h⟩
+
 /-- `digestOf` of a commitment that decodes is the digest of what it decodes to. -/
 theorem digestOf_ok {P : Protocol} {b : ByteArray} {c : P.Commitment} (h : P.commitment b = .ok c) :
     Properties.Composition.digestOf P b = some (P.digest c) := by
@@ -326,15 +347,18 @@ named by their ids. -/
 theorem remote_check_ids (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
       holdTies [Core.Remote.windows] ev (checkSame "verity/remote/v0"
-        [NciCheck.Protocol.protocol.id, SampledProofs.OneStage.protocol.id]
-        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, SampledProofs.OneStage.protocol] ps c ev) := by
-  rw [remote_check, id_policy, id_oneStage]
+        [NciCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)).id]
+        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol,
+          VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := by
+  rw [remote_check, id_policy, id_sampled]
 
-theorem ne_policy_stage : (NciCheck.Protocol.protocol.id == SampledProofs.OneStage.protocol.id) = false := by
-  rw [id_policy, id_oneStage]; decide
+theorem ne_policy_stage (bs : Blobs) :
+    (NciCheck.Protocol.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
+  rw [id_policy, id_sampled]; decide
 
-theorem ne_period_stage : (PouwCheck.Period.protocol.id == SampledProofs.OneStage.protocol.id) = false := by
-  rw [id_period, id_oneStage]; decide
+theorem ne_period_stage (bs : Blobs) :
+    (PouwCheck.Period.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
+  rw [id_period, id_sampled]; decide
 
 /-- What remote's tie gives once the policy's commitment decodes: every Commit record the period's windows name, when
 they decode, has the policy's record's digest. -/
@@ -373,17 +397,26 @@ theorem windows_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
     cases hy
     rw [hyr d hd, ← hxr _ (List.mem_singleton_self _)]
 
-/-- What the one-stage audit's accepted case gives: `StageHeld`. -/
-theorem stage_held {k : Case} {n : Named} (hp : k.params = n.params)
-    (h : Properties.Composition.DecodedAccepted SampledProofs.OneStage.protocol n.params.toUTF8
+/-- What sampled proofs' accepted case gives, on any blobs: `StageHeld`, at the form its params name. -/
+theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
+    (h : Properties.Composition.DecodedAccepted (VStar.Recursive.Sampled.protocol.onBlobs bs) n.params.toUTF8
       k.commitment k.evidence) : StageHeld k := by
   obtain ⟨p, c, e, hp', hc, -, pub, prof, hchk⟩ := h
-  have hp'' : (canonicalJson n.params.toUTF8 >>= SampledProofs.OneStage.paramsOfJson) = .ok p := hp'
+  have hp'' : (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok p := by
+    rw [hp]; exact hp'
   have hc' : SampledProofs.OneStage.commitmentOf k.commitment = .ok c := hc
-  have hchk' : SampledProofs.OneStage.checkLive p c e = .accept pub prof := hchk
-  exact ⟨p, c, by rw [hp]; exact hp'', hc', stage_registered hchk'⟩
+  have hchk' : VStar.Recursive.Sampled.checkBlobs p c e bs = .accept pub prof := hchk
+  clear hp' hchk
+  rcases p with p | q <;> rcases e with e | e
+  · exact Or.inl ⟨p, c, hp'', hc',
+      stage_registered (show SampledProofs.OneStage.checkLive p c e = .accept pub prof from hchk')⟩
+  · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
+  · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
+  · obtain ⟨e₀, he₀⟩ := recursive_live
+      (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
+    exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀⟩
 
-/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and the one-stage audit's
+/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and sampled proofs'
 records, which every Commit record the period's windows name has, and the policy's case decoding to what the policy's
 check accepts. -/
 theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}
@@ -404,11 +437,13 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
   have hS₀ := hS
   obtain ⟨pS, cS, eS, -, hcS, -, -⟩ := hS₀
   have hdS := strays_two (P₁ := NciCheck.Protocol.protocol) (P₂ := PouwCheck.Period.protocol)
-    (P₃ := SampledProofs.OneStage.protocol) ne_policy_stage ne_period_stage hcI hcS hstrays
+    (P₃ := VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)) (ne_policy_stage _) (ne_period_stage _)
+    hcI hcS hstrays
   have hp : (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI'
   refine ⟨kI, kW, kS, pI, cI, eI, rfl, digestOf_ok hcI,
-    windows_tied hidI hidW hcI (hties _ (List.mem_singleton_self _)), (digestOf_ok hcS).trans (congrArg some hdS), hp, hcI,
-    heI, hchkI, stage_held hpS hS⟩
+    windows_tied hidI hidW hcI (hties _ (List.mem_singleton_self _)),
+    (digestOf_sampled _ _).symm.trans ((digestOf_ok hcS).trans (congrArg some hdS)), hp, hcI, heI, hchkI,
+    stage_held hpS hS⟩
 
 theorem acceptInferenceOnly : AcceptInferenceOnly := by
   intro blobs ps c ev pub prof h
