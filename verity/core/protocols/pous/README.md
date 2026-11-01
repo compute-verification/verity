@@ -200,7 +200,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `P2RingAuditSecureOfReduces`, `P2RingAuditSecureOfRoundSecure` and `P2RingGradedOfRoundSecure`; `P2ContentAbsorbs`
   (`Guarantees/Obligation.lean`); above `2^23` blocks, `Pous.Period.SecurityProofs.periodHeldAt`. The named
   assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`,
-  `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
+  and `P2RingRoundSecureWide`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
 - **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
   `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
