@@ -141,7 +141,7 @@ reference makes that explicit as one domain type per tree kind, built only from 
 |---|---|---|---|---|---|
 | C0 semantic | `SemanticDomain` | position leaf | path shape from (N, i); meaning = `unrank(i)` of the template | root (`u64 N`) | program, query_id, template, ctx, epoch |
 | native-host step, host path | `StepDomain(chunk=None)` | position leaf | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step), geo, layout |
-| native-host step, host path, hm96 (opt-in) | `StepDomain(chunk=None)` wrapped by `hm96.Hm96Sha256` | hm96 leaf over the position leaf: `SHA-256(leaf_prefix(key) ‖ b ‖ c)`, recomputed from the value and its salt | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step, and the scheme digest through `/leaf=`, §4), geo, layout |
+| native-host step, host path, hm96 (opt-in) | `StepDomain(chunk=None)`, each leaf an `hm96.HidingLayout` over its position leaf | hm96 leaf over the position leaf: `SHA-256(leaf_prefix(key) ‖ b ‖ c)`, recomputed from the value and its salt | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step, and the scheme digest through `/leaf=`, §4), geo, layout |
 | native-host step, GPU tree | `StepDomain(chunk=…)` | chunk leaf | chunk header's `chunk_index` = i, and the path | root (`u64 N`) | as above, plus the header fields |
 | `fa2h` stream | `StreamDomain` | chunk leaf | `chunk_index` = i, and the path | `stream_ctx` | layout, `launch_tag`, `src_mask`, `chunk_words` |
 | `fa2h` thread | `ThreadDomain` | thread leaf | header (slab, m_block, n_block, tidx) and i = `((slab·num_m_block + m_block)·NB + n_block)·128 + tidx` | `geo` only: N = HB·num_m_block·NB·128 | geo, `launch_tag`, `src_mask` |
@@ -343,7 +343,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
   `"hash": "sha512"`. That is the tagged-hash frame of `identity_digest`, through SHA-512, with prefix
   `verity/tagged-sha512/v1\0`. SHA-256 domain digests are unchanged.
 - **Thread trees.** Unvisited slots hold 64 zero bytes.
-- **Hiding leaves.** hm96 over this scheme is `hm96-sha512/v1` (`Hm96Sha512`). Under it, the §4 context suffix carries that rule's
+- **Hiding leaves.** hm96 over this scheme is `hm96-sha512/v1`. Under it, the §4 context suffix carries that rule's
   64-byte scheme digest.
 
 **Not covered.** Capture-v1 id leaves (`leaves.LeafTree`) stay SHA-256; they are a research capture format, not a serving tree.
