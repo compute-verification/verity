@@ -1,15 +1,16 @@
 """A plain hidden-output session on the keyed coin tree, end to end (PROTOCOL.md §16.15, `plain_hidden.py`, `--coins
 tree`, `Flock.CoinTree`): a RoPE d64 statement with hidden outputs whose 32 units read their own rows (no shared rows, no
 registered value), proved by Flock in one loopback session without `--zk` under a subset sample of 16
-(`pod/91-plain-hidden.sh`), its coins committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree that the auditor's
+(`pod/91-plain-hidden.sh COINS=tree`), its coins committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree that the auditor's
 challenger sampled and opened (`flock-circuit serve --tree-from`, the prover checking each opening).
 
 The session's coins are the ones the challenger's release log shows it sampled and opened. The compiled Lean verifier
 accepts it with the verifier's own program and partition, the form `flock_verify_sound`'s plain hidden-output branch
 covers at the subset law (`FailClosed.SoundExecH` at its subset sample design), and refuses it on any other coins at
 S2/R7, a second time in one run for its reused session key, with a byte of a proof changed, or with its record's sample a
-bernoulli sample of the same units (no claim draws by that law). It is the one test of a plain session at the subset law
-on the verifier of record; the `#guard`s of `Flock/Test/PlainHidden.lean` hold the rule itself.
+bernoulli sample of the same units (no claim draws by that law). It and `test_lean_plain_hidden.py` (a session on OS
+coins) are the tests of a plain session at the subset law on the verifier of record; the `#guard`s of
+`Flock/Test/PlainHidden.lean` hold the rule itself.
 
 It is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a missing fixture
 fails these tests rather than skipping them. Each verify sets up an m = 22 table, so the module is slow. It catches a

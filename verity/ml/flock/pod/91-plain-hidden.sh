@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
-# The plain hidden-output fixture (tests/plain_hidden.py, tests/test_lean_plain_tree.py): a RoPE d64 statement with hidden
-# outputs, no shared rows and no registered value, proved in one loopback session without --zk under a subset sample on the
-# keyed coin tree, which the auditor's challenger samples and opens (challenger.sh: serve --tree-from; its release log holds
-# the session's record, challenger/audit.json), then Lean's `flock-verify verify --coins tree` on it with the verifier's own
-# program and partition (PROTOCOL.md §16.15: the plain claim at hidden outputs draws by the subset law at one table,
-# FailClosed.SoundExecH at its subset sample design). The staged files, the session and, on the tree, its challenger's
-# challenger/ (no private key or secret) go into the evidence store as a fixture (`research data put --kind fixture/v1
-# --preserve`), whose id `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only.
-# Outputs under out/: host.txt,
-# stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), challenger/ (its record,
-# releases.jsonl, hellos.jsonl and audit.json), lean-honest.log (its VERDICT line), fixture.txt.
+# The plain hidden-output fixture (tests/plain_hidden.py, tests/test_lean_plain_hidden.py): a RoPE d64 statement with hidden
+# outputs, no shared rows and no registered value, proved in one loopback session without --zk under a subset sample on OS
+# coins, then Lean's `flock-verify verify --coins os` on it with the verifier's own program and partition (PROTOCOL.md
+# §16.15: the plain claim at hidden outputs draws by the subset law at one table, FailClosed.SoundExecH at its subset sample design). The staged files
+# and the session go into the evidence store as a fixture (`research data put --kind fixture/v1 --preserve`), whose id
+# `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt,
+# stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), lean-honest.log (its VERDICT
+# line), fixture.txt; under COINS=tree also challenger/ (its record, releases.jsonl, hellos.jsonl and audit.json: the
+# session's record held to its release log), which the fixture keeps without the challenger's private key or secret.
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
-# env: CPUS=16  K=16 (the subset sample's units, of the stage's 32)  COINS=tree (FC_COINS=tree, verify --coins tree;
-#      tests/test_lean_plain_tree.py's fixture), or os for per-round OS coins and no challenger  FLOCK_WORK=/workspace, or
-#      where /workspace isn't writable
+# env: CPUS=16  K=16 (the subset sample's units, of the stage's 32)  COINS=os, or tree for the session on the keyed coin
+#      tree, which the auditor's challenger samples and opens (challenger.sh: serve --tree-from; FC_COINS=tree, verify
+#      --coins tree; tests/test_lean_plain_tree.py's fixture)  FLOCK_WORK=/workspace, or where /workspace isn't writable
 #      /workspace/jobs/pc-read-gadget (node 1, shared as 76-read-gadget.sh's) else /workspace/cache/plain-hidden (the prover
 #      build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -28,8 +26,8 @@ if [ -z "${PH_PINNED:-}" ]; then
   # no slice locks here (a vy-cpu pod): the check slot (research run --pool) has pinned the job to its own cores
   export PH_PINNED=slot RAYON_NUM_THREADS=$(nproc)
 fi
-COINS=${COINS:-tree}
-case $COINS in os|tree) ;; *) echo "COINS=$COINS: tree or os" >&2; exit 2 ;; esac
+COINS=${COINS:-os}
+case $COINS in os|tree) ;; *) echo "COINS=$COINS: os or tree" >&2; exit 2 ;; esac
 export FC_COINS=$COINS
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/plain-hidden}/out; mkdir -p $O
 if [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ]; then
