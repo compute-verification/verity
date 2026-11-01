@@ -69,6 +69,7 @@ theorem schedOf_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : L
         | .error _ => some .empty
       | .error _ => some .empty := by
   simp only [schedOf, hs, hq, hl]
+  rfl
 
 /-- **Exactly the inner proof's rounds have no scheduled round**: at a statement that sets up a session and a history
 past the link, `schedOf` is none exactly at `InnerAt`. -/
@@ -222,10 +223,12 @@ theorem fillRoundEq_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     FillRoundEq (CoinLayer.session Loop.loopNr Masked.dataE) vs (ofLoopLink L₀ src real) CoinOpen.shaH wk x w := by
   intro ν t κ m₀ ρ₀ ops hpos hlt hlive hok href
   rw [scheduled_ofLoopLink]
-  rcases hsc : Loop.schedOf (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2) with _ | r
-  · exact hI ν t κ m₀ ρ₀ ops hpos hlt hlive hok href
+  split
+  · rename_i r hsc
+    exact hS ν t κ m₀ ρ₀ ops r hpos hlt hlive hok href hsc
+  · rename_i hsc
+    exact hI ν t κ m₀ ρ₀ ops hpos hlt hlive hok href
       ((Loop.schedOf_eq_none_iff (by omega) (by simpa using hpos)).mp hsc)
-  · exact hS ν t κ m₀ ρ₀ ops r hpos hlt hlive hok href hsc
 
 end LeanRelease
 
