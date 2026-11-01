@@ -411,3 +411,6 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
   - The gates are designed and priced, not built: 233 GPU-h (1B) and 1,674 (8B) to prove the spectral gate.
   - **The decisive test** (a cheater trained against both gates on q and k at a 1B-like width) is running on
     vy-nebius-1, finishing by 12:00Z Sun.
+- **HT-SCALE closed:** the teacher (SmolLM2-1.7B) does not narrow A′'s gap at matched tokens (0.0373 against
+  0.0359 nats at D/4, a shift of +0.0014, within the seed spread of 0.011–0.013). It used 186.8 GPU-h in total, about
+  $392. Final evidence: art:adbda5ff…
