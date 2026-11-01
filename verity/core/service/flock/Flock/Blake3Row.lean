@@ -1,5 +1,5 @@
 /-
-The keyed-BLAKE3 row leaf (`blake3-keyed/row/v2`), the circuit statement's row leaf at PR #83 up to `19c7269a`: each input
+The keyed-BLAKE3 row leaf (`blake3-keyed/row/v2`), the circuit statement's row leaf in the circuit prover up to `19c7269a`: each input
 port's row is hashed by BLAKE3 in keyed mode (key `verity/blake3-leaf/v1/x`) in compression slots of the pinned
 compression circuit, chunk runs then (for a port of several chunks) a keyed parent tree, and the root's output is the
 port's row digest. Regions: every compression's counter, block length and flags; every chain start's chaining value

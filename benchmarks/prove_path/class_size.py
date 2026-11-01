@@ -41,6 +41,7 @@ from verity_vllm.program.predict import window_circuit as WC
 
 from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
 from verity.ml.definitions.registry.fa2_check_inf import pv_groups
+from verity.ml.windows.interface import K_MAX, LAST_BLOCK_BYTES, proof_block_k_log
 
 SOFTMAX = "AttnBlockSoftmax_v1"
 PV = "AttnBlockPv_v1"
@@ -225,15 +226,14 @@ MEASURED |= {
 }
 #: `TokenFeed_v1{NP}`'s k_log as composed: (the most NP, k_log), an upper bound below a composed NP
 FEED_K = ((1024, 23), (2048, 24))
-#: C-Flock's largest block, 2^27 bits (`verity_flock.circuit.K_MAX`)
-K_MAX = 27
 
 
 def rows_k(rows: int) -> int:
-    """The least k_log of a unit of ``rows`` rows in and out: C-Flock's composer gives each an hm96 slot, the slots rounded up
+    """The least k_log of a unit of ``rows`` rows in and out (`proof_block_k_log` at no logic, one row past
+    `LAST_BLOCK_BYTES` and the rest a byte): C-Flock's composer gives each an hm96 slot, the slots rounded up
     to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every copy unit of W + 1 rows composed (W 2
     to 128, `COMPOSED`) takes exactly this, so a unit of 257 rows takes 2^28."""
-    return max(22, 19 + (rows - 1).bit_length())
+    return proof_block_k_log([LAST_BLOCK_BYTES + 1] + [1] * (rows - 1))
 
 
 def measured(lab: str) -> tuple[int, int, str]:

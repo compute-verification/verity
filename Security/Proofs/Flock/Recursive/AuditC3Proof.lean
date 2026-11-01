@@ -36,12 +36,8 @@ Candidate 3's table ignores the last round's coin, as its pick does (`schedInner
 gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerLV`, `innerC`'s form off
 `ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl` that `RegExtract`'s proof reads).
 
-`_hstk` is read here only as `TopColl`'s collision (`topFinder`): VBridgeCOff is a premise, and `_hstk` is what its
-discharge at the honest family takes as `htop` (`FlockC3.Compose.hbr_honest_reg`, off `TopColl` the held top is
-`TopOf`'s, `topOf_held`, which gives VBridgeCOff at the checked sessions and
-the word the runs open, `_hbr`'s form, from `hbr_honest` at a fixed word of R's cap, since candidate 3's table reads
-only the cap; its decoder reads the last round from the layers in full); `vbridge_checked` and `vbridgeC_checked` carry VBridge and
-VBridgeC from the typed sessions to the checked ones.
+`_hstk` is read here only as `TopColl`'s collision (`topFinder`): VBridgeCOff is a premise. `vbridge_checked` and
+`vbridgeC_checked` carry VBridge and VBridgeC from the typed sessions to the checked ones.
 
 (ii) is `RecursiveFirewallPrivate`.
 -/
@@ -112,8 +108,7 @@ theorem acceptsZKR_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'}
     exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t h).elim
 
 /-- **VBridge at the typed sessions gives it at the checked sessions**, which accept only what the typed sessions accept
-(`acceptsZKR_of_keepOwn`) and whose reads, layers and commit strings are theirs: `FlockC3.Compose.hbr_honest`
-discharges `_hbr` through it. -/
+(`acceptsZKR_of_keepOwn`) and whose reads, layers and commit strings are theirs. -/
 theorem vbridge_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} {ish : RecVStar.Inner} {cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}

@@ -1,5 +1,6 @@
 import Mathlib
 import Definitions.Hash.Basic
+import Definitions.Core.Boolean
 import Definitions.Claims.Hm96
 import Definitions.Claims.Json
 
@@ -94,27 +95,6 @@ abbrev Collision (H : Msg → Msg) (u v : Msg) : Prop := Hash.Collision H u v
 /-- **`H`'s outputs are 64 bytes**: the deployed oracle is SHA-512 with its whole output, and the random-oracle model
 draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
 def Out64 (H : Msg → Msg) : Prop := ∀ m, (H m).length = 64
-
-/-! ## AND/XOR circuits -/
-
-inductive Gate where
-  | and (i j : ℕ)
-  | xor (i j : ℕ)
-
-/-- A circuit: `nIn` input wires, then one wire per gate; the outputs are wire indices. -/
-structure Circuit where
-  nIn : ℕ
-  gates : List Gate
-  outs : List ℕ
-
-/-- Wire values after the gates, in order (input wires first). -/
-def Circuit.wires (C : Circuit) (inp : List Bool) : List Bool :=
-  C.gates.foldl (fun ws g => ws ++ [match g with
-    | .and i j => ws.getD i false && ws.getD j false
-    | .xor i j => xor (ws.getD i false) (ws.getD j false)]) inp
-
-def Circuit.eval (C : Circuit) (inp : List Bool) : List Bool :=
-  C.outs.map fun o => (C.wires inp).getD o false
 
 /-! ## Relations -/
 
@@ -559,18 +539,19 @@ structure Form where
   rowsV1 : Bool
   rowsV2OrSeg : Bool
   wiresAcyclic : Bool
+  templated : Bool
 
-/-- **Flock's statement**: `2^m` trace bits in blocks of `2^kLog`, the block circuit `C`, the blocks' inputs and outputs
-(`inp b`, `out b`, reading the public or the hidden values), the public values, and the statement's form. The
-commitments are no field of their own: they are hm96 rows under frame-v3-sha512 trees, which the circuit computes and
-outputs (the forms `hm96Rows`, `rowsV1`, `rowsV2OrSeg`), so they are among `C`'s outputs, which the verifier checks
-against the registered rows; their salts are among the hidden values. -/
+/-- **Flock's statement**: `2^m` trace bits in blocks of `2^kLog`, the block circuit `C` (a Boolean circuit), the blocks'
+inputs and outputs (`inp b g`, `out b g`: the public or hidden value block `b` reads at `C`'s gate `g`), the public
+values, and the statement's form. The commitments are no field of their own: they are hm96 rows under frame-v3-sha512
+trees, which the circuit computes and outputs (the forms `hm96Rows`, `rowsV1`, `rowsV2OrSeg`), so they are among `C`'s
+outputs, which the verifier checks against the registered rows; their salts are among the hidden values. -/
 structure Stmt where
   m : ℕ
   kLog : ℕ
-  C : Circuit
-  inp : ℕ → List Src
-  out : ℕ → List Src
+  C : FlockSoundness.Audit.Circuit
+  inp : ℕ → ℕ → Src
+  out : ℕ → ℕ → Src
   pub : List Bool
   form : Form
 
@@ -588,11 +569,14 @@ def val (s : Stmt) (w : Wit) : Src → Bool
   | .pub i => s.pub.getD i false
   | .hid i => w.hid.getD i false
 
-/-- **Flock's relation** on a parsed statement: `C` maps inputs to outputs in every block. That is the whole relation:
-the commitments are hm96 rows under frame-v3-sha512 trees that `C` computes from the hidden values, salts included,
-and outputs, so this clause reads them as `C`'s outputs. -/
+/-- **Flock's relation** on a parsed statement: `C` maps inputs to outputs in every block. Evaluated one bit per gate
+(`FlockSoundness.Audit.Circuit.toCircuit`) with each input gate `g` holding the value `inp b g`, `C` holds at each
+output gate `o` the value `out b o`. That is the whole relation: the commitments are hm96 rows under frame-v3-sha512
+trees that `C` computes from the hidden values, salts included, and outputs, so this clause reads them as `C`'s
+outputs. -/
 def RelS (s : Stmt) (w : Wit) : Prop :=
-  ∀ b < s.nBlocks, s.C.eval ((s.inp b).map (val s w)) = (s.out b).map (val s w)
+  ∀ b < s.nBlocks, ∀ o ∈ s.C.outputs,
+    (s.C.toCircuit.eval (fun g => BitVec.ofBool (val s w (s.inp b g.val))) o).getLsbD 0 = val s w (s.out b o.val)
 
 instance instDecidableRelS (s : Stmt) (w : Wit) : Decidable (RelS s w) := by
   unfold RelS; infer_instance
@@ -618,7 +602,10 @@ registered reads and `hm96-sha512/v1` leaves (with or without `--zk`); a unit of
 with hidden outputs, the general instance form: the unit repeated, reading any number of committed input groups, and
 any number of stages the verifier evaluates, reading wires from earlier outputs, with an order of the wires that
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
-row a `sha512/row/v2` or `sha512/row-seg/v1` row. -/
+row a `sha512/row/v2` or `sha512/row-seg/v1` row; and no output port pinned (META `pinned_outputs`), which both row forms
+(`rowsV1`, `rowsV2OrSeg`) read. A templated statement (`templated`: its unit read from a template, the unit's fields
+those of the unit it unrolls to) only under `--zk`, with hidden outputs, without registered reads and at one table, its
+unit reading one input group and returning the outputs. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧
@@ -627,7 +614,9 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     (s.form.sharedRows → s.form.hiddenOutputs ∧ s.form.registeredReads ∧ s.form.leaf = "hm96-sha512/v1") ∧
     ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
     s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
-    (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg))
+    (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg)) ∧
+    (s.form.templated → zk ∧ s.form.hiddenOutputs ∧ ¬ s.form.registeredReads ∧ s.form.tables ≤ 1 ∧
+      s.form.unitInputGroups = 1 ∧ ¬ s.form.tail)
 
 /-- **The zero-filled word** of length `n`: at each position the first opened column there, zero where none was opened.
 Positions from `n` on are ignored. -/

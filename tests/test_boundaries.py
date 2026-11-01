@@ -7,7 +7,7 @@
     ``ALLOWED``, and no third-party package;  a verifier imports no ml: until a protocol's verifier of
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
-    another distribution of the workspace (C-Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
+    another distribution of the workspace (Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
     imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  only tests name
     a function past a guard (``TEST_ONLY``).
@@ -16,7 +16,9 @@ An import is an import statement (a relative one resolved against its package), 
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
 time: a module named as data is still a dependency.  Tests (``tests/``) are suites of their own and declare what they read;
 a ``lean/`` directory holds a Lean package and the scripts that write its vectors, run by path.  The trees in ``SEPARATE``
-have import roots of their own, and only the rule that ml never imports core reads them; it reads ml's tests too.
+have import roots of their own, and only the rule that ml never imports core reads them; it reads ml's tests too.  No other
+file under ``verity/``, tests included, reads another distribution at run time: its package data or a module named in a
+string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
 numpy is a core dependency (architecture decision: `verity.ml.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
@@ -56,10 +58,16 @@ ALLOWED = {
     # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
     "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
     # Integrations are frontends. An integration hands Verity a window: its circuit, the values it
-    # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
+    # commits in a `verity.ml.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
+    # Ticks, spans and the monitoring period, stdlib only: the mirror of the code's `CoreProtocol.Period`, which a
+    # protocol's periods read rather than define.
+    "core.periods": set(),
     "core.claims": set(),
+    # An auditor party's signed period roots and liveness records,
+    # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
+    "core.attest": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
     # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
@@ -67,22 +75,25 @@ ALLOWED = {
     "core.wire": set(),
     "core.deploy": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
-    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
+    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof system's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
-    # Its challenger, firewall, workers and verifier are
+    # Its challenger, ZK server, workers and verifier are
     # parties of the deployment layer (`parties`), their messages the wire's.
     "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's.
-    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
-                            "ml.randomness"},
+    # deployment layer (`wipe_parties`), their messages the wire's. The
+    # memory challenger reports its sessions under its party's per-period root (`core.attest`). The wipe's monitoring
+    # periods are the core's.
+    "core.protocols.pous": {"core.periods",
+                            "core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+                            "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof service's one challenger's (`sampled_proofs.challenger`).
+    # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous"},
@@ -91,7 +102,7 @@ ALLOWED = {
     # verifier recomputes): the one edge into the catalog.
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                             "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
-    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
+    # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
 }
@@ -103,7 +114,7 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
-#: Trees under ``verity/`` with import roots of their own: C-Flock's distribution (``verity_flock``) and its verifier's
+#: Trees under ``verity/`` with import roots of their own: Flock's distribution (``verity_flock``) and its verifier's
 #: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
 #: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
 #: which holds it to the wire's Python reference through ``verity_difftest``.
@@ -115,7 +126,7 @@ NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/cir
 #: ``verity/ml/`` that import core anyway
 #: (globs from ``verity/``), each with why.
 ML_IMPORTS_CORE = {
-    "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against core's Python verifiers",
+    "ml/flock/tests/*": "Flock's tests check its prover and the Lean verifier against core's Python verifiers",
     "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.core.claims`",
     "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
                                                 "decode, receipts and trees (`remote_bandwidth.codec`, `receipts`, `audit`)",
@@ -151,7 +162,7 @@ CORE_ML_EDGES = {
 #: The units of ``verity.ml`` core's Python verifiers read, directly or through one another (what ``ALLOWED`` lets core
 #: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen
 #: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier of record becomes its Lean.  The rest of ml
-#: (C-Flock's prover, the private circuits) is not on it.
+#: (Flock's prover, the private circuits) is not on it.
 SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto", "ml.kernels",
                   "ml.randomness"}
 #: What a test that refuses a new core -> ml edge says.
@@ -189,7 +200,7 @@ BENCHMARKS_IMPORTERS = {
     "verity/core/protocols/pous/check/timed_audit.py": "memory-accounting: the memory challenger, the strict timed audit's "
                                                        "reference (`benchmarks/pous/band_gpu/memory_challenger.py`)",
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
-    # C-Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
+    # Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
     **dict.fromkeys((
         "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py", "verity/ml/flock/pod/rec_inner.py",
         "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/boolean_export.py",
@@ -338,6 +349,41 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
                     or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
                 offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
     assert not offenders, "\n".join(offenders)
+
+
+#: A read of another package at run time, matched in the text: its package data (``importlib.resources``) or a module an import
+#: call names by a string, an f-string included (`_imports` sees only a whole constant handed to an import call).
+RUN_TIME_READ = re.compile(r"""\b(?:files|read_text|read_binary|open_text|open_binary|import_module|__import__|find_spec)\("""
+                           r"""\s*[rRbBuUfF]{0,2}["'](?P<name>[A-Za-z_]\w*)""")
+
+
+def _run_time_reads(text: str) -> list[tuple[int, str]]:
+    """``(line, name)`` for each read in ``text`` that `RUN_TIME_READ` matches and whose top-level name is ``FORBIDDEN_EXTERNAL``."""
+    return [(text.count("\n", 0, m.start()) + 1, m["name"]) for m in RUN_TIME_READ.finditer(text) if m["name"] in FORBIDDEN_EXTERNAL]
+
+
+def test_verity_reads_no_other_distribution_at_run_time() -> None:
+    """No Python file under ``verity/`` (tests, Lean scripts and sidecars included; a ``SEPARATE`` tree is a distribution of its own)
+    reads another distribution's package data or names one of its modules for an import call, so ``verity`` alone evaluates its
+    Definitions and no suite of it takes another distribution as an input."""
+    offenders = []
+    for path in sorted(SRC.rglob("*.py")):
+        rel = path.relative_to(SRC)
+        if {".lake", "__pycache__"} & set(rel.parts) or _separate(rel):
+            continue
+        offenders += [f"{rel}:{line}: {name}" for line, name in _run_time_reads(path.read_text(encoding="utf-8"))]
+    assert not offenders, ("verity reads another distribution at run time, and an integration may import verity but never the "
+                           "reverse: move the data or code into verity beside what reads it (as `bf16_gemm_check`'s device pins "
+                           "sit in its `device_pins/`), or take it as a parameter the caller supplies\n" + "\n".join(offenders))
+
+
+def test_a_run_time_read_is_found() -> None:
+    """The check above isn't vacuous: package data, and a module named by a string or an f-string, are each a read of their
+    distribution; ``verity``'s own package data is not."""
+    src = ('P = resources.files("verity_vllm") / "pins"\nm = importlib.import_module("verity_vllm.pins")\n'
+           "n = import_module(f'verity_vllm.{x}')\no = __import__('research')\n"
+           'q = resources.files("verity.ml.circuits.ops") / "tables"\nr = resources.files(__package__)\n')
+    assert _run_time_reads(src) == [(1, "verity_vllm"), (2, "verity_vllm"), (3, "verity_vllm"), (4, "research")]
 
 
 def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:

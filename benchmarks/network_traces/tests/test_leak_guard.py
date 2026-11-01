@@ -252,7 +252,7 @@ def _chain(tmp: Path, gates: str, *, py: str = sys.executable, **kw) -> subproce
 
 
 def _sent(tmp: Path) -> Path:
-    """A run dir as `research run --send gate.tgz` leaves it, with the runner's logs and a record that leaked a piece."""
+    """A run dir as a job sent gate.tgz leaves it, with the runner's logs and a record that leaked a piece."""
     run = tmp / "runs" / "r1"
     g = _gate(tmp / "src")
     _tar(run / "inputs" / "gate.tgz", {f"{GATE}/{p.relative_to(g).as_posix()}": p.read_bytes()

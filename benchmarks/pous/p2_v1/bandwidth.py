@@ -1,4 +1,4 @@
-"""A remote bandwidth session over PoUS's P2 store on the card that serves from it: the prover's side of
+"""A PoUB session over PoUS's P2 store on the card that serves from it: the prover's side of
 `verity.core.protocols.remote_bandwidth.p2_party`, whose verifier runs on another host.
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration

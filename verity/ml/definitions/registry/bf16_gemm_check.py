@@ -16,7 +16,7 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
   launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
   so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
-  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
+  `device_pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
   under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
   Commit's verdict, TP1's and each TP rank's, refuses for a Program that binds one of the `ROUTE_DEFINITIONS`
   (`check.cublas_route_pin`).  So a torch or cuBLAS upgrade in the serving venv refuses every such Program until the scan
@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import json
 from functools import cache
-from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -102,29 +101,27 @@ def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
     return run[2] if run else None
 
 
-def _pins():
-    """Each pinned device's measured facts, `<its name in vLLM's file-name form>.json`: its compute capability, multiprocessor count,
-    library versions and cuBLAS routes.  They are the integration's, read when asked for, so loading the Definitions imports
-    nothing of it."""
-    return resources.files("verity_vllm") / "pins"
+#: each pinned device's measured facts, `<its name in vLLM's file-name form>.json`: its compute capability, multiprocessor count,
+#: library versions and cuBLAS routes
+DEVICE_PINS = Path(__file__).with_name("device_pins")
 
 
 @cache
 def device_pin(device: str) -> dict[str, Any]:
     """The pin of the device that reports `device` (`torch.cuda.get_device_name`)."""
-    path = _pins() / f"{device.replace(' ', '_')}.json"
+    path = DEVICE_PINS / f"{device.replace(' ', '_')}.json"
     if not path.is_file():
-        raise KeyError(f"no device pin {path.name} in verity_vllm/pins")
+        raise KeyError(f"no device pin {path.name} in {DEVICE_PINS.name}/")
     return json.loads(path.read_text())
 
 
 @cache
 def capability_pin(cc: tuple[int, int]) -> dict[str, Any]:
     """The one pinned device of compute capability `cc`."""
-    pins = [json.loads(p.read_text()) for p in _pins().iterdir() if p.name.endswith(".json")]
+    pins = [json.loads(p.read_text()) for p in sorted(DEVICE_PINS.glob("*.json"))]
     got = [p for p in pins if tuple(p["compute_capability"]) == tuple(cc)]
     if len(got) != 1:
-        raise KeyError(f"{len(got)} device pins of compute capability {cc} in verity_vllm/pins; one is required")
+        raise KeyError(f"{len(got)} device pins of compute capability {cc} in {DEVICE_PINS.name}/; one is required")
     return got[0]
 
 
@@ -379,7 +376,7 @@ def cublas_routes_at(fits: list[int]) -> list[dict[str, Any]]:
 
 
 def route_probe_rows(M: int, K: int, C: int, rng: np.random.Generator) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Two probes of a route at (M, K), each (x (M, K), w (C, K)) bf16 words drawn from `rng`: spread rows (x of exponents -6 to 6,
+    """Two probes of a route at (M, K), each (x (M, K), w (C, K)) bf16 words sampled from `rng`: spread rows (x of exponents -6 to 6,
     w of -10 to 2), and cancelling rows (x all ones; each W row small words and one +-2^8..2^13 pair, so which chain each product
     lands in decides what the chains absorb, and the small sum shows it through the bf16 rounding)."""
     def words(shape, lo, hi):

@@ -14,7 +14,7 @@ reference it must equal):
   `sha512/row/v2` digest (17 compressions after the prefix's midstate), its leaf (1) and one RFC 6962 node (2).
 
 ``raw`` is SHA-512 over 64 MiB buffers (the compression rate OpenSSL reaches on one core), and ``urandom`` the
-operating system's generator, which draws the hm96 salts.
+operating system's generator, which samples the hm96 salts.
 
     python benchmarks/network_traces/load_commit.py --out DIR [--rows 65536] [--blocks 8192] [--procs 1,4,16]
 

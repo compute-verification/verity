@@ -66,7 +66,7 @@ def add(sub) -> None:
     e.add_argument("--l2", type=float, help="with --lookups: L2 read bytes a second (default: the file's)")
     e.add_argument("--uni-issue", type=float, metavar="C",
                    help="put the uniform classes on the issue rows (issue, the joint JI…_0) at C times an ALU's "
-                        "cost there (PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
+                        "cost there (PREDICT's u16s_l7qs measured 0.92)")
     e.add_argument("--checking", choices=("full", "sampled"), default="full",
                    help="full: every word and operand verified, the core ε alone, ε_luck in it (default); sampled: "
                         "also ε_sample = ε_adapt, on its own line and columns")

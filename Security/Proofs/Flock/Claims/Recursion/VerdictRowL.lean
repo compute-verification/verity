@@ -86,7 +86,7 @@ namespace Flock.RecAlgebra
 open Flock
 
 /-- **The zerocheck's `v_C`** is `round1c`'s messages at the Lagrange weights of its `z`. -/
-theorem zerocheck_vc {α : Type} [Val α] {m : Nat} {M : Messages α} {k k' : Nat} {src : Coins} {r0 : α}
+theorem zerocheck_vc {α : Type} [Val α] {m : Nat} {M : Messages α} {k k' : Nat} {src : CoinSource} {r0 : α}
     {zc : ZcPts α} (h : zerocheck m M k src = .ok ((r0, zc), k')) :
     zc.vc = dotV (lagrange nodesL den6Inv zc.z) M.c := by
   unfold zerocheck at h

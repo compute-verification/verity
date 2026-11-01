@@ -4,9 +4,8 @@
 # and step.cu at one field and codec and the codecs' tests, the step at a tiny model under compute-sanitizer (memcheck:
 # every kernel the step launches, at the batch's MMA width), then the step itself. Results go to $RESEARCH_RUN_DIR/out.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 \
-#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-codec-tensor \
-#     --env MODEL=8b --env BATCH=32 -- taskset -c 48-95 bash benchmarks/codec_tensor/step.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-codec-tensor MODEL=8b BATCH=32 taskset -c 48-95 bash \
+#     benchmarks/codec_tensor/step.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). MODEL (8b, 70b) and BATCH name the point (kv.cu
 # is built at the model's query heads, KV_QHEADS); FIELD (512, 1024) and MASK (σ_K between rounds) the codec in both

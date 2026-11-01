@@ -31,8 +31,10 @@ seen.
 6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
    <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
    posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
-   lists them (findings with no lane: @top); once a day after 15:00Z, @top with the totals and their change from the line
-   24 h earlier, and the registry's teams the app can't read (`unread`), which the audit skips.
+   lists them (findings with no lane: @top); a person's ask off track (`linear.ASK_KINDS`) rings its lane every hour, naming
+   the issues (a slip only once per new date), and top with the counts by lane, until it holds; once a day after 15:00Z,
+   @top with the totals and their change from the line 24 h earlier, and the registry's teams the app can't read
+   (`unread`), which the audit skips.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -261,6 +263,11 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
 
 # ---- sweep ----
 
+def _slip(f: dict) -> str:
+    """A slipped ask's ring key: its issue and its dates (in its fix), so each further slip rings again."""
+    return f"linear-slip:{f['issue']}:{f['fix']}"
+
+
 def once_each(state: dict, fid: str, ring: Ringer | None, name: str, body: str, thread: str | None, now: float,
               reply: str | None = None) -> None:
     rung = state.setdefault("rung", {})
@@ -398,6 +405,26 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
         once_each(state, f"linear:{lane}:{bucket}", ring, name,
                   f"{name}: the Linear audit finds {sum(c.values())} on {whose} ({', '.join(f'{k} {n}' for k, n in c.items())}): "
                   f"`research msg linear audit --lane {lane}` lists them, one line each with its fix.", None, now)
+    hour, rung = int(now // 3600), state.setdefault("rung", {})
+    asks = {lane: {k: n for k, n in c.items() if k in linear.ASK_KINDS} for lane, c in counts.items()}
+    asks = {lane: c for lane, c in asks.items() if c}
+    due: dict[str, list[dict]] = {}
+    for f in found:                          # a slip can't be undone, only delivered: it rings once per new date, not hourly
+        if f["kind"] in linear.ASK_KINDS and (f["kind"] != "slipped" or _slip(f) not in rung):
+            due.setdefault(f["lane"], []).append(f)
+    for lane, fs in due.items():
+        c = {k: n for k in linear.ASK_KINDS if (n := sum(f["kind"] == k for f in fs))}
+        once_each(state, f"linear-ask:{lane}:{hour}", ring, "top" if lane == linear.NO_LANE else lane,
+                  f"{lane}: a person's ask is off track on {', '.join(dict.fromkeys(f['issue'] for f in fs))} "
+                  f"({', '.join(f'{k} {n}' for k, n in c.items())}): `research msg linear audit --lane {lane}` gives each fix; "
+                  "this rings every hour until it holds (a slip, once per new date).", None, now)
+        if f"linear-ask:{lane}:{hour}" in rung:
+            rung.update({_slip(f): now for f in fs if f["kind"] == "slipped"})
+    if asks:
+        once_each(state, f"linear-ask:top:{hour}", ring, "top",
+                  "top: people's asks off track: " + ", ".join(f"{lane} {sum(c.values())}" for lane, c in
+                                                                sorted(asks.items(), key=lambda kv: -sum(kv[1].values())))
+                  + " (`research msg linear audit --asks` is the ledger)", None, now)
     if time.gmtime(now).tm_hour < REPORT_HOUR_UTC:
         return
 

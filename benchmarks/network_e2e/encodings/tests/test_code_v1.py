@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.certifier.window_charge import Window as W
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -29,7 +31,6 @@ def _load(name: str):
 
 V = _load("code_v1")
 C = V.C
-W = V.Window
 
 SMALL = V.Caps(arrived=40, hits=12, hit_units=300, resumes=10, order=4, order_len=6, gap=200, index=300, lag=8)
 

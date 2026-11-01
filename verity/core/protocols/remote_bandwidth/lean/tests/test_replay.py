@@ -1,7 +1,7 @@
 """The replay harness (`replay.py`) on records it can be sure of: transcripts of recorded sessions, and the
 `verifier.json` that `benchmarks/remote_session/verifier.py` would write of them, built here from the session as it
 builds it. Both verifiers must agree on each and give the recorded verdict; a record whose verdict the replay
-contradicts (an accepted session with a window that drew another count) is caught."""
+contradicts (an accepted session with a window that sampled another count) is caught."""
 
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ def server():
 
 
 def verifier_json(r: M.Run) -> dict:
-    """`r`'s session as `verifier.py` records it: arrivals of the roots its session took, each window's draws and the
-    time they were sent (its draw's, at its draw's last window's close, for every window of a draw that drew), its
+    """`r`'s session as `verifier.py` records it: arrivals of the roots its session took, each window's samples and the
+    time they were sent (its sample's, at its sample's last window's close, for every window of a sample that sampled), its
     `groups_per_coin` above 1, and an accepted session's record."""
     s, reg, g = r.s, r.store.registration, r.params.groups_per_coin
     arrivals: dict[int, list[int]] = {}
@@ -115,7 +115,7 @@ def test_a_transcript_reads_a_windows_frames_as_the_live_verifiers_do(server, tm
 
 @pytest.mark.parametrize("key", ["samples", "min_passes"])
 def test_a_transcript_whose_windows_could_draw_nothing_is_refused_by_both(server, tmp_path, key) -> None:
-    """Both verifiers reject a window with no draws `malformed` whatever its frames (`Session.verify`), and no session
+    """Both verifiers reject a window with no samples `malformed` whatever its frames (`Session.verify`), and no session
     has one: with `samples` or `min_passes` at 0, the transcript, a frame neither can read beside each window's
     openings, is refused by both before its first event."""
     case = copy.deepcopy(M.recorded("honest")[0])
@@ -163,9 +163,9 @@ def test_a_verifier_json_replays_to_its_recorded_verdict(server, tmp_path, name)
                                            ("few-shared", "few")])
 def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_recorded_verdict(server, tmp_path, name,
                                                                                             outcome) -> None:
-    """Drawn g > 1 windows a coin (`groups_per_coin`) at two windows in flight, each draw closes at its last window
+    """Drawn g > 1 windows a coin (`groups_per_coin`) at two windows in flight, each sample closes at its last window
     under W + ⌈W/g⌉ coins and draws as many receipts as its windows' shares recorded: an honest session, even and
-    uneven, replays every draw, and a draw with a window short of its passes is rejected `few` at that window."""
+    uneven, replays every sample, and a sample with a window short of its passes is rejected `few` at that window."""
     r = run(name)
     assert r.s.outcome == outcome and r.params.groups_per_coin > 1
     v = verifier_json(r)

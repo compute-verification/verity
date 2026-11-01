@@ -211,7 +211,7 @@ theorem innerOf_metaLeaf {cf pf : ByteArray} {partition : Option Json} {program 
   unfold RecVStar.innerOf at h
   obtain ⟨⟨spec, sts⟩, hs, -⟩ := except_bind_ok h
   rcases HiddenExec.setupTables_okH innerTags_hiddenOutputs hs with ⟨-, st, hst, -, -⟩ | ⟨hc, -⟩
-  · exact parse_metaLeaf (Hidden.parse_untyped innerTags_typed (Hidden.setupHidden_spec' hst).parse).1
+  · exact parse_metaLeaf (Hidden.parse_untyped innerTags_typed ((Hidden.setupHidden_spec' hst).parseF (by decide))).1
   · omega
 
 /-- **Flock's statement check reads the leaf scheme it admits off the circuit file**: a circuit file `ProvedScope.check`
@@ -224,7 +224,8 @@ theorem check_metaLeaf_tags {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables :
   refine ⟨?_, hleaf⟩
   unfold ProvedScope.circuitOf at hc
   split at hc
-  · exact parse_metaLeaf (Hidden.parse_untyped htyped hc).1
+  · obtain ⟨pre, c₀, hp, -⟩ := Hidden.parseCommit_untyped htyped hc
+    exact parse_metaLeaf hp
   · exact parse_metaLeaf hc
 
 /-- **Flock's statement check reads `hm96-sha512/v1` leaves, or plain SHA-512 leaves at hidden outputs without `--zk`**

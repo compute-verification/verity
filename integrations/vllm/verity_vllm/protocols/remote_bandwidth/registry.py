@@ -25,7 +25,7 @@ seeded from the window's challenge and the root before it (`chain`): the session
 the registration's root before the session's first.  The reference computes every receipt from the bytes
 (`receipts`); a device reader hands `end_pass` its aligned segments' roots, or the pass's root.
 
-The plan and the tree are the remote bandwidth driver's, imported (`rb`, its `receipts`): a pass's plan is its
+The plan and the tree are the PoUB driver's, imported (`rb`, its `receipts`): a pass's plan is its
 `Plan` (canonical runs of distinct blocks; `plan_digest` is its digest in numpy), its tree `rb.domain`'s
 frame-v3-sha512 over leaves of ``PER_LEAF`` receipts in plan order, each `rb.hidden` as an hm96-sha512/row/v2 leaf
 under its salt, and an opening verifies by `rb.verify_leaf`.  `RemoteBandwidthReceipt` is its receipt.  The seed is
@@ -160,7 +160,7 @@ class KindReceipt:
 
 @dataclass(frozen=True)
 class RemoteBandwidthReceipt:
-    """The remote bandwidth driver's receipt (`rb.Receipter`): ``SHA512(Z(D ‖ frame(seed)) ‖ u64be j ‖ E_j ⊕
+    """The PoUB driver's receipt (`rb.Receipter`): ``SHA512(Z(D ‖ frame(seed)) ‖ u64be j ‖ E_j ⊕
     spread(z))`` of a 4 KiB block, bound to the output ``z`` of the tile before its read."""
 
     name: str = "verity/remote-bandwidth/receipt/v0"
@@ -438,7 +438,7 @@ class Store:
     def record_memory_map(self, path: Any = None, registration: bytes | None = None, lifetime: int = mm.LIFETIME,
                           on_line: Any = None, on_append: Any = None) -> mm.MemoryMap:
         """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
-        ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from, under
+        ``registration``, PoUB's `Registration.digest`, which the session's first window chains from, under
         the session's lifetime cap of ``lifetime`` windows, each append to ``on_append`` and each closed line to
         ``on_line`` (`memory_map.record`).  The registration took every block as its bytes are, so none is dirty now."""
         m = mm.record(self, path, registration, lifetime, on_line, on_append)
