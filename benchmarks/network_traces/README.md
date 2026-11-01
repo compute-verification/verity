@@ -95,11 +95,11 @@ The session's fetch, with `witness/`, stays in a 0700 directory outside the run 
 less `witness/` and the session's outcome. `chain` runs the chain's network certifier path on the kept fetch, and only
 from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
-the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
-runs on, which the challenger's coin link reaches through that node's own line of
-`/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the draw's peer, since the gate key and the
-warden run's witness never go on the prover's machine. Without the gate's coins the chain draws on the verifier's
-(`--coins verifier`, the default).
+the endpoint. Every round of `chain` that draws (each scan round, each member of N2's sampled period) reads its coins
+from a session of its own of the auditor's challenger (`--challenger`, `round_coins.py`): by default the gate's, on
+the network certifier's machine, whose coin link reaches the node the chain runs on through that node's own line of
+`/etc/vy/coin-ports` (the auditor's node's is ports 7821-7830); `--challenger local` is a dry run's. Nothing draws on
+the verifier's own coins, and a challenger that fails fails the round.
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
@@ -114,17 +114,19 @@ the scan's link-window (`scan_period.rows_case`). The answer is accept only when
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
 its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
-profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
-on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
-whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
-does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
-report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
-bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two around V3c
+late, say), a drawing round whose challenger session didn't open or whose evidence doesn't hold, or a step that can't
+run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's profile names its placement: the
+certifier on the gate's host, each drawing round's coins from the auditor's challenger, and the chain, the period check
+and their Flock sessions' coins on the prover's node, so `trusted-host` is assumed with the auditor's devices not
+placed. The chain's endpoint report, whose rows count each Commit window's requests, steps and outputs and its advice's
+bits, stays beside the fetch, and so does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts
+and ε at δ, and the scan's answers) and each round's challenger evidence, which go in its public files: report.md, the
+report's other keys and the steps' summaries count the window's requests and outputs and the advice's bits. The leak
+guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two around V3c
 (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
-(`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
-consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
-releases through its own hold.
+(`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees) and its rounds on the
+piece's challenger, and its `period` runs the consistency check on the rows case whose one compute audit is V3c's
+`period.json`, at any sample of V3c's; each step releases through its own hold.
 
 ## The chain's run of record
 

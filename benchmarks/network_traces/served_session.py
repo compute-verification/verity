@@ -14,7 +14,8 @@ answered greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS
     python served_session.py endpoint --from SERVE_DIR --io FILE|- --out DIR [--eos-ids 128001] [--port 18782]
         [--keep DIR]
     python served_session.py chain --run RUN [--keep DIR] [--endpoint DIR|ART] [--eos-ids IDS] [--draw K]
-        [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
+        [--challenger gate:USER@HOST --challenger-key RECORD [--coin-peer NAME] | --challenger local] [--main FILE]
+        [CR_K=V ...]
 
 FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
        [--prompt-ids 256] [--tokens 64] [--vocab 128000] [--scan-class w63|w63k4]
@@ -116,11 +117,11 @@ The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's ga
       --store-read --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
       tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
-      --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
+      --draw 8 --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
 (``--store-read`` gives the job the read-only store key its fetch of the endpoint's art needs; ``--run-max`` leaves room
 over a dry chain of 16 requests on the gate's coins, which held its slot about 9,500 s, an hour of it the challenger's
-session; ``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
+session);
 
 and the dry rehearsal, on `AUDITOR`, whose KEEP its dry chain reads:
 
@@ -168,6 +169,8 @@ PEER, PORT, GATE, LANE = SITE["peer"], 18782, SITE["gate"], SITE["lane"]
 AUDITOR = SITE["auditor"]
 KEY = Path.home() / ".ssh" / SITE["gate_key"]
 KEEP = Path(SITE["keep"])
+#: chain_record.sh's challenger variables, which `coin_env` alone sets
+CHALLENGER_ENV = ("CR_CHALLENGER", "CR_MAIN", "CR_PEER", "CR_CHALLENGER_KEY", "CR_GATE_KEY")
 #: Llama 3's regular token ids; 128,000 and up are its special tokens
 VOCAB = 128_000
 #: the minutes past `auditor.warden_minutes` a session asks for
@@ -283,7 +286,7 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
                          "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
                          "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
-                         "--endpoint ART --draw 8 --coins gate "
+                         "--endpoint ART --draw 8 "
                          "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}
 
 
@@ -509,28 +512,33 @@ def input_file(path: Path, what: str) -> Path:
     return path
 
 
-def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
-    """The scan's sample arguments: none (every proof block), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
-    the auditor's side (`--coin-peer`)."""
-    if a.coins == "verifier":
-        return [] if a.draw is None else ["--draw", str(a.draw)]
-    if a.draw is None:
-        raise Refused("--coins gate draws --draw K of the scan's units: give K")
-    served = served_peer(fetch)
-    if served is None:
-        raise Refused(f"{fetch} holds no request.json naming the node it served on, so the coin peer can't be checked")
-    if a.coin_peer in (served, PEER):
-        raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the warden run's "
-                      f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")
+def challenger_refusal(a: argparse.Namespace) -> str | None:
+    """Why ``--challenger`` (with ``--challenger-key``, ``--key``) can't give the chain's coins, or None when it can."""
+    if a.challenger == "local":
+        return None
+    if not a.challenger.startswith("gate:"):
+        return f"--challenger {a.challenger}: gate:USER@HOST (the auditor's, on the network certifier's machine) or " \
+               "local (a dry run's)"
     if a.challenger_key is None:
-        raise Refused("--coins gate needs --challenger-key, the deployment's challenger-key/v1 record "
-                      "(challenger-key current)")
+        return "--challenger gate:… needs --challenger-key, the deployment's challenger-key/v1 record " \
+               "(challenger-key current)"
     if not a.key.is_file():
-        raise Refused(f"no gate key {a.key}: the draw runs on the node that holds the lane's gate key, {AUDITOR}")
+        return f"no gate key {a.key}: the chain runs on the node that holds the lane's gate key ({AUDITOR}'s, or " \
+               "the served node's)"
+    return None
+
+
+def coin_env(a: argparse.Namespace) -> dict[str, str]:
+    """chain_record.sh's challenger: CR_CHALLENGER and CR_MAIN, and for the gate's CR_PEER (`--coin-peer`, this node
+    as the gate names it), CR_CHALLENGER_KEY and CR_GATE_KEY."""
+    if why := challenger_refusal(a):
+        raise Refused(why)
+    main = input_file(a.main, "--main") if a.main else first_parent(TREE, a.keep / a.run / "chain-main.txt")
+    env = {"CR_CHALLENGER": a.challenger, "CR_MAIN": str(main)}
+    if a.challenger == "local":
+        return env
     key = input_file(a.challenger_key, "challenger key record")
-    main = input_file(a.main, "--main") if a.main else first_parent(TREE, a.keep / a.run / "scan-main.txt")
-    return ["--draw", str(a.draw), "--challenger", f"gate:{a.gate}", "--main", str(main), "--peer", a.coin_peer,
-            "--challenger-key", str(key), "--gate-key", str(a.key)]
+    return env | {"CR_PEER": a.coin_peer, "CR_CHALLENGER_KEY": str(key), "CR_GATE_KEY": str(a.key)}
 
 
 def certified_io(fetch: Path) -> tuple[dict, dict]:
@@ -701,15 +709,15 @@ def chain(a: argparse.Namespace) -> int:
         k, eq, v = kv.partition("=")
         if not (eq and k.startswith("CR_")):
             raise Refused(f"{kv!r}: CR_K=V, a chain_record.sh variable")
-        if k in ("CR_SCAN_ARGS", "CR_SCAN_CMD") and any(w in v for w in ("--draw", "--challenger", "--peer")):
-            raise Refused(f"{k}: the scan's draw and its coins are --draw and --coins's, which keep the draw off the "
-                          "prover's node")
+        if k in CHALLENGER_ENV:
+            raise Refused(f"{k}: the chain's challenger is --challenger's (with --coin-peer, --challenger-key, --key "
+                          "and --main)")
+        if k in ("CR_SCAN_ARGS", "CR_SCAN_CMD") and any(w in v for w in ("--draw", "--challenger", "--peer", "--main")):
+            raise Refused(f"{k}: the scan's draw and its coins are --draw's and --challenger's")
         env[k] = v
-    coins = coin_args(a, fetch)
-    if any(c.isspace() for w in coins for c in w):
-        raise Refused(f"{coins}: chain_record.sh splits CR_SCAN_ARGS on whitespace, so give paths without it")
-    if scan := " ".join(coins):
-        env["CR_SCAN_ARGS"] = f"{scan} {env.get('CR_SCAN_ARGS', '')}".strip()
+    env.update(coin_env(a))
+    if a.draw is not None:
+        env["CR_SCAN_ARGS"] = f"--draw {a.draw} {env.get('CR_SCAN_ARGS', '')}".strip()
     if endpoint:
         env.update({"CR_ENDPOINT": endpoint, **({"CR_EOS_IDS": a.eos_ids} if a.eos_ids else {})})
     return subprocess.run(["bash", str(HERE / "chain_record.sh")], cwd=TREE, env=env).returncode
@@ -755,14 +763,22 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--endpoint", help="endpoint's art (its report.json), or a dry rehearsal's endpoint records")
     q.add_argument("--eos-ids")
     q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every proof block by default)")
-    q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
-    q.add_argument("--coin-peer", default=AUDITOR, help="with --coins gate: this node, as the gate's peers file names it")
-    q.add_argument("--challenger-key", type=Path)
-    q.add_argument("--main", type=Path, help="the verifier's git rev-list --first-parent origin/main")
-    q.add_argument("--gate", default=GATE)
+    coin_flags(q, AUDITOR)
     q.add_argument("--key", type=Path, default=KEY)
     q.add_argument("set", nargs="*", help="CR_K=V")
     return p
+
+
+def coin_flags(q: argparse.ArgumentParser, peer: str) -> None:
+    """The chain's challenger flags (`coin_env`), the coin peer `peer` by default."""
+    q.add_argument("--challenger", default=f"gate:{GATE}", help="the auditor's challenger every drawing round reads "
+                   "its coins from, a session a round: gate:USER@HOST (on the network certifier's machine) or local "
+                   "(a dry run's)")
+    q.add_argument("--coin-peer", default=peer, help="with --challenger gate:…: this node, as the gate's peers file "
+                   "names it")
+    q.add_argument("--challenger-key", type=Path, help="with --challenger gate:…: the deployment's challenger-key/v1 "
+                   "record")
+    q.add_argument("--main", type=Path, help="the verifier's git rev-list --first-parent origin/main")
 
 
 def main(argv: list[str] | None = None) -> int:
