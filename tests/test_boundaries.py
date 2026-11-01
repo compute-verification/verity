@@ -46,6 +46,8 @@ ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
     "ml.crypto": set(),
+    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
+    "hardware": set(),
     "ml.commitments": {"ml.circuits", "ml.crypto"},
     # the catalog and the kernels, distributions of their own before the platform layout
     "ml.circuits.silicon": {"ml.circuits"},
@@ -60,8 +62,6 @@ ALLOWED = {
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
-    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
-    "hardware": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
     # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
