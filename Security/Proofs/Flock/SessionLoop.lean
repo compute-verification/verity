@@ -1,4 +1,5 @@
 import Proofs.Flock.SessionLoop.Statement
+import Proofs.Flock.SessionLoop.TakenVals
 import Proofs.Flock.SessionLoop.Inner
 import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.SessionLoop.Link
@@ -10,7 +11,6 @@ import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishTrunc
-import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.Claims.ZK.FinHmkLive
 import Proofs.Flock.Claims.ZK.FinishFwRep
 import Proofs.Flock.Claims.ZK.FinTau
