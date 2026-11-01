@@ -862,7 +862,9 @@ before its `Finish` (§10.1): the tampered message never leaves (a masked value 
 every stream runs its schedule, and `Finish` goes without proofs, the auditor's verdict not accepted after as many rounds
 as an honest session's. The prover's record has the refusal: `prover_stopped` the ZK server's, where its own checks caught
 it, and the verdict's `why` the loop's `PROVER-STOPPED: the Lean frame stopped table I rep R` where the rep's frame stopped
-it (both, for some). `verifier/firewall_controls.sh` runs each control through the loop and holds it to that outcome. `later-NAME` is `NAME` on every table of a several-table session but the first, and is refused
+it (both, for some). `verifier/firewall_controls.sh` runs each control through the loop and holds it to that outcome,
+after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. `later-NAME` is `NAME`
+on every table of a several-table session but the first, and is refused
 the same way at the second table:
 
 | `FC_FIREWALL_TAMPER` | the device | refusal, at `Finish` |
