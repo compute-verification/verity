@@ -218,9 +218,19 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
 
 # --- the records from the runs' outputs ----------------------------------------------------------------------------------
 
-#: `benchmarks/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
-REFERENCE = {"id": "dc-12500-machines-600s", "machines": 12500, "gpus_per_machine": 8, "window_s": 600, "role": "reference",
-             "label": "reference datacenter: 12,500 eight-GPU machines (100,000 GPUs), every machine audited in 10-minute windows"}
+#: the census's deployments, the one source of the reference deployment
+CENSUS = Path(__file__).resolve().parents[4] / "benchmarks" / "census" / "deployments.json"
+
+
+def _reference() -> dict[str, Any]:
+    refs = [d for d in json.loads(CENSUS.read_text()) if d.get("role") == "reference"]
+    if len(refs) != 1:
+        raise ValueError(f"{CENSUS}: {len(refs)} deployments with the role reference, not one")
+    return {k: refs[0][k] for k in ("id", "machines", "gpus_per_machine", "window_s", "role", "label")}
+
+
+#: the census's reference deployment as the runs' monitoring reports record it (its fields but its sources)
+REFERENCE = _reference()
 
 
 def from_runs(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:

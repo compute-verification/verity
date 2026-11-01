@@ -131,3 +131,10 @@ def test_a_report_of_another_format_is_refused() -> None:
     report, _ = _accepting_report()
     with pytest.raises(ValueError, match="not one of"):
         R.from_period({**report, "format": "verity/all-protocols-window/v0"}, steps=(0, 2), deployment=R.REFERENCE)
+
+
+def test_the_reference_deployment_is_the_census_entry_the_fixtures_carry() -> None:
+    census = [d for d in json.loads(R.CENSUS.read_text()) if d["role"] == "reference"]
+    assert len(census) == 1 and R.REFERENCE == {k: v for k, v in census[0].items() if k != "sources"}
+    for name in (*NAMES, "block-record-b71a-w30"):
+        assert _load(name)["monitoring_period"]["deployment"] == R.REFERENCE
