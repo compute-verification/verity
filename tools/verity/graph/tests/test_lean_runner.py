@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from conftest import git, toy_tree
 
-from verity_graph import ROOT, contract, graph, local, runners
+from verity_graph import ROOT, graph, local, runners
 from verity_graph.families import lean_lock, lean_module
 from verity_graph.runners import lean_lock as lock_runner
 from verity_graph.runners import lean_module as module_runner
@@ -28,6 +28,11 @@ TOOLCHAIN = (ROOT / CONTROL / "lean-toolchain").read_text().strip()
 BIN = module_runner.toolchain_dir(TOOLCHAIN) / "bin"
 LISTERS = {"lean-module": lean_module.tasks, "lean-lock": lean_lock.tasks}
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(not (BIN / "lean").is_file(), reason=f"no Lean toolchain {TOOLCHAIN}")]
+
+
+def manifest(name: str) -> str:
+    return json.dumps({"version": "1.1.0", "packagesDir": ".lake/packages", "packages": [], "name": name, "lakeDir": ".lake"})
+
 
 #: a package under the module system: public, private and `import all` imports, and a file outside it importing its modules
 MS = {
@@ -41,13 +46,10 @@ MS = {
     "Ms.lean": "import C\nimport D\nimport F\nimport G\nimport H\n",
     "lakefile.toml": 'name = "ms"\ndefaultTargets = ["Ms"]\n\n[[lean_lib]]\nname = "Ms"\n'
                      'roots = ["A", "B", "C", "D", "F", "G", "H", "Ms"]\n',
-    "lake-manifest.json": json.dumps({"version": "1.1.0", "packagesDir": ".lake/packages", "packages": [], "name": "ms",
-                                      "lakeDir": ".lake"}),
+    "lake-manifest.json": manifest("ms"),
 }
 BAD = {"lakefile.toml": 'name = "bad"\ndefaultTargets = ["Bad"]\n\n[[lean_lib]]\nname = "Bad"\n',
-       "Bad.lean": "theorem bad : 1 = 2 := rfl\n"}
-#: the parts `lean` writes beside a `module` file's `.olean`
-PARTS = {"olean.server": ".olean.server", "olean.private": ".olean.private", "ir.sig": ".ir.sig", "ir": ".ir"}
+       "Bad.lean": "theorem bad : 1 = 2 := rfl\n", "lake-manifest.json": manifest("bad")}
 
 
 @pytest.fixture(scope="module")
@@ -103,22 +105,6 @@ def lib(d: Path, path: str) -> Path:
     return d / ".lake" / "build" / "lib" / "lean" / path.removeprefix("out/lean/")
 
 
-def with_parts(doc: dict, root: Path) -> dict:
-    """``doc`` with what a task has under the module system: a `module` file's task outputs the parts `lean` writes beside
-    its `.olean`, and a task reads every part of each `module` file it reads."""
-    mods = {t["id"] for t in doc["tasks"] if (root / t["id"].partition(":")[2]).read_text().startswith("module")}
-    for t in doc["tasks"]:
-        if t["id"] in mods:
-            olean = next(o["path"] for o in t["outputs"] if o["name"] == "olean")
-            t["outputs"] = sorted(t["outputs"] + [{"name": n, "path": olean.removesuffix(".olean") + ext}
-                                                  for n, ext in PARTS.items()], key=lambda o: o["name"])
-        t["reads"] = sorted(t["reads"] + [{"task": r["task"], "output": n} for r in t["reads"] if r["task"] in mods
-                                          for n in PARTS], key=lambda r: (r["task"], r["output"]))
-        if not t["reads"]:
-            t["key"] = contract.key(t, doc["files"], None, doc["envs"][t["env"]]["digest"])
-    return doc
-
-
 def test_each_module_compiles_from_its_reads_alone_to_lake_s_bytes(tree, tmp_path):
     doc = only(graph.listing(tree, {"lean-module"}, listers=LISTERS), "lean-module:ctl/")
     got = run(tree, doc, tmp_path / "x")
@@ -145,9 +131,11 @@ def test_each_module_compiles_from_its_reads_alone_to_lake_s_bytes(tree, tmp_pat
 
 
 def test_a_module_system_package_compiles_part_by_part_to_lake_s_bytes(tree, tmp_path):
-    doc = with_parts(only(graph.listing(tree, {"lean-module"}, listers=LISTERS), "lean-module:ms/"), tree)
+    doc = only(graph.listing(tree, {"lean-module"}, listers=LISTERS), "lean-module:ms/")
     got = run(tree, doc, tmp_path / "x")
     built = lake(tree, "ms", tmp_path)
+    a = next(t for t in doc["tasks"] if t["id"] == "lean-module:ms/A.lean")
+    assert {o["name"] for o in a["outputs"]} >= set(lean_module.PARTS), "A is a `module` file"
     for t in doc["tasks"]:
         assert got[t["id"]]["status"] == "pass", got[t["id"]]
         for o in t["outputs"]:
