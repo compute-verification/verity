@@ -60,6 +60,8 @@ d = bind(definition("FastStageToy", 1, lambda C, a, b, w: add(C, a, b, width=20,
                     (("a", Array(12, BIT)), ("b", Array(20, BIT)), ("w", Array(2048, BIT))), Array(22, BIT), register=False))
 st = CS.UnitStager(d, "unit/fast-stage-toy", [("ab", V2, 32, ["a", "b"]), ("w", V2, 2048, ["w"])], [(V2, (0,))],
                    circuit=out / "circuit.txt", layout=layout, structural=bool(structural))
+if mode == "fast" and layout is None:
+    assert isinstance(st.low.layout, fast_stage.CST.CompactLayout)
 print(json.dumps({"pin": st.pin, "class": st.class_sha512}))
 """
 
