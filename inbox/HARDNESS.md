@@ -399,3 +399,15 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
   - **Quality before training:** +0.1–0.4% perplexity with 16-bit activations, and +1.0–1.2% under design U's 2-bit
     noise.
   - Post-training quality, 2-bit-noise training, trained-code pricing and 8B are due about 06:30Z.
+- **HT-PROV final** (note:compute-research/20261101T0211Z-report-hardness-prov; measured toys at d 192/384; Llama-1B
+  statistics):
+  - **Live noise in the hardening pass taxes a cheater's planted small codes:** +0.26 nats against the honest model's
+    +0.009 at 0.5 LSB a step. A one-shot 4-LSB dither costs the honest model 0.005 nats, and it erases ternary and 2:4
+    starts.
+  - **Two gates,** proved in ZK and publishing only a pass bit: a spectral gate and a code-law gate. On 352 cheap
+    projections of Llama-1B's linears, none passes both.
+  - **Open margin (one step heuristic):** low-rank plus residual routes the gates can't exclude cost 0.82 of dense on q
+    and k, and 0.87–0.93 elsewhere.
+  - The gates are designed and priced, not built: 233 GPU-h (1B) and 1,674 (8B) to prove the spectral gate.
+  - **The decisive test** (a cheater trained against both gates on q and k at a 1B-like width) is running on
+    vy-nebius-1, finishing by 12:00Z Sun.
