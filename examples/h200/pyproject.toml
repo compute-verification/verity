@@ -23,7 +23,6 @@ inputs = [
     "benchmarks/torch_gpu/commit_slots/slots.py",
     "benchmarks/torch_gpu/commit_slots/slots_gpu.py",
     "benchmarks/torch_gpu/sha512_rows",
-    "benchmarks/pouw/commit_gpu/sha512.cuh",
     # the settings engine sha512_rows' engine and commit_slots' step read their variables through
     "tools/config/verity_config",
     # the P2 v4 reference encode and decode the store runs

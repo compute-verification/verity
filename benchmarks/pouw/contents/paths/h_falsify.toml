@@ -1,4 +1,0 @@
-order = 200
-path = "`h_falsify/`"
-runs_on = "RTX PRO 6000"
-what = "The Dither transcript's zero instance (R 0/1, B̃ periodic in U): the tiled reference and its duo receipt (`ref.py`), and honest, zero-IMMA and Four Russians arms on `gpu_kit` (`hfalsify.cu`)"

@@ -2,11 +2,12 @@ import Proofs.Flock.Claims.Recursion.BoundRoute
 import Proofs.Flock.Claims.Recursion.LastBindsEC
 
 /-!
-# `KSBoundRoute` from the bridge, the last message bound modulo what `E*` reads (R1′)
+# `KSBoundDeployed`'s ∀-form from the bridge, the last message bound modulo what `E*` reads (R1′)
 
-`ksBoundRoute_of_bridge` reads (P4, `Bound.LastBinds`) once, in `forksBind_nf`, and (P4) was false at the deployed
-record before S0 (a trailing space in the record's text, `BindsDeployed`). This file proves the route with (P4) replaced by `Bound.LastBindsEC` and
-`Bound.LastCoinFree`, through REC1's chain as it stands (`KS_of_flockKS_binds`):
+(P4) is the last message's binding modulo what `E*` reads, `Bound.LastBindsEC` with `Bound.LastCoinFree`. As first
+stated, a collision wherever `final` reads two accepted last messages apart, it was false at the deployed record before
+S0 (a trailing space in the record's text, which `final` reads apart and the verifier decided alike, `BindsDeployed`),
+and is retired. This file proves the route through REC1's chain as it stands (`KS_of_flockKS_binds`):
 
 * The compiled record's inner view reads the last message as a representative of its reading (`RecDeploy.deployRecC`):
   `IVStar`'s decision with the set of its calls, and `DE`'s columns of the opened view (`Bound.readL`), at the coins
@@ -20,12 +21,10 @@ record before S0 (a trailing space in the record's text, `BindsDeployed`). This 
   collision among `IVStar`'s calls, which the witnesses record (`RecDeploy.forksBind_C`).
 
 The reading takes the calls as a set because `LastBindsEC` compares them so: the record's stream order and
-its optional digest of a table's empty publics change the list of calls the deployed verifier makes, not the set
-(`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
+its optional digest of a table's empty publics change the list of calls the deployed verifier makes, not the set.
 
-`RecDeploy.KSBoundRouteCols` is `KSBoundRoute` with `LastBindsEC` and `LastCoinFree` for `LastBinds`;
-`RecDeploy.ksBoundRoute_of_bridge_cols` proves it from the bridge. At the deployed plain verifier's own steps
-`LastCoinFree` holds (`RecDeploy.lastCoinFree_deployed`).
+`RecDeploy.KSBoundRouteCols` is `KSBoundDeployed`'s ∀-form; `RecDeploy.ksBoundRoute_of_bridge_cols` proves it from the
+bridge. At the deployed plain verifier's own steps `LastCoinFree` holds (`RecDeploy.lastCoinFree_deployed`).
 -/
 
 namespace Claims.Recursion
@@ -545,10 +544,39 @@ end Cols
 
 /-! ## The route -/
 
-/-- **`KSBoundRoute` with the last message bound modulo what `E*` reads**: its premises with (P4, `Bound.LastBinds`)
-replaced by `Bound.LastBindsEC` (a collision where two accepted decisions differ in `DE`'s columns or in the set of
-`IVStar`'s calls) and `Bound.LastCoinFree` (`IVStar`'s last step reads no last coin, which holds at the deployed plain
-verifier's own steps, `lastCoinFree_deployed`). -/
+/-- **`KSBoundDeployed`'s ∀-form** (option (d), proved: `ksBoundRoute_of_bridge_cols`): at the deployment's brings `b`
+and V*'s bound layout `L`, at every choice the code side makes (the element-level verifier's steps `nextE`, its columns
+`colsE` and weight `wE`, how a round's rows join, the rows' digest input, how the last message reads, `γ`'s weight at
+`IVStar`), the deployed bound record `Bd` meets `KSBoundDeployed` given:
+
+* (P1) to (P4) at `Bd`: `Bound.PlainKSAbort`, `Bound.Binds`, `Bound.WeightCovers`, and (P4) the last message bound
+  modulo what `E*` reads, `Bound.LastBindsEC` (a collision where two accepted decisions differ in `DE`'s columns or in
+  the set of `IVStar`'s calls) with `Bound.LastCoinFree` (`IVStar`'s last step reads no last coin, which holds at the
+  deployed plain verifier's own steps, `lastCoinFree_deployed`). (P1) stays a premise here: at an accept-all `nextE` it
+  is false. At the deployed plain verifier's own steps, columns and weight it is `plain_KSAbort`'s statement
+  (`plainKSAbort_bd`);
+* Flock's KS at the deployed outer `--zk` record;
+* the staging off the run: an accepted run's verifier messages show its coins, read by some `decC` (`VStar.RunPairs`);
+* V*'s parts at `L`, at each of the three forms the compiled verifier takes (dense, holo, sparse), for some inner check
+  `chk` each part computes, the coins each statement shows (`shows`) and the commit strings it shows (`cmt`):
+  `VStarB.HeldB`, `VStarB.VstarShowsB` (the staging shows the coins `decC` reads and the run's commit strings),
+  `VStarB.PartChecksB` and `VStarB.PartOpensB` at every part, and `VStarB.DecompB` at `IVStar`;
+* V*'s readers at `L.readers`: `ReadersTrue`, `ReadersLogColl` (so the collisions P4, `DecompB` and the inner `B`
+  produce are among the run's own recorded calls, which `Be` searches) and `ReadersRunPlayed`.
+
+`VstarShowsB` with `RunPairs` ties `shows` to the run: without them a `shows` that holds nowhere makes `PartChecksB` and
+`DecompB` hold at a `chk` that holds nowhere, at every inner verifier, even one that rejects everything, where `E*` never
+extracts. `PartOpensB` makes every holder of a
+round hold the run's commit string there, which the readers read, so each part's check reaches the readers' messages.
+
+`Bridge` is a lemma on the way, not a premise. At the deployed bound record (`bdCover`, `γ`'s weight `wCover` at
+`IVStar`) (P3) holds and the route is `ksBoundRouteCols_cover`. Its level (`Claims.Recursion.lam`) is about 65
+bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below
+the 100-bit floor and the `2^-128` target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense
+statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`),
+Holo statements being candidate 3's own model, and `BitsLin2` at those statements follows from it
+(`bitsLin2On_of_ksLin2On`). -/
 def KSBoundRouteCols (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) : Prop :=
   ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -577,8 +605,8 @@ def KSBoundRouteCols (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
     KSBoundDeployed rel relO b L nextE colsE wE join rowIn final w
 
-/-- **`KSBoundRouteCols` from the bridge**: `ksBoundRoute_of_bridge` with `KS_of_flockKS_binds` at `deployRecC`, whose
-inner view reads the last message as its representative modulo what `E*` reads, carried back (`ksA_of_C`).
+/-- **`KSBoundRouteCols` from the bridge**: `KS_of_flockKS_binds` at `deployRecC`, at the bridge's `Inner.KSAbort` and
+V*'s acceptance at the bound layout (`vstarAccepts_bound`), whose inner view reads the last message as its representative modulo what `E*` reads, carried back (`ksA_of_C`).
 `ForksBind` is `forksBind_C`, from `LastBindsEC` and `LastCoinFree`; `CallsLogColl` and `InnerAcceptsColl` are the
 deployed record's (`callsLogColl_C`, `innerAcceptsColl_C`); every other fact of the compiled record is `deployRec`'s,
 which `deployRecC` shares. -/

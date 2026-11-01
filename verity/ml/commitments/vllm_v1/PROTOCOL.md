@@ -316,8 +316,8 @@ this verifier-derived position, of this verifier-derived commitment. §5's injec
 
 ## 10. `vllm-v1-sha512`
 
-`vllm-v1` with SHA-512 in place of SHA-256 for every hash the scheme computes, for SHA-512 data commitments (Daniel, 2026-09-26:
-SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
+`vllm-v1` with SHA-512 in place of SHA-256 for every hash the scheme computes, for SHA-512 data commitments
+(SHA-512 on every commitment path). It is opt-in:
 - every leaf, tree and root function takes `hash="sha512"`;
 - the domain types take a `hash="sha512"` field;
 - `VllmV1` over such domains is named `vllm-v1-sha512`, with `TREE_SHA512` as its bare tree rule.
@@ -388,7 +388,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
   step a root belongs to rests on SHA-256.
 - **What that means for Table 1.** Until then, a Table 1 row that cites `vllm-v1-sha512` cites `cr/sha-256` beside `cr/sha-512`.
 
-**The remaining SHA-256 dependency, for the re-baseline.** Daniel's rule is SHA-512 on every commitment path, and E4 extends to the
+**The remaining SHA-256 dependency, for the re-baseline.** The rule is SHA-512 on every commitment path, and it extends to the
 identity and domain digests at the re-baseline. What is left:
 1. the identity digests `ctx`, `geo` and `layout`, the integration's `template` and `names`, and `program`'s full 64 bytes;
 2. frame-v3's `binding` (frame-v3 §6).

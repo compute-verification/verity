@@ -192,9 +192,9 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
-    "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
-    "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
-    "(PROTOCOL.md §8)")}
+    "differently, taken as 0; the prover is sent no coin commitment before the session's end (coins.Released, "
+    "audit.Session.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
+    "is the statement that the play fixes each window's receipts by its cut (PROTOCOL.md §8)")}
 """What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
 statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is
 conditional on them, `NoOutsideCompute` unless a lockdown grounds it (`GROUNDED`), and the `memory-line-of-record`
@@ -248,8 +248,8 @@ def requested_pin(out: Path) -> str | None:
 
 def peer_of(out: Path, v: dict) -> str:
     """The challenger peer the verifier ran as (`verifier.py --challenger-peer`), from the run's record: each gate
-    session's in `v` (verifier.json's `challenger.peer`, `challengers.Gate.finish`), and a host run's `request.json`
-    beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
+    session's in `v` (verifier.json's `challenger.peer`, `challengers.ChallengerGate.finish`), and a host run's
+    `request.json` beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
     named = {(s.get("challenger") or {}).get("peer") for s in v["sessions"]
              if (s.get("challenger") or {}).get("challenger") == "gate"}
     req = out.parent / "request.json"
@@ -414,7 +414,7 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
 
 
 def transcript_of(out: Path, s: dict) -> dict | None:
-    """Session `s`'s transcript (`lean_verifier.Transcript`'s file) where the run's out/ keeps it: its name under
+    """Session `s`'s transcript (`lean_verifier.DifftestCase`'s file) where the run's out/ keeps it: its name under
     `out/transcripts/`, gzipped (`host.gzip_transcripts`) or not, held to the sha256 verifier.json gives it; None where
     there is none (a host run fetched without `--transcripts`)."""
     t = s.get("transcript") or {}

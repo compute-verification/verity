@@ -1,7 +1,6 @@
-"""pfill's receipt folds against the cheats of note:20261016T0917Z-draft-fullfloor-s-r8 §1.2, on the twin
+"""pfill's receipt folds against the cheats on them, on the twin
 (pfill_ref.py) and on pfill.cuh's host `dfill_ref` built with g++, the reference dgate holds the GPU to:
-ram (NC 4), duo (NC 2), and P2-FF r9's LOP3+IMAD (LI, -DPFILL_LI) and XOR-in (13, 19) (XIN13, -DPFILL_XIN13)
-(note:20261016T1117Z-draft-fullfloor-s-r9).
+ram (NC 4), duo (NC 2), and the r9 folds LOP3+IMAD (LI, -DPFILL_LI) and XOR-in (13, 19) (XIN13, -DPFILL_XIN13).
 
 Ram's step (rotl(y, 7) + d0) a0 + d1 = rotl(y, 7) a0 + Q reads a pair only through Q = a0 d0 + d1, so a receipt from Q
 alone (one product a pair) is the tile's ram receipt. A fold binds both words of a pair when no change of them maps every
@@ -86,7 +85,7 @@ def test_q_words_are_half_the_information(kind):
 @pytest.mark.parametrize("nc", FOLDS)
 def test_packed_cheat_recovers_every_word_on_pm1_and_bits(host, kind, nc):
     """The packed route, (4 A)(33 B0 + B1) and a table, gets both words of a pair from one product on the ±1 and {0,1}
-    tiles, under every fold: no fold closes it (P2-FF prices it by COINC)."""
+    tiles, under every fold: no fold closes it (the fold analysis prices it by COINC)."""
     assert R.packed_receipt(C0, C1, 3, nc, 8, kind) == host(C0, C1, 3, nc, 8, kind)
 
 

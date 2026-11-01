@@ -39,8 +39,10 @@ theorem tableAt_model {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts)
     simp only [↓reduceIte] at hd
     obtain ⟨hwf, hrw⟩ := Hidden.setupHidden_wf hd
     have s := Hidden.setupHidden_spec' hd
-    have P := parse_facts (Hidden.parse_untyped ht' s.parse).1
-    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b,
-      Integrate.placedB_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b⟩⟩
+    have hC := Hidden.committed_of_commit s.parse
+    have hW := hC.netWidths ht'
+    have hK := hC.netKinds ht'
+    have L := Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset j hj)
+    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eqW hW hK L s.leaf a b, Integrate.placedB_eqW hW hK L s.leaf a b⟩⟩
 
 end Flock.Readable

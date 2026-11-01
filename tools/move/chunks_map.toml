@@ -3,8 +3,8 @@
 #
 # `chunks.Collector.on_step` is the `on_step` callback of `engine.arrivals.run_requests_arrivals`, and `engine.vllm_adapter`'s run
 # loop is its one caller, so its import pointed up from `engine` to `observe`. `chunks` imports nothing from the package. Beside
-# the run loop it sits with the requests' other run records (the vision's `engine/`: requests, arrivals, external_id;
-# note:20261024T0615Z-draft-verity-vllm-vision). The whole module moves; nothing is split, edited or deleted. The format is
+# the run loop it sits with the requests' other run records (`engine/`: requests, arrivals, external_id). The whole module
+# moves; nothing is split, edited or deleted. The format is
 # `layout_map.toml`'s.
 
 [roots]
