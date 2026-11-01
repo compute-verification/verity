@@ -81,9 +81,11 @@ def toolchain(pkg: Path, work: Path) -> Path:
 
 
 def fetched(pkg: Path) -> list[str]:
-    """The packages ``pkg``'s manifest fetches, in its order."""
+    """The directories under `.lake/packages` of the packages ``pkg``'s manifest fetches, in its order (`«doc-gen4»`, a
+    name Lean quotes, is `doc-gen4`)."""
     m = pkg / "lake-manifest.json"
-    return [d["name"] for d in json.loads(m.read_text()).get("packages", []) if d.get("type") != "path"] if m.is_file() else []
+    return [d["name"].strip("«»") for d in json.loads(m.read_text()).get("packages", [])
+            if d.get("type") != "path"] if m.is_file() else []
 
 
 def packages(pkg: Path, work: Path) -> Path | None:
