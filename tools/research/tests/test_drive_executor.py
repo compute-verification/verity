@@ -344,23 +344,35 @@ def test_on_refuses_main_on_a_failed_task_and_tells_ci(world, monkeypatch, tmp_p
     assert h.listings == [tip] and h.posted == [], "a failed tip isn't checked again"
 
 
-def test_research_executor_enqueue_runs_the_command_its_variable_names_and_refuses_without_one(tmp_path, monkeypatch, capsys):
-    """Drive's default transport runs `research executor enqueue`; research imports nothing from `infra/`, so the command is
-    the one `RESEARCH_EXECUTOR_ENQUEUE` names where drive runs, run with drive's arguments and its exit passed back."""
+def test_drive_runs_the_enqueue_command_drive_toml_names(world, monkeypatch, tmp_path):
+    """Drive's default transport runs drive.toml's `executor_enqueue`, infra's command (research imports nothing from `infra/`),
+    with drive's arguments."""
     import sys
 
-    from research.cli import main
-    from research.executor import ENQUEUE_ENV
+    from research.queue import DriveFlags
 
-    seen = tmp_path / "argv.txt"
-    stub = tmp_path / "enqueue.py"
-    stub.write_text(f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv[1:]))\nsys.exit(3)\n")
-    monkeypatch.setenv(ENQUEUE_ENV, f"{sys.executable} {stub} --db 'q b.db'")
-    assert main(["executor", "enqueue", "--graph", "g.json", "--priority", "1", "--check", "after-landing:abc"]) == 3
-    assert seen.read_text() == "--db q b.db --graph g.json --priority 1 --check after-landing:abc"
-    monkeypatch.delenv(ENQUEUE_ENV)
-    assert main(["executor", "enqueue", "--graph", "g.json"]) == 2
-    assert f"{ENQUEUE_ENV} names no command" in capsys.readouterr().err
+    assert DriveFlags.parse('executor_enqueue = ["python3", "enqueue.py"]\n').executor_enqueue == ("python3", "enqueue.py")
+    assert DriveFlags.parse("").executor_enqueue == ()
+    for bad in ("executor_enqueue = []", 'executor_enqueue = "python3 enqueue.py"', 'executor_enqueue = [""]'):
+        with pytest.raises(Exception, match="executor_enqueue = .*: a command as a non-empty list of its words"):
+            DriveFlags.parse(bad + "\n")
+    seen, stub = tmp_path / "argv.txt", tmp_path / "enqueue.py"
+    stub.write_text(f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv[1:]))\n")
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.executor, h.d.executor_enqueue = "shadow", (sys.executable, str(stub), "--db", "q b.db")
+    one = _land(h, 1)
+    assert seen.read_text() == f"--db q b.db --priority 1 --check after-landing:{one}"
+    assert one in h.q.load_state()["drive"]["executor"]
+
+
+def test_with_no_enqueue_command_a_shadowed_tip_is_recorded_incomplete_and_lands(world, monkeypatch):
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.executor = "shadow"
+    tip = _land(h, 1)
+    assert len(h.posted) == 1
+    (rec,) = world.store.labels(f"commit:{tip}", key=vocab.EXECUTOR_SHADOW)
+    assert rec.value["incomplete"] == ("enqueueing its check: RuntimeError: drive.toml names no `executor_enqueue` command: "
+                                       "set it to infra's enqueue command, the words of its argv")
 
 
 def test_the_queue_transport_enqueues_a_check_with_no_graph_and_reads_the_graph_the_executor_labelled(tmp_path):

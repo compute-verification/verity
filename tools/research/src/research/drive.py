@@ -998,12 +998,12 @@ class Driver:
                  ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
                  after_landing_shards: int | str = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
-                 lowrisk_excludes: tuple[str, ...] = ()):
+                 lowrisk_excludes: tuple[str, ...] = (), executor_enqueue: tuple[str, ...] = ()):
         self.q, self.on = q, on
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place:
-        #: `_follow_tasks`); ``tasks``, the executor (default: infra's queue, `QueueTransport`), and how "on" lists a tip's graph
-        #: (shadow reads the graph the executor listed on a worker: `_shadow_tip`)
-        self.executor, self._tasks = executor, tasks
+        #: `_follow_tasks`); ``tasks``, the executor (default: infra's queue, `QueueTransport` running ``executor_enqueue``), and
+        #: how "on" lists a tip's graph (shadow reads the graph the executor listed on a worker: `_shadow_tip`)
+        self.executor, self._tasks, self.executor_enqueue = executor, tasks, executor_enqueue
         self.list_tasks: Callable[[Path, str], dict] = list_tasks
         self.listed_tasks: Callable[[dict], tuple[dict | None, str | None]] = listed_tasks
         #: drive.toml's low-risk lane (`land_lowrisk`): on, its most landings a tick, and what keeps a change off it (`lowrisk`)
@@ -1056,7 +1056,7 @@ class Driver:
     @property
     def tasks(self) -> Executor:
         if self._tasks is None:
-            self._tasks = Executor(QueueTransport(self.q.store))
+            self._tasks = Executor(QueueTransport(self.q.store, self.executor_enqueue))
         return self._tasks
 
     # -- what the store says of a commit

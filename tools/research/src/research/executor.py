@@ -16,7 +16,8 @@ task with no key of its own (a build, a circuit-check slice, a job that keeps no
 its check alone (`keyed`), so it runs in every check and no verdict of it is reused across checks.
 
 The transport is how the rows reach the queue and the graphs and verdicts come back: `QueueTransport`, infra's queue (its
-`ENQUEUE` command, and the labels and graphs from the store's remote), or `FileTransport`, a directory, for tests.
+enqueue command, drive.toml's `executor_enqueue`, and the labels and graphs from the store's remote), or `FileTransport`, a
+directory, for tests.
 
 Drive's `executor` flag (drive.toml) uses it after landing (`drive.Driver`): `shadow` enqueues the check of each `checked` tip
 the after-landing run checks at `AFTER_LANDING_PRIORITY` with no graph, reads the graph the executor listed for it once
@@ -46,15 +47,8 @@ PASS, FAIL, PENDING = "pass", "fail", "pending"
 NONE, MISSING = "none", "missing"
 #: the priority of an after-landing check of `checked`'s tip on the queue, its highest
 AFTER_LANDING_PRIORITY = 1
-#: infra's command that puts a check on the queue: `--priority N`, `--check ID`, and `--graph FILE` (a tasks/v1 document, each
-#: task's `key` the one its verdict is labelled under), when it inserts one row {key, task, priority, check} per task and exits
-#: 0 once they are in; with no `--graph`, it exits 0 at once and the executor lists the graph on a worker (`TASKS_GRAPH`)
-ENQUEUE = ("research", "executor", "enqueue")
 #: the store kind of a graph the executor listed
 TASKS_GRAPH_KIND = "tasks-graph/v1"
-#: the environment variable naming infra's enqueue command (`research executor enqueue` runs it): research imports nothing from
-#: `infra/`, so the command lives where infra runs it (the control pod's drive.sh)
-ENQUEUE_ENV = "RESEARCH_EXECUTOR_ENQUEUE"
 #: the newest tips in a row whose shadow records agree fully before drive may switch to `executor = "on"`
 SWITCH_STREAK = 3
 #: a shadowed tip with no graph from the executor this long after its check was enqueued is recorded incomplete, and one whose
@@ -190,14 +184,21 @@ class FileTransport:
 
 
 class QueueTransport:
-    """infra's queue: rows go in through `ENQUEUE`; the graph the executor listed for a check comes back as the `tasks-graph/v1`
-    artifact a `tasks_graph` label on `commit:<sha>` names, and verdicts as `verdict` labels on `task:<key>`, each target's
-    labels pulled from the store's remote while it has none here yet."""
+    """infra's queue: a check goes in through infra's enqueue command (``command``, drive.toml's `executor_enqueue`: research
+    imports nothing from `infra/`), run with `--priority N --check ID` and, for a graph drive listed, `--graph FILE` (a tasks/v1
+    document, each task's `key` the one its verdict is labelled under), when it inserts one row {key, task, priority, check} per
+    task and exits 0 once they are in; with no `--graph`, it exits 0 at once and the executor lists the graph on a worker.  The
+    graph the executor listed for a check comes back as the `tasks-graph/v1` artifact a `tasks_graph` label on `commit:<sha>`
+    names, and verdicts as `verdict` labels on `task:<key>`, each target's labels pulled from the store's remote while it has
+    none here yet."""
 
-    def __init__(self, store, command: tuple[str, ...] = ENQUEUE, cwd: Path | None = None):
-        self.store, self.command, self.cwd = store, command, cwd
+    def __init__(self, store, command: tuple[str, ...] = (), cwd: Path | None = None):
+        self.store, self.command, self.cwd = store, tuple(command), cwd
 
     def enqueue(self, graph_file: Path | None, priority: int, check: str) -> None:
+        if not self.command:
+            raise RuntimeError("drive.toml names no `executor_enqueue` command: set it to infra's enqueue command, the words "
+                               "of its argv")
         graph = ["--graph", str(graph_file)] if graph_file is not None else []
         r = subprocess.run([*self.command, *graph, "--priority", str(priority), "--check", check],
                            cwd=self.cwd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
@@ -363,21 +364,3 @@ def shadow_report(records: list[Shadowed], tips: int) -> tuple[str, bool]:
                  f"(the newest {streak} agree)")
     return "\n".join(lines), ok
 
-
-def main(argv: list[str]) -> int:
-    """`research executor enqueue [--graph FILE] --priority N --check KIND:SHA`: run infra's enqueue command, the one
-    `ENQUEUE_ENV` names (split as a shell would, no shell run), with these arguments, and exit with it; refused (exit 2) when
-    the variable is unset, so a drive whose host doesn't name it records the tip's shadow incomplete rather than guessing."""
-    import os
-    import shlex
-    import sys
-
-    if argv[:1] != ["enqueue"]:
-        print("research executor enqueue [--graph FILE] --priority N --check KIND:SHA", file=sys.stderr)
-        return 2
-    command = shlex.split(os.environ.get(ENQUEUE_ENV, ""))
-    if not command:
-        print(f"research executor enqueue: {ENQUEUE_ENV} names no command: set it to infra's enqueue command where drive runs "
-              "(the control pod's drive.sh)", file=sys.stderr)
-        return 2
-    return subprocess.run([*command, *argv[1:]], stdin=subprocess.DEVNULL).returncode
