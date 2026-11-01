@@ -4,9 +4,9 @@
 #   research run --on auto --source . --as LANE --project verity --cwd clone --cpus 16 --mem-gb 32 \
 #     -- bash verity/ml/flock/pod/93-zk-tree-from.sh
 # The challenger is benchmarks/live_challenger/serve.py, its coins the Lean verifier's `IO.getRandomBytes`
-# (`one_stage.verifier.coins`, built here with lake first), a test LMS key outside $OUT and a session secret. RoPE d64
-# staged at 32 instances as 92-zk-sessions.sh stages it (one circuit, hidden outputs), then, each session drawing all 32
-# (--draw subset:32, as every soundness claim is about a drawn session):
+# (`one_stage.verifier.coins`, built here with lake first), a test LMS key outside $OUT and a session secret. The statement
+# is 91-plain-hidden.sh's (tests/plain_hidden.py: RoPE d64 at 32 instances, hidden outputs, the verifier's own program and
+# partition), each session drawing all 32 (--draw subset:32, as every soundness claim is about a drawn session):
 #   wrong-secret  serve --tree-from with another secret: the challenger refuses its hello and serve never serves
 #   tree-from     serve/prove --zk, the session's coin tree sampled and opened by the challenger (--tree-from with its
 #                 secret, --sessions 1); the challenger exits 0 once serve closes its session
@@ -31,10 +31,7 @@ DIFFTEST=$SP/.lake/build/bin/sampled-proofs-difftest
 S=$OUT/sessions CH=$OUT/challenger
 mkdir -p "$S"
 
-"$PY" -m verity_numerical.bench.generate --subcircuit rope-head/d64/neox-bf16 --n 32 --seed 20260926 --out "$W/sets" \
-  > "$OUT/generate.log" 2>&1 || { log "generate FAILED: $(tail -2 "$OUT/generate.log")"; exit 1; }
-SET=$(dirname "$(find "$W/sets" -name manifest.json | head -1)")
-"$PY" -m verity_flock.circuit --input-set "$SET" --n 32 --out "$W/stage" > "$OUT/stage.json" 2> "$OUT/stage.err" \
+"$PY" "$SRC/verity/ml/flock/tests/plain_hidden.py" --out "$W/stage" > "$OUT/stage.json" 2> "$OUT/stage.err" \
   || { log "stage FAILED: $(tail -2 "$OUT/stage.err")"; exit 1; }
 PIN=$(sha512sum "$W/stage/circuit.txt" | cut -d' ' -f1)
 log "staged: circuit_sha512 ${PIN:0:16}"
@@ -105,7 +102,8 @@ EOF
 
 verify() {   # verify SESSION: Lean flock-verify's verdict, accepted and why
   "$LEAN" verify --zk --statement verity/flock-circuit --circuit "$W/stage/circuit.txt" --public "$W/stage/pub-32.bin" \
-    --session-tables 1 --session "$1" 2>&1 | grep '^VERDICT ' \
+    --partition "$W/stage/partition.json" --program "$W/stage/program.json" --session-tables 1 --session "$1" 2>&1 \
+    | grep '^VERDICT ' \
     | "$PY" -c "import json, sys; [print(v['accepted'], v['why']) for v in (json.loads(l[8:]) for l in sys.stdin)]"
 }
 { for n in tree-from own-tree; do echo "$n: $(verify "$(one $n)")"; done; } | tee "$OUT/lean.log" | tee -a "$OUT/job.log"
