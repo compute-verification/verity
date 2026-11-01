@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.ExecStratified
 public import Proofs.Flock.Soundness.Refine.Setup
+import all Init.Data.Array.QSort.Basic
+import all Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # The strata the verifier accepts are a partition's

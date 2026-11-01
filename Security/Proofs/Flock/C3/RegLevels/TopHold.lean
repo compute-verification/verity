@@ -2,6 +2,7 @@ module
 
 public import Flock.RecVStar
 public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # R's stream's first top makes R's registered entry
@@ -74,7 +75,7 @@ section Loop
 
 variable (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α)
 
-theorem loop_sameOn :
+private theorem loop_sameOn :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       SameOn lo hi as (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2 := by
   intro d
@@ -95,7 +96,7 @@ theorem loop_sameOn :
     · exact ih _ _ _ _ _ _ (by omega)
 
 /-- The loop's split: past its pivot's place, no element is below the pivot, which it puts there. -/
-theorem loop_split :
+private theorem loop_split :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       as[hi] = pivot → (∀ j (hj : j < n), i ≤ j → j < k → lt as[j] pivot = false) →
       ∀ m as', Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w = (m, as') →
@@ -141,7 +142,7 @@ theorem loop_split :
       · exact hb j hj h1 (by omega)
 
 /-- The loop puts its pivot before `hi` once it has passed a place `mid < hi` whose element is not below it. -/
-theorem loop_lt {mid : Nat} (hmid : mid < hi) :
+private theorem loop_lt {mid : Nat} (hmid : mid < hi) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (i < k ∨ (k ≤ mid ∧ lt (as[mid]'(by omega)) pivot = false)) →
       (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).1.1 < hi := by
@@ -191,7 +192,7 @@ theorem ite_swap_lt (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true �
   · rename_i h; simp only [Vector.getElem_swap_left, Vector.getElem_swap_right]; exact hasym _ _ h
   · rename_i h; simpa using h
 
-theorem loop_spec (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) {as as₃ : Vector α n} (w : lo ≤ hi) {mid : Nat}
+private theorem loop_spec (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) {as as₃ : Vector α n} (w : lo ≤ hi) {mid : Nat}
     (hm1 : lo ≤ mid) (hm2 : mid ≤ hi) (hmid : lo < hi → mid < hi) (hS : SameOn lo hi as as₃)
     (H : lt (as₃[mid]'(by omega)) as₃[hi] = false) :
     ∀ m as', Array.qpartition.loop lt lo hi hhi as₃[hi] as₃ lo lo (Nat.le_refl _) (Nat.le_refl _) w = (m, as') →
@@ -218,7 +219,7 @@ theorem qpartition_spec (lt : α → α → Bool) (hasym : ∀ a b, lt a b = tru
         (sameOn_ite_swap _ _ _ _ (by omega) (by omega) (by omega) (by omega)))
   · exact ite_swap_lt lt hasym _ _ _
 
-theorem sort_spec (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
+private theorem sort_spec (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
     (htr : ∀ a b c, lt a b = false → lt b c = false → lt a c = false) :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo < d →
       SameOn lo hi as (Array.qsort.sort lt as lo hi w hlo hhi) ∧

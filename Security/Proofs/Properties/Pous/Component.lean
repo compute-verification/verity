@@ -6,6 +6,7 @@ public import Proofs.Properties.Pous.MemoryChallenger
 public import Proofs.Properties.CertifierDevice.Lms
 public import Mathlib.Tactic.SplitIfs
 public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)

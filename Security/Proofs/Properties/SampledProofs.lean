@@ -2,6 +2,7 @@ module
 
 public import Properties.SampledProofs
 public import Proofs.Properties.Challenger
+import all Init.Data.Array.QSort.Basic
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.SampledProofs`)
 

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Nci.Novel
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # Toward `Novel.ReadsExact`: what `Desc.analyze`'s pieces and segments name
@@ -9921,7 +9922,7 @@ theorem qpartition_spec {n : Nat} (as : Vector α n) (lo hi : Nat) (w : lo ≤ h
   · exact median_le f _ _ _ _ _
 
 /-- `qsort`'s `sort` of `[lo, hi]` sorts it by `f`, changing only it, to elements it held. -/
-theorem sort_spec {n : Nat} :
+private theorem sort_spec {n : Nat} :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       Within as (Array.qsort.sort (fun x y => decide (f x < f y)) as lo hi w hlo hhi) lo hi ∧
       ∀ i j (hi' : i < n) (hj : j < n), lo ≤ i → i ≤ j → j ≤ hi →

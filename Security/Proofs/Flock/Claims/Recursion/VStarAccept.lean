@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.VStarBuild
 public import Proofs.Flock.C3.RegLevels.TopHold
+import all Init.Data.Array.QSort.Basic
+import all Proofs.Flock.C3.RegLevels.TopHold
 
 /-!
 # When the stager accepts a part (`VStar.In.partIn`)

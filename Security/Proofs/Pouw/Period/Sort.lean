@@ -2,6 +2,7 @@ module
 
 public import Batteries.Tactic.OpenPrivate
 public import Proofs.Properties.RemoteAudit.Sort
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `Array.qsort` sorts strings
@@ -185,7 +186,7 @@ theorem qpartition_spec {n : Nat} (as : Vector String n) (lo hi : Nat) (w : lo �
   · exact median_le _ _ _ _ _
 
 /-- `qsort`'s `sort` of `[lo, hi]` sorts it, changing only it, to elements it held. -/
-theorem sort_spec {n : Nat} :
+private theorem sort_spec {n : Nat} :
     ∀ (d : Nat) (as : Vector String n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       Within as (Array.qsort.sort (fun x y => decide (x < y)) as lo hi w hlo hhi) lo hi ∧
       ∀ i j (hi' : i < n) (hj : j < n), lo ≤ i → i ≤ j → j ≤ hi →
