@@ -397,20 +397,34 @@ theorem drawWithheld : DrawWithheld := by
   cases u
   exact creditedDraw_withheld hu
 
-/-- `DrawWithheld`'s honest case: the draw session's step (`drawSession`) accepts every session the ledger opens withheld
-on the draw root and `trustedSessionOf` trusts, as a withheld deployment's is. -/
-theorem drawWithheld_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+/-- The draw session's step (`drawSession`) accepts every session the ledger opens withheld on the draw root and
+`trustedSessionOf` trusts, as a withheld deployment's is. -/
+theorem drawSession_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
     (ht : trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
     (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x := by
   simp [PouwCheck.Credit.drawSession, ht, hw, Except.mapError]
 
-/-- `DrawWithheld`'s conclusion is false for a verifier that accepts everything: a ledger that opens no session (here
-the empty one) withholds no draw root. -/
+/-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the draw
+`{root: ""}`, for every root `r`: the empty ledger withholds no draw root. -/
 theorem drawWithheld_nontrivial :
-    ¬ ∀ ledger draw : Json, ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
-  intro h
-  obtain ⟨r, -, hw⟩ := h (.arr #[]) (Json.mkObj [("root", Json.str "")])
+    ∀ r : String, ¬ (PouwCheck.get (Json.mkObj [("root", Json.str "")]) "root" = .str r ∧
+      withheldOn (.arr #[]) r = true) := by
+  rintro r ⟨-, hw⟩
   simp [withheldOn] at hw
+
+/-- **`DrawWithheld` fails at a verifier that accepts everything**: such a verifier credits the empty ledger and the draw
+`{root: ""}`, where the conclusion fails (`drawWithheld_nontrivial`). -/
+theorem drawWithheld_acceptAll
+    (f : Json → Json → Json → Json → Json → Json → Json → Json → Json → Json → Except (String × String) (List Nat))
+    (hall : ∀ key ledger pins main salt calls served commit rounds draw,
+      ∃ got, f key ledger pins main salt calls served commit rounds draw = .ok got) :
+    ¬ ∀ key ledger pins main salt calls served commit rounds draw got,
+      f key ledger pins main salt calls served commit rounds draw = .ok got →
+        ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  intro h
+  obtain ⟨got, hf⟩ := hall .null (.arr #[]) .null .null .null .null .null .null .null (Json.mkObj [("root", Json.str "")])
+  obtain ⟨r, hr, hw⟩ := h _ _ _ _ _ _ _ _ _ _ _ hf
+  exact drawWithheld_nontrivial r ⟨hr, hw⟩
 
 end Withheld
 
