@@ -47,7 +47,15 @@ include h
 theorem kind {p : ℕ} (hp : p < c.ports.size) : PadRow c.ports[p]! ∨ SegRow c.ports[p]! :=
   h.2 _ (by rw [getElem!_pos c.ports p hp]; exact Array.getElem_mem_toList hp)
 
+theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := fun p hp => by
+  rcases h.2 p hp with h1 | h1
+  · exact h1.2.1
+  · exact h1.2.1
+
 end RowsFitP
+
+/-- A `RowsFitS` proof where a `RowsFitP` one is asked for (`RowsFitS.toP`). -/
+instance instCoeRowsFitSRowsFitP {c : Circuit} : Coe (RowsFitS c) (RowsFitP c) := ⟨RowsFitS.toP⟩
 
 /-- **The bytes a row's `hm96` slot hashes**, `bytes` its message bytes: `RowSeg.enc` of them at a segmented row, else
 its own prefix (`rowPre`) and them. -/
@@ -62,10 +70,7 @@ include h
 theorem kind {p : ℕ} (hp : p < c.ports.size) : PadRow c.ports[p]! ∨ SegRow c.ports[p]! :=
   h.toP.kind hp
 
-theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := fun p hp => by
-  rcases h.2 p hp with h1 | h1
-  · exact h1.2.1
-  · exact h1.2.1
+theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := h.toP.bits16
 
 end RowsFitS
 

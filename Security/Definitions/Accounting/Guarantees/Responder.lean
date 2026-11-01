@@ -46,7 +46,7 @@ a function of its state at the previous one and of what reached it in between.
   `q`-bit `z` passes while `q + N ≥ M + 1 + τ + H + k` with probability at most `δ + ε + c·2^-k`; `B2AddsP2Ring`, the
   same at P2's deployed point under `P2RingAuditSecure 0 0 0`, with `δ + 2^-129 + 2^-130 + 105·2^-k`.
 * `B2Window`, the core of the oracle-location form (B2's row): where the location does use the ring, at oracle locations
-  of its own (`RingWindow`), a window whose multiplications take at least `ℓ > 0` ticks to answer and which spans at
+  of its own (`RingResponder`), a window whose multiplications take at least `ℓ > 0` ticks to answer and which spans at
   most `D·ℓ` ticks is a step of an `(N, D, Q, L)` sequential responder, which asks the additions, `one` and the keys at
   once and holds each multiplication until the earliest held one could be due. With `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency
   form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`. `B2WindowAudit`: so under
@@ -209,7 +209,7 @@ locations answer, wherever the window asks at most `Q` key queries and `L` ring 
 def B2Window : Prop :=
   ∀ {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N D Q L ℓ : ℕ)
     (Wd : Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
-      RingWindow B w (Pous.Bits sch.ℓ × Pous.Bits N)),
+      RingResponder B w (Pous.Bits sch.ℓ × Pous.Bits N)),
     0 < ℓ → (∀ W pp j σ i (q : Pous.RingQry B w), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
     (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
     ∃ A₂ : Pous.SeqResponderOn sch N D Q L, ∀ W pp j σ i (f : Pous.RingQry B w → Pous.Bits w),
@@ -227,14 +227,14 @@ def B2WindowAudit : Prop :=
     Pous.AuditSecureOn sch .sequential N D Q L k δ ε →
     ∀ (W : Pous.Bits sch.n) (A₁ : Pous.Preprocessor sch N)
       (Wd : Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
-        RingWindow B w (Pous.Bits sch.ℓ × Pous.Bits N)),
+        RingResponder B w (Pous.Bits sch.ℓ × Pous.Bits N)),
       0 < ℓ → (∀ W pp j σ i (q : Pous.RingQry B w), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
       (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
       (∀ (ω : (Pous.ringRO B w p).Ω) W pp j σ i, (Wd W pp j σ i).keys ((Pous.ringRO B w p).answer ω) ≤ Q ∧
         (Wd W pp j σ i).ops ((Pous.ringRO B w p).answer ω) ≤ L) →
       Pous.pr (fun x : Pous.Outcome sch k =>
         Pous.seqAnswers ((Pous.ringRO B w p).answer x.1)
-            (fun j σ i => Pous.Prog.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
+            (fun j σ i => Pous.OracleAlgorithm.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
             0 (List.ofFn x.2.2) (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
           List.ofFn fun j => (sch.enc W x.1 x.2.1).2 (x.2.2 j)) ≤ δ + ε
 
@@ -253,7 +253,7 @@ def B2WindowP2Ring : Prop :=
         Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).t → ℕ →
         Pous.Bits ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ) →
         Fin (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).B →
-        RingWindow (2 ^ 19) 16448 (Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ ×
+        RingResponder (2 ^ 19) 16448 (Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ ×
           Pous.Bits ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ))),
       0 < ℓ → T ≤ D * ℓ →
       (∀ W pp j σ i (q : Pous.RingQry (2 ^ 19) 16448), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
@@ -263,7 +263,7 @@ def B2WindowP2Ring : Prop :=
         (Wd W pp j σ i).ops ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) ≤ L) →
       Pous.pr (fun x : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
         Pous.seqAnswers ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
-            (fun j σ i => Pous.Prog.ret ((Wd W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1
+            (fun j σ i => Pous.OracleAlgorithm.ret ((Wd W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1
               x.2.1).1 j σ i).result ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)))
             0 (List.ofFn x.2.2)
             (A₁ W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1).1

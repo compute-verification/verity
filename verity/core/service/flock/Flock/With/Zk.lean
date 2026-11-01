@@ -5,6 +5,7 @@ runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text
 -/
 import Flock.With.Verify
 import Flock.Zk
+import Flock.JsonParse
 
 namespace Flock.Zk
 
@@ -244,7 +245,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
         liftLM (claimPow p)
         let bb ← liftW (sampleWith hs)
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }
-    -- §13.6 final check
+    -- `Flock.Ligerito` final check
     let st ← get
     let orig := levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
     if orig.size + ext != n then throw "ligerito: |orig| + ext ≠ n"
@@ -293,7 +294,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
   return rec
 
 /-- `Zk.verifyRep` with the oracle's hashes. -/
-def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     M ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
@@ -369,7 +370,7 @@ def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : 
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 theorem verifyWithM_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
-    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : Lean.Json.parse record = .ok j) :
+    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : JsonParse.parse record = .ok j) :
     verifyWithM hs spec tabs record proofs = verifyJWithM hs spec tabs j proofs := by
   simp only [verifyWithM, verifyJWithM, Record.decodeWith_of_parse hs spec h]
 

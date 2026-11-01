@@ -4,6 +4,7 @@ and `RECORD_VERDICT` switches the record back to Python in one line."""
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from pathlib import Path
@@ -12,8 +13,9 @@ import pytest
 
 import verity_difftest
 from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
+from verity.ml.circuits import codec
 from verity.ml.circuits.codec import canonical_json
-from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs import challenger as C, coins as T, service as S
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
                                                             verifier as V)
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
@@ -82,6 +84,31 @@ def test_every_check_runs_both_and_records_them():
     assert not bad["accepted"] and bad["verifiers"]["agree"] and bad["verifiers"]["lean"]["failed"] == ["roots"]
 
 
+def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():
+    """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
+    the Lean compiles on a hash map of the registration's roots, against the Python's whole: the sessions' roots all
+    right, one wrong, one at a port the registration doesn't name, and a port registered twice, read at its last root;
+    and verdicts reporting reads of the registration's own port and of a value it doesn't name, of which only its own is
+    kept."""
+    _, reg, draw = _drawn()
+    rec = reg.record
+    roots = {r["port"]: r["root"] for r in rec["roots"]}
+    x = rec["roots"][0]["port"]
+    twice = {**rec, "roots": [*rec["roots"], {**rec["roots"][0], "root": "77" * 64}]}
+    reads = _lean(registered={"0": {"value": x, "root": roots[x]}, "1": {"value": "elsewhere", "root": "00" * 64}})
+    for registration, given, verdicts, failed in (
+            (rec, roots, _lean(), []), (rec, {**roots, x: "77" * 64}, _lean(), ["roots"]),
+            (rec, {**roots, "elsewhere": "00" * 64}, _lean(), ["roots"]),
+            (twice, {**roots, x: "77" * 64}, _lean(), ["receipt"]), (twice, roots, _lean(), ["receipt", "roots"]),
+            (rec, roots, reads, ["registered"])):
+        a = {**_args(reg, draw, registration=registration, verdicts=verdicts), "session_roots": given}
+        got = V.audit_record(**a)
+        assert got["verifiers"]["agree"] and got["verifiers"]["lean"]["failed"] == failed, got["verifiers"]
+        py = audit.audit_record(**a, session_registered=audit.session_registered(verdicts, registration))
+        assert canonical_json({k: v for k, v in got.items() if k != "verifiers"}) == canonical_json(py)
+    assert got["checks"]["registered"]["detail"]["opened"] == [x]
+
+
 def _lean_answering(monkeypatch, fn: str, answer):
     """The Lean, answering `fn` with `answer(its own answer)`."""
     real = V.lean
@@ -128,7 +155,7 @@ def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatc
     assert draw.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
     for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("subset:3"), {"law": "subset", "k": 3})):
         seen.clear()
-        s = _stream(_spec(rule), coins=b"\x5a")
+        s = _stream(_spec(rule))
         d = s.select(s.register(_record(law=law), _ports(6)))
         (asked,) = seen
         got = real("select", asked)
@@ -187,26 +214,32 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
     assert V.hello(*run, [key], ["selection"], 2, ["session"]).codes == (V.DISAGREE,)
 
 
-def test_a_streams_coins_are_the_leans(monkeypatch):
-    """A stream's default coins are the Lean verifier's `IO.getRandomBytes` (A3): every byte its salt and its
-    draw read is a `coins` answer, and the draw of record is the Lean's on exactly those bytes."""
+def test_the_leans_coins_are_a_challengers_entropy_and_never_a_streams(monkeypatch):
+    """The Lean verifier's `IO.getRandomBytes` (A3, `verifier.coins`) is a challenger's entropy, never a stream's own
+    coins: a stream given it, or no coins, refuses (`NO_OWN_COINS`). A challenger on it commits to its coins, and a
+    stream drawing from that challenger has the Lean's draw of record on coins it released after the registration."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
-    answered, selected = [], []
+    for coins in (None, V.coins):
+        with pytest.raises(ValueError) as e:
+            S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
+        assert str(e.value) == S.NO_OWN_COINS
+    selected = []
     real = V._server.call
 
     def spy(fn, value):
-        kind, body = real(fn, value)
-        if fn == "coins":
-            answered.append(bytes.fromhex(body))
         if fn == "select":
             selected.append(bytes.fromhex(value["source"]))
-        return kind, body
+        return real(fn, value)
     monkeypatch.setattr(V._server, "call", spy)
-    stream = S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c")
-    assert stream.salt() == answered[0] and len(answered[0]) == 64
-    draw = stream.select(stream.register(_record(), _ports(6)))
-    assert len(draw.units) == 2 and selected == [b"".join(answered[1:])] and len(selected[0]) > 0
+    challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("positions", 8)], V.coins)
+    coins = T.ChallengerCoins(C.LiveRecord(challenger, "positions", itertools.count().__next__))
+    stream = S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
+    reg = stream.register(_record(), _ports(6))
+    segment = coins.commit(bytes.fromhex(reg.digest))
+    draw = stream.select(reg)
+    released = b"".join(o.coin for o in segment.openings)
+    assert len(draw.units) == 2 and len(selected) == 1 and 0 < len(selected[0]) and released.startswith(selected[0])
 
 
 def test_coins_the_lean_cannot_give_are_no_coins(monkeypatch):
@@ -250,6 +283,96 @@ def test_floats_reach_the_lean_as_python_wrote_them():
     for delta in (DELTA, 0.05, 0.1):
         assert V.audit_record(**_args(reg, draw, statement=floats, delta=delta))["verifiers"]["agree"]
     assert not V.audit_record(**_args(reg, draw, statement={"x": -0.0}))["verifiers"]["agree"]
+
+
+def _sent(monkeypatch, answer=None) -> list[tuple[str, dict]]:
+    """Every request line the server writes, as `(fn, input)`, from a fresh process; `answer(fn, input)`, where it
+    returns a line, answers in the Lean's place."""
+    V._server.close()
+    sent, real = [], V._Server._exchange
+
+    def exchange(self, fn, line):
+        sent.append((fn, json.loads(line)["input"]))
+        return (answer and answer(fn, sent[-1][1])) or real(self, fn, line)
+    monkeypatch.setattr(V._Server, "_exchange", exchange)
+    return sent
+
+
+def _checked(program, ports=None) -> Verdict:
+    """`check` on `program`, held to the Python's."""
+    law = {"law": "subset", "k": 2}
+    v = V.check(_record(), program, QUERY, law, S.SCHEME, ports or _ports(6))
+    py = R.check(_record(), program, QUERY, law, S.SCHEME, ports or _ports(6))
+    assert v == py and v.verifiers["lean"] == v.verifiers["python"], (v, py)
+    return v
+
+
+def test_a_program_is_loaded_once_and_named_after(monkeypatch):
+    """The server process loads a program the first time a call passes it and names it by digest and annotations after,
+    for every call on it (a check on a Program built afresh, the stream's draw and run): each decides as the Python
+    does. Another program, or the same under other annotations, is loaded beside it; a process that ends forgets them."""
+    sent = _sent(monkeypatch)
+    six, five = P.population_program(PAIR, 6), P.population_program(PAIR, 5)
+    named = {"annotations": dict(six.annotations), "loaded": codec.program_digest(six)}
+    assert _checked(six).ok
+    assert [fn for fn, _ in sent] == ["program", "registration"] and sent[0][1] == json.loads(V._dumps(codec.encode_program(six)))
+    assert sent[1][1]["params"]["program"] == named
+    sent.clear()
+    assert _checked(P.population_program(PAIR, 6)).ok and [fn for fn, _ in sent] == ["registration"]
+    sent.clear()
+    stream, reg, draw = _drawn()
+    stream.deliver(draw, [SESSION])
+    assert stream.outcome(draw, _lean(), {"statement": "stub"}).accepted
+    programs = [x["program"] if fn == "select" else x["params"]["program"] for fn, x in sent if fn in ("registration", "select", "run")]
+    assert [fn for fn, _ in sent if fn in ("program", "registration", "select", "run")] == ["registration", "select", "run"]
+    assert programs == [named] * 3
+    sent.clear()
+    assert not _checked(five).ok and [fn for fn, _ in sent] == ["program", "registration"]
+    sent.clear()
+    noted = P.population_program(PAIR, 6)
+    noted.annotations["note"] = 1
+    assert _checked(noted).ok and [fn for fn, _ in sent] == ["program", "registration"]
+    assert sent[1][1]["params"]["program"] == {**named, "annotations": {"note": 1}}
+    sent.clear()
+    V._server.close()
+    assert _checked(six).ok and [fn for fn, _ in sent] == ["program", "registration"]
+
+
+def test_past_loaded_max_a_fresh_process_loads_anew(monkeypatch):
+    sent = _sent(monkeypatch)
+    monkeypatch.setattr(V, "LOADED_MAX", 1)
+    six, five = P.population_program(PAIR, 6), P.population_program(PAIR, 5)
+    _checked(six)
+    first = V._server._proc.pid
+    _checked(five)
+    assert V._server._proc.pid != first and [fn for fn, _ in sent] == ["program", "registration"] * 2
+    sent.clear()
+    _checked(six)
+    assert [fn for fn, _ in sent] == ["program", "registration"]
+
+
+def test_a_program_the_lean_will_not_load_is_sent_whole(monkeypatch):
+    """Where the Lean refuses a program or answers another digest for it, the call carries the descriptor and decides as
+    before; nothing is named by a digest the Lean hasn't answered."""
+    six = P.population_program(PAIR, 6)
+    for reply in ('{"reject":"no"}\n', '{"output":"' + "00" * 64 + '"}\n', 'not json\n'):
+        sent = _sent(monkeypatch, lambda fn, x, reply=reply: reply if fn == "program" else None)
+        assert _checked(six).ok and [fn for fn, _ in sent] == ["program", "registration"]
+        assert sent[1][1]["params"]["program"] == json.loads(V._dumps(codec.encode_program(six)))
+        sent.clear()
+        assert _checked(six).ok and [fn for fn, _ in sent] == ["program", "registration"]
+        monkeypatch.undo()
+
+
+def test_a_reference_the_process_has_not_loaded_is_refused():
+    """A process that hasn't loaded the program a reference names refuses the call: it reads the reference as a
+    descriptor, which it isn't, never as another program."""
+    V._server.close()
+    six = P.population_program(PAIR, 6)
+    params = V._params(six, QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6), None, (), [], None, None, None)
+    params["program"] = {"annotations": dict(six.annotations), "loaded": codec.program_digest(six)}
+    kind, _ = V._server.call("registration", {"params": params, "record": _record()})
+    assert kind == "reject"
 
 
 def test_a_stream_rules_disagreement_stops_the_stream(monkeypatch):

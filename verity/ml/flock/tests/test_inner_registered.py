@@ -1,5 +1,5 @@
 """A recursive session's inner statement whose private circuit's description is registered (`verity_flock.inner_registered`,
-PROTOCOL.md §16.16), on a plain-leaves hidden-output RoPE d64 statement shaped as a private circuit's: its ``cs`` port one
+`Tags.withPlainLeaves`), on a plain-leaves hidden-output RoPE d64 statement shaped as a private circuit's: its ``cs`` port one
 table row every instance reads (the description, which the developer registers), ``x`` a row per instance. `register`
 takes the table's rows and salts as the registration, so the statement's ``b || c`` and frame-v3 roots are unchanged, and
 writes the header's ``registered`` and the verifier's own reads file; `claim` writes another description's statement with

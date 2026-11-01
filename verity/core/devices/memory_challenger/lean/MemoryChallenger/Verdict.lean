@@ -1,10 +1,11 @@
+import CoreProtocol.Protocol
 import MemoryChallenger.Records
 import MemoryChallenger.SignedMessage
 
 /-!
 # The verdict on a signed session
 
-`memory_challenger.verdict`: the check of a signed session against the commitment published before it. It checks the
+`memory_challenger.verdict`: the check of a signed session against its commitment, released with it. It checks the
 signature under a trusted key and an accepted scheme, the header against the commitment, every revealed index against
 its coin opening, every `H(block)` against the expected digest of that block of `C`, and every round on time within
 `Δ + RTT`. It fails closed: an unknown scheme, an untrusted key or a bad signature rejects, whatever the rounds. The
@@ -71,14 +72,25 @@ def pyRepr (s : String) : String := Id.run do
       else out.push c
   return out.push q
 
-/-- Whether the signed session passes. `reasons` (empty when it passes), `late` and `wrong` are witness: only
-`public` is published. -/
-structure Verdict where
-  accepted : Bool
+/-- What the check found besides its verdict, all witness: the reasons it rejects (empty when it passes), the late
+answers and the wrong ones. -/
+structure Findings where
   reasons : Array String
   late : Nat
   wrong : Nat
   deriving BEq, Inhabited
+
+/-- Whether the signed session passes, as `Core.Verdict` (`accept` exactly when there is no reason, never `undecided`),
+with its findings. Only the verdict is published (`public`). -/
+abbrev Verdict := Findings × Core.Verdict
+
+/-- `accept` when there is no reason (`b`), `reject` otherwise. -/
+def acceptIf (b : Bool) : Core.Verdict := if b then Core.Verdict.accept else Core.Verdict.reject
+
+def Verdict.accepted (v : Verdict) : Bool := v.2 == Core.Verdict.accept
+def Verdict.reasons (v : Verdict) : Array String := v.1.reasons
+def Verdict.late (v : Verdict) : Nat := v.1.late
+def Verdict.wrong (v : Verdict) : Nat := v.1.wrong
 
 /-- `verdict(signed, commitment, openings, expected, trusted=trusted, schemes=schemes)`: `expected i` is `block_digest` of
 block `i` of `C`, or none when the caller has no digest for it (no answer is then that block). Openings are looked up by
@@ -112,6 +124,6 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → O
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ c.limitNs) then late := late + 1
   if wrong > 0 then reasons := reasons.push s!"{wrong} answers are not their blocks of C"
   if late > 0 then reasons := reasons.push s!"{late} answers are past Δ + RTT = {c.limitNs} ns"
-  return ⟨reasons.isEmpty, reasons, late, wrong⟩
+  return (Findings.mk reasons late wrong, acceptIf reasons.isEmpty)
 
 end MemoryChallenger

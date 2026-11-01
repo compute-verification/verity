@@ -38,8 +38,8 @@ lemma. Which template each part uses:
   `ResReadsAt` (an algebra part at either flag, M's `ResReads` body), `OpeningReadsAt`, `SparseCopyAt`; `PartKindAt` is
   their disjunction. `PartsLinks s` asks it wherever part `s`'s outer relation holds with true recorded calls and its
   coins are shown; `PartsLinksOr s` allows `PartChecks`' fallback instead, a collision among the part's recorded calls
-  (`findColl`) or a tie with the setup's out-of-oracle evaluations at `xO` (`SetupColl`, which `Br` finds: card
-  f93bbff1). `partChecks_of_partsLinks` and `partChecks_of_partsLinksOr` give `PartChecks s` at any shape;
+  (`findColl`) or a tie with the setup's out-of-oracle evaluations at `xO` (`SetupColl`, which `Br`
+  finds). `partChecks_of_partsLinks` and `partChecks_of_partsLinksOr` give `PartChecks s` at any shape;
   `partChecks_holo` at every part of the holo shape. M's dense links are instances (`partsLinks_of_reads`,
   `partsLinks_of_open`).
 * **`PartLogs`** (`partLogs_of_shown_nil`, `partLogs_of_logLinks`, `partLogs_holo`): the algebra, opening and sparse
@@ -325,19 +325,19 @@ part's witness (`PartKindAt`). -/
 def PartsLinks (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)
     (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) → ∀ c : ℕ → Coin, shows s x xO c →
       PartKindAt decode L chk x s xO c w
 
 /-- **Part `s`'s links, or a collision the finders charge** (`PartsLinks` with `PartChecks`' fallback): at each
 accepted witness with true recorded calls, either some kind of part's links hold at every coins `xO` shows for part
 `s`, or two of the part's recorded calls collide (`findColl`), or one of them ties with an evaluation the setup makes at
-`xO` outside the oracle (`SetupColl`, which `Br` finds at the run: card f93bbff1). The registration ties (`v`, the zero
+`xO` outside the oracle (`SetupColl`, which `Br` finds at the run). The registration ties (`v`, the zero
 output rows, the levels' `coef`, `dirs` and top) are where a link can fail off a recorded collision. -/
 def PartsLinksOr (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)
     (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (∀ c : ℕ → Coin, shows s x xO c → PartKindAt decode L chk x s xO c w) ∨ (findColl (L.calls x s w)).isSome ∨
         SetupColl H D xO (L.calls x s w)
@@ -453,7 +453,7 @@ part `s`): at the compiled statements of the shape and the V* statements that sh
 on every list of messages. -/
 def LogsNil (D : Deploy Coin) (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
     (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin),
     shows s x xO c → ∀ ms, logs s x c ms = []
 
 /-- **`PartLogs` at a part whose inner check logs no call where its coins are shown** (`LogsNil`). -/
@@ -480,7 +480,7 @@ def PartsLogLinks (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Co
     (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
     (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (∀ c : ℕ → Coin, shows s x xO c → LevelLogsAt decode L logs x s xO c w) ∨ (findColl (L.calls x s w)).isSome ∨
         SetupColl H D xO (L.calls x s w)
@@ -527,7 +527,7 @@ theorem partLogs_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coi
 theorem partOpens_of_none {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
     {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {opening : Opening}
     {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
-    (h : ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ i, L.msgAt x s i = none) :
+    (h : ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ i, L.msgAt x s i = none) :
     PartOpens H D DO L shape shows opening cmt s := by
   intro x st hst hf xO w _ _
   exact Or.inl fun _ _ i _ m hm => by simp [Layout.held, h x st hst hf i] at hm

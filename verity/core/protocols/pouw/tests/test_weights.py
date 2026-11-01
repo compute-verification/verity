@@ -3,16 +3,19 @@
 (`hm96_salt`, `commit_string`, `registered.leaf`, `tree_levels`), for any chunking and any `workers`."""
 from __future__ import annotations
 
+import json
 import random
 import struct
 
 import numpy as np
 import pytest
 
+from verity.core.protocols import registration as Reg
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.audit import chacha20_block, hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments import hm96
+from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.crypto import chacha20
@@ -77,6 +80,25 @@ def test_weights_root_folds_by_ascending_k():
     roots = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY)
     assert Wt.weights_root(roots) == Wt.weights_root(dict(reversed(list(roots.items()))))
     assert Wt.weights_root(roots) != Wt.weights_root({**roots, 8: roots[12]})
+
+
+def test_the_weights_root_is_pouws_view_of_theta():
+    """Each K's ``b/<K>`` registered as a θ item of the registration log, read back from the accepted log's view: its
+    `theta_root` is `weights_root` of the roots, whatever else θ lists; a second ``b/<K>`` is the log's refusal."""
+    shapes, rows = model()
+    roots = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY)
+    n = {k: sum(m for m, kw in shapes if kw == k) for k in roots}
+    items = [Wt.theta_item(CIRCUIT, PREFIX, k, n[k], roots[k]) for k in reversed(sorted(roots))]
+    other = [{**items[0], "value": v} for v in ("other/b/8", f"{PREFIX}b/08", f"{PREFIX}a/8", f"{PREFIX}b/8x")]
+    log = Reg.chain("onsite", [Reg.Information(tuple(items[:1] + other)), Reg.Information(tuple(items[1:]))])
+    composite, read = Reg.log_of(json.loads(Reg.committed("onsite", log)))
+    view = Reg.check(Reg.Auditor(), composite, read).view()
+    assert [t["value"] for t in view.theta][:1] == [Wt.value(PREFIX, max(roots))]
+    assert Wt.theta_roots(view.theta, PREFIX) == roots
+    assert Wt.theta_root(view.theta, PREFIX) == Wt.weights_root(roots)
+    with pytest.raises(Reg.Refused, match="duplicate-information"):
+        Reg.check(Reg.Auditor(), "onsite", Reg.chain("onsite", [Reg.Information(tuple(items)),
+                                                                Reg.Information(tuple(items[:1]))]))
 
 
 def test_a_changed_code_scale_or_key_moves_the_root():
@@ -173,12 +195,12 @@ def test_hm96_salts_are_hm96_salt_at_each_row(nonce):
     and its last whole salt included; a row past it is refused."""
     key, last = bytes(range(3, 35)), ((1 << 64) - 3) // 3
     rows = [5, 0, (1 << 32) // 3, 1 << 40, 5, last, 2]
-    assert chacha20.hm96_salts(key, nonce, rows) == b"".join(hm96_salt(key, nonce, j) for j in rows)
-    assert chacha20.hm96_salts(key, nonce, np.array(rows[:3], dtype=np.int64)) == b"".join(hm96_salt(key, nonce, j) for j in rows[:3])
-    assert chacha20.hm96_salts(key, nonce, []) == b""
+    assert hm96_batch.salts(key, nonce, rows) == b"".join(hm96_salt(key, nonce, j) for j in rows)
+    assert hm96_batch.salts(key, nonce, np.array(rows[:3], dtype=np.int64)) == b"".join(hm96_salt(key, nonce, j) for j in rows[:3])
+    assert hm96_batch.salts(key, nonce, []) == b""
     for bad in ([last + 1], [-1], [0.5]):
         with pytest.raises(ValueError):
-            chacha20.hm96_salts(key, nonce, bad)
+            hm96_batch.salts(key, nonce, bad)
 
 
 def test_progress_and_workers():
@@ -210,3 +232,21 @@ def test_a_rows_chunks_are_the_least_n_past_4096_whose_chunk_is_whole_512_code_b
     for bad in (0, -32, 4096 + 32, 5000):
         with pytest.raises(ValueError):
             Wt.chunks(bad)
+
+
+def test_every_weights_root_is_one_fold():
+    """H1's `weights_root`, an epoch's `audit.weights_root` and `core_check.weights_root` under each coin scheme are
+    `protocol.fold_roots` at their own tag (truncated as the scheme keeps it): one fold of registered roots, at the same
+    bytes as each one's own spelling of it."""
+    from verity.core.protocols.pouw import audit, core_check
+    from verity.core.protocols.pouw.protocol import fold_roots, tagged
+
+    roots = {12: bytes(range(64)), 8: bytes(64), 30: b"\x7f" * 64}
+
+    def spelled(tag: str) -> bytes:
+        return tagged(tag, *(p for k in sorted(roots) for p in (k, roots[k])))
+
+    assert Wt.weights_root(roots) == fold_roots(Wt.WEIGHTS_TAG, roots) == spelled("verity/pouw/h1/weights/v1")
+    assert audit.weights_root(roots) == fold_roots("verity/pouw/weights/v1", roots) == spelled("verity/pouw/weights/v1")
+    for scheme, (n, tag) in core_check.COIN_VERSIONS.items():
+        assert core_check.weights_root(scheme, roots) == fold_roots(tag, roots)[:n] == spelled(tag)[:n]

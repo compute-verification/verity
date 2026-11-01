@@ -1,18 +1,18 @@
-"""Byte-for-byte interop of the two implementations of `p2-audit-wire/v4` (`p2/PROTOCOL.md` §9): the Python reference
+"""Byte-for-byte interop of the two implementations of `p2-audit-wire/v4`: the Python reference
 `benchmarks/pous/p2_v1/wire.py` and the Lean `pous_check` (`PousCheck.Wire`, `PousCheck.Audit.check`).
 
     uv run python verity/core/protocols/pous/check/interop.py --all [--out FILE]
 
-The transcripts are every vector of §7:
+The transcripts are every vector the P2 vectors files (`benchmarks/pous/p2_v1/`) hold:
 
 * every transcript of `audit-negative-vectors.json`, `audit-vectors.json`'s two-round end-to-end one, and its full-width
   response in a one-block setup, public and private (`scripts/difftest_vectors.py` builds them, and checks both files against
-  §7's SHA-512), the verifier holding its own root of the private setup. Each side gives its setup's outputs (the epoch id,
+  `reference.py`'s SHA-512), the verifier holding its own root of the private setup. Each side gives its setup's outputs (the epoch id,
   the declared root and the identity it binds, how many blocks it carried, its failure code, where the audit begins) and
   its audit's (the `FINAL` frame, its verdict, code, record count and transcript hash), or the fault where it stops, its
   code and message, or the refusal of the verifier's inputs: `wire._parse_setup`, `wire.verify_audit` and
   `wire.parse_final` on one side, `pous-audit-difftest serve` on the other;
-* `vectors.json`'s vectors and σ rejection cases: each entry's hash and whether §7 pins it, and its keys and decode
+* `vectors.json`'s vectors and σ rejection cases: each entry's hash and whether `reference.ENTRY_SHA512` pins it, and its keys and decode
   (`reference.keys`, `decode`, `sigma` on one side, `pous-setup-difftest`'s `vector` and `sigma` on the other).
 
 Both sides write canonical JSON, compared byte for byte. The script prints each mismatch with both outputs, then
@@ -28,7 +28,6 @@ import argparse
 import hashlib
 import importlib.util
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -74,19 +73,9 @@ def transcript(gen, wire, inst: dict) -> dict:
     return {"audit": audit, "setup": setup}
 
 
-def _params(reference, w: int, c0: int):
-    deployment = (w, c0) == (reference.DEPLOYMENT.w, reference.DEPLOYMENT.c0)
-    return reference.Params(w, c0, reference.DEPLOYMENT.payload_bytes if deployment else w // 8 - 1)
-
-
-def entry_pins(spec: str) -> dict[int, str]:
-    """§7's hash of each width's `vectors.json` entry."""
-    return {int(w.replace(",", "")): h for w, h in re.findall(r"^- w=([\d,]+) entry: `([0-9a-f]{128})`$", spec, re.M)}
-
-
 def vector(reference, pins: dict[int, str], v: dict) -> dict:
-    """`reference.py`'s outputs on a §7 vector, in the form of `PousCheck.SetupDifftest.vector`'s."""
-    q = _params(reference, v["w"], v["c0"])
+    """`reference.py`'s outputs on a `vectors.json` vector, in the form of `PousCheck.SetupDifftest.vector`'s."""
+    q = reference.vector_params(v["w"], v["c0"])
     n = q.width_bytes
     entry = hashlib.sha512(canonical({k: x for k, x in v.items() if k != "sha512"}).encode()).hexdigest()
     k, t, attempt = reference.keys(bytes.fromhex(v["setup_salt"]), q, bytes.fromhex(v["model_commitment"]), v["segment"],
@@ -99,8 +88,8 @@ def vector(reference, pins: dict[int, str], v: dict) -> dict:
 
 
 def sigma(reference, v: dict) -> dict:
-    """`reference.py`'s outputs on a §7 σ rejection case, in the form of `PousCheck.SetupDifftest.sigma`'s."""
-    q = _params(reference, v["w"], v["c0"])
+    """`reference.py`'s outputs on a `vectors.json` σ rejection case, in the form of `PousCheck.SetupDifftest.sigma`'s."""
+    q = reference.vector_params(v["w"], v["c0"])
     n, r, k = q.width_bytes, int(v["r"], 16), int(v["K"], 16)
     return {"p": q.p.to_bytes(n, "big").hex(), "r_xor_K": (r ^ k).to_bytes(n, "big").hex(), "rejects": r ^ k >= q.p,
             "sigma": reference.sigma(q, r, k).to_bytes(n, "big").hex()}
@@ -122,13 +111,12 @@ def compare() -> tuple[list[dict], int]:
     """Every transcript with both outputs, and how many vectors the files hold."""
     gen = _generator()
     reference, wire, _ = py = gen._python(ROOT)
-    spec = (ROOT / gen.SPEC).read_text()
     doc = json.loads(reference.VECTORS.read_bytes())
     if hashlib.sha512(reference.VECTORS.read_bytes()).hexdigest() != reference.VECTORS_SHA512:
-        raise SystemExit("vectors.json is not the file §7 pins")
+        raise SystemExit("vectors.json is not the file reference.VECTORS_SHA512 pins")
     negative = json.loads(reference.NEGATIVE_VECTORS.read_bytes())
     expected = negative["case_count"] + 1 + 2 + len(doc["vectors"]) + len(doc["sigma_rejection_vectors"])
-    pins, out = entry_pins(spec), []
+    pins, out = reference.ENTRY_SHA512, []
     with Server([str(build(HERE, "pous-audit-difftest")), "serve"]) as lean:
         for inst in gen._vector_audits(py):
             out.append({"id": inst["name"], "kind": "transcript", "python": _python_side(transcript, gen, wire, inst),
@@ -153,14 +141,14 @@ def report(results: list[dict], expected: int, out: Path | None = None) -> int:
         out.write_text("".join(canonical(r | {"match": r["python"] == r["lean"]}) + "\n" for r in results))
     print(f"{len(results)} transcripts, {len(mismatches)} mismatches")
     if len(results) != expected:
-        print(f"expected {expected} transcripts, every vector of §7's files")
+        print(f"expected {expected} transcripts, every vector of the vectors files")
         return 1
     return 1 if mismatches else 0
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--all", action="store_true", required=True, help="every vector of §7")
+    ap.add_argument("--all", action="store_true", required=True, help="every vector of the vectors files")
     ap.add_argument("--out", type=Path, help="write one JSON line per transcript with both outputs")
     a = ap.parse_args(argv)
     return report(*compare(), a.out)

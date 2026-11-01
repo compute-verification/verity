@@ -110,7 +110,7 @@ theorem mem_table_leafAt {pub : SetupProtocol.Public} {digests : ByteArray} {C :
 
 /-- What an accepted `checkAt` checked, at the point `pt`. -/
 theorem check_okAt {pt : Run.Point} {trusted : List ByteArray} {pub : SetupProtocol.Public} {digests : ByteArray}
-    {r : Run.Session} {sid : ByteArray} (h : Run.checkAt SCHEMES pt trusted pub digests r sid = .ok ()) :
+    {r : Run.ChallengerRecord} {sid : ByteArray} (h : Run.checkAt SCHEMES pt trusted pub digests r sid = .ok ()) :
     AuditsSetupAt pt pub r.commitment ∧ r.commitment.session = sid ∧
       digests.size = pt.params.blocks * Merkle.DIGEST ∧
       Merkle.root (Run.rowLeaves pt.params pub.salt digests) = some pub.root ∧

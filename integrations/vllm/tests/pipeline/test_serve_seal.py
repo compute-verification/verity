@@ -20,9 +20,9 @@ ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2), ("warmup", 5, 6,
 NAMES = {"runner-a": "alice", "runner-b": "cmpl-2"}
 
 
-def _ledgers() -> dict[str, sc.Ledger]:
-    return {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
-            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+def _ledgers() -> dict[str, sc.LiveRequest]:
+    return {"alice": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
 
 
 def test_a_windows_requests_are_named_by_user_with_their_rows_and_first_step():
@@ -199,8 +199,8 @@ def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
         com.sources[1].rows = SERVED_ROWS if kept is None else kept
     if with_manifest:
         com.required_manifest = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
-    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
-            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
     d = tmp_path / (name or ("w5" if with_manifest else "w5-raw"))
 
@@ -416,8 +416,8 @@ def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_strea
     com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
     com.sources[1].rows = SERVED_ROWS
     served = {"digest": "ab" * 64, "statics": {"R": 4, "P": 2}}
-    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
-            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
     d = tmp_path / "windows" / "w2"
     s = ss.seal_window(com, rc, d, rec={"window": 2, "run_id": "t/w2", "steps": 2, "passed": True, "served_rows": served}, reqs=reqs,
@@ -504,6 +504,21 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     assert c.digest == "2f470d2b6aadc53b707b0bd65820da4c55583eb18667eb3dce128aabb9dddab855473d52af758a630a2958e3555f7cafbc68e9238c0188cd9f8ef551abca2a9a"
     assert ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=8192).digest != want
     assert ADV.registered_compiler("inner-compiler").cap_bits == ADV.CAP_BITS
+
+
+def test_bs_builder_item_is_what_the_registration_log_registers_once():
+    """B's entry in the registration log: the inner compiler's digest, advice v0 and ℓ, read back as the log's builder; a
+    second builder is refused."""
+    from verity.core.protocols import registration as REG
+    from verity.core.protocols.certifier import advice as I1
+
+    item = ADV.builder_item(ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=4096))
+    assert item == {"advice": I1.SCHEMA, "cap": 4096, "digest": "cd" * 64, "kind": "builder"}
+    auditor = REG.Auditor()
+    assert REG.check(auditor, "onsite", REG.chain("onsite", [REG.Information((item,))])).view().builder == item
+    other = ADV.builder_item(ADV.registered_compiler("other-compiler", "ab" * 64))
+    with pytest.raises(REG.Refused, match="entry 1: duplicate-information"):
+        REG.check(auditor, "onsite", REG.chain("onsite", [REG.Information((item,)), REG.Information((other,))]))
 
 
 @pytest.mark.parametrize("cap", [0, 7, True, "8"])

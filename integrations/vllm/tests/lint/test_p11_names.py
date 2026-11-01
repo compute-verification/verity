@@ -1,14 +1,15 @@
 """P11: names say the job, and versions appear only in hashed data.
 
-Checked today, against ``allowlists/p11_names.json``:
+Checked against ``allowlists/p11_names.json``:
 
 * ``module-name`` / ``package-name`` / ``def-name`` / ``class-name`` / ``flag-name`` / ``env-name``: a file, directory,
   function, class, flag or environment-variable name (``add_argument``, ``config.option`` and its ``env``) with a
   version or lab token: ``v1``/``v2b``, ``fast``, ``poc``, ``m1``, ``b1``, ``tp2`` or ``G1`` as a whole
   ``_``/``-``/CamelCase-separated token.  Functions decorated with a Definition decorator (``@primitive(...)``) are
   exempt: their name is the hashed Definition name.
-* ``doc-board-id`` (``M-1234``, ``F-r16``), ``doc-lane`` (``[lane ``), ``doc-round`` (``R10``..``R19``) and
-  ``doc-date`` (``2026-09-17``) in module, class and function docstrings.  Counted per docstring and pattern.
+* ``doc-board-id`` (``M-`` and four digits, or ``F-r`` and a number), ``doc-lane`` (``[lane`` and a space),
+  ``doc-round`` (``R1`` and one digit) and ``doc-date`` (an ISO date) in module, class and function docstrings, as
+  ``DOC_PATTERNS`` reads them and ``test_detectors_on_examples`` shows.  Counted per docstring and pattern.
 
 Versioned strings that are hashed (Definition ids such as ``Gemm_v1``, schema ids such as
 ``runtime-correspondence/v1``) are data, not names, and are not scanned.

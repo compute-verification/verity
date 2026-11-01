@@ -12,9 +12,9 @@ the host's RAM, its disks. The memory challenger fills `n` labels of 512 bits (6
 driver's reserve, the host OS. At ratio `r` the fill's share of what the server keeps through the wipe is about
 `(n/r)·(512 + log₂(e·r))` bits (`fillShare`); `R` and the egress count in full.
 
-The claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the verdict as a parameter (`Verdict`,
-with `winRealBy` and `wipeDistinguisherBy` the game's `winReal` and `wipeDistinguisher` under it), so they can be
-stated false at `acceptAll`; and they are met at a deployment (`Deployment`), the H200 as measured (`h200`).
+The claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the acceptance rule as a parameter
+(`Acceptance`, with `winRealBy` and `wipeDistinguisherBy` the game's `winReal` and `wipeDistinguisher` under it), so
+they can be stated false at `acceptAll`; and they are met at a deployment (`Deployment`), the H200 as measured (`h200`).
 -/
 
 namespace Pous.StreamedWipe
@@ -43,23 +43,23 @@ def serverBound (n r k R : ℕ) : ℕ := fillShare n r k + R
 keeps at most 5 GB of its assumed memory capacity plus its egress. -/
 def OperatingPoint (n r k R : ℕ) : Prop := serverBound n r k R ≤ 40000000000
 
-/-- A verdict of the wipe: whether the memory challenger accepts the prover `P` on prior content `z`, labels `L` and
-challenges `c`. The wipe's own is `Accepts` (every answer is its label); `acceptAll` accepts everything. -/
-abbrev Verdict : Type :=
+/-- An acceptance rule of the wipe: whether the memory challenger accepts the prover `P` on prior content `z`, labels
+`L` and challenges `c`. The wipe's own is `Accepts` (every answer is its label); `acceptAll` accepts everything. -/
+abbrev Acceptance : Type :=
   ∀ {N k b q M E : ℕ}, Prover N k b q M E → Bits q → (Fin N → Bits b) → (Fin k → Fin N) → Prop
 
-/-- The verdict that accepts every prover, against which the wipe's guarantees must fail. -/
-def acceptAll : Verdict := fun _ _ _ _ => True
+/-- The acceptance rule that accepts every prover, against which the wipe's guarantees must fail. -/
+def acceptAll : Acceptance := fun _ _ _ _ => True
 
-/-- `wipeDistinguisher` under the verdict `V`: coins `(z, c)`, labels `L`, and it outputs whether `V` accepts `P` and
-`P` keeps `z`. At `V = Accepts` it is `wipeDistinguisher P`. -/
-def wipeDistinguisherBy (V : Verdict) {N k b q M E : ℕ} (P : Prover N k b q M E) :
+/-- `wipeDistinguisher` under the acceptance rule `V`: coins `(z, c)`, labels `L`, and it outputs whether `V` accepts
+`P` and `P` keeps `z`. At `V = Accepts` it is `wipeDistinguisher P`. -/
+def wipeDistinguisherBy (V : Acceptance) {N k b q M E : ℕ} (P : Prover N k b q M E) :
     (Bits q × (Fin k → Fin N)) × (Fin N → Bits b) → Prop :=
   fun x => V P x.1.1 x.2 x.1.2 ∧ Keeps P x.1.1 x.2 x.1.2
 
-/-- `winReal` under the verdict `V`: the probability that `V` accepts `P` and `P` keeps `z`, with the labels `prf K`
-under a uniform key `K`. At `V = Accepts` it is `winReal prf P`. -/
-noncomputable def winRealBy (V : Verdict) {N k b q M E κ : ℕ} (prf : Bits κ → Fin N → Bits b)
+/-- `winReal` under the acceptance rule `V`: the probability that `V` accepts `P` and `P` keeps `z`, with the labels
+`prf K` under a uniform key `K`. At `V = Accepts` it is `winReal prf P`. -/
+noncomputable def winRealBy (V : Acceptance) {N k b q M E κ : ℕ} (prf : Bits κ → Fin N → Bits b)
     (P : Prover N k b q M E) : ℝ≥0∞ :=
   pr (fun x : (Bits q × (Fin k → Fin N)) × Bits κ => wipeDistinguisherBy V P (x.1, prf x.2))
 
@@ -74,12 +74,11 @@ structure Deployment where
 /-- `R = M_s − 512·n`: every bit of the deployment's capacity outside the fill. -/
 def Deployment.R (d : Deployment) : ℕ := d.Ms - 512 * d.n
 
-/-- **One H200 on vy-dc-h200-2, as measured.** Run r20261026-003454-bfd2 (its record `art:213936fe824d1f844fe4bb0cbc4749fcc364e0dc38757c9fa73848a7872bfaa4`,
-an honest wipe accepted on the whole card) measured both numbers. The card (NVIDIA H200, GPU-7d104033) holds
-143,771 MiB, its `gpu.txt`: `M_s = 143,771 · 2^20 · 8 = 1,206,038,560,768` bits. The fill was 4,425 segments of
-32 MiB, `n = 2,319,974,400` labels (148,478,361,600 bytes, its streamer's `labels`). So `R` is
-18,211,667,968 bits (2.276 GB), the driver's reserve and every context included. The read count is the deployed
-`k = 5500`, the `wipe_party --reads 5500` pinned for this card on vy-auditor-2 (that run read 2152), at its published
+/-- **One H200 on vy-dc-h200-2, as measured.** An honest wipe accepted on the whole card measured both numbers. The
+card (NVIDIA H200, GPU-7d104033) holds 143,771 MiB: `M_s = 143,771 · 2^20 · 8 = 1,206,038,560,768` bits. The fill
+was 4,425 segments of 32 MiB, `n = 2,319,974,400` labels (148,478,361,600 bytes). So `R` is 18,211,667,968 bits
+(2.276 GB), the driver's reserve and every context included. The read count is the deployed `k = 5500`, the
+`wipe_party --reads 5500` pinned for this card on vy-auditor-2 (the measuring wipe read 2152), at its published
 ratio `r = 62`, the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. -/
 def h200 : Deployment where
   n := 2319974400

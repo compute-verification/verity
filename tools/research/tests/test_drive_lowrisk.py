@@ -158,6 +158,10 @@ def _lean(h: Review) -> dict:
     return h.d.q.load_state()["drive"]["lean"]
 
 
+def _rebuilds(world: World) -> list[str]:
+    return [x for x in world.logs if x.startswith("research queue drive: low-risk rebuild of `next`")]
+
+
 def test_a_running_lean_check_moves_across_a_low_risk_landing_and_lands_there(world, monkeypatch):
     """#2 lands off `next` under the running Lean check of #1: `next` is rebuilt on `checked` and the check holds #1's new
     commit, whose tree differs from the one it checks by #2's file alone, so it isn't cancelled or launched again."""
@@ -168,8 +172,17 @@ def test_a_running_lean_check_moves_across_a_low_risk_landing_and_lands_there(wo
     one = _tip(world)
     assert [c for c, *_ in h.launched] == [one], world.logs
     world.gh.put(2, world.change({"x.txt": "2\n"}))
+    merge = h.d._clean_merge
+
+    def slow(tip, head):                                        # each merge takes 1.5 s of drive's clock
+        h.clock += 1.5
+        return merge(tip, head)
+
+    monkeypatch.setattr(h.d, "_clean_merge", slow)
     assert h.tick().endswith("landed #2 on the low-risk lane"), world.logs
     assert _subject(world, "checked") == "Queue: #2 change 2" and world.on_next(h.q) == [1]
+    assert _rebuilds(world) == [f"research queue drive: low-risk rebuild of `next` on `checked` {_checked(world)[:12]}: 1 of 1 "
+                                "member(s) merged again in 1.5 s, kept: 1 Lean check(s) move to it"]
     new = _tip(world)
     assert _git(world.origin, "rev-parse", f"{new}^1") == _checked(world)
     (rid,) = h.lean_ids()
@@ -231,6 +244,8 @@ def test_a_lean_check_isnt_moved_across_a_change_lowrisk_excludes_names_and_the_
     assert line.startswith(f"research queue drive: low-risk lane waits: a landing off `next` rebuilds it, and (b) can't be "
                            f"shown for the Lean check {h.lean_ids()[0]} of {one[:12]}: its tree and that of "), line
     assert line.endswith("differ in verity/core/v.py, which `lowrisk_excludes` names"), line
+    (line,) = _rebuilds(world)
+    assert line.endswith(": 1 of 1 member(s) merged again in 0.0 s, dropped: the lane waits"), line
 
 
 def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkeypatch):
@@ -256,3 +271,37 @@ def test_the_lane_never_lands_on_main(world, monkeypatch):
     world.gh.put(1, world.change({"x.txt": "1\n"}))
     h.tick()
     assert _main(world) == main and not _landed(world)
+
+
+def test_a_rebuild_cut_at_a_member_that_doesnt_merge_again_is_completed_by_the_next_sync(world, monkeypatch):
+    """`checked` moved within the tick by a file #3 changes too: the lane lands #2, its rebuild of `next` stops at #3, which no
+    longer merges, and pushes `next` cut there with #1's moved check below it.  The next sync appends #4 again and leaves
+    #3 out as a conflict, told as any; nobody's ready mark is withdrawn."""
+    h = _lane(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    h.review(1)
+    h.tick()
+    world.gh.put(2, world.change({"x.txt": "2\n"}))
+    world.gh.put(3, three := world.change({"a.txt": "3\n"}))
+    world.gh.put(4, four := world.change({"verity/core/v.py": "v = 4\n"}))      # not the lane's
+    real, moved = h.d._stack_lean, []
+
+    def move(drive, dry_run):
+        if not moved:
+            _git(world.dev, "push", "-q", "origin",
+                 f"{world.change({'a.txt': 'other\n'}, base='origin/checked')}:refs/heads/checked")
+            h.q.fetch()
+            moved.append(_checked(world))
+        return real(drive, dry_run)
+
+    monkeypatch.setattr(h.d, "_stack_lean", move)
+    assert h.tick().endswith("landed #2 on the low-risk lane"), world.logs
+    assert world.on_next(h.q) == [1] and len(_carried(world)) == 1, world.logs
+    (line,) = _rebuilds(world)
+    assert line.endswith(": 1 of 3 member(s) merged again in 0.0 s, kept: 1 Lean check(s) move to it"), line
+    h.tick()
+    assert world.on_next(h.q) == [1, 4], world.logs
+    assert (3, three) in world.gh.ready and (4, four) in world.gh.ready
+    assert "3" in h.q.load_state()["conflicts"], world.logs
+    assert h.cancelled == [] and len(h.launched) == 1
+    assert any(f"#3 at {three[:8]} is out of `next`: conflicts with `next` in a.txt" in p for p in h.posts), h.posts

@@ -12,7 +12,7 @@ from verity.ml.circuits import codec
 from verity_vllm.query import query_artifact as QA
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.partition import PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict
+from verity.ml.circuits.partition import PartitionVerdict, ReadinessReport, WidthVerdict
 from verity.ml.circuits.program import Program
 from verity.ml.definitions.registry import b1
 
@@ -31,9 +31,9 @@ def gemm8():
     return Program(bind(b1.Gemm, K=32, N=8))
 
 
-def verdict(status: str = "ok") -> VuVerdict:
-    return VuVerdict(PartitionVerdict("exact", (), {"path": "tiling"}), WidthVerdict(32, 16, (), (), "ok"), 230,
-                     ReadinessReport(32, True, (), 32, 3, 0), status)
+def verdict(status: str = "ok") -> dict:
+    return {"status": status, "count": 230, "partition": PartitionVerdict("exact", (), {"path": "tiling"}).to_json(),
+            "width": WidthVerdict(32, 16, (), (), "ok").to_json(), "readiness_32": ReadinessReport(32, True, (), 32, 3, 0).to_json()}
 
 
 def test_program_digest_is_the_codecs_untouched():

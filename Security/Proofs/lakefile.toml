@@ -34,6 +34,12 @@ path = "../../verity/core/primitives/randomness"
 name = "core_vstar"
 path = "../../verity/core/service/vstar"
 
+# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
+# `RecursiveKSAt`'s event
+[[require]]
+name = "core_vstar_recursive"
+path = "../../verity/core/service/vstar/recursive"
+
 # The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
 [[require]]
 name = "security_properties"
@@ -55,13 +61,17 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Nci.Width", "Proofs.Properties.Nci.Novel", "Proofs.Properties.Nci.BaselineSteps",
   "Proofs.Properties.Nci.Baseline", "Proofs.Properties.Nci.OperandsResolve", "Proofs.Properties.Nci.Agrees",
   "Proofs.Properties.SampledProofs", "Proofs.Properties.SampledProofs.Halt", "Proofs.Properties.Evaluate",
+  "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkRecords", "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.NetworkScan", "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins", "Proofs.Properties.RemoteAudit.Frozen", "Proofs.Properties.RemoteAudit.Order",
   "Proofs.Properties.RemoteAudit.Pooled", "Proofs.Properties.Accounting.Served", "Proofs.Properties.RemoteAudit.Line",
   "Proofs.Properties.RemoteAudit.Schedule", "Proofs.Properties.RemoteAudit.Shared",
   "Proofs.Properties.RemoteAudit.SharedLink", "Proofs.Properties.RemoteAudit.Live",
-  "Proofs.Properties.RemoteAudit.Component",
+  "Proofs.Properties.RemoteAudit.Component", "Proofs.Properties.RemoteAudit.ComponentWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
-  "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger"]
+  "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Verity.Subprotocols",
+  "Proofs.Properties.Verity.Wipe", "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest",
+  "Proofs.Properties.Verity.Recursive", "Proofs.Properties.Verity.Recursive.Target",
+  "Proofs.Properties.Verity.Recursive.Refusals", "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Challenger"]

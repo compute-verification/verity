@@ -38,6 +38,7 @@ pub mod glue;
 pub mod proved_scope;
 pub mod pure_block;
 pub mod record_text;
+pub mod run_record;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;
@@ -198,7 +199,7 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
 }
 
-/// The unit sample (the Lean verifier's PROTOCOL.md §7.3): the verifier samples the units to prove in the clear from its OS
+/// The unit sample (the Lean verifier's `Flock.Draw`): the verifier samples the units to prove in the clear from its OS
 /// randomness, after registration and before the statement is fixed, with `verity.ml.randomness`'s exact samplers read straight
 /// from OS bytes (no derivation). The sample is the object `{"law": "subset", "population": N, "k": K, "units": [...]}`,
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,
@@ -1188,7 +1189,7 @@ pub struct SessionConfig {
     /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
     pub prime_live: bool,
     /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
-    /// it in its verdict (lane flock-circuit). Off for every statement that does not ask for it.
+    /// it in its verdict. Off for every statement that does not ask for it.
     pub coin_seed: bool,
     /// The coin server keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
     /// round digests stay, as framing); the record carries them. Off for every statement that does not ask for it.
@@ -1475,6 +1476,11 @@ impl Server {
     /// The committed coin schedule's root (after `Hello`).
     pub fn coin_root(&self) -> Option<[u8; 64]> {
         self.coin_tree.as_ref().map(|t| t.root())
+    }
+
+    /// The committed coin schedule's session key (after `Hello`), as the session record names it (`coin_tree.key`).
+    pub fn coin_key(&self) -> Option<&[u8; coin_tree::KEY_BYTES]> {
+        self.coin_tree.as_ref().map(|t| t.key())
     }
 
     /// M2: `n` coins of `stream`'s round `round` from the committed schedule, and the answer's words (coins, then opening).

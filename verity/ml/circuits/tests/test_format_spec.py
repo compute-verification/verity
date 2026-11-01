@@ -15,12 +15,12 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits import codec, cut, partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.parts import n_members
 from verity.ml.circuits.program import INPUT_ID, Program, input_id, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, array_of, refs_from_json, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple, Value, type_from_json
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value, type_from_json
 
 PATH = Path(__file__).parent / "format_vectors.json"
 V16, V32 = Value(16), Value(32)
@@ -42,7 +42,7 @@ TSum4 = _prim("TSum4", [("x", Array(4, V32))], V32)
 TSum6 = _prim("TSum6", [("x", Array(6, V32))], V32)
 TWide = _prim("TWide", [("x", Array(cut.WIDE_FAN_IN, V32)), ("a", V32)], V32)
 TNarrow = _prim("TNarrow", [("x", Array(4, V32)), ("a", V32)], V32)
-REG = Registry()
+REG = DefinitionTable()
 for _p in (TAdd, TWiden, TSum2, TSum4, TSum6, TWide, TNarrow):
     REG.add(_p)
 
@@ -68,7 +68,7 @@ RowDef = _comp("TRow", ("N", "OP", "C", "D"), lambda S: ((("row", Array(S.N, V32
 Row = bind(RowDef, N=4, OP=TAdd, C=1.5, D={"k": 2, "a": [1, "x"]})
 
 X_T = Array(2, Array(4, V32))
-R_T = Record(("h", Array(2, V16)), ("b", V32))
+R_T = RecordType(("h", Array(2, V16)), ("b", V32))
 RET_T = Tuple(Tuple(V32, V32), Array(2, V32), Array(4, V32), Tuple(V32, Array(4, V32)), V32, V32, V32, V32, V32)
 
 
@@ -155,7 +155,7 @@ def jcs(v) -> bytes:
 
 
 def leaf_widths(t) -> list[int]:
-    """Row-major leaves: an Array's elements in index order, a Tuple's or Record's fields in declared order."""
+    """Row-major leaves: an Array's elements in index order, a Tuple's or RecordType's fields in declared order."""
     tag = t[0]
     if tag == "Value":
         return [t[1]]
@@ -592,6 +592,21 @@ def test_the_alias_and_flat_concatenation(live, decoded):
 def test_the_decoder_refuses(live, label, edit, why):
     got = dict(live["decoder_rejects"])[label]
     assert got == dict(VECTORS["decoder_rejects"])[label] and got is not None and why in got
+
+
+def test_the_self_contained_entry_and_v0(decoded):
+    """§4.7: a v0 descriptor's definitions are the self-contained entries, which a v0 decode gives back; a v1 decode flattens
+    node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
+    program = Program(PROG)
+    v0 = codec.encode_program(program, codec.SCHEMA_V0)
+    assert sorted(v0) == ["annotations", "definitions", "program_fn", "root", "schema"]
+    assert v0["definitions"][v0["root"]] == codec.definition_entry(program.root)
+    assert codec.encode_program(codec.decode_program(v0, REG), codec.SCHEMA_V0)["definitions"] == v0["definitions"]
+    via_v1 = {**v0, "definitions": codec.encode_program(decoded, codec.SCHEMA_V0)["definitions"]}
+    assert [k for k in v0["definitions"] if via_v1["definitions"][k] != v0["definitions"][k]] == [v0["root"]]
+    nested, flat = _node(v0, 12)["args"][0]["refs"], _node(via_v1, 12)["args"][0]["refs"]
+    assert any("concat" in p for p in nested["concat"]) and not any("concat" in p for p in flat["concat"])
+    assert expand(nested) == expand(flat)
 
 
 # -- 5. programs and Input nodes ------------------------------------------------------------------------------------------------

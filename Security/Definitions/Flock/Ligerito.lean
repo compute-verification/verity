@@ -2,15 +2,15 @@ import Definitions.Flock.Piop
 import Definitions.Flock.Accounting.Bound
 
 /-!
-# Ligerito (PROTOCOL.md §13), as an interactive oracle proof
+# Ligerito (`Flock.Ligerito`), as an interactive oracle proof
 
-The verifier of §13.3 and its final check (§13.6), with one change of model: a level's
+The verifier of `Flock.Ligerito` and its final check (`Flock.Ligerito`), with one change of model: a level's
 commitment is the committed table itself (an oracle, `ℕ → ℕ → F`, lane then position), and the
-opened rows are that table's columns at the query positions. The Merkle layer (§14) replaces the
+opened rows are that table's columns at the query positions. The Merkle layer (`Flock.Merkle`) replaces the
 oracle by a cap and authentication paths; `Merkle` relates the two.
 
 Sumcheck messages are `(u₀, u₂) ∈ K²`; with running claim `s` a message defines
-`q(X) = u₀ + (s + u₂)·X + u₂·X²`, so `q(0) + q(1) = s` holds by construction (§13.2).
+`q(X) = u₀ + (s + u₂)·X + u₂·X²`, so `q(0) + q(1) = s` holds by construction (`Flock.Ligerito`).
 -/
 
 namespace FlockSoundness.Model
@@ -25,7 +25,7 @@ abbrev Oracle (F : Type) := ℕ → ℕ → F
 /-- A round polynomial `q₀ + q₁·X + q₂·X²`. -/
 abbrev Quad (K : Type) := K × K × K
 
-/-- `from(msg, s)` (§13.2). -/
+/-- `from(msg, s)` (`Flock.Ligerito`). -/
 def fromMsg (msg : K × K) (s : K) : Quad K := (msg.1, s + msg.2, msg.2)
 
 def Quad.eval (q : Quad K) (x : K) : K := q.1 + q.2.1 * x + q.2.2 * x ^ 2
@@ -34,14 +34,14 @@ def Quad.eval (q : Quad K) (x : K) : K := q.1 + q.2.1 * x + q.2.2 * x ^ 2
 def Quad.addScaled (q p : Quad K) (β : K) : Quad K :=
   (q.1 + β * p.1, q.2.1 + β * p.2.1, q.2.2 + β * p.2.2)
 
-/-- An out-of-domain context (§13.3): the point, the batching coin, and the split it binds
+/-- An out-of-domain context (`Flock.Ligerito`): the point, the batching coin, and the split it binds
 (`none` for the level-0 sample). -/
 structure OodCtx (F : Type) where
   z : List F
   β : F
   split : Option ℕ
 
-/-- A consistency context (§13.3 steps 11 and the recursive rounds). -/
+/-- A consistency context (`Flock.Ligerito` steps 11 and the recursive rounds). -/
 structure ConsCtx (F : Type) where
   cols : ℕ
   positions : List ℕ
@@ -49,7 +49,7 @@ structure ConsCtx (F : Type) where
   β : F
   start : ℕ
 
-/-- The greedy decomposition `Q = Σ 2^{c_i}`, `c_i = min(⌊log2 rem⌋, d)` (§13.5). -/
+/-- The greedy decomposition `Q = Σ 2^{c_i}`, `c_i = min(⌊log2 rem⌋, d)` (`Flock.Ligerito`). -/
 def strata (Q d : ℕ) : List ℕ :=
   go Q Q
 where
@@ -60,7 +60,7 @@ where
           let c := min (Nat.log 2 rem) d
           c :: go fuel (rem - 2 ^ c)
 
-/-- Query positions from the query coins (§13.5): summand by summand, stratum by stratum,
+/-- Query positions from the query coins (`Flock.Ligerito`): summand by summand, stratum by stratum,
 `pos = (s << (d − c)) | (lo(coin) mod 2^(d − c))`. -/
 def positions (A : Arith F K) (Q d : ℕ) (w : Fin Q → F) : List ℕ :=
   let slots : List (ℕ × ℕ) := (strata Q d).flatMap fun c => (List.range (2 ^ c)).map fun s => (c, s)
@@ -75,17 +75,17 @@ def eqList {R : Type} [CommRing R] (α : List R) (j : ℕ) : R :=
 def foldColumn (A : Arith F K) (ch : List K) (row : ℕ → F) : K :=
   ∑ ℓ ∈ Finset.range (2 ^ ch.length), eqList ch ℓ * A.embed (row ℓ)
 
-/-- The batched consistency value `e = Σ_j eq(α)[j]·fold(row_j)` (§13.3 step 10). -/
+/-- The batched consistency value `e = Σ_j eq(α)[j]·fold(row_j)` (`Flock.Ligerito` step 10). -/
 def consValue (A : Arith F K) (α : List F) (ch : List K) (C : Oracle F) (pos : List ℕ) : K :=
   ((pos.zipIdx).map fun (p, j) =>
     A.embed (eqList α j) * foldColumn A ch fun ℓ => C ℓ p).sum
 
-/-- Draw a `K` coin: one `sample_f128_vec(2)` squeeze `(w₀, w₁) ↦ w₀ + w₁·u` (§2.4). -/
+/-- Draw a `K` coin: one `sample_f128_vec(2)` squeeze `(w₀, w₁) ↦ w₀ + w₁·u` (`Flock.Field`). -/
 def drawK (A : Arith F K) : Game K := do
   let w ← draw (Fin 2 → F)
   pure (A.ofLimbs (w 0) (w 1))
 
-/-- `k` folding rounds (§13.3 step 4, and each recursive round): draw `r`, set `s ← q(r)`, read
+/-- `k` folding rounds (`Flock.Ligerito` step 4, and each recursive round): draw `r`, set `s ← q(r)`, read
 the next message. Returns the challenges, the claim and the round polynomial. -/
 def foldRounds (A : Arith F K) : ℕ → K → Quad K → Game (List K × K × Quad K)
   | 0, s, q => pure ([], s, q)
@@ -96,7 +96,7 @@ def foldRounds (A : Arith F K) : ℕ → K → Quad K → Game (List K × K × Q
       let (rs, s'', q') ← foldRounds A k s' (fromMsg msg s')
       pure (r :: rs, s'', q')
 
-/-- Two out-of-domain samples on a freshly committed split table (§13.3 step 6). -/
+/-- Two out-of-domain samples on a freshly committed split table (`Flock.Ligerito` step 6). -/
 def twoOod (A : Arith F K) (dim : ℕ) (split : ℕ) (s : K) (q : Quad K) :
     Game (K × Quad K × List (OodCtx F)) := do
   let z₁ ← draw (Fin dim → F)
@@ -113,21 +113,21 @@ def twoOod (A : Arith F K) (dim : ℕ) (split : ℕ) (s : K) (q : Quad K) :
   let s := s + A.embed β₂ * A.embed y₂
   pure (s, q, [⟨List.ofFn z₁, β₁, some split⟩, ⟨List.ofFn z₂, β₂, some split⟩])
 
-/-- The coordinate-fold factor `cff(c) = 1 + c·(1 + u)` (§13.6). -/
+/-- The coordinate-fold factor `cff(c) = 1 + c·(1 + u)` (`Flock.Ligerito`). -/
 def cff (A : Arith F K) (c : K) : K := 1 + c * (1 + A.u)
 
 /-- `Π_{s ≥ a} cff(level[s][0])`. -/
 def cffFrom (A : Arith F K) (levels : List (List K)) (a : ℕ) : K :=
   ((levels.drop a).map fun l => cff A (l.headD 0)).prod
 
-/-- The multilinear extension of the batched basis over `K` (§12.4). -/
+/-- The multilinear extension of the batched basis over `K` (`Flock.Opening`). -/
 def bHat (A : Arith F K) (n : ℕ) (b : ℕ → F) (p : List K) : K :=
   ∑ y ∈ Finset.range (2 ^ n), A.embed (b y) * eqList p y
 
 /-- The bits of `y` as `0/1` field elements (the clear-residual coordinates). -/
 def bitsK (ext : ℕ) (y : ℕ) : List K := (List.range ext).map fun j => if y.testBit j then 1 else 0
 
-/-- The final check (§13.6). -/
+/-- The final check (`Flock.Ligerito`). -/
 def finalCheck (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
     (levels : List (List K)) (oods : List (OodCtx F)) (cons : List (ConsCtx F)) (ext : ℕ)
     (yr : Fin (2 ^ (ext + 1)) → F) (s : K) : Bool :=
@@ -174,7 +174,7 @@ structure LigState (F K : Type) where
   prev : Oracle F
   prevLevel : Level
 
-/-- Queries and the consistency claim on the previous commitment (§13.3 steps 7–11 and their
+/-- Queries and the consistency claim on the previous commitment (`Flock.Ligerito` steps 7–11 and their
 recursive counterparts). `ch` are the challenges that folded the previous level's lanes. -/
 def queryAndBatch (A : Arith F K) (lv : Level) (C : Oracle F) (ch : List K) (start : ℕ)
     (st : LigState F K) (withMessage : Bool) : Game (LigState F K) := do
@@ -193,7 +193,7 @@ def queryAndBatch (A : Arith F K) (lv : Level) (C : Oracle F) (ch : List K) (sta
     q := match q with | some qi => st.q.addScaled qi (A.embed β) | none => st.q
     cons := st.cons ++ [ctx] }
 
-/-- The recursive rounds (§13.3), one per remaining level. -/
+/-- The recursive rounds (`Flock.Ligerito`), one per remaining level. -/
 def recursiveRounds (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ) :
     List Level → LigState F K → Game Bool
   | [], _ => pure false
@@ -214,7 +214,7 @@ def recursiveRounds (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
       let st ← queryAndBatch A lv st.prev ch st.levels.length st true
       recursiveRounds A n b initial ext (lv' :: rest) { st with prev := C', prevLevel := lv' }
 
-/-- **Ligerito** (§13.3): decides `Σ_y f(y)·b(y) = T` for the committed level-0 table `C₀`. -/
+/-- **Ligerito** (`Flock.Ligerito`): decides `Σ_y f(y)·b(y) = T` for the committed level-0 table `C₀`. -/
 def ligerito (A : Arith F K) (sch : Schedule) (T : F) (b : ℕ → F) (C₀ : Oracle F) : Game Bool := do
   let n := sch.m - 7
   match sch.levels with

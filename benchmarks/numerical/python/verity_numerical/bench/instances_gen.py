@@ -2,7 +2,7 @@
 
 Everything here is deterministic from string labels (:class:`Rng`), the 24 seed captures and the pinned Hugging Face
 revision of ``Qwen/Qwen2.5-1.5B``; :mod:`verity_numerical.bench.instances` drives it and owns the byte layout.  The
-relation is never restated here: expected words come from ``verity.ml.circuits.silicon.silicon`` (the target's executable
+relation is never restated here: expected words come from ``verity.ml.circuits.silicon.models`` (the target's executable
 definition) and are cross-checked against ``verity_numerical.reference.hawkeye_close`` by the driver.
 
 Contents, in order: the hash-stream RNG; BF16/FP32 word helpers; the seeds (the 24 real K=1536 GEMM coordinates of
@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
 
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S, term as T
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 from verity.ml.circuits.silicon.errors import InvalidArtifact
 
@@ -216,7 +216,7 @@ def _pair_with_exponent(rng: Rng, e: int, sign: int) -> tuple[int, int]:
 # --- the relation, as the generator uses it -------------------------------------------------------------------------------------
 
 
-def chain_accs(x: Sequence[int], w: Sequence[int], acc0: int = 0, pipeline: S.Pipeline = PIPELINE) -> list[int]:
+def chain_accs(x: Sequence[int], w: Sequence[int], acc0: int = 0, pipeline: S.GroupSum = PIPELINE) -> list[int]:
     """The ``K/16`` accumulator words of the chain (``acc_0 .. acc_{K/16-1}``), raising ``InvalidArtifact`` outside the domain."""
 
     acc = acc0
@@ -553,7 +553,7 @@ def _gen_cancel(rng: Rng, i: int, seeds: Sequence[Seed]) -> Corner:
     return Corner(x, w, ["corner", "cancel", "tiny", "subnormal-result" if sub else "normal-result"], {"E": E, "d": d})
 
 
-NO_FLOOR = S.Pipeline(name="mistake:no-exponent-floor", arch="mistake", dtype="bf16", operand_bits=16, groups=(8, 8), width=25,
+NO_FLOOR = S.GroupSum(name="mistake:no-exponent-floor", arch="mistake", dtype="bf16", operand_bits=16, groups=(8, 8), width=25,
                       zero_exponent=-(1 << 20), validated="not hardware: a deliberately wrong model (no -132 floor)")
 
 
@@ -996,9 +996,9 @@ def generate_tu_corner(family: str, i: int, seeds: Sequence[Seed]) -> TuCorner:
 
 # --- deliberately wrong models ------------------------------------------------------------------------------------------------------
 
-SINGLE_GROUP = S.Pipeline(name="mistake:single-group-16", arch="mistake", dtype="bf16", operand_bits=16, groups=(16,), width=25,
+SINGLE_GROUP = S.GroupSum(name="mistake:single-group-16", arch="mistake", dtype="bf16", operand_bits=16, groups=(16,), width=25,
                           zero_exponent=-132, validated="not hardware: a deliberately wrong model (one group of sixteen)")
-ADDER_24 = S.Pipeline(name="mistake:adder-24-bit", arch="mistake", dtype="bf16", operand_bits=16, groups=(8, 8), width=24,
+ADDER_24 = S.GroupSum(name="mistake:adder-24-bit", arch="mistake", dtype="bf16", operand_bits=16, groups=(8, 8), width=24,
                       zero_exponent=-132, validated="not hardware: a deliberately wrong model (24-bit adder)")
 
 
@@ -1006,13 +1006,13 @@ def non_sticky_tc_dot(acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
     """``silicon.tc_dot`` without the sticky saturation: a group whose result leaves the FP32 range continues into the
     next group as a finite term (as the pinned simulator does) and only the final packing saturates."""
 
-    acc = S.fp32_term(acc_bits)
+    acc = T.fp32_term(acc_bits)
     start = 0
     for size in PIPELINE.groups:
-        products = [S.bf16_product(a[k], b[k]) for k in range(start, start + size)]
+        products = [T.bf16_product(a[k], b[k]) for k in range(start, start + size)]
         acc = S.group_sum([acc, *products], width=PIPELINE.width, zero_exponent=PIPELINE.zero_exponent)
         start += size
-    return S.pack_fp32(acc)
+    return T.pack_fp32(acc)
 
 
 def _chain(step: Callable[[int, Sequence[int], Sequence[int]], int], x: Sequence[int], w: Sequence[int], acc0: int = 0) -> list[int]:
@@ -1116,7 +1116,7 @@ def _ulp(delta: int) -> Callable[[int, int, dict], int | None]:
     return f
 
 
-def _pipeline_chain(pipeline: S.Pipeline) -> Callable[[Sequence[int], Sequence[int], dict], list[int] | None]:
+def _pipeline_chain(pipeline: S.GroupSum) -> Callable[[Sequence[int], Sequence[int], dict], list[int] | None]:
     def f(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int] | None:
         try:
             return chain_accs(x, w, pipeline=pipeline)

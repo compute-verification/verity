@@ -1,12 +1,13 @@
-"""N2's period draw (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
-period's salted roots committed before any coin is read, K of its link-windows drawn, only those registered and proved,
-the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
+"""N2's period sample (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
+period's salted roots committed before any coin is read, K of its execution phases sampled, only those registered and
+proved, the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
 `coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the sample
-established stated as wrong units at δ."""
+established stated as faulty proof blocks at δ."""
 from __future__ import annotations
 
 import itertools
 import json
+import random
 import sys
 from dataclasses import replace
 
@@ -15,8 +16,8 @@ import pytest
 from verity.core.protocols.certifier import service as SVC
 from verity.core.protocols.certifier.certificate import CertifiedRecord
 from verity.core.protocols.certifier.service import PERIOD_DRAW, PERIOD_DRAWN
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness
+from verity.core.protocols.sampled_proofs import challenger as C, service as S
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins, OwnRandomness
 
 from test_network_certifier_service import SALTS, Run, lean  # noqa: F401  (lean: the stand-in Lean, autouse)
 
@@ -42,18 +43,23 @@ def lean_draw(monkeypatch):
     return calls
 
 
-class Coins:
-    """A coin source with a `commit`, as a remote challenger's: what it was committed to, and when it was read."""
+class Coins(ChallengerCoins):
+    """The challenger's coins, from an in-process challenger: what they were committed to, and each read with its
+    bytes."""
 
-    def __init__(self, byte: int = 0x5a) -> None:
-        self.byte, self.events = byte, []
+    def __init__(self, seed: str = "period") -> None:
+        ch = C.LiveChallenger("verity/test/period/v1", 0, [("draw", 64)], random.Random(seed).randbytes)
+        super().__init__(C.LiveRecord(ch, "draw", itertools.count().__next__))
+        self.events = []
 
-    def commit(self, after: bytes) -> None:
+    def commit(self, after: bytes):
         self.events.append(("commit", after.hex()))
+        return super().commit(after)
 
     def __call__(self, n: int) -> bytes:
-        self.events.append(("read", n))
-        return bytes([self.byte]) * n
+        b = super().__call__(n)
+        self.events.append(("read", b))
+        return b
 
 
 def committed(run: Run, windows=range(3)) -> dict:
@@ -66,7 +72,7 @@ def roots(run: Run, openings: dict) -> list[str]:
 
 
 def prove(run: Run, drawn: dict, openings: dict, windows=None) -> list[S.Outcome]:
-    """The drawn windows (or `windows`) registered under the period draw, in order, and each decided on a proof."""
+    """The sampled windows (or `windows`) registered under the period sample, in order, and each decided on a proof."""
     out = []
     for w in drawn["units"] if windows is None else windows:
         reg = run.lw.register(run.stream, run.lw.registration(openings[w], run.previous), drawn)
@@ -81,23 +87,22 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 2, coins)
     assert coins.events[0] == ("commit", drawn["commitment"]) and len(coins.events) > 1
     assert all(e[0] == "read" for e in coins.events[1:])
-    assert drawn["read"] == (bytes([coins.byte]) * sum(e[1] for e in coins.events[1:])).hex()
+    assert drawn["read"] == b"".join(e[1] for e in coins.events[1:]).hex()
+    assert coins.segments[0].after.hex() == drawn["commitment"]
     assert drawn["commitment"] == S._sha512({"format": PERIOD_DRAW, "stream": run.stream.digest,
-                                             "roots": roots(run, openings), "advice": None})
+                                             "roots": roots(run, openings)})
     assert drawn["format"] == PERIOD_DRAW and drawn["k"] == 2 and drawn["population"] == 3
-    assert len(drawn["units"]) == 2 and drawn["units"] == sorted(set(drawn["units"])) <= [0, 1, 2]
+    assert len(drawn["units"]) == 2 and drawn["units"] == sorted(set(drawn["units"])) and set(drawn["units"]) <= {0, 1, 2}
     with pytest.raises(ValueError, match="1 <= K <= 3"):
         run.lw.period_draw(run.stream, roots(run, openings), 4, Coins())
     with pytest.raises(ValueError, match="SHA-512 in lowercase hex"):
         run.lw.period_draw(run.stream, ["00"] * 3, 2, Coins())
-    with pytest.raises(ValueError, match="advice's digest"):
-        run.lw.period_draw(run.stream, roots(run, openings), 2, Coins(), advice="00" * 64)
     prove(run, drawn, openings)
     with pytest.raises(ValueError, match="before the stream's first registration"):
         run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
 
 
-def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
+def test_all_samples_every_window_and_reads_no_coin(tmp_path, lean_draw):
     """K = n leaves nothing to sample: no coin is read, no Lean draw runs, and the sample of record is every window."""
     run, coins = Run(tmp_path), Coins()
     openings = committed(run)
@@ -110,7 +115,7 @@ def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
     assert verdict["records"] == run.lw.network_verdict(run.stream)["records"]
 
 
-def test_a_sampled_link_is_accepted_on_its_drawn_windows_and_states_its_wrong_units_at_delta(tmp_path, lean_draw):
+def test_a_sampled_link_is_accepted_on_its_sampled_windows_and_states_its_incorrect_blocks_at_delta(tmp_path, lean_draw):
     """Two of three windows drawn, registered and proved, the third never registered: the AND over every window refuses
     the missing one, the sampled verdict accepts on the Lean's sample from the very coins the period flip read, and
     K = 2 of 3 leaves at most one wrong window at any δ < 1/3."""
@@ -140,8 +145,8 @@ def _other(drawn: dict, n: int = 3) -> list[int]:
 @pytest.mark.parametrize("k", [1, 2])
 def test_a_prover_that_proves_another_k_subset_is_refused_by_name(tmp_path, k):
     """The prover registers and proves K windows the sample didn't hold, every one accepted, under a sample object listing
-    them (the period's own coins and commitment, which hold): the verdict draws its own with the Lean on those coins and
-    refuses the link by name, `period-draw`, whether it is handed the prover's object or the challenger's."""
+    them (the period's own coins and commitment, which hold): the verdict samples its own with the Lean on those coins
+    and refuses the link by name, `period-draw`, whether it is handed the prover's object or the challenger's."""
     run = Run(tmp_path)
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), k, Coins())
@@ -156,7 +161,7 @@ def test_a_prover_that_proves_another_k_subset_is_refused_by_name(tmp_path, k):
         assert set(verdict["refused"]) <= set(drawn["units"]) and verdict["refused"]
 
 
-def test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name(tmp_path, monkeypatch):
+def test_a_lean_that_refuses_or_samples_otherwise_refuses_the_link_by_name(tmp_path, monkeypatch):
     """An honest period, proved: the verdict refuses it by name where the Lean can't draw on its coins, draws other
     windows than the sample object lists, or answers with a sample that isn't subset:K over the period's windows."""
     run = Run(tmp_path)
@@ -176,6 +181,18 @@ def test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name(tmp_pat
             assert why["lean"] == other["units"] and verdict["selection"]["by"] == "lean"
         else:
             assert "refused" in why["lean"] and why["why"] and verdict["selection"]["by"] is None
+
+
+def test_a_period_draw_on_coins_other_than_the_challengers_is_refused(tmp_path):
+    """The verifier has no coins of its own: a draw of K windows on a callable that isn't the challenger's coins
+    (`ChallengerCoins`), however it would draw, is refused before anything is committed or read."""
+    run = Run(tmp_path)
+    openings = committed(run)
+    read = []
+    for own in (lambda n: read.append(n) or b"\x5a" * n, OwnRandomness(lambda n: b"\x5a" * n), None):
+        with pytest.raises(ValueError, match="challenger's coins"):
+            run.lw.period_draw(run.stream, roots(run, openings), 2, own)
+    assert read == [] and not run.stream.log
 
 
 def test_lean_draw_runs_flock_verify_draw_on_the_coins(tmp_path, monkeypatch):
@@ -210,7 +227,7 @@ def test_lean_draw_runs_flock_verify_draw_on_the_coins(tmp_path, monkeypatch):
     assert "can't run" in SVC.lean_draw(2, 5, b"\x01")["refused"]
 
 
-def test_registration_follows_the_draw_and_the_committed_roots(tmp_path):
+def test_registration_follows_the_sample_and_the_committed_roots(tmp_path):
     run = Run(tmp_path)
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 1, Coins())
@@ -228,7 +245,7 @@ def test_registration_follows_the_draw_and_the_committed_roots(tmp_path):
         run.lw.register(run.stream, run.lw.registration(openings[other], run.previous), drawn)
 
 
-def test_a_rejected_drawn_window_rejects_the_link(tmp_path):
+def test_a_rejected_sampled_window_rejects_the_link(tmp_path):
     run = Run(tmp_path)
     openings = committed(run)
     w = 1
@@ -242,7 +259,7 @@ def test_a_rejected_drawn_window_rejects_the_link(tmp_path):
     assert not verdict["accepted"] and verdict["refused"] == [w]
 
 
-def test_the_draw_is_held_to_this_stream_and_the_period_it_committed(tmp_path):
+def test_the_sample_is_held_to_this_stream_and_the_period_it_committed(tmp_path):
     run = Run(tmp_path)
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
@@ -250,7 +267,7 @@ def test_the_draw_is_held_to_this_stream_and_the_period_it_committed(tmp_path):
     with pytest.raises(ValueError, match="this stream's"):
         run.lw.network_verdict(another, drawn=drawn)
     swapped = list(reversed(drawn["roots"]))
-    for bad in ({**drawn, "roots": swapped}, {**drawn, "advice": "00" * 64}, {**drawn, "stream": "00" * 64}):
+    for bad in ({**drawn, "roots": swapped}, {**drawn, "commitment": "00" * 64}, {**drawn, "stream": "00" * 64}):
         with pytest.raises(ValueError, match="this stream's"):
             run.lw.network_verdict(run.stream, drawn=bad)
     for bad in ({**drawn, "units": drawn["units"][:1]}, {**drawn, "population": 4}, {**drawn, "units": [2, 0]},
@@ -260,7 +277,7 @@ def test_the_draw_is_held_to_this_stream_and_the_period_it_committed(tmp_path):
             run.lw.network_verdict(run.stream, drawn=bad)
 
 
-def test_a_drawn_window_missing_or_past_the_draw_refuses_a_sampled_link(tmp_path):
+def test_a_sampled_window_missing_or_past_the_sample_refuses_a_sampled_link(tmp_path):
     run = Run(tmp_path)
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())

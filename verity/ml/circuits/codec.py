@@ -17,7 +17,7 @@ descriptor is held to (strings ASCII without DEL, integers of magnitude at most 
 
 Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; `verity-ir/descriptor/v1`
 (the default) writes the same program with flat concatenations, the reference-sequence alias
-and interned callee ids / types (see `SCHEMA_V1` below). Both decode. The digest is a function of the
+and interned callee ids / types (PROTOCOL.md §4.5–§4.7). Both decode. The digest is a function of the
 encoding, so it differs between the schemas for one program; `descriptor_equivalence` is the test that two
 descriptors denote the same circuit.
 """
@@ -30,7 +30,7 @@ import json
 import re
 from typing import Callable, Any, Iterator
 
-from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
+from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, BodyNode, PrimitiveDefinition, DefinitionTable,
                    SpecializedDefinition, _static_key, bind)
 from . import ports as P
 from .program import input_id, input_prim, is_input
@@ -41,15 +41,6 @@ SCHEMA_V0 = "verity-ir/descriptor/v0"
 SCHEMA_V1 = "verity-ir/descriptor/v1"
 SCHEMA = SCHEMA_V1
 SCHEMAS = (SCHEMA_V0, SCHEMA_V1)
-
-# v1 differs from v0 only in how the *same* program is written down (what a descriptor denotes — gates,
-# producers, ordered reference sequences, definitions — is identical; `descriptor_equivalence` checks that):
-#   * nested `concat`s are written flat, and a node argument whose leading parts repeat the whole reference
-#     sequence of an earlier node's argument is written as `{"alias": [node, arg]}` followed by the remaining
-#     parts — a pass-through reference to the sequence already in the body instead of a re-materialised copy
-#     (the root's KV cache: position T's `kc` is position T-1's `kc` plus one row);
-#   * a node's callee id (`fn`), argument types (`args[].type`) and output type (`out`) are interned: integers
-#     into the top-level `callees` and `types` tables (first-seen order of the deterministic dependency walk).
 ALIAS_WINDOW = 8  # how many trailing parts an alias search may leave as the explicit suffix
 
 
@@ -68,7 +59,7 @@ class _Tables:
     def callee_of(self, f: FunctionDefinition) -> int:
         hit = self._seen.get(id(f))
         if hit is None or hit[0] is not f:
-            hit = self._seen[id(f)] = (f, self.callee(_spec_id(f)))
+            hit = self._seen[id(f)] = (f, self.callee(descriptor_id(f)))
         return hit[1]
 
     def type(self, t) -> int:
@@ -90,7 +81,7 @@ class _Tables:
 
 def _static_json(v: Any) -> Any:
     if isinstance(v, (PrimitiveDefinition, SpecializedDefinition)):
-        return {"fn": _spec_id(v)}
+        return {"fn": descriptor_id(v)}
     if isinstance(v, CompositeDefinition):
         return {"fn": v.id}
     if isinstance(v, (list, tuple)):
@@ -104,9 +95,10 @@ def _static_json(v: Any) -> Any:
     raise TypeError(f"unsupported static value {v!r}")
 
 
-def _spec_id(fn: FunctionDefinition) -> str:
-    """Descriptor id of a specialized definition: `Name_vN` for primitives / static-free composites, else
-    `Name_vN{k=v,...}` with the binding record in static-parameter order."""
+def descriptor_id(fn: FunctionDefinition) -> str:
+    """The id a descriptor names `fn` by (its `definitions` key and `callees` entry): `Name_vN` for primitives and static-free
+    composites, else `Name_vN{k=v,...}` with the binding record in static-parameter order.  The readable `fn.id` differs for
+    string, float, function and dict statics (`RMSNormTriton_v1{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}` against `...EPS=1e-05}`)."""
     if isinstance(fn, PrimitiveDefinition):
         return fn.id
     assert isinstance(fn, SpecializedDefinition)
@@ -118,10 +110,7 @@ def _spec_id(fn: FunctionDefinition) -> str:
     return fn.base_id + "{" + ",".join(parts) + "}"
 
 
-def descriptor_id(fn: FunctionDefinition) -> str:
-    """The id a descriptor names `fn` by (its `definitions` key and `callees` entry): the readable `fn.id` differs for string, float,
-    function and dict statics (`RMSNormTriton_v1{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}` against `...EPS=1e-05}`)."""
-    return _spec_id(fn)
+_spec_id = descriptor_id
 
 
 def _flat_parts(r: Refs) -> list[Refs]:
@@ -165,7 +154,7 @@ def _flat_keys(r: Concat) -> tuple[list[Refs], tuple]:
 
 class _BodyEncoder:
     """Reference encoding within one body. v0: `Refs.to_json` verbatim. v1: flat `concat`s and the alias rule
-    (see `SCHEMA_V1`): the whole reference sequence of every encoded node argument is remembered, and a later
+    (PROTOCOL.md §4.5): the whole reference sequence of every encoded node argument is remembered, and a later
     concatenation whose first `m` parts equal one of them (`m` down to `len - ALIAS_WINDOW`, longest first) is
     written as that argument's alias plus its remaining parts. Aliases point backwards only (to an earlier node
     of the same body, or from `ret` to any node), so decoding is one forward pass: a node's later argument never
@@ -179,7 +168,7 @@ class _BodyEncoder:
             raise ValueError(f"{schema} bodies are encoded within a descriptor (interning tables)")
 
     def fn(self, f: FunctionDefinition) -> Any:
-        return _spec_id(f) if self.tables is None else self.tables.callee_of(f)
+        return descriptor_id(f) if self.tables is None else self.tables.callee_of(f)
 
     def type(self, t) -> Any:
         return t.to_json() if self.tables is None else self.tables.type(t)
@@ -202,7 +191,7 @@ class _BodyEncoder:
         return out[0] if len(out) == 1 else {"concat": out}
 
 
-def _encode_node(n: Node, enc: _BodyEncoder | None = None, k: int = 0) -> dict:
+def _encode_node(n: BodyNode, enc: _BodyEncoder | None = None, k: int = 0) -> dict:
     enc = enc or _BodyEncoder()
     d: dict[str, Any] = {
         "form": n.form,
@@ -254,7 +243,7 @@ def _encode_definition(fn: FunctionDefinition, schema: str = SCHEMA_V0, tables: 
 
 
 def definition_entry(fn: FunctionDefinition) -> dict:
-    """The self-contained (v0) descriptor entry of one definition, callees named by id: what a digest of the definition alone hashes."""
+    """The self-contained (v0) descriptor entry of one definition (PROTOCOL.md §4.7): what a digest of the definition alone hashes."""
     return _encode_definition(fn)
 
 
@@ -290,7 +279,7 @@ def _program_fn_functions(program) -> list[FunctionDefinition]:
     `Program` from its `fn`; for a `DecodedProgram` the definitions its descriptor resolved for `program_fn`."""
     pfn = getattr(program, "fn", None)
     if isinstance(pfn, SpecializedDefinition):
-        owner = _spec_id(pfn)
+        owner = descriptor_id(pfn)
         return [_as_specialized(f, owner) for k in pfn.defn.statics for f in _static_functions(pfn.bindings[k])]
     return list(getattr(program, "program_fn_functions", ()))
 
@@ -315,8 +304,8 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     seen = _walk(program, encode)
     desc = {
         "schema": schema,
-        "root": _spec_id(program.root),
-        "program_fn": getattr(program, "program_fn_id", None) or _spec_id(program.fn),
+        "root": descriptor_id(program.root),
+        "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
         "definitions": {fid: done[fid] for fid in seen},
         "annotations": dict(program.annotations),
     }
@@ -343,7 +332,7 @@ def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str,
         if visited.get(id(fn)) is fn:
             return
         visited[id(fn)] = fn
-        fid = _spec_id(fn)
+        fid = descriptor_id(fn)
         prev = seen.get(fid)
         if prev is not None:
             if prev is not fn and (fid, id(fn)) not in dup_objects:
@@ -427,8 +416,8 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
             _intern_body(fn.body, tables)
 
     seen = _walk(program, intern)
-    skeleton = {"schema": schema, "root": _spec_id(program.root),
-                "program_fn": getattr(program, "program_fn_id", None) or _spec_id(program.fn),
+    skeleton = {"schema": schema, "root": descriptor_id(program.root),
+                "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
                 "definitions": {fid: heads[fid] for fid in seen}}
     if tables is not None:
         skeleton.update(tables.to_json())
@@ -628,7 +617,7 @@ def _record_function_ids(fid: str) -> list[str]:
     return out
 
 
-def lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
+def lookup_primitive(registry: DefinitionTable, fid: str) -> PrimitiveDefinition:
     """`registry[fid]`, materialising the on-demand families (`Input<w>`, `Const<w>[bits]`, `GatherBf16x<V>`)
     when a descriptor is decoded in a process that has not built the program (their evaluators are total
     functions of the id).  Public so a semantics package's lazy-family makers (`register_lazy_family`) can
@@ -636,7 +625,7 @@ def lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
     return _lookup_primitive(registry, fid)
 
 
-def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
+def _lookup_primitive(registry: DefinitionTable, fid: str) -> PrimitiveDefinition:
     m = input_id(fid)
     if m:
         return input_prim(m[1], m[0])
@@ -671,7 +660,7 @@ class DecodedProgram:
         return self.root.gates
 
 
-def _decode_refs(j, nodes: list[Node], schema: str, leaves: Callable[[str, int], int | None] | None = None) -> Refs:
+def _decode_refs(j, nodes: list[BodyNode], schema: str, leaves: Callable[[str, int], int | None] | None = None) -> Refs:
     """v0: `refs_from_json`. v1: also resolves `{"alias": [k, a]}` to the reference sequence node `k` passed as
     argument `a` (already decoded — aliases point backwards), splicing a concatenation's alias parts in flat so
     the decoded representation does not depend on how the writer nested it.  Given `leaves`, every part read is `_checked_refs`."""
@@ -805,7 +794,7 @@ def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
     return v
 
 
-def definition_decoder(desc: dict, registry: Registry, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
+def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
     """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
     if schema not in SCHEMAS:
@@ -909,7 +898,7 @@ def definition_decoder(desc: dict, registry: Registry, built: dict[str, Any] | N
     return get
 
 
-def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
     built: dict[str, Any] = {}
     get = definition_decoder(desc, registry, built)
     root = get(desc["root"])

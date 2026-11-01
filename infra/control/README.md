@@ -1,15 +1,26 @@
 # The control pod
 
-`vy-control-verity` is the RunPod CPU pod (`nv7h6w1pairkcu`, US-CA-2, 2 vCPU, 4 GB, 20 GB container disk) that runs the budget
+`vy-control-verity` is the RunPod CPU pod (`p1ugdh9hfgqe5d`, US-CA-2, cpu3g, 4 vCPU, 16 GB, 40 GB container disk) that runs the budget
 guard, the resource steward, the console's store panels and every loop that watches the system (the watchers supervisor). Its state lives on network volume `4ue28s1c6g` (1000 GB, NFS),
 mounted at `/data`. This directory holds the master copies of its boot script and its loops: deploy from here rather than
 editing on the pod.
 
 ## The persistence contract
 
-- **Everything that must survive lives under `/data`.** The container disk holds only links and packages that `post_start.sh`
-  recreates. A RunPod reset wipes the container disk, `/post_start.sh` included. Any `PATCH /pods/{id}` resets the pod about
-  30 s later, even one that only renames it. So never edit the pod; make a new one.
+- **Everything that must survive lives under `/data`.** The container disk holds links and packages that `post_start.sh`
+  recreates, drive's two clones under `/root/fast` (seeded from the volume), and the local store caches `/root/drive-store`,
+  `/root/watchers-preflight-store` and `/root/watchers-challenger-store` (SQLite on NFS was too slow). A RunPod reset wipes the
+  container disk, `/post_start.sh` included. Any `PATCH /pods/{id}` resets the pod about 30 s later, even one that only renames
+  it. So never edit the pod; make a new one.
+- **To resize, move to a new pod.** The services need more than 4 GB: at 4 GB the cgroup sat at its cap and killed processes.
+  - create it with the RunPod REST API under the same name, on volume `4ue28s1c6g` mounted at `/data`, with the old pod's image
+    and `PUBLIC_KEY`; it boots with sshd only;
+  - `drive.sh stop` on the old pod, then copy the store caches above to `/data/handover/<old id>/`, each `catalog.sqlite` with
+    sqlite3's `.backup`;
+  - stop the old pod (never start it again: its `/post_start.sh` would start a second guard), copy the caches into the new
+    pod's `/root`, and run `sh /data/boot/post_start.sh`, then `drive.sh start`;
+  - `research pods register vy-control --pod-id NEW --replace --any-name`, and terminate the old pod, since two pods of one
+    name make `research pods ssh vy-control-verity` and the guard host's lookup refuse.
 - **After a reset, run `sh /data/boot/post_start.sh` once.** It relinks every path below, installs rsync, sqlite3, git and psql when
   they're missing, and starts each service detached (`setsid -f`). It also puts `/post_start.sh` back as a link to itself.
 - **A service is added in a PR here.** Its files go under `/data/<name>`; its link and its start line go into
@@ -87,7 +98,7 @@ Secrets stay on the volume and never in git: this README names the files, never 
 A loop reads its script at each start, so after a copy restart the loop, or let it pick the file up at its next pass:
 
 ~~~sh
-CP="research pods ssh nv7h6w1pairkcu --"
+CP="research pods ssh p1ugdh9hfgqe5d --"
 $CP "cat > /data/boot/post_start.sh" < infra/control/post_start.sh
 $CP "cat > /data/steward/run.sh" < infra/control/steward-run.sh
 $CP "cat > /data/infra/store_index.sh && chmod +x /data/infra/store_index.sh" < infra/control/store_index.sh

@@ -1,5 +1,6 @@
 import SampledProofs.Json
 import SampledProofs.Program
+import SampledProofs.Loaded
 import SampledProofs.Partition
 import SampledProofs.PartitionRef
 import SampledProofs.Draw
@@ -15,6 +16,7 @@ import SampledProofs.Rate
 import SampledProofs.HiddenDraw
 import SampledProofs.Select
 import SampledProofs.Slots
+import SampledProofs.PopOrder
 import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.Stream
@@ -26,8 +28,10 @@ import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
 import SampledProofs.ChallengerCoins
 import SampledProofs.ChallengerDraw
+import SampledProofs.ChallengerTrees
 import SampledProofs.Wires
 import SampledProofs.WiresSpan
 import SampledProofs.WiresSound
 import SampledProofs.WiresComplete
 import SampledProofs.WiresDrawn
+import SampledProofs.SiteDifftest

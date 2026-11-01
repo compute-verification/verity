@@ -17,9 +17,9 @@ TOK, WTS, PEERS = 0, 1, 2
 WNAME = "model.layers.0.mlp.down_proj.weight"
 
 
-def _prog(label: str, inputs: dict, peer_fields: dict, ar_operand: list[tuple], *, compact: bool = False) -> C.Prog:
+def _prog(label: str, inputs: dict, peer_fields: dict, ar_operand: list[tuple], *, compact: bool = False) -> C.RootView:
     """One step: a Gemm partial, its all-reduce with the peers, a Gemm reading the reduction."""
-    P = C.Prog.__new__(C.Prog)
+    P = C.RootView.__new__(C.RootView)
     P.label, P.digest = label, f"digest-{label}"
     P.inputs = inputs
     P.tok_node, P.seed_nodes, P.seed_index = TOK, set(), {}
@@ -44,7 +44,7 @@ def _prog(label: str, inputs: dict, peer_fields: dict, ar_operand: list[tuple], 
 OWN = ("n", "own", 0, H)
 
 
-def rank_program(rank: int, order: list[int] | None = None, **kw) -> C.Prog:
+def rank_program(rank: int, order: list[int] | None = None, **kw) -> C.RootView:
     """The rank Program: tok, weights, then `peers_<K0+i>` Inputs; the all-reduce reads the parts in rank order (its own at `rank`)."""
     order = list(range(W - 1)) if order is None else order
     inputs = {TOK: ("Input32_v1", 4), WTS: ("Input16_v1", H * H)} | {PEERS + i: ("Input16_v1", H) for i in range(W - 1)}
@@ -53,7 +53,7 @@ def rank_program(rank: int, order: list[int] | None = None, **kw) -> C.Prog:
     return _prog(f"build{rank}", inputs, peer_fields, reads[:rank] + [OWN] + reads[rank:], **kw)
 
 
-def rank_fold(rank: int, peers_runs=None, **kw) -> C.Prog:
+def rank_fold(rank: int, peers_runs=None, **kw) -> C.RootView:
     """The fold: ONE peers Record of W-1 fields at increasing offsets, read as one run on each side of the rank's own partial."""
     inputs = {TOK: ("Input32_v1", 4), WTS: ("Input16_v1", H * H), PEERS: ("Input16_v1", (W - 1) * H)}
     peer_fields = {PEERS: [(i * H, K0 + i) for i in range(W - 1)]}
@@ -67,7 +67,7 @@ def rank_fold(rank: int, peers_runs=None, **kw) -> C.Prog:
     return F
 
 
-def _ar(P: C.Prog) -> int:
+def _ar(P: C.RootView) -> int:
     return next(i for i, r in enumerate(P.inst) if r["spec"].startswith("AllReduce_v2"))
 
 

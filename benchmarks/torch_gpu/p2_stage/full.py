@@ -19,7 +19,7 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
   - its rows and its buffer freed, so one tensor's rows and staging buffer are on the device at a time.
 - **summary**: each tensor's fastest decode summed, which is the decode of a step measured tensor by tensor, and the peak
   HBM torch allocated and reserved over the pass.
-- **receipts** (`--receipts`): the remote bandwidth audit's pass over the units the store's tensors lie in
+- **receipts** (`--receipts`): PoUB's pass over the units the store's tensors lie in
   (`sketch.plan_units`; the encoded padding past the head is in no receipt) beside the stage pass (`sketch.py`), under
   the seed `receipts.seed(CHALLENGE, PASS, PREVIOUS)`: each tensor's rows taken in whole units (up to three blocks more
   at each end), the sketch attached to the warm-up decode (the pass's σ), and its timed decodes with the sketch and
@@ -230,7 +230,7 @@ def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
 
 
 def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit | None = None
-           ) -> tuple[torch.Tensor | None, S.Store, dict]:
+           ) -> tuple[torch.Tensor | None, S.EncodedRows, dict]:
     """`t`'s rows onto the device and decoded into a fresh buffer: the buffer (None if refused), the store and timings.
     With `audit`, the rows are of whole units and the decode sketches them."""
     t0 = time.perf_counter()
@@ -238,7 +238,7 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     rows = segs.rows(r)
     sync()
     rows_s = time.perf_counter() - t0
-    store = S.Store(lay, rows, r.start, args.lib, chunk=args.chunk)
+    store = S.EncodedRows(lay, rows, r.start, args.lib, chunk=args.chunk)
     store.sketch = audit.P if audit else None
     w = torch.empty(t.n, t.k, dtype=torch.int8, device=DEVICE)
     S.flat(w).fill_(0xA5)
@@ -252,7 +252,7 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     return w, store, rec
 
 
-def sketched(store: S.Store, sk, layer: int, name: str, w: torch.Tensor) -> None:
+def sketched(store: S.EncodedRows, sk, layer: int, name: str, w: torch.Tensor) -> None:
     store.sketch = sk
     S.decode_matrix(store, layer, name, w)
 

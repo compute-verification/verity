@@ -6,7 +6,8 @@ forward ran last and frees each block once, a step's line closes when the next o
 order, and a block as old as the lifetime cap is re-keyed before the first pass that could not hold it.  In a session
 (deferred residency) a step's completed blocks go out as one append, and the line open when its encode lands writes
 them: one freed before then is written there and freed a line later, a re-key frees its old index at once, and an
-encode that would write a slot its line writes already waits a line."""
+encode that would write a slot its line writes already waits a line.  `Lines`, the one builder of the `NodeMemory`'s map and
+the Commit's, holds those rules on its own."""
 from __future__ import annotations
 
 import hashlib
@@ -17,9 +18,10 @@ import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, codec, memory_map
 from verity.core.protocols.remote_bandwidth.memory_map import MemoryMapError, Replay
+from verity.ml.circuits import requirement
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
-from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, Store
+from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME, Lines
+from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
 
 from .test_registry import CODEC, RECEIPT
 
@@ -33,9 +35,9 @@ def kv_payload(layer: int, page: int, slot: int, life: int = 0) -> bytes:
                     for u in range(2 * SLOT_BYTES // 64))
 
 
-def store(s: Store | None = None) -> tuple[Store, list[ArrayBacking]]:
+def store(s: NodeMemory | None = None) -> tuple[NodeMemory, list[ArrayBacking]]:
     """Weights of 3 blocks, the KV pool's two layers of 16 blocks each, then 2 blocks of host filler: N = 37."""
-    s = Store() if s is None else s
+    s = NodeMemory() if s is None else s
     w = np.random.default_rng(0).integers(0, 256, 3 * BLOCK, np.uint8)
     s.register("w", "hbm", "weights", ArrayBacking(w), block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="w")
     lay = PageLayout(PAGES, SLOTS, SLOT_BYTES)
@@ -46,11 +48,11 @@ def store(s: Store | None = None) -> tuple[Store, list[ArrayBacking]]:
     return s, bs
 
 
-def registration(s: Store) -> audit.Registration:
+def registration(s: NodeMemory) -> audit.Registration:
     return audit.register(bytes(32), b"node", s.layout().blocks, bytes(64), nonce=bytes(32))
 
 
-def expected_payload(s: Store, slot: int, page: int, life: int) -> bytes:
+def expected_payload(s: NodeMemory, slot: int, page: int, life: int) -> bytes:
     """The payload the trace wrote to a KV block: its plane's slots ``[lo, hi)``, in slot order."""
     p = s.pool
     for li, rn in enumerate(p.regions):
@@ -63,7 +65,7 @@ def expected_payload(s: Store, slot: int, page: int, life: int) -> bytes:
     raise AssertionError(f"slot {slot} is not a KV block")
 
 
-def pool_blocks(s: Store):
+def pool_blocks(s: NodeMemory):
     """Each KV block: (store index, page, column)."""
     p = s.pool
     for rn in p.regions:
@@ -85,7 +87,7 @@ TRACE = [
 ]
 
 
-def run_trace(s: Store, m, check=None) -> list[memory_map.Step]:
+def run_trace(s: NodeMemory, m, check=None) -> list[memory_map.Step]:
     """The trace, each step's frees (a finished request's after the step before, a preempted one's in this step's
     schedule) and allocs, then its write; ``check(step, lives, new, pages)`` after each write, with the lines it closed
     and the pages it wrote, whose blocks are in the line it opened; then the last line closed."""
@@ -170,10 +172,30 @@ def test_a_serving_trace_is_a_memory_map_the_driver_replays_as_the_store_holds_i
     assert changes[5].released == ((3, 4), (19, 4))
 
 
+def test_the_audit_store_is_the_requirement_store_the_map_records():
+    """`NodeMemory.audit_store` is the audit's `requirement.Store` as the map records it: the 37 registered blocks, each
+    step's written indices and those it released, and no payloads; the blocks resident after each step are those the
+    replayed map's slots hold."""
+    s, _ = store()
+    with pytest.raises(RuntimeError, match="record_memory_map"):
+        s.audit_store()
+    m = s.record_memory_map(registration=registration(s).digest)
+    steps = run_trace(s, m)
+    a = s.audit_store()
+    assert type(a) is requirement.Store and a.registered == 37 and a.payload == {}
+    assert sorted(a.written) == sorted(a.freed) == [x.step for x in steps]
+    assert a.freed[2] == frozenset(range(37, 49)) and a.freed[6] == frozenset((3, 4, 5, 6, 19, 20, 21, 22))
+    replay = Replay(memory_map.parse(m.text().splitlines())[0])
+    assert a.resident(0) == frozenset(range(37))
+    for x in steps:
+        assert a.written[x.step] == frozenset(replay.apply(x).indices)
+        assert a.resident(x.step + 1) == {j for slot in range(37) if (j := replay.holds(slot)) is not None}
+
+
 def test_a_freed_page_is_released_out_of_every_plan_until_written_again():
     """The audit credits only blocks the circuit keeps live: a freed page's blocks leave the filler and the pass's plan
     (one that names them is refused) until a write completes them under a new index."""
-    s = Store(filler_plan=lambda st, j: [("kv/0", st.idle_blocks("kv/0"))])
+    s = NodeMemory(filler_plan=lambda st, j: [("kv/0", st.idle_blocks("kv/0"))])
     store(s)
     reg = registration(s)
     s.record_memory_map(registration=reg.digest)
@@ -185,7 +207,7 @@ def test_a_freed_page_is_released_out_of_every_plan_until_written_again():
     s.begin_window(bytes(32), reg.digest)
     s.begin_pass(None)
     assert s.end_pass() is not None and not page1 & set(s.plan(0).tolist())
-    bad = Store(filler_plan=lambda st, j: [("kv/0", [4, 5])])
+    bad = NodeMemory(filler_plan=lambda st, j: [("kv/0", [4, 5])])
     store(bad)
     bad.record_memory_map(registration=registration(bad).digest)
     bad.kv_alloc([1])
@@ -237,7 +259,7 @@ def test_a_dirty_block_is_in_no_step_until_a_write_completes_it():
 
 
 def test_on_write_sees_each_registered_block_a_write_reaches_before_its_bytes_change():
-    """`Store.on_write`: a step's `kv_append` hands it the pool blocks the step's write reaches while they are
+    """`NodeMemory.on_write`: a step's `kv_append` hands it the pool blocks the step's write reaches while they are
     registered (a pass's plan may still hold them), before the forward writes them; a block already reached and not
     complete (dirty) is not handed again."""
     s, _ = store()
@@ -314,7 +336,7 @@ def test_a_live_block_is_re_keyed_once_its_window_is_lifetime_old():
     assert (rekey.step, rekey.freed, [w.slot for w in rekey.written]) == (2, tuple(page1), page0)
     assert [w.digest for w in rekey.written] == [w.digest for w in first.written if w.slot in page0]
     assert [w.index for w in rekey.written] == list(range(37 + 16, 37 + 24))
-    assert m.rekeyed == 8 and m.joined == dict.fromkeys(page0, 2)
+    assert m.rekeyed == 8 and joined(m) == dict.fromkeys(page0, 2)
     assert all(m.replay.holds(w.slot) == w.index for w in rekey.written)
 
 
@@ -332,7 +354,7 @@ def test_a_block_written_and_freed_in_one_step_is_no_write():
     assert (first.step, first.freed, first.written) == (0, (3, 5, 19, 21), ()) and m.last == 1
     # step 1's line is empty: K0 V0's write is dropped, and K1 V1, which no write reached, stay resident filler
     assert all(m.replay.holds(x) is None for x in (3, 5)) and all(m.replay.holds(x) == x for x in (4, 6))
-    assert m.joined == {} and not s.pool.dirty[0, [1, 3]].any()
+    assert joined(m) == {} and not s.pool.dirty[0, [1, 3]].any()
 
 
 def test_a_freed_pages_untouched_blocks_stay_resident_until_a_write_reaches_them():
@@ -388,7 +410,7 @@ def test_the_map_goes_to_the_provers_file(tmp_path):
 
 
 def test_the_map_needs_4096_byte_blocks_registered_first_and_increasing_steps():
-    t = Store()
+    t = NodeMemory()
     t.register("w", "hbm", "weights", ArrayBacking(np.zeros(2048, np.uint8)), block_bytes=1024, codec=CODEC,
                receipt=RECEIPT, source="w")
     with pytest.raises(ValueError, match="block_bytes=4096"):
@@ -411,7 +433,7 @@ def test_the_map_needs_4096_byte_blocks_registered_first_and_increasing_steps():
 PAGE0, PAGE1 = [3, 4, 5, 6, 19, 20, 21, 22], [7, 8, 9, 10, 23, 24, 25, 26]
 
 
-def deferred(s: Store, lifetime: int = LIFETIME):
+def deferred(s: NodeMemory, lifetime: int = LIFETIME):
     """A map in a session: each append to ``sent`` as (first, digests, payloads), its encode landing when the test
     says (`MemoryMap.encoded`)."""
     sent: list = []
@@ -422,6 +444,11 @@ def deferred(s: Store, lifetime: int = LIFETIME):
 
 def lines(m) -> list[tuple[int, tuple[int, ...], list[tuple[int, int]]]]:
     return [(x.step, x.freed, [(w.slot, w.index) for w in x.written]) for x in memory_map.parse(m.text().splitlines())[1]]
+
+
+def joined(m) -> dict[int, int]:
+    """Each live written block's slot and the window its append joined."""
+    return {x: b.window for x, b in m.lines.live.items()}
 
 
 def test_a_completed_blocks_write_is_recorded_in_the_line_open_when_its_encode_lands():
@@ -435,7 +462,7 @@ def test_a_completed_blocks_write_is_recorded_in_the_line_open_when_its_encode_l
     s.kv_write_reference([Append(1, 0, 8)], kv_payload, 0)
     m.complete()
     m.complete()
-    assert [(f, len(d)) for f, d, _ in sent] == [(37, 8)] and m.waiting == 8
+    assert [(f, len(d)) for f, d, _ in sent] == [(37, 8)] and m.lines.waiting == 8
     assert list(sent[0][1]) == [codec.digest(x) for x in sent[0][2]] == [codec.digest(s.payload(x)) for x in PAGE1]
     s.kv_append([], 1)
     with pytest.raises(RuntimeError, match="not the oldest awaiting its encode"):
@@ -443,7 +470,7 @@ def test_a_completed_blocks_write_is_recorded_in_the_line_open_when_its_encode_l
     m.encoded(37)
     s.kv_append([], 2)
     assert lines(m) == [(0, tuple(PAGE1), []), (1, (), list(zip(PAGE1, range(37, 45))))]
-    assert m.waiting == 0 and [m.replay.holds(x) for x in PAGE1] == list(range(37, 45)) and m.joined == dict.fromkeys(PAGE1, 0)
+    assert m.lines.waiting == 0 and [m.replay.holds(x) for x in PAGE1] == list(range(37, 45)) and joined(m) == dict.fromkeys(PAGE1, 0)
 
 
 def test_a_block_freed_before_its_encode_lands_is_written_when_it_lands_and_freed_a_step_later():
@@ -464,7 +491,7 @@ def test_a_block_freed_before_its_encode_lands_is_written_when_it_lands_and_free
     s.kv_append([], 3)
     s.kv_append([], 4)
     assert lines(m) == [(0, tuple(PAGE1), []), (2, (), list(zip(PAGE1, range(37, 45)))), (3, tuple(PAGE1), [])]
-    assert all(m.replay.holds(x) is None for x in PAGE1) and m.joined == {}
+    assert all(m.replay.holds(x) is None for x in PAGE1) and joined(m) == {}
 
 
 def test_a_re_key_frees_the_old_index_at_once_and_writes_the_new_one_once_its_encode_lands():
@@ -488,7 +515,7 @@ def test_a_re_key_frees_the_old_index_at_once_and_writes_the_new_one_once_its_en
     s.kv_append([], 3)
     assert lines(m) == [(0, (), list(zip(PAGE0, range(37, 45)))), (1, tuple(PAGE0), []),
                         (2, (), list(zip(PAGE0, range(45, 53))))]
-    assert m.joined == dict.fromkeys(PAGE0, 1)
+    assert joined(m) == dict.fromkeys(PAGE0, 1)
 
 
 def test_two_encodes_landing_in_one_line_that_write_one_slot_are_written_a_line_apart():
@@ -512,6 +539,46 @@ def test_two_encodes_landing_in_one_line_that_write_one_slot_are_written_a_line_
     assert lines(m) == [(0, tuple(PAGE1), []), (2, (), list(zip(PAGE1, range(37, 45)))),
                         (3, (), list(zip(PAGE1, range(45, 53))))]
     assert sent[0][1] != sent[1][1] and [m.replay.holds(x) for x in PAGE1] == list(range(45, 53))
+
+
+D = [bytes([i]) * 64 for i in range(4)]
+
+
+def written(*steps) -> list[tuple[int, tuple[int, ...], list[tuple[int, int]]]]:
+    return [(x.step, x.freed, [(w.slot, w.index) for w in x.written]) for x in steps if x is not None]
+
+
+def test_lines_write_each_append_where_it_lands_and_free_each_block_at_its_last_reader():
+    """`Lines`, the one builder of the `NodeMemory`'s map and the Commit's: indices run from N in append order, appends land in
+    that order, each written in the line open when it lands, a line frees no slot it writes (the write releases the
+    slot's previous block), and a block is freed at its last structural reader, or a line after its write if that is no
+    earlier (one read last before its write, its reader set after its append)."""
+    b = Lines(10)
+    a, c = b.append((1, 2), D[:2], (3, None)), b.append((3,), D[2:3])
+    with pytest.raises(RuntimeError, match="not the oldest awaiting its encode"):
+        b.land(c.first)
+    b.land(a.first)
+    b.free((1, 2, 3))
+    assert written(b.close(0)) == [(0, (3,), [(1, 10), (2, 11)])] and b.waiting == 1
+    c.lasts[0] = 1
+    b.land(c.first)
+    assert written(*(b.close(t) for t in range(1, 5))) == [(1, (), [(3, 12)]), (2, (3,), []), (3, (1,), [])]
+    assert {x: blk.index for x, blk in b.live.items()} == {2: 11} and not b.busy
+
+
+def test_lines_re_key_a_block_at_once_and_write_a_slot_a_second_time_a_line_later():
+    """A re-key frees its blocks' old indices in the open line and appends them again with their digests and readers,
+    written where that append lands; an append that would write a slot its line writes already waits for the next line,
+    with every append after it, and its write releases the slot's block in place of that block's free."""
+    b = Lines(10)
+    b.land(b.append((1, 2), D[:2], (None, 5)).first)
+    assert written(b.close(0)) == [(0, (), [(1, 10), (2, 11)])] and list(b.held(5)) == [1]
+    r = b.rekey([1, 2])
+    assert (r.first, r.digests, r.lasts) == (12, tuple(D[:2]), [None, 5]) and b.held(1) == {}
+    assert written(b.close(1)) == [(1, (1, 2), [])]
+    for a in (r, b.append((2,), D[2:3]), b.append((4,), D[3:4])):
+        b.land(a.first)
+    assert written(b.close(2), b.close(3), b.close(5)) == [(2, (), [(1, 12), (2, 13)]), (3, (), [(2, 14), (4, 15)])]
 
 
 def test_a_block_left_part_written_before_the_map_began_is_registered_as_it_is_and_freed_where_a_write_reaches_it():

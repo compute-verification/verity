@@ -4,14 +4,14 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 /-!
 # The period sum: per-window leak bounds summed over a period
 
-A period `T` is a finite set of windows over one coin space `Ω` (the audit's draws over the period). Each window `w`
+A period `T` is a finite set of windows over one coin space `Ω` (the audit's samples over the period). Each window `w`
 has its own leak bound: except with probability `ε w`, an accepted audit of `w` leaves the sender at most `b w` bits
-through the wardens in `w` (`Pr[acc w ∧ b w < moved w] ≤ ε w`). This is the per-window guarantee's conclusion, whose
-error is `δ + ε_ks + ε_bind`, taken here as a hypothesis family, so the sum doesn't depend on the per-window
-statement's form. `periodLeak_le_sum` sums these bounds by a union bound (`Pr_exists_mem_le_sum`): except with
-probability `Σ_w ε w`, when every window's audit is accepted, the period's total is at most `a + Σ_w b w`. The total
+through the network certifiers in `w` (`Pr[acc w ∧ b w < moved w] ≤ ε w`). This is the per-window guarantee's
+conclusion, whose error is `δ + ε_ks + ε_bind`, taken here as a hypothesis family, so the sum doesn't depend on the
+per-window statement's form. `periodLeak_le_sum` sums these bounds by a union bound (`Pr_exists_mem_le_sum`): except
+with probability `Σ_w ε w`, when every window's audit is accepted, the period's total is at most `a + Σ_w b w`. The total
 is bounded by the period-level terms `a` (`log2 #Ss + Σ_c log2 (cap_c + 1)` and whatever else the period charges once)
-plus each window's own bits (`htotal`), as `EncardWardenDecodableLe` counts them.
+plus each window's own bits (`htotal`).
 -/
 
 namespace NetTiming

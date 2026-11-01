@@ -155,9 +155,9 @@ theorem setupTables_pointsHP (hh : tags.hiddenOutputs = true)
 
 end Tables
 
-variable {I : Inputs} {own : Option ByteArray} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
-  (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
-include ht hc
+variable {I : Inputs} {own : Option ByteArray} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
+  (ht : I.tags.typed = false)
+include ht
 
 /-- **A `DrawSetupHP` from setupHidden's acceptance at `own` at a draw** (`drawSetupH_of_setupHiddenI`), a `fast100`
 schedule of its `m`, the draw proving `S`, and its link points `mPts`. -/
@@ -167,13 +167,12 @@ theorem drawSetupHP_of_setupHiddenI {st : Flock.Stmt}
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
     ∃ x : DrawSetupHP I own mPts S d, x.st = st := by
-  have hcst : st.c = c := Except.ok.inj ((Hidden.setupHidden_parseCP (HmOut.parse_isTmpl hc) h).symm.trans hc)
   have hg : 0 < st.c.g := by
-    have P := parse_facts (parse_untyped ht hc).1
-    obtain ⟨ls, hls⟩ := P.check
-    have hp := (check_facts P.typed hls).g_pow2
+    obtain ⟨hty, ⟨ls, hls⟩, -⟩ :=
+      Hidden.Committed.check ht (Hidden.committed_of_commit (Hidden.setupHidden_specP h).choose_spec.parse)
+    have hp := (check_facts hty hls).g_pow2
     simp only [isPow2, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hp
-    exact hcst ▸ hp.1
+    exact hp.1
   obtain ⟨pi, pop, -, -, hdr⟩ := Hidden.setupHidden_drawnP h
   obtain ⟨D', hD', -, hn, -⟩ := Layout.drawn_spec
     (c := { st.c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] }) hdr

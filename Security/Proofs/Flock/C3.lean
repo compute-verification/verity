@@ -66,7 +66,6 @@ import Proofs.Flock.C3.Reps.SentKeys
 import Proofs.Flock.C3.Reps.WRead
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.C3.Reps.RoundReads
-import Proofs.Flock.C3.Reps.RoundSel
 import Proofs.Flock.C3.Reps.RoundOfHolo
 import Proofs.Flock.C3.Reps.WithReads
 import Proofs.Flock.C3.Reps.KeysInW
@@ -113,7 +112,7 @@ import Proofs.Flock.C3.Reps.HAlgRows
 /-!
 # Candidate 3's recursive guarantee: its open pieces
 
-`Flock.Guarantees.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3`) is proved from piece (a); pieces (b)–(h)
+`Flock.Guarantees.RecursiveAuditHolo` (`Proofs.Flock.Recursive.AuditC3`) is proved from piece (a); pieces (b)–(h)
 discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'s statements over the verifier's list
 (`_hob`). Each piece has its own directory and namespace, and `README.md` beside this file is the gap list.
 

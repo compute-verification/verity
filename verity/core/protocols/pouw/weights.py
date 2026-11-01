@@ -13,13 +13,15 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
   chunks of at most `CHUNK_BYTES` (a power of two rows each), and each chunk's subtree root, pads past Σn included, is
   folded in order as `tree_levels` folds the leaves. The caller's process copies each row into one of ``2 * workers + 1``
   shared slots of a chunk each, which `workers` forked processes read in place, so the auditor's host holds about
-  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits vy-challenger-1
-  (4 vCPU, 15 GB). A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
+  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits a challenger host
+  of 4 vCPU and 15 GB. A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
   blocks `audit.hm96_salt` concatenates) and its hm96 leaves `verity.ml.commitments.hm96.batch`'s. Its roots are
   `Registered.commit`'s for any `workers`, and `entry` is the registration's entry (`Registered.entry`), which credit's
   `_weights` checks.
-* `weights_root` is credit's fold of the roots: `tagged` of ``verity/pouw/h1/weights/v1`` and each ``K, root`` by
-  ascending K.
+* `weights_root` is credit's fold of the roots: `protocol.fold_roots` at ``verity/pouw/h1/weights/v1``, each
+  ``K, root`` by ascending K, the one fold every PoUW weights' root is at its own tag.
+* **θ.** Each ``<prefix>b/<K>`` is a registered value of the registration log's θ (`theta_item`, its `entry` as a θ
+  item), and PoUW's view of θ is `theta_root`: `weights_root` of the ``<prefix>b/<K>`` roots θ lists.
 * **Chunk rows.** Past `CHUNK_MAX` codes a row of K is `chunks` (K) = n leaves, leaf n·r + c chunk c's K/n codes and
   the row's s_w (`leaf_words` (K) words), and credit's `_weights` reads ``<prefix>b/<K>`` as n·Σn such leaves.
   `weights_roots` and `entry` still commit whole rows, so at such a K their entry is not yet the one credit accepts.
@@ -32,19 +34,23 @@ import itertools
 import mmap
 import multiprocessing
 import os
+import re
 from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from verity.core.protocols.pouw.protocol import tagged
+from verity.core.protocols.pouw.protocol import fold_roots
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 from verity.ml.crypto import chacha20
 
 #: an H1 window's weights' root: each K's registered ``…/b/<K>`` root
-WEIGHTS_TAG = "verity/pouw/h1/weights/v1"
+WEIGHTS_TAG = domains.POUW_H1_WEIGHTS
+#: the registration's kind of item for a registered value (`registration.item_of`)
+THETA = "theta"
+_DECIMAL = re.compile(r"0|[1-9][0-9]*")
 #: ``b/<K>``'s first salt nonce, past every round's and call's tables in the prover's salt stream (vllm's
 #: ``REQUESTS_NONCE + 2^42 + 2^40``), so a key that salts both never repeats a (nonce, leaf)
 B_NONCE = (1 << 61) + (1 << 42) + (1 << 40)
@@ -296,9 +302,32 @@ def entry(circuit: str, prefix: str, k: int, n: int, root: bytes) -> dict[str, A
 
 
 def weights_root(roots: Mapping[int, bytes]) -> bytes:
-    """The weights' root: `tagged` of `WEIGHTS_TAG` and each K's ``…/b/<K>`` root, ``K, root`` by ascending K."""
-    return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
+    """The weights' root: `fold_roots` of each K's ``…/b/<K>`` root at `WEIGHTS_TAG`, ``K, root`` by ascending K."""
+    return fold_roots(WEIGHTS_TAG, roots)
 
 
-__all__ = ["B_NONCE", "CHUNK_ALIGN", "CHUNK_BYTES", "CHUNK_MAX", "DEFAULT_WORKERS", "SCHEMA", "WEIGHTS_TAG", "b_words",
-           "chunk_bits", "chunks", "entry", "ks", "leaf_words", "row_bytes", "row_words", "value", "weights_root", "weights_roots"]
+def theta_item(circuit: str, prefix: str, k: int, n: int, root: bytes) -> dict[str, Any]:
+    """``<prefix>b/<K>`` as the registration's θ item (`registration.item_of`): its entry (`entry`), of kind ``theta``."""
+    return {**entry(circuit, prefix, k, n, root), "kind": THETA}
+
+
+def theta_roots(theta: Iterable[Mapping[str, Any]], prefix: str) -> dict[int, bytes]:
+    """Each K's root among θ's registered values (a registration view's `theta`, or a window's entries that reference
+    them): the root of the value named ``<prefix>b/<K>``, K a canonical decimal. Every other value is not PoUW's."""
+    head, out = f"{prefix}b/", {}
+    for t in theta:
+        v = t["value"]
+        if isinstance(v, str) and v.startswith(head) and _DECIMAL.fullmatch(v[len(head):]):
+            out[int(v[len(head):])] = bytes.fromhex(t["root"])
+    return out
+
+
+def theta_root(theta: Iterable[Mapping[str, Any]], prefix: str) -> bytes:
+    """PoUW's view of θ: `weights_root` of the ``<prefix>b/<K>`` roots θ registers, the weights' root a period-open
+    signs and a window's open root binds."""
+    return weights_root(theta_roots(theta, prefix))
+
+
+__all__ = ["B_NONCE", "CHUNK_ALIGN", "CHUNK_BYTES", "CHUNK_MAX", "DEFAULT_WORKERS", "SCHEMA", "THETA", "WEIGHTS_TAG",
+           "b_words", "chunk_bits", "chunks", "entry", "ks", "leaf_words", "row_bytes", "row_words", "theta_item",
+           "theta_root", "theta_roots", "value", "weights_root", "weights_roots"]

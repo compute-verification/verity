@@ -217,7 +217,7 @@ are at most `424 + 16·1024 + 168·(232 + 64·13)`. -/
 theorem inZ_shape {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (lay : Zk.PadLayout) (tape : TapeZk)
     (i r : ℕ) {ic : InnerCommit}
     (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) (padsOf tape i r lay) (tape.innerSalt i r) = .ok ic)
-    (cons : Array (String × Zk.Lin)) (cs : InZ.Coins) (hlen : lay.len + Zk.K_PAD ≤ 1024) :
+    (cons : Array (String × Zk.Lin)) (cs : InZ.Challenges) (hlen : lay.len + Zk.K_PAD ≤ 1024) :
     (∀ x ∈ (InZ.proof lay (padsOf tape i r lay) cons h ic cs).salts, x.size = 192) ∧
     (∀ q ∈ (InZ.proof lay (padsOf tape i r lay) cons h ic cs).paths, ∀ x ∈ q, x.size = 64) ∧
     (ZkView.wInner (InZ.proof lay (padsOf tape i r lay) cons h ic cs)).size ≤
@@ -368,9 +368,9 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
 
 /-- **Masked completeness from level 0**: `complete_jsonT` from level 0's four premises (`Level0`) and the mask-rank
 bound; `RepShapedT` beyond level 0's shape (`shapeRest`) and `ProverRunsT` beyond level 0 (`runsRest`) hold. -/
-theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) 
     (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
     (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT_of_parts H S h0 h1 h2 h3 (shapeRest H) (runsRest H) hMR
+  complete_jsonT_of_parts H h0 h1 h2 h3 (shapeRest H) (runsRest H) hMR
 
 end FlockComplete.ZkTables

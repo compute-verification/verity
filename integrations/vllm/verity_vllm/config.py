@@ -45,7 +45,7 @@ WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
-#: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
+#: The PoUB session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
 REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 #: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
 VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
@@ -330,7 +330,8 @@ def stored_workloads(d: Path = WORKLOADS) -> dict[str, str]:
 
 def _fetch(paths: list[Path]) -> None:
     """Fetch ``paths`` with ``research data fetch-fixtures`` in the repository holding each (the nearest ancestor with a registry),
-    by that tree's own ``research``."""
+    by that tree's own ``research``, run from that repository's root: the command reads a relative PATH against its cwd, not
+    ``--repo``, and a reader running elsewhere (the regression's pytest, from integrations/vllm) would select nothing."""
     by_repo: dict[Path, list[Path]] = {}
     for p in paths:
         repo = next((d for d in p.resolve().parents if (d / "fixtures" / "artifacts.json").is_file()), REPO)
@@ -340,7 +341,7 @@ def _fetch(paths: list[Path]) -> None:
         env = settings.environ()
         env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(repo / "tools" / "research" / "src"), env.get("PYTHONPATH")]))
         r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json", *rels],
-                           capture_output=True, text=True, env=env)
+                           capture_output=True, text=True, env=env, cwd=repo)
         if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
             raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "
@@ -687,15 +688,16 @@ class CommitConfig:
                                            "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
-                                         help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
+                                         help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
                                               "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
     guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="1",
-                                  help="0 opts out, for A/B only: by default the attention stream's ROW word 3 carries GuardNegInfZero(m) after a "
-                                       "row's first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written "
-                                       "by the guarded-max FA2/FA3 tap build")
+                                  help="0 opts out, for A/B only: by default the row loads the guarded-max FA2/FA3 tap build, whose "
+                                       "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every "
+                                       "block's max * scale (acquire.sources.hidden_source.TAP_ROW3); only a manifest that names the stream "
+                                       "binds it")
     router_tap: str = option("--router-tap", env="ROUTER_TAP", default="1",
                              help="0 opts out, for A/B only: by default the row commits the selection-order router's softmax per token row "
                                   "(verity_vllm.query.router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source) "

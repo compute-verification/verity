@@ -1,4 +1,5 @@
-"""``ncp-v1``: noise-cancelling polarization under TT_NCP(0.5%) (``PROTOCOL.md`` §NCP; Lean `Pouw.NCP`).
+"""``ncp-v1``: noise-cancelling polarization under TT_NCP(0.5%) (Lean `Pouw.NCP`, its γ
+`Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`).
 
 For int7 activations ``A`` (m x k) and weights ``B`` (committed as its n rows along k, so the product is ``A·Bᵀ``):
 
@@ -32,6 +33,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
+from verity.ml.commitments import domains
 from verity.ml.randomness import Part, frame
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
@@ -213,8 +215,8 @@ def route_u_shift(unbiased: list[list[list[int]]], y: Sequence[Sequence[int]], b
 
 def stack(ctx: Context, pi: Sequence[int], sigma: Sequence[int], a: list[list[int]], b: list[list[int]], tile: Tile) -> Ops:
     u, k = ctx.matmul, ctx.matmul.shape.k
-    e1 = [noise_row("verity/pouw/ncp/E1/v1", k, ctx.salt, u.index, ctx.root_a, u.weight, i) for i in tile.rows]
-    f1 = [noise_row("verity/pouw/ncp/F1/v1", k, ctx.salt, u.weight, j) for j in tile.cols]
+    e1 = [noise_row(domains.POUW_NCP_E1, k, ctx.salt, u.index, ctx.root_a, u.weight, i) for i in tile.rows]
+    f1 = [noise_row(domains.POUW_NCP_F1, k, ctx.salt, u.weight, j) for j in tile.cols]
     return assemble(a, b, e1, f1, pi, sigma)
 
 
@@ -296,7 +298,7 @@ class NCP:
         steps = len(checked[0][0]) if checked and checked[0] else 0
         words = b"".join(checked[i][j][t].to_bytes(4, "little")
                          for t in range(steps) for i in range(len(checked)) for j in range(len(checked[i])))
-        return hashlib.shake_256(b"verity/pouw/ncp/tile/v1\0" + words).digest(32)
+        return hashlib.shake_256(domains.POUW_NCP_TILE.encode() + b"\0" + words).digest(32)
 
     def useful(self, ctx: Context, noise, ops: Ops, checked) -> list[list[int]]:
         return [[s[-1] - (1 << 32) if s[-1] >> 31 else s[-1] for s in row] for row in checked]

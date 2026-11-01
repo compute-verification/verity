@@ -24,3 +24,10 @@ extern "C" int rr_public_salts_host(const Pub* p, uint64_t* out) {
   for (uint32_t i = 0; i < p->n; ++i) public_salt(*p, p->first + i, out + 24 * (size_t)i);
   return 0;
 }
+
+// The same of the ok salts (`shake_salt`).
+extern "C" int rr_shake_salts_host(const Pub* p, uint64_t* out) {
+  if (p->n == 0 || p->len > 8 * PUB_WORDS) return 1;
+  for (uint32_t i = 0; i < p->n; ++i) shake_salt(*p, p->first + i, out + 24 * (size_t)i);
+  return 0;
+}

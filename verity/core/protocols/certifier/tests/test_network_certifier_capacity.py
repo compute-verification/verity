@@ -1,9 +1,8 @@
-"""Theorems 1(b) and 3 on small grids. By name, the tests mirror nine of their statements (`NetTiming.SecurityProofs`,
-proved in its `Counting`, `Advice` and `Schedule`): `SecurityProofs.EncardLeProdOfBranching`,
-`SecurityProofs.EncardObsDecodableLe`, `SecurityProofs.EncardAccSeqsLeSync`, `SecurityProofs.EncardAccSeqsLeFixedClock`,
-`SecurityProofs.EncardAccSeqsLeBlocks`, and for the constant-rate Program `SecurityProofs.EncardAccSeqsLeConstantRate`,
-`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`, `SecurityProofs.EncardAccSeqsLeConstantRateWindows` and
-`SecurityProofs.ExpectedRowCausal`.
+"""Theorems 1(b) and 3 on small grids. By name, the tests mirror three of their statements:
+`SecurityProofs.EncardLeProdOfBranching` and `SecurityProofs.EncardObsDecodableLe` (`NetTiming.SecurityProofs`, proved
+in its `Counting`), and the check's count of accepted runs, `Properties.NetworkCertifier.EncardAcceptedObservationsLe`
+(`#Ac · #Σ_sync^W · D^(W·T)`). The rest check what the program's syncs give, which Lean's reference Program, over send
+ticks and execution blocks, doesn't state: the per-window prefixes and that a window's grid reads only earlier syncs.
 
 The accepted observation sequences are the grids an accepted run can show. The tests enumerate every sender behaviour
 on a small horizon: every hand-time schedule, and every declared clock sync. They count what an accepted run can
@@ -76,8 +75,8 @@ def test_tree_lemma():
 
 
 def test_accepted_count_le_sync_advice():
-    """SecurityProofs.EncardAccSeqsLeSync, for the constant-rate Program SecurityProofs.EncardAccSeqsLeConstantRate:
-    accepted sequences ≤ #Sync^W (content fixed, J so D = 1)."""
+    """Properties.NetworkCertifier.EncardAcceptedObservationsLe: the check's accepted sequences ≤ #Σ_sync^W (content
+    fixed, J so D = 1)."""
     sync_set = SyncSet((0, 1), (1, 2))
     windows = 2
     seen = accepted_observations(sync_set, windows)
@@ -97,8 +96,8 @@ def test_fractional_rate_count_le_sync_advice():
 
 
 def test_accepted_count_le_sync_per_window_opened():
-    """SecurityProofs.EncardAccSeqsLeConstantRateWindows: runs accepted on their first m windows show at most
-    #Σ_sync^m grid prefixes, however many windows the advice covers."""
+    """Runs accepted on their first m windows show at most #Σ_sync^m grid prefixes, however many windows the advice
+    covers."""
     sync_set = SyncSet((0, 1), (1, 2))
     windows = 2
     for m in range(windows + 1):
@@ -113,8 +112,8 @@ def test_accepted_count_le_sync_per_window_opened():
 
 
 def test_window_grid_reads_only_earlier_syncs():
-    """SecurityProofs.ExpectedRowCausal: window w's grid is the same whatever later windows declare, in Σ_sync or not,
-    with fractional rates and frames anchored past the horizon."""
+    """Window w's grid is the same whatever later windows declare, in Σ_sync or not, with fractional rates and frames
+    anchored past the horizon."""
     rng = random.Random(11)
     rhos = (Fraction(1), Fraction(2), Fraction(1, 2), Fraction(2, 3))
     for _ in range(300):
@@ -130,9 +129,9 @@ def test_window_grid_reads_only_earlier_syncs():
 
 
 def test_a_negative_logical_index_is_rejected():
-    """Lean's index is a ℕ, and SecurityProofs.ExpectedRowCausal needs it. A frame anchored in window 1 with λ = −2 is
-    eligible at T + δ − 2 at ρ = 1, so window 0's grid would read window 1's sync: here it holds the frame under δ = 0
-    and not under δ = 2. `LogicalFrame` rejects that index."""
+    """Lean's index is a ℕ, and a window's grid reading only earlier syncs needs it. A frame anchored in window 1 with
+    λ = −2 is eligible at T + δ − 2 at ρ = 1, so window 0's grid would read window 1's sync: here it holds the frame
+    under δ = 0 and not under δ = 2. `LogicalFrame` rejects that index."""
     with pytest.raises(ValueError, match="logical index is non-negative"):
         LogicalFrame(b"x", P.buckets, -2)
     unchecked = SimpleNamespace(payload=b"x", anchor=P.buckets, index=-2)
@@ -143,8 +142,8 @@ def test_a_negative_logical_index_is_rejected():
 
 
 def test_fixed_clock_zero_capacity():
-    """SecurityProofs.EncardAccSeqsLeFixedClock, for the constant-rate Program
-    SecurityProofs.EncardAccSeqsLeConstantRateFixedClock: with a fixed clock, every accepted run shows the same grids."""
+    """Properties.NetworkCertifier.EncardAcceptedObservationsLe at one sync value, under J: with a fixed clock, every
+    accepted run shows the same grids."""
     sync_set = SyncSet((1,), (1,))
     seen = accepted_observations(sync_set, 2)
     assert len(seen) == 1
@@ -183,8 +182,7 @@ def test_free_occupancy_advice_reaches_the_envelope():
 
 def test_reacting_operator_does_not_add_capacity():
     """The operator sets the second window's request anchor from the occupancy it saw in the first window's last bucket,
-    so feedback reaches the Program through ingress. Accepted sequences still number at most #Sync^W (the joint
-    witness's shape)."""
+    so feedback reaches the Program through ingress. Accepted sequences still number at most #Sync^W."""
     sync_set = SyncSet((0, 1), (1,))
     head = FRAMES[:3]
     seen = set()
@@ -200,39 +198,6 @@ def test_reacting_operator_does_not_add_capacity():
     assert 1 <= len(seen) <= sync_set.size ** 2
 
 
-def test_block_bound_random_programs():
-    """SecurityProofs.EncardAccSeqsLeBlocks. The occupancy of cell (link, bucket) reads only its own block's timing
-    advice and the history, and the frames read only content advice and the history: at most
-    2^A_c · ∏ min(2^A_β, #P_β) sequences."""
-    rng = random.Random(6)
-    T, links = 2, 2
-    for _ in range(1500):
-        a_c, adv = rng.randint(0, 2), [rng.randint(0, 3) for _ in range(links)]
-        occ_t = [[{} for _ in range(T)] for _ in range(links)]
-        cont_t = [[{} for _ in range(T)] for _ in range(links)]
-
-        def look(table, key, hi):
-            if key not in table:
-                table[key] = rng.randint(0, hi)
-            return table[key]
-
-        seqs = set()
-        for ac in range(2 ** a_c):
-            for a in itertools.product(*[range(2 ** x) for x in adv]):
-                hist = ()
-                for t in range(T):
-                    row = []
-                    for ell in range(links):
-                        o = look(occ_t[ell][t], (a[ell], ac, hist), 1)
-                        row.append(look(cont_t[ell][t], (ac, hist), 3) if o else None)
-                    hist += (tuple(row),)
-                seqs.add(hist)
-        bound = 2 ** a_c
-        for x in adv:
-            bound *= min(2 ** x, 2 ** T)
-        assert len(seqs) <= bound
-
-
 def test_sync_set_lists_each_value_once():
     """A repeated δ or ρ (1 and 2/2 are one ρ) is rejected, so iterating Σ_sync yields exactly #Σ_sync values."""
     with pytest.raises(ValueError, match="each delta and each rho once"):
@@ -246,9 +211,6 @@ def test_sync_set_lists_each_value_once():
 def test_doc_numbers():
     s = SyncSet(tuple(range(16)), tuple(range(1, 9)))
     assert s.size == 128 and s.bits == 7
-    # the block cap with one block: below the advice cap at T = 2, r = 1, W = 3, and far above it at T = 600
-    assert capacity.left_packed_patterns(2, 1) ** 3 == 64 < s.size**3 == 2_097_152
-    assert capacity.envelope_bits(600, 1) == 600 > s.bits == capacity.envelope_bits(7, 1)
     assert math.isclose(capacity.ingress_rate(64), 60.2, rel_tol=1e-3)
     assert math.isclose(capacity.ingress_rate(64, 1000), 6.02, rel_tol=1e-3)
     two_links_hour = (capacity.ingress_rate(64) + capacity.ingress_rate(1024)) * 3600

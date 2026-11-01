@@ -18,20 +18,22 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from verity.ml.circuits.boolean import forms
+from verity.ml.circuits.silicon import fp4, tc_step
 from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
 from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 
 from . import lowering
 
-__all__ = ["BACKENDS", "FLOCK_FRAME_V3_BLAKE3", "FLOCK_VLLM_V1", "Flock", "GemmSub", "Supported", "Unavailable", "Unsupported"]
+__all__ = ["BACKENDS", "FLOCK_FRAME_V3_BLAKE3", "Flock", "GemmSub", "Supported", "Unavailable", "Unsupported"]
 
 #: Pipelines with a pinned lowering, by the model object the target names (imported: a rename fails at import time).
 _LOWERED = {HOPPER_BF16_M16N8K16: "bf16-hopper", ADA_E4M3_M16N8K32: "fp8-ada", HOPPER_E4M3_K32: "fp8-hopper",
             AMPERE_BF16_M16N8K16: "bf16-ampere"}
 _TARGETS = {BF16_HOPPER.name: "bf16-hopper", FP8_ADA_MMA.name: "fp8-ada", FP8_HOPPER_WGMMA.name: "fp8-hopper",
             FIRST.name: "bf16-ampere"}
-_HERE = Path(__file__).resolve().parent
-_LOWERING_SOURCES = ("lowering.py", "unit.py", "gf2.py")
+#: what the lowering is built from: ``lowering.py`` and the modules its ``unit``, ``unit_fp4`` and ``gf2`` alias
+_LOWERING_SOURCES = tuple(Path(m.__file__).resolve() for m in (lowering, tc_step, fp4, forms))
 
 
 @dataclass(frozen=True)
@@ -58,10 +60,11 @@ class Unavailable:
 
 
 def lowering_version() -> str:
-    """sha256 over the lowering's source files (``lowering.py``, ``unit.py``, ``gf2.py``), in that order."""
+    """sha256 over the lowering's source files (``lowering.py``, ``silicon/tc_step.py``, ``silicon/fp4.py``,
+    ``boolean/forms.py``), in that order, each as its file name, a zero byte and its bytes."""
     h = hashlib.sha256()
-    for name in _LOWERING_SOURCES:
-        h.update(name.encode() + b"\0" + (_HERE / name).read_bytes())
+    for path in _LOWERING_SOURCES:
+        h.update(path.name.encode() + b"\0" + path.read_bytes())
     return h.hexdigest()
 
 
@@ -84,10 +87,7 @@ class Flock:
             return Unsupported(f"{sub.target.name}: no pinned Flock lowering of its transition unit")
         pipe = lowering.PIPES[relation]
         row_bytes = sub.k * pipe.word_bits // 8
-        if self.scheme == "vllm-v1":
-            if row_bytes != 32 * (sub.k // pipe.k):
-                return Unsupported(f"K = {sub.k}: flock-vllm-block needs every unit to read 32 bytes of each operand row")
-        elif sub.k % pipe.k or row_bytes % 64 or row_bytes <= 1024:
+        if sub.k % pipe.k or row_bytes % 64 or row_bytes <= 1024:
             return Unsupported(f"K = {sub.k}: needs a multiple of {pipe.k} whose {pipe.word_bits}-bit rows are whole "
                                "BLAKE3 blocks and more than one chunk")
         if sub.k != 1536:
@@ -114,8 +114,6 @@ class Flock:
 
     def record(self) -> dict:
         """The Table 1 entry: what this configuration guarantees."""
-        if self.scheme == "vllm-v1":
-            return self._record_vllm_v1()
         return {
             "family": "Flock",
             "configuration": f"Flock(scheme={self.scheme}, profile={self.profile}, statement={self.statement})",
@@ -148,41 +146,6 @@ class Flock:
         }
 
 
-    def _record_vllm_v1(self) -> dict:
-        return {
-            "family": "Flock",
-            "configuration": f"Flock(scheme={self.scheme}, profile={self.profile}, statement={self.statement})",
-            "statement": ("full relation: x rows, W columns and outputs committed under vllm-v1 (trees a, b over position "
-                          "leaves of the rows, tree y over position leaves of the output words' little-endian bytes; every "
-                          "root the step-root binding of a verifier-held StepDomain, PROTOCOL.md section 9); the verifier sees "
-                          "each row's leaf digest and the output words, never the operands"),
-            "commitment_scheme": {"id": "vllm-v1", "leaf": "pos-leaf: SHA-256(verity/pos-leaf/v0 || u64be(len) || row) (rows and y words)",
-                                  "in_proof": "every row's position-leaf SHA-256 compressions (prefix, IV and padding constant), chained in the circuit",
-                                  "native": "the vllm-v1 node / lift trees and the step-root bindings, by the verifier; the y leaves",
-                                  "domains": "ligero.vllm_tree port domains (the same as B-Ligero's +vllm-v1), domain digests in the statement"},
-            "hashes": [
-                {"hash": "SHA-256", "role": "statement commitment (vllm-v1 leaves, nodes, lifts, step roots)", "assumption": "collision resistance", "class": "standard"},
-                {"hash": "BLAKE3 (CPU) / SHA-256 (Flock-CUDA)", "role": "proof-internal commitment (Ligerito Merkle trees)",
-                 "assumption": "collision resistance", "class": "standard"},
-                {"hash": "SHA-256", "role": "live-coin binding (each round's digest, recorded before its coin)",
-                 "assumption": "collision resistance", "class": "standard"},
-            ],
-            "zk_class": "NON_ZK_PROOF",
-            "verifier_model": "interactive: live verifier coins (flock-live R1-R8), designated verifier, not transferable",
-            "soundness": {"profile": self.profile, "per_rep": "2^-97.8 (Fast100, red-team-flock, no grinding credit)",
-                          "whole_proof": "2^-195.5 (two reps on one root, independent live coins); red-team review of "
-                                         "verity/flock-vllm-block/v1 pending",
-                          "dominant_term": "Ligerito proximity queries per rep, squared over the reps",
-                          "accountant": "lanes/flock-128/evidence/accounting.py"},
-            "proximity": {"regime": "up to the Johnson bound", "status": "proven (Haböck ePrint 2025/2110; BCHKS25)"},
-            "setup": "transparent", "interaction": "interactive: every Flock challenge is a live coin round trip",
-            "assumptions": ["GF(2^128) and GF(2^256) extension fields of Flock b684b12"],
-            "pin": {"lowering": dict(lowering.PINS), "lowering_version": lowering_version(),
-                    "flock": "succinctlabs/flock b684b12 + verity/ml/flock/flock-link-b684b12.patch + flock-gpu-link-b684b12.patch"},
-        }
-
-
 FLOCK_FRAME_V3_BLAKE3 = Flock()
 FLOCK_BLOCK = Flock(binary="flock-pure-gpu", statement="block")
-FLOCK_VLLM_V1 = Flock(scheme="vllm-v1", binary="flock-vllm-v1", statement="block")
-BACKENDS = (FLOCK_FRAME_V3_BLAKE3, FLOCK_BLOCK, FLOCK_VLLM_V1)
+BACKENDS = (FLOCK_FRAME_V3_BLAKE3, FLOCK_BLOCK)

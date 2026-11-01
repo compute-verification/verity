@@ -13,7 +13,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 from verity.ml.commitments import hm96
 from verity_vllm.pipeline import registration_log as RL
 
@@ -74,7 +74,7 @@ def test_each_break_is_refused_with_its_code():
     bad["provenance"][0]["root"] = "00" * 64
     assert REF.check_baseline(bad, out["trusted"]) == {"error": "theta-root"}
     _p, inst, out = _case(program_digest="cd" * 64)             # a log registered for another Program
-    assert REF.check_baseline(inst, out["trusted"]) == {"error": "theta-unbound"}
+    assert REF.check_baseline(inst, out["trusted"]) == {"error": "run-program"}
     _p, inst, out = _case(registered=())                         # θ bound per run: the Program the builder made before
     assert REF.check_baseline(inst, out["trusted"]) == {"error": "theta-not-registered"}
 
@@ -94,7 +94,7 @@ def test_record_takes_entries_committed_elsewhere_and_refuses_any_that_is_not_it
 
 
 def test_refusals():
-    mixed = (("m", Record(("a", Value(8)), ("b", Value(32)))),)
+    mixed = (("m", RecordType(("a", Value(8)), ("b", Value(32)))),)
     assert RL.lower(mixed[0][1]) == REF.lower(mixed[0][1]) == [(8, 1), (32, 1)]
     with pytest.raises(ValueError, match="more than one leaf width"):
         RL.theta_parameters(mixed, [0])

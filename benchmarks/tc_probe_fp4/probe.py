@@ -14,7 +14,7 @@ Instructions (``--instruction``): ``nvf4`` = ``mma.sync.aligned.kind::mxf4nvf4.b
 (``sm120.mma.m16n8k64.e2m1.mxf4``, capture + model5-with-ue8m0-shift as a hypothesis, no hot clip); ``f8f6f4`` = the unscaled
 ``mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32`` (``sm120.mma.m16n8k32.e2m1.f8f6f4``, autoproof probe2
 replay only); ``bf16`` = ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` (``sm120.mma.m16n8k16.bf16``), compared with
-``verity.ml.circuits.silicon.silicon.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
+``verity.ml.circuits.silicon.models.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
 
 The kernel (``mma_fp4.cu``) is built with ``-arch=sm_120a``: ptxas refuses ``.block_scale`` / ``.kind::f8f6f4`` on plain
 ``sm_120`` ("not supported on .target sm_120"), the arch-specific target is required.  ``--sass-check`` runs ``cuobjdump -sass``
@@ -30,8 +30,8 @@ recorded, nothing is tuned.
 random accumulators; random with zero accumulators; uniform encodings (codes, scales and accumulator bits all uniform); the full
 UE4M3 scale-code sweep (every valid code 0x00..0x7E, one and both operands); the hot-group-clip regime (one live group with both
 scale codes in 0x78..0x7E, the other groups on subnormal scales with bits at 2^-20, tiny or zero accumulators); all-hot and
-one-operand-hot controls; large cancellation (two groups cancel exactly at the top of the window while small terms sit below
-E1-41: the window-width probe); accumulator-window probe (large accumulators over tiny terms: W2); tiny accumulators; signed zero.
+one-operand-hot controls; large cancellation (two groups cancel exactly at the top of the window while small terms sit below:
+the window-width probe); accumulator-window probe (large accumulators over tiny terms: W2); tiny accumulators; signed zero.
 
 Outputs under ``--out``: ``probe_results.json`` (identity, sass counts, replay and per-family counts, first mismatches),
 ``capture_sample.json`` (records sampled per family: acc, a/b codes, scales, d as hex), ``tiles_<family>.npz`` (the full capture),
@@ -53,8 +53,6 @@ The K=32 E2M1 rows, the gates, and the other instructions and modes:
     bit in the first gated family: the run must fail).
   * casts (``--instruction cvt_*``, ``cast.py``); the 2:4 sparse ``mma.sp`` m16n8k128 rows (``--instruction sp_nvf4 | sp_mxf4``,
     ``sparse.py``: a capture over named candidates, the first of which is the dense pinned model on the compressed operands);
-    T1's merged k128 route (``--instruction sp_nvf4_t1``, ``t1_merged.py``: the sparse k128 from C = H against two chained dense
-    atoms from C = H, on the operands of ``fp4_emulation.py routes`` at 1ad1aaa2, for each ``--hot-bits`` h and C = +0);
     the sparse rows' metadata rule (``--instruction sp_nvf4_meta | sp_mxf4_meta``, ``meta_rule.py``: where each of the 16
     nibbles puts a chunk's stored codes, the pinned step on that gather, and the zero patterns the hardware can write);
     named vectors of a generated Lean vector file (``--instruction nvf4_lean_vectors --vectors F``, ``lean_vectors.py``: each
@@ -100,7 +98,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.silicon (and verity) from the shipped tree
+_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.models (and verity) from the shipped tree
 for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "tools" / "config"):
     if _src.is_dir() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
@@ -136,8 +134,6 @@ CAST_INSTRUCTIONS = ("cvt_e2m1x2_f32", "cvt_f16x2_e2m1x2", "cvt_ue8m0x2_f32_rz",
                      "cvt_e4m3x2_f32_ue4m3")
 #: the 2:4 sparse mma.sp rows (sparse.py; mma_fp4.cu's sparse_tiles_kernel), dispatched like the casts
 SPARSE_INSTRUCTIONS = ("sp_nvf4", "sp_mxf4")
-#: T1's merged k128 route (t1_merged.py): the sparse NVF4 row against the dense one's two-atom chain, from the hot accumulator
-T1_INSTRUCTIONS = ("sp_nvf4_t1",)
 #: the sparse rows' metadata rule (meta_rule.py): what each of the 16 nibbles gathers, and the pinned step on that gather
 META_RULE_INSTRUCTIONS = ("sp_nvf4_meta", "sp_mxf4_meta")
 #: named vectors of a generated Lean vector file (lean_vectors.py), captured on the NVF4 row against the file's predicted words
@@ -1252,7 +1248,7 @@ def _init(instr: str, group: int):
     _CTX["group"] = group
     try:
         if instr == "bf16":
-            from verity.ml.circuits.silicon import silicon as S
+            from verity.ml.circuits.silicon import models as S
             _CTX["pipes"] = {"ampere_bf16_m16n8k16": S.AMPERE_BF16_M16N8K16, "hopper_bf16_m16n8k16": S.HOPPER_BF16_M16N8K16}
             _CTX["tc_dot"] = S.tc_dot
         else:
@@ -1441,7 +1437,7 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="nvf4",
-                    choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS) + list(T1_INSTRUCTIONS)
+                    choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS)
                     + list(META_RULE_INSTRUCTIONS) + list(LEAN_VECTOR_INSTRUCTIONS))
     ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
     ap.add_argument("--out", required=True)
@@ -1468,9 +1464,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prebuilt", default=None, metavar="SO",
                     help="load this library (an earlier --sass-only run's build of the same source; its sha256 is recorded) instead of "
                          "running nvcc, so a fill job holds no GPU while compiling")
-    ap.add_argument("--hot-bits", default="14,15,16", help="sp_nvf4_t1: the h of each hot accumulator H (C = +0 always runs)")
-    ap.add_argument("--model-sample", type=int, default=4096,
-                    help="sp_nvf4_t1: span words per accumulator checked against the pinned models (and 1/64 as many whole chains)")
     ap.add_argument("--vectors", default=None, help="nvf4_lean_vectors: a generated Fp4Vectors.lean")
     ap.add_argument("--vector-list", default="nvf4P7", help="nvf4_lean_vectors: the Vec list --vector-ids index")
     ap.add_argument("--vector-ids", default=None, help="nvf4_lean_vectors: comma list of 0-based entries of --vector-list")
@@ -1489,9 +1482,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.instruction in CAST_INSTRUCTIONS:
         import cast
         return cast.main(args)
-    if args.instruction in T1_INSTRUCTIONS:
-        import t1_merged
-        return t1_merged.main(args)
     if args.instruction in META_RULE_INSTRUCTIONS:
         import meta_rule
         return meta_rule.main(args)
@@ -1539,7 +1529,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     primary = args.expect_model or PRIMARY_MODEL[instr]
     if instr == "bf16":
-        model_desc, model_src = "verity.ml.circuits.silicon.silicon.tc_dot", "verity.ml.circuits.silicon.silicon"
+        model_desc, model_src = "verity.ml.circuits.silicon.models.tc_dot", "verity.ml.circuits.silicon.models"
     elif instr in k32.ROWS:
         model_desc = "k32.candidates: " + ", ".join(sorted(verity_models(instr))) + (" (control: autoproof model5)" if instr in MODEL5_ROWS else "")
         model_src = str(HERE / "k32.py") + " + verity.ml.circuits.silicon.models"

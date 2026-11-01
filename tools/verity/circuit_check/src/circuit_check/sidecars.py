@@ -223,7 +223,7 @@ def named(fid: str) -> Any | None:
     whoever asked for it first).  None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by
     nothing, built in this process or not."""
     from verity.ml.circuits.codec import lookup_primitive
-    from verity.ml.circuits.defs import Registry
+    from verity.ml.circuits.defs import DefinitionTable
 
     if not _NAMED:
         _NAMED.update({v.id: v for v, _mod in _index().values()})
@@ -231,7 +231,7 @@ def named(fid: str) -> Any | None:
         return d
     with CC.internal():
         try:
-            return lookup_primitive(Registry(), fid)
+            return lookup_primitive(DefinitionTable(), fid)
         except (KeyError, ValueError):
             return None
 

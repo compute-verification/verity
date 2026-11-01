@@ -1,8 +1,8 @@
 import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
 import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 import Proofs.Flock.Soundness.Discharge.Layout.Outs
-import Proofs.Flock.Soundness.Discharge.Const
-import Proofs.Flock.Soundness.Discharge.Zero
+import Proofs.Flock.Soundness.Discharge.Const.Keyed
+import Proofs.Flock.Soundness.Discharge.Placed.Typed
 
 set_option Elab.async false
 

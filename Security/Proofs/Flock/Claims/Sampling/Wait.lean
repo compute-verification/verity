@@ -158,14 +158,6 @@ theorem W_eq (b : R → ℝ) (rs : List R) : ∀ k : ℕ,
       · simp only [W, h, ↓reduceIte, accList, List.filter_cons, decide_false, Bool.false_eq_true]
         exact ih (k + 1)
 
-theorem W_nonneg {b : R → ℝ} (hb : ∀ r, 0 ≤ b r) (k : ℕ) (rs : List R) : 0 ≤ W acc b k rs := by
-  rw [W_eq]
-  split_ifs
-  · exact List.prod_nonneg fun x hx => by
-      obtain ⟨r, -, rfl⟩ := List.mem_map.1 hx
-      exact hb r
-  · exact le_rfl
-
 variable {E : Type} [Fintype E] [Nonempty E]
 
 /-- Every kept draw is bad at its own coins, and `k` were kept. -/
@@ -225,10 +217,6 @@ theorem EW_succ (b : R → ℝ) (k K : ℕ) : EW acc b (k + 1) (K + 1) =
   rw [congrArg Ex (funext h2), Ex_add, Ex_mul_right, Ex_mul_right, Ex_ite]
   simp only [EW]
   ring
-
-omit [Nonempty R] in
-theorem EW_nonneg {b : R → ℝ} (hb : ∀ r, 0 ≤ b r) (k K : ℕ) : 0 ≤ EW acc b k K :=
-  Ex_nonneg fun _ => W_nonneg acc hb _ _
 
 /-- **One wait's weight averages at most `(g/a)^k`**, `g = 𝔼[1[acc]·b]`, `a = Pr[acc] > 0`. -/
 theorem EW_le {b : R → ℝ} (hb : ∀ r, 0 ≤ b r) (ha : 0 < Pr acc) :

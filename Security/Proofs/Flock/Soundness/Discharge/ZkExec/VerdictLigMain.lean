@@ -70,7 +70,7 @@ theorem padE_eq (lv : Flock.Level) (hl : LevelSeam lv) (hrate : lv.rate = 1) (k0
     (fun j hj => hR j (hsz ▸ hj)) (pos_le_alpha lv hl cw cα hcα) hrep hρ0 hρ1 hy ht
 
 set_option maxHeartbeats 8000000 in
-/-- **The hiding Ligerito accepts** (live PROTOCOL.md §7 with §13.3–§13.6). When `Zk.ligerito` accepts from `t` to
+/-- **The hiding Ligerito accepts** (live PROTOCOL.md §7 with `Flock.Ligerito`). When `Zk.ligerito` accepts from `t` to
 `t'` on well-formed rounds, at a schedule whose dimensions and levels are the model's, whose levels' consistency coins
 are not one word, with at least one lane round, level 0 of rate 1 and the padding no longer than level 0's message,
 and with `basisAt` the model's `bHat` of `b` (`hbasis`), then at any pads and batched value, the compiled masked phase's

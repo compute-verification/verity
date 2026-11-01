@@ -1,6 +1,7 @@
 import Difftest
 import RemoteAudit.Line
 import RemoteAudit.P2
+import RemoteAudit.P2Session
 import RemoteAudit.Registry
 import RemoteAudit.Schedule
 import RemoteAudit.Store
@@ -22,7 +23,8 @@ rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the lin
 reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
 `p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
-and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`).
+and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
+`p2_party.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
 `remote-audit-difftest` serves them.
 -/
 
@@ -346,8 +348,8 @@ def verifyOpeningFn (j : Json) : V Json := do
   if !(binding.size == 32 || binding.size == 64) || owner < -2 || !(root.size == 32 || root.size == 64)
       || path.any fun x => !(x.size == 32 || x.size == 64) then
     throw "not a domain, commitment and opening"
-  let d := FrameV3.Domain.make binding owner (← nat j "start") (← nat j "count")
-  pure (.bool (FrameV3.verifyOpening d root (← nat j "position") (← hex j "value") (← J.str j "schema" "input") path))
+  let d := FV3.Sha512.Domain.make binding owner (← nat j "start") (← nat j "count")
+  pure (.bool (d.verifyOpening root d.count (← nat j "position") (← hex j "value") (← J.str j "schema" "input") path))
 
 def leafReceiptFn (j : Json) : V Json := do
   match leafReceipt (← hex j "leaf") (← nat j "p") (← nat j "positions") with
@@ -656,7 +658,7 @@ private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   if xs.size ≠ n then throw s!"{ctx}: {n} integers"
   xs.mapM (J.asNat · ctx)
 
-private def blockOf (j : Json) : V Schedule.Block := do
+private def blockOf (j : Json) : V Schedule.Chunk := do
   match j with
   | .null => pure none
   | v =>
@@ -748,6 +750,41 @@ def p2OpeningFn (j : Json) : V Json := do
     | some f => .str f.name
     | none => .null)
 
+/-- A P2 session of record (`P2Session`) on the bytes the verifier reads: `{"registration", "request", "session",
+"not_before_ns", "coins", "chunk", "events"}`, the registration file's bytes and the prover's request line (lowercase
+hex), the auditor's session parameters (`P2Session.Auditor.ofJson`, or `P2Session.SESSION` for null), the session's
+2W coins, the draws a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
+`{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
+The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
+or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`, and a request off the auditor's
+session `{"refused": "request", "reason": why}` (`P2Session.heldTo`'s, `p2_party.params_of`'s words). -/
+def p2SessionFn (j : Json) : V Json := do
+  let .ok held := P2Session.heldOf (← hex j "registration") | pure (Json.mkObj [("refused", .str "registration")])
+  let auditor ← match ← J.get j "session" "input" with
+    | .null => pure P2Session.SESSION
+    | v => P2Session.Auditor.ofJson v
+  let .ok asked := P2Session.askedOn held (← hex j "request") | pure (Json.mkObj [("refused", .str "request")])
+  let params ← match P2Session.heldTo auditor asked with
+    | .ok p => pure p
+    | .error why => return Json.mkObj [("refused", .str "request"), ("reason", .str why)]
+  let coins ← hexes j "coins"
+  if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
+  let chunk ← nat j "chunk"
+  let mut s := P2Session.init held params coins (← nat j "not_before_ns")
+  let mut results : Array Json := #[]
+  for e in ← J.arr j "events" "input" do
+    let (r, s') ← match ← J.str e "kind" "event" with
+      | "start" => pure (Session.start s (← nat e "now"))
+      | "boundary" => pure (Session.boundary s (← nat e "now"))
+      | "close" => Session.close s (← int e "t") (← nat e "now")
+      | "root" => pure (P2Session.receive held s (← int e "t") (← int e "i") (← hex e "line") (← nat e "now"))
+      | "openings" => pure (P2Session.verify chunk held s (← int e "t") (← hex e "line"))
+      | "fail" => pure (P2Session.fail s)
+      | k => throw s!"no P2 event kind {k}"
+    results := results.push (resultJ r)
+    s := s'
+  pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
@@ -756,6 +793,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),
-  ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn)]
+  ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
+  ("p2_session", p2SessionFn)]
 
 end RemoteAudit.Difftest

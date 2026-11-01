@@ -424,3 +424,141 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
     assert parts == [[list(SECURITY)], [["pytest"]], [[]], []], "an unsharded check sends none"
+
+
+def _records_run(tmp_path, monkeypatch, rc: int = 0) -> tuple[Path, list[list[str]]]:
+    """`check.py --cc-records` in a recorded run, circuit-check stubbed: it stores one record in its ``--cache`` and exits
+    ``rc``.  (the run dir, each circuit-check it ran)."""
+    real, ran = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[1:3] == ["-m", "circuit_check"]:
+            ran.append(cmd)
+            rec = Path(cmd[cmd.index("--cache") + 1]) / "v9" / "abc" / "e1.json"
+            rec.parent.mkdir(parents=True)
+            rec.write_text('{"key": "k"}')
+            Path(cmd[cmd.index("--out") + 1]).write_text("{}")
+            return subprocess.CompletedProcess(cmd, rc)
+        return real(cmd, *a, **k)
+
+    run_dir = tmp_path / "records-run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261030-000000-cc00")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
+    monkeypatch.setattr(subprocess, "run", run)
+    assert CHECK.main(["--keep-going", "--cc-records"]) == (0 if rc == 0 else rc)
+    monkeypatch.setattr(subprocess, "run", real)
+    return run_dir, ran
+
+
+def test_the_records_step_builds_circuit_checks_records_once_and_tars_them_with_the_tree_they_were_built_from(tmp_path, monkeypatch):
+    """`--cc-records`: one `circuit-check --all --records-only` into a fresh cache, tarred under $OUT with this tree's id, its
+    sha256 in a valid result; a failed build leaves no tarball, and the result says it failed."""
+    import hashlib
+    import tarfile
+
+    from research import result as RES
+
+    run_dir, ran = _records_run(tmp_path, monkeypatch)
+    [cc] = ran
+    assert cc[3:6] == ["--all", "--records-only", "-q"] and "--catalog-units" not in cc and "--shard" not in cc
+    r = RES.check(run_dir, "r20261030-000000-cc00")
+    assert r.valid and r.validation_status == "passed" and r.doc["kind"] == CHECK.CC_RECORDS_KIND, r.errors
+    tar, tree = run_dir / CHECK.CC_RECORDS, CHECK._rev("HEAD^{tree}")
+    assert r.doc["records"] == {"path": CHECK.CC_RECORDS, "sha256": hashlib.sha256(tar.read_bytes()).hexdigest(), "tree": tree}
+    with tarfile.open(tar) as t:
+        assert t.extractfile(CHECK.CC_RECORDS_TREE).read().decode() == tree + "\n"
+        assert t.extractfile("cache/v9/abc/e1.json").read() == b'{"key": "k"}'
+    (tmp_path / "failed").mkdir()
+    run_dir, ran = _records_run(tmp_path / "failed", monkeypatch, rc=1)
+    assert len(ran) == 1 and not (run_dir / CHECK.CC_RECORDS).exists()
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert doc["validation"]["status"] == "failed" and "records" not in doc
+    assert CHECK.main(["--cc-records", "--no-cache"]) == 2, "it takes no other flag"
+
+
+def test_a_shard_takes_the_records_artifact_only_with_its_digest_and_this_tree(tmp_path, monkeypatch):
+    """`--cc-records-from ART@SHA256`: the tarball fetched from ART goes into circuit-check's cache only when its bytes have
+    that sha256 and it was built from this tree; anything else is refused by name, and nothing goes in."""
+    import hashlib
+    import io
+    import tarfile
+
+    run_dir, _ = _records_run(tmp_path, monkeypatch)
+    tar = run_dir / CHECK.CC_RECORDS
+    sha = hashlib.sha256(tar.read_bytes()).hexdigest()
+    fetched = []
+
+    def fetch(art, d, src=tar):
+        fetched.append(art)
+        (got := d / "got.tar.gz").write_bytes(src.read_bytes())
+        return got
+
+    cache = tmp_path / "check" / "circuit-check"
+    other = tmp_path / "other.tar.gz"
+    with tarfile.open(other, "w:gz") as t:
+        info = tarfile.TarInfo(CHECK.CC_RECORDS_TREE)
+        info.size = len(b"0" * 40 + b"\n")
+        t.addfile(info, io.BytesIO(b"0" * 40 + b"\n"))
+    osha = hashlib.sha256(other.read_bytes()).hexdigest()
+    assert CHECK.cc_records_in(f"art:r1@{'0' * 64}", cache, fetch) == f"its bytes' sha256 is {sha}, not {'0' * 64}"
+    why = CHECK.cc_records_in(f"art:r2@{osha}", cache, lambda art, d: fetch(art, d, other))
+    assert why.startswith("it was built from tree 000000000000, and this tree is ")
+    assert CHECK.cc_records_in("art:r3", cache, fetch) == "art:r3 is not ART@SHA256"
+    assert "can't be fetched (OSError: gone)" in CHECK.cc_records_in(f"art:r4@{sha}", cache, lambda art, d: (_ for _ in ()).throw(OSError("gone")))
+    assert not cache.exists() or not list(cache.rglob("*.json")), "nothing refused goes in"
+    assert CHECK.cc_records_in(f"art:r5@{sha}", cache, fetch) is None
+    assert (cache / "v9" / "abc" / "e1.json").read_text() == '{"key": "k"}' and fetched == ["art:r1", "art:r2", "art:r5"]
+    assert [p.name for p in cache.parent.iterdir()] == ["circuit-check"], "its scratch is gone"
+
+
+def test_each_shard_holding_circuit_check_starts_from_the_records_and_one_refused_runs_nothing(tmp_path, monkeypatch, capsys):
+    """Drive gives every shard of its after-landing run the records step's artifact: each that holds a part of circuit-check
+    unpacks it into circuit-check's cache before its steps; a shard without one ignores it; a refusal exits 2 before any step,
+    as does an artifact where circuit-check keeps no cache."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261030-000000-abcd")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
+    monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+    ran, took, why = [], [], [None]
+    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only, *a: ran.append(only) or (True, []))
+    monkeypatch.setattr(CHECK, "cc_records_in", lambda spec, cache: took.append((spec, cache)) or why[0])
+    art = f"art:abc@{'1' * 64}"
+    steps = ",".join(j.name for j in CHECK.JOBS)
+    for k in range(1, 5):
+        argv = ["--deferred", steps, "--shard", f"{k}/4", "--keep-going", "--no-cache", "--circuit-cache", "--cc-records-from", art]
+        assert CHECK.main(argv) == 0
+    assert took == [(art, CHECK.cache_dir() / "circuit-check")] * 4 and len(ran) == 4
+    assert all(f"circuit-check:{k}/4" in only for k, only in enumerate(ran, 1))
+    took.clear()
+    assert CHECK.main(["--deferred", "pytest", "--shard", "3/4", "--cc-records-from", art]) == 0 and not took
+    why[0] = "it was built from tree 000000000000, and this tree is 111111111111"
+    assert CHECK.main(["--deferred", steps, "--shard", "2/4", "--cc-records-from", art]) == 2 and len(ran) == 5
+    assert f"--cc-records-from {art} refused: {why[0]}" in capsys.readouterr().err
+    assert CHECK.main(["--deferred", steps, "--shard", "2/4", "--no-cache", "--cc-records-from", art]) == 2 and len(ran) == 5
+    assert "circuit-check reuses no cache here" in capsys.readouterr().err
+
+
+def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory(monkeypatch):
+    """`--record --cc-records`: recorded without the check tool (no gate reads it), in a train slot's memory as circuit-check
+    takes, with no upstream build, Lean dependencies or gathered verdicts."""
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(CHECK, "landable", lambda base: True)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: (_ for _ in ()).throw(AssertionError("Lean dependencies sent")))
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: (_ for _ in ()).throw(AssertionError("verdicts gathered")))
+    monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot"])
+    assert CHECK.record(["--base", "HEAD", "--agreement", "--on", "vy-x", "--priority", "--keep-going", "--cc-records"]) == 0
+    [cmd] = launched
+    head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
+    assert "--tool" not in head and "flock_upstream=" not in " ".join(head)
+    assert f"{CHECK.SLOT.MIN_MEM_ENV}={CHECK.TRAIN_GB}" in head and tail[0] == "slot" and tail[-2:] == ["--keep-going", "--cc-records"]

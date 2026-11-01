@@ -4,7 +4,7 @@
 * `BodyTiling` / `Tiling` -- the structural description `validate_partition`'s fast path reads; `materialise` turns a
   tiling into the family it induces, so the fast path can be checked
   against the interval sweep on the same sets;
-* `OracleBoundary` -- `w_out` from the explicit oracle `GateSelection.out` (gate widths from the producing primitive),
+* `OracleBoundary` -- `w_out` from the explicit oracle `query_ast.oracle_out` (gate widths from the producing primitive),
   with an adjustable slack on the bound and an optional "exact is Unsupported" mode;
 * two small Programs: `gemm_program()` (`Gemm_v1{K=32,N=6}`: Input batches, a composite batch, nested calls) and
   `synth_program(N)` (a pair of zip-able batches, a constant, a scan).
@@ -16,7 +16,8 @@ from dataclasses import dataclass, field
 from typing import Any, Iterator
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.layout import Scope, GateSelection
+from verity.ml.circuits.layout import Scope
+from verity.ml.circuits.query_ast import GateSet, oracle_out
 from verity.ml.circuits.parts import Part, Unsupported, n_members
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
@@ -273,7 +274,7 @@ def family_of(program: Program, tiling: Tiling, with_tiling: bool = True) -> Stu
 
 
 class OracleBoundary:
-    """`w_out(part)` = sum of `ret.w` over `GateSelection(circuit, gates).out` (the oracle); `w_out_bound` = exact +
+    """`w_out(part)` = sum of `ret.w` over `query_ast.oracle_out` of the part (the oracle); `w_out_bound` = exact +
     `slack` (a deliberately loose sound bound).  `exact_unsupported=True` makes `w_out` return Unsupported."""
 
     def __init__(self, program: Program, slack: int = 0, exact_unsupported: bool = False) -> None:
@@ -282,8 +283,7 @@ class OracleBoundary:
 
     def _exact(self, part: Part) -> int:
         C = self.program.circuit
-        gates = [g for lo, hi in part.intervals() for g in range(lo, hi)]
-        return sum(C.gate(g).prim.ret.w for g in GateSelection(C, gates).out)
+        return sum(C.gate(g).prim.ret.w for g in oracle_out(C, GateSet((part,))))
 
     def w_out_bound(self, part: Part) -> int:
         self.calls["bound"] += 1

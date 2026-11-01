@@ -8,7 +8,8 @@ the whole `Verdict` back. This is what `benchmarks/pous/memory_challenger/live.p
 replay of its records reads (`verdict.py` beside this package is the Python call). The input is one object:
 
 * `signed`: `SignedSession.to_json()`;
-* `commitment`: `SessionCommitment.to_json()`, the commitment published before the session;
+* `commitment`: `SessionCommitment.to_json()`, the commitment the device builds before the session and releases once
+  it is signed;
 * `openings`: `[CoinOpening.to_json(), …]`;
 * `expected`: `{"<i>": hex, …}`, `block_digest` of block `i` of `C` for the blocks the caller has it for (the blocks the
   rounds name are enough: `verdict` reads no other);
@@ -28,7 +29,7 @@ open Lean (Json)
 open Flock
 
 /-- `verdict`'s inputs, decoded. -/
-structure Record where
+structure JudgeInputs where
   signed : SignedSession
   commitment : SessionCommitment
   openings : Array CoinOpening
@@ -36,12 +37,12 @@ structure Record where
   trusted : Array ByteArray
   schemes : Array String
 
-def Record.toJson (r : Record) : Json :=
+def JudgeInputs.toJson (r : JudgeInputs) : Json :=
   Json.mkObj [("commitment", r.commitment.toJson), ("expected", r.expected.toJson),
     ("openings", .arr (r.openings.map CoinOpening.toJson)), ("schemes", .arr (r.schemes.map Json.str)),
     ("signed", r.signed.toJson), ("trusted", .arr (r.trusted.map fun b => .str (hexOf b)))]
 
-def Record.ofJson (j : Json) : V Record := do
+def JudgeInputs.ofJson (j : Json) : V JudgeInputs := do
   let ctx := "record"
   pure { signed := ← SignedSession.ofJson (← J.get j "signed" ctx),
          commitment := ← SessionCommitment.ofJson (← J.get j "commitment" ctx),
@@ -61,11 +62,11 @@ def Verdict.toJson (v : Verdict) : Json :=
     ("wrong", Lean.toJson v.wrong)]
 
 /-- The verdict on a record. -/
-def judge (r : Record) : V Verdict := do
+def judge (r : JudgeInputs) : V Verdict := do
   let schemes ← schemesOf r.schemes
   pure (verdict schemes r.trusted.toList r.expected.find r.signed r.commitment r.openings)
 
 def verdictFn (j : Json) : V Json := do
-  pure (Verdict.toJson (← judge (← exactly Record.ofJson Record.toJson j)))
+  pure (Verdict.toJson (← judge (← exactly JudgeInputs.ofJson JudgeInputs.toJson j)))
 
 end MemoryChallenger.Judge

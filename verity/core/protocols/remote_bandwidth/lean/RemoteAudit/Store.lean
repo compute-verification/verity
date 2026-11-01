@@ -20,7 +20,8 @@ pin        UTF-8; JSON, else JSON lines (split at "\n", a line of spaces, tabs a
            nonempty name, a nonempty {file: SHA-512 hex} (no "/", no leading "."), checkpoint_sha512 its digest, and
            config.json and a .safetensors file among the files
 digest     SHA512(canonical JSON of {file: SHA-512 hex}): keys sorted by code point, "," and ":", ensure_ascii
-salt_j     SHAKE256("verity/store/salt/v0\0" ‖ key ‖ SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j), 192 bytes
+salt_j     XOF(m)[0 : 192], m = "verity/store/salt/v1\0" ‖ key ‖ SHA512("verity/remote-session/payload-salts/v0") ‖
+           u64be j, XOF(m) = SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ … (`Codec.xof`)
 root       payload_domain(node, N)'s tree, N = E·A + H: leaf j hidden_digest(d, salt_j), d block j's digest in its
            arena (j mod A < W) or a zero block's, then pad leaves up to 2^depth N
 hold       the hello's N at least E·A, its layout (if any) the store's regions, its node 1 to 64 bytes, its payload
@@ -42,12 +43,13 @@ namespace RemoteAudit.Store
 open Lean (Json)
 open Flock
 
-def SALT_DOMAIN : ByteArray := tag0 "verity/store/salt/v0"
+def SALT_DOMAIN : ByteArray := tag0 "verity/store/salt/v1"
 def PAYLOAD_LABEL : ByteArray := sha512 "verity/remote-session/payload-salts/v0".toUTF8
 
-/-- `store_salt(key, label, c)`, SHAKE256 with its lanes unboxed (`Unboxed.shake256`): one a block of the store. -/
+/-- `store_salt(key, label, c)`, SHA-512 in counter mode (`Codec.xof`, as `Unboxed.xof` computes it): one a block of
+the store. -/
 def storeSalt (key label : ByteArray) (c : Nat) : ByteArray :=
-  Unboxed.shake256 (SALT_DOMAIN ++ key ++ label ++ be 8 c) SALT_BYTES
+  Unboxed.xof (SALT_DOMAIN ++ key ++ label ++ be 8 c) SALT_BYTES
 
 private def hex4 (n : Nat) : String :=
   let d := fun (k : Nat) => let x := (n >>> (4 * k)) % 16; if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
@@ -257,10 +259,6 @@ letters alone. -/
 def reprRegions (rs : Array Region) : String :=
   "[" ++ ", ".intercalate ((rs.toList.take 4).map fun (k, t, f, n) => s!"('{k}', '{t}', {f}, {n})") ++ "]"
 
-/-- `payload_domain(node, N)`. -/
-def payloadDomain (node : ByteArray) (blocks : Nat) : FrameV3.Domain :=
-  FrameV3.Domain.make (sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 blocks
-
 /-- `codec.digest` of a block of zeros. -/
 def ZERO_DIGEST : ByteArray := Codec.digest (zeros Codec.BLOCK_BYTES)
 
@@ -272,7 +270,7 @@ def weightsOf (digests : ByteArray) : Nat := digests.size / 64
 
 /-- Leaf `j` of the payload tree over `N` blocks, `engines` arenas of `arenaBlocks` (each its weights blocks, `digests`
 64 bytes a block, then zeros) and then zeros, salted under `key`; a pad leaf past `N`. -/
-def payloadLeaf (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (j : Nat) : ByteArray :=
+def payloadLeaf (d : FV3.Sha512.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (j : Nat) : ByteArray :=
   if j ≥ N then d.pad j
   else
     let W := weightsOf digests
@@ -282,7 +280,7 @@ def payloadLeaf (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key 
 
 /-- `store._up(dom, level, height, first)`: a level of nodes at `height`, the first of them under leaf `first`,
 climbed to its root. -/
-def climbUp (d : FrameV3.Domain) (level : Array ByteArray) (height first : Nat) : ByteArray := Id.run do
+def climbUp (d : FV3.Sha512.Domain) (level : Array ByteArray) (height first : Nat) : ByteArray := Id.run do
   let mut level := level
   let mut h := height
   for _ in [0:level.size] do
@@ -293,7 +291,7 @@ def climbUp (d : FrameV3.Domain) (level : Array ByteArray) (height first : Nat) 
   return level[0]!
 
 /-- `store._subtree`: the root of the subtree over leaves `first … first + 2^log2 − 1`. -/
-def subtree (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (first log2 : Nat) :
+def subtree (d : FV3.Sha512.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (first log2 : Nat) :
     ByteArray :=
   climbUp d ((Array.range (2 ^ log2)).map fun i => payloadLeaf d engines arenaBlocks N digests key (first + i)) 0 first
 
@@ -305,7 +303,7 @@ def expectedRoot (engines arenaBlocks hostBlocks : Nat) (digests node key : Byte
     (chunkLog2 : Nat := CHUNK_LOG2) : ByteArray :=
   let N := engines * arenaBlocks + hostBlocks
   let d := payloadDomain node N
-  let height := FrameV3.depth N
+  let height := log2ceil N
   let c := min chunkLog2 height
   let chunks := 2 ^ (height - c)
   let w := max 1 (min workers chunks)

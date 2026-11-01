@@ -44,10 +44,4 @@ theorem EndToEndRegisteredDrawnFlat : Flock.Guarantees.EndToEndRegisteredDrawnFl
   intro n Reg I ht own c hc
   exact EndToEndRegisteredDrawn n Reg I ht own (.single c) (Flock.Desc.parse_single hc)
 
-/-- `EndToEndRegisteredPerTest` gives its flat form, at `Desc.single c`. -/
-theorem EndToEndRegisteredPerTestFlat_of (h : Flock.Guarantees.EndToEndRegisteredPerTest) :
-    Flock.Guarantees.EndToEndRegisteredPerTestFlat := by
-  intro n Reg I ht own c hc
-  exact h n Reg I ht own (.single c) (Flock.Desc.parse_single hc)
-
 end Flock.SecurityProofs

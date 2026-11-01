@@ -53,6 +53,32 @@ def test_a_tree_is_discovered_and_keyed_from_gits_view_of_it(tmp_path, monkeypat
     assert S.object_ids(S.worktree(), ["pkg"])["pkg"] != before["pkg"]
 
 
+def test_a_clone_another_step_has_not_checked_out_yet_is_left_out_of_the_tree(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    before = S.object_ids(S.worktree(), ["a.py", "clone"])
+    (tmp_path / "clone").mkdir()
+    _git(tmp_path / "clone", "init", "-q")                     # a clone in flight: no commit checked out yet
+    (tmp_path / "a.py").write_text("a = 2\n")
+    after = S.object_ids(S.worktree(), ["a.py", "clone"])
+    assert after["clone"] == "absent" and after["a.py"] != before["a.py"], "the rest of the tree is still read"
+
+
+def test_any_other_error_of_git_add_is_raised_with_its_message(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    (tmp_path / ".git" / "objects").chmod(0o500)
+    try:
+        if os.access(tmp_path / ".git" / "objects", os.W_OK):
+            pytest.skip("this user writes through read-only modes (root)")
+        with pytest.raises(RuntimeError, match=r"git add -A.*\n.*"):
+            S.worktree()
+    finally:
+        (tmp_path / ".git" / "objects").chmod(0o700)
+
+
 def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = []\n')
     S = _suites(monkeypatch, tmp_path)
@@ -704,6 +730,7 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests" / "fixtures").mkdir(parents=True)
@@ -779,6 +806,7 @@ def _per_test_workspace(root: Path) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests").mkdir(parents=True)
@@ -811,6 +839,7 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text(f'[tool.uv.workspace]\nmembers = {list(members)!r}\n'.replace("'", '"'))
     for path, test in members.items():
@@ -1415,6 +1444,7 @@ def _traced_workspace(root: Path) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
@@ -1476,6 +1506,7 @@ def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_t
     root, lib = tmp_path / "tree", tmp_path / "tree" / "lib"
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
@@ -1817,6 +1848,20 @@ def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_p
     assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
     assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
     assert S.serial_slots([], 3, 32, 16) == 0
+
+
+def test_the_suites_in_one_process_leave_the_parallel_suites_half_the_memory(tmp_path, monkeypatch):
+    """A parallel suite's workers are fixed when it starts, which is before the one-process suites finish: 16 serial lanes at
+    TEST_PROCESS_GB took 144 of a 150 GB check's GB for the whole run, and flock ran on one 16 GB worker. Half of 150 GB holds
+    8 serial lanes (72 GB), so flock gets 78 // 16 = 4 workers, and the two together still fit in --mem-gb."""
+    S = _suites(monkeypatch, tmp_path)
+    flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
+    assert S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90) == 16
+    r = S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90, 150)
+    assert r == 8 and S.wide_gb(150, r) == 150 - 8 * S.TEST_PROCESS_GB
+    assert S.wide_workers(flock, 90 - r, S.wide_gb(150, r)) == 4 and S.wide_workers(flock, 74, S.wide_gb(150, r)) == 4
+    assert r * S.TEST_PROCESS_GB + 4 * 16 <= 150
+    assert S.serial_slots([5.0] * 48, 0, 48, 150) == 150 // S.TEST_PROCESS_GB, "with no parallel suite they may take all of it"
 
 
 def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):

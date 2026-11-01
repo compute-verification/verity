@@ -25,7 +25,7 @@ def AccelProductForm (x : Accel.Open) : Prop := x.ProductForm
 ceiling, takes every content `M` of its stores with `D M` to `f M` within `T` seconds. Then for some semantics `x`
 meeting P1 and P2 (the card's own: what its instructions compute), some program of the machine at `c` and `x`, with a
 schedule chosen before the content as the card's code is, takes every such `M` to `f M` within `T` seconds
-(`Machine.Fits`). It holds because every instruction the card executes is dominated by an ACCEL op (`Accel.Op`)
+(`Machine.Fits`). It holds because every instruction the card executes is dominated by an ACCEL op (`Accel.Opcode`)
 reading and writing at least its words, at no more units of each resource (the coverage table,
 `benchmarks/pouw/machine_model/data/cover/rows.toml`), and the model's coarsenings (pooling, no latency, no per-clock
 limit, free resources) only let a program do more. A table is a SKU's at its firmware's maximum (`Accel.H200`,
@@ -39,8 +39,8 @@ node's host CPUs and links are other devices of the period (`Pouw.Dither.Others`
 
 Open: an exclusion is a second adversary class until it has a rate row or a proof that the model dominates it.
 sm_120's RT cores (at most 58 integer products a SM-clock, 6% of its `s8` rate) and the texture path (at most 64
-products a SM-clock, 6% on sm_120 and 1.6% on the H200) exceed the headline's served margins,
-3.9% on sm_120 and 2.6% on the H200. -/
+products a SM-clock, 6% on sm_120 and 1.7% on the H200, 1.6% with its tensor at 1980 MHz) exceed the headline's
+served margins, 3.9% on sm_120 and 2.6% on the H200. -/
 def CardWithinAccel (c : Accel.Card) (can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop) : Prop :=
   ∃ x : Accel.Open, c.Exact x ∧ AccelProductForm x ∧
     ∀ f T D, can f T D → ∃ (P : (Accel.Machine.mk c x).Prog ℕ) (sched : List ℕ),

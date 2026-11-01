@@ -1,12 +1,13 @@
-"""The sample: the verifier's own coins pick the proof blocks to prove, sent in the clear after registration and before the session.
+"""The sample: the challenger's coins pick the proof blocks to prove, sent in the clear after registration and before the session.
 
     {"law": "subset", "population": N, "k": K, "units": [<ascending proof block indices>]}
     {"law": "bernoulli", "population": N, "p": "NUM/DEN", "units": [...]}
     {"law": "stratified", "population": N, "k": K, "strata": [<stratum>, ...], "units": [...]}
     {"law": "work", "population": N, "k": K, "strata": [<work stratum>, ...], "units": [...], ["closure": [...]]}
 
-This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. The verifier samples it from the operating system's
-randomness (Lean `flock-verify draw`, or `flock-circuit serve --draw`, live); nothing here samples, and no sample is derived from a
+This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the auditor's
+challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` without `--stream` still samples the
+operating system's randomness (`Flock.Draw`'s OS draw); nothing here samples, and no sample is derived from a
 commitment. `check_draw` holds a sample to the registration and to the verifier's own sampling design, and `check_proved` holds the
 proved statement's proof blocks to the sample.
 
@@ -48,6 +49,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
+from verity.core.protocols.profile import work_k
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
@@ -110,12 +112,6 @@ def rate_count(num: int, den: int, tables: int, n: int) -> int:
 def stratum_k(k: int, size: int, population: int) -> int:
     """A stratum's sample under the stratified rule: max(1, round(k * size / population)), rounding half up."""
     return max(1, (2 * k * size + population) // (2 * population))
-
-
-def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's draw under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
-    at most `size`."""
-    return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
 def work_table(table: Mapping[str, Any]) -> dict[str, tuple[int, int]]:

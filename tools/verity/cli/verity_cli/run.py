@@ -1,25 +1,41 @@
 """`verity run` and `verity config`: a deployment configuration's parties, run on this machine, and the file itself
-(`verity.core.deploy.config`; `note:memory-accounting/20261026T2305Z-draft-deployment-api-v3`, addenda 23:46Z to 00:30Z).
+(`verity.core.deploy.config`).
 
-    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
+    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR] [--bindings FILE] [--dry-run]
     verity config new --workload W --protocols P,... [--on MACHINE] [--out FILE]
     verity config check CONFIG
     verity config hash CONFIG
 
-`verity run` checks the configuration, then runs the parties it places on this machine (``--on``, default
-``local``), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state ``--state`` (default
-a new directory under the system's temporary one). Step 0's parties are those of the static table `REGISTRY` names.
-It names none since the toy it ran was removed, so `verity run` and `verity config` are refused by name (``no-table``)
-until a workload's protocols bring their table; `verity_cli`'s tests run one (`tools/verity/cli/tests/step0.py`). A
-party that is an entry there, a function of the configuration, the state and
+`verity run` checks the configuration, refusing any set of subprotocols that is neither remote's nor onsite's
+(``composite``, `verity.core.deploy.config.COMPOSITES`: protocol soundness covers only those two composites), then runs
+the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
+periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
+parties are those of the static table `REGISTRY` names: the served window's (`examples/onsite_served/served_table.py`);
+`verity_cli`'s tests also run the toy's (`tools/verity/cli/tests/step0.py`). With no table, `verity run` and
+`verity config` are refused by name (``no-table``).
+
+``--bindings FILE`` gives the deploy bindings: the hosts, addresses and gate commands the table's pieces reach the
+parties by, which the configuration never states, so binding another host changes no hash. It is TOML, a table per
+party and in it a table per listed subprotocol that declares that party, of strings and integers
+(``[memory-challenger.pous] address = "HOST:PORT"``); one naming another party or subprotocol is refused by name
+(``binding``). They are kept beside the run (``STATE/bindings.json``), never in its record.
+
+``--dry-run`` runs nothing: it prints a ``PLAN`` line for each party it would run (without ``--on``, the ``--party``
+ones wherever they are placed, else every party of the configuration), its machine and each entry (a table's entry
+describes itself: its subprotocol, its scripts, the variables it sets, the bindings it lacks), a ``CHANNEL`` line for
+each channel, and a ``DRY`` line of the counts and every unbound binding. A listed subprotocol with no entry for a party
+it declares is refused ``no-party``, an entry whose script isn't in the tree ``no-piece``, and, with ``--bindings``, a
+binding an entry needs that the file lacks ``unbound``.
+
+A party that is an entry there, a function of the configuration, the state and
 whether every party is on one machine, runs first, each in a process of its own, one after another in the table's
 order, its output in ``STATE/logs/<party>.log``; one that fails stops the run. Then the table's live parties here
 (sampled proofs', the core parties) run together in one live run of the deployment layer (the table's ``live``): in
 this process when all of them are here, else meeting the rest over TCP at the configuration's ``address`` and
 ``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
 
-When the verifier runs here, each period's verdict is its own: the product over exactly the listed components, printed
-as a line and written to ``STATE/record/verdicts.jsonl``:
+When the verifier runs here, each period's verdict is its own: the composite of the listed subprotocols (remote or
+onsite, its id the line's ``product``), printed as a line and written to ``STATE/record/verdicts.jsonl``:
 
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
@@ -59,10 +75,13 @@ from verity.core.wire import Refused
 from . import settings
 
 ROOT = Path(__file__).resolve().parents[4]
-#: step 0's static table: the directory on its import path, and its module (module docstring)
-REGISTRY: tuple[Path, str] | None = None
-#: what isn't an entry's message in the state: the build, the logs, the transcripts, the run and the tools it names
-UNSENT = ("build", "logs", "transcripts", "run.json", "tools.json", "record/transcripts", "record/verdicts.jsonl")
+#: the static table: the directory on its import path, and its module (module docstring)
+REGISTRY: tuple[Path, str] | None = (ROOT / "examples" / "onsite_served", "served_table")
+#: the deploy bindings `begin` keeps beside the run (module docstring)
+BINDINGS = "bindings.json"
+#: what isn't an entry's message in the state: the build, the logs, the transcripts, the run, its bindings and the tools
+UNSENT = ("build", "logs", "transcripts", "run.json", BINDINGS, "tools.json", "record/transcripts",
+          "record/verdicts.jsonl")
 PUBLIC = ("record/", "public/")
 VERIFIER = "verifier"
 Entry = Callable[[Mapping[str, Any], Path, bool], int]
@@ -82,17 +101,18 @@ class Registry:
     live: Callable[[Mapping[str, Any], Path, Sequence[str]], Any]
 
     def entries(self, cfg: Mapping[str, Any], party: str) -> list[tuple[str, Entry | str]]:
-        """``party``'s entries under ``cfg``: the workload's party, or each listed component's that declares it, a
-        component's after those it requires; refused by name where a component has none yet."""
+        """``party``'s entries under ``cfg``: the workload's when it is the workload's party, then each listed
+        subprotocol's that declares it, a subprotocol's after those it requires; refused by name where a subprotocol has
+        none yet."""
         w = cfg["workload"]["name"]
-        if party in self.workloads[w].parties:
-            return [(w, self.workers[w])]
-        out = []
+        out: list[tuple[str, Entry | str]] = []
+        if any(r.name == party for r in self.workloads[w].parties):
+            out.append((w, self.workers[w]))
         for c in _required_first(cfg["protocols"], self.components):
-            if party in self.components[c].parties:
+            if any(r.name == party for r in self.components[c].parties):
                 if party not in self.parties.get(c, {}):
-                    raise K.Refused("no-party", f"{c} has no step-0 {party} yet: verity run runs "
-                                                f"{', '.join(sorted(self.parties))}")
+                    raise Refused("no-party", f"{c} has no step-0 {party} yet: verity run runs "
+                                              f"{', '.join(sorted(self.parties))}")
                 out.append((c, self.parties[c][party]))
         return out
 
@@ -121,8 +141,8 @@ def registry(table: tuple[Path, str] | None = None) -> Registry:
     """Step 0's table: ``table``, else `REGISTRY`; refused by name (``no-table``) when there is neither."""
     table = table or REGISTRY
     if table is None:
-        raise K.Refused("no-table", "step 0 has no table: the toy it ran was removed, and no workload's protocols "
-                                    "have brought theirs yet")
+        raise Refused("no-table", "step 0 has no table: the toy it ran was removed, and no workload's protocols "
+                                  "have brought theirs yet")
     path, module = table
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
@@ -147,29 +167,78 @@ def plan(cfg: Mapping[str, Any], reg: Registry, machine: str, wanted: Sequence[s
     every party the configuration places there; each with its entries (`Registry.entries`)."""
     at = placed(cfg)
     if unknown := [p for p in wanted if p not in at]:
-        raise K.Refused("unknown-party", f"{', '.join(unknown)} (the configuration's: {', '.join(at)})")
+        raise Refused("unknown-party", f"{', '.join(unknown)} (the configuration's: {', '.join(at)})")
     if elsewhere := [p for p in wanted if at[p] != machine]:
-        raise K.Refused("machine", ", ".join(f"{p} runs on {at[p]}, not {machine} (--on)" for p in elsewhere))
+        raise Refused("machine", ", ".join(f"{p} runs on {at[p]}, not {machine} (--on)" for p in elsewhere))
     chosen = list(dict.fromkeys(wanted)) or [p for p, m in at.items() if m == machine]
     if not chosen:
-        raise K.Refused("machine", f"the configuration places no party on {machine} (its machines: "
-                                   f"{', '.join(sorted(set(at.values())))})")
+        raise Refused("machine", f"the configuration places no party on {machine} (its machines: "
+                                 f"{', '.join(sorted(set(at.values())))})")
     for p in chosen:
         reg.entries(cfg, p)
     rank = {p: i for i, p in enumerate(reg.order)}
     return sorted(chosen, key=lambda p: (rank.get(p, len(rank)), list(at).index(p)))
 
 
+def bindings(path: Path | None, cfg: Mapping[str, Any], reg: Registry) -> dict[str, dict[str, dict[str, Any]]]:
+    """The deploy bindings at ``path`` (module docstring), checked against ``cfg``; refused by name (``toml``,
+    ``binding``)."""
+    if path is None:
+        return {}
+    got = K.parse(path.read_text())
+    parties = {p["name"] for p in cfg["party"]}
+    for party, tables in got.items():
+        if party not in parties:
+            raise Refused("binding", f"{path} binds {party}, which the configuration has no party of (its parties: "
+                                     f"{', '.join(sorted(parties))})")
+        mine = [c for c in cfg["protocols"] if any(r.name == party for r in reg.components[c].parties)]
+        if not isinstance(tables, Mapping) or not all(isinstance(t, Mapping) for t in tables.values()):
+            raise Refused("binding", f"{path}: [{party}] holds a table per component ([{party}.COMPONENT])")
+        if extra := sorted(set(tables) - set(mine)):
+            raise Refused("binding", f"{path} binds {party} for {', '.join(extra)}, not a listed component that "
+                                     f"declares it ({', '.join(mine) or 'none'})")
+        for c, t in tables.items():
+            if bad := sorted(k for k, v in t.items() if type(v) not in (str, int)):
+                raise Refused("binding", f"{path}: {party}.{c}'s {', '.join(bad)} are strings or integers")
+    return {p: {c: dict(t) for c, t in tables.items()} for p, tables in got.items()}
+
+
+def describe(cfg: Mapping[str, Any], component: str, entry: Entry | str, bound: Mapping[str, Any]) -> dict[str, Any]:
+    """An entry as the dry run prints it: its own ``describe(cfg, bindings)`` when it has one."""
+    if hasattr(entry, "describe"):
+        return {"component": component, **entry.describe(cfg, bound)}
+    return {"component": component, "entry": "live" if not callable(entry) else getattr(entry, "__name__", "entry")}
+
+
+def dry(cfg: Mapping[str, Any], reg: Registry, chosen: Sequence[str], bound: Mapping[str, Any]) -> list[str]:
+    """The dry run (module docstring): every party of ``chosen`` resolved with its entries, every channel; the
+    bindings still unbound. Refused by name (``no-piece``) where an entry's script is missing."""
+    at, principal = placed(cfg), {p["name"]: p["principal"] for p in cfg["party"]}
+    plans = [{"party": p, "machine": at[p], "principal": principal[p],
+              "entries": [describe(cfg, c, e, bound) for c, e in reg.entries(cfg, p)]} for p in chosen]
+    if missing := sorted({f"{x['party']}'s {e['component']} piece: {s}" for x in plans for e in x["entries"]
+                          for s in e.get("missing", ())}):
+        raise Refused("no-piece", f"not in the tree: {'; '.join(missing)}")
+    for x in plans:
+        say("PLAN", x)
+    for c in cfg["channel"]:
+        say("CHANNEL", {"from": c["from"], "to": c["to"], "messages": c["messages"], "after": c["after"]})
+    unbound = sorted({u for x in plans for e in x["entries"] for u in e.get("unbound", ())})
+    say("DRY", {"configuration": K.digest(cfg), "parties": len(plans), "channels": len(cfg["channel"]),
+                "entries": sum(len(x["entries"]) for x in plans), "unbound": unbound})
+    return unbound
+
+
 def unmet(cfg: Mapping[str, Any], reg: Registry, head: str | None) -> list[str]:
     """The premises the run's placement leaves unmet (module docstring): each party that sends coins on a developer's
     party's machine, and a configured program commit other than the running tree's ``head``."""
     listed = [reg.components[c] for c in cfg["protocols"]]
-    parties, messages, channels = K.declared(listed, reg.workloads[cfg["workload"]["name"]])
+    parties, channels = K.declared(listed, reg.workloads[cfg["workload"]["name"]])
     at = placed(cfg)
-    sources = sorted({ch.source for ch in channels.values() if any(messages[m] == "coins" for m in ch.messages)})
+    sources = sorted({ch.sender for ch in channels.values() if ch.carries_coins})
     out = []
     for p in sources:
-        if shared := sorted(q for q, m in at.items() if m == at[p] and parties[q] == "developer"):
+        if shared := sorted(q for q, m in at.items() if m == at[p] and parties[q].principal == "developer"):
             out.append(f"{p} shares {at[p]} with the developer's {', '.join(shared)}: Faithful and Secret unmet")
     if head != cfg["program"]["commit"]:
         out.append(f"the program is the running tree's {head}, not the configured {cfg['program']['commit']}")
@@ -229,16 +298,20 @@ def head() -> str | None:
     return p.stdout.strip() if p.returncode == 0 else None
 
 
-def begin(cfg: Mapping[str, Any], state: Path, periods: int, machine: str, hooks: Iterable[str]) -> dict[str, Any]:
+def begin(cfg: Mapping[str, Any], state: Path, periods: int, machine: str, hooks: Iterable[str],
+          bound: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The run's ``run.json`` (module docstring), written before any party starts, or the one in ``state`` when it is
-    this configuration's run at ``periods`` (another machine's parties)."""
+    this configuration's run at ``periods`` (another machine's parties); the deploy bindings ``bound`` beside it."""
+    state.mkdir(parents=True, exist_ok=True)
+    if bound:
+        (state / BINDINGS).write_text(json.dumps(bound, indent=1, sort_keys=True))
     digest = K.digest(cfg)
     f = state / "run.json"
     if f.exists():
         run = json.loads(f.read_text())
         if run["configuration"] != digest or run["periods"] != periods:
-            raise K.Refused("state", f"{state} holds the run of configuration {run['configuration'][:16]}… at "
-                                     f"{run['periods']} periods, not {digest[:16]}… at {periods}")
+            raise Refused("state", f"{state} holds the run of configuration {run['configuration'][:16]}… at "
+                                   f"{run['periods']} periods, not {digest[:16]}… at {periods}")
         return run
     run = {"run": settings.run_id(), "periods": periods, "configuration": digest,
            "hooks": sorted(hooks), "parties": placed(cfg), "machine": machine}
@@ -313,7 +386,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
         return 0
     try:
         r = reg.live(cfg, state, here)
-    except (K.Refused, Refused) as e:
+    except Refused as e:
         print(f"verity run: refused {e.name}: {e.detail}", file=sys.stderr)
         return 2
     except OSError as e:
@@ -348,20 +421,33 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
                                  "machine (module docstring of verity_cli.run).")
     ap.add_argument("config", metavar="CONFIG")
     ap.add_argument("--party", action="append", default=[], metavar="ROLE", help="only this party (repeatable)")
-    ap.add_argument("--on", dest="machine", default=K.LOCAL, metavar="MACHINE", help="this machine's name in the configuration "
+    ap.add_argument("--on", dest="machine", metavar="MACHINE", help="this machine's name in the configuration "
                     f"(default {K.LOCAL})")
     ap.add_argument("--periods", type=int, default=1, metavar="N", help="the run's periods (default 1)")
     ap.add_argument("--state", metavar="DIR", help="the parties' shared state (default a new temporary directory)")
+    ap.add_argument("--bindings", metavar="FILE", help="the deploy bindings: hosts, addresses and gate commands (TOML)")
+    ap.add_argument("--dry-run", action="store_true", help="resolve every party, channel and entry, and run nothing")
     a = ap.parse_args(argv)
     if a.periods < 1:
         ap.error(f"--periods is at least 1, not {a.periods}")
-    state = Path(a.state or tempfile.mkdtemp(prefix="verity-run-")).resolve()
     try:
         reg = reg or registry()
         cfg = load(Path(a.config), reg)
-        chosen = plan(cfg, reg, a.machine, a.party)
-        begin(cfg, state, a.periods, a.machine, hooks_of(cfg, reg))
-    except K.Refused as e:
+        bound = bindings(Path(a.bindings) if a.bindings else None, cfg, reg)
+        machine = a.machine or K.LOCAL
+        if a.dry_run:
+            at = placed(cfg)
+            if a.machine is None and (unknown := [p for p in a.party if p not in at]):
+                raise Refused("unknown-party", f"{', '.join(unknown)} (the configuration's: {', '.join(at)})")
+            unbound = dry(cfg, reg, plan(cfg, reg, machine, a.party) if a.machine else
+                          list(dict.fromkeys(a.party)) or list(at), bound)
+            if a.bindings and unbound:
+                raise Refused("unbound", f"{a.bindings} doesn't bind {', '.join(unbound)}")
+            return 0
+        state = Path(a.state or tempfile.mkdtemp(prefix="verity-run-")).resolve()
+        chosen = plan(cfg, reg, machine, a.party)
+        begin(cfg, state, a.periods, machine, hooks_of(cfg, reg), bound)
+    except Refused as e:
         print(f"verity run: refused {e.name}: {e.detail}", file=sys.stderr)
         return 2
     say("RUN", {"state": str(state), "parties": chosen, "configuration": K.digest(cfg), "periods": a.periods})
@@ -389,7 +475,8 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("new", help="a configuration that states only its choices")
     p.add_argument("--workload", required=True)
-    p.add_argument("--protocols", required=True, help="the components, comma-separated")
+    p.add_argument("--protocols", required=True, help="the subprotocols, comma-separated: remote's (sampled-proofs,pouw) "
+                   "or onsite's")
     p.add_argument("--on", dest="machine", default=K.LOCAL, metavar="MACHINE", help=f"every party's machine (default {K.LOCAL})")
     p.add_argument("--commit", help="the program's commit (default the running tree's HEAD)")
     p.add_argument("--out", help="write it here (default stdout)")
@@ -409,7 +496,7 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
                 sys.stdout.write(text)
             return 0
         cfg = load(Path(a.config), reg)
-    except K.Refused as e:
+    except Refused as e:
         print(f"refused {e.name}: {e.detail}")
         return 2
     print(f"ok {K.digest(cfg)}" if a.cmd == "check" else K.digest(cfg))

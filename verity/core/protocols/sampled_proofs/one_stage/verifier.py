@@ -12,9 +12,11 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
-  flip read), compared whole with the number of bytes read; the sample of record is the Lean's;
-* `coins`: those bytes themselves, the challenger's coins, which only the Lean reads from the operating system
-  (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a Lean that can't answer leaves no coins;
+  sample read), compared whole with the number of bytes read; the sample of record is the Lean's;
+* `coins`: the entropy a challenger flips its coins from (`challenger.LiveChallenger`, on the challenger's host), which
+  only the Lean reads from the operating system (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a
+  Lean that can't answer leaves no coins. The verifier reads none of it: its samples read the challenger's coins from its
+  log (`run`'s `coins`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`), which `Stream.outcome`
   passes in with everything it read on the way: compared whole;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
@@ -22,6 +24,12 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
   argument. Python's `delta` is a float, given to the Lean exactly (`str(Fraction(delta))`); the Lean writes it, and any
   float in the inputs, as Python's `repr` does. A float the Lean can't read back (`-0.0`, NaN, an infinity) makes the two
   disagree.
+
+`check`, `select` and `run` read the population program. The one server process (`_Server`) loads each program once and
+the calls after name it by its digest and annotations, so a session's checks, draws, runs and negatives on one program
+parse it once; each piece reads from a reference the program it would read from the descriptor (`Loaded.parse_ref`,
+under SHA-512's collision resistance), and a reference the process hasn't loaded is refused, never read as another
+program.
 
 Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`, which `test_verifier.py` holds this one to): Lake
 builds the path requires in place, and two builds at once would rewrite one module's C under each other. This package
@@ -40,7 +48,7 @@ import tempfile
 import threading
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.ml.circuits import codec
 from verity.ml.circuits.codec import canonical_json
@@ -80,12 +88,25 @@ def executable() -> Path:
     return PACKAGE / ".lake" / "build" / "bin" / EXE
 
 
-def _dumps(value: Any) -> str:
+class _Program:
+    """A program in a request to the Lean: written as its descriptor (`codec.encode_program`), or as `{"annotations",
+    "loaded"}` naming the one the server process has loaded (`_Server`, the Lean's `Loaded.ref?`)."""
+
+    __slots__ = ("program",)
+
+    def __init__(self, program: Program) -> None:
+        self.program = program
+
+
+def _dumps(value: Any, program: Callable[[Program], Any] = codec.encode_program) -> str:
     """`value` as one JSON line the Lean reads back as Python wrote it: a float of 10^16 or more, which Python writes in
-    exponent form and `Json.parse` would read as an integer, is written with its digits and `.0`."""
+    exponent form and `Json.parse` would read as an integer, is written with its digits and `.0`; a `_Program` is written
+    as `program` gives it."""
     nonce, big = secrets.token_hex(8), {}
 
     def walk(x: Any) -> Any:
+        if isinstance(x, _Program):
+            return walk(program(x.program))
         if isinstance(x, float) and math.isfinite(x) and abs(x) >= 1e16:
             token = f"\0{nonce}:{len(big)}\0"
             big[json.dumps(token)] = format(x, ".1f")
@@ -102,36 +123,87 @@ def _dumps(value: Any) -> str:
     return text
 
 
+#: The most programs one server process holds loaded; past it, the process ends and a fresh one loads anew.
+LOADED_MAX = 4
+
+
 class _Server:
-    """One `sampled-proofs-verifier serve` process per Python process (`Difftest.serve`: a request line, an answer line),
-    started at the first call and again after it dies."""
+    """One `sampled-proofs-verifier serve` process per Python process (`VerifierMain.main`: a request line, an answer line),
+    started at the first call and again after it dies. A request's program (`_Program`) is loaded into the process once
+    (`{"fn": "program"}`, `Loaded.Programs.load`) under its digest and annotations as this call writes them, and
+    named by them from then on (`{"annotations", "loaded"}`), so the process parses each program once rather than on every
+    call. The digest is the program's as it is at each call (`codec.program_digest`), so a reference names the program the
+    call passes; where the Lean refuses the program or answers another digest, the request carries the descriptor, as it
+    would have without the store."""
 
     def __init__(self) -> None:
         self._proc: subprocess.Popen | None = None
         self._stderr: Any = None
         self._lock = threading.Lock()
+        self._loaded: set[tuple[str, str]] = set()
+        self._named = False
+
+    def _start(self) -> None:
+        self._stderr = tempfile.TemporaryFile()
+        self._proc = subprocess.Popen([str(executable())], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                      stderr=self._stderr, text=True, encoding="utf-8")
+        self._loaded = set()
+
+    def _end(self) -> None:
+        if self._proc is not None and self._proc.poll() is None:
+            self._proc.stdin.close()
+            self._proc.wait()
+        self._proc = None
+        self._loaded = set()
+
+    def _exchange(self, fn: str, line: str) -> str:
+        """The process's answer line to `line`; raises `LeanError` where it ends first."""
+        try:
+            self._proc.stdin.write(line + "\n")
+            self._proc.stdin.flush()
+            reply = self._proc.stdout.readline()
+        except BrokenPipeError:
+            reply = ""
+        if not reply.endswith("\n"):
+            self._proc.kill()
+            self._proc.wait()
+            self._stderr.seek(0)
+            err = self._stderr.read().decode("utf-8", "replace")[-2000:]
+            self._proc = None
+            self._loaded = set()
+            raise LeanError(f"{EXE} ended on {fn}: {err}")
+        return reply
+
+    def _program(self, program: Program) -> Any:
+        """`program` as the request writes it: the reference to it, loaded first where this process hasn't loaded it, or
+        its descriptor."""
+        try:
+            digest = codec.program_digest(program)
+        except Exception:  # noqa: BLE001 - the descriptor raises as it would have, or is written whole
+            return codec.encode_program(program)
+        annotations = dict(program.annotations)
+        key = (digest, _dumps(annotations))
+        if key not in self._loaded:
+            if len(self._loaded) >= LOADED_MAX:
+                if self._named:
+                    return codec.encode_program(program)
+                self._end()
+                self._start()
+            desc = codec.encode_program(program)
+            reply = self._exchange("program", _dumps({"fn": "program", "input": desc}))
+            if reply != json.dumps({"output": digest}, separators=(",", ":")) + "\n":
+                return desc
+            self._loaded.add(key)
+        self._named = True
+        return {"annotations": annotations, "loaded": digest}
 
     def call(self, fn: str, value: Any) -> tuple[str, Any]:
         """`("output", JSON)` or `("reject", reason)`; anything else raises `LeanError`."""
-        line = _dumps({"fn": fn, "input": value})
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
-                self._stderr = tempfile.TemporaryFile()
-                self._proc = subprocess.Popen([str(executable())], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                              stderr=self._stderr, text=True, encoding="utf-8")
-            try:
-                self._proc.stdin.write(line + "\n")
-                self._proc.stdin.flush()
-                reply = self._proc.stdout.readline()
-            except BrokenPipeError:
-                reply = ""
-            if not reply.endswith("\n"):
-                self._proc.kill()
-                self._proc.wait()
-                self._stderr.seek(0)
-                err = self._stderr.read().decode("utf-8", "replace")[-2000:]
-                self._proc = None
-                raise LeanError(f"{EXE} ended on {fn}: {err}")
+                self._start()
+            self._named = False
+            reply = self._exchange(fn, _dumps({"fn": fn, "input": value}, self._program))
         try:
             msg = json.loads(reply)
         except ValueError:
@@ -143,12 +215,9 @@ class _Server:
         raise LeanError(f"{EXE} on {fn}: {reply[:500]}")
 
     def close(self) -> None:
-        """End the server: `Difftest.serve` stops at the end of its input."""
+        """End the server: `VerifierMain.main` stops at the end of its input."""
         with self._lock:
-            if self._proc is not None and self._proc.poll() is None:
-                self._proc.stdin.close()
-                self._proc.wait()
-            self._proc = None
+            self._end()
 
 
 _server = _Server()
@@ -170,9 +239,10 @@ COINS_MAX = 1 << 24
 
 def coins(n: int) -> bytes:
     """`n` bytes of the operating system's randomness, read by the Lean verifier (`IO.getRandomBytes`, A3's
-    `uniform/io-getrandombytes`): the challenger's coins (`service.Stream`'s default), which the Python never reads from
-    the operating system itself. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes:
-    no coins, so no sample and no salt."""
+    `uniform/io-getrandombytes`): a challenger's entropy (`challenger.LiveChallenger`'s, on its own host), which the
+    Python never reads from the operating system itself. No stream or verifier samples from it: they read the challenger's
+    coins from its log. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes: no
+    coins."""
     if not (type(n) is int and 0 <= n <= COINS_MAX):
         raise ValueError(f"coins are 0 to {COINS_MAX} bytes a request, not {n!r}")
     kind, body = _server.call("coins", n)
@@ -227,10 +297,11 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
             circuit_params: Mapping[str, int] | None = None) -> dict[str, Any]:
-    """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
+    """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), the program as the server writes
+    it (`_Program`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
-         "ports": {k: dict(v) for k, v in ports.items()}, "program": codec.encode_program(program), "query": dict(query),
+         "ports": {k: dict(v) for k, v in ports.items()}, "program": _Program(program), "query": dict(query),
          "registered": None if registered is None else dict(registered), "scheme": scheme,
          "work_table": None if work_table is None else dict(work_table)}
     if registered is not None:
@@ -323,7 +394,7 @@ def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], prog
     agree when the Lean draws the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
     they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the sample returned is Python's, and the
     caller refuses it)."""
-    got = lean("select", {"rule": dict(rule), "program": codec.encode_program(program), "query": dict(query),
+    got = lean("select", {"rule": dict(rule), "program": _Program(program), "query": dict(query),
                           "work_table": None if work_table is None else dict(work_table),
                           "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
                           "source": read.hex()})
@@ -346,16 +417,15 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         session_roots: Mapping[str, str] | None = None, *, supplied: Mapping[str, Any] | None = None,
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-        held: Sequence[str] | None = None, coin_source: str, coins: Mapping[str, Any] | None = None) -> Verdict:
+        held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
-    with the sessions' roots whole. `coin_source` is where the sample's coins came from (`"verifier"` or `"challenger"`,
-    the stream's `coin_source`, required): from the challenger, the Lean also checks `coins`, their evidence
-    (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger opens for `window_root`
-    released after the registration's digest, and refuses the select step where they aren't or `coins` is missing
-    (code `coins`); from the verifier, `coins` must be None. Where the two differ,
+    with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
+    `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
+    opens for `window_root` released after the registration's digest, and refuses the select step where they aren't or
+    `coins` is missing (code `coins`); for one that read none, `coins` must be None. Where the two differ,
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
@@ -368,7 +438,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
                        "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
                        "served": None if served is None else list(served),
                        "session_roots": None if session_roots is None else dict(session_roots),
-                       "coin_source": coin_source, "coins": None if coins is None else dict(coins)})
+                       "coins": None if coins is None else dict(coins)})
     if isinstance(got.get("audit"), str):
         try:
             got = {**got, "audit": json.loads(got["audit"])}

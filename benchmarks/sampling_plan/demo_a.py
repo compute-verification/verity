@@ -29,12 +29,12 @@ year: one sample over all their units, its statements shared per subcircuit. M3'
 block's units (and, for its reservation, 8 of its tile lanes), given as its cost against the block's GPU time and its 1%
 budget, and what it certifies.
 
-**Certificate.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
+**PlanBounds.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
 delta split by subcircuit, its leak's location term counting the wrong units by the unit-weighted harm bound in place of
 the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
 (Security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per verification phase, one detection budget
-`sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's wrong
-units each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
+`sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's incorrect
+proof blocks each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
 delta, from one sample at one delta. A difftest holds `certify`'s fields to that supremum.
 
 **Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit an execution phase,
@@ -64,7 +64,7 @@ import h200 as H  # noqa: E402
 from verity.core.protocols.pouw.window import eps_at  # noqa: E402
 from verity.core.protocols.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (  # noqa: E402
-    Candidate, Certificate, CostModel, Objective, Plan, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,
+    Candidate, CostModel, Objective, Plan, PlanBounds, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 
 #: Demo A's block: 16,384 requests, a 6.35 s step (the commit 1.0 s of it), 32 steps a request
@@ -83,8 +83,6 @@ BUDGET_SHARE = 0.01
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
 TILE = "PouwH1LaneZy_v2"
-#: Flock's largest statement (it refuses k_log 28)
-K_LOG_MAX = 27
 #: M3's live sample: a uniform subset of this many of one block's units
 M3_UNITS = 8
 #: PoUW's proof block: J10-R's per-call lane unit `PouwH1LaneZy_v2` over
@@ -284,7 +282,7 @@ def location(n: int, count: int) -> float:
     return min(float(n), nextafter(n * (-x * log2(x) - (1 - x) * log2(1 - x)) * (1 + MARGIN), inf))
 
 
-def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Objective) -> Certificate:
+def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Objective) -> PlanBounds:
     """`certify`'s certificate, its location term's count the floor of core's `harm_bound` with every unit weighing 1
     instead of the exact `count_bound`, whose exact binomials take hours at 1e12 units. Any set with more units escapes
     with less than delta, so that floor is `audit_exfiltration`'s k (`L.miss (k + 1) < delta`), and as it is at least
@@ -297,7 +295,7 @@ def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Object
     count = floor(st.harm_bound({c.template: 1.0 for c in chosen}, d))
     leak = st.harm_bound({c.template: float(c.out_bits) for c in chosen}, d) + location(st.population, count)
     dens = density_bound(((c.units, sizes[c.template], objective.harm(c)) for c in chosen), d)
-    return Certificate(d, harm, dens, work, leak)
+    return PlanBounds(d, harm, dens, work, leak)
 
 
 def _best(cands, cm, objective, budget, grid) -> Plan | None:

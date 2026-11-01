@@ -280,12 +280,6 @@ theorem innerY_column (hv mv : Array F128) (beta : F128) (hs : mv.size = hv.size
   simp only [Array.getElem_map, Array.getElem_range]
   exact f128_beq_self _
 
-/-- At a rep's pads, `Y` has the inner code's message length `s + K_PAD`. -/
-theorem padsOf_innerY_size (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) (beta : F128) :
-    (innerY ((padsOf tape i r lay).h ++ (padsOf tape i r lay).padH)
-      ((padsOf tape i r lay).mu ++ (padsOf tape i r lay).padMu) beta).size = lay.len + Zk.K_PAD := by
-  simp [innerY, padsOf]
-
 theorem padsOf_mu_size (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) :
     (padsOf tape i r lay).mu.size = (padsOf tape i r lay).h.size := by
   simp [padsOf]

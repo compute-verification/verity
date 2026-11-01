@@ -199,7 +199,8 @@ def lay_out(req: RQ.Requirement, positions, seed: int):
         payload[j] = payload.get(j, 0) | req.values[v] << offset[v]
     for j in set(block.values()):
         freed.setdefault(max(req.last[v] for v, k in block.items() if k == j), set()).add(j)
-    return RQ.Layout(block, offset), RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload)
+    return (RQ.Store.Packing(block, offset),
+            RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload))
 
 
 # --- the canonical commitments ----------------------------------------------------------------------------------------------
@@ -321,13 +322,13 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     payloads = [store.payload.get(j, 0).to_bytes(RQ.BLOCK_BITS // 8, "little") for j in range(NR)]
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
+    rs = audit.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
                      lifetime=LIFE, schedule_cap=SCHEDULE_CAP)
     clock = Clock()
-    s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
-                   not_before_ns=0, clock=clock)
-    prover = audit.Prover(rs, None, s.commitment, entropy=Entropy(b"a7 receipt salts"))
+    s = audit.AuditRun(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
+                       not_before_ns=0, clock=clock)
+    prover = audit.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
     replay = MM.Replay(head, rs.registration)
     slot_of, free_slots, nxt_slot, record, index = {}, [], NR, [], {}
@@ -455,7 +456,7 @@ class UnitsLink:
     they are set, the link credits nothing."""
     holds: bool
     req: RQ.Requirement
-    layout: RQ.Layout
+    layout: RQ.Store.Packing
     appends: bytes | None = None
     proved: bool = False
     epsilon: float = 1.0
@@ -653,7 +654,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     """The remote session's check 3 by proofs: each sample's opening unit (`opening.witness`), one member a receipt-leaf
     size, its plan row under the canonical plan's salt of the sample's step and every other row under a fresh salt,
     registered, every unit sampled by the verifier's Lean and each member proved --zk and held by Lean `verify --zk
-    --partition --program`. The verifier opens each drawn unit's public rows to its own copy (`opening.public`) and its
+    --partition --program`. The verifier opens each sampled proof block's public rows to its own copy (`opening.public`) and its
     verdict row, holds its plan row to the certified one by ``b || c`` (`opening.plan_link`), and decides each window of
     the session on its samples. No block, payload, receipt leaf or plan row is opened."""
     out.mkdir(parents=True, exist_ok=True)
@@ -984,9 +985,10 @@ def main() -> int:
         print("A7 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str)[:4000])
         return 1
 
-    # the verifier's stratified sample, by its own Lean; each member serves its stratum, --zk
-    p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                "--stratified", str(a.k)], out / "draw.log")
+    # the verifier's stratified sample, by its own Lean on a development challenger's coins; each member serves its
+    # stratum, --zk
+    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, counts, session_roots, opened = [], [], 0, {}, {}, [], {}, {}, {}

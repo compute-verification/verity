@@ -12,8 +12,8 @@ import Proofs.Pous.Accounting.Numbers
 One forward-only adversary against the two-layer chain on `Fin 8` (`wc = 64`, `m = 512`, `s = 1`, `D = 3`,
 `Q = 4`, `k = 2`, `W = 0`) answers two challenges with probability at least `2^-448` (`pr_attack`), while every
 statement below bounds it by `8·56⁴·2^-512 ≈ 2^-485.8` (`bound_lt`). Refuted: the pinned
-`Pous.Guarantees.InvExPostFactoTwoLayer`, the `q_inv = 0` case of `pebbling/InvertibleExPostFactoDraft.lean`'s
-`inv_ex_post_facto_bounded_inv` (`ForwardOnlyBound`), and that file's placeholder `ForwardBound`.
+`Pous.Guarantees.InvExPostFactoTwoLayer`, the `q_inv = 0` case of the N10 draft's
+`inv_ex_post_facto_bounded_inv` (`ForwardOnlyBound`), and the draft's placeholder `ForwardBound`.
 -/
 
 namespace PousP3Forward
@@ -139,7 +139,7 @@ namespace PousP3Forward
 open Pous Pous.Invertible Pous.Labelling
 open scoped ENNReal
 
-/-! ### Inverse-query counting (verbatim from `pebbling/InvertibleExPostFactoDraft.lean`) -/
+/-! ### Inverse-query counting (verbatim from the N10 draft) -/
 
 /-- Whether a P3 query is an inverse (`P⁻¹`) query. -/
 def isInv {n wc : ℕ} (q : (p3Model n wc).Qry) : Bool :=
@@ -148,12 +148,12 @@ def isInv {n wc : ℕ} (q : (p3Model n wc).Qry) : Bool :=
   | _ => false
 
 /-- The number of `P⁻¹` queries a program makes on the path taken when queries are answered by `f`. -/
-def invWork {n wc : ℕ} {α : Type} (f : (p3Model n wc).Qry → (p3Model n wc).Ans) : Prog (p3Model n wc) α → ℕ
+def invWork {n wc : ℕ} {α : Type} (f : (p3Model n wc).Qry → (p3Model n wc).Ans) : OracleAlgorithm (p3Model n wc) α → ℕ
   | .ret _ => 0
   | .round qs k => (qs.filter fun q => isInv q).length + invWork f (k (qs.map f))
 
 /-- A program makes at most `q_inv` inverse queries, against every primitive. -/
-def InvBounded {n wc : ℕ} {α : Type} (q_inv : ℕ) (p : Prog (p3Model n wc) α) : Prop :=
+def InvBounded {n wc : ℕ} {α : Type} (q_inv : ℕ) (p : OracleAlgorithm (p3Model n wc) α) : Prop :=
   ∀ ω : (p3Model n wc).Ω, invWork ((p3Model n wc).answer ω) p ≤ q_inv
 
 /-! ### The adversary -/
@@ -164,7 +164,7 @@ def W0 : Fin 8 → Lab 8 64 := fun _ => zLab
 
 /-- The online program for challenge 1, from the stored top label `σ = c²_0`: it computes `c¹_0` and guesses
 `c¹_u[1] = 0` for `u ≥ 1`. Three rounds, four forward queries. -/
-noncomputable def prog1 (σ : Lab 8 64) : Prog (p3Model 8 64) (Lab 8 64) :=
+noncomputable def prog1 (σ : Lab 8 64) : OracleAlgorithm (p3Model 8 64) (Lab 8 64) :=
   .round [Sum.inl (0, 0, fun _ => none), Sum.inl (1, 1, fun a => if a ∈ chain8.par 1 then some σ else none)]
     fun as =>
       .round [Sum.inr (Sum.inl (labXor (W0 0) (as.getD 0 zLab)))] fun bs =>
@@ -175,7 +175,7 @@ noncomputable def prog1 (σ : Lab 8 64) : Prog (p3Model 8 64) (Lab 8 64) :=
 noncomputable def A₁ (ω : (p3Model 8 64).Ω) : Bits 512 := codeEquiv 8 64 (topLabel chain8 W0 ω 0)
 
 /-- The online programs: challenge 0 from the state, challenge 1 by `prog1`, the others give up. -/
-noncomputable def A₂ (σ : Bits 512) (v : Fin 8) : Prog (p3Model 8 64) (Lab 8 64) :=
+noncomputable def A₂ (σ : Bits 512) (v : Fin 8) : OracleAlgorithm (p3Model 8 64) (Lab 8 64) :=
   if v = 0 then .ret ((codeEquiv 8 64).symm σ) else if v = 1 then prog1 ((codeEquiv 8 64).symm σ) else .ret zLab
 
 theorem A₂_bounded (σ : Bits 512) (v : Fin 8) : (A₂ σ v).Bounded 3 4 := by
@@ -214,7 +214,7 @@ theorem correct_of (H : KQ 8 64 → Lab 8 64) (P : Equiv.Perm (Lab 8 64))
     2 ≤ (Finset.univ.filter fun v =>
       (A₂ (A₁ (H, P)) v).run ((p3Model 8 64).answer (H, P)) = topLabel chain8 W0 (H, P) v).card := by
   have h0 : (A₂ (A₁ (H, P)) 0).run ((p3Model 8 64).answer (H, P)) = topLabel chain8 W0 (H, P) 0 := by
-    simp [A₂, A₁, Prog.run]
+    simp [A₂, A₁, OracleAlgorithm.run]
   have h1 : (A₂ (A₁ (H, P)) 1).run ((p3Model 8 64).answer (H, P)) = topLabel chain8 W0 (H, P) 1 := by
     have hq1 : (fun a : Fin 8 => if a ∈ chain8.par 1 then some ((codeEquiv 8 64).symm (A₁ (H, P))) else none) =
         fun a => if a ∈ chain8.par 1 then some (c2 chain8 H P W0 a) else none := by
@@ -237,7 +237,7 @@ theorem correct_of (H : KQ 8 64 → Lab 8 64) (P : Equiv.Perm (Lab 8 64))
         rw [c1_eq, hq0]
       · exact (hE u (by have : u.val ≠ 0 := fun h => hu (Fin.ext h); omega) (by omega)).symm
     have hne : (1 : Fin 8) ≠ 0 := by decide
-    simp only [A₂, hne, ↓reduceIte, prog1, Prog.run]
+    simp only [A₂, hne, ↓reduceIte, prog1, OracleAlgorithm.run]
     rw [topLabel, c2_eq, ← hT, ← hq1]
     rfl
   refine le_trans (le_of_eq ?_) (Finset.card_le_card (s := {0, 1}) fun v hv => ?_)
@@ -483,14 +483,14 @@ theorem not_invExPostFactoTwoLayer : ¬ Pous.Guarantees.InvExPostFactoTwoLayer :
   exact absurd (pr_attack.trans hb) (not_le.2 bound_lt)
 
 set_option linter.unusedVariables false in
-/-- The `q_inv = 0` specialization of `pebbling/InvertibleExPostFactoDraft.lean`'s `inv_ex_post_facto_bounded_inv`,
+/-- The `q_inv = 0` specialization of the N10 draft's `inv_ex_post_facto_bounded_inv`,
 verbatim with `q_inv := 0`. -/
 def ForwardOnlyBound : Prop :=
   ∀ (n wc m s D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc)
     (hwc : 0 < wc) (hqs : 0 ≤ s)
     (hard : WhiteGreenHard G s D k)
     (A₁ : (p3Model n wc).Ω → Bits m)
-    (A₂ : Bits m → Fin n → Prog (p3Model n wc) (Lab n wc))
+    (A₂ : Bits m → Fin n → OracleAlgorithm (p3Model n wc) (Lab n wc))
     (hA₂ : ∀ σ c, (A₂ σ c).Bounded D Q)
     (hInv : ∀ σ c, InvBounded 0 (A₂ σ c)),
     pr (fun ω : (p3Model n wc).Ω =>
@@ -506,9 +506,9 @@ theorem not_forwardOnlyBound : ¬ ForwardOnlyBound := by
 /-! ### The sibling's placeholder `ForwardBound` -/
 
 set_option linter.unusedVariables false in
-/-- `ForwardBound`, verbatim from `pebbling/InvertibleExPostFactoDraft.lean` (namespace `PousInvBoundedInv`). -/
+/-- `ForwardBound`, verbatim from the N10 draft (namespace `PousInvBoundedInv`). -/
 def ForwardBound (n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) : Prop :=
-  ∀ (s' : ℕ) (A₁ : (p3Model n wc).Ω → Bits m) (A₂ : Bits m → Fin n → Prog (p3Model n wc) (Lab n wc)),
+  ∀ (s' : ℕ) (A₁ : (p3Model n wc).Ω → Bits m) (A₂ : Bits m → Fin n → OracleAlgorithm (p3Model n wc) (Lab n wc)),
     (∀ σ c, (A₂ σ c).Bounded D Q) → (∀ σ c, InvBounded 0 (A₂ σ c)) → WhiteGreenHard G s' D k →
     pr (fun ω : (p3Model n wc).Ω =>
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
@@ -526,7 +526,7 @@ set_option linter.unusedVariables false in
 `ForwardBound` is `b = n·wc` (one whole label per fresh entry), refuted above. `b = wc` (one component per fresh
 entry) is the weak candidate, open. -/
 def ForwardBoundAt (b n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) : Prop :=
-  ∀ (s' : ℕ) (A₁ : (p3Model n wc).Ω → Bits m) (A₂ : Bits m → Fin n → Prog (p3Model n wc) (Lab n wc)),
+  ∀ (s' : ℕ) (A₁ : (p3Model n wc).Ω → Bits m) (A₂ : Bits m → Fin n → OracleAlgorithm (p3Model n wc) (Lab n wc)),
     (∀ σ c, (A₂ σ c).Bounded D Q) → (∀ σ c, InvBounded 0 (A₂ σ c)) → WhiteGreenHard G s' D k →
     pr (fun ω : (p3Model n wc).Ω =>
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤

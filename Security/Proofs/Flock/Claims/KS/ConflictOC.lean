@@ -86,13 +86,6 @@ def shadow (H : Claims.Msg → Claims.Msg) : With.Sim OCV Flock.V where
   throw _ := rfl
   lift _ := rfl
 
-theorem shadow_hashes (H : Claims.Msg → Claims.Msg) :
-    (shadow H).Hashes Claims.Hashes.oc (Hashes.ofSha512 (Claims.hOf H)) where
-  sha512 _ := rfl
-  sha256 _ := rfl
-  blake3 _ := rfl
-  blake3Keyed _ _ := rfl
-
 /-- At `sha512` the hashes are the deployed ones. -/
 theorem shadow_std : (shadow sha512).Hashes Claims.Hashes.oc With.std where
   sha512 b := by
@@ -107,26 +100,5 @@ theorem shadow_std : (shadow sha512).Hashes Claims.Hashes.oc With.std where
 theorem Runs.std {H : Claims.Msg → Claims.Msg} {α : Type} {x : OCV α} {y : Flock.V α} {a : α} {L : List Claims.Msg}
     (hR : (shadow H).R x y) (h : Runs H x a L) : y = .ok a :=
   hR.symm.trans h.1
-
-/-- A step of a bind whose verdict the shadow knows. -/
-theorem Runs.bind_std {H : Claims.Msg → Claims.Msg} {α β : Type} {x : OCV α} {y : Flock.V α} {f : α → OCV β} {b : β}
-    {L : List Claims.Msg} (hR : (shadow H).R x y) (h : Runs H (x >>= f) b L) : ∃ a, y = .ok a ∧ Runs H (f a) b L :=
-  let ⟨a, h1, h2⟩ := Runs.bind h
-  ⟨a, Runs.std hR h1, h2⟩
-
-/-- A transcript step whose verdict the shadow knows. -/
-theorem Runs.sbind_std {H : Claims.Msg → Claims.Msg} {σ α β : Type} {x : StateT σ OCV α} {y : StateT σ Flock.V α}
-    {f : α → StateT σ OCV β} {s : σ} {b : β × σ} {L : List Claims.Msg} (hR : ((shadow H).st σ).R x y)
-    (h : Runs H ((x >>= f) s) b L) : ∃ a s₁, y s = .ok (a, s₁) ∧ Runs H (f a s₁) b L :=
-  let ⟨a, s₁, h1, h2⟩ := Runs.sbind h
-  ⟨a, s₁, Runs.std (hR s) h1, h2⟩
-
-/-- A Ligerito step whose verdict the shadow knows. -/
-theorem Runs.lbind_std {H : Claims.Msg → Claims.Msg} {σ τ α β : Type} {x : StateT σ (StateT τ OCV) α}
-    {y : StateT σ (StateT τ Flock.V) α} {f : α → StateT σ (StateT τ OCV) β} {s : σ} {t : τ} {b : (β × σ) × τ}
-    {L : List Claims.Msg} (hR : (((shadow H).st τ).st σ).R x y) (h : Runs H ((x >>= f) s t) b L) :
-    ∃ a s₁ t₁, y s t = .ok ((a, s₁), t₁) ∧ Runs H (f a s₁ t₁) b L :=
-  let ⟨a, s₁, t₁, h1, h2⟩ := Runs.lbind h
-  ⟨a, s₁, t₁, Runs.std (hR s t) h1, h2⟩
 
 end FlockDeploy.KS

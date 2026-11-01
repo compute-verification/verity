@@ -80,6 +80,7 @@ theorem ownPort_ne_top {sv : _root_.VStar.Stmt} {q : String × String × Array (
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- A round's rows read off a longer history are the same. -/
 theorem roundRows_take (I : InnerRec) (w : Claims.Flock.Wit) (ρ : I.Tape) (hist : List (Msg × Msg)) {K i : ℕ}
@@ -358,6 +359,7 @@ theorem fit_stream (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
   | sparse _ _ =>
     first | cases hpin | simp [_root_.VStar.In.partIn, throw, throwThe, MonadExceptOf.throw] at hpin
   | opening _ _ _ _ _ _ =>

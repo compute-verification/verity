@@ -5,6 +5,7 @@ import PouwWindow.Public
 import PouwWindow.Length
 import PouwCheck.Inputs
 import PouwCheck.WindowSalt
+import Identity.Domains
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
@@ -163,7 +164,7 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
     else if prof.drawn ≠ #[(unitLevel, k)] then
       .reject s!"profile: drawn {cs (drawnJson prof.drawn)}, not {k} units"
     else if draw.law ≠ .subset k ∨ draw.population ≠ n then
-      .reject s!"draw: {draw.law.name} over {draw.population}, not subset:{k} over {n}"
+      .reject s!"draw: {lawName draw.law} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else
@@ -175,5 +176,9 @@ def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public C
   match registered p c with
   | .error r => .reject r
   | .ok f => outcome p c f e
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : oneStage = Domains.ONE_STAGE_PROTOCOL := rfl
 
 end PouwCheck

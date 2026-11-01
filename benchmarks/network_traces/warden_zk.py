@@ -1,43 +1,50 @@
-"""warden-zk: the warden's bucket rows read by the proof system. A toy unit over one row's bits, its port registered
-against the warden's signed egress root (`warden_rows`), proved by Flock `prove --zk` behind the Lean ZK server and
-held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through the one-stage audit as
-`n2_zk.py` proves N2's head checks.
+"""warden-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its
+port registered against the network certifier's signed egress root (`warden_rows`), proved by Flock `prove --zk` behind
+the Lean ZK server and held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through
+the one-stage audit as `n2_zk.py` proves N2's head checks.
 
     python benchmarks/network_traces/warden_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--units 16] [--dry]
 
 * **The run.** A warden-serve run's directory (`warden_serve.py rehearse`'s): `deployment.json`, the records, and the
-  rows the warden committed and signed while serving, a row a bucket: `cells.jsonl` (each link-window's registration)
-  and `cells.salts` (the rows' salts and the wiring's, witness, which the warden hands the prover alone).
-* **The registration.** An egress link-window's: its registration read by the verifier
-  (`warden_rows.check_registration`, under the deployment's key and session and the schedule), and the warden's
-  opening (the record's rows and wiring under the salts) held to its head.
-* **The unit** (`WardenRowIdentity{B}`, B a row's S·B bytes): one bucket row's 8·B bits in (`row`), the same bits out
-  (`o0`), each through two NOTs (the partition refuses a template with no gate; no AND).
-* **The units' wiring is the Program's** (`warden_rows.Units`), fixed from public structure alone, never the cells'
-  bytes: the connection admitted in a link-window (its first row past the window's first, or window 0) with the most
-  cells, at least D·r + n, and unit i reading its egress cell i, its cell D·r + i (the D buckets before are its
-  delay's pads, the schedule's). Each is at its bucket's row, the cell at its slot's words (`warden_rows.Wiring.place`,
-  with the warden's wiring, opened to the verifier: the named gap). The verifier's port names the units' digest in
-  its value (`warden_rows.port`), so a statement made for any other units' wiring is refused by Lean's registered
+  rows the network certifier committed and signed while serving, a row a bucket: `cells.jsonl` (each execution phase's
+  registration) and `cells.salts` (the rows' salts and the wiring's, witness, which the network certifier hands the
+  prover alone).
+* **The registration.** An egress execution phase's: its registration read by the verifier
+  (`warden_rows.check_registration`, under the deployment's key and session and the schedule), and the network
+  certifier's opening (the record's rows and wiring under the salts) held to its head.
+* **The proof block** (`WardenRowIdentity{B}`, B a row's S·B bytes): one bucket row's 8·B bits in (`row`), the same bits
+  out (`o0`), each through two NOTs (the partition refuses a template with no gate; no AND).
+* **The proof blocks' wiring is the Program's** (`warden_rows.Units`), fixed from public structure alone, never the
+  cells' bytes: the connection admitted in an execution phase (its first row past the window's first, or window 0) with
+  the most cells, at least D·r + n, and proof block i reading its egress cell i, its cell D·r + i (the D buckets before
+  are its delay's pads, the schedule's). Each is at its bucket's row, the cell at its slot's words
+  (`warden_rows.Wiring.place`, with the network certifier's wiring, opened to the verifier: the named gap). The
+  verifier's port names the proof blocks' digest in its value (`warden_rows.port`), so a statement made for any other
+  proof blocks' wiring is refused by Lean's registered
   reads, even at the same rows.
-* **Members.** One statement of n units each, a shared-row public file whose registered ports are the verifier's own
-  (`--registered`, `warden_rows.port` at the warden's root):
+* **Members.** One statement of n units each, a shared-row public file every port of which is one of the verifier's
+  own registered reads (`--registered`, which `Flock.Registered.checkComplete` holds to every port of the
+  circuit): the member's network certifier port at the network certifier's root (`warden_rows.port`), and its other
+  port at the member's committed value of it (`committed_value`: its units' rows under its own salts, committed before
+  staging, the root the registration names before any coin, `audit_member`):
   - ``sender``: ``o0`` registered, under the warden's salts and paths: the sender's unit opens its output as the rows;
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
-  - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, unit 0's cell one byte off: rows the
-    warden didn't sign (and the prover's registration of its own root, under the warden's certificate, is refused by
-    `check_registration`);
-  - ``altered``: ``o0`` under the warden's salts and paths, unit 0's input row one bit off in its cell, so its output
-    differs from the warden's row;
-  - ``pad``: ``o0`` under the warden's salts and paths, made for units whose unit 0 reads the connection's cell 0, a
-    pad of its delay, where the Program's reads its egress cell 0: the header names the pad's units' wiring;
-  - ``pad-named``: ``pad``'s rows under the Program's value, which is public: unit 0's row isn't the Program's;
-  - ``swapped``: made for units 0 and 1 reading each other's cells, in one row when r > 1, so its rows are the
-    Program's: the header names the swapped units' wiring.
-  Each is registered, every unit sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved `--zk`
-  behind the ZK server (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition --program
-  --registered`. ``sender`` and ``receiver`` are to be accepted, the others refused by Lean's registered reads.
+  - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, proof block 0's cell one byte off: rows the
+    network certifier didn't sign (and the prover's registration of its own root, under the network certifier's
+    certificate, is refused by `check_registration`);
+  - ``altered``: ``o0`` under the network certifier's salts and paths, proof block 0's input row one bit off in its
+    cell, so its output differs from the network certifier's row;
+  - ``pad``: ``o0`` under the network certifier's salts and paths, made for proof blocks whose proof block 0 reads the
+    connection's cell 0, a pad of its delay, where the Program's reads its egress cell 0: the header names the pad's
+    proof blocks' wiring;
+  - ``pad-named``: ``pad``'s rows under the Program's value, which is public: proof block 0's row isn't the Program's;
+  - ``swapped``: made for proof blocks 0 and 1 reading each other's cells, in one row when r > 1, so its rows are the
+    Program's: the header names the swapped proof blocks' wiring.
+  Each is registered, every proof block sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved
+  `--zk` behind the ZK server (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition
+  --program --registered`. ``sender`` and ``receiver`` are to be accepted, the others refused by Lean's registered
+  reads.
 * **What the verifier receives**, scanned for every 16-byte piece of every opened row and every salt of the
   statement (`a8.received`) but the pieces the public circuit holds, the empty slot's (zero bytes, the schedule's)
   and the pads' (`pad_cells`, (PAD, q) and zeros, the wiring's): none is to be found; the prover's instance file,
@@ -67,7 +74,10 @@ from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, PAD  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams, cell  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import produced, registered as G  # noqa: E402
 
+#: the unit's ports: its input row and its output row
+PORTS = ("row", "o0")
 MEMBERS = {"sender": ("o0", True), "receiver": ("row", True), "unsigned": ("o0", False), "altered": ("o0", False),
            "pad": ("o0", False), "pad-named": ("o0", False), "swapped": ("o0", False)}
 #: what Lean's registered reads, and the host's read of them, refuse each refused member by
@@ -79,7 +89,7 @@ def log(msg: str) -> None:
     print(f"WZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
-# --- the unit ---------------------------------------------------------------------------------------------------------
+# --- the proof block --------------------------------------------------------------------------------------------------
 
 def _signature(S):
     return (("row", Array(8 * S.B, BL.BIT)),), Array(8 * S.B, BL.BIT)
@@ -98,10 +108,10 @@ WardenRowIdentity = CompositeDefinition(
 # --- the run ----------------------------------------------------------------------------------------------------------
 
 def attestation(run: Path, n: int) -> SimpleNamespace:
-    """The egress link-window to read, its registration as the verifier reads it, the warden's opening, and the
-    Program's units' wiring (`units`, the module docstring's), from public structure alone: `reads` its (connection,
-    cell) each, the row and slot the warden's wiring places each at (`positions`, `slots`), and how many of them hold
-    the server's bytes (`data_rows`, reported, never read to choose)."""
+    """The egress execution phase to read, its registration as the verifier reads it, the network certifier's opening,
+    and the Program's proof blocks' wiring (`units`, the module docstring's), from public structure alone: `reads` its
+    (connection, cell) each, the row and slot the network certifier's wiring places each at (`positions`, `slots`), and
+    how many of them hold the server's bytes (`data_rows`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
@@ -147,9 +157,9 @@ def flip(row: bytes, byte: int = -1, bit: int = 0) -> bytes:
 
 
 def member_units(name: str, at: SimpleNamespace) -> WR.Units:
-    """The units' wiring a member's statement is made for: the Program's, but ``pad``'s and ``pad-named``'s, whose
-    unit 0 reads the connection's cell 0, a pad of its delay, and ``swapped``'s, whose units 0 and 1 read each other's
-    cells."""
+    """The proof blocks' wiring a member's statement is made for: the Program's, but ``pad``'s and ``pad-named``'s,
+    whose proof block 0 reads the connection's cell 0, a pad of its delay, and ``swapped``'s, whose proof blocks 0 and 1
+    read each other's cells."""
     c = at.units.cells
     if name in ("pad", "pad-named"):
         return WR.Units(((at.connection, 0),) + c[1:])
@@ -159,9 +169,9 @@ def member_units(name: str, at: SimpleNamespace) -> WR.Units:
 
 
 def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
-    """A member's units' wiring, the rows they read (`positions`), its input rows, its salts for the registered port,
-    the header's `registered` entry and, for ``unsigned``, the prover's own tree. The flips are in unit 0's cell (its
-    slot's last byte). ``pad-named``'s entry names the Program's value."""
+    """A member's proof blocks' wiring, the rows they read (`positions`), its input rows, its salts for the registered
+    port, the header's `registered` entry and, for ``unsigned``, the prover's own tree. The flips are in proof block 0's
+    cell (its slot's last byte). ``pad-named``'s entry names the Program's value."""
     units = member_units(name, at)
     op, last = at.opening, (at.slots[0] + 1) * at.params.cell_bytes - 1
     pos = [t for t, _ in op.wiring.place(at.params, units.cells)]
@@ -181,38 +191,75 @@ def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
 
 
 def opened(at: SimpleNamespace, mr: SimpleNamespace) -> list[bool]:
-    """Whether each of a member's rows, committed under its salt, climbs its path to the warden's signed root at the
-    position the member's entry names."""
+    """Whether each of a member's rows, committed under its salt, climbs its path to the network certifier's signed root
+    at the position the member's entry names."""
     return [WR.opens(at.dom, at.head.root, p, WR.bc(r, s), bytes.fromhex(path))
             for p, r, s, path in zip(mr.entry["positions"], mr.rows, mr.salts, mr.entry["paths"])]
 
 
 def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> str | None:
     """The host's read of a member's registered port against the verifier's (`warden_rows.port` of the Program's
-    units), as Lean's registered reads make it (`warden_rows.refusal`): None when they accept, else why not."""
+    proof blocks), as Lean's registered reads make it (`warden_rows.refusal`): None when they accept, else why not."""
     port = WR.port(at.head, at.opening.wiring, at.params, at.units, reads_from)
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
 
+def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> G.Registered:
+    """A member's own rows of a port no network certifier row registration holds (one a unit, its u16 words), committed
+    before staging as a value registered on `head`'s link-window: each row under a salt of the prover's own, in a tree
+    whose domain binds the statement's Program (its SHA-512, `program`) and the network certifier's root, so the root,
+    which the registration names before any coin, opens under no other link-window's. The statement commits the port's
+    rows under the same salts, so they open it."""
+    return G.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, G.WORD_BITS, WR.SCHEMA,
+                               window=head.root.hex())
+
+
+def value_port(v: G.Registered, reads_from: int = 0) -> dict:
+    """The verifier's own `--registered` port of a registered value `v` at its root (a committed value's,
+    `committed_value`, the one the registration names): unit `reads_from + i` reads its row i."""
+    return produced.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \
+        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+
+
 # --- the audit (`n2_zk`'s flow on one-stage's a0, a7 and a8) ------------------------------------------------------------
+
+def _statement():
+    """What staging a statement reads: one-stage's partition, Flock's unit stager and the Program's encoding."""
+    import numpy as np
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity_flock import class_statement as CS
+
+    return SimpleNamespace(np=np, P=P, canonical_json=canonical_json, encode_program=encode_program, V2=V2, CS=CS)
+
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))
     import a0
     import a7
     import a8
-    import numpy as np
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity_flock import class_statement as CS
+    from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R, verifier as V
 
-    return SimpleNamespace(a0=a0, a7=a7, a8=a8, np=np, D=D, P=P, R=R, V=V, canonical_json=canonical_json,
-                           encode_program=encode_program, V2=V2, CS=CS)
+    return SimpleNamespace(**vars(_statement()), a0=a0, a7=a7, a8=a8, D=D, R=R, V=V)
+
+
+def check_shape(M, sg: SimpleNamespace) -> None:
+    """The statement's m, k_log + the blocks' log, within Flock's ``--zk`` prover's shape, which proving needs."""
+    nbl = max(3, (-(-sg.n // sg.st.meta["vus_per_block"]) - 1).bit_length())
+    if not 25 <= sg.st.meta["k_log"] + nbl <= M.a7.M_MAX:
+        raise SystemExit(f"m = {sg.st.meta['k_log']} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's "
+                         "shape)")
+
+
+def public_header(out: Path, n: int) -> dict:
+    """A staged statement's public file's header line."""
+    with open(out / f"pub-{n}.bin", "rb") as f:
+        return json.loads(f.readline())
 
 
 def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
-    """The statement program and partition (one template, n units) and the unit's stager."""
+    """The statement program and partition (one template, n proof blocks) and the proof block's stager."""
     defn = bind(WardenRowIdentity, B=B)
     program = M.P.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
@@ -229,27 +276,26 @@ def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
     assert tid == M.P.template_id(defn) and cnt == n
     return SimpleNamespace(defn=defn, program=program, query=query, n=n, base=base, st=st, out=out,
                            lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
-                           program_file=out / "program.json")
+                           program_file=out / "program.json", program_sha512=part["program"])
 
 
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
-    """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its registered
-    port's rows under its salts and paths (`member_rows`), every other row under a fresh salt; and the verifier's own
-    `--registered` file at the warden's root."""
+    """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its network
+    certifier port's rows under its salts and paths (`member_rows`) and its other port's under those of the member's
+    committed value of them (`committed_value`); and the verifier's own `--registered` file, which names both ports:
+    the network certifier's port at its root, the other at the committed value's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
-    k_log = st.meta["k_log"]
-    nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
-    if not 25 <= k_log + nbl <= M.a7.M_MAX:
-        raise SystemExit(f"{name}: m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
     port, _ = MEMBERS[name]
+    other = next(p for p in PORTS if p != port)
     mr = member_rows(name, at)
     words = M.np.asarray([WR.words(r) for r in mr.rows], dtype=M.np.uint16)
-    fresh = [os.urandom(WR.SALT_BYTES) for _ in range(n)]
-    salts = {"row": fresh, "o0": mr.salts} if port == "o0" else {"row": mr.salts, "o0": fresh}
+    value = committed_value(sg.program_sha512, at.head, other, words.tolist())
+    _w, salts, entry = value.statement(range(n))
     set_name = f"{st.iset.name}-{name}"
-    got = st.stage({"row": words}, out, os.urandom(32), salts=salts, indices=range(sg.base, sg.base + n),
-                   set_name=set_name, tables={"row": words}, refs={"row": list(range(n))}, registered={port: mr.entry})
+    got = st.stage({"row": words}, out, os.urandom(32), salts={port: mr.salts, other: salts},
+                   indices=range(sg.base, sg.base + n), set_name=set_name, tables={"row": words},
+                   refs={"row": list(range(n))}, registered={port: mr.entry, other: entry})
     outs = M.np.asarray(got["outs"]["o0"], dtype=M.np.uint16)
     if not M.np.array_equal(outs, words):
         raise SystemExit(f"{name}: the identity's outputs are not its inputs")
@@ -257,15 +303,15 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    reads = WR.reads_file({port: WR.port(at.head, at.opening.wiring, at.params, at.units, sg.base)})
+    reads = WR.reads_file({port: WR.port(at.head, at.opening.wiring, at.params, at.units, sg.base),
+                           other: value_port(value, sg.base)})
     (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
-    m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
-         "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"], "salts": got["salts"],
-         "ports": st.ports, "port": port, "rows": mr.rows, "own": mr.own, "partition_file": sg.partition_file,
-         "program_file": sg.program_file, "registered_file": out / "registered.json", "opens": opened(at, mr),
-         "predicted": refused(at, mr, sg.base), "units": mr.units.digest().hex(), "stage_s": round(time.time() - t0, 1)}
-    m["header"] = M.a0.public_header(out, n)
-    return m
+    return {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
+            "set": set_name, "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
+            "salts": got["salts"], "ports": st.ports, "port": port, "committed": {other: value}, "rows": mr.rows,
+            "own": mr.own, "partition_file": sg.partition_file, "program_file": sg.program_file,
+            "registered_file": out / "registered.json", "opens": opened(at, mr), "predicted": refused(at, mr, sg.base),
+            "units": mr.units.digest().hex(), "stage_s": round(time.time() - t0, 1), "header": public_header(out, n)}
 
 
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
@@ -279,13 +325,35 @@ def firewall(M, m: dict) -> dict:
     return {"FC_FIREWALL": "1", **M.a0.firewall_env(m)}
 
 
+def committed_roots(m: dict) -> tuple[dict, list]:
+    """The registration's entries of a member's committed values (`committed_value`), each ``<member>/committed/<port>``:
+    the domain the verifier expects (its own, from the Program, the value's name and the network certifier's root) and
+    the root the prover registers, which the verifier's registered reads name."""
+    want, roots = {}, []
+    for p, v in m["committed"].items():
+        q, d = f"{m['name']}/committed/{p}", v.domain.domain_id.hex()
+        want[q] = {"leaves": v.leaves, "domain": d}
+        roots.append({"port": q, "root": v.root.hex(), "leaves": v.leaves, "domain": d})
+    return want, roots
+
+
+def registered_roots(m: dict, rec: dict) -> dict:
+    """The verifier's registered reads (``m["registered_file"]``) name each committed port at the root the registration
+    names (`committed_roots`), before any coin."""
+    ports = json.loads(m["registered_file"].read_text())["ports"]
+    named = {r["port"]: r["root"] for r in rec["roots"]}
+    codes = [p for p in m["committed"] if ports[p]["root"] != named.get(f"{m['name']}/committed/{p}")]
+    return {"ok": not codes, "codes": codes, "detail": {}}
+
+
 def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -> dict:
-    """Member m registered, sampled by the verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean
-    with the verifier's own registered reads. Writes what the verifier received under ``out / "verifier"``."""
+    """Member m registered (its frame ports and its committed value's root, `committed_roots`), sampled by the
+    verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean with the verifier's own registered
+    reads. Writes what the verifier received under ``out / "verifier"``."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
     n, name = m["n"], m["name"]
-    want, roots = {}, []
+    want, roots = committed_roots(m)
     fv = m["header"]["frame_v3"]
     for p_, w in a7.frame_ports(m["set"], m["meta"], n).items():
         want[f"{name}/{p_}"] = w
@@ -296,11 +364,12 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                                       f"egress link-window {at.window} (warden_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
-           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the warden's signed root"}
+           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the warden's signed root; "
+                   f"{', '.join(m['committed'])} the member's committed value at its registered root"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
-              f"statement/{name}": a7.statement_checks(m, rec, want)}
+              f"statement/{name}": a7.statement_checks(m, rec, want), "registered": registered_roots(m, rec)}
     receipt = R.receipt(rec, "one-stage-e2e verifier (warden_zk.py)")
     res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
     if not all(v["ok"] for v in checks.values()):
@@ -353,8 +422,8 @@ def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
 
 
 def pad_cells(at: SimpleNamespace) -> bytes:
-    """Each connection's pad as the warden writes it, (PAD, q) and zeros: fixed by the ordinal, which the wiring
-    (opened to the verifier) names, so a 16-byte piece of it matches any small integer among zeros."""
+    """Each connection's pad as the network certifier writes it, (PAD, q) and zeros: fixed by the ordinal, which the
+    wiring (opened to the verifier) names, so a 16-byte piece of it matches any small integer among zeros."""
     return b"".join(cell(PAD, q, b"", at.params.cell_bytes) for q, _, _ in at.opening.wiring.connections)
 
 
@@ -401,6 +470,7 @@ def prove(a) -> int:
         f"under the warden's certificate: {summary['unsigned_registration']}")
     M = _one_stage()
     sg = stager(M, B, a.units, out / "stager")
+    check_shape(M, sg)
     summary["stager"] = {"lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"], "vus_per_block": sg.st.meta["vus_per_block"],
                          "pin": sg.st.pin, "base": sg.base}
     log(f"stager: {sg.defn.id}, {sg.lower_s} s, k_log {sg.st.meta['k_log']}, pin {sg.st.pin[:16]}")
@@ -445,7 +515,8 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="warden_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="the toy unit's ports registered against the warden's egress root, proved --zk")
+    p = sub.add_parser("prove", help="the toy proof block's ports registered against the network certifier's egress root, "
+                                     "proved --zk")
     p.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory")
     p.add_argument("--bin")
     p.add_argument("--lean")

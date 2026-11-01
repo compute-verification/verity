@@ -293,7 +293,7 @@ def test_own_rows_is_its_own_stage_cache_entry(monkeypatch, tmp_path: Path):
 
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
-    (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
+    (the output row's, `HmOut`, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
     is neither other frame's. From the prover's file, every committed row's elements give core's bit-row digest, ``b || c`` with its salt, the frame leaf under the
     hiding schema, and the header's root under the domain its binding names, using ``verity.ml.commitments`` only."""
     from verity.ml.commitments import hm96
@@ -345,7 +345,7 @@ def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_
 
 def test_core_rows_stage_partial_blocks_and_refuse_tiles_and_sources_that_are_not_whole_parameters(monkeypatch, tmp_path: Path):
     """A bit row of any length stages, its leaves ``ceil(bits / 16)`` words: NVF4 K=256's rows are 1152 bits, 144 bytes, one
-    compression and then a last block that holds 16 row bytes and SHA-512's padding; the output row (§16.13) is a bit row of its
+    compression and then a last block that holds 16 row bytes and SHA-512's padding; the output row (`HmOut`) is a bit row of its
     64 words. NVF4 K=128's (576 bits, 72 bytes) fit the padding block with no compression before it, so the output row's is the
     statement's one (with none, the circuit's ``sha512x3`` range, the pin's, would hold no slot). A source that is not one whole
     parameter, a row length that is not its leaves', and tiling are refused."""
@@ -415,7 +415,7 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
     each new prefix is core's ``P(l)`` for the row's own bits (codes then scales), so a prefix names a length and nothing else, x
     and W rows of one shape share it (by design: the frame leaf binds the port's domain), and none equals an old-frame prefix.
     Every shape stages, MXF4 K=2048's partial last block among them: rows that fit SHA-512's padding block (at most 111 bytes)
-    have no compression before it, and the output row's (§16.13) is the statement's. The derivation agrees with the stager's
+    have no compression before it, and the output row's (`HmOut`) is the statement's. The derivation agrees with the stager's
     own lowering and `element_rows` at K=128."""
     from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 

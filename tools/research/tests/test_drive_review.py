@@ -11,10 +11,12 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
 
+import research.drive as D
 import research.queue as Q
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
@@ -55,6 +57,27 @@ def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, 
     _move_main(world, {"tools/verity/check/ci.toml": "not toml ["})
     h.q.fetch()
     assert h.d._gating(_main(world)) == every
+
+
+def test_a_git_without_merge_tree_attr_source_refuses_the_tick_and_rings_ci_and_infra_hourly(world, monkeypatch):
+    """A git before 2.40 has no `merge-tree --attr-source`, and a sync without it left out every PR whose only conflict is a pin,
+    ringing no one.  Drive refuses the tick on it (no sync, nothing pushed) and rings the lander's and the machines' handles
+    with the version and the fix, again an hour later while it stays; on a git that has it the same tick syncs and lands."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    refs = _git(world.origin, "for-each-ref")
+    monkeypatch.setattr(D, "git_version", lambda: "git version 2.34.1")
+    for _ in range(2):
+        assert h.tick().startswith("drive refuses its ticks: `git version 2.34.1` has no `merge-tree --attr-source`"), world.logs
+    assert _git(world.origin, "for-each-ref") == refs
+    (ring,) = h.posts
+    assert ring.startswith("@ci @infra queue: drive refuses its ticks") and "Fix: install git >= 2.40" in ring
+    h.clock += D.OLD_GIT_EVERY_S
+    h.tick()
+    assert h.posts == [ring, ring]
+    monkeypatch.setattr(D, "git_version", lambda: "git version 2.40.0")
+    assert h.tick().startswith("landed #1"), world.logs
 
 
 def _registry(world: World, *handles: str) -> None:
@@ -131,29 +154,80 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert "lean-agreement" in pl["verified_as"]["steps"]         # ci's baseline passed it, and nothing it checks changed since
 
 
+def test_a_pr_whose_preflight_onto_next_refuses_it_is_told_and_stays_out_while_the_members_above_it_land(world, monkeypatch):
+    _registry(world, "lane-2")
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+        h.review(n)
+    h.q.preflight = lambda pr, base, commit, members: "a.py: SyntaxError" if pr.number == 2 else None
+    assert h.tick().startswith("landed #3"), world.logs
+    assert [_subject(world, r)[:9] for r in ("main", "main^1")] == ["Queue: #3", "Queue: #1"]
+    (post,) = [p for p in h.posts if "out of `next`" in p]
+    assert f"#2 at {world.gh.prs[2].head[:8]} is out of `next`: a.py: SyntaxError" in post and "@lane-2" in post, post
+
+
 def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(world, monkeypatch):
     """`after_landing_shards = N`: the after-landing run is N runs at once, shard K of ci.toml's plan with N shards each, so it
     takes about its longest shard rather than every step on one slot (2.5 h). `main` is verified once each shard passed; a shard
     that never started launches the run again, whole."""
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = 3
+    art = f"art:{'a' * 64}@{'b' * 64}"
+    h.d.records_artifact = lambda rid: art if rid == "r-post-0" else None
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     assert h.tick().startswith("landed #1"), world.logs
     main = _main(world)
-    assert [(c, kw.get("shard")) for c, _, kw in h.posted] == [(main, "1/3"), (main, "2/3"), (main, "3/3")]
-    h.run_state.update({"r-post-0": ("done", 0, None), "r-post-1": ("running", None, None), "r-post-2": ("done", 0, None)})
-    h.evidence = [_steps_run(world.tmp, "r-post-0", {s: "passed" for s in AFTER_LANDING})]
+    assert h.posted == [(main, "circuit-check", {"cc_records": True})], "circuit-check's records step first"
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert [(c, kw.get("shard"), kw.get("cc_records_from")) for c, _, kw in h.posted[1:]] == [(main, f"{k}/3", art) for k in (1, 2, 3)]
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("running", None, None), "r-post-3": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-post-1", {s: "passed" for s in AFTER_LANDING})]
     h.tick()
     pl = h.postland()
-    assert pl["run"]["groups"] == [["r-post-0"], ["r-post-1"], ["r-post-2"]] and pl["verified"] != main, "one shard runs on"
-    h.run_state["r-post-1"] = ("done", 75, None)
+    assert pl["run"]["groups"] == [["r-post-1"], ["r-post-2"], ["r-post-3"]] and pl["verified"] != main, "one shard runs on"
+    h.run_state["r-post-2"] = ("done", 75, None)
     h.tick()
-    assert h.postland()["verified"] != main and len(h.posted) == 6, "a shard that never started: the run again, whole"
-    h.run_state.update({f"r-post-{i}": ("done", 0, None) for i in (3, 4, 5)})
+    assert h.postland()["verified"] != main and len(h.posted) == 7, "a shard that never started: the run again, whole"
+    assert [kw.get("cc_records_from") for _, _, kw in h.posted[4:]] == [art] * 3, "on the records it had: no second records step"
+    h.run_state.update({f"r-post-{i}": ("done", 0, None) for i in (4, 5, 6)})
     h.tick()
     pl = h.postland()
     assert pl["verified"] == main and pl["run"] is None, world.logs
+
+
+@pytest.mark.parametrize("ends", ["failed", "no artifact", "lost"])
+def test_a_sharded_run_s_shards_build_the_records_themselves_when_the_records_step_gives_none(world, monkeypatch, ends):
+    """The records step holds the shards only while it may still give its artifact: failed, passed without one by
+    `RECORDS_WAIT_S`, or still running then (cancelled), the shards launch without it and each builds the records itself."""
+    from research.drive import RECORDS_WAIT_S
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = 3
+    h.d.records_artifact = lambda rid: None
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    h.run_state["r-post-0"] = {"failed": ("failed", 1, None), "no artifact": ("done", 0, None), "lost": ("running", None, None)}[ends]
+    if ends != "failed":
+        h.tick()
+        assert len(h.posted) == 1, "it waits for the artifact"
+        h.clock += RECORDS_WAIT_S + 1
+    h.tick()
+    assert [(kw.get("shard"), "cc_records_from" in kw) for _, _, kw in h.posted[1:]] == [(f"{k}/3", False) for k in (1, 2, 3)]
+    assert h.cancelled == (["r-post-0"] if ends == "lost" else [])
+
+
+def test_an_unsharded_after_landing_run_has_no_records_step(world, monkeypatch):
+    """One run of every step runs circuit-check's `--all` whole, whose prologue builds the records once anyway."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    [(_, steps, kw)] = h.posted
+    assert steps == ",".join(AFTER_LANDING) and "cc_records" not in kw and "shard" not in kw
 
 
 @pytest.mark.parametrize("on, n, want", [
@@ -170,10 +244,14 @@ def test_each_shard_of_the_after_landing_run_gets_machines_no_other_shard_has(wo
     h.d.on, h.d.after_landing_shards, machines = on, n, []
     h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or h.launch_post(repo, commit, machine,
                                                                                                              steps, **kw)
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}"
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     assert h.tick().startswith("landed #1"), world.logs
-    assert machines == want and [kw["shard"] for _, _, kw in h.posted] == [f"{k}/{n}" for k in range(1, n + 1)]
+    h.run_state["r-post-0"] = ("done", 0, None)                  # circuit-check's records step, on any of `on`
+    h.tick()
+    assert machines == [on, *want] and [kw["shard"] for _, _, kw in h.posted[1:]] == [f"{k}/{n}" for k in range(1, n + 1)]
+    machines = machines[1:]
     shared = [line for line in world.logs if "fewer machines than shards" in line]
     if len(on.split(",")) >= n:
         assert not shared and len({m for ms in machines for m in ms.split(",")}) == sum(len(ms.split(",")) for ms in machines)
@@ -190,9 +268,12 @@ def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
 
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = 2
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}"
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     assert h.tick().startswith("landed #1"), world.logs
+    h.run_state["r-post-0"] = ("done", 0, None)                  # circuit-check's records step
+    h.tick()
     main = _main(world)
     check = ["uv", "run", "python", "tools/verity/check/check.py", "--keep-going"]
     steps = ["--deferred", ",".join(AFTER_LANDING)]
@@ -208,16 +289,16 @@ def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
             "o/r", "--store", str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml")]
     with pytest.raises(QueueError, match="still launching"):
         Q.drive_shard_add(h.q, main, 2, "r-hand")
-    h.run_state.update({"r-post-0": ("done", 0, None), "r-post-1": ("waiting", None, None), "r-hand": ("done", 0, None)})
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("waiting", None, None), "r-hand": ("done", 0, None)})
     h.evidence = [_steps_run(world.tmp, "r-hand", {s: "passed" for s in AFTER_LANDING})]
     h.tick()
     assert h.postland()["verified"] != main, "shard 2's only twin waits"
     monkeypatch.delenv(DRIVE_ENV, raising=False)
-    assert Q.main(argv) == 1 and h.postland()["run"]["groups"] == [["r-post-0"], ["r-post-1"]]
+    assert Q.main(argv) == 1 and h.postland()["run"]["groups"] == [["r-post-1"], ["r-post-2"]]
     monkeypatch.setenv(DRIVE_ENV, "1")
     for tip, k, rid, why in ((_git(world.origin, "rev-parse", "main^1"), 2, "r-hand", "is not the tip"),
                              (main[:6], 2, "r-hand", "is not the tip"), (main, 3, "r-hand", "shard 3 is not one of the run's 2"),
-                             (main, 0, "r-hand", "shard 0 is not one"), (main, 2, "r-post-0", "already a run"),
+                             (main, 0, "r-hand", "shard 0 is not one"), (main, 2, "r-post-1", "already a run"),
                              (main, 2, "r-other-commit", f"r-other-commit checked {records['r-other-commit'][0][:12]}, not"),
                              (main, 2, "r-other-shard", "r-other-shard is shard 1/2, not shard 2/2"),
                              (main, 2, "r-unsharded", "r-unsharded is no shard, not shard 2/2"),
@@ -229,14 +310,14 @@ def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
         Q.main([*argv[:3], *argv[4:]])
     assert Q.main(argv) == 0
     run = h.postland()["run"]
-    assert run["groups"] == [["r-post-0"], ["r-post-1", "r-hand"]] and run["ids"] == ["r-post-0", "r-post-1", "r-hand"]
+    assert run["groups"] == [["r-post-1"], ["r-post-2", "r-hand"]] and run["ids"] == ["r-post-1", "r-post-2", "r-hand"]
     h.tick()
     assert h.postland()["verified"] != main, "drive waits while a twin it replaced still waits: ci cancels it"
-    h.run_state["r-post-1"] = ("done", SIGTERM_RC, None)
+    h.run_state["r-post-2"] = ("done", SIGTERM_RC, None)
     h.tick()
     pl = h.postland()
     assert pl["verified"] == main and pl["run"] is None, world.logs
-    assert h.cancelled == [] and len(h.posted) == 2
+    assert h.cancelled == [] and len(h.posted) == 3
 
 
 def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_the_landings_above_it(world, monkeypatch):
@@ -297,6 +378,47 @@ def test_no_verdict_counts_by_the_owner_its_handle_or_its_ready_marks_author_wha
         Q.review(h.q, world.store, StoreLabels(world.store, log=lambda s: None), 1, "land", None, "MARKER")
     h.review(1, by="@lane-7")
     assert h.tick().startswith("landed #1")
+
+
+def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_top_every_30_min_at_its_head(world, monkeypatch):
+    """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: drive rings @ci
+    (who staffs the reviewers) and @top `BOTTOM_WAIT_S` after it became the lowest or its ready mark, whichever is later, once
+    per `BOTTOM_WAIT_S` at its head; a hold rings nothing, and a new head starts the wait again."""
+    from research.drive import BOTTOM_WAIT_S
+
+    h = Review(world, monkeypatch)
+    marks: dict[tuple[int, str], float] = {}
+    h.q.marked_at = lambda n, hd: (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(marks[(n, hd)]))
+                                   if (n, hd) in marks else None)
+
+    def rings() -> list[str]:
+        return [p for p in h.posts if "lowest member" in p]
+
+    def wait(s: float) -> str:
+        h.clock += s
+        return h.tick()
+
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    assert wait(BOTTOM_WAIT_S - 60).startswith("nothing reviewed lands: #1") and rings() == []
+    wait(60)
+    (ring,) = rings()
+    assert ring.startswith("@ci @top queue: #1 (owner lane-1)") and "has waited 30 min with no land verdict" in ring, ring
+    wait(BOTTOM_WAIT_S - 60)
+    assert len(rings()) == 1, "at most once per head per BOTTOM_WAIT_S"
+    wait(60)
+    assert len(rings()) == 2 and "has waited 60 min" in rings()[-1]
+
+    world.gh.put(1, world.change({"a.txt": "2\n"}))            # a new head waits afresh, from its ready mark
+    marks[(1, world.gh.prs[1].head)] = h.clock + 600
+    assert wait(0).startswith("nothing reviewed lands: #1") and len(rings()) == 2
+    assert wait(BOTTOM_WAIT_S).startswith("nothing reviewed lands") and len(rings()) == 2, "30 min since it became the lowest, 20 since its mark"
+    wait(600)
+    assert len(rings()) == 3 and world.gh.prs[1].head[:8] in rings()[-1]
+
+    h.review(1, "hold", by="other", ref="reads a stale fixture")
+    wait(BOTTOM_WAIT_S)
+    assert len(rings()) == 3, "a held member waits on its owner, not on a reviewer"
 
 
 def test_a_lean_change_without_a_lock_change_waits_for_a_lean_check_and_the_after_landing_lean_audit_takes_no_regenerated_record(
@@ -645,7 +767,7 @@ def _stacked(world, monkeypatch) -> tuple[Review, str, str]:
 
 
 def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_change_waits(world, monkeypatch):
-    """Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
+    """Lean in `Security/` that touches no lock and no spec is proofs and lands on its land verdict (the
     after-landing lean-audit reverts it on a failure); a lock, or Lean outside `Security/` (it runs as code), still waits."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"Security/lean-audit.json": "{}\n", "Security/Proofs/A.lean": "theorem A : True := trivial\n"}))
@@ -658,17 +780,66 @@ def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_c
     assert h.q.chain()[0].pr == 2                                         # proofs only: non-Lean first puts it below
 
 
-def test_a_two_demos_lean_change_lands_on_its_verdict_and_another_waits(world, monkeypatch):
-    """A PR whose title says "two demos" lands on its land verdict with no Lean check first (its records passed at its
-    ready mark, and the after-landing lean-audit checks it); any other lock change still waits for one."""
+#: a Lake package with a lock outside `Security/`, whose Lean runs as code
+FLOCK_LOCK = {"verity/core/service/flock/lean-audit.json": "{}\n"}
+
+
+def test_every_lean_change_but_proofs_waits_for_its_lean_check_whatever_its_title(world, monkeypatch):
+    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Models.lean` and
+    `Security/`'s Lake files: what the guarantees' statements read), every lock and Lean that runs as code (outside `Security/`,
+    in a package with a lock: Flock's verifier) wait for a Lean check in a two-demos PR too: landed unchecked, they leave a
+    record stale for the after-landing lean-audit (`--no-regenerate`), the spec's statements or a code package's
+    `verifier.allow`, with no regenerated lock commit after them.  `Security/` proofs alone wait in no PR."""
+    _move_main(world, FLOCK_LOCK)
     h = Review(world, monkeypatch)
-    world.gh.put(1, head := world.change({"pkg/lean-audit.json": "{}"}))
-    world.gh.prs[1] = PR(1, head, "Two demos: the lock", "Lane `lane-1`.")
-    world.gh.put(2, world.change({"pkg/lean-audit.json": "{\n}"}, base=head))
-    for n in (1, 2):
+    two_demos = {1: {"pkg/C.lean": "theorem C : True := trivial\n"},
+                 2: {"Security/Definitions/X.lean": "def x := 1\n"},
+                 3: {"pkg/lean-audit.json": "{}"},
+                 4: {"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"},
+                 5: {"Security/Models.lean": "import Definitions.X\n"},
+                 6: {"Security/lakefile.toml": "name = \"security\"\n"},
+                 7: {"Security/lean-toolchain": "leanprover/lean4:v4.0.0\n"},
+                 8: {"verity/core/service/flock/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}
+    for n, files in {**two_demos, 9: {"Security/Definitions/Z.lean": "def z := 1\n"}}.items():
+        world.gh.put(n, head := world.change(files))
+        if n in two_demos:
+            world.gh.prs[n] = PR(n, head, f"two demos: change {n}", f"Lane `lane-{n}`.")
         h.review(n)
+    h.q.sync()
+    chain = h.q.chain()
+    want = {n: n != 4 for n in range(1, 10)}
+    assert {m.pr: lean_change(h.d.repo, m.commit) for m in chain} == want
+    h.d._lean_of = {}                                                       # a tick's cache
+    assert {m.pr: h.d._lean_change(m) for m in chain} == want
+
+
+@pytest.mark.parametrize("path, text", [("Security/Definitions/Claims/Sampling.lean", "def AuditStatement := 1\n"),
+                                        ("verity/core/service/flock/Flock/X.lean", "def x := Nat.gcd 4 6\n")],
+                         ids=["spec", "code"])
+def test_a_two_demos_spec_or_code_lean_change_without_a_lock_waits_for_a_lean_check_before_it_lands(
+        world, monkeypatch, path, text):
+    """A two-demos PR that changes a guarantee's statement, or Flock's verifier Lean, without its lock doesn't land on its
+    verdict: drive launches a Lean check at its commit and lands it once that check passed, with its regenerated records."""
+    _move_main(world, FLOCK_LOCK)
+    h = Review(world, monkeypatch)
+    world.gh.put(1, head := world.change({path: text}))
+    world.gh.prs[1] = PR(1, head, "two demos: dedupe", "Lane `lane-1`.")
+    h.review(1)
+    assert not h.tick().startswith("landed"), world.logs
+    assert h.launched == [(_tip(world), "m1", False)], world.logs
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {"lean-build": "passed", LEAN_STEP: "passed"})]
     assert h.tick().startswith("landed #1"), world.logs
-    assert h.launched and h.launched[0][0] != head, world.logs              # #2's own check, never #1's
+
+
+def test_a_two_demos_proofs_only_change_lands_on_its_verdict_with_no_lean_check(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    world.gh.put(1, head := world.change({"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"}))
+    world.gh.prs[1] = PR(1, head, "two demos: a proof", "Lane `lane-1`.")
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert h.launched == [], world.logs
 
 
 def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):
@@ -1192,17 +1363,19 @@ def _red_landing(world, monkeypatch, tmp_path) -> tuple[Review, str]:
     return h, tip
 
 
-def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
-                                                                                                       tmp_path):
-    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to @ci alone.
-    Drive names the one landing whose change touches the failing test, rings its owner and the suite's with the run and the first
-    error line, and reverts it once `FIX_WINDOW_S` passed with no fix marked."""
+def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
+                                                                                                             tmp_path):
+    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to ci alone.
+    Drive names the one landing whose change touches the failing test, rings its lane with the suite's owner in one post
+    (neither ci nor top) with the run and the first error line, and reverts it once `FIX_WINDOW_S` passed with no fix
+    marked, telling the same two."""
     from research.drive import FIX_WINDOW_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
     assert _main(world) == tip
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@ci @pkg-owner @lane-2 queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
+    assert ring.startswith("@lane-2 @pkg-owner queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
+    assert "@ci" not in ring and "@top" not in ring, ring
     assert "failed tests/test_x.py::test_y" in ring and "NameError: name '_once' is not defined" in ring, ring
     assert "Culprit: #2 (its change touches pkg/tests/test_x.py)" in ring and "unless a fix is marked" in ring, ring
     assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2
@@ -1215,7 +1388,8 @@ def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_rev
     assert _git(world.origin, "rev-parse", f"{main}^") == tip                            # one revert on top of the landing
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
     (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
+    assert post.startswith("@lane-2 @pkg-owner queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
+    assert "@ci" not in post and "@top" not in post, post
     assert h.posted[-1][0] == main and h.launched == []                                  # the next run checks the new tip
     h.run_state[f"r-post-{len(h.posted) - 1}"] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, f"r-post-{len(h.posted) - 1}", {s: "passed" for s in h.posted[-1][1].split(",")})]
@@ -1408,7 +1582,7 @@ def test_a_revert_whose_push_loses_a_race_is_retried_on_the_next_tick(world, mon
     main = _main(world)
     assert _git(world.origin, "rev-parse", f"{main}^") == raced[0] and _reverts(world, tip) == 1
     assert _git(world.origin, "show", f"{main}:c.txt") == "landed in between"
-    assert any(p.startswith("@ci @lane-1 queue: #1 reverted on `main`") for p in h.posts), h.posts
+    assert any(p.startswith("@lane-1 queue: #1 reverted on `main`") for p in h.posts), h.posts
 
 
 def test_a_drive_killed_after_a_revert_pushed_does_not_revert_again_on_restart(world, monkeypatch, tmp_path):
@@ -1511,13 +1685,14 @@ def test_a_read_guard_failure_rings_the_pr_that_added_the_reading_test(world, mo
     h.evidence = [run]
     h.tick()
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@ci @pkg-owner @lane-1 queue: suite pkg is red"), ring
+    assert ring.startswith("@lane-1 @pkg-owner queue: suite pkg is red"), ring
     assert "read outside its declared inputs: data/x.json" in ring and "Culprit: #1" in ring, ring
 
 
-def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(world, monkeypatch, tmp_path):
+def test_main_far_behind_its_last_verified_commit_for_a_red_rings_the_culprits_lane_every_hour(world, monkeypatch, tmp_path):
     """A `main` many hours without a verified commit must reach someone.  Once its oldest unverified landing is
-    `BEHIND_S` old, drive rings @ci and @top, again every `BEHIND_EVERY_S` while it stays behind."""
+    `BEHIND_S` old, drive rings who acts on what is red there, the culprit's lane and the suite's owner (not ci and top, which
+    hear only while nothing red explains it), again every `BEHIND_EVERY_S` while it stays behind."""
     from research.drive import BEHIND_EVERY_S, BEHIND_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
@@ -1528,7 +1703,7 @@ def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(wo
     h.clock += 20
     h.tick()
     (alarm,) = [p for p in h.posts if "behind its tip" in p]
-    assert alarm.startswith("@ci @top queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
+    assert alarm.startswith("@lane-2 @pkg-owner queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
     h.clock += BEHIND_EVERY_S - 30
     h.tick()
     assert len([p for p in h.posts if "behind its tip" in p]) == 1
@@ -1552,7 +1727,7 @@ def test_a_healthy_after_landing_run_under_way_is_not_an_alarm(world, monkeypatc
     h.clock += POSTLAND_RUN_S
     h.tick()
     (alarm,) = [p for p in h.posts if "behind its tip" in p]
-    assert "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
+    assert alarm.startswith("@ci @top queue: ") and "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
 
 
 def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_broke_it(world, monkeypatch, tmp_path):
@@ -1593,7 +1768,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     h.tick()
     assert "bisect" not in h.postland() and not [p for p in h.posts if "reverted" in p]
     (ring,) = [p for p in h.posts if "Culprit: #2, by bisection" in p]
-    assert ring.startswith("@ci @lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
+    assert ring.startswith("@lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
     h.clock += FIX_WINDOW_S + 1
     h.tick()
     main = _main(world)
@@ -1601,7 +1776,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     assert _subject(world, revert).startswith('Revert "Queue: #2')
     assert _git(world.origin, "show", f"{main}:pkg/tests/test_x.py") == "def test_y():\n    pass"
     (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`"), post
+    assert post.startswith("@lane-2 queue: #2 reverted on `main`"), post
 
 
 def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Review, str]:
@@ -1981,8 +2156,8 @@ def test_a_detached_lean_launch_that_ends_without_run_ids_registered_no_run_and_
     h.printed[str(tmp_path / "launch-1")] = ([], "train: no run launched in the wait; stopped its launcher")
     assert not h.tick().startswith("landed")
     (post,) = [p for p in h.posts if "registered no run" in p]
-    assert f"train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run: train: no run launched" in post, post
-    assert f"{tmp_path / 'launch-1'}/log" in post
+    assert post.startswith(f"@ci @top queue: train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run 1 time since "), post
+    assert post.endswith(f"(log {tmp_path / 'launch-1'}/log): train: no run launched in the wait; stopped its launcher"), post
     assert starts == [top, top]                                           # dropped, and launched again in the same tick
     rec = h.d.q.load_state()["drive"]["lean"][top]
     assert rec["launch"]["dir"] == str(tmp_path / "launch-2") and rec["state"] is None
@@ -1991,7 +2166,10 @@ def test_a_detached_lean_launch_that_ends_without_run_ids_registered_no_run_and_
     assert starts == [top, top]
     h.clock += 1                                                          # printing nothing past it, it registered no run
     h.tick()
-    assert starts == [top, top, top] and len([p for p in h.posts if "registered no run" in p]) == 1   # told once per commit
+    posts = [p for p in h.posts if "registered no run" in p]
+    assert starts == [top, top, top] and len(posts) == 2, posts           # another reason rings at once
+    assert "registered no run 2 times since" in posts[1] and posts[1].endswith(": no run ids 60 min after its launch: "
+                                                                               "train: abc on m1; log x"), posts[1]
     rec = {"ids": [], "launch": {"dir": "d", "pid": 0}, "at": h.clock - LAUNCH_LOST_S - 1}
     assert h.d._resolve(rec, "x").startswith("no run ids 60 min after its launch") and "launch" not in rec
 
@@ -2058,6 +2236,77 @@ def test_the_after_landing_run_launches_detached_and_one_that_registered_no_run_
     h.evidence = [_steps_run(world.tmp, "r-post", {s: "passed" for s in AFTER_LANDING})]
     assert h.tick().startswith("landed #1"), world.logs
     assert h.postland()["verified"] == main
+    assert "postland" not in h.d.q.load_state()["drive"]["launch_failed"]     # its launch registered a run: the count ends
+
+
+def test_an_after_landing_launch_that_exits_1_rings_ci_and_top_once_an_hour_and_the_behind_ring_names_it(
+        world, monkeypatch, tmp_path):
+    """A train.sh that refuses before any step exits 1 at every launch, and drive launches the run again each tick.  Told once to
+    ci alone, nobody acted for hours while the behind-ring said the run was `(launching)` for 0.0 h.  Each launch that
+    registered no run rings ci and top at once with its reason's last line, the same reason at the same tip again only an hour
+    later, and the behind-ring counts the failures."""
+    from datetime import UTC, datetime
+
+    from research.drive import BEHIND_S, LAUNCH_RING_EVERY_S
+
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path, lean=False, post=True)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1")
+    main, landed = _main(world), h.clock
+    assert starts == [main]
+    refused = "train.sh: refused: its settings check failed (exit 1)"
+    h.d.launched = lambda launch: ([], f"train: checking settings\n{refused}")
+
+    def rings() -> list[str]:
+        return [p for p in h.posts if "registered no run" in p]
+
+    h.clock += 60
+    h.tick()
+    (ring,) = rings()
+    since = f"{datetime.fromtimestamp(h.clock, UTC):%H:%M}Z"
+    assert ring.startswith(f"@ci @top queue: train.sh {main[:12]} m1 --deferred "), ring
+    assert ring.endswith(f"registered no run 1 time since {since} (log {tmp_path / 'launch-1'}/log): {refused}"), ring
+    assert "checking settings" not in ring and starts == [main, main]
+    h.clock += 600
+    h.tick()                                                              # the same failure within the hour: no ring
+    assert len(rings()) == 1 and starts == [main] * 3
+    assert h.d.q.load_state()["drive"]["launch_failed"]["postland"]["n"] == 2
+    h.clock += LAUNCH_RING_EVERY_S - 600
+    h.tick()
+    assert len(rings()) == 2 and f"registered no run 3 times since {since}" in rings()[1], rings()
+    h.clock = landed + BEHIND_S + 60
+    h.tick()
+    (alarm,) = [p for p in h.posts if "behind its tip" in p]
+    assert alarm.startswith("@ci @top queue: `main`'s last verified commit"), alarm
+    assert f"its launch registered no run 4 times since {since}: {refused}; red: nothing named red" in alarm, alarm
+    assert "(launching)" not in alarm and "has run" not in alarm, alarm
+
+
+def test_a_lean_check_launch_that_exits_1_rings_ci_and_top_and_again_only_an_hour_later(world, monkeypatch, tmp_path):
+    from research.drive import LAUNCH_RING_EVERY_S
+
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    h.tick()
+    top = _tip(world)
+    h.d.launched = lambda launch: ([], "train.sh: refused: its settings check failed (exit 1)")
+
+    def rings() -> list[str]:
+        return [p for p in h.posts if "registered no run" in p]
+
+    h.tick()
+    (ring,) = rings()
+    assert ring.startswith(f"@ci @top queue: train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run 1 time"), ring
+    h.clock += LAUNCH_RING_EVERY_S - 1
+    h.tick()
+    assert len(rings()) == 1 and starts == [top] * 3
+    h.clock += 1
+    h.tick()
+    assert len(rings()) == 2 and "registered no run 3 times since" in rings()[1], rings()
 
 
 def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_them_or_an_exit_without_them(tmp_path, monkeypatch):

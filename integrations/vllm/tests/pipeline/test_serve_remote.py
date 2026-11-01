@@ -1,4 +1,4 @@
-"""serve-openai's remote bandwidth session (`serve_remote`) on CPU: its options and refusals before the model loads, the
+"""serve-openai's PoUB session (`serve_remote`) on CPU: its options and refusals before the model loads, the
 engine's arguments under it, and, over the stand-in engine and a prover that drives the session's `Lockstep` as
 `remote.prove` does, the server's engine steps paced by the session from its first, the steps after it unaudited, the
 registered bytes a seal carries read before it, and a session that fails or outlasts the server rejected."""
@@ -81,6 +81,8 @@ def test_the_remote_options_parse_into_their_group_and_are_refused_before_the_mo
     opts = parse(*VERIFIER, "--remote-filler-gib", "1.5")
     assert (opts.remote.remote_verifier, opts.remote.remote_plan, opts.remote.remote_filler_gib) == ("127.0.0.1:7781", "serve", 1.5)
     assert refusal(opts) is None and SR.session_of(parse(), "/tmp") is None and SR.accepted(None)
+    assert SR.session_of(parse(*VERIFIER, "--remote-node", "gpu-node"), "/tmp").cs.node == "gpu-node"
+    assert SR.session_of(opts, "/tmp").cs.node.startswith("verity-vllm/")
     assert "HOST:PORT" in refusal(parse("--remote-verifier", "nohost"))
     assert "is serve" in refusal(parse(*VERIFIER, "--remote-plan", "servedrop:1"))
     assert "kv_lib" in refusal(parse(*VERIFIER, "--remote-session-lib", "session.so"))

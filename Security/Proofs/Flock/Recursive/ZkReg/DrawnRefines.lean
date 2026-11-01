@@ -1,5 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
 import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+import Proofs.Flock.Soundness.Discharge.Composed.Sound
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The drawn units of one `--zk --registered` session

@@ -24,7 +24,8 @@ without blocking a merge.
 A suite is a directory whose `pyproject.toml` configures pytest. Each runs in its own process from its own directory. A pass is
 kept under a hash of its inputs and reused while that hash is unchanged. The inputs are the suite's directory, the workspace
 packages it depends on, what it resolves to in `uv.lock`, the paths it lists under `[tool.verity.tests] inputs`, its fixtures,
-the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables), and the runner itself.
+the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables but those `settings.py` declares
+`where`), and the runner itself.
 Markdown is left out unless a suite lists it. The read guard (`guard/verity_suite_guard.py`) fails a test that opens a
 repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. In a
 `parallel = true` suite each passing test is also kept on its own, under its module's key.
@@ -35,6 +36,30 @@ part reads something it doesn't declare, and the fix goes in the check.
 
 `suites.py`'s docstring is the full contract. The testing skill (`.agents/skills/testing/SKILL.md`) has the rules every test
 follows.
+
+## Modules
+
+| File | What it is |
+| --- | --- |
+| `check.py` | `check` itself: every step, its shards, `--deferred`, `--record` |
+| `ci.toml`, `declaration.py` | the jobs `check` runs, and their reader |
+| `suites.py` | every test suite, each run in its own process, with passes cached |
+| `guard/` | the read guard, the pytest plugin `suites.py` loads into every suite |
+| `verdicts.py` | passes carried between machines as one verdict pack |
+| `common.py` | the helpers `check.py` and the Lean check share, apart so the Lean check's key covers them |
+| `plan.py` | `check.py --plan`: what `check` would reuse at a commit and what it would run |
+| `spans.py` | the spans a check run writes beside its steps, which the dashboard reads |
+| `tool.py`, `preflight.py` | the check's store declaration, and whether a machine is prepared for it |
+| `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
+| `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
+| `train.sh` | the lander's recorded check of a train |
+| `post_train.py` | the vLLM reference regression's manifest rebuilds after a landing |
+| `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
+| `gates/markdown_caps.py` | the landing gate holding Markdown to its caps |
+| `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
+| `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
+| `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
+| `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
 ## Running it
 
@@ -50,8 +75,61 @@ uv run tools/verity/check/suites.py --explain SUITE       # why a suite would ru
 ~~~
 
 `research run` returns once the job starts, and `research status RUN` checks back on it. To record a check of a clean
-commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research` from
-the checkout.
+commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on auto` from the checkout.
+
+## Tasks (`tasks/v1`)
+
+The check is also a graph of tasks, the whole contract between Verity and an executor. `verity tasks` (`tasks.py`) has two
+commands:
+
+~~~sh
+verity tasks list --json [--kind after-landing|preflight] [--changed BASE] [--circuit-shards M] [--gather | --costs FILE]
+verity tasks run ID [--out FILE] [--work DIR] [--circuit-shards M]
+~~~
+
+`list` prints the graph of the checked-out tree, uncommitted files included. `--kind after-landing` (the default) is every job
+in `ci.toml`, as drive's after-landing run checks it; `--kind preflight` is the jobs on the merge gate, a PR's preflight.
+`--changed BASE` keeps the tasks whose inputs the change from BASE's merge-base with HEAD touches, by `suites.py --changed`'s
+rule for a suite and by input paths for the rest, and the tasks they depend on. `--circuit-shards M` splits circuit-check into M
+tasks (default: its ci.toml `shards`). The document is `{"schema": "tasks/v1", "commit", "tree", "kind", "circuit_shards",
+"changed": {"base": the merge-base, "files": how many files changed} or null, "costs": [notes], "tasks": [...]}`, and each
+task is:
+
+| Field | What it is |
+| --- | --- |
+| `id` | the shard planner's part (`shards.py`): `pytest:SUITE` or `lean-suites:SUITE` (`suites.AFTER_LEAN`, which read the verifier's build), `lean-audit:PKG`, `circuit-check:K/M`, or a job's name |
+| `kind` | `suite`, `lean-package`, `circuit-check`, `build` (`lean-build`, `flock-circuit-build`) or `step` (another job, run whole: `flock-rust-tests`, `lean-unit-cut`, `lean-agreement`, `lean-changed`, `ratchet-gate`) |
+| `argv`, `cwd` | the command `check.py` builds for that part alone (`check.groups`), with `<tree>`, `<cache>`, `<out>` and `<python>` for the tree, the check's cache, the run's output directory and the interpreter; `argv` is null where check can't run it on this tree |
+| `reason` | null, or why `argv` is null: one starting `skipped:` is a skip, any other a failure |
+| `inputs` | `{"closure", "paths"}`: paths and globs from the root that cover what the task reads, and the function that lists them (`suites.inputs_of`, with the runner's files; `lean_audit.inputs`; circuit-check's workspace closure). `["."]` is the whole tree, for a job that declares none |
+| `needs` | the artifacts it reads that another task makes: `lean-build:verity/core/service/flock/.lake/build`, `flock-circuit-build:$FLOCK_CHECKOUT` |
+| `outputs` | the artifacts it makes (a build's) |
+| `deps` | the task ids that must end before it starts (its job's ci.toml `needs` and `after`) |
+| `beside` | the tasks that build what it builds (a spec's audit and the packages its `proved_in` names), so best on one worker; no order |
+| `resources` | `{cores, mem_gb, disk_gb}` it asks of a worker: 32, 128, 60 for a Lake package's audit; 1, `suites.TEST_PROCESS_GB`, 10 for a suite that runs in one process; 16, 64, 20 for the rest |
+| `cost_s` | its measured seconds (`check.measure`: this machine's caches, `--gather` the newest recorded checks' too, `--costs` a `{id: seconds}` over them), null when none |
+| `key` | SHA-512 over its id, argv, cwd and what it reads; null when it has none |
+| `unkeyed` | null, or why `key` is null |
+
+A task's key hashes what a suite's key hashes (`suites.components`: each input's git object id, its fixtures, the
+resolved lock entries and installed versions, Python, the platform, the base image and the `VERITY_*`/`FLOCK_*` variables) under
+the environment check gives that step; a Lake package's, `lean_audit.components` (its content and its path dependencies' and
+provers', the auditor's files, the toolchain pin) with Python and the base image; a job in `check.STEP_KEYS`, that step's key.
+So keys are of the machine that lists them: list on a worker. These have no key yet, and run whenever they're in the graph: the
+builds (no declared inputs, read guard or keyed outputs), circuit-check's slices (it keys each target, from a task list only a
+run builds), and the jobs that keep no verdict (`lean-unit-cut`, `lean-changed`, `ratchet-gate`). The preflight is no task: a
+worker's `uv sync --locked` refuses a lock that isn't current, each suite fetches the fixtures it reads, and the repository's
+suite holds the lints.
+
+`run ID` runs that task here as `check.py` runs that part in a shard of its own (`check.run` with only that part, without the
+preflight), its `deps` beside it until artifacts are shared, and writes `{"schema", "id", "verdict": passed|failed|skipped,
+"key", "seconds", "outputs": {"dir", "files", "artifacts"}, "steps": [check's step records]}` to stdout or `--out`; the steps'
+progress goes to stderr. It exits 0 for passed or skipped, 1 for failed.
+
+A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
+it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
+and ended, and `verity ci inspect RUN` shows a check's steps with their state, elapsed time, an ETA from each step's median
+over recent recorded checks, and its reds so far. What isn't recorded shows as unknown, never as passed.
 
 ## Landing
 
@@ -60,5 +138,13 @@ PRs land through the merge queue (`research queue drive`): its flags are `drive.
 merge. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
 with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red job off the gate reverts its culprit on `checked`
-but doesn't hold `main`. The team skill's "Landing" is the procedure. A pure move that `move_check.py` certifies
-(`verity check move BASE HEAD`) lands ahead of the queue.
+but doesn't hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
+body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
+(`verity check move BASE HEAD`), running both scripts as `checked` has them.
+
+## Settings
+
+Every environment variable check reads is declared once in `settings.py`, with its type, default, doc and role: `value` (hashed
+into the run's `result.json` under `settings`), `where` (telemetry there, with the reason it changes no verdict) or `debug`
+(refused in a recorded run, and by `train.sh`). `check.py` and `suites.py` refuse to start with a `CHECK_*` or `LEAN_SLOT*`
+variable it doesn't declare. Reads outside it are held by `tools/verity/check/tests/test_settings.py` to a list that only shrinks.

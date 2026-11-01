@@ -42,13 +42,6 @@ def StepsBaseC (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w).LastCoinFree
       FlockDeploy.sha512
 
-/-- `StepsBase` is `StepsBaseC` at the deployed plain verifier's trimmed columns. -/
-theorem stepsBaseC_of_stepsBase {nextE : Msg → List Msg → List Coin → Claims.OC Out} {wE : Msg → ℝ}
-    {join : List Msg → Msg} {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ}
-    (h : StepsBase nextE wE join final w) :
-    StepsBaseC nextE (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join final w :=
-  h
-
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
 (`recTr`), and any steps and columns meeting `StepsBaseC`, from `DecompB`**: `ksLin2_route_staged` with `HeldB` from
 `heldB_layoutBTops`, `StagedB` from `stagedB_deployRec_part` at `recRead` (`readsBack_recTr`), the inner check
@@ -162,8 +155,9 @@ theorem stepsBase_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List
 /-! ## The B corollaries at the deployed reader -/
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
-(`recTr`) and the deployed reader's steps and trimmed columns**: `ksLin2_stepsC_partAccepts` at `stepsBase_R`. What
-stays open: `DecompB` at `PartAccepts` and `PlainRdInR`. -/
+(`recTr`) and the deployed reader's steps and trimmed columns**: `ksLin2_stepsC_partAccepts` at `stepsBase_R`. Its
+premises are `DecompB` at `PartAccepts` and `PlainRdInR`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the
+deployed reader with none. -/
 theorem ksLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)

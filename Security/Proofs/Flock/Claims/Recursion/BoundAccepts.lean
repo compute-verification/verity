@@ -23,9 +23,6 @@ namespace Claims.Recursion.VStarB
 open Claims
 open Claims.Recursion.VStar (readAt)
 
-theorem readAt_length (w : Flock.Wit) (ps : List ℕ) : (readAt w ps).length = (ps.length + 7) / 8 := by
-  simp [readAt, VStar.bytesOf]
-
 theorem readForms_length (w : Flock.Wit) (fs : List _root_.Flock.HmNets.Lin) :
     (readForms w fs).length = (fs.length + 7) / 8 := by
   simp [readForms, VStar.bytesOf]

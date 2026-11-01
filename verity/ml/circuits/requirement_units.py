@@ -40,7 +40,7 @@ string (`b || c`). So is the stale bound, the store index below which every writ
 derives it from the pass row as a step, the cap, and holds a re-key's old block's write step in the map below it; no
 input names it.
 
-**The appends.** A step's written blocks are the remote audit's append for that step. A payload row's commit string is the
+**The appends.** A step's written blocks are PoUB's append for that step. A payload row's commit string is the
 append leaf's (`hm96-sha512/row/v2` of the same 4,096 bytes under the same salt: the leaf hides ``d_j``), so an append's root
 is a function of its instance's payload rows' ``b || c`` and its public ``first`` and ``count``. The chain over the steps'
 appends is then the record's (remote_bandwidth's `Record.appends`): no dummy append, none out of the map's order, no re-key the
@@ -113,8 +113,9 @@ statement adds each row's hm96 commitment.
 
 `plan_match`, `plan_shard` and `memory_map` are the references, over plain ints; `plan_rows`, `plan_shard_rows` and
 `memory_map_rows` name each instance's rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments
-from a `requirement.Requirement`, its `Layout` and `Store` (`layout_words`, `map_words` and `pass_words` the shared rows),
-`shard_inputs` a shard's from a pass's plan and the blocks its step reads, and `row_words` an instance's rows from them.
+from a `requirement.Requirement`, its `Store.Packing` and `Store` (`layout_words`, `map_words` and `pass_words` the shared
+rows), `shard_inputs` a shard's from a pass's plan and the blocks its step reads, and `row_words` an instance's rows from
+them.
 """
 from __future__ import annotations
 
@@ -127,7 +128,7 @@ from . import boolean as BL
 from .boolean import trace as TR
 from .boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from .defs import CompositeDefinition
-from .requirement import BLOCK_BITS, Layout, Requirement, Store
+from .requirement import BLOCK_BITS, Requirement, Store
 from .types import Array
 
 __all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "PlanShard", "U16", "layout_words", "map_inputs", "map_value_leaves",
@@ -525,7 +526,7 @@ def _mask(bits, n: int) -> list[int]:
     return out
 
 
-def layout_words(S, req: Requirement, layout: Layout, positions: Sequence[int]) -> list[int]:
+def layout_words(S, req: Requirement, layout: Store.Packing, positions: Sequence[int]) -> list[int]:
     """The layout row at epoch 0: written value ``positions[i]``'s store index and slot at words 2 i and 2 i + 1, zero past
     them and at every later epoch (a re-key's entries, ``(e V + i)``'s words, are its caller's)."""
     vw, out = value_bits(S.SLOTS), [0] * (2 * S.V * S.E)

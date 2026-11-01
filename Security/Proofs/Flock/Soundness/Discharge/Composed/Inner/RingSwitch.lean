@@ -16,7 +16,7 @@ claim's value is a masked message, so the check is the affine constraint on the 
 The honest prover's messages at the claims the replay derives, for a witness `z`:
 
 * `ŝ_k = shat (claimOf m c_k) z`: bit-slice `v` of `z` evaluated at `c_k`'s point beyond the packed seven bits
-  (`OpeningPhase.lean`'s `shat`, §12.2);
+  (`OpeningPhase.lean`'s `shat`, `Flock.Opening`);
 * the lincheck's final message `zPartial = zPartialOf (claimOf m ab) z + h_zp`: the 64 skip positions of `z`, each
   evaluated at `ab`'s point (§10), under its pads;
 * the zerocheck's `final_c = (claimOf m c).eval z + h_fc`: the `c` claim's value under its pad.
@@ -86,7 +86,7 @@ theorem eqAt_range {n : ℕ} (r : Fin n → 𝔽) (g : ℕ → 𝔽) (hg : ∀ j
 
 /-! ## The claim check and the lincheck's message -/
 
-/-- **The claim check is the packed weights' sum** (§12.1, `packedWeight_eq` without the shapes). -/
+/-- **The claim check is the packed weights' sum** (`Flock.Opening`, `packedWeight_eq` without the shapes). -/
 theorem fOf_claimCheck {m : ℕ} (hm : 7 ≤ m) (c : Flock.Claim) (s : Array F128) :
     fOf (Zk.claimCheck c s) = ∑ v : Fin 128, packedWeight (claimOf m c) hm v * vecOf 128 s v := by
   show fOf (dot (wOf c) s) = _
@@ -232,7 +232,7 @@ theorem fOf_dot_combo (ws : Array F128) (hw : ws.size = 64) (lay : Zk.PadLayout)
   rw [Finset.sum_eq_single ⟨lay.zp k.val, zp_lt lay k.isLt⟩ (fun j _ hj => by
     rw [ite_eq_right (fun e => hj (Fin.ext e))]) (by simp), ite_eq_left rfl]
 
-/-- **The ring switch's two constraints hold for the honest prover** (completeness of §12.2 under the pads, at the
+/-- **The ring switch's two constraints hold for the honest prover** (completeness of `Flock.Opening` under the pads, at the
 claims `Zk.replay` derives). On a run of the masked replay, at any pads vector `h` and witness `z`, if the lincheck's
 final message is the honest one under its pads, `final_c` is the `c` claim's value under its pad, and each of the two
 ring-switch messages is the honest `ŝ` at its claim, then `verifyRep`'s constraints "ring switch ab" and
@@ -285,7 +285,7 @@ theorem fOf_dot_right (a b : Array F128) (n : ℕ) (hb : b.size = n) :
     show fOf 0 * fOf b[i]! = 0
     rw [fOf_zero, zero_mul]
 
-/-- **The batched target of honest ring switches** (completeness of §12.3–§12.5, GF128's claims to Ligerito's target).
+/-- **The batched target of honest ring switches** (completeness of `Flock.Opening`, GF128's claims to Ligerito's target).
 On a run of `ringSwitch` on well-formed rounds (each round's coins as many as it issued), if every claim's message is the honest `ŝ` and `f` is the packed witness (bit `v` of `f y` is
 `z[128y + v]`), the batched value `T` is `Σ_y f(y)·b(y)` for the batched basis `b(y) = Σ_k γ_k·Φ_{r''_k}(eq(z_k, y))`
 of the switched claims (`OpenRel.b`'s form), at each claim's point beyond the packed bits `z_k`. -/

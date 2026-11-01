@@ -1,4 +1,4 @@
-"""verity/flock-circuit's Python side (lane flock-circuit): the composite circuit, its instance files, and the tail pieces in
+"""verity/flock-circuit's Python side: the composite circuit, its instance files, and the tail pieces in
 the circuit. The Rust statement's own tests are ``flock-circuit selftest`` on a pod (every negative) and the crate's unit tests."""
 from __future__ import annotations
 
@@ -222,7 +222,7 @@ def test_registered_reads_refuse_a_circuit_naming_a_port_twice():
 
 @pytest.mark.slow
 def test_the_header_carries_an_rfc8785_identifier(tmp_path):
-    """The header's identifier (PROTOCOL.md §16.10) is both files' as given; anything but a JSON object on which canonical
+    """The header's identifier (`Flock.HmRow`) is both files' as given; anything but a JSON object on which canonical
     JSON is RFC 8785 is refused."""
     s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit)
@@ -264,7 +264,7 @@ def test_public_leaves_split_from_the_rows_and_lie_in_whole_words():
 
 @pytest.mark.slow
 def test_public_input_ports_carry_the_verifiers_recomputation(tmp_path):
-    """A public input port (PROTOCOL.md §16.10) is no row: META names it with its seed and derivation, its leaves are zero
+    """A public input port (`Flock.HmRow`) is no row: META names it with its seed and derivation, its leaves are zero
     leaves of ``leaves_in`` and public words of ``leaves_public`` in whole words of the leaf group, and the unit range is not
     packed (the in region reads it). Both instance files end with its words; the verifier's own ``--public-inputs`` file holds
     the same words under the same ports. A port naming no recomputation, no input port, or one sharing a word with a row's
@@ -299,11 +299,11 @@ def test_public_input_ports_carry_the_verifiers_recomputation(tmp_path):
 def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
     """META ``program_digests`` names the template by core's descriptor id (the canonical partition's and the verifier's), not
     its display id: RMSNorm's EPS is its f64 hex."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
 
     s = _set("rmsnorm-triton/n2048-eps1e-05/bf16", 1, tmp_path)
     got = FC.program_digests(s.subcircuit, FC.set_statics(s))
-    assert list(got) == [_spec_id(s.subcircuit.definition(**FC.set_statics(s)))]
+    assert list(got) == [descriptor_id(s.subcircuit.definition(**FC.set_statics(s)))]
     assert '"f64":"0x1.4f8b588e368f1p-17"' in next(iter(got))
     assert list(got.values()) == list(s.subcircuit.program_digests([FC.set_statics(s)]).values())
 

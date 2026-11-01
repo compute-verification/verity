@@ -10,7 +10,7 @@ set_option maxRecDepth 20000
 /-!
 # The device's output is accepted
 
-Every egress record a closed run publishes is published by an egress tick (`egress_at`), so `CompleteRows` makes its
+Every egress record a closed run publishes is an egress tick's (`egress_at`), so `completeRows_honest` makes its
 grid the Program's grid of the frames the shaper handed under the syncs it declared (`grid_eq`). The assembly certifies
 each record (`certifyAll_ok`), and since a closed run publishes one record of each link-window, the commitment has one
 certificate of each, the honest one (`recordsOf_one`). `HonestAccepted` then accepts the unit.
@@ -24,7 +24,7 @@ open Properties.CertifierDevice (outputs after EgressAt ValidKey egressActions)
 open Properties.CertifierDevice.Proofs (records_proof completeRows_honest pre prefix_good egressAt_of_lt egress_acts
   statusOf rowOf)
 
-theorem mem_published {c : Config} {tr : List Event} {r : Record} (h : r ∈ published c tr) :
+theorem mem_published {c : Config} {tr : List Event} {r : BlockGrid} (h : r ∈ published c tr) :
     ∃ (n : Nat) (acts : List Action) (p : Params), (outputs (init c) tr)[n]? = some acts ∧ Action.publish r p ∈ acts := by
   obtain ⟨acts, hacts, hr⟩ := List.mem_flatMap.1 h
   obtain ⟨n, hn⟩ := List.mem_iff_getElem?.1 hacts
@@ -34,7 +34,7 @@ theorem mem_published {c : Config} {tr : List Event} {r : Record} (h : r ∈ pub
   | _ => cases he
 
 /-- A record on the egress link is published by an egress tick: any other event publishes only ingress records. -/
-theorem egress_at {c : Config} {tr : List Event} (hd : Distinct c) {n : Nat} {acts : List Action} {r : Record}
+theorem egress_at {c : Config} {tr : List Event} (hd : Distinct c) {n : Nat} {acts : List Action} {r : BlockGrid}
     {p : Params} (hn : (outputs (init c) tr)[n]? = some acts) (hm : Action.publish r p ∈ acts)
     (hl : r.link = c.egressLink) : ∃ k b, EgressAt c tr n k b := by
   by_contra hne
@@ -49,7 +49,7 @@ theorem expectedRow_cast {a T W : Nat} (S : Array ClockSync) (h : S.size = W) (f
       _root_.NetworkCertifier.expectedRow a T W (syncsFn S W h) fr := by
   subst h; rfl
 
-theorem window_lt {P : List Record} {l : String} {W : Nat} (h : windowsOn l P = List.range W) {r : Record}
+theorem window_lt {P : List BlockGrid} {l : String} {W : Nat} (h : windowsOn l P = List.range W) {r : BlockGrid}
     (hr : r ∈ P) (hl : r.link = l) : r.window < W := by
   have : r.window ∈ windowsOn l P := List.mem_map_of_mem (List.mem_filter.2 ⟨hr, by simp [hl]⟩)
   rw [h] at this
@@ -59,7 +59,7 @@ theorem window_lt {P : List Record} {l : String} {W : Nat} (h : windowsOn l P = 
 frames under the declared syncs. -/
 theorem grid_eq {c : Config} {tr : List Event} (key : Lms.PrivateKey) (session : ByteArray) (hT : Ticking c) (hd : Distinct c)
     (hc : Closed c tr) (ht : HonestTiming c tr) (hnf : NoFault c tr) (hsd : (declaredSyncs c tr).size = c.windows)
-    {r : Record}
+    {r : BlockGrid}
     (hr : r ∈ published c tr) (hl : r.link = c.egressLink) (hw : r.window < c.windows) :
     r.grid = Properties.NetworkCertifier.programGrid (unitParams c key session) (syncsFn (declaredSyncs c tr) c.windows hsd)
       (openedFrames c tr) r.window := by
@@ -98,9 +98,9 @@ theorem grid_eq {c : Config} {tr : List Event} (key : Lms.PrivateKey) (session :
 /-- **One certificate of each link-window**: if the records `rs` hold one record of each window `w < W` on link `l`,
 each certified in direction `d`, the commitment of what the assembly issued for them has one record of `(d, l, w)`,
 the certificate of that record. -/
-theorem recordsOf_one {c : Config} {i : Issuer} {rs : List Record} {crs : List CertifiedRecord}
+theorem recordsOf_one {c : Config} {i : Issuer} {rs : List BlockGrid} {crs : List CertifiedRecord}
     (hall : List.Forall₂ (Issued c i) rs crs) {l : String} {d : NetworkCheck.Direction} {W w : Nat}
-    (hW : windowsOn l rs = List.range W) (hw : w < W) (hld : ∀ r : Record, r.link = l → directionOf c r = d)
+    (hW : windowsOn l rs = List.range W) (hw : w < W) (hld : ∀ r : BlockGrid, r.link = l → directionOf c r = d)
     (bytes : ByteArray) :
     ∃ r cr, r ∈ rs ∧ r.link = l ∧ r.window = w ∧ Issued c i r cr ∧
       Properties.NetworkCertifier.recordsOf (commitment crs bytes) d l w = [certified cr] := by
@@ -108,7 +108,7 @@ theorem recordsOf_one {c : Config} {i : Issuer} {rs : List Record} {crs : List C
   have hmem : r ∈ rs.filter (fun r => decide (r.link = l ∧ r.window = w)) := by rw [hr]; exact List.mem_singleton_self r
   obtain ⟨hrs, hrd⟩ := List.mem_filter.1 hmem
   simp only [decide_eq_true_eq] at hrd
-  have hf := forall₂_filter (p := fun r : Record => decide (r.link = l ∧ r.window = w))
+  have hf := forall₂_filter (p := fun r : BlockGrid => decide (r.link = l ∧ r.window = w))
     (q := fun cr : CertifiedRecord => decide (cr.head.direction = d ∧ cr.head.link = l ∧ cr.head.window = (w : Int)))
     (fun r cr hi => by
       obtain ⟨pd, -, hh⟩ := hi.head

@@ -19,9 +19,9 @@ import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 
 /-!
-# Lemma A over permutations of any finite type (generalizing `a2/A2.lean`)
+# Lemma A over permutations of any finite type
 
-`a2/A2.lean`'s lazy-sampling count with `Bits ℓ` replaced by any finite type `X` with `N = |X|` points, and the
+A2's lazy-sampling count with `Bits ℓ` replaced by any finite type `X` with `N = |X|` points, and the
 responder given directly as query trees over `Fin B × X`. `count_main` is the counting form of Lemma A with `N^g` in
 place of `2^(ℓ·g)`.
 -/
@@ -84,22 +84,22 @@ theorem work_askList (f : Q → A) (qs : List Q) (c : List A → Tree Q A α) :
 
 end Tree
 
-/-- A `Prog` as a query tree, one query per node. -/
-def toTree {M : IdealModel} {α : Type} : Prog M α → Tree M.Qry M.Ans α
+/-- An `OracleAlgorithm` as a query tree, one query per node. -/
+def toTree {M : IdealModel} {α : Type} : OracleAlgorithm M α → Tree M.Qry M.Ans α
   | .ret a => .ret a
   | .round qs k => Tree.askList qs (fun as => toTree (k as))
 
-theorem run_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : Prog M α) :
+theorem run_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : OracleAlgorithm M α) :
     (toTree p).run f = p.run f := by
   induction p with
   | ret a => rfl
-  | round qs k ih => simp only [toTree, Tree.run_askList, Prog.run]; exact ih _
+  | round qs k ih => simp only [toTree, Tree.run_askList, OracleAlgorithm.run]; exact ih _
 
-theorem work_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : Prog M α) :
+theorem work_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : OracleAlgorithm M α) :
     (toTree p).work f = p.work f := by
   induction p with
   | ret a => rfl
-  | round qs k ih => simp only [toTree, Tree.work_askList, Prog.work]; rw [ih]; omega
+  | round qs k ih => simp only [toTree, Tree.work_askList, OracleAlgorithm.work]; rw [ih]; omega
 
 /-- The trees `p i`, `i ∈ l`, one after another; block `i` of the output is `p i`'s output. -/
 def comb {Q A ι β : Type} [DecidableEq ι] (p : ι → Tree Q A β) (d : ι → β) : List ι → Tree Q A (ι → β)

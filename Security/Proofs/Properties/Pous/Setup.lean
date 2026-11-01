@@ -108,13 +108,6 @@ theorem drop_flatten_chunks {α : Type} (n : Nat) :
       hx, show (j + 1) * n - n = j * n by rw [Nat.succ_mul]; omega,
       drop_flatten_chunks n xs j fun y hy => h y (List.mem_cons_of_mem _ hy), List.drop_succ_cons]
 
-/-- Chunk `j` of a flattening of `n`-element chunks is its `n` elements from `j · n`. -/
-theorem take_drop_flatten_chunks {α : Type} (n : Nat) (xs : List (List α)) (j : Nat) (hj : j < xs.length)
-    (h : ∀ x ∈ xs, x.length = n) : (xs.flatten.drop (j * n)).take n = xs[j] := by
-  rw [drop_flatten_chunks n xs j h, List.drop_eq_getElem_cons hj, List.flatten_cons,
-    List.take_append_of_le_length (Nat.le_of_eq (h _ (List.getElem_mem hj)).symm),
-    List.take_of_length_le (Nat.le_of_eq (h _ (List.getElem_mem hj)))]
-
 /-! ## The decoder -/
 
 theorem decodeBlock_ok {q : P2.Params} {j k t : Nat} {block m : ByteArray} (h : P2.decodeBlock q j k t block = .ok m) :
