@@ -1530,7 +1530,7 @@ class Driver:
             cache[commit] = got
         return cache[commit]
 
-    def _allowed(self, tip: str, key: str, d: Path, rec: dict) -> policy.Verdict:
+    def _allowed(self, tip: str, key: str, d: Path, rec: dict) -> policy.Coverage:
         """Whether an allowance of ``tip``'s policy covers failed ``key`` (`suite NAME`, or a step: circuit-check's by its
         log's failures), with the expired ones that would have."""
         pol, now = self._policy(tip), self.now()
@@ -1538,7 +1538,7 @@ class Driver:
             return pol.suite(key.split(" ", 1)[1], rec, now)
         if key == CIRCUIT_RED:
             return pol.circuit(_step_log(d, rec), now)
-        return policy.Verdict(False)
+        return policy.Coverage(False)
 
     def _allowed_steps(self, tip: str, dirs: list[Path]) -> set[str]:
         """The steps that failed in the run whose records are ``dirs`` only on failures ``tip``'s allowances cover: pytest and

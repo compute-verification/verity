@@ -59,6 +59,7 @@ parallel = true
 exports = ["tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py", "tools/research/src/research/cli.py",
            "tools/research/src/research/clone.py", "tools/research/src/research/compare.py", "tools/research/src/research/env.py",
            "tools/research/src/research/gates.py", "tools/research/src/research/mem.py", "tools/research/src/research/merge.py",
+           "tools/research/src/research/policy.py",
            "tools/research/src/research/pythonpath.py", "tools/research/src/research/queue.py",
            "tools/research/src/research/quick_tier.py", "tools/research/src/research/record.py",
            "tools/research/src/research/remote.py", "tools/research/src/research/result.py", "tools/research/src/research/runs.py",

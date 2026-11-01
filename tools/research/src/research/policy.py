@@ -13,7 +13,7 @@ red until a deadline (`allow`):
 An unexpired allowance covers a failure (`Policy.suite`, `Policy.circuit`): a failed suite whose own `suite NAME` has one, or whose
 every failed test has one and that failed for nothing besides them (its report's `beyond_tests` is false); a failed circuit-check
 step whose every `FAIL` line's key (`circuit_keys`: `CHECK/CODE FAMILY`, the Definition without its statics) has one.  Expired, it
-is as if absent, and the judge names it (each verdict's ``expired``) so drive's ring says which deadline passed.
+is as if absent, and the judge names it (each Coverage's ``expired``) so drive's ring says which deadline passed.
 
 Drive reads the file at the commit it judges (`at`), so an allowance lands with the tip it lets pass and a red `checked` can be
 unblocked by a reviewed change; `research merge` reads `off_gate` at the commit it merges (`merge.declared_jobs`), and the quick
@@ -60,7 +60,7 @@ class Allowance:
 
 
 @dataclass(frozen=True)
-class Verdict:
+class Coverage:
     """Whether the failure is covered, and the expired allowances that would have covered it (none when it is covered)."""
     covered: bool
     expired: tuple[Allowance, ...] = ()
@@ -80,13 +80,13 @@ class Policy:
     off_gate: tuple[str, ...] = ()
     allow: tuple[Allowance, ...] = ()
 
-    def _judge(self, ids: set[str], covered, now: float) -> Verdict:
+    def _judge(self, ids: set[str], covered, now: float) -> Coverage:
         live = {a.id for a in self.allow if a.live(now)}
         if covered(live):
-            return Verdict(True)
-        return Verdict(False, tuple(a for a in self.allow if a.id in ids and not a.live(now)))
+            return Coverage(True)
+        return Coverage(False, tuple(a for a in self.allow if a.id in ids and not a.live(now)))
 
-    def suite(self, name: str, row: dict, now: float) -> Verdict:
+    def suite(self, name: str, row: dict, now: float) -> Coverage:
         """Failed suite ``name``'s report ``row`` (`suites.py --json`'s): covered by its own allowance, or by one for each of its
         failed tests when it failed for nothing else."""
         tests = [str(t) for t in row.get("failed_tests") or ()]
@@ -94,7 +94,7 @@ class Policy:
         return self._judge({whole, *each}, lambda live: whole in live or (
             bool(each) and row.get("beyond_tests") is False and all(t in live for t in each)), now)
 
-    def circuit(self, log: str, now: float) -> Verdict:
+    def circuit(self, log: str, now: float) -> Coverage:
         """A failed circuit-check step, by its log: covered when it names failures and each has an allowance."""
         each = [f"circuit-check {k}" for k in circuit_keys(log)]
         return self._judge(set(each), lambda live: bool(each) and all(k in live for k in each), now)
@@ -148,5 +148,5 @@ def at(repo: Path, commit: str) -> Policy | str:
         return str(e)
 
 
-__all__ = ["ALLOW_FIELDS", "Allowance", "ID_RE", "PATH", "Policy", "PolicyError", "SCHEMA", "Verdict", "at", "circuit_keys",
+__all__ = ["ALLOW_FIELDS", "Allowance", "ID_RE", "PATH", "Policy", "PolicyError", "SCHEMA", "Coverage", "at", "circuit_keys",
            "parse"]
