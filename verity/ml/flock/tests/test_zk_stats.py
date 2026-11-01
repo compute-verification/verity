@@ -1,4 +1,4 @@
-"""The C-Flock ZK transcript statistics (``zk_stats.py``) on synthetic dumps: uniform real and simulated transcripts
+"""The Flock ZK transcript statistics (``zk_stats.py``) on synthetic dumps: uniform real and simulated transcripts
 pass, and a real transcript whose masked values do not depend on the prover's randomness fails. The dumps from
 ``flock-circuit zkstat`` run on a pod or VM; this checks the analysis itself."""
 from __future__ import annotations

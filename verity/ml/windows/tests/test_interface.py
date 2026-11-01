@@ -1,5 +1,5 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
-Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
+Verity's Definitions, a unit's rows are its Definition's bit rows as Flock stages them, a window tiles the partition and
 commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
 the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
 against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
@@ -334,8 +334,8 @@ def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[n
 
 def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_salts():
     """Each member's wired port reads, unit by unit, the writer the pattern gives it; the committed rows' public strings are
-    the writers' (a5's wiring check), a wire moved to other writers is refused there (on the drawn units alone, the units
-    it draws), and a reader row that isn't its writer's output doesn't commit."""
+    the writers' (a5's wiring check), a wire moved to other writers is refused there (on the sampled proof blocks alone, the units
+    it samples), and a reader row that isn't its writer's output doesn't commit."""
     win = I.Window(chain(), RUN, LAW, 2)
     assert [(m.base, m.n, m.wired) for m in win.window.members] == [
         (0, 2, ()), (2, 2, (("x", "o0", (4, 5)),)), (4, 2, (("x", "o0", (0, 1)),)), (6, 2, (("x", "o0", (2, 3)),))]
@@ -465,7 +465,7 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
 
 def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
     """A template passes with the k_log its rows alone need, and is refused, its message naming it, its cuts, its rows and
-    the fix, when its rows are more than C-Flock's composer takes, none is past 111 bytes, or they alone need a C-Flock block
+    the fix, when its rows are more than Flock's composer takes, none is past 111 bytes, or they alone need a Flock block
     past 2^27 bits."""
     assert I.check_proof_block(GEMM) == I.check_proof_block(GEMM, {"x": 2}) == 21
     wide = bind(G.Gemm, K=16, N=256, **G.GEMM_AMPERE)
@@ -479,9 +479,9 @@ def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
 
 
 def test_the_proof_block_limits_are_c_flocks_composers():
-    """`check_proof_block`'s sizes are C-Flock's composer's, and `rows_k_log` is the k_log its ranges give a unit's rows,
+    """`check_proof_block`'s sizes are Flock's composer's, and `rows_k_log` is the k_log its ranges give a unit's rows,
     holding every gate range's k_log at or above it: a row has a compression before its last block exactly past
-    ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit C-Flock block room."""
+    ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block room."""
     from verity_flock import circuit as FC
 
     assert (I.K_MAX, I.SLOT_LOG, I.PER_SLOT, I.MASK_LOG) == (FC.K_MAX, FC.SHA_LOG, FC.PER_SLOT, FC.MASK_LOG)
@@ -815,9 +815,9 @@ class Bound(Held):
 
 def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, the files
-    `write` writes byte for byte, and each member's prover body as the files make it (`rows.read_private`), where ``refd``'s
-    leave a registered value's rows and salts out of the member's own file (``value_rows``); both leave a wired port's
-    (``wired_rows``)."""
+    `write` writes under one index salt byte for byte, and each member's prover body as the files make it
+    (`rows.read_private`), where ``refd``'s leave a registered value's rows and salts out of the member's own file
+    (``value_rows``); both leave a wired port's (``wired_rows``)."""
     a, b = full.close(salt_key=bytes(32)), refd.close(salt_key=bytes(32))
     assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
     assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
@@ -827,7 +827,7 @@ def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
     files = []
     for win, c, d in ((full, a, tmp_path / "full"), (refd, b, tmp_path / "refd")):
-        win.write(c, d, {"by": "test"}, registrar=reg)
+        win.write(c, d, {"by": "test"}, registrar=reg, index_salt=bytes(CS.SALT_BYTES))
         doc = json.loads((d / "window.json").read_text())
         got = {f.name: f.read_bytes() for f in d.iterdir() if not re.fullmatch(r"[mv][0-9]+-private\.bin", f.name)}
         got["window.json"] = {k: v for k, v in doc.items() if k not in ("seconds", "value_rows", "members")}

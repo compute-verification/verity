@@ -113,7 +113,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
     (hx : cs.stream? "stacked/rep0" = some x) (hxs : x.coins.size = rs.size)
     (hrun : RecOpening.run osh (FlockC3.RegLevels.msgsO osh w (FlockC3.RegLevels.opsAt
         (FlockC3.RegLevels.readMaps M osh.sched) osh Lb kap c3 unit w)) (FlockC3.Opening.claimsO osh w c3 unit) 0
-      (RecAlgebra.Coins.ofRounds (FlockC3.Opening.rep0 c3 unit)) = .ok (res, k₁))
+      (RecAlgebra.CoinSource.ofRounds (FlockC3.Opening.rep0 c3 unit)) = .ok (res, k₁))
     (hz : ∀ y ∈ res, y = 0) (hleft : FlockC3.RegLevels.MapsLeft M zs Lb osh unit c3 w kap e0 sb e cap₀ u)
     (htot : 1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op + nCoins u.lg =
       1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length) :

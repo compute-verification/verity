@@ -196,7 +196,50 @@ def test_a_job_the_commits_ci_toml_declares_that_no_shard_runs_passes_nothing(wo
             meta["shard"]["parts"], meta["steps"] = ["lean-audit:q"], meta["steps"][:2]
 
     ids = _shards(world, edit)
-    assert shard_set(store, main, tip, ids, "check", tuple(COMMAND))[1] == f"no shard runs c, which {tip[:12]}'s ci.toml declares"
+    assert shard_set(store, main, tip, ids, "check", tuple(COMMAND))[1] == f"no shard runs c, which {tip[:12]}'s ci.toml puts on the gate"
+
+
+def _off_gate(world):
+    """``world`` with feat's ci.toml also declaring `off`, a job off the gate (`gate = false`, as circuit-check is)."""
+    main, _tip, _config, store = world
+    _git(main, "checkout", "-q", "feat")
+    (main / "tools" / "verity" / "check" / "ci.toml").write_text(CI + '[[job]]\nname = "off"\nowner = "ci"\ngroup = 2\ngate = false\n')
+    _git(main, "commit", "-q", "-am", "off the gate")
+    tip = _git(main, "rev-parse", "HEAD")
+    _git(main, "checkout", "-q", "main")
+    return main, tip, _git(main, "rev-parse", f"{tip}:tools/verity/check"), store
+
+
+def test_a_job_off_the_gate_is_required_of_no_check_whole_or_sharded(world):
+    """circuit-check is off the gate until `circuit-check --all` fits inside the rest of the check: shards covering every job on
+    the gate combine into a passing check, a whole check without it passes, and its red is the after-landing run's to revert."""
+    from research.merge import declared_jobs, refused
+
+    off = _off_gate(world)
+    main, tip, _config, store = off
+    assert declared_jobs(main, tip) == ["a", "lean-audit", "c"]
+    whole = _attempt(store, tip, COMMAND, "check/v1", {"steps": [{"step": s, "status": "passed"} for s in ("a", "lean-audit", "c")]})
+    assert step_status(store, whole, "off") == "absent" and _gate(off) == (tip, whole)
+    assert refused(store, whole, frozenset({"check/v1"}), "check", tip, tuple(COMMAND), main) is None
+    ids = _shards(off)
+    steps, why = shard_set(store, main, tip, ids, "check", tuple(COMMAND))
+    assert why is None and "off" not in {s["step"] for s in steps}
+    rid = _combine(off, ids)
+    assert refused(store, rid, frozenset({"check/v1"}), "check", tip, tuple(COMMAND), main) is None
+    assert not unchecked_pushes(main, [f"refs/heads/main {tip} refs/heads/main {'0' * 39}1"], store)
+
+
+def test_shards_missing_a_job_on_the_gate_still_pass_nothing_beside_a_job_off_it(world):
+    off = _off_gate(world)
+    main, tip, _config, store = off
+
+    def edit(k, argv, meta, kw):
+        meta["shard"]["all"] = EVERY[:3]
+        if k == 2:
+            meta["shard"]["parts"], meta["steps"] = ["lean-audit:q"], meta["steps"][:2]
+
+    ids = _shards(off, edit)
+    assert shard_set(store, main, tip, ids, "check", tuple(COMMAND))[1] == f"no shard runs c, which {tip[:12]}'s ci.toml puts on the gate"
 
 
 def test_a_combine_whose_steps_arent_its_shards_passes_nothing(world):
@@ -233,3 +276,25 @@ def test_a_combine_without_the_targets_checkout_passes_nothing(world):
         "it combines shards, which this gate reads only in the target's checkout, for a commit")
     assert passing(store, tip, kinds=frozenset({"check/v1"}), command=tuple(COMMAND)) == []
 
+
+def test_a_split_step_passes_in_a_shard_only_for_every_part_and_in_the_combine_for_all_of_them(world):
+    """Drive's Lean checks read `step_status(ID, "lean-audit")` from any passing run of a commit, and an after-landing shard is
+    one: shard 1 ran lean-audit on p alone, so its lean-audit is partial, as it is in a deferred run's shard; the combine's
+    `lean-audit:p` and `:q` together pass."""
+    _main, tip, _config, store = world
+    ids = _shards(world)
+    assert [step_status(store, i, "lean-audit") for i in ids] == ["partial", "partial"]
+    assert step_status(store, ids[0], "a") == "passed"
+    rid = _combine(world, ids)
+    assert step_status(store, rid, "lean-audit") == "passed"
+    steps, _ = shard_set(store, *world[:2], ids, "check", tuple(COMMAND))
+    steps[2]["status"] = "failed"
+    assert step_status(store, _combine(world, ids, steps=steps), "lean-audit") == "failed"
+    shard = _shard_meta(1, 2, tip, world[2])
+    deferred = _attempt(store, tip, [*COMMAND, "--deferred", "a,lean-audit", "--shard", "1/2"], "check-deferred/v1",
+                        {"deferred": {**shard["shard"], "deferred": ["a", "lean-audit"]}, "steps": shard["steps"]})
+    assert step_status(store, deferred, "lean-audit") == "partial" and step_status(store, deferred, "a") == "passed"
+    whole = _attempt(store, tip, [*COMMAND, "--deferred", "lean-audit"], "check-deferred/v1",
+                     {"deferred": {"parts": ["lean-audit:p"], "deferred": ["lean-audit"]},
+                      "steps": [{"step": "lean-audit", "status": "passed", "parts": ["lean-audit:p"]}]})
+    assert step_status(store, whole, "lean-audit") == "passed", "an unsharded deferred run ran every part it was given"

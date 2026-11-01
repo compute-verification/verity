@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.types import Record
+from verity.ml.circuits.types import RecordType
 from verity_vllm.config import UsageError
 from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE, correspondence_digest
 from verity_vllm.program.predict import aot as A
@@ -23,8 +23,8 @@ from tests.program.predict.test_predict import TINY, _phi
 AOT = {"comparison": "r20261018-001500-aaaa", "trace": "art:" + "5" * 64}
 
 
-def _weights(program) -> tuple[str, Record]:
-    return next((n, t) for n, t in program.fn.body.params if isinstance(t, Record))
+def _weights(program) -> tuple[str, RecordType]:
+    return next((n, t) for n, t in program.fn.body.params if isinstance(t, RecordType))
 
 
 def _trace(d: Path) -> Path:
@@ -60,7 +60,7 @@ def test_emit_writes_the_predicted_program_under_the_traces_annotations_and_name
     assert (doc["digest"], doc["correspondence_digest"]) == (res["program"]["digest"], res["program"]["correspondence_digest"])
     assert [r["name"] for r in doc["rows"]] == [f"m{k}/fx_{k}" for k in range(len(doc["rows"]))]
     name, rec = _weights(build_program(_phi(TINY), "step", M=1, pos0=8).program)
-    assert dict(doc["params"])[name] == str(Record(*((f"inner.{n}", t) for n, t in rec.fields)))
+    assert dict(doc["params"])[name] == str(RecordType(*((f"inner.{n}", t) for n, t in rec.fields)))
 
 
 def test_emit_refuses_weight_leaves_that_are_not_the_programs(tmp_path):
@@ -85,7 +85,10 @@ def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
 @pytest.mark.slow
 def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path, monkeypatch):
     d = tmp_path / "row"
-    (d / "build" / "rank0" / "build_step").mkdir(parents=True)
+    for r in range(2):
+        (d / "build" / f"rank{r}" / "build_step").mkdir(parents=True)
+        (d / "build" / f"rank{r}" / "build_request_LP9_T2").mkdir()
+        (d / "build" / f"rank{r}" / "build_request_LP9_T2" / "result.json").write_text(json.dumps({"LP": 9, "T": 2}))
     (d / "build_summary.json").write_text(json.dumps({"tp": {"world": 2}, "ranks": {
         f"rank{r}": {"build_step": {"program_digest": f"s{r}"}, "build_request_LP9_T2": {"program_digest": f"q{r}"},
                      "workload": {"workload_digest": f"w{r}"}} for r in range(2)}}))
@@ -110,7 +113,7 @@ def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(
     monkeypatch.setattr(A, "phi_at", lambda row, rank, config: phi)
     (tmp_path / "result.json").write_text(json.dumps({"M": 1, "pos0": 8}))
     names = [f"build_request_LP{lp}_T{t}" for lp, t in phi.request_shapes()]
-    got = A._predict_rank(("row", 0, "config.json", str(tmp_path), names))
+    got = A._predict_rank(("row", 0, "config.json", str(tmp_path), [(n, *s) for n, s in zip(names, phi.request_shapes())]))
     assert got["errors"] == {} and set(got["secs"]) == {"step", "workload", *names}
     assert got["requests"] == {n: build_program(phi, "request", LP=lp, T=t).digest for n, (lp, t) in zip(names, phi.request_shapes())}
     assert got["workload"] == S.predict_workload(phi)["digest"]

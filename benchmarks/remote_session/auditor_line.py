@@ -4,7 +4,7 @@ the auditor's host signed rather than from the verifier's stamps.
 
 **Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
 `RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
-record's draws) computes each session's line off its record from
+record's samples) computes each session's line off its record from
 the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
 (`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
@@ -32,15 +32,15 @@ is its wrong receipts, and its registered blocks, the registration's; and the ve
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
 the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
-auditor replay offline (the remote audit's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
+auditor replay offline (PoUB's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
 
 The ledger check: its longest head verified under the pinned key (`ledger_head`, `verify_ledger`, `verify_periods`);
 the period's lane, cap and circuit, and that it closed; each session reserved and opened by the lane for the peer under
 the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; σ_0 asked
 after R_k, and each coin released after its root's receipt. The peer is the verifier machine's name at the challenger
-host, as the run's own record gives it (`peer_of`): vy-nebius-1 for a verifier there, vy-auditor-1 for a host run.
-`--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
+host, as the run's own record gives it (`peer_of`): the node's own name for a verifier on a node, the verifier host's
+for a host run. `--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
 the auditor's.
 
@@ -85,7 +85,7 @@ and `sketch_outside` every F the run's sessions were charged at.
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
 commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
-draw's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
+sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
 total of a record whose ledger didn't charge them), plus the windows' PRF advantages by name (`NAMED_TERMS`, claim
 prf/sha-512), which have no number and are in no total. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
@@ -97,7 +97,7 @@ certifiers cover the gate node's boundary. A relay prover, a thin node forwardin
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
-NoOutsideCompute, binding-split`), and `research data label` refuses one that doesn't.
+NoOutsideCompute, binding-split`), and the evidence store's labeller refuses one that doesn't.
 
 **The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
@@ -248,8 +248,8 @@ def requested_pin(out: Path) -> str | None:
 
 def peer_of(out: Path, v: dict) -> str:
     """The challenger peer the verifier ran as (`verifier.py --challenger-peer`), from the run's record: each gate
-    session's in `v` (verifier.json's `challenger.peer`, `challengers.Gate.finish`), and a host run's `request.json`
-    beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
+    session's in `v` (verifier.json's `challenger.peer`, `challengers.ChallengerGate.finish`), and a host run's
+    `request.json` beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
     named = {(s.get("challenger") or {}).get("peer") for s in v["sessions"]
              if (s.get("challenger") or {}).get("challenger") == "gate"}
     req = out.parent / "request.json"
@@ -286,7 +286,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     leave only once that root has come, so a root the prover repeats can't make A_g early, as an earlier request
     naming the same value (σ_(g+1)'s, or another window's) would.
 
-    Drawn `per_coin` G > 1 windows a coin (`groups_per_coin`), only a draw's last window closes, so openings coin c's
+    Drawn `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
     request names the last root of draw c's last window and no request names another window's by place. A_g is then
     the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
     σ_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
@@ -414,7 +414,7 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
 
 
 def transcript_of(out: Path, s: dict) -> dict | None:
-    """Session `s`'s transcript (`lean_verifier.Transcript`'s file) where the run's out/ keeps it: its name under
+    """Session `s`'s transcript (`lean_verifier.DifftestCase`'s file) where the run's out/ keeps it: its name under
     `out/transcripts/`, gzipped (`host.gzip_transcripts`) or not, held to the sha256 verifier.json gives it; None where
     there is none (a host run fetched without `--transcripts`)."""
     t = s.get("transcript") or {}
@@ -454,7 +454,7 @@ def session_error(session: dict) -> dict:
     `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
     beside it its six parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
     2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_binding`, the receipts' binding term,
-    `delta_sketch`, δs, and `delta_rejection`, the draw's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
+    `delta_sketch`, δs, and `delta_rejection`, the sample's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
     `delta`) must sum to the total as the ledger adds them, or there is no line (`Disagree`); one written before them
     gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was
     charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger
@@ -515,10 +515,10 @@ def recorded_append_coins(session: dict) -> int | None:
 
 
 def recorded_binding(session: dict) -> Fraction:
-    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its draws
-    (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a draw of it can have (g times
+    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its samples
+    (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a sample of it can have (g times
     `ledger.window_receipts`, at its pace's k, its registered blocks and, when its append coins aren't recorded
-    (`recorded_append_coins`), the codec's `max_blocks`) and its draw cap `samples`, F·C the queries its sketch term
+    (`recorded_append_coins`), the codec's `max_blocks`) and its sample cap `samples`, F·C the queries its sketch term
     (`sketch_failure`) charged; 0 for a record with no sketch term, which states no C."""
     sf = (session.get("ledger") or {}).get("sketch_failure")
     if not sf:
@@ -724,7 +724,7 @@ def conditional_on(rows: list[dict]) -> dict:
 
 def line_label(doc: dict) -> str:
     """The `memory-line-of-record` value naming the doc's line: who computed it and what it is conditional on, as
-    `research data label` holds it to this file (`vocab.check_line_of_record`)."""
+    the evidence store's labeller holds it to this file (`vocab.check_line_of_record`)."""
     return f"{doc['line_by']} conditional on {', '.join(doc['conditional_on'])}"
 
 
@@ -1153,7 +1153,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
-                    help="the remote-audit-verifier executable (default: `lake build` it in the remote audit's package)")
+                    help="the remote-audit-verifier executable (default: `lake build` it in PoUB's package)")
     ap.add_argument("--boundary", type=Path, metavar="FILE",
                     help="the network certifiers' records of the gate node's boundary links (`read_boundary`): refuse "
                          "a session's credit when they show ingress other than the verifier's messages over its span "

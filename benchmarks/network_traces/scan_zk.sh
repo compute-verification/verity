@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # The step-indexed scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
 # job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the
-# sampled-proofs verifier built in the tree. From a clone, in one of the network slots:
-#   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env SC_MEM_GB=128 -- \
-#     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     bash benchmarks/network_traces/scan_zk.sh
+# sampled-proofs verifier built in the tree. From a clone, in one of the network slots, as a job of at most 180 minutes:
+#   env SC_MEM_GB=128 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
 #      SC_CLASS=w63|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G (`prove
@@ -15,16 +14,18 @@
 #      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on
 #      the verifier's coins)
 #      SC_CHALLENGER=local|gate:USER@HOST (with SC_DRAW: the honest round's K on the challenger's coins, `prove
-#      --challenger`, pinned on main's first-parent history fetched from the clone's origin; gate: also SC_PEER, this
-#      node as the gate's /etc/vy/peers names it, SC_CHALLENGER_KEY, the deployment's challenger-key/v1 record, and
-#      SC_GATE_KEY, the lane's gate key)
+#      --challenger`, pinned on main's first-parent history fetched from the clone's origin, or on MAIN_SHA's when set,
+#      as for a challenger pinned at a commit of next's first-parent history; gate: also SC_PEER, this node as the
+#      gate's /etc/vy/peers names it, SC_CHALLENGER_KEY, the deployment's challenger-key/v1 record, and SC_GATE_KEY,
+#      the lane's gate key)
 #      SC_RSS=1 (each flock-circuit process's own peak RSS, its command and wall, a line each in $OUT/rss.jsonl: a8's
 #      max_child_rss_gb is the largest of every session's so far)
 #      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
-# rehearsal's public files go in $OUT/warden, its records and salts (the prover's) nowhere.
+# rehearsal's public files go in $OUT/warden; its records and salts (the prover's) and its request values (traffic.json's
+# requests, client.json's responses) nowhere.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -65,17 +66,18 @@ if [ -n "${SC_REHEARSE:-}" ]; then
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
-  for f in deployment.json cells.jsonl certified.jsonl check.json client.json warden.json serve.log traffic.json; do
+  for f in deployment.json cells.jsonl certified.jsonl check.json warden.json serve.log; do
     [ -f "$W/warden/$f" ] && cp "$W/warden/$f" "$OUT/warden/"
   done
   SC_WARDEN_RUN=$W/warden
 fi
 CH=()
-if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
+if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-parent history the session's pin must be on
   UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
   git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > "$OUT/fetch-main.log" 2>&1 \
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> "$OUT/fetch-main.log" 2>&1 \
-    && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.txt" || { tail -5 "$OUT/fetch-main.log"; exit 4; }
+    && git rev-list --first-parent "${MAIN_SHA:-refs/remotes/origin/main}" > "$OUT/main.txt" \
+    || { tail -5 "$OUT/fetch-main.log"; log "sczk: no first-parent history of ${MAIN_SHA:-origin/main} in this clone"; exit 4; }
   CH=(--challenger "$SC_CHALLENGER" --main "$OUT/main.txt")
   case $SC_CHALLENGER in gate:*)
     [ -n "${SC_PEER:-}" ] && [ -n "${SC_CHALLENGER_KEY:-}" ] || { log "sczk: SC_CHALLENGER=gate:… needs SC_PEER and SC_CHALLENGER_KEY"; exit 4; }

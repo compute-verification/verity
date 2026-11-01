@@ -1,4 +1,5 @@
 import json
+import math
 import sys
 
 import pytest
@@ -94,15 +95,19 @@ def test_in_place_the_design_gives_both_s_times_and_gates_per_flop():
 @pytest.mark.parametrize("name", REFERENCES)
 def test_the_measured_s_times_moves_the_bound_by_u_over_w_on_the_share_counted_at_u(name):
     """With the design in place `G` no longer cancels: a gate counted at `u` (the dark leaves, the uncertified routes)
-    holds `u/w = 2G / (κ s_×)` of the reference's weight, so the lower bound is the default's times `1 / (a u/w + 1 −
-    a)` on the share `a` counted at `u`, the rest the same in gates. The bound cites the runs that measured `s_×`
-    beside the straddling premise, its status as it was."""
+    holds `u/w = 2G / (κ s_×)` of the reference's weight, so the lower bound's rate (`1 / overhead` before its floor
+    at 1) is the default's times `a u/w + 1 − a` on the share `a` counted at `u`, the rest the same in gates. The bound
+    cites the runs that measured `s_×` beside the straddling premise, its status as it was."""
     base, one = evaluate_named(REG, name), evaluate_named(circuits.in_place(REG, STEP), name)
     f = base.families[0]
     uw = 2 * circuits.units(REG, C).gates_per_flop / (f.profile.kappa * C.s_x)
     at_u = sum(t.share for t in analysis.attribution(base) if t.name == "dark" or t.name.split(".")[0] in ROUTES)
     assert 0 < at_u <= 1
-    assert one.lo / base.lo == pytest.approx(1 / (at_u * uw + 1 - at_u), rel=1e-9)
+    def rate(r):
+        return math.fsum(r.families[0].combined.overhead.rates().values())
+
+    assert rate(one) / rate(base) == pytest.approx(at_u * uw + 1 - at_u, rel=1e-9)
+    assert one.lo == pytest.approx(max(1.0, 1 / rate(one)), rel=1e-12)
     c = one.families[0].combined
     assert set(structure(REG, C.structure).cites()) <= set(c.cites) and c.status == f.combined.status
 
@@ -120,5 +125,7 @@ def test_periods_sets_the_step_beside_the_flop_model_and_evaluates_with_its_desi
     assert doc["measured"]["s_x"] == C.s_x and doc["measured"]["u_over_w"] == circuits.compare(REG, STEP).u_over_w(C.s_x)
     at = circuits.in_place(REG, STEP)
     for x in doc["rows"]:
-        assert x["overhead"] == analysis.result(at.override(periods.choices(name, x["fleet"], x["period"])), name).lo
-        assert any(r["what"] == "draft:no-straddle" and r["at"][1] < r["at"][0] for r in x["ranking"])
+        assert x["slowdown"] == analysis.result(at.override(periods.choices(name, x["fleet"], x["period"])), name).lo
+        # the measured design takes remote to the floor, 1, which no premise dropped can lower
+        assert x["slowdown"] == 1.0
+        assert all(r["at"][1] >= r["at"][0] for r in x["ranking"] if r["kind"] == "named premise")
