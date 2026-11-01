@@ -92,6 +92,12 @@ private theorem sort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
           ((ih (mid - lo) (by omega) _ _ _ _ _ _ rfl))).trans hp
     · exact Array.Perm.refl _
 
+theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as := by
+  unfold Array.qsort
+  split
+  · exact ⟨List.Perm.refl _⟩
+  · exact sort_perm lt _ _ _ _ _ _ _ rfl
+
 theorem mem_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (x : α) : x ∈ as.qsort lt ↔ x ∈ as := by
   unfold Array.qsort
   split

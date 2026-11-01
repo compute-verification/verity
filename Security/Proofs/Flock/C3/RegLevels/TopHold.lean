@@ -286,6 +286,31 @@ theorem qsort_min (as : Array α) (f : α → Nat) {x y : α} (hx : x ∈ as)
     simp at h
     exact Nat.le_of_not_lt (of_decide_eq_false h)
 
+theorem mem_of_sameOn {as : Array α} {r : Vector α as.size} {lo hi : Nat} (hS : SameOn lo hi as.toVector r)
+    (hlo : lo = 0) (hhi : as.size ≤ hi + 1) (x : α) : x ∈ r.toArray ↔ x ∈ as := by
+  subst hlo
+  rw [Vector.mem_toArray_iff, Vector.mem_iff_getElem, Array.mem_iff_getElem]
+  constructor
+  · rintro ⟨j, hj, rfl⟩
+    obtain ⟨j', hj', -, -, e⟩ := (hS.2 r[j]).2 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
+    exact ⟨j', hj', e⟩
+  · rintro ⟨j, hj, rfl⟩
+    obtain ⟨j', hj', -, -, e⟩ := (hS.2 as[j]).1 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
+    exact ⟨j', hj', e⟩
+
+/-- **`Array.qsort` keeps its elements**, under an order whose negation is transitive. -/
+theorem qsort_mem (as : Array α) (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
+    (htr : ∀ a b c, lt a b = false → lt b c = false → lt a c = false) (x : α) : x ∈ as.qsort lt ↔ x ∈ as := by
+  unfold Array.qsort
+  split
+  · exact Iff.rfl
+  · rename_i h0
+    try simp only
+    obtain ⟨hS, -⟩ := sort_spec lt hasym htr _ as.toVector (min 0 (as.size - 1))
+      (max (min 0 (as.size - 1)) (min (as.size - 1) (as.size - 1))) (by omega) (by omega) (by omega)
+      (Nat.lt_succ_self _)
+    exact mem_of_sameOn hS (Nat.zero_min _) (by omega) x
+
 end QSort
 
 

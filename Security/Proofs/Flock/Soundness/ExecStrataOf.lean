@@ -2,8 +2,6 @@ module
 
 public import Proofs.Flock.Soundness.ExecStratified
 public import Proofs.Flock.Soundness.Refine.Setup
-import all Init.Data.Array.QSort.Basic
-import all Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # The strata the verifier accepts are a partition's
@@ -112,11 +110,8 @@ theorem chain_facts : ∀ (a b : Nat) (l : List (Nat × Nat)), Chain a b l → (
       simp only [hits, decide_eq_true_eq]
       split <;> split <;> split <;> omega
 
-theorem qsort_perm {α : Type} (lt : α → α → Bool) (as : Array α) : (as.qsort lt).toList.Perm as.toList := by
-  unfold Array.qsort
-  split
-  · exact List.Perm.refl _
-  · exact Array.perm_iff_toList_perm.1 (DrawExec.sort_perm lt _ _ _ _ _ _ _ rfl)
+theorem qsort_perm {α : Type} (lt : α → α → Bool) (as : Array α) : (as.qsort lt).toList.Perm as.toList :=
+  Array.perm_iff_toList_perm.1 (DrawExec.qsort_perm as lt)
 
 theorem loopA {β : Type} (l : List β) (b : β → Option (Option String) × Unit → Id (ForInStep (Option (Option String) × Unit)))
     (hb : ∀ i, b i (none, ()) = ForInStep.yield (none, ()) ∨ ∃ m, b i (none, ()) = ForInStep.done (some (some m), ())) :
