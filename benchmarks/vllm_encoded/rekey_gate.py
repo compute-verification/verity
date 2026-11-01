@@ -17,7 +17,7 @@ about a quarter of them plaintext (deferred residency's flag), each check bit fo
                 page and decode attention under them and the flags equal the plain cache's
     back        re-keyed to the first offsets: the cache and offsets equal the first ones
     ctas        grids of 1 CTA, of 7 and of every SM's resident CTAs give the default grid's cache
-    pinned      (a library at the remote audit's codec, at its rounds) `vectors.json`'s `codec.coin` blocks, each
+    pinned      (a library at PoUB's codec, at its rounds) `vectors.json`'s `codec.coin` blocks, each
                 appended at a slot that is not its index's under another index's and coin's offset folded to the slot,
                 then re-keyed to its own b_j(c_a) folded likewise: the token-layer is the pinned block (SHA-512, first word)
     refusals    k = 0, k past KMAX, negative rows, a negative grid
@@ -293,7 +293,7 @@ def pinned(lib, torch, log) -> dict:
     seed = bytes.fromhex(vec["seed"])
     key, dev = RC.key(seed, rc), K.key(f.name, seed, rc.rounds, mask=rc.masked)
     if (dev.c, dev.tau, dev.mask) != (key.c, key.tau, key.mask):
-        raise RuntimeError("kv.py's key is not the remote audit's codec key")
+        raise RuntimeError("kv.py's key is not PoUB's codec key")
     KB.set_key(lib, dev)
     W, nslots = K.token_layer_words(f), BLOCKS * BS
     cache = torch.zeros(BLOCKS, G, BS, 2 * D, dtype=torch.bfloat16, device="cuda")

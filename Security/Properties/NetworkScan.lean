@@ -6,8 +6,8 @@ import Definitions.NetworkCertifier.SampledAudit
 
 The sampled audit's scope at a link-window's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
 (`Claims.Sampling.Scope`, the sampled verifier's own, which `Claims.Sampling.ScopeMatches` equates with its scope
-check), and the statement's layout fitting its program over its horizon (`NetTiming.Layout.Fits`). The network check
-reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.
+check), and the statement's layout fitting its program over its horizon (`NetTiming.BoundaryGates.Fits`). The network
+check reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.
 
 **The layout** (`scanLayout`) is the generator form's, at the schedule's `S = lanes · slots` slots of `B` bytes and
 `T` buckets, over one egress link: at step `t`, slot `σ`'s presence gate is bit 0 of egress member `t`'s verdict (its
@@ -40,7 +40,7 @@ def gateAt (P : Flock.Program.Prog) (sc : Flock.Program.Scope) (r : Flock.Progra
 
 /-- **The scan's layout** in its Program `P` at the schedule `s`, over one egress link: step `t`'s slot `σ` is bit 0 of
 egress member `t`'s verdict and its frame's `8B` bits, and step `t`'s ingress is bucket `t`'s `row` parameter. -/
-def scanLayout (P : Flock.Program.Prog) (s : Schedule) : NetTiming.Layout 1 s.allocation :=
+def scanLayout (P : Flock.Program.Prog) (s : Schedule) : NetTiming.BoundaryGates 1 s.allocation :=
   let nodes := (P.defs[P.root]!).body.nodes
   let ts := NetworkCheck.Period.templateNodes P
   let ke := ts.getLast?.getD 0
@@ -54,7 +54,7 @@ def scanLayout (P : Flock.Program.Prog) (s : Schedule) : NetTiming.Layout 1 s.al
       (List.range (s.allocation * bits)).map fun j => gateAt P (P.child P.rootScope km.1 km.2) ⟨true, 0, j⟩ }
 
 /-- A statement's layout at the schedule `s`: its descriptor's scan layout, none where the descriptor doesn't decode. -/
-def layOf (s : Schedule) (x : Claims.Sampling.AuditStatement) : NetTiming.Layout 1 s.allocation :=
+def layOf (s : Schedule) (x : Claims.Sampling.AuditStatement) : NetTiming.BoundaryGates 1 s.allocation :=
   match Flock.Program.decode ⟨x.desc.toArray⟩ with
   | .ok P => scanLayout P s
   | .error _ => { egress := fun _ _ _ => (0, []), ingress := fun _ => [] }

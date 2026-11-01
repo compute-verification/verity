@@ -157,7 +157,7 @@ def _apart_built(entries: list[UN.Entry], jobs: int) -> tuple[list[UN.Entry], li
     """`units.built_apart` within `_budget`, each binding counted at how far `heavy.json` says its process grows; and how the
     build went, naming the bindings that grew past that, whose growth belongs in `heavy.json`."""
     weights = cli.heavy()
-    kept, dropped, grew = UN.built_apart(entries, jobs, _budget(os.environ), weights)
+    kept, dropped, grew, _ = UN.built_apart(entries, jobs, _budget(os.environ), weights)
     past = sorted(((gb, name) for name, gb in grew.items() if gb > weights.get(name, UN.APART_GB)), reverse=True)
     return kept, dropped, "built apart" + (f" ({len(past)} grew past their heavy.json GiB: "
                                            + ", ".join(f"{name} {gb}" for gb, name in past[:5]) + ")" if past else "")

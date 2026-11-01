@@ -78,35 +78,6 @@ def EncardAccSeqsLeFixedClock : Prop :=
     (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
 
-/-- **Theorem 3, the block cap, under the two dataflow conditions.** The advice is content advice `Ac` and timing
-advice `At β` per block `β`. The cells `C` carry the Program's occupancy predictions `occ c : U c`, at step `step c`,
-in block `blk c`. Then the accepted sequences number at most
-`#Ac · D^n · ∏_β min(#At β, ∏_{c ∈ β} #U c)`. -/
-def EncardAccSeqsLeBlocks : Prop :=
-  ∀ {L K S : ℕ} {In Ac B C : Type} {At : B → Type} {U : C → Type}
-    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
-    (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
-    (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ),
-    (AccSeqs P op n D).encard ≤
-      ((Fintype.card Ac * D ^ n *
-        ∏ β, min (Fintype.card (At β)) (∏ c ∈ univ.filter (fun c => blk c = β), Fintype.card (U c)) : ℕ) : ℕ∞)
-
-/-- **The left-packed instance.** Cells are the (link, step) pairs of the horizon, and the Program's occupancy at a
-cell is the count of its row, a value in `Fin (S + 1)`. Then the block cap reads
-`#Ac · D^n · ∏_β min(#At β, (S + 1)^|β|)`. -/
-def EncardAccSeqsLeBlocksCounts : Prop :=
-  ∀ {L K S : ℕ} {In Ac B : Type} {At : B → Type}
-    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
-    (blk : Fin L × Fin n → B)
-    (h1 : FramesReadNoTimingAdvice P (fun c : Fin L × Fin n => (c.2 : ℕ))
-      (fun c ins a => rowCount (P.rows c.2 ins a c.1)))
-    (h2 : OccupancyReadsOwnBlock blk (fun c : Fin L × Fin n => fun ins a => rowCount (P.rows c.2 ins a c.1))),
-    (AccSeqs P op n D).encard ≤
-      ((Fintype.card Ac * D ^ n *
-        ∏ β, min (Fintype.card (At β)) ((S + 1) ^ (univ.filter (fun c => blk c = β)).card) : ℕ) : ℕ∞)
-
 /-! ## Theorem 3 for the shipped schedule: the constant-rate Program
 
 `constantRate T W ss frames` (`NetTiming.Protocol.Schedule`) is the Program of `schedule.py`: windows of `T` buckets,
@@ -216,7 +187,7 @@ X. Take messages `Ms` whose runs keep every status complete up to `n`, and whose
 released, are a prefix of the prescribed content `c ℓ` (the Program's input, charged as reads). If a decoder inside X
 reads the wire and recovers every message in `Ms`, then under W2, W4 with allocation `r ℓ`, and J, there are at most
 `(∏_ℓ (r ℓ + 1))^n · D^n` of them: `n · Σ_ℓ log2(r ℓ + 1)` bits of timing, which is `T·log2(r_in + 1)` per ingress
-link-window, and `n·log2 D` of jitter, none under J's `D = 1`. -/
+execution phase, and `n·log2 D` of jitter, none under J's `D = 1`. -/
 def EncardIngressDecodableLe : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (n D : ℕ) (r : Fin L → ℕ)
@@ -268,8 +239,8 @@ def EncardIngressObsDecodableLePerWindow : Prop :=
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg),
     Ms.encard ≤ ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞)
 
-/-- **Content plus timing, per link-window.** `EncardIngressObsDecodableLeContents` over the first `m` whole windows of
-`T` buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus
+/-- **Content plus timing, per execution phase.** `EncardIngressObsDecodableLeContents` over the first `m` whole windows
+of `T` buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus
 `T·Σ_ℓ log2(r ℓ + 1)` bits of timing and `T·log2 D` of jitter per window. -/
 def EncardIngressObsDecodableLeContentsPerWindow : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
@@ -356,10 +327,11 @@ The challenger's coins reach the developer's site on a certified link, so they a
 the ingress grid, and their content is exempt.
 
 - **Timing.** The coin link is one more ingress link, at τ_in and an allocation r_coin. It adds a factor
-  `(r_coin + 1)^T` per window to the ingress count, which is `T·log2(r_coin + 1)` bits per link-window, the K charge's
-  unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`). r_coin isn't calibrated. At r_coin = 1, one 4 KiB frame
-  per bucket, it is 600 bits per link-window (10 bit/s): 864,000 bits a day, 0.0095 of K = 9.12e7. That is on top of
-  the `requests` link's 3,077.6 bits per link-window (51.3 bit/s, 0.0486 of K a day), for 0.0581 of K a day in all.
+  `(r_coin + 1)^T` per window to the ingress count, which is `T·log2(r_coin + 1)` bits per execution phase, the K
+  charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`). r_coin isn't calibrated. At r_coin = 1, one 4
+  KiB frame per bucket, it is 600 bits per execution phase (10 bit/s): 864,000 bits a day, 0.0095 of K = 9.12e7. That is
+  on top of the `requests` link's 3,077.6 bits per execution phase (51.3 bit/s, 0.0486 of K a day), for 0.0581 of K a
+  day in all.
 - **Content: 0 bits.** `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow` charges `log2 #Cs` for the
   content, where `Cs` is one set of content assignments covering every message counted. Conditioned on the
   challenger's coins, which is how the model treats a randomized outside party, the coin link's content is one fixed
@@ -373,8 +345,8 @@ the ingress grid, and their content is exempt.
   - They are fixed before the developer sees them. The coin tree is committed before the audit, so no coin depends on
     anything X sends, and `c_coin` is the same for every message the bound counts.
   - Only the count is free. The frames on the coin link are a prefix of `c_coin`, in order, since a retry never
-    redraws. How far the prefix has reached at each bucket is timing, and the grid charges it. Which coins the firewall
-    asks for, and when, is egress, which the egress grid charges.
+    resamples. How far the prefix has reached at each bucket is timing, and the grid charges it. Which coins the
+    firewall asks for, and when, is egress, which the egress grid charges.
 - **What it doesn't cover.** The exemption is for coin openings only. Anything else the challenger sends on the link
   must be fixed by the public parameters, or it is charged as content.
 -/

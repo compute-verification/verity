@@ -58,7 +58,7 @@ witness encoding (`Reference.refP`'s); the router by slot (`step`); and the part
 structure Framing where
   parse : Msg → Option AuditStatement
   partition : AuditStatement → Option Partition
-  commit : Commitment Bool
+  commit : CommitmentScheme Bool
   reads : AuditStatement → Msg → List ℕ
   wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit
   step : Msg → List (Msg × Msg) → StepZ

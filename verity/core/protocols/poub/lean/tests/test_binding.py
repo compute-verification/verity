@@ -288,6 +288,15 @@ def test_store_salt(server) -> None:
     assert stats.outputs > 60, stats
 
 
+def test_store_salt_at_every_message_length_modulo_a_sha512_block(server) -> None:
+    """Keys of 0 to 128 bytes make the salt's message every length modulo SHA-512's 128-byte block, so the Lean's
+    counter mode (`Unboxed.xof`) meets each boundary its shared blocks, its counter and its padding can cross, which
+    random keys rarely reach."""
+    for n in range(129):
+        value = {"key": bytes(range(n)).hex(), "label": store.PAYLOAD_LABEL.hex(), "c": 2 ** 64 - 1}
+        assert D.replay(port("store_salt", store_salt), value, server)[0] == "output"
+
+
 # --- the expected root and the hello's decision -----------------------------------------------------------------------
 
 def _digests(v) -> list[bytes]:

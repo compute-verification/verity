@@ -10,7 +10,7 @@ Each is a `def … : Prop` over `Bridge.Defs` and `Bridge.Deployed`, so a proof 
   openings at a wire the constants `κ` don't fix opens its wire's claims position under `Cm` (`TransportsLive`'s
   conclusion), and whose evaluation is `κ`'s constant at each constant wire, is not faulty in `witDep Xr`. So
   `faulty ⊆ wrongRegZ`.
-* `PartRusTarget`: `partOf P κ` has `n` slots, one per unit, each with the input rows its unit owns.
+* `PartBlocksTarget`: `partOf P κ` has `n` slots, one per unit, each the unit's proof block with the input rows it owns.
 * `PaTarget` (M4): `designOf kd`'s `P_a` on `partOf P κ` is the subset miss `C(n − |B|, kd)/C(n, kd)` at a set of
   population slots.
 * `CountTarget` (M4): outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, at least `min K₀ (n − kd + 1)` population slots
@@ -32,7 +32,7 @@ reads, is not faulty in `witDep C Cm H roots Xr` at the statement at constants `
 def FaultyRightTarget : Prop :=
   ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (roots : List Claims.Msg)
+    (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n),
     (∃ op : Pos → Opn, ∀ g ∈ P.io u, com (op (pos g)) = cs (pos g) ∧ bit (val (op (pos g))) g = C.eval Xr g) →
     (∀ g ∈ P.io u, κ g = none → ∀ o : Opn, com o = cs (pos g) →
@@ -42,9 +42,9 @@ def FaultyRightTarget : Prop :=
       u.val ∉ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witDep C Cm H roots Xr)
 
 /-- `partOf P κ` has one slot per unit. -/
-def PartRusTarget : Prop :=
+def PartBlocksTarget : Prop :=
   ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool),
-    (partOf P κ).rus.length = n
+    (partOf P κ).blocks.length = n
 
 /-- **The Pa lemma**: on `partOf P κ`, `designOf kd` misses a set `B` of slots with probability
 `C(n − |B|, kd)/C(n, kd)`. -/
@@ -57,7 +57,7 @@ def PaTarget : Prop :=
 least `min K₀ (n − kd + 1)` faulty population slots, slots below `n`. -/
 def CountTarget : Prop :=
   ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd K₀ : ℕ), 1 ≤ kd → kd ≤ n →
-    ∀ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (κ : Fin C.N → Option Bool)
+    ∀ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (κ : Fin C.N → Option Bool)
       (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg) (w : Claims.Sampling.Wit),
       ¬ Claims.Sampling.RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots)
           (partOf P κ) w →
@@ -67,7 +67,7 @@ def CountTarget : Prop :=
 /-- **The assembly**: the registered openings opening the deployed commitment, M1's core, the slot count and the count
 lemma turn `EndToEndHidden` into `SampledKSLive`. -/
 def AssemblyTarget : Prop :=
-  TransportsLive → FaultyRightTarget → PartRusTarget → CountTarget → Flock.Guarantees.EndToEndHidden →
+  TransportsLive → FaultyRightTarget → PartBlocksTarget → CountTarget → Flock.Guarantees.EndToEndHidden →
     Flock.Guarantees.SampledKSLive
 
 /-- **rel_deploy**: at the deployed sampling record of a verifier's code whose layout is `commitDep`'s, and which
