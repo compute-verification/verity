@@ -21,9 +21,10 @@ A primitive is taken as the descriptor declares it, as Flock's decoder takes it,
 `check_baseline` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
 deployment's registration log, the run's own record and the program function's parameters), with `NciCheck.Baseline`'s
 codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance expanded by
-`expand_baseline`. θ holds registered public data only: an entry of any kind but `registered`, an earlier run's `output`
-among them, is refused `theta-provenance`. One log is one deployment, and every entry cites its first record, the first
-run's own included; any other record is refused `theta-not-at-deployment-start`.
+`expand_baseline`. The run's own record names the Program checked (its `program` is the descriptor's digest), whatever θ
+is, and is refused `run-program` otherwise. θ holds registered public data only: an entry of any kind but `registered`,
+an earlier run's `output` among them, is refused `theta-provenance`. One log is one deployment, and every entry cites its
+first record, the first run's own included; any other record is refused `theta-not-at-deployment-start`.
 """
 from __future__ import annotations
 
@@ -350,6 +351,8 @@ def provenance(inst, tr, node) -> None:
             counts[i] += offs[k + 1] - offs[k]
     digest = codec.program_digest(desc)
     run = T["log"][T["run"]]
+    if run.get("program") != digest:
+        raise Malformed("run-program")
     for t, p in zip(inst["theta"], prov, strict=True):
         k = node(offs, t)
         D = p["registration"]
@@ -360,7 +363,7 @@ def provenance(inst, tr, node) -> None:
         e = last_with(T["log"][0], "registered", "value", p["value"])
         if e is None or e.get("root") != p["root"]:
             raise Malformed("theta-root")
-        if run.get("program") != digest or own[k] is None:
+        if own[k] is None:
             raise Malformed("theta-unbound")
         i = own[k]
         mine = last_with(run, "registered", "value", T["params"][i][0])
