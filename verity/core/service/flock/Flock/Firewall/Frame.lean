@@ -398,6 +398,27 @@ def innerOwn (c : Cfg) (s : Masker) (k : Nat) (content : ByteArray) (n : Nat) : 
       throw "the inner proof's round 3 is not the rep's Y = (h ‖ pad_h) + β (μ ‖ pad_μ) and the queries"
   | _ => throw s!"a round after the inner proof's {INNER_ROUNDS}"
 
+/-- **The firewall's own round `k` of the inner proof** at the configuration `c` and the state `s` (its `ε` and `β`),
+squeezing `n` coins, as the frame fixes it (`innerOwn`): round 0 the inner label, `final_c'`'s word `w` and `ε`'s
+squeeze; round 1 `(ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty)` and the batching coins; round 2 `τ`'s 64-byte commitment `t`
+and `β`'s squeeze; round 3 `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` and the queries. -/
+def ownRound (c : Cfg) (s : Masker) (w t : ByteArray) (n : Nat) : Nat → ByteArray
+  | 0 => (labelFrame Zk.LABEL_INNER.toUTF8 ++ header 3 1 1) ++ w ++ header 4 1 1
+  | 1 => header 3 2 2 ++ wordBytes #[s.eps * c.h[c.lay.fa]! + c.h[c.lay.tx]!, c.h[c.lay.fb]! + c.h[c.lay.ty]!] ++
+      header 4 2 n
+  | 2 => header 5 0 64 ++ t ++ header 4 1 1
+  | _ =>
+    let y := (c.rowH.zip c.rowMu).map fun (a, b) => a + s.beta * b
+    header 3 2 y.size ++ wordBytes y ++ header 4 2 n
+
+/-- **The inner proof's round `k` as the frame schedules it** from the rounds `fin` the rep's finish computed: the
+firewall's own round (`ownRound`) at the frame's configuration and state, its `final_c'` round 0's word after its label
+frame and observe header, and `τ`'s commitment round 2's four words after its header. Only those two are the finish's;
+every other byte is the frame's own, so the round has `innerOwn`'s shape whatever `fin` holds. -/
+def innerSched (c : Cfg) (s : Masker) (fin : Array ByteArray) (n k : Nat) : ByteArray :=
+  ownRound c s (wordBytes (words (fin.getD 0 .empty) ((labelFrame Zk.LABEL_INNER.toUTF8).size + 16) 1))
+    (wordBytes (words (fin.getD 2 .empty) 16 4)) n k
+
 /-- `round`, with the offsets in `content` of the values it absorbs in the algebraic phase (16 bytes each, ascending): the
 values a device round carries freely, since each leaves masked. A round of the inner proof is the one `innerOwn` fixes. -/
 def roundFree (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker × Array Nat) := do

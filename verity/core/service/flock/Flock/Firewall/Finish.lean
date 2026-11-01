@@ -24,7 +24,9 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
 * `liveAsks`, `openLive`, `innerLive`: the rep's rounds past its recorded coins sent to the firewall as they come, each
   waiting for the coins the stream answered it: the opening's (`repPiop` and `repOpening` at zero values and pads), the
   rounds the Lean frame holds the device's opening rounds to, and the inner proof's (`repCons` and `innerP`), the
-  firewall's own (live PROTOCOL.md §10.1). Only the `Asks` is live: the code that computes each round is `repFw`'s.
+  firewall's own (live PROTOCOL.md §10.1): in the session loop each goes to the loop's frames before it leaves, which
+  release it themselves, and its coins are held to the ones the stream answered (`serve`'s `inner` and `own`). Only the
+  `Asks` is live: the code that computes each round is `repFw`'s.
 
 * `serve`: the requests, on the statement of `flock-verify verify --zk`: each table's level 0, each rep's salts for levels
   ≥ 1, which this code draws itself from the operating system at the rep's start and hands the prover (`salts`), and
@@ -428,7 +430,8 @@ structure Own where
 
 /-- **Where the request `q` is not what the loop holds of the rep (`o`)**, or none: its draws, its passed values, its extra
 claims or its coins. `final_c`'s slot (`lay.fc`) is the request's: the passed values fix it, and where it is another, the
-rep's `zerocheck c_eval` constraint fails on the loop's pads and the rep stops (`repFw`, `failingOn`). -/
+rep's `zerocheck c_eval` constraint fails and its `inner` request is refused before any round of its inner proof
+(`consWhy`). -/
 def RepIn.differs (lay : Zk.PadLayout) (q : RepIn) (o : Own) : Option String :=
   let (d, e) := (q.draws, o.draws)
   if !(d.h == e.h && d.mu == e.mu && d.padH == e.padH && d.padMu == e.padMu) then some "its pads are not the frame's draws"
@@ -544,10 +547,12 @@ abbrev LiveM := StateT (Array (Array F128)) (ExceptT String IO)
 
 /-- **A rep's rounds, live** on `ch`: round `k` (the rounds taken so far) by `coins[k]` while the rep's recorded coins last,
 which must hold the round's coin count (its squeeze header's last eight bytes), as `asksOf`. Past them, with `live`, the
-round goes to the firewall as `round N LEN` followed by its `LEN` bytes, `N` its coin count, and is answered `coins N`
-followed by the `16 N` bytes of the coins the stream answered it; any other answer, or a round past them without `live`,
-ends the rep. -/
-def liveAsks (ch : Frame.Chan) (coins : Array (Array F128)) (live : Bool) : Asks LiveM where
+round, the `j`-th past them, goes to `sent j` and then to the firewall as `round N LEN` followed by its `LEN` bytes, `N`
+its coin count, and is answered `coins N` followed by the `16 N` bytes of the coins the stream answered it, which go to
+`held k`; any other answer, a refusal of `sent` or `held`, or a round past them without `live`, ends the rep. -/
+def liveAsks (ch : Frame.Chan) (coins : Array (Array F128)) (live : Bool)
+    (sent : Nat → ByteArray → IO (Option String) := fun _ _ => pure none)
+    (held : Nat → Array F128 → IO (Option String) := fun _ _ => pure none) : Asks LiveM where
   link _ _ := throwThe String "finish: a link message inside a rep"
   round c := do
     let got ← get
@@ -557,12 +562,15 @@ def liveAsks (ch : Frame.Chan) (coins : Array (Array F128)) (live : Bool) : Asks
       | some cs, _ => pure cs
       | none, false => throwThe String s!"finish: round {k} past the rep's {coins.size} rounds of coins"
       | none, true => do
+        if let some why ← (sent (k - coins.size) c : IO (Option String)) then throwThe String why
         ch.write ((s!"round {n} {c.size}\n").toUTF8 ++ c)
         ch.flush
         let line := (← ch.getLine).replace "\n" ""
         if line != s!"coins {n}" then
           throwThe String s!"finish: round {k}, of {n} coins, answered `{line}`"
-        pure (Link.wordsAt (← ch.readExact (16 * n)) 0 n)
+        let cs := Link.wordsAt (← ch.readExact (16 * n)) 0 n
+        if let some why ← (held k cs : IO (Option String)) then throwThe String why
+        pure cs
     if cs.size != n then throwThe String s!"finish: round {k} squeezes {n} coins where the rep's coins have {cs.size}"
     set (got.push cs)
     return fun i => cs[i]!
@@ -591,12 +599,25 @@ def openLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Arr
       (Array.replicate lay.len 0) t.extra t.lanePad salt
   let _ ← prog.run (Transcript.init #[] dom)
 
+/-- **Why a live rep's constraints `cons` do not go to the firewall**, if they do not, its PIOP and opening having taken `k`
+rounds of coins: not the request's `n`, or a request whose `final_c` is not the one its passed values fix, where its
+`zerocheck c_eval` constraint (`Σ λ_i(z) r1c_i + final_c`, each value masked by its own pad, so no pad changes it) fails on
+the pads `h`. So the inner proof's `final_c'` is that one under `h_fc`, whatever the host sends. -/
+def consWhy (n k : Nat) (cons : Array (String × Zk.Lin)) (h : Array F128) : Option String :=
+  if k != n then some s!"finish: the rep's PIOP and opening took {k} of its {n} rounds of coins"
+  else if !(failingOn (cons.filter (·.1 == "zerocheck c_eval")) h).isEmpty then
+    some "finish: the request's final_c is not the one its passed values fix (its zerocheck c_eval constraint fails)"
+  else none
+
 /-- **A rep's inner proof, live**: `repFw` on the request `q` but for its stop, its `repCons` on `q`'s recorded coins (every
-one of which it must take), then its constraints sent to the firewall as `cons LEN` followed by their `LEN` bytes
-(`consBytes`), then `repFw`'s inner proof (`innerP`) on them, each round sent live (`liveAsks`). Where `repFw` stops on a
-constraint that fails on the pads, this speaks on schedule (`proofFile` then refuses the rep's file, and the session
-stops at its `Finish`). -/
-def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM Unit := do
+one of which it must take), then, unless `consWhy` refuses them, its constraints sent to the firewall as `cons LEN`
+followed by their `LEN` bytes (`consBytes`), then `repFw`'s inner proof (`innerP`) on them, each round sent live
+(`liveAsks`, its `j`-th to `sent j` before it leaves and the coins of the rep's round `k` to `held k`). Where `repFw` stops
+on a constraint that fails on the pads but `consWhy`'s, this speaks on schedule (`proofFile` then refuses the rep's file,
+and the session stops at its `Finish`). -/
+def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn)
+    (sent : Nat → ByteArray → IO (Option String) := fun _ _ => pure none)
+    (held : Nat → Array F128 → IO (Option String) := fun _ _ => pure none) : LiveM Unit := do
   let pads := padsOf q.draws
   let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
   let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
@@ -606,18 +627,20 @@ def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : Rep
     let (p, _, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
       pads ic q.vals t.extra t.lanePad salt
     let k := (← getThe (Array (Array F128))).size
-    if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
+    if let some why := consWhy q.coins.size k cons pads.h then throwThe String why
     let b := consBytes cons
     ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
     ch.flush
-    let _ ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
-      cons
+    let _ ← innerP (liveAsks ch q.coins true sent held) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic
+      p.zerocheck.finalC cons
   let _ ← prog.run (Transcript.init #[] dom)
 
 /-- **A rep's inner proof, live, kept**: `innerLive`, returning `repFw`'s proof where no constraint fails on the pads
 (`innerLiveK_discard`): `repFw` on `q` with every coin this took, which is the proof `proofFile` computes on a `rep`
 request with those inputs and coins (`Kept`). -/
-def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM (Option Zk.ZkProof) := do
+def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn)
+    (sent : Nat → ByteArray → IO (Option String) := fun _ _ => pure none)
+    (held : Nat → Array F128 → IO (Option String) := fun _ _ => pure none) : LiveM (Option Zk.ZkProof) := do
   let pads := padsOf q.draws
   let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
   let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
@@ -627,12 +650,12 @@ def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : Re
     let (p, zl, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
       pads ic q.vals t.extra t.lanePad salt
     let k := (← getThe (Array (Array F128))).size
-    if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
+    if let some why := consWhy q.coins.size k cons pads.h then throwThe String why
     let b := consBytes cons
     ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
     ch.flush
-    let inner ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
-      cons
+    let inner ← innerP (liveAsks ch q.coins true sent held) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic
+      p.zerocheck.finalC cons
     return if (failingOn cons pads.h).isEmpty then some { proof := p, level0 := zl, inner } else none
   return (← prog.run (Transcript.init #[] dom)).1
 
@@ -646,8 +669,9 @@ instance instLawfulEST {ε σ : Type} : LawfulMonad (EST ε σ) := LawfulMonad.m
 instance instLawfulEIO {ε : Type} : LawfulMonad (EIO ε) := inferInstanceAs (LawfulMonad (EST ε IO.RealWorld))
 
 /-- `innerLiveK` is `innerLive` with its result kept: the same rounds, the same bytes to the firewall, the same coins. -/
-theorem innerLiveK_discard (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) :
-    (do let _ ← innerLiveK ch t rep dom q) = innerLive ch t rep dom q := by
+theorem innerLiveK_discard (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn)
+    (sent : Nat → ByteArray → IO (Option String)) (held : Nat → Array F128 → IO (Option String)) :
+    (do let _ ← innerLiveK ch t rep dom q sent held) = innerLive ch t rep dom q sent held := by
   unfold innerLiveK innerLive
   simp only [StateT.run_bind, map_bind, bind_pure_comp]
   congr 1; funext ic; congr 1; funext a; congr 1; funext b
@@ -699,6 +723,13 @@ def ownWhy (own : Nat → Nat → ByteArray → IO (Option (Except String Own)))
   | some (.error e) => return some s!"finish: {e}"
   | some (.ok o) => return (differs o).map fun why => s!"finish: table {i} rep {r}'s request: {why}"
 
+/-- **Why the coins `cs` that answered table `i`'s rep `r`'s round `k` on the table `t` are refused**, where the session
+loop holds the rep (`own`): they are not the ones the stream answered the rep's round `k` (`ownWhy`). -/
+def coinsWhy (own : Nat → Nat → ByteArray → IO (Option (Except String Own))) (i r : Nat) (t : Tab) (k : Nat)
+    (cs : Array F128) : IO (Option String) :=
+  ownWhy own i r t fun o =>
+    if o.coins[k]? == some cs then none else some s!"its round {k}'s coins are not the ones the stream answered"
+
 /-- **The finish's requests** on `ch`, at the session's statement (`spec`, its tables' `setups`), each a line `HEAD LEN`
 followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `table I LEN`: table `I`'s level-0 data (`Link.parse`'s, `tabOf`), kept; the answer is its level-0 root.
@@ -711,14 +742,17 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
   (`parseOpen`): each of its rounds goes to the firewall as it comes and waits for its coins (`openLive`, `liveAsks`), the
   rounds the Lean frame holds the device's opening rounds to; answered `ok 0` after the last.
 * `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, then its inner
-  proof's rounds, live (`innerLive`); answered `ok 0` after the last. Its proof file is then `rep`'s on every round's coins.
+  proof's rounds, live (`innerLive`), its `j`-th handed to `inner` with the table's level-0 root before it goes, and
+  where `inner` refuses it, so does this; answered `ok 0` after the last. Its proof file is then `rep`'s on every round's
+  coins.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
   (`proofFile`), encoded from the proof the rep's last `inner` request computed where that request's inputs and coins
   are this one's (`Kept.answers`). Another rep's requests may come between the two. The file is handed to `file` with
   the table's level-0 root before it is answered, and where `file` refuses it, so does this.
 Where the session loop holds the rep (`own`, by table, rep and the table's level-0 root), an `open`, `inner` or `rep`
-request that is not what it holds is refused (`RepIn.differs`; an opening's extra claims and coins): the draws, the
-passed values, the extra claims and the coins are the loop's own, whatever the host sends.
+request that is not what it holds is refused (`RepIn.differs`; an opening's extra claims and coins), and so are coins
+that answer an `inner` request's round but are not the ones the stream answered it (`coinsWhy`): the draws, the passed
+values, the extra claims and the coins are the loop's own, whatever the host sends.
 With `liveOnly` (the session loop's finish, `serveLoop`), a table comes only as the loop's level 0 (`level0`, never
 `table`), and a rep's proof file is only the one its last `inner` request computed live (`Kept.answers`): a `rep` request
 no such proof answers is refused, never computed afresh from the request.
@@ -728,7 +762,8 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
     (keep : ByteArray → Nat → Array ByteArray → IO Unit := fun _ _ _ => pure ())
     (file : ByteArray → Nat → ByteArray → IO (Option String) := fun _ _ _ => pure none)
     (own : Nat → Nat → ByteArray → IO (Option (Except String Own)) := fun _ _ _ => pure none)
-    (liveOnly : Bool := false) : IO UInt32 := do
+    (liveOnly : Bool := false)
+    (inner : ByteArray → Nat → Nat → ByteArray → IO (Option String) := fun _ _ _ _ => pure none) : IO UInt32 := do
   let refuse := fun (why : String) => do
     ch.write (s!"err {why.replace "\n" " "}\n").toUTF8
     ch.flush
@@ -816,7 +851,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let run : V (LiveM (Option Kept)) := if line.startsWith "open " then
           (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return none
         else (parseRep t s b).map fun q => do
-          let z ← innerLiveK ch t r dom q
+          let z ← innerLiveK ch t r dom q (inner (flat t.cm0.cap) r) (coinsWhy own i r t)
           let coins ← getThe (Array (Array F128))
           return z.map fun proof => ({ i, r, q, coins, proof } : Kept)
       match run with
@@ -862,11 +897,13 @@ def cmd (args : List String) : IO UInt32 := do
 the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
 loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt drawn from the operating
 system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Registry`, `l0s`), each rep's salts
-for levels ≥ 1 handed to `keep`, the loop's frames' copy, and each rep's proof file to `file`, the proof the loop sends
-(`Session.relay`), each rep's requests held to what the loop holds of it (`own`, `Frames.ownOf`). -/
+for levels ≥ 1 handed to `keep`, the loop's frames' copy, each round of a rep's inner proof to `inner`, which the loop's
+frames release in its place, and each rep's proof file to `file`, the proof the loop sends (`Session.relay`), each rep's
+requests held to what the loop holds of it (`own`, `Frames.ownOf`). -/
 def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Registry)
     (keep : ByteArray → Nat → Array ByteArray → IO Unit) (file : ByteArray → Nat → ByteArray → IO (Option String))
-    (own : Nat → Nat → ByteArray → IO (Option (Except String Own))) (line : String) : IO Unit := do
+    (own : Nat → Nat → ByteArray → IO (Option (Except String Own)))
+    (inner : ByteArray → Nat → Nat → ByteArray → IO (Option String)) (line : String) : IO Unit := do
   let say := fun (s : String) => do
     ch.write (s ++ "\n").toUTF8
     ch.flush
@@ -882,7 +919,7 @@ def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : I
       | .ok (spec, sts) =>
         say "ok 0"
         let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit)
-          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file own true
+          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file own true inner
   | _ => say s!"err a request `{line.trim}`"
 
 end Flock.Firewall.Finish
