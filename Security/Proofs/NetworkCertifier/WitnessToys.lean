@@ -51,7 +51,7 @@ def unitOp {L K S : ℕ} : ℕ → List (Obs L K S) → Unit := fun _ _ => ()
 
 /-- **The honest certifier at `P` under the advice `a`**: at each step it records and puts on the wire `P`'s row on
 the ingress so far, jitter class 0 and every status complete, whatever the sender does. -/
-def honestI {L K S : ℕ} {Adv : Type} (P : Program L S Unit Adv) (a : Adv) :
+def honestI {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Adv) (a : Adv) :
     Interaction L K S Unit Unit Unit (Obs L K S) where
   certifier :=
     { obs := fun k xs _ => ⟨P.rows k xs a, 0, fun _ => .complete⟩
@@ -61,7 +61,7 @@ def honestI {L K S : ℕ} {Adv : Type} (P : Program L S Unit Adv) (a : Adv) :
   snd := fun _ _ _ => ()
 
 /-- **`P` accepts the honest certifier's run under `a`**, over every number of steps. -/
-theorem honestI_accepted {L K S : ℕ} {Adv : Type} (P : Program L S Unit Adv) (a : Adv) (n : ℕ) :
+theorem honestI_accepted {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Adv) (a : Adv) (n : ℕ) :
     Accepted P unitOp n ((honestI (K := K) P a).obsRun () n) a := by
   intro t ht
   have hlen : t < ((honestI (K := K) P a).obsRun () n).length := by
@@ -78,7 +78,7 @@ theorem honestI_accepted {L K S : ℕ} {Adv : Type} (P : Program L S Unit Adv) (
     rfl
 
 /-- The honest certifier's run is among `P`'s accepted sequences at `D = 1`. -/
-theorem honestI_mem {L K S : ℕ} {Adv : Type} (P : Program L S Unit Adv) (a : Adv) (n : ℕ) :
+theorem honestI_mem {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Adv) (a : Adv) (n : ℕ) :
     (honestI (K := K) P a).obsRun () n ∈ AccSeqs P (unitOp (K := K)) n 1 := by
   refine ⟨Interaction.length_obsRun _ () n, fun x hx => ?_, a, honestI_accepted P a n⟩
   obtain ⟨k, xs, as, rfl⟩ := Interaction.mem_obsRun _ () n x hx
@@ -92,7 +92,7 @@ def fxFrames : List Unit → Fin 2 → (Fin 1 → Bool) → Fin 1 → List Logic
 
 /-- **The constant-rate Program** over two execution blocks of two buckets (`T = 2`, `g = 1`), one link of two slots,
 one advice bit per block. -/
-def fxRate : Program 1 2 Unit (Fin 2 → Fin 1 → Bool) :=
+def fxRate : EgressPrediction 1 2 Unit (Fin 2 → Fin 1 → Bool) :=
   constantRate 2 1 2 fxFrames
 
 /-- `fxRate`'s advice: the bit `true` in both execution blocks. -/
@@ -111,8 +111,8 @@ def AccSeqsAt {L K S : ℕ} (acc : List (Obs L K S) → Prop) (n D : ℕ) : Set 
 /-- The verifier that accepts everything. -/
 def acceptAll {L K S : ℕ} (_ : List (Obs L K S)) : Prop := True
 
-theorem accSeqs_eq_at {L K S : ℕ} {In Adv : Type} (P : Program L S In Adv) (op : ℕ → List (Obs L K S) → In)
-    (n D : ℕ) : AccSeqs P op n D = AccSeqsAt (AcceptedUpTo P op n) n D :=
+theorem accSeqs_eq_at {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv)
+    (op : ℕ → List (Obs L K S) → In) (n D : ℕ) : AccSeqs P op n D = AccSeqsAt (AcceptedUpTo P op n) n D :=
   rfl
 
 /-- **At the verifier that accepts everything, the sequences of a positive number of steps are infinitely many**: one
