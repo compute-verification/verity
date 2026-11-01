@@ -152,7 +152,7 @@ class _Builder:
     reads: list[IF.Read] = field(default_factory=list)
     tables: dict[tuple[int, int, int], IF.Table] = field(default_factory=dict)
     roots: list[IF.TableRead] = field(default_factory=list)
-    openings: list[IF.Opening] = field(default_factory=list)
+    openings: list[IF.TableOpening] = field(default_factory=list)
     #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
     label: tuple[int, int] | None = None
     spans: dict[str, list[tuple[int, int, int, int]]] = field(default_factory=dict)
@@ -286,12 +286,12 @@ class _Builder:
         for f in self.feeds:
             self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
 
-    def merged(self) -> tuple[list[IF.TableRead], list[IF.Opening]]:
+    def merged(self) -> tuple[list[IF.TableRead], list[IF.TableOpening]]:
         """The table reads and the openings, each run of like ones at consecutive units one."""
         return (_merge(self.roots, lambda x: (x.reader, x.port, x.table, x.of),
                        lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n)),
                 _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict),
-                       lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n)))
+                       lambda x, n: IF.TableOpening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n)))
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:

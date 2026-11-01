@@ -34,7 +34,7 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
 
 - `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v1{V, H}` (`commitments.gates.embedding`): its ``root`` and
   ``domain`` are the embedding table's (a `Table` over the weights record, read by `TableRead`), its ``row``, ``salt`` and
-  ``path`` an `Opening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
+  ``path`` a `TableOpening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, each reading its weight rows from the weights record (`Read`) and
   its ``x`` as its writers' rows, n = ``grain.gemm_words`` // K columns, halved while an earlier node reads that slice
   template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
@@ -351,7 +351,7 @@ class _Program:
         self.b.feed(tid, "tok", u, 1, self._token(tok))
         t = self.b.table(self.weight(table.refs, V * H), H, V)
         self.b.roots += [IF.TableRead(tid, "root", t.name, "root", u, 1), IF.TableRead(tid, "domain", t.name, "domain", u, 1)]
-        self.b.openings.append(IF.Opening(tid, t.name, "tok", ("row", "salt", "path"), "o1", u, 1))
+        self.b.openings.append(IF.TableOpening(tid, t.name, "tok", ("row", "salt", "path"), "o1", u, 1))
         self.outs[j] = [(0, H, Row(tid, u, "o0", H))]
 
     def _token(self, tok: Any) -> tuple[Row, ...]:
