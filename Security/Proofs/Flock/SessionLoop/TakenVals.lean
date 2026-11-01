@@ -16,9 +16,10 @@ states the switched session's side by pad index, as the firewall's words:
 
 * **`Loop.vsWord`**: table `j`'s rep `r` value `k` of `vs` at the opened coins, at the table's base on the tape (its
   mask slot and extra lanes, which a table's values may read), as the firewall's word; `0` from `n_E` on.
-* **`Loop.RowsOK`**: each table's rows hold at `vs` at its base, at every nonce, opened coins and tape. Where they fail
-  the switched session commits its pads tree over the moved pads (`Table.swPads`), while the frame commits it over the
-  drawn ones, so a rep's first round, which carries the pads root, is the switched message only where they hold.
+* **`Loop.RowsOK`**: each table's rows hold at `vs` at its base, at every nonce, opened coins and tape at which none of
+  the table's zerocheck outer coins is `1`. Where they fail the switched session commits its pads tree over the moved
+  pads (`Table.swPads`), while the frame commits it over the drawn ones, so a rep's first round, which carries the pads
+  root, is the switched message only where they hold. `Loop.rowsOK_honestVals`: they hold at the honest values.
 * **`Loop.TakesVals`**: at every live round, each word the frame frees in the worker's round is `vs`'s value there.
 * **`Loop.TakesFinalC`**: at the inner proof's round 0, which the frame frees nothing of, the worker's `final_c'` plus
   its pad is `vs`'s `final_c`.
@@ -36,7 +37,23 @@ its own and where it doesn't:
   a statement that sets up a session (`0 < refK x`) and a history past the link, `schedOf` is none exactly there.
 * `LeanRelease.LiveSched`, `LeanRelease.LiveInner`: `LiveRoundEq`'s equation at the rounds the loop schedules and at
   the inner proof's. `LeanRelease.liveRoundEq_ofLoopLink`: the two give `LiveRoundEq`.
+* `LeanRelease.outer_ne_one_ofLoopLink`: on a live history whose last coins the frame takes, the coins the openings
+  open meet `RowsOK`'s outer-coin condition, so `RowsOK` gives the rows there.
 -/
+
+namespace FlockSoundness.ZK.Table
+
+set_option smartUnfolding false in
+/-- **The rows at the honest values are the table's own**: where each rep's batched constraint holds at `w`'s view at
+every draw, the rows hold at `w` and the table's values. -/
+theorem rowsAt_vals {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (R : T.XLanes)
+    (h : ∀ (ω : T.Rand) (r : Fin 2),
+      ∑ i, T.lam r (T.view w ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view w ω).pre) :
+    T.onVals.RowsAt (w, T.vals) u R :=
+  fun ω _ _ r => h ω r
+
+end FlockSoundness.ZK.Table
 
 namespace Claims.ZKServer
 
@@ -59,13 +76,33 @@ noncomputable def vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hk⟩)
   else 0
 
-/-- **The rows hold at `vs`**: at every nonce, opened coins and tape, each table's rows hold at `vs`'s values at the
-table's base (`Table.RowsAt`). -/
+/-- **The rows hold at `vs`**: at every nonce, opened coins and tape, at each table none of whose zerocheck outer coins
+is `1`, the table's rows hold at `vs`'s values at its base (`Table.RowsAt`). At an outer coin `1` the honest pads miss
+the inner proof's batched constraint (`CoinedSetup.Admits`), so the rows are asked for only where they hold at the
+honest values (`rowsOK_honestVals`). -/
 def RowsOK (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)),
+    (∀ (r : Fin 2), ∀ y ∈ (tabC PE x j).rOuter (czExe PE x c j) r, y ≠ 1) →
     ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, vs x w ν c j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1
+
+/-- **The rows hold at the honest values** at every witness in the deployed relation: each table's share is valid
+(`complete_tabC`), so it carries the public region data (`coinedOf_reg_of`), and the honest pads satisfy each rep's
+batched constraint where its outer coins aren't `1` (`innerOf_holds_rep_of`). -/
+theorem rowsOK_honestVals {x : Msg} {w : Flock.Wit}
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) :
+    RowsOK (CoinLayer.session Loop.loopNr Masked.dataE).honestVals x w := by
+  intro ν c τ j hout
+  have hv := complete_tabC PE hR j
+  have hreg := FlockSoundness.Discharge.Composed.coinedOf_reg_of PE (zkTab x j).table (stAt x j) (zkTab x j).wf.1
+    (zkTab x j).wf.2 rfl (zkTab x j).whole (czExe PE x c j) (wtOf PE x w j)
+    (FlockSoundness.Discharge.Composed.RegionsHold.of_satisfies hv)
+  exact FlockSoundness.ZK.Table.rowsAt_vals ((tabC PE x j).T (czExe PE x c j)).tab (wtOf PE x w j) _ _
+    fun ω r => FlockSoundness.Discharge.Composed.innerOf_holds_rep_of PE (zkTab x j).table (stAt x j)
+      (zkTab x j).wf.1 rfl (zkTab x j).mask
+      (FlockSoundness.Discharge.FailClosed.avoidsMask_of_shapeOk (zkTab x j).wf.2 (zkTab x j).hzk)
+      (czExe PE x c j) r (hout r) (wtOf PE x w j) hv hreg ω
 
 /-- **The worker's free words are `vs`'s values**: after every history `LiveRoundEq` reads (`0 < ops.length < refK x`
 openings, live, whose openings pass under the tape's nonce), where the frame takes the stream's coins (`answered`) and
@@ -312,6 +349,45 @@ theorem liveRoundEq_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
   · exact hI ν t κ m₀ ρ₀ ops v hpos hlt hl hok href hv
       ((Loop.schedOf_eq_none_iff (by omega) (by simpa using hpos)).mp hsc)
   · exact hS ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hv hsc
+
+/-- **The opened coins meet `RowsOK`'s outer-coin condition**: at a statement the loop serves, on a live history of at
+most `refK x` openings whose last coins the frame takes, no zerocheck outer coin of a table at the coins the openings
+open is `1`. One whose slot is among the openings the frame refused at `1` (`outer_unrefused`); one past them is the
+default coin's `0`. -/
+theorem outer_ne_one_ofLoopLink
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (wk : (ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hSv : Loop.Serves x)
+    (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
+    (κ : (ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
+    (hlive : (ofLoopLink L₀ src real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hr : (ofLoopLink L₀ src real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false) (j : Fin (Masked.jOf x)) :
+    ∀ (r : Fin 2), ∀ y ∈ (Masked.tabC Masked.PE x j).rOuter (Masked.czExe Masked.PE x
+      ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) j) r, y ≠ 1 := by
+  intro r y hy
+  obtain ⟨e, he, rfl⟩ := Masked.outerReads_czExe Masked.PE x _ j r y hy
+  have hj := Masked.lt_of_jOf j
+  rcases Nat.lt_or_ge (Masked.outerSlot x j.val r.val) ops.length with hb | hb
+  · exact outer_unrefused Masked.dataE (withFiles (withLink L₀ src) src) real wk x w (Masked.live_of_lt j) hSv ρ κ
+      m₀ ρ₀ ops hl hlive hr hj r.isLt hb (by rw [getElem!_pos (Masked.stsOf x) j.val hj]; exact he)
+  · unfold Masked.outerAt
+    split
+    · show ((ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2).getD
+        (Masked.outerSlot x j.val r.val) default).at e ≠ 1
+      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by rw [List.length_map]; exact hb), Option.getD_none]
+      unfold FlockDeploy.Coin.at
+      split
+      · show (0 : F128) ≠ 1
+        decide
+      · decide
+    · decide
 
 end LeanRelease
 
