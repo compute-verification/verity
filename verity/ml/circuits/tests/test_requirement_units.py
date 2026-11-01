@@ -64,7 +64,7 @@ def toy():
     return req, positions, {s: sorted(g) for s, g in gathers.items()}
 
 
-def spread(req: R.Requirement, packed: R.Store.Placement, positions):
+def spread(req: R.Requirement, packed: R.Store.Packing, positions):
     """Each written value alone in a fresh block of its step, slot 0, freed at its last structural reader."""
     block, offset = dict(packed.block), dict(packed.offset)
     written, freed, payload, j = {}, {}, {k: v for k, v in R.pack(req)[1].payload.items() if k < MAP.N}, MAP.N
@@ -76,7 +76,7 @@ def spread(req: R.Requirement, packed: R.Store.Placement, positions):
         j += 1
     for v in req.registered:
         freed.setdefault(req.last[v], set()).add(block[v])
-    return R.Store.Placement(block, offset), R.Store(MAP.N, {s: frozenset(b) for s, b in written.items()},
+    return R.Store.Packing(block, offset), R.Store(MAP.N, {s: frozenset(b) for s, b in written.items()},
                                                      {s: frozenset(b) for s, b in freed.items()}, payload)
 
 
@@ -298,7 +298,7 @@ def shard_toy():
     last = {**{v: 0 if v == 36 else 1 for v in weights}, **{v: 1 for v in rows}}
     uses = {0: frozenset(weights) | {rows[3]}, 1: frozenset(set(weights) - {36}) | {rows[10]}}
     req = R.Requirement(width, frozenset(width), {v: -1 for v in width}, last, uses, 2, {})
-    layout = R.Store.Placement({**{v: v for v in weights}, **{v: 20 + (v - 100) // 2 for v in rows}},
+    layout = R.Store.Packing({**{v: v for v in weights}, **{v: 20 + (v - 100) // 2 for v in rows}},
                                {**{v: 0 for v in weights}, **{v: ((v - 100) % 2) * VW for v in rows}})
     need = {t: sorted({layout.block[v] for v in req.reads(t) if v in weights} | set(TABLE_BLOCKS)) for t in range(2)}
     return req, layout, need
