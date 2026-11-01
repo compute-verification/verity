@@ -2,6 +2,7 @@
 //! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1). Lane flock-circuit.
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
+//!                          [--tree-from HOST:PORT [--tree-secret-file F]]   (`--zk`, with `--sessions N`: each session's coin tree the challenger's)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
@@ -5627,6 +5628,32 @@ fn firewall_outcome(fw: &ReleaseArgs, seen: usize, v: &Value) -> Value {
     json!({"session": fw.session, "part": fw.part, "outcome": outcome, "why": why})
 }
 
+/// `--tree-from HOST:PORT [--tree-secret-file F]`: the challenger that samples and opens every session's coin tree
+/// ([`flock_live::tree_from`]), on one connection the server's sessions share, closed after the last of `--sessions N`.
+/// Only a `--zk` statement's sessions commit their coins to a tree.
+fn tree_from_arg(sv: &Serving) -> Option<flock_live::tree_from::Shared> {
+    let (address, secret_file) = (arg("--tree-from", ""), arg("--tree-secret-file", ""));
+    if address.is_empty() {
+        if !secret_file.is_empty() {
+            refuse("--tree-secret-file is --tree-from's".into());
+        }
+        return None;
+    }
+    if config_of(&sv.tabs).coin_tree.is_none() {
+        refuse("--tree-from: only a --zk statement's sessions commit their coins to a tree".into());
+    }
+    if arg("--sessions", "").parse::<usize>().is_err() {
+        refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N".into());
+    }
+    let secret = (!secret_file.is_empty()).then(|| {
+        let s = std::fs::read_to_string(&secret_file).unwrap_or_else(|e| refuse(format!("--tree-secret-file: {e}")));
+        flock_live::tree_from::unhex(&s.trim().to_ascii_lowercase())
+            .unwrap_or_else(|| refuse("--tree-secret-file: the challenger session's secret, in hex".into()))
+    });
+    let c = flock_live::tree_from::Challenger::connect(&address, secret.as_deref()).unwrap_or_else(|e| refuse(format!("--tree-from: {e}")));
+    Some(Arc::new(Mutex::new(c)))
+}
+
 fn serve_loop(make: impl Fn() -> Server) {
     let listen = arg("--listen", "127.0.0.1:7500");
     let out = std::path::PathBuf::from(arg("--out", "sessions"));
@@ -5933,7 +5960,17 @@ fn main() {
         "replay" => replay(&st, &inst, tables),
         "serve" => {
             let sv = serving(&st, &inst, tables);
-            serve_loop(move || server_of(&sv, &st, &inst, tables))
+            let tree_from = tree_from_arg(&sv);
+            serve_loop(|| {
+                let s = server_of(&sv, &st, &inst, tables);
+                match &tree_from {
+                    Some(c) => s.with_tree_from(c.clone()),
+                    None => s,
+                }
+            });
+            if let Some(c) = tree_from {
+                c.lock().unwrap_or_else(PoisonError::into_inner).close().unwrap_or_else(|e| refuse(format!("--tree-from: {e}")));
+            }
         }
         "prove" => {
             if firewall_on(&st) {
