@@ -92,17 +92,6 @@ def test_exclusive_refuses_a_live_holder_and_reclaims_a_dead_one(tmp_path):
     _wait_terminal(runs_root / "third")
 
 
-def test_stale_lock_from_vanished_holder_is_reclaimed(tmp_path):
-    _, runs_root = _request(tmp_path, "ghost", ["true"])
-    runs_root.mkdir(parents=True, exist_ok=True)
-    (runs_root / ".exclusive.lock").write_text("ghost\n")
-    (runs_root / "ghost").mkdir()
-    (runs_root / "ghost" / "launch.json").write_text(json.dumps({"runner_pid": 2**22 - 7}))   # no such pid
-    req, _ = _request(tmp_path, "live", [PY, "-c", "print(1)"], exclusive=True)
-    assert remote.launch_request(req)["started"]
-    _wait_terminal(runs_root / "live")
-
-
 def test_a_queued_run_holds_its_cpu_allocation_through_custody_and_its_gpu_lease_around_the_workload_alone(tmp_path):
     """--queue: the runner runs inside the job's CPU allocation (a systemd scope on vy-nebius-2), which the stand-in wrapper
     holds until the runner exits: the run's status is already terminal then. A gpu phase's lease (gpu-lease) wraps the

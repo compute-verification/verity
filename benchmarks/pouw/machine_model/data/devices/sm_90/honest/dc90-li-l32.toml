@@ -5,7 +5,7 @@
 # the MMA-only GEMM, where the LP gives 1.52.
 name = "dc90-li-l32"
 status = "provisional"
-source = "DC-DESIGN (note:20261017T0805Z-draft-dc-design §3): LI is LOP3 (^ d0 ^ k0) and IMAD (·a0 + d1) a pair of words, 128 committed words a lane a MMA at L = 32; honest's shape wgmix_mix_r512 (r20261017-092536-be63) and the stress runs r20261017-104008-2898 and -104407-e527 lie inside every row the design reads"
+source = "DC-DESIGN: LI is LOP3 (^ d0 ^ k0) and IMAD (·a0 + d1) a pair of words, 128 committed words a lane a MMA at L = 32; honest's shape wgmix_mix_r512 and two stress runs lie inside every row the design reads"
 L = 32
 
 [mma]

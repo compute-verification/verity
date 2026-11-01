@@ -18,14 +18,13 @@ One line per fact on stdout, one per failure on stderr. It checks:
 - that the tree's and the cache's filesystems have the space a check takes: 45 GB, or 1.25 times the most the recent checks
   recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
   A machine with check slots (`slot.py`) shares its disk with other work, which a recorded drop in free space counts, so
-  there it is 45 GB (vy-nebius-1, 1 Oct: a 2 GB check "took" 607 GB while the node's jobs wrote).
+  there it is 45 GB (a 2 GB check can seem to take hundreds of GB while the node's other jobs write).
 The run's `--send` files are in RESEARCH_PREFLIGHT_INPUTS.
 """
 from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -336,13 +335,13 @@ def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpui
 
 
 def _env_path(name: str) -> Path | None:
-    return Path(os.environ[name]) if os.environ.get(name) else None
+    return Path(p) if (p := CHECK.SETTINGS.get(name)) else None
 
 
 def main() -> int:
     runs = ROOT.parent.parent / "runs" if ROOT.parent.name == "src" else None       # a shipped tree: <root>/src/<sha>, <root>/runs
     facts, fails = run(ROOT, _env_path("RESEARCH_PREFLIGHT_INPUTS"), _env_path("RESEARCH_PREFLIGHT_CUSTODY"), CHECK.cache_dir(),
-                       sha=os.environ.get("RESEARCH_SOURCE_SHA"), runs=runs, shared=SLOT.SLOTS.exists())
+                       sha=CHECK.SETTINGS.RESEARCH_SOURCE_SHA, runs=runs, shared=SLOT.SLOTS.exists())
     for line in facts:
         print(line, flush=True)
     for line in fails:

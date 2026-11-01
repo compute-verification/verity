@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # The covert sender's rate through the online prover's declared sync (covert.py) on the injected clock: active_replay.py
 # over every configuration of every trace, per sync policy, in parallel, then covert.py pools each policy's summaries.
-# From the shipped tree's root, with the traces' tarball and the calibration sent as inputs:
-#   research run --on MACHINE --project verity --source <tree> --cwd source --campaign CAMPAIGN \
-#     --tool benchmarks.network_traces.tool:COVERT_SYNC --declared-output 'out/*' \
-#     --send traces.tar.gz --send calibration.json [--env JOBS=32] -- \
-#     bash benchmarks/network_traces/covert.sh last cover-3-2 envelope
+# From the shipped tree's root, as a job whose inputs are the traces' tarball (traces.tar.gz) and the calibration, whose
+# outputs are out/*, and whose store declaration is `benchmarks.network_traces.tool:COVERT_SYNC`:
+#   [JOBS=32] bash benchmarks/network_traces/covert.sh last cover-3-2 envelope
 # A fixed policy (`envelope`, `model`) is the control: the same sender steers nothing.
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}/out}

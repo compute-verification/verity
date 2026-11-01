@@ -1,4 +1,4 @@
-"""PoUW's audit window as the proof service sees it: what the window makes public, the grid its tile count is padded to,
+"""PoUW's audit window as the proof system sees it: what the window makes public, the grid its tile count is padded to,
 the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile).
 
 **Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
@@ -10,7 +10,7 @@ that makes anything else public; the window's own root and W's root are salted r
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the law subset:K′ they fix with the work level (`k_prime`)
     length     structure    parameter  the rows of record's fixed length: each slot's public max_tokens (`length_item`)
-    drawn      coins        outcome    the verifier's own draw, after the receipt
+    flipped      coins        outcome    the verifier's own draw, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
@@ -21,9 +21,9 @@ always has: the private partition's unit-count bucket n_b on the same grid, one 
 declared range [lo, hi] it takes `levels(lo, hi)` = q values: log2 q bits in the draft's leakage bound.  The honest cost is
 under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <= 1 + 2^-s in K′.
 
-**The draw** (L3): uniform subset:K′ over the N equal tiles, K′ the smallest K with (1 − ε·W/(N·w_max))^K <= δ, W the
+**The sample** (L3): uniform subset:K′ over the N equal tiles, K′ the smallest K with (1 − ε·W/(N·w_max))^K <= δ, W the
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
-tiles, so a draw of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
+tiles, so a sample of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
 
 **The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
@@ -32,7 +32,7 @@ public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": 
 and is not of record.
 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
-an `Entry` row committed in one window root registered before the draw.  A call's sides are dense: each side tree holds only
+an `Entry` row committed in one window root registered before the sample.  A call's sides are dense: each side tree holds only
 the rows its tiles keep (a row the scheme refused is no tile's), in order, so its tiles are the products of A's rows and
 B's, row-major, and index u of its range is (u div n_b, u mod n_b); each side row carries its place in the call (I, J), and
 the call's record, which the entry binds by SHA-512, lists them (``keep``).  A call's entry also holds the root of its
@@ -50,11 +50,11 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
 
-**Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
+**Live windows**.  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
-derivation from the salt and the prover's roots.  A live window's comes from the proof service's challenger
+derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
-`live_families(R)` under `LIVE_SCHEME`, its salt coin, its draw coin and R round coins (``pouw/round``, rounds numbered
+`live_families(R)` under `LIVE_SCHEME`, its salt coin, its sampling coin and R round coins (``pouw/round``, rounds numbered
 from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  The salt coin opens once, after the
 window's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
 rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
@@ -77,11 +77,12 @@ from typing import Any, Mapping, Sequence
 
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import Key, derive
 
 GRID_BITS = 3
@@ -100,7 +101,7 @@ PUBLIC = (
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
-#: the items a registration carries; the verdict and the draw come after it
+#: the items a registration carries; the verdict and the sample come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
 #: what a registration made before the fixed-length rule carries: no `length`, so not of record
 LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
@@ -108,9 +109,9 @@ KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"
 MODES = ("live", "seeded")
-LIVE_SCHEME = "verity/pouw/epoch-coins/live/v1"
+LIVE_SCHEME = domains.POUW_EPOCH_COINS_LIVE
 SALT, DRAW, ROUND = "pouw/salt", "pouw/draw", "pouw/round"
-ROUND_NOISE_DOMAIN = "verity/pouw/round-noise/v1"
+ROUND_NOISE_DOMAIN = domains.POUW_ROUND_NOISE
 
 
 # ---- the grid ---------------------------------------------------------------------------------------------------------------
@@ -192,7 +193,7 @@ def bucket(real: int, bits: int = GRID_BITS) -> Work:
     return Work.at(level(floor_point(real, bits), bits), bits)
 
 
-# ---- the draw -----------------------------------------------------------------------------------------------------------
+# ---- the sample -----------------------------------------------------------------------------------------------------------
 
 #: (a/b)^k is compared exactly in integers while k·bitlength(b) is at most this many bits
 EXACT_BITS = 1 << 14
@@ -257,7 +258,7 @@ EPS_BITS = 32
 
 def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fraction:
     """`k_prime` inverted: the least ε = j/2^`EPS_BITS` (1 <= j <= 2^`EPS_BITS`) whose K′ at δ and the window's inputs
-    (`k_prime(ε, δ, credited, n, w_max)`) is at most `k`, so a draw of `k` establishes ε at δ, rounded up to the grid.
+    (`k_prime(ε, δ, credited, n, w_max)`) is at most `k`, so a sample of `k` establishes ε at δ, rounded up to the grid.
     Bisection over j, K′ being nonincreasing in ε; ValueError when `k` isn't a positive integer, the inputs are outside
     `k_prime`'s domain, or not even ε = 1 has K′ <= `k`."""
     if not _positive(k):
@@ -344,7 +345,7 @@ _HEAD = struct.Struct("<6Q")
 #: tile0, cols, m and a zero u64, after root_h3
 _PASS = struct.Struct("<4Q")
 _PASS_AT = 240
-_DIGEST = 64
+_DIGEST = DIGEST_BYTES["sha512"]
 _ZERO = bytes(_DIGEST)
 _HM = hm96.SHA512
 #: the pass's tiles are 64 x 64 (`audit.tile_refs` over Pearl-C's tiles), and a short last tile row is whole 16-row
@@ -500,7 +501,7 @@ def entry_leaf(dom: CommitmentDomain, e: int, bc: bytes) -> bytes:
 
 # ---- the side trees -----------------------------------------------------------------------------------------------------
 
-SIDE_DOMAIN = "verity/pouw/window/side-domain/v1"
+SIDE_DOMAIN = domains.POUW_PERIOD_SIDE_DOMAIN
 #: the frame's owner, as C-Flock's statement domains have it
 OWNER = -1
 #: a side row's index field: the row's place in its call (I < 2^13 for A, J < 2^17 for B) as a u32, two u16 words low
@@ -683,18 +684,18 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
 # ---- the tile instances' public inputs ------------------------------------------------------------------------------------
 
 #: C-Flock's format of the verifier's own ``--public-inputs`` file (its PROTOCOL.md §16.10, Lean's ``HmIn.checkOwn``)
-PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 #: a tile instance's public input ports, in order, as its circuit's META ``public_inputs`` must name them: each port's u16
 #: words (whole 128-bit words, so no row leaf shares one), the public datum it is recomputed from and its rule.  t is a
 #: u128 below 2^40; the root and the domain ids are 64 bytes, each u16 word two of them, little-endian.  domain_h3 is the
 #: domain of the pass's -h3 tile tree, which binds its tile count and so its depth.
 PUBLIC_PORTS = (
-    {"port": "t", "words": 8, "seed": "drawn", "derivation": "verity/pouw/window/t/v1"},
-    {"port": "root", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/root/v1"},
-    {"port": "domain", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/domain/v1"},
-    {"port": "domain_a", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/side-domain-a/v1"},
-    {"port": "domain_b", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/side-domain-b/v1"},
-    {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": "verity/pouw/window/domain-h3/v1"},
+    {"port": "t", "words": 8, "seed": "drawn", "derivation": domains.POUW_PERIOD_T},
+    {"port": "root", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_ROOT},
+    {"port": "domain", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_DOMAIN},
+    {"port": "domain_a", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_SIDE_DOMAIN_A},
+    {"port": "domain_b", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_SIDE_DOMAIN_B},
+    {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": domains.POUW_PERIOD_DOMAIN_H3},
 )
 #: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its PROTOCOL.md §16.5, `shape_in_range`)
 M_MAX = 35
@@ -727,7 +728,7 @@ def _registered_root(registration: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int) -> list[int]:
-    """Session σ's tile indices: drawn[σ·cap + s] while that is drawn, N − 1 after.  Raises ValueError unless `drawn` is
+    """Session σ's tile indices: drawn[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless `drawn` is
     the registration's K′ distinct indices of [0, N), ascending, and σ one of its S sessions."""
     n, law = registration.get("population"), registration.get("law")
     if not _positive(n) or n > 1 << T_BITS:
@@ -767,12 +768,12 @@ def mode(check: Mapping[str, Any]) -> str:
 
 
 def live_families(rounds: int) -> tuple[tuple[str, int], ...]:
-    """A live epoch's coin layout: its salt coin, its draw coin and `rounds` round coins, the most rounds a window takes."""
+    """A live epoch's coin layout: its salt coin, its sampling coin and `rounds` round coins, the most rounds a window takes."""
     return ((SALT, 1), (DRAW, 1), (ROUND, rounds))
 
 
 def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
-    """A live epoch's challenger, its coins and hm96 salts drawn from `entropy`: a served one's is the Lean verifier of
+    """A live epoch's challenger, its coins and hm96 salts sampled from `entropy`: a served one's is the Lean verifier of
     record's (`verifier.coins`, `IO.getRandomBytes`, A3)."""
     return Ch.LiveChallenger(LIVE_SCHEME, epoch, live_families(rounds), entropy)
 

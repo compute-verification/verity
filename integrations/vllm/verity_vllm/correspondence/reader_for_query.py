@@ -26,8 +26,8 @@ them every return of the Call lies in (an attention row's `[t=<position>]` names
 
 The second correspondence fact is the map from a Program module path to the IMPLEMENTATION's path (the collector's `named_modules()`
 name): the export wrapper holds the served model under an attribute, so `model.model.layers.0...` in the Program is `model.layers.0...` at
-the collector.  It is determined from the Build's observed implementation paths (`result.json: attention_impls_observed`, keys =
-implementation module paths) by suffix match against the Program's module paths -- the one prefix every observed path is a suffix under
+the collector.  It is determined from the Build's implementation paths (`result.json: attention_impls_observed`, or predict's
+`attention_impls_declared`, keys = implementation module paths) by suffix match against the Program's module paths -- the one prefix every observed path is a suffix under
 -- never assumed.
 
 A HELD module path (`held_module_paths`) is resolved to the registered module it names: a module that another module holds under an
@@ -356,8 +356,9 @@ class Correspondence:
 
     @staticmethod
     def implementation_paths_of(result_json: Mapping[str, Any] | None) -> tuple[str, ...]:
-        """The observed implementation module paths a Build's `result.json` records (`attention_impls_observed` keys)."""
+        """The implementation module paths a Build's `result.json` records: `attention_impls_observed` keys (a trace's), else
+        `attention_impls_declared` keys (predict's, `program.predict.naming`)."""
         if not result_json:
             return ()
-        obs = result_json.get("attention_impls_observed") or {}
+        obs = result_json.get("attention_impls_observed") or result_json.get("attention_impls_declared") or {}
         return tuple(str(k) for k in obs)

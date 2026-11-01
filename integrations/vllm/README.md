@@ -114,7 +114,7 @@ TP > 1). An adapter states `NAME`, `schemes()`, `refusals(scheme, ctx)` and `ins
 `verity_vllm/protocols/interface.py`); the protocol logic stays in its `verity.core.protocols` package. At a linear layer's `quant_method.apply` PoUS wraps PoUW,
 which executes the GEMM (`protocols.SITES`), and sampled proofs commits outside every site. Every option first commits to the
 plaintext weights, then installs innermost first. `verity_vllm/protocols/remote_bandwidth/` is the node's registered store
-for the remote bandwidth audit, with the hooks that keep it current while vLLM serves. The network certifier is on the
+for PoUB, with the hooks that keep it current while vLLM serves. The network certifier is on the
 node's uplink.
 
 Every runtime patch, an adapter's or a benchmark arm's, goes through `engine/hooks.py`: `patch`, `wrap`, `append` and `service`

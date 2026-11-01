@@ -1,4 +1,4 @@
-"""The difftest of the description-sized NCI check (`NciCheck.Desc`) against the unrolled one: the Python half.
+"""The difftest of the description-sized inference-only check (`NciCheck.Desc`) against the unrolled one: the Python half.
 
 `verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 4,009 declarations divided into IUs of
 root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
@@ -18,7 +18,7 @@ gate reading a nested scan's carry, past `NciCheck.Desc.walkBound`'s limit, wher
 fifth that it holds the empty scans: a scan of no iterations carrying a value, which `Flock.Program.resolve` can't
 resolve, refused read or not, the sixth that it holds the shared members: one copy of pieces of two nodes' outputs,
 which `NciCheck.Desc` once read as all its first piece's node's, and the seventh that the mistyped ones the codec
-refuses are refused as `E_REINTERPRET`, which C-Flock's decoder once let through.
+refuses are refused as `E_REINTERPRET`, which Flock's decoder once let through.
 """
 
 from __future__ import annotations
@@ -123,7 +123,7 @@ def test_the_empty_scans_are_refused_where_they_carry_a_value():
 def test_the_shared_members_read_both_nodes():
     """The shared members come just before the mistyped instances, and on each the reference gives the unrolled check's
     verdict: the other Call's 8 output bits are novel to the reading gate's IU, however the members order the pieces,
-    so it fails NCI at α 1 (`NciCheck.Desc` once counted none, and accepted)."""
+    so it fails the policy at α 1 (`NciCheck.Desc` once counted none, and accepted)."""
     first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.shared()))]
     assert made == vectors.shared() and len(made) == 12

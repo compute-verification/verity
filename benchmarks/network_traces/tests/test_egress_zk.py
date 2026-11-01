@@ -1,4 +1,4 @@
-"""egress_zk's host side: the link-window it reads (each bucket's state renders the warden's row, its registration
+"""egress_zk's host side: the execution phase it reads (each bucket's state renders the warden's row, its registration
 read under the test key) and each member's host read (`egress_zk.refused`, as Lean's registered reads make it, of the
 rows the units compute) as the member's: honest accepted with every o0 1 and every row the warden's, lying's changed
 unit's row not the warden's, moved's at the other unit's position.

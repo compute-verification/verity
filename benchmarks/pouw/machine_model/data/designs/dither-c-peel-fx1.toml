@@ -1,7 +1,7 @@
-# H1 + fx1 (decision 83): Dither-C's peel design, H1's noise (co32c linears and lm_head, cohalf QKᵀ, the peel on P·V
+# H1 + fx1: Dither-C's peel design, H1's noise (co32c linears and lm_head, cohalf QKᵀ, the peel on P·V
 # with vfold's sums), with fx1 chained in front of duo on every absorbed word: one IMAD a word keyed by the tile
-# position, so the fold is fx1's 2 ALU and 2 IMAD a word. Honest is BC-KERNEL r5's measured c_fx1 (#2310,
-# data/honest/c-fx1.toml). The RTX PRO 6000's headline design (`machine-model headline`).
+# position, so the fold is fx1's 2 ALU and 2 IMAD a word. Honest is the measured c_fx1
+# (data/honest/c-fx1.toml). The RTX PRO 6000's headline design (`machine-model headline`).
 base = "dither-c-peel"
 name = "dither-c-peel-fx1"
 title = "Dither-C, peel P·V, fx1"
@@ -17,8 +17,8 @@ IMAD = 2
 [skip.served]
 eps = 0.003628
 at = { "DS-120" = 0.004207 }
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 19.757 SMSP-cycles a 4096-MAC MMA on VF3r-16 (this design's own, decision 90: fx1's fold); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: the linears' co32c recombination 0.0742%; QKᵀ's cohalf sums 0.00630%; P·V's peel 0.282%. With P·V's served output checked it is 0.300% (8B) / 0.139% (70B) there. On DS-120 (`at`), ♭ 17.026: 0.421%. Skip terms as dither-c-peel's (note:20261017T0320Z-draft-eps1-calc Round 11)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 19.757 SMSP-cycles a 4096-MAC MMA on VF3r-16 (this design's own: fx1's fold); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: the linears' co32c recombination 0.0742%; QKᵀ's cohalf sums 0.00630%; P·V's peel 0.282%. With P·V's served output checked it is 0.300% (8B) / 0.139% (70B) there. On DS-120 (`at`), ♭ 17.026: 0.421%. Skip terms as dither-c-peel's"
 
 [mand.fold]
 eps = 0.0
-source = "named assumption: fx1 at 4 lane instructions a word is the cheapest implementation of the fold (FOLD-OPT; ASSUME r2, #2289: fx1 needs at least 4)"
+source = "named assumption: fx1 at 4 lane instructions a word is the cheapest implementation of the fold (FOLD-OPT; ASSUME r2: fx1 needs at least 4)"

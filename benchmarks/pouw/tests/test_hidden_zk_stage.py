@@ -1,4 +1,4 @@
-"""hidden_zk's fast staging (stage.py under HZ_STAGE=fast: fast_stage.py's patches of C-Flock's staging) writes the bytes the
+"""hidden_zk's fast staging (stage.py under HZ_STAGE=fast: fast_stage.py's patches of Flock's staging) writes the bytes the
 library writes: the circuit, its instances, public file and pin, and the same stage.json but for its timings and its label."""
 
 from __future__ import annotations
