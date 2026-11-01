@@ -184,11 +184,11 @@ def test_a_template_the_declared_program_does_not_define_is_lowered_for_no_strat
     assert lowered == [] and not (tmp_path / "circuits" / PC.MANIFEST).exists()
 
 
-def test_a_j10r_program_builds_its_live_file_and_refuses_to_lower_its_strata(tmp_path, monkeypatch):
+def test_a_j10r_program_builds_its_live_file_and_lowers_its_strata_as_j10r(tmp_path, monkeypatch):
     """A Program over J10-R's tile unit (serve-openai's pouw setting ``unit`` j10r) is bound as v1's is, each K's
     template the declared J10-R one (`h1tile.PouwH1Tile5`'s, here the served tests' stand-in): with ``--strata none``
-    its live file and manifest are built, the files a period opens on; a stratum it would lower is refused, since
-    `h1unit.Shape`'s statement is v1's or v3's."""
+    its live file and manifest are built, the files a period opens on; a stratum it lowers is lowered as J10-R's
+    statement (``j10r``), never v1's."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
 
     from tests.protocols.test_pouw_h1_served import StandInJ10R
@@ -206,5 +206,11 @@ def test_a_j10r_program_builds_its_live_file_and_refuses_to_lower_its_strata(tmp
                    lower_live=lambda T, part, path: path.write_text(f"the live template at T = {T}\n"), only=())
     assert doc["templates"] == {f"k{k}": PO.template_id(HW.template(k, j10r(k))) for k in (64, 128)}
     assert sorted(doc["files"]) == [CR.LIVE] and doc["program"] == _sha(raw)
-    with pytest.raises(ValueError, match=r"K = \[64\]'s template is over J10-R's tile unit"):
-        PC.build(d, out, lower=lambda *_a: pytest.fail("lowered a J10-R stratum"), only=(64,))
+    lowered = []
+
+    def stand_in(k, tile, bind, path, j10r=False):
+        lowered.append((k, j10r))
+        path.write_text(f"the J10-R k{k} template, bound to {json.dumps(bind, sort_keys=True)}\n")
+    doc = PC.build(d, out, lower=stand_in, only=(64,))
+    assert lowered == [(64, True)] and sorted(doc["files"]) == ["k64"]
+    assert doc["files"]["k64"] == _sha((out / PC.file_name(64)).read_bytes())
