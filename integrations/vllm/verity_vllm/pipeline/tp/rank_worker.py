@@ -1134,7 +1134,7 @@ class TP2CaptureWorkerExtension:
         if rc is None or not pop or not bmap:
             return {"rank": st["rank"], "n": 0, "verified": 0, "error": "no population / binding map on this rank"}
         rcv = self._claimed(rc, claimed_root_hex)
-        draws = bd.challenge_identities(pop, bmap, bytes.fromhex(combined_root_hex), int(k), salt=salt.encode(), legacy=False,
+        draws = bd.challenge_identities(pop, bmap, bytes.fromhex(combined_root_hex), int(k), salt=salt.encode(),
                                         source=bytes.fromhex(source_hex))
         unbound = [bd.identity_dict(i) for i, e, _l in draws if e is None]
         positions = [(int(i[2]), int(leaf)) for i, e, leaf in draws if e is not None]
