@@ -748,7 +748,8 @@ samples the loop made for it and the pads' root, which the prover proves with. E
 on the schedule `Drive.reqs` fixes: a rep stream's `Round` carries the device's round, and the loop places it as the
 algebraic phase's scheduled round (`Skeleton.rounds` on the table's level 0), then the opening's (`Drive.openStep`, the
 rep's opening a round at a time in the loop, on the extra claims at the `Commit`'s coins and the rep's salts for levels
-≥ 1, one copy with the finish's), then the inner proof's own; rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
+≥ 1, one copy with the finish's), then the inner proof's, each at the frame's own round (`Frame.innerSched`) on the loop's
+finish's round, which the finish hands the loop before Rust relays it (§10.4); rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
 frame's release, at the stream's first round after its domain frame (`Frames.round`); anything the frame refuses is
 refused before it reaches the auditor. Once a round's coins open the tree, they are the frame's coins before the prover
 receives them (`Frames.feedOf`, `Frames.coins`), and the session's `Finish` leaves only once every rep's frame answered
@@ -804,7 +805,9 @@ standard input (`tests/test_firewall_frame.py`):
   ended, and no round after its fourth. It takes each round only in the form it fixes (`innerOwn`): the inner label,
   `final_c'` and `ε`'s squeeze; `[ρ, σ] = [ε h_fa + h_tx, h_fb + h_ty]` and the batching coins; `τ`'s 64-byte commitment
   and `β`'s squeeze; `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` and the queries, with `ρ`, `σ` and `Y` its own values from its samples
-  and the coins. Any other round (a frame more, a value changed) is answered `err WHY` and releases nothing.
+  and the coins. Any other round (a frame more, a value changed) is answered `err WHY` and releases nothing. The session
+  loop sends each with the frame's own round in its place (`round N LEN REFLEN`, `Frame.innerSched`: `innerOwn`'s form at
+  the finish's `final_c'` and `τ`'s commitment), so a relayed round that differs stops the rep, its own round leaving.
 - **finish**: `ok`, or `stop` for a stopped rep, once every masked phase closed with every pad of the layout used and
   the inner proof's four rounds left.
 
@@ -905,16 +908,32 @@ The loop's finish computes each rep's proof file on what its frames hold, not on
 `open`, `inner` or `rep` request whose samples (the pads, `τ`'s salt, the pads tree's salts), passed values, extra claims or
 coins are not the rep's frame's (the samples it took at the rep's start, the values it took, `Drive.extras` at the
 session's link points, the coins the stream answered) is refused, and the finish ends (`Finish.RepIn.differs`,
-`Frames.ownOf`). `final_c`'s slot is the request's: the passed values fix it, and any other fails the rep's
-`zerocheck c_eval` constraint on the frame's pads, which stops the rep. `FC_FINISH_TAMPER` doctors the session's last rep
-request in time, and the selftest's `zk_worker_finish` holds each mode to that, beside an honest session:
+`Frames.ownOf`), and so are coins that answer an `inner` request's round but are not the ones the stream answered it
+(`Finish.coinsWhy`). `final_c`'s slot is the request's, and the passed values fix it: an `inner` request whose slot is any
+other fails its `zerocheck c_eval` constraint and is refused before its inner proof's first round (`Finish.consWhy`), and a
+`rep` request whose slot is not its `inner` request's is answered by no proof computed live, so it is refused.
+`FC_FINISH_TAMPER` doctors the session's last rep request in time, and the selftest's `zk_worker_finish` holds each mode to
+that, beside an honest session:
 
 | `FC_FINISH_TAMPER` | the last rep request | outcome |
 |---|---|---|
 | `pads-zero` | the pads `h` all zero | `finish: table T rep R's request: its pads are not the frame's draws`; no proof leaves, and the verifier gets the honest session's every request but its proofs, `Finish` included, and does not accept |
 | `vals-chosen` | the first passed value plus one | `… its passed values are not the ones the frame took`; the same |
 | `coins` | the first round's first coin plus one | `… its coins are not the ones the stream answered`; the same |
-| `final-c` | `final_c` plus one | `the constraints zerocheck c_eval … fail on the rep's pads`; the same |
+| `final-c` | `final_c` plus one | `… proof file is only the one its inner request computed live, and none answers this request`; the same |
+
+The inner proof's rounds that leave are the frame's own: the loop places each at `Frame.innerSched`, the frame's own round
+(`ε`, `β`, its samples and the round's coin count) on the finish's round (`final_c'`, `τ`'s commitment), which the loop's
+finish hands the frame before Rust relays it (`Frames.Registry.innerRound`), and the frame's check holds the relayed round
+to it byte for byte. `FC_INNER_TAMPER=J` relays table 0 rep 0's inner round `J` with its last value byte flipped, and the
+selftest's `zk_worker_inner` holds each round to that, beside an honest session, which is accepted:
+
+| `FC_INNER_TAMPER` | the relayed round | outcome |
+|---|---|---|
+| `0` | `final_c'` | the frame's stop at the round, its own round leaving in its place: `PROVER-STOPPED: the Lean frame stopped table 0 rep 0`; no proof leaves, and the verifier gets the honest session's every request but its proofs, `Finish` included, and does not accept |
+| `1` | `[ρ, σ]` | the same |
+| `2` | `τ`'s commitment | the same |
+| `3` | `Y` | the same |
 
 The outer phase's rounds are the loop's own, so it has no transcript for the contract (`flock-firewall contract`)
 to decide after the fact.
