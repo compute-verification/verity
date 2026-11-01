@@ -5153,7 +5153,7 @@ fn worker_inner_case(gpu: bool) -> Value {
     let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0
         && honest["prover_stopped"].as_str().unwrap_or("").is_empty();
     let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
-    let rounds: Vec<Value> = (0..4).map(|j| {
+    let modes: Vec<Value> = (0..4).map(|j| {
         let v = worker_subsession(&[("FC_INNER_TAMPER", j.to_string())]);
         let s = seen(&v);
         let stopped = v["prover_stopped"].as_str().unwrap_or("");
@@ -5167,7 +5167,7 @@ fn worker_inner_case(gpu: bool) -> Value {
     }).collect();
     json!({"case": name, "expect": "the honest relay accepted; each doctored inner round stops the rep in the Lean frame, no proof sent, the honest session's other requests",
            "honest": {"accepted": honest["accepted"], "error": honest["error"], "prover_stopped": honest["prover_stopped"], "requests": h.len()},
-           "rounds": rounds, "pass": honest_ok && rounds.iter().all(|c| c["ok"] == true)})
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
 }
 
 /// `zk_worker_level0` (live PROTOCOL.md §10.4): the level 0 a session binds is the loop's one sample for each table, never one
