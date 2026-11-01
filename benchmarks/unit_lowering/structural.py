@@ -5,19 +5,23 @@ measured beside the flat form, at any K and R × C tile. A leaf is proved as one
 lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h1_lanes` stages, which
 `h1window.leaf_unit` derives at a K of whole lanes. Each must fit C-Flock's block (``k_log <= 27``).
 
-* ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--staging fast|library] [--path FILE]``: a tile
-  through `pouw_h1_circuits._lower` itself (the ``--lower`` command's body, ``HZ_STAGE`` set to the staging), a lane or
-  combine through `h1unit.stager` with `h1_lanes`' rows, in this process, bound to `BIND`; at ``fast`` (the default)
-  `fast_stage` patches the library first, for the same bytes. OUT (JSON): the lowering (its class; the rows C-Flock
-  proves below the root, the commits among them and the ANDs, `_counts`; the template's Definitions, rows and calls), its
-  seconds and peak RSS before compose and at the end, and the file's bytes, SHA-512 and META block fields; or the
-  refusal, before lowering (`refusal`) or compose's (a block past ``K_MAX``, ``k_log`` the block it needs) with the
-  lowering's counts. The file goes to FILE, else to a scratch directory removed at exit.
+* ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--staging fast|library] [--bind leaf|zero]
+  [--path FILE] [--program FILE]``: a tile through `pouw_h1_circuits._lower` itself (the ``--lower`` command's body,
+  ``HZ_STAGE`` set to the staging), bound to `ZERO_BIND`; a lane or combine through `h1unit.stager` with `h1_lanes`'
+  rows, in this process, bound to its leaf Program's partition and digest as a served window's verifier derives them
+  (`leaf_bind`, the default; its descriptor to ``--program``), or with ``--bind zero`` to `ZERO_BIND`; at ``fast`` (the
+  default) `fast_stage` patches the library first, for the same bytes. OUT (JSON): the lowering (its class; the rows
+  C-Flock proves below the root, the commits among them and the ANDs, `_counts`; the template's Definitions, rows and
+  calls), its seconds and peak RSS before compose and at the end, the binding, and the file's bytes, SHA-512 and META
+  block and binding fields; or the refusal, before lowering (`refusal`) or compose's (a block past ``K_MAX``, ``k_log``
+  the block it needs) with the lowering's counts. The file goes to FILE, else to a scratch directory removed at exit.
+* ``check K R C LANE COMBINE OUT``: `credit`'s lanes form on a leaf-bound lane and combine file (`check`); exits 1 unless
+  credit would take them as K's ``lane<K>`` and ``combine<K>``.
 * ``agree K R C OUT``: the flat and the structural tile stager at one shape, their units evaluated on the same rows
   (honest leaves, a record off in one bit, random words): each output word of the template (`TmplLowering.evaluate`)
   against the flat unit's (`ir_lower.Lowering.evaluate`) and both against `h1zy.reference`, the word reference; then
   `circuit_check.structural.check_unit`'s verdict on the template against the flat unit.
-* ``sweep --shapes K:R:C[:UNIT],.. --out DIR [--form F] [--staging S] [--jobs J]``: ``lower`` of each shape (UNIT
+* ``sweep --shapes K:R:C[:UNIT],.. --out DIR [--form F] [--staging S] [--bind B] [--jobs J]``: ``lower`` of each shape (UNIT
   ``tile`` unless given) in a process of its own, its peak RSS from ``wait4`` (so also when it is killed):
   DIR/<form>-<unit>-k<K>-<R>x<C>.json and DIR/sweep-<form>.json.
 """
@@ -41,8 +45,11 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 VLLM = ROOT / "integrations" / "vllm"
 H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
-#: the guard's bind: the file's bytes are pinned under it at small shapes
-BIND = {"partition": "0" * 128, "program": "0" * 128}
+#: the zero binding: a tile's, which has no leaf Program (the guard's pins are under it), or a lane's or combine's under
+#: ``--bind zero``, a file no verifier holds a Program and partition for
+ZERO_BIND = {"partition": "0" * 128, "program": "0" * 128}
+#: a lane's or combine's binding: its leaf Program's (`leaf_bind`, the default), or `ZERO_BIND`
+BINDS = ("leaf", "zero")
 #: META's fields that say how the statement fills C-Flock's block
 BLOCK = ("format", "statement", "layout", "k_log", "unit_log", "vus_per_block", "per_vu")
 SEED = 20261028
@@ -108,19 +115,59 @@ def leaf_statement(U, unit: str, k: int, r: int, c: int) -> tuple:
     return Z.combine(t), rows
 
 
-def stage(U, unit: str, k: int, r: int, c: int, path: Path, staging: str) -> None:
-    """``unit``'s statement file at `path`, bound to `BIND`, staged as its benchmark stages it."""
+def window(U, k: int, r: int, c: int):
+    """A served window of one call at K over the R × C tile: `h1window.program` over `h1window.tile_unit` at K on
+    `h1unit.tile`'s H1 tile. `h1window.leaf_program` reads only the window's template at K, so every served window's
+    leaf Programs at K are this one's."""
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    h1 = H.PouwH1Tile3 if U.tile() == "v3" else None
+    return HW.program((("w", k, c),), (("w", 0),), r, (r, c), unit=lambda kk: HW.tile_unit(kk, (r, c), h1))
+
+
+def _descriptor(program) -> bytes:
+    from verity.ml.circuits import codec
+    return codec.canonical_json({x: v for x, v in codec.encode_program(program).items() if x != "annotations"})
+
+
+def leaf_bind(U, unit: str, k: int, r: int, c: int) -> tuple[object, dict, bytes]:
+    """``unit``'s Definition, binding and leaf Program descriptor as a served window's verifier derives them (`credit`'s
+    lanes form): `h1window.leaf_program`'s one-call Program of its wrapper over the lane or combine, a population of one,
+    bound as ``{partition: its partition object's digest, program: the descriptor's SHA-512}``."""
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    win = window(U, k, r, c)
+    program, query = HW.leaf_program(win, k, unit)
+    if P.units(program, query) != 1:
+        raise SystemExit(f"{unit} at K = {k}: its leaf Program is not a population of one")
+    part, raw = P.partition(program, query), _descriptor(program)
+    if hashlib.sha512(raw).hexdigest() != part["program"]:
+        raise SystemExit(f"{unit} at K = {k}: the partition object is over another program than the leaf Program's")
+    return HW.leaf_unit(win, k, unit), {"partition": P.digest(part), "program": part["program"]}, raw
+
+
+def stage(U, unit: str, k: int, r: int, c: int, path: Path, staging: str, bind: str = "leaf") -> dict:
+    """``unit``'s statement file at `path`, staged as its benchmark stages it: a tile bound to `ZERO_BIND`, a lane or
+    combine to its leaf Program's binding (`leaf_bind`) or with ``bind`` ``zero`` to `ZERO_BIND`. Returns the binding and,
+    for a leaf binding, the leaf Program's descriptor (``program``) and its unit's id."""
     if unit == "tile":
         from tests.protocols import pouw_h1_circuits as PC
         os.environ["HZ_STAGE"] = staging
-        PC._lower(k, r, c, BIND, path)
-        return
+        PC._lower(k, r, c, ZERO_BIND, path)
+        return {"bind": ZERO_BIND}
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    d, rows = leaf_statement(U, unit, k, r, c)
+    out = {"bind": ZERO_BIND}
+    if bind == "leaf":
+        leaf, b, raw = leaf_bind(U, unit, k, r, c)
+        if leaf.id != d.id:
+            raise SystemExit(f"{unit} at K = {k}: the leaf Program's unit is {leaf.id}, not the staged {d.id}")
+        d, out = leaf, {"bind": b, "program": raw, "unit_id": leaf.id}
     if staging == "fast":
         import fast_stage
         fast_stage.install(path.parent / f".scratch-k{k}")
-    d, rows = leaf_statement(U, unit, k, r, c)
-    U.stager(d, NAMES[unit], rows, [(V2, (0,))], U.layout(), circuit=path, bind=BIND)
+    U.stager(d, NAMES[unit], rows, [(V2, (0,))], U.layout(), circuit=path, bind=out["bind"])
+    return out
 
 
 def _flat_commits(lay) -> int | None:
@@ -187,10 +234,68 @@ def _file(path: Path) -> dict:
 def _done(args, rec: dict) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(rec, indent=1))
-    print("LOWER " + json.dumps({k: rec.get(k) for k in ("k", "r", "c", "unit", "form", "lowering", "rows", "commits",
-                                                         "ands", "rows_agree", "k_log", "bytes", "seconds", "peak_gib",
-                                                         "refused")}), flush=True)
+    print("LOWER " + json.dumps({k: rec.get(k) for k in ("k", "r", "c", "unit", "form", "bind_form", "lowering", "rows",
+                                                         "commits", "ands", "rows_agree", "k_log", "bytes", "sha512",
+                                                         "program_sha512", "seconds", "peak_gib", "refused")}), flush=True)
     return 0
+
+
+def _meta(path: Path) -> dict:
+    with open(path, "rb") as f:
+        f.readline()
+        line = f.readline()
+    if not line.startswith(b"META "):
+        raise SystemExit(f"{path}: its second line is not META")
+    return json.loads(line[len(b"META "):])
+
+
+def check(args) -> int:
+    """`credit`'s lanes form on the lane file LANE and combine file COMBINE at K over the R × C tile, as a period that
+    commits them as ``lane<K>`` and ``combine<K>`` reads them: the served window (`window`) within `lanes_shape`; each
+    file's leaf Program, `h1window.leaf_program`'s descriptor, `leaf_of` the unit `leaf_unit_id` reads off the window's
+    descriptor; each file's META bound as the verifier of record holds it (``program_sha512`` that descriptor's SHA-512,
+    ``partition`` the digest of `leaf_partition_of`, the object credit hands the verifier, which is
+    `partition.partition`'s of the leaf Program); and the circuit files with their leaf Programs in the lanes form
+    (`lanes_files`, `form_of`)."""
+    U = _h1unit("structural")
+    from verity.core.protocols.pouw import credit as Cr
+    from verity.core.protocols.pouw import leaf_lanes as LL
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    t0 = time.time()
+    win = window(U, args.k, args.r, args.c)
+    raw = _descriptor(win)
+    layout, why = Cr.layout_of(raw)
+    if why is not None:
+        raise SystemExit(f"the window's descriptor: {why}")
+    shape = Cr.shape_of(raw)
+    rec = {"k": args.k, "tile": [args.r, args.c], "window_sha512": hashlib.sha512(raw).hexdigest(),
+           "lanes_shape": Cr.lanes_shape(layout, shape, args.k)}
+    files, progs = {}, {}
+    for kind, path in ((LL.LANE, Path(args.lane)), (LL.COMBINE, Path(args.combine))):
+        unit = Cr.leaf_unit_id(shape, args.k, kind)
+        program, query = HW.leaf_program(win, args.k, kind)
+        leaf = _descriptor(program)
+        part = Cr.leaf_partition_of(hashlib.sha512(leaf).hexdigest(), unit)
+        meta = _meta(path)
+        name = f"{kind}{args.k}"
+        rec[name] = got = {
+            "circuit_sha512": _file(path)["sha512"], "leaf_program_sha512": part["program"], "unit": unit,
+            "partition_digest": P.digest(part), "leaf_of": Cr.leaf_of(leaf, unit, args.k, kind),
+            "derived_partition": P.partition(program, query) == part,
+            "meta_program": meta.get("program_sha512") == part["program"],
+            "meta_partition": meta.get("partition") == {"rule": P.FORMAT, "digest": P.digest(part)}}
+        got["ok"] = got["leaf_of"] and got["derived_partition"] and got["meta_program"] and got["meta_partition"]
+        files[name], progs[name] = got["circuit_sha512"], part["program"]
+    files[Cr.LEAF_PROGRAMS] = progs
+    rec |= {"files": files, "lanes_files": Cr.lanes_files(files), "form": Cr.form_of(files, args.k),
+            "seconds": round(time.time() - t0, 2), "peak_gib": peak_gib()}
+    rec["ok"] = (rec["lanes_shape"] is None and rec["lanes_files"] is None and rec["form"] == "lanes"
+                 and all(rec[f"{kind}{args.k}"]["ok"] for kind in (LL.LANE, LL.COMBINE)))
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(rec, indent=1))
+    print("CHECK " + json.dumps(rec), flush=True)
+    return 0 if rec["ok"] else 1
 
 
 def lower(args) -> int:
@@ -198,9 +303,13 @@ def lower(args) -> int:
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
 
+    bind = args.bind or ("zero" if args.unit == "tile" else "leaf")
     rec = {"k": args.k, "r": args.r, "c": args.c, "tile": [args.r, args.c], "unit": args.unit, "form": args.form,
-           "staging": args.staging, "layout": U.layout(), "bind": BIND}
-    if why := refusal(args.unit, args.k, args.r, args.c):
+           "staging": args.staging, "layout": U.layout(), "bind_form": bind}
+    why = refusal(args.unit, args.k, args.r, args.c)
+    if why is None and args.unit == "tile" and bind == "leaf":
+        why = "a tile has no leaf Program (its served binding is its window's Program and partition): --bind zero"
+    if why:
         return _done(args, rec | {"written": False, "refused": why, "seconds": 0.0, "peak_gib": peak_gib()})
     got: dict = {}
     library, meta_of = CS.unit_lowering, FC.meta_of
@@ -219,7 +328,8 @@ def lower(args) -> int:
     def meta_captured(text):
         m = meta_of(text)
         tl = m.get("template")
-        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "template_lines": len(tl) if isinstance(tl, list) else None}
+        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "template_lines": len(tl) if isinstance(tl, list) else None,
+                       "program_sha512": m.get("program_sha512"), "partition": m.get("partition")}
         return m
 
     CS.unit_lowering, FC.meta_of = captured, meta_captured
@@ -228,8 +338,12 @@ def lower(args) -> int:
     path = Path(args.path) if args.path else Path(scratch.name) / f"k{args.k}.circuit.txt"
     t0 = time.time()
     try:
-        stage(U, args.unit, args.k, args.r, args.c, path, args.staging)
-        rec["written"] = True
+        bound = stage(U, args.unit, args.k, args.r, args.c, path, args.staging, bind)
+        rec |= {"written": True, "bind": bound["bind"], "unit_id": bound.get("unit_id")}
+        if "program" in bound:
+            rec["leaf_program_sha512"] = hashlib.sha512(bound["program"]).hexdigest()
+            if args.program:
+                Path(args.program).write_bytes(bound["program"])
     except ValueError as e:
         rec |= {"written": False, "refused": str(e)}
         if m := re.search(r"needs a block of 2\^(\d+) bits", str(e)):
@@ -370,7 +484,7 @@ def sweep(args) -> int:
         k, r, c, unit = shape
         tag = f"{args.form}-{unit}-k{k}-{r}x{c}"
         cmd = [sys.executable, __file__, "lower", str(k), str(r), str(c), str(out / f"{tag}.json"), "--form", args.form,
-               "--unit", unit, "--staging", args.staging]
+               "--unit", unit, "--staging", args.staging, *(["--bind", args.bind] if args.bind else [])]
         t0 = time.time()
         with open(out / "logs" / f"{tag}.log", "w") as log:
             p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
@@ -411,17 +525,25 @@ def main() -> None:
             p.add_argument("--unit", choices=UNITS, default="tile")
             p.add_argument("--form", choices=("structural", "flat"), default="structural")
             p.add_argument("--staging", choices=STAGINGS, default="fast")
+            p.add_argument("--bind", choices=BINDS, help="a lane's or combine's binding (default leaf; a tile's is zero)")
             p.add_argument("--path")
+            p.add_argument("--program", help="with the leaf binding, the leaf Program's descriptor to this file")
         else:
             p.add_argument("--no-check", action="store_true")
+    p = sub.add_parser("check")
+    for v in ("k", "r", "c"):
+        p.add_argument(v, type=int)
+    for v in ("lane", "combine", "out"):
+        p.add_argument(v)
     p = sub.add_parser("sweep")
     p.add_argument("--shapes", type=shapes, required=True)
     p.add_argument("--form", choices=("structural", "flat"), default="structural")
     p.add_argument("--staging", choices=STAGINGS, default="fast")
+    p.add_argument("--bind", choices=BINDS)
     p.add_argument("--jobs", type=int, default=1)
     p.add_argument("--out", required=True)
     a = ap.parse_args()
-    sys.exit({"lower": lower, "agree": agree, "sweep": sweep}[a.cmd](a))
+    sys.exit({"lower": lower, "agree": agree, "check": check, "sweep": sweep}[a.cmd](a))
 
 
 if __name__ == "__main__":
