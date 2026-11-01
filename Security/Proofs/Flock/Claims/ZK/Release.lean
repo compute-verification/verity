@@ -540,8 +540,7 @@ theorem coinVerdict_take (hl : Except String _root_.Flock.Firewall.Coins.Hello) 
     cases hS : _root_.Flock.Firewall.Coins.Session.start hl a with
     | error e =>
       change (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os)).isOk = true at h
-      rw [hS] at h
-      exact h
+      simp [Except.bind, hS, Except.isOk, Except.toBool] at h
     | ok S =>
       change (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os)).isOk = true at h
       show (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll (os.take k))).isOk = true
