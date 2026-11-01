@@ -16,8 +16,8 @@
 //! `--session-tables J` (both sides, CPU prover): the session's units in J equal tables (`session_tables`), each with its own
 //! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
 //!
-//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk`, with `--sessions N`): each session's coin tree sampled and
-//! opened by the challenger (`flock_live::tree_from`), not drawn here.
+//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N`): each session's
+//! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not drawn here.
 
 use std::{
     collections::BTreeMap,
@@ -791,8 +791,8 @@ impl Drop for TreeFrom {
 }
 
 /// `serve --tree-from HOST:PORT [--tree-secret-file F]`: the challenger that samples and opens every session's coin tree
-/// ([`flock_live::tree_from`]). Only a `--zk` statement's sessions commit their coins to a tree, and the challenger's
-/// session closes after the server's last, so a bounded `--sessions N`.
+/// ([`flock_live::tree_from`]). Only sessions on the keyed coin tree (`--zk`, or plain ones under `FC_COINS=tree`)
+/// commit their coins to a tree, and the challenger's session closes after the server's last, so a bounded `--sessions N`.
 fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
     let (address, secret_file) = (arg("--tree-from", ""), arg("--tree-secret-file", ""));
     if address.is_empty() {
@@ -802,7 +802,8 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
         return None;
     }
     if std::env::args().nth(1).as_deref() != Some("serve") || config_of(tabs).coin_tree.is_none() {
-        refuse("--tree-from is serve's, for a --zk statement: only its sessions commit their coins to a tree".into());
+        refuse("--tree-from is serve's, for sessions on the keyed coin tree (--zk, or FC_COINS=tree): only theirs commit \
+                their coins to a tree".into());
     }
     if arg("--sessions", "").parse::<usize>().is_err() {
         refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N".into());
