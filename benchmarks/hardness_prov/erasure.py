@@ -86,8 +86,8 @@ def parse(start):
     return m.group(1), int(m.group(2) or 0), float(m.group(3) or 1)
 
 
-def start_path(out, family, steps, quant):
-    return Path(out) / f"start_{family}@{steps}_{quant}.pt"
+def start_path(where, family, steps, quant):
+    return Path(where) / f"start_{family}@{steps}_{quant}.pt"
 
 
 def prepare(args, pre, family, steps, quant):
@@ -110,7 +110,8 @@ def job(args, pre, start, cfg, seed, scratch):
     q0, tplant = {}, {}
     with torch.no_grad():
         if steps:
-            ck = torch.load(start_path(args.out, base, steps, cfg.quant), weights_only=False)
+            p = start_path(args.start_dir or args.out, base, steps, cfg.quant)
+            ck = torch.load(p if p.exists() else start_path(args.out, base, steps, cfg.quant), weights_only=False)
             model.load_state_dict(ck["model"])
             tplant = ck["t"]
         else:
@@ -187,6 +188,7 @@ def main():
     ap.add_argument("--workers", type=int, default=30)
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--constrain-lr", type=float, default=3e-4, help="the peak lr of `family@n` starts' training")
+    ap.add_argument("--start-dir", help="read `family@n` starts saved there by an earlier run (missing ones are trained)")
     args = ap.parse_args()
     args.heads = args.heads or max(1, args.d // 48)
     args.taus = [int(x) for x in args.taus.split(",")]
@@ -208,6 +210,8 @@ def main():
     specs = [(st, c, s) for st in args.starts.split(",") for c in cfgs for s in range(args.seeds)]
     ctx = multiprocessing.get_context("spawn")
     todo = sorted({(parse(st)[0], parse(st)[1], c.quant) for st, c, _ in specs if parse(st)[1]})
+    if args.start_dir:
+        todo = [x for x in todo if not start_path(args.start_dir, *x).exists()]
     made = []
     if todo:
         print(f"{len(todo)} constrained starts", flush=True)

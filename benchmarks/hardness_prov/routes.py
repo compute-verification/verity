@@ -133,7 +133,7 @@ def search(q, t=None):
         best = min(fam, key=lambda f: fam[f]["cost"])
         out[chip] = {"cost": fam[best]["cost"], "family": best, "families": fam}
     e = np.cumsum(s.astype(np.float64) ** 2) / float((s.astype(np.float64) ** 2).sum())
-    out["energy_top"] = {str(r): float(e[r - 1]) for r in (1, 4, 8, 16, 32, min(n, k) // 8) if 0 < r <= len(e)}
+    out["energy_top"] = {str(r): float(e[r - 1]) for r in (1, 4, 8, 16, 32, 64, 128, min(n, k) // 8) if 0 < r <= len(e)}
     return out
 
 
@@ -142,5 +142,6 @@ def stats(q):
     p = np.bincount((q + 127).ravel(), minlength=255) / q.size
     nz = p[p > 0]
     return {"sigma_q": float(q.std()), "entropy_bits": float(-(nz * np.log2(nz)).sum()),
-            "frac_abs_le15": float((np.abs(q) <= 15).mean()), "frac_abs_gt63": float((np.abs(q) > 63).mean()),
+            "frac_abs_le15": float((np.abs(q) <= 15).mean()), "frac_abs_gt31": float((np.abs(q) > 31).mean()),
+            "frac_abs_gt63": float((np.abs(q) > 63).mean()),
             "frac_zero": float((q == 0).mean()), "p_odd": float((q % 2 != 0).mean())}
