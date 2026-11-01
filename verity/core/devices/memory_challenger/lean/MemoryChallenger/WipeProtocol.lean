@@ -201,18 +201,19 @@ def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
 private def segment : StreamedWipe.Params := ⟨2 ^ 19, 2152, 1, 1000, #[("gpu", 2 ^ 25)]⟩
 
-/-- `StreamedWipeMeets141GB5`'s H200: its fill and its 2.3 GB of driver reserve, declared as one tier. -/
-private def h200 : StreamedWipe.Params := ⟨2203125000, 5231, 1, 1000, #[("gpu-hbm", 143300000000)]⟩
+/-- `StreamedWipeMeetsH200`'s H200: 141 GiB, filled whole as one tier. -/
+private def h200 : StreamedWipe.Params := ⟨2365587456, 2906, 1, 1000, #[("gpu-hbm", 151397597184)]⟩
 
-#guard (ratio 1, ratio 90, ratio 91, ratio 2152, ratio 5231, ratio 5321) == (1, 1, 1, 24, 59, 60)
+#guard (ratio 1, ratio 90, ratio 91, ratio 2152, ratio 2905, ratio 2906, ratio 5231, ratio 5321) ==
+  (1, 1, 1, 24, 32, 33, 59, 60)
 #guard (certify segment 0).foreignBits == 11709069
 #guard (certify segment 2).foreignBits == 11709069 + 2 * 2 ^ 23
 #guard (certify segment 0).eps.toString == s!"1/{2 ^ 128}"
 #guard (certify segment StreamedWipe.EGRESS_MAX_UNITS).certified == false
 #guard (certify { segment with k := 5231 } 0).foreignBits == 5074062
-#guard outsideBits h200 == 18400000000
-#guard (certify h200 0).foreignBits == 39721768854
-#guard (certify h200 0).r == 59
+#guard outsideBits h200 == 0
+#guard (certify h200 0).foreignBits == 39068035213
+#guard (certify h200 0).r == 33
 #guard gaps { segment with k := MAX_READS + 1 } 0 ==
   [s!"k = {MAX_READS + 1}: the certificate is computed for at most {MAX_READS} reads"]
 #guard (certify { segment with k := MAX_READS + 1 } 0).foreignBits == 2 ^ 28
