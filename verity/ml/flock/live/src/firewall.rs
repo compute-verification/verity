@@ -148,12 +148,14 @@ impl Challenger for Framer<'_> {
 }
 
 /// What the Lean session loop names a rep's next round ([`LoopRep::place`]): the algebraic phase's or the opening's
-/// scheduled round, squeezing that many coins, or none (the inner proof's rounds, which this relays from the Lean finish
-/// and the loop's frame holds to its own, `Frame.innerSched`).
+/// scheduled round, squeezing that many coins, the rep's salts for levels ≥ 1 first (its algebraic phase ended and its
+/// opening waits for them: [`LeanFinish::salts`]), or none (the inner proof's rounds, which this relays from the Lean
+/// finish and the loop's frame holds to its own, `Frame.innerSched`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Place {
     Alg(usize),
     Open(usize),
+    Salts,
     Own,
 }
 
@@ -275,6 +277,7 @@ impl LoopRep {
         match line.split_once(' ') {
             Some(("alg", k)) => Ok(Place::Alg(n(k)?)),
             Some(("open", k)) => Ok(Place::Open(n(k)?)),
+            _ if line == "salts" => Ok(Place::Salts),
             _ if line == "own" => Ok(Place::Own),
             _ => Err(refused(format!("the Lean session loop: {}", line.strip_prefix("err ").unwrap_or(&line)))),
         }
@@ -324,13 +327,15 @@ pub fn rep_body(vals: &[F128], extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Ve
 
 /// The ZK server's proof files of record on a firewalled session: the Lean session loop's finish (`Flock.Firewall.Finish`
 /// in the Lean verifier) on the session's statement, which reads each table's level 0 from the loop's own
-/// ([`LeanFinish::level0`]), then per rep, at its start, is asked for its salts for levels ≥ 1, which it samples itself, and at
-/// its end given its request, which it proves with the pads the rep's Lean frame drew. It ends at its first refusal, so
-/// every later request is refused too.
+/// ([`LeanFinish::level0`]), then per rep, once its algebraic phase ended, is asked for its salts for levels ≥ 1, which it
+/// samples itself, and at its end given its request, which it proves with the pads the rep's Lean frame drew. It ends at
+/// its first refusal, so every later request is refused too.
 #[cfg(feature = "sha512")]
 pub struct LeanFinish {
     stdin: std::net::TcpStream,
     stdout: std::io::BufReader<std::net::TcpStream>,
+    addr: String,
+    draw: String,
 }
 
 #[cfg(feature = "sha512")]
@@ -343,7 +348,7 @@ impl LeanFinish {
         let tcp = std::net::TcpStream::connect(addr).map_err(|e| fail(e.to_string()))?;
         let _ = tcp.set_nodelay(true);
         let reader = tcp.try_clone().map_err(|e| fail(e.to_string()))?;
-        let mut f = LeanFinish { stdin: tcp, stdout: std::io::BufReader::new(reader) };
+        let mut f = LeanFinish { stdin: tcp, stdout: std::io::BufReader::new(reader), addr: addr.to_string(), draw: draw.to_string() };
         write!(f.stdin, "finish {}\n{draw}", draw.len()).and_then(|_| f.stdin.flush()).map_err(|e| fail(e.to_string()))?;
         let mut line = String::new();
         f.stdout.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
@@ -351,6 +356,12 @@ impl LeanFinish {
             "ok 0" => Ok(f),
             l => Err(fail(l.strip_prefix("err ").unwrap_or(if l.is_empty() { "no answer" } else { l }).to_string())),
         }
+    }
+
+    /// Another finish on the same session loop and sample, beside this one: the loop serves as many as the prover opens,
+    /// each holding the requests it serves to what the loop's frames hold.
+    pub fn another(&self) -> Result<Self, String> {
+        Self::connect(&self.addr, &self.draw)
     }
 
     fn ask(&mut self, head: &str, body: &[u8]) -> Result<Vec<u8>, String> {
@@ -375,7 +386,8 @@ impl LeanFinish {
     }
 
     /// Rep `r` of session table `i`'s salts for levels ≥ 1, which the finish draws from the OS once, for the rep's proof
-    /// file: one byte string a level, levels `1` to `R` in order, each 192 bytes a leaf (`Finish.saltsBytes`).
+    /// file: one byte string a level, levels `1` to `R` in order, each 192 bytes a leaf (`Finish.saltsBytes`). The loop's
+    /// finish draws them only once the rep's frame took its algebraic phase's last coins (`Finish.Own.algebraEnded`).
     pub fn salts(&mut self, i: usize, r: usize) -> Result<Vec<Vec<u8>>, String> {
         let b = self.ask(&format!("salts {i} {r}"), &[])?;
         let bad = || refused(format!("the Lean finish's salts of table {i} rep {r}: {} bytes that do not parse", b.len()));

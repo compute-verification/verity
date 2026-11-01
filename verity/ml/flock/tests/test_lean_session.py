@@ -545,9 +545,11 @@ def test_the_loops_finish_needs_a_statement(loop):
 @pytest.mark.slow
 def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
     """The loop's finish (`Finish.serveLoop`) takes a table's level 0 from the loop, by its root, and only one the loop sampled
-    at the table's `m`, for a session it still serves; its answer is that root. Each rep's salts for levels ≥ 1 it samples
-    itself, once: whole 192-byte leaves a level, fresh for each rep, and a rep asked again, or a rep's request before its
-    salts, is refused. Once the session that sampled the level 0 ends, the loop has freed it, and finish refuses its root."""
+    at the table's `m`, for a session it still serves; its answer is that root. A rep's request before its salts for levels
+    ≥ 1 is refused, and so are the salts of a rep whose frame has not taken its algebraic phase's last coins, here one whose
+    level 0 no `Commit` carries (the selftest's firewalled sessions draw them past it, and `zk_worker_finish`'s
+    `salts-early` holds a worker asking before it to the refusal). Once the session that sampled the level 0 ends, the loop
+    has freed it, and finish refuses its root."""
     S = Sessions(_args(zk, "pub-16.bin"))
     s, name = S.session()
     lp = S.lp
@@ -566,22 +568,11 @@ def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
     assert f.ask(f"level0 0 {len(r0)}", r0) == (f"ok {len(r0)}", r0)
     assert f.ask("rep 0 0 0") == "err table 0 rep 0 before its salts for levels ≥ 1"
     f.close()
-    f = finish()
-    f.ask(f"level0 0 {len(r0)}", r0)
-    reps = []
     for r in (0, 1):
-        line, b = f.ask(f"salts 0 {r} 0")
-        (n,) = struct.unpack_from("<Q", b)
-        levels, o = [], 8
-        for _ in range(n):
-            (k,) = struct.unpack_from("<Q", b, o)
-            levels.append(b[o + 8:o + 8 + k])
-            o += 8 + k
-        assert o == len(b) and n >= 1 and all(len(x) and len(x) % 192 == 0 for x in levels), (line, n)
-        reps.append(levels)
-    assert [len(x) for x in reps[0]] == [len(x) for x in reps[1]] and reps[0] != reps[1]
-    assert f.ask("salts 0 0 0") == "err table 0 rep 0's salts for levels ≥ 1 were drawn already"
-    f.close()
+        f = finish()
+        f.ask(f"level0 0 {len(r0)}", r0)
+        assert f.ask(f"salts 0 {r} 0") == "err finish: table 0: a level 0 no session's Commit carries"
+        f.close()
     s.close()
     assert re.match(r"level 0: session \d+ ended; ", S.ended())
     f = finish()

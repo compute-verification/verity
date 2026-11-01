@@ -29,7 +29,8 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
   `Asks` is live: the code that computes each round is `repFw`'s.
 
 * `serve`: the requests, on the statement of `flock-verify verify --zk`: each table's level 0, each rep's salts for levels
-  ≥ 1, which this code draws itself from the operating system at the rep's start and hands the prover (`salts`), and
+  ≥ 1, which this code draws itself from the operating system and hands the prover (`salts`), in the session loop only
+  once the rep's frame took its algebraic phase's last coins (`Own.algebraEnded`), and
   each rep's proof file on them and on the rep's draws, which never come from the prover: its frame's in the session
   loop (`Own`), else this code's own (`drawsOf`). `flock-firewall finish` serves them on its standard input (`cmd`,
   `Witness.setupOf`); the session loop on its frames port (`serveLoop`, `Hello.Setup`), reading each table's level 0 from
@@ -423,12 +424,15 @@ structure RepIn where
 
 /-- **What the session loop holds of a rep**: the draws its frame took at the rep's start, which its finish proves with
 (`drawsOf`), and what the finish holds the rep's requests to (`RepIn.differs`): the values the frame took by pad index,
-the extra claims at the session's link points, and the coins the stream answered each of the rep's rounds so far. -/
+the extra claims at the session's link points, the coins the stream answered each of the rep's rounds so far, and whether
+the frame took the coins of every round of the rep's algebraic phase, before which the rep's salts for levels ≥ 1 are
+not drawn (`serve`'s `salts`). -/
 structure Own where
   draws : Frame.Draws
   vals : Array F128
   xs : Array (Array F128)
   coins : Array (Array F128)
+  algebraEnded : Bool
 
 /-- **Where the request `q` is not what the loop holds of the rep (`o`)**, or none: its passed values, its extra claims or
 its coins. Its draws are `o`'s (`drawsOf`). `final_c`'s slot (`lay.fc`) is the request's: the passed values fix it, and
@@ -757,8 +761,10 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
   the answer is its root.
 * `salts I R 0`: rep `R`'s salts for levels ≥ 1 on table `I`, drawn from `get` once (`hiSaltsOf`), kept for its proof
   file and handed to `keep` with the table's level-0 root; the answer is them (`saltsBytes`). A rep's salts are drawn
-  once: asking again is refused. Without `liveOnly`, the rep's draws are drawn here too (`drawsFrom`) and kept, never
-  answered.
+  once: asking again is refused. Where the session loop holds the rep (`own`), they are drawn only once its frame took
+  the coins of every round of the rep's algebraic phase (`Own.algebraEnded`): asking before is refused, so no round of
+  the algebraic phase the prover sends can depend on them. Without `liveOnly`, the rep's draws are drawn here too
+  (`drawsFrom`) and kept, never answered.
 * `open I R LEN`: rep `R`'s opening on table `I`, after its salts, on the extra claims and the algebraic phase's coins
   (`parseOpen`): each of its rounds goes to the firewall as it comes and waits for its coins (`openLive`, `liveAsks`), the
   rounds the Lean frame holds the device's opening rounds to; answered `ok 0` after the last.
@@ -828,6 +834,9 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let some (some t) := tabs[i]? | return (← refuse s!"rep {r}'s salts of table {i} before its table")
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       if ((hi[i]!)[r]!).isSome then return (← refuse s!"table {i} rep {r}'s salts for levels ≥ 1 were drawn already")
+      if let some why ← ownWhy own i r t (fun o =>
+          if o.algebraEnded then none else some "its salts for levels ≥ 1, asked for before its algebraic phase ended") then
+        return (← refuse why)
       let s ← hiSaltsOf get t
       let d ← if liveOnly then pure none else some <$> drawsFrom get t
       hi := hi.set! i ((hi[i]!).set! r (some s))

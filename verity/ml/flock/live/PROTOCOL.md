@@ -839,7 +839,11 @@ table's level-0 request (`table J LEN`: the witness, extra lanes, paddings and l
 `verifier/firewall_finish_agree.py` drives. With the table it samples each rep's salts for levels ≥ 1
 itself, from the OS (`salts J R 0`, `192·2^d` bytes a level), and hands them to the prover, whose device trees at those
 levels take them (`LeafSalts::preset`), and so do the loop's opening rounds: no salt of the rep's proof file comes from the
-prover. No request carries the rep's samples: the loop's finish proves each rep with the ones its frame took
+prover. The loop's finish samples them only once the rep's frame took the coins of its algebraic phase's last round
+(`Finish.Own.algebraEnded`): the loop then answers the rep's `place` with `salts` until they are drawn, and the ZK server
+asks for them at the round that opens the opening, before the device builds its first tree past level 0. A `salts`
+request before then, on any finish the prover opens, is refused, so no round of the algebraic phase can depend on them.
+No request carries the rep's samples: the loop's finish proves each rep with the ones its frame took
 (`Finish.drawsOf`, from `Frames.ownOf`), and refuses a rep no frame holds. After the rep's end check the ZK server sends
 the finish the rep's request with the coins of its PIOP and opening (`inner J R LEN`: the values the frame took, the
 extra claims' points and the coins), and the finish answers the constraints it replayed (`cons LEN`, which the ZK server
@@ -874,7 +878,8 @@ the prover only the names of the constraints that fail on them. A worker that se
 choosing finds it leave as that word plus a pad it never saw, and the session stop at its `Finish` (`zk_worker_pads`,
 below). What the worker still sees is level 0's hiding: every lane's padding, the four extra lanes and the level-0 salts the
 loop sampled for each table (§10.2), because the device's level-0 commitment needs them, beside each rep's salts for
-levels ≥ 1, which its trees take. None of them leaves the worker a free choice: the ZK server rechecks the device's
+levels ≥ 1, which its trees take and which it gets only once the rep's algebraic phase ended. None of them leaves the
+worker a free choice: the ZK server rechecks the device's
 level-0 root against its own commitment of the host witness under that hiding and those salts (§10.2), and every byte of
 the opening, level 0's values included, must equal the loop's own opening round (`Drive.openStep`) byte for byte, so
 nothing of level 0 the worker sends leaves except as the ZK server computed it. The worker also sees the mask slot's
@@ -944,14 +949,15 @@ round but are not the ones the stream answered it (`Finish.coinsWhy`). `final_c`
 values fix it: an `inner` request whose slot is any other fails its `zerocheck c_eval` constraint and is refused before
 its inner proof's first round (`Finish.consWhy`), and a `rep` request whose slot is not its `inner` request's is answered
 by no proof computed live, so it is refused.
-`FC_FINISH_TAMPER` doctors the session's last rep request in time, and the selftest's `zk_worker_finish` holds each mode to
-that, beside an honest session:
+`FC_FINISH_TAMPER` doctors the session's last rep request in time (`salts-early` asks for salts early instead), and the
+selftest's `zk_worker_finish` holds each mode to that, beside an honest session:
 
 | `FC_FINISH_TAMPER` | the last rep request | outcome |
 |---|---|---|
 | `vals-chosen` | the first passed value plus one | `finish: table T rep R's request: its passed values are not the ones the frame took`; no proof leaves, and the verifier gets the honest session's every request but its proofs, `Finish` included, and does not accept |
 | `coins` | the first round's first coin plus one | `… its coins are not the ones the stream answered`; the same |
 | `final-c` | `final_c` plus one | `… proof file is only the one its inner request computed live, and none answers this request`; the same |
+| `salts-early` | none doctored: at table 0 rep 0's first round a finish of the worker's own asks for the rep's salts for levels ≥ 1 | `… its salts for levels ≥ 1, asked for before its algebraic phase ended`; the session goes on on its own finish, and the verifier gets the honest session's every request and accepts |
 
 The inner proof's rounds that leave are the frame's own: the loop places each at `Frame.innerSched`, the frame's own round
 (`ε`, `β`, its samples and the round's coin count) on the finish's round (`final_c'`, `τ`'s commitment), which the loop's

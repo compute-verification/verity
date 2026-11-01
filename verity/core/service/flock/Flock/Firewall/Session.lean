@@ -37,8 +37,8 @@ the prover's bytes:
   level 0 drawn for a session, bound or not, is gone when it ends (`Level0.Registry.close`).
 * `Finish` leaves only once the schedule's last opening has (`State.request`), as `FINISH`. The proof files are the
   loop's own finish's, a connection to the frames port (`Finish.serveLoop`): it reads each table's level 0 from the
-  loop's `Level0` of the table's root, draws each rep's salts for levels ≥ 1 itself, which the prover's trees then take,
-  proves each rep with its frame's draws, which never reach the prover (`Finish.drawsOf`), refuses a rep's request whose
+  loop's `Level0` of the table's root, draws each rep's salts for levels ≥ 1 itself, only once the rep's frame took its
+  algebraic phase's last coins (`Finish.Own.algebraEnded`), which the prover's trees then take, proves each rep with its frame's draws, which never reach the prover (`Finish.drawsOf`), refuses a rep's request whose
   passed values, extra claims or coins are not its frame's (`Frames.ownOf`, `Finish.RepIn.differs`) or whose `final_c`
   its passed values do not fix (`Finish.consWhy`), and coins answering its
   inner proof's rounds that are not the stream's (`Finish.coinsWhy`), refuses a table's level-0 data from the host

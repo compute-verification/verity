@@ -338,8 +338,9 @@ def finish (reg : IO.Ref Registry) (sid tables : Nat) : IO (Except String Unit) 
 /-- **What the loop holds of table `i`'s rep `r`** on the level 0 of root `root`, in its frames `R` and level 0s `L0`
 (`Finish.Own`): the draws its frame took at its start, which the loop's finish proves the rep with (`Finish.drawsOf`), and
 what it holds the rep's requests to: the algebraic phase's values the frame took at their pads (`Frame.absorbed`'s order,
-the rest `0`), the extra claims at the session's link points (`Drive.extras`, as `placeOf` opens with them), and the coins
-the stream answered each of the rep's rounds so far. -/
+the rest `0`), the extra claims at the session's link points (`Drive.extras`, as `placeOf` opens with them), the coins
+the stream answered each of the rep's rounds so far, and whether those cover every round of its algebraic phase (`alg`,
+known once its first round came). -/
 def ownOf (R : Registry) (L0 : Level0.Registry) (i r : Nat) (root : ByteArray) : Except String Finish.Own := do
   let some sl := L0.slots.find? (·.l0.root == root) | throw s!"table {i}: a level 0 the session loop did not draw"
   let some (sid, name) := sl.bound | throw s!"table {i}: a level 0 no session's Commit carries"
@@ -349,11 +350,14 @@ def ownOf (R : Registry) (L0 : Level0.Registry) (i r : Nat) (root : ByteArray) :
   let some c := s.link | throw "a rep's request before the session's Commit coins"
   let some (_, p) := R.find sid i r | throw s!"a request of table {i} rep {r}, whose frame the loop has not started"
   let vals := (p.cfg.order.zip p.vals).foldl (fun v (k, x) => v.set! k x) (Array.replicate (p.cfg.lay.zp 64) 0)
-  return { draws := p.draws, vals, xs := Drive.extras st (Drive.linkPoints st c), coins := p.coins }
+  return { draws := p.draws, vals, xs := Drive.extras st (Drive.linkPoints st c), coins := p.coins,
+           algebraEnded := !p.alg.isEmpty && p.alg.size ≤ p.coins.size }
 
 /-- **What the loop tells the prover of table `i`'s rep `r`** in the live session named `name`, for the request line
 `line` on `ch`, past the session's `Commit`: `place NAME I R` is answered by its next round's place (`placeOf`), `alg N`
-or `open N` for the algebraic phase's or the opening's scheduled round, squeezing `N` coins, else `own`: the inner proof's,
+or `open N` for the algebraic phase's or the opening's scheduled round, squeezing `N` coins, `salts` where the algebraic
+phase ended and the opening waits for the rep's salts for levels ≥ 1, which the loop's finish draws only then
+(`Finish.serve`'s `salts`, `Finish.Own.algebraEnded`), else `own`: the inner proof's,
 whose rounds the host relays from the loop's finish (`roundPlace`); `vals NAME I R`
 by `ok N` followed by the `N` bytes of the values the frame took so far (`Rep.vals`). A prover whose device stops sends
 each place's round empty (its first, the domain frame alone): the frame fails it, and the scheduled round leaves in its
@@ -381,6 +385,8 @@ def ask (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry)
       | .ok p => pure p
       | .error e => return (← err e)
     let alg := p.coins.size < p.alg.size
+    if !alg && !p.opened && p.opening.isNone && !R.salts.any (fun (x, q, _) => x == l0.root && q == r) then
+      return (← say "salts")
     match placeOf R.salts l0 s p (s.spec.domain tname r).toUTF8 with
     | .error e => err e
     | .ok (place, n, p') =>

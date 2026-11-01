@@ -1234,7 +1234,8 @@ fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str, fw: 
 
 /// Where the salt context's samples go under the ZK server: with a CPU device (`two`), the device's own trees as the sequential
 /// prover takes them, its level-0 commitment from the level-0 salts and every later tree from the table's salts, a rep's
-/// levels ≥ 1 the Lean finish's ([`Firewall::begin_rep`] presets them); any other draw from the table's salts.
+/// levels ≥ 1 the Lean finish's ([`Firewall::place`] presets them once the rep's algebraic phase ended); any other draw from
+/// the table's salts.
 struct FirewallDraws {
     shared: Arc<Mutex<flock_live::zk_hooks::LeafSalts>>,
     level0: Arc<Vec<u8>>,
@@ -1321,8 +1322,8 @@ struct Firewall {
     table: usize,
     finish: Arc<Mutex<flock_live::firewall::LeanFinish>>,
     dump: Option<std::path::PathBuf>,
-    /// each rep's salts for levels ≥ 1, the Lean finish's, drawn with the table and taken at the rep's start
-    lean_hi: [Option<Vec<Vec<u8>>>; 2],
+    /// the reps begun: a table's reps are 0 and 1, each begun once
+    begun: [bool; 2],
     /// the statement's replay's constraint names, which the Lean finish's constraints are held to
     /// ([`flock_live::firewall::relations_held`])
     relations: Vec<&'static str>,
@@ -1402,6 +1403,8 @@ struct FirewallRep {
     rounds: Vec<Vec<F128>>,
     /// the opening's rounds the device sent so far, counted under the opening's tamper controls (their place)
     open_rounds: usize,
+    /// the Lean finish drew the rep's salts for levels ≥ 1 ([`Firewall::place`]), which the device's trees from there take
+    hi: bool,
 }
 
 /// A rep after the ZK server's end check ([`Firewall::finish`]): the inner proof's rounds, the session's Lean finish's
@@ -1503,10 +1506,6 @@ impl Firewall {
             return Err(refused(format!("level-0 recheck: the Lean root's {} bytes are not whole {w}-byte digests", root.len())));
         }
         let cm = Commitment { cap: root.chunks(w).map(merkle_digest_read).collect(), params: pcs };
-        let lean_hi = {
-            let mut f = finish.lock().unwrap_or_else(PoisonError::into_inner);
-            [Some(f.salts(table, 0)?), Some(f.salts(table, 1)?)]
-        };
         let dump = finish_dump();
         if let Some(dir) = &dump {
             for (ext, bytes) in [("req", body.as_slice()), ("root", root.as_slice()), ("finish_root", fin_root.as_slice())] {
@@ -1515,7 +1514,7 @@ impl Firewall {
             }
         }
         Ok(Firewall { st: st.clone(), cm, root, draws, tamper, why: None, rep: None, ended: 0, seen, cut_fired, t_recheck, cpu_recheck,
-                      table, finish: finish.clone(), dump, lean_hi, relations: Vec::new() })
+                      table, finish: finish.clone(), dump, begun: [false; 2], relations: Vec::new() })
     }
 
     /// The rep's `cut-` control (the worker's failure), if its round is this rep's or later and it has not fired yet.
@@ -1542,22 +1541,54 @@ impl Firewall {
         why
     }
 
-    /// A rep starts (after its pads tree took its salt id): the device's trees for levels ≥ 1 take the Lean finish's salts
-    /// from here.
+    /// A rep starts (after its pads tree took its salt id). Its device's trees for levels ≥ 1 take the Lean finish's salts,
+    /// which the finish draws only once the rep's algebraic phase ended ([`Firewall::place`]).
     fn begin_rep(&mut self, rep: usize, zk: &ZkRep) -> Result<(), String> {
-        let hi = self.lean_hi.get_mut(rep).and_then(Option::take).ok_or_else(|| flock_live::firewall::refused(
-            format!("table {} rep {rep}: no Lean salts for levels ≥ 1 (a table's reps are 0 and 1, each begun once)", self.table)))?;
-        {
-            let mut d = self.draws.lock().unwrap_or_else(PoisonError::into_inner);
-            d.shared.lock().unwrap_or_else(PoisonError::into_inner).preset(hi)
-                .map_err(|e| flock_live::firewall::refused(format!("table {} rep {rep}: the Lean finish's salts: {e}", self.table)))?;
-            // rep 0's level-0 tree is the salt context's first, which hm96 salts with level 0's salts without a sample
-            d.device_trees = usize::from(rep == 0);
+        if rep > 1 || std::mem::replace(&mut self.begun[rep], true) {
+            return Err(flock_live::firewall::refused(format!("table {} rep {rep}: a table's reps are 0 and 1, each begun once", self.table)));
         }
+        // rep 0's level-0 tree is the salt context's first, which hm96 salts with level 0's salts without a sample
+        self.draws.lock().unwrap_or_else(PoisonError::into_inner).device_trees = usize::from(rep == 0);
         let lean = zk.lean.lock().unwrap_or_else(PoisonError::into_inner).take()
             .unwrap_or_else(|| Err(flock_live::firewall::refused("a firewalled rep without its Lean frame")))?;
         self.rep = Some(FirewallRep { rep, lay: zk.lay, coins: Vec::new(), extras: None, algebra_tampered: false, failed: false, lean,
-                                  rounds: Vec::new(), open_rounds: 0 });
+                                  rounds: Vec::new(), open_rounds: 0, hi: false });
+        Ok(())
+    }
+
+    /// The rep's next place as the Lean session loop names it. Where the loop names the rep's salts for levels ≥ 1 (its
+    /// algebraic phase ended, its opening waits for them), the Lean finish draws them now, the device's trees from here take
+    /// them ([`FirewallDraws`]), and the place is the one after.
+    fn place(&mut self) -> Result<flock_live::firewall::Place, String> {
+        use flock_live::firewall::{refused, Place};
+        let r = self.rep.as_mut().ok_or_else(|| refused("a place outside a firewalled rep"))?;
+        let p = r.lean.place()?;
+        if p != Place::Salts {
+            return Ok(p);
+        }
+        let hi = self.finish.lock().unwrap_or_else(PoisonError::into_inner).salts(self.table, r.rep)?;
+        self.draws.lock().unwrap_or_else(PoisonError::into_inner).shared.lock().unwrap_or_else(PoisonError::into_inner).preset(hi)
+            .map_err(|e| refused(format!("table {} rep {}: the Lean finish's salts: {e}", self.table, r.rep)))?;
+        r.hi = true;
+        match r.lean.place()? {
+            Place::Salts => Err(refused(format!("table {} rep {}: the Lean session loop still waits for the salts for levels ≥ 1 the Lean finish drew",
+                                                self.table, r.rep))),
+            p => Ok(p),
+        }
+    }
+
+    /// `FC_FINISH_TAMPER=salts-early` (the selftest's `zk_worker_finish`): at table 0 rep 0's first round, before its algebraic
+    /// phase ended, a finish of the worker's own beside the session's ([`flock_live::firewall::LeanFinish::another`]) asks for
+    /// the rep's salts for levels ≥ 1. The loop's finish refuses it (`Flock.Firewall.Finish.Own.algebraEnded`) and the refusal
+    /// goes to [`FINISH_REFUSED`] (salts it answers go there as `drawn early`); the session's own finish goes on.
+    fn salts_early(&mut self) -> Result<(), String> {
+        let mut f = self.finish.lock().unwrap_or_else(PoisonError::into_inner).another()?;
+        f.level0(self.table, &self.root)?;
+        let got = match f.salts(self.table, 0) {
+            Ok(s) => format!("drawn early: {} levels", s.len()),
+            Err(e) => e,
+        };
+        *FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner) = Some(got);
         Ok(())
     }
 
@@ -1592,12 +1623,21 @@ impl Firewall {
 
     /// One device round before anything of it is sent: the round that leaves (the device's, which the rep's frame in the
     /// Lean session loop checks against the statement's round in its place, and masks) and its coin count; or nothing, once the loop names no place of the statement's left. A rep a check here
-    /// failed sends the loop's place with no device round in it ([`Firewall::scheduled`]). An error is the ZK server's own fault.
+    /// failed sends the loop's place with no device round in it ([`Firewall::scheduled`]). Until the rep's salts for levels
+    /// ≥ 1 are drawn, each round after its first asks the loop its place first, so the round that opens the opening waits for
+    /// them ([`Firewall::place`]). An error is the ZK server's own fault.
     fn round(&mut self, content: &[u8], n: usize) -> Result<Option<(Vec<u8>, usize)>, String> {
         self.seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let r = self.rep.as_ref().ok_or_else(|| flock_live::firewall::refused("a round outside a firewalled rep"))?;
         if r.failed {
             return self.scheduled();
+        }
+        let (first, hi, rep) = (r.rounds.is_empty(), r.hi, r.rep);
+        if first && self.table == 0 && rep == 0 && std::env::var("FC_FINISH_TAMPER").is_ok_and(|m| m == "salts-early") {
+            self.salts_early()?;
+        }
+        if !first && !hi {
+            self.place()?;
         }
         Ok(Some((self.tampered(content)?, n)))
     }
@@ -1611,8 +1651,9 @@ impl Firewall {
         if !matches!(t.as_str(), "label" | "algebra" | "steer" | "opening" | "opening-frame") {
             return Ok(c);
         }
+        let place = self.place()?;
         let r = self.rep.as_mut().unwrap();
-        match r.lean.place()? {
+        match place {
             Place::Alg(_) if t == "steer" && !r.algebra_tampered => {
                 r.algebra_tampered = steer_first(&mut c, steer());
             }
@@ -1635,8 +1676,8 @@ impl Firewall {
     /// in its place; nothing once the loop names no place of the statement's.
     fn scheduled(&mut self) -> Result<Option<(Vec<u8>, usize)>, String> {
         use flock_live::firewall::Place;
+        let (Place::Alg(k) | Place::Open(k)) = self.place()? else { return Ok(None) };
         let r = self.rep.as_ref().unwrap();
-        let (Place::Alg(k) | Place::Open(k)) = r.lean.place()? else { return Ok(None) };
         let mut c = if r.rounds.is_empty() { frame_domain(&domain(&self.st.c, r.rep)) } else { Vec::new() };
         flock_live::push_header(&mut c, OP_SQUEEZE, KIND_SLICE, k as u64);
         Ok(Some((c, k)))
@@ -1650,7 +1691,7 @@ impl Firewall {
         if !r.failed {
             match r.lean.place()? {
                 Place::Own => return Ok(None),
-                Place::Alg(_) => self.fail(refused("the device returned before its opening")),
+                Place::Alg(_) | Place::Salts => self.fail(refused("the device returned before its opening")),
                 Place::Open(_) => self.fail(refused("the device returned before the firewall's opening ended")),
             }
         }
@@ -1997,7 +2038,7 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
         return (Vec::new(), bk);
     }
     let t = Instant::now();
-    let tamper = std::env::var("FC_FINISH_TAMPER").unwrap_or_default();
+    let tamper = std::env::var("FC_FINISH_TAMPER").ok().filter(|m| m != "salts-early").unwrap_or_default();
     let lean = {
         let mut f = fin.lock().unwrap_or_else(PoisonError::into_inner);
         let last = FINISH_SENT.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1 == FINISH_REPS.load(std::sync::atomic::Ordering::SeqCst);
@@ -2022,7 +2063,8 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
 /// named way: `vals-chosen` (the first passed value plus one), `coins` (the first round's first coin plus one) or `final-c`
 /// (`final_c` plus one). The loop's finish refuses each (`Flock.Firewall.Finish.RepIn.differs`, and for `final_c`, which no
 /// live inner proof answers, its live-only rule: a rep's file is only the one its `inner` request computed), and the refusal
-/// goes to [`FINISH_REFUSED`]. A request carries no pads to doctor: the finish proves with the rep's frame's.
+/// goes to [`FINISH_REFUSED`]. A request carries no pads to doctor: the finish proves with the rep's frame's. `salts-early`
+/// doctors no request: a finish of the worker's own asks for salts early instead ([`Firewall::salts_early`]).
 static FINISH_REPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 static FINISH_SENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 static FINISH_REFUSED: Mutex<Option<String>> = Mutex::new(None);
@@ -5155,7 +5197,10 @@ fn worker_wire_case(gpu: bool) -> Value {
 /// each in a process of its own, whose last rep request to the Lean finish carries a chosen passed value, a chosen coin or a
 /// chosen `final_c`: the finish refuses it (the request is not the frame's, or no live inner proof answers it), no proof
 /// leaves, and the verifier gets the honest session's every request but its proofs, `Finish` included, and does not
-/// accept. No request carries the pads: the finish proves with the rep's frame's (`zk_worker_pads`).
+/// accept. No request carries the pads: the finish proves with the rep's frame's (`zk_worker_pads`). One more session's
+/// worker opens a finish of its own at table 0 rep 0's first round and asks it for the rep's salts for levels ≥ 1
+/// (`salts-early`): the loop's finish refuses them before the rep's algebraic phase ended, so no round of it depends on
+/// them, and the session goes on on its own finish, the verifier getting the honest session's every request and accepting.
 fn worker_finish_case(gpu: bool) -> Value {
     let name = "zk_worker_finish";
     if gpu {
@@ -5182,9 +5227,20 @@ fn worker_finish_case(gpu: bool) -> Value {
                "error": v["error"], "requests": s.len(),
                "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "tampered": s.get(i)}))})
     }).collect();
-    json!({"case": name, "expect": "each doctored rep request refused by the loop's finish, no proof sent, the honest session's other requests",
+    let v = worker_subsession(&[("FC_FINISH_TAMPER", "salts-early".to_string())]);
+    let s = seen(&v);
+    let refused = v["finish_refused"].as_str().is_some_and(|r| r.contains("its salts for levels ≥ 1, asked for before its algebraic phase ended"));
+    let first_miss = (0..h.len().max(s.len())).find(|&i| h.get(i) != s.get(i));
+    let early_ok = v["accepted"] == true && refused && first_miss.is_none();
+    json!({"case": name, "expect": "each doctored rep request refused by the loop's finish, no proof sent, the honest session's other requests; \
+                                    salts for levels ≥ 1 asked for before the algebraic phase ended refused, the session on its own finish, accepted",
            "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
-           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
+           "modes": modes,
+           "salts_early": {"ok": early_ok, "accepted": v["accepted"], "finish_refused": v["finish_refused"],
+                           "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(),
+                           "prover_stopped": v["prover_stopped"], "error": v["error"], "requests": s.len(),
+                           "first_miss": first_miss.map(|i| json!({"at": i, "honest": h.get(i), "tampered": s.get(i)}))},
+           "pass": honest_ok && modes.iter().all(|c| c["ok"] == true) && early_ok})
 }
 
 /// `zk_worker_inner` (live PROTOCOL.md §10.4): the inner proof's rounds that leave are the loop's frame's own
