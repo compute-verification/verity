@@ -29,6 +29,12 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
   definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
   proof-only definitions is not a guarantee.
+- **Every module is on Lean's module system** (`tests/test_lean_packages.py`): a new file starts `module`, imports with
+  `public import M`, and opens `@[expose] public section` after its header; `python3 tools/verity/lean/modules.py FILE`
+  writes that. A proof's body is private, so an edit to it rebuilds no importer. What the module system refuses is fixed
+  in the file (the codemod's docstring): a tactic's helper is `meta`; a proof that unfolds a core definition the
+  toolchain doesn't expose (`decide`, `rfl`, `unfold`) has `import all` of its module; a public definition that reads a
+  private one takes `modules.py --option backward.privateInPublic FILE`.
 - **Build in your own checkout**: two agents never share a writable `.lake`, since two Lake builds in one tree break
   each other. A second Lean task on one machine gets its own worktree, its dependencies copied (never symlinked) from a
   checkout with the same manifest and toolchain: `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages
