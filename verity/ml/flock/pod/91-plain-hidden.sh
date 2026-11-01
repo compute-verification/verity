@@ -118,6 +118,7 @@ X=$S/fixture; mkdir -p $X/stage $X/session
 cp $D/circuit.txt $D/pub-$N.bin $D/program.json $D/partition.json $X/stage/ && cp -r $D/tables $X/stage/
 cp -r $SESS/. $X/session/
 cp $O/live.json $X/live.json
+if [ $COINS = tree ]; then cp -r $O/challenger $X/challenger || exit 1; fi
 if [ -n "$RESEARCH" ]; then
   $RESEARCH data put --kind fixture/v1 --tree $X --preserve > $O/fixture.txt 2> $O/fixture.err || tail -5 $O/fixture.err
 fi
