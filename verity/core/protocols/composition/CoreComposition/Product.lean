@@ -23,6 +23,8 @@ public import CoreProtocol.Protocol.Canonical
 public import Flock.Hash
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Composition
 

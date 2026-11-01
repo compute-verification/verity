@@ -32,6 +32,8 @@ back) and the profile is `{"mode":"public"}`: Python's setup records nothing bey
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PousCheck.SetupProtocol
 

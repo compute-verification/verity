@@ -224,6 +224,8 @@ window's sync from it, with `certificate.SignedClocks` beside it as the referenc
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.Period
 

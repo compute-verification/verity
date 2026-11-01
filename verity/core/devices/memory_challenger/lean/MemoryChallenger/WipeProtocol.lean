@@ -40,6 +40,8 @@ signers' schemes and only them.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.WipeProtocol
 

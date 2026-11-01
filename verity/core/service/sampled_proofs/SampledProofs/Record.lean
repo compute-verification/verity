@@ -33,6 +33,8 @@ meta import CoreProtocol.Profile
 meta import Std.Data.HashMap
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Record
 

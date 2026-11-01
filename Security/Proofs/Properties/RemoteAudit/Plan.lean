@@ -17,6 +17,8 @@ builds, or `none` (`changed_make`).
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit
 

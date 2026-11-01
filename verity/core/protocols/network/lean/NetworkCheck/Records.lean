@@ -45,6 +45,8 @@ nothing else holds. Its refusals are otherwise `evaluate`'s, and its ingress ver
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.Records
 

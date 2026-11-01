@@ -53,6 +53,8 @@ public import SampledProofs.Record
 public import SampledProofs.ChallengerDraw
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.OneStage
 

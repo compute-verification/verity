@@ -34,6 +34,8 @@ each exactly the canonical JSON of what it decodes to, and `SESSION_ID` the desi
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PousCheck.Run
 

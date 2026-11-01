@@ -24,6 +24,8 @@ tests pass `pous_test_signer.SCHEMES`.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger
 

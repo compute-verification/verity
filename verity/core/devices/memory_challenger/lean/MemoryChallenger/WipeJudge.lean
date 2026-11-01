@@ -22,6 +22,8 @@ the reasons the Python's word for word.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.StreamedWipe
 

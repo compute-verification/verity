@@ -33,6 +33,8 @@ meta import SampledProofs.OneStage
 meta import Flock
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.OneStageZk
 

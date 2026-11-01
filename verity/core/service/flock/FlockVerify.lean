@@ -5,6 +5,8 @@ public import Flock.CircuitType
 public import Flock.Layout
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open Flock
 

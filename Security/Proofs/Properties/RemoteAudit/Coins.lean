@@ -21,6 +21,8 @@ with window `t` undrawn never drew a window from `t` on, so it read only coins b
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit RemoteAudit.Session
 

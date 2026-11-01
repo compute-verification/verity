@@ -77,6 +77,8 @@ accepted-runs bound charges, `log2 #Σ_sync` bits per window); integers only.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.Check
 

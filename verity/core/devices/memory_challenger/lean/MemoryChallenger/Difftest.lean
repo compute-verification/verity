@@ -19,6 +19,8 @@ run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.Difftest
 

@@ -19,6 +19,8 @@ module
 public import Firewall.Release
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Firewall
 

@@ -20,6 +20,8 @@ meta import CoreProtocol.Protocol
 meta import CoreProtocol.Protocol.Canonical
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 
