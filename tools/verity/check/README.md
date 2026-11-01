@@ -70,14 +70,19 @@ commands:
 verity tasks list --json [--kind after-landing|preflight] [--changed BASE] [--circuit-shards M] [--gather | --costs FILE]
                          [--split-s S]
 verity tasks run ID [--out FILE] [--work DIR] [--graph art:ID|FILE | [--circuit-shards M] [--timings FILE]]
+verity tasks costs --graph art:ID|FILE [--graph ...] [--seconds FILE] [--out FILE]
 ~~~
 
 `list` prints the graph of the checked-out tree, uncommitted files included. `--kind after-landing` (the default) is every job
 in `ci.toml`, as drive's after-landing run checks it; `--kind preflight` is the jobs on the merge gate, a PR's preflight.
 `--changed BASE` keeps the tasks whose inputs the change from BASE's merge-base with HEAD touches, by `suites.py --changed`'s
 rule for a suite and by input paths for the rest, and the tasks they depend on. `--circuit-shards M` splits circuit-check into M
-tasks (default: its ci.toml `shards`). A suite whose cost is past `--split-s` seconds (default `shards.SPLIT_S`, 15 min) is
-listed in M = ceil(cost / S) parts by test file (at most one per file), each priced at its files' share of the suite's cost. The
+tasks (default: its ci.toml `shards`, or ceil(seconds / S) when `--costs` gives `circuit-check` more seconds than those cover).
+A suite whose cost is past `--split-s` seconds (default `shards.SPLIT_S`, 15 min) is listed in M = ceil(cost / S) parts by test
+file (at most one per file), each priced at its files' share of the suite's cost. The lister's own caches and `--gather`'s
+recorded checks measure a suite on other machines than the executor's worker slots, where it can take several times as long, so
+the executor lists with `--costs` from `costs` over the graph it ran last; then each part is about S of the executor's seconds.
+The
 document is `{"schema": "tasks/v1", "commit", "tree", "kind", "circuit_shards", "split_s", "splits": {suite: {"m", "seconds",
 "digest", "shares", "files", "timings"}}, "changed": {"base": the merge-base, "files": how many files changed} or null, "costs":
 [notes], "tasks": [...]}`, where `splits` names each split suite's partition (its digest, each part's share and files, and the
@@ -124,6 +129,17 @@ tree or environment) is named on stderr. It refuses a graph whose `commit` isn't
 Without `--graph`, the tasks are this machine's: a split suite's part runs on the partition `--timings` gives (`{suite: the
 listing's splits timings}`), else on this machine's timing record. A suite's verdict is the join of its parts'
 (`suites.combine_parts`).
+
+`costs` writes `{task id: seconds}`, what the executor took for the tasks of a graph it ran (`--graph`, read as `run` reads
+one, of any commit), as `list --costs` reads it. Each task is priced from its newest `pass` verdict label on `task:<key>` (an
+unkeyed task's key is its check's, `research.executor.keyed`), whose `ref` is the run that earned it: the sum of the task's own
+steps' seconds in that run's `out/task-result.json` (not a dep's build run beside it), else the run's wall seconds, which also
+count its wait for a slot. `--seconds FILE` (`{task id: seconds}`, as the executor's queue records them) is taken over the
+store's. A split suite's parts are summed back to `JOB:SUITE` and circuit-check's slices to `circuit-check`, each over the
+share of the job the priced parts cover (the graph's partition's shares; a slice 1/M), so the next listing cuts them anew. A
+failed task and one the executor didn't run are unpriced, and stderr names them. Given several graphs, each id gets its most.
+Circuit-check assigns its targets to shards by the hash of each one's id and keeps each target's pass under its own key, so a
+changed shard count reruns no target.
 
 A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
 it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
