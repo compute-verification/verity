@@ -163,6 +163,10 @@ Protocols and claims:
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
+- `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
+  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet. ML-KEM-1024
+  is the one-hash rule's exception for transport only: a cableless remote party's, its secret always XORed with a
+  SHA-512 one and never on pair links (`ind-cca/ml-kem-1024`).
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
