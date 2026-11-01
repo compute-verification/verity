@@ -105,7 +105,7 @@ theorem sampleCut_go (coin : ℕ → ℕ → F128) (n : ℕ) (t : Transcript) (l
 /-! ## The inner proof from the source against the session's -/
 
 /-- The inner proof's coins at `asksCut`'s rounds `L` to `L + 3`. -/
-def cutCoins (coin : ℕ → ℕ → F128) (L : ℕ) : InZ.Coins := ⟨coin L, coin (L + 1), coin (L + 2), coin (L + 3)⟩
+def cutCoins (coin : ℕ → ℕ → F128) (L : ℕ) : InZ.Challenges := ⟨coin L, coin (L + 1), coin (L + 2), coin (L + 3)⟩
 
 /-- **What the source carries for an inner proof begun after `L` bodies**, against the honest pads `p` and the
 constraints `cons`, at the coins `asksCut coin n` answers (round `k < n`). Each holds where its round is answered:

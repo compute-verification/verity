@@ -57,24 +57,24 @@ namespace Rs
 
 variable {tr : Trace} {c₁ c₂ : Array Claim}
 
-theorem betas_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
+theorem betas_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) :
     betas tr c₁ cs = betas tr c₂ cs := by
   unfold betas
   rw [hn]
   exact pushes_congr fun k _ => by rw [switch_congr hx k]
 
-theorem T_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
+theorem T_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) :
     T tr c₁ cs = T tr c₂ cs := by
   unfold T
   rw [hn, betas_congr hn hx]
 
-theorem perClaim_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
+theorem perClaim_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) :
     perClaim c₁ cs = perClaim c₂ cs := by
   unfold perClaim
   rw [hn]
   exact pushes_congr fun k _ => by rw [hx k]
 
-theorem sws_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
+theorem sws_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) :
     sws c₁ cs = sws c₂ cs := by
   unfold sws
   rw [hn, perClaim_congr hn hx]
@@ -85,8 +85,8 @@ end Rs
 prover's through its ring switch, a ring switch that returns gives the prover's `T` and switched claims and stops
 where the prover's did. Its checks passing is each claim's identity on the prover's switched vectors. -/
 theorem rs_eq (hs : Hashes V) (st : Setup) (hk : st.fold.kLog = st.kLog) (tr : Trace) (e : Array Claim)
-    (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (cz : Zc.Coins)
-    (full : Array F128) (cl : Lc.Coins) (crs : Rs.Coins) (t₀ : Transcript) (h₀ : t₀.k = 0)
+    (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (cz : Zc.Challenges)
+    (full : Array F128) (cl : Lc.Challenges) (crs : Rs.Challenges) (t₀ : Transcript) (h₀ : t₀.k = 0)
     (hs₀ : t₀.rounds.size = 0) (R : Array Round) (rp : Zk.Replayed) (prf : Proof)
     (hR : Agrees R (Rs.tEnd tr (abcClaims st.m st.kLog (Zc.out st.m cz tr)
       (Lc.out st.fold st.m tr (Zc.out st.m cz tr) cl) ++ e) crs
@@ -144,8 +144,8 @@ theorem rs_eq (hs : Hashes V) (st : Setup) (hk : st.fold.kLog = st.kLog) (tr : T
 
 /-- **Every claim a rep opens has `m − 6` coordinates**, for a table with `k_log ≤ m`, at any link points: the extra
 claims' points are region points, of `m` coordinates (`regionPoint_size`). -/
-theorem claims_xsize' (st : Stmt) (hk : st.c.kLog ≤ st.m) (hm : 13 ≤ st.m) (tr : Trace) (zcs : Zc.Coins)
-    (cs : Lc.Coins) (points : Array (Array F128)) (extras : Array Claim) (hex : st.extraClaims points = .ok extras) :
+theorem claims_xsize' (st : Stmt) (hk : st.c.kLog ≤ st.m) (hm : 13 ≤ st.m) (tr : Trace) (zcs : Zc.Challenges)
+    (cs : Lc.Challenges) (points : Array (Array F128)) (extras : Array Claim) (hex : st.extraClaims points = .ok extras) :
     ∀ c ∈ abcClaims st.m st.c.kLog (Zc.out st.m zcs tr) (Lc.out st.circuitFold st.m tr (Zc.out st.m zcs tr) cs) ++
         extras, c.x.size = st.m - 6 := by
   intro c hc
@@ -247,7 +247,7 @@ its coins (`verifyInnerWith_of` with the batched constraint for `ConsHold`). -/
 theorem verifyInnerWith_of' (h : ByteArray → ByteArray) (h64 : ∀ b, (h b).size = 64) (lay : Zk.PadLayout)
     (tape : TapeZk) (i r : ℕ) (salt : ℕ → ByteArray) {ic : InnerCommit}
     (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) (padsOf tape i r lay) salt = .ok ic) (finalC : F128)
-    {cons : Array (String × Zk.Lin)} (cs : InZ.Coins)
+    {cons : Array (String × Zk.Lin)} (cs : InZ.Challenges)
     (hz : ((InZ.lin lay (padsOf tape i r lay) cons cs).c +
       dot (InZ.lin lay (padsOf tape i r lay) cons cs).a (padsOf tape i r lay).h).isZero = true)
     (hb : (cs.cb 0).isZero = false) (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}

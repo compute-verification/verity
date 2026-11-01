@@ -92,7 +92,7 @@ namespace RecDeploy
 
 open _root_.Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout ZKmalAt SeqTape iterSimG)
+open Claims.ZKMal (RunParts ZKmalAt SeqTape iterSimG)
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
@@ -216,11 +216,11 @@ where it has (`stopProgB`), on coins of its own. -/
 noncomputable def simMStop (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (S₀ : Claims.Simulator) (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
     (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool) : Claims.Simulator where
-  C x := (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s))
+  C x := (iterSimG T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s))
     (Claims.ZKMal.censorSim S₀ s (kPre IV)) (fun j x => (SO x j).C)
     (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
       fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) (nS x)).C x
-  prog x := (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s))
+  prog x := (iterSimG T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s))
     (Claims.ZKMal.censorSim S₀ s (kPre IV)) (fun j x => (SO x j).C)
     (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
       fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) (nS x)).prog x
@@ -248,7 +248,7 @@ theorem zkAtStop (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [N
         RF (xsOf IV b x j u) (wit w (pre t₀) (u.take (IV.k (xIOf x))) j))
     (he0 : ∀ j < nS x, 0 ≤ eB j) (hg : 0 ≤ g) :
     ZKmalAt H (kM IV b x)
-      (fun w => (Claims.ZKMal.stopP (refPM IV b pre wit PS w) s (kPre IV)).comap (Layout.flatten T₀ 0 NB ΩB (nS x)))
+      (fun w => (Claims.ZKMal.stopP (refPM IV b pre wit PS w) s (kPre IV)).comap (RunParts.flatten T₀ 0 NB ΩB (nS x)))
       (RA x) x ((simMStop IV b T₀ NB ΩB S₀ SO s).C x) ((simMStop IV b T₀ NB ΩB S₀ SO s).prog x)
       (ε₀ + ∑ j ∈ Finset.range (nS x), eB j) (nS x * g) := by
   have hst := lay_start IV b pre wit
@@ -261,7 +261,7 @@ theorem zkAtStop (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [N
       rw [hst]
       exact parts_start_pos IV b _ x j))
     he0 hg
-  rw [Layout.iterSimG_seq_congr T₀ 0 NB ΩB ((lay IV b pre wit).stopped s) ((parts IV b _).stopped s) rfl rfl rfl, hst,
+  rw [RunParts.iterSimG_seq_congr T₀ 0 NB ΩB ((lay IV b pre wit).stopped s) ((parts IV b _).stopped s) rfl rfl rfl, hst,
     parts_start] at h
   exact h.of_equiv _ (Equiv.refl _) (Equiv.refl _) fun _ _ _ => rfl
 
@@ -282,11 +282,11 @@ theorem iterSimG_stopped_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (S₀ : Claims.Simulator)
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool)
     (x : Claims.Msg)
-    (pB : (n : ℕ) → (x : Claims.Msg) → (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s) n).U x →
+    (pB : (n : ℕ) → (x : Claims.Msg) → (RunParts.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s) n).U x →
       (SO x n).C → Claims.SP (List (Claims.Msg × Claims.Out))) :
-    ∀ (m : ℕ) (c : (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s)) S₀
+    ∀ (m : ℕ) (c : (iterSimG T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s)) S₀
         (fun j x => (SO x j).C) pB (fun _ _ => Claims.Recursion.goesOn) m).C x),
-      (Claims.SP.eval H ask ((iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s)) S₀
+      (Claims.SP.eval H ask ((iterSimG T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s)) S₀
         (fun j x => (SO x j).C) pB (fun _ _ => Claims.Recursion.goesOn) m).prog x c)).1 =
       (List.finRange m).foldl (fun τ (j : Fin m) => stepS H ask SO x pB τ j
           ((Claims.ZKMal.iterCoins T₀ 0 NB ΩB _ S₀ _ _ _ x m c).2 j))

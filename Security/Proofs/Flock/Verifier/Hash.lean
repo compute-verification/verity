@@ -7,10 +7,10 @@ import Flock.Hm96
 namespace Flock
 
 /-- A SHA-256 collision: two different inputs with one digest. -/
-def Sha256.Collision : Prop := ∃ u v : ByteArray, u ≠ v ∧ Sha256.hash u = Sha256.hash v
+def Sha256.HasCollision : Prop := ∃ u v : ByteArray, u ≠ v ∧ Sha256.hash u = Sha256.hash v
 
 /-- A SHA-512 collision: two different inputs with one digest. -/
-def Sha512.Collision : Prop := ∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v
+def Sha512.HasCollision : Prop := ∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v
 
 theorem Sha256.hash_size (m : ByteArray) : (Sha256.hash m).size = 32 := by
   unfold Sha256.hash
@@ -82,7 +82,7 @@ theorem leafPair_collides (P S : ByteArray) (M : ByteArray → ByteArray) (x x' 
 theorem leaf_binding_of (P S : ByteArray) (M : ByteArray → ByteArray) (x x' y y' : ByteArray) (hx : x.size = 64)
     (hx' : x'.size = 64) (hne : (x, y) ≠ (x', y'))
     (h : Sha512.hash (P ++ (xor64 x (M y) ++ Sha512.hash (S ++ y))) =
-      Sha512.hash (P ++ (xor64 x' (M y') ++ Sha512.hash (S ++ y')))) : Sha512.Collision :=
+      Sha512.hash (P ++ (xor64 x' (M y') ++ Sha512.hash (S ++ y')))) : Sha512.HasCollision :=
   let hp := leafPair_collides P S M x x' y y' hx hx' hne h
   ⟨_, _, hp.1, hp.2⟩
 
@@ -91,7 +91,7 @@ theorem leaf_binding_of (P S : ByteArray) (M : ByteArray → ByteArray) (x x' y 
 commit strings), of the salt digest `c` (different salts), or neither, when the salts are one and the masks cancel, so
 `x = x'`. -/
 theorem Default512.leaf_binding (x x' y y' : ByteArray) (hx : x.size = 64) (hx' : x'.size = 64) (hne : (x, y) ≠ (x', y'))
-    (h : Default512.leaf x y = Default512.leaf x' y') : Sha512.Collision :=
+    (h : Default512.leaf x y = Default512.leaf x' y') : Sha512.HasCollision :=
   leaf_binding_of Default512.leafPrefix Default512.saltPrefix Default512.mask x x' y y' hx hx' hne h
 
 theorem Default512.leaf_size (x y : ByteArray) : (Default512.leaf x y).size = 64 := Sha512.hash_size _

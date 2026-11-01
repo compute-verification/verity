@@ -28,7 +28,7 @@ namespace Masked
 /-- **The batch, term by term**: where `all`'s ten rows have the layout's length, their coefficients are `R`'s, the
 coins are `γ` and the pads' `μ` is `μ` through `padEquiv`, `τ` is `Σ_i batchCoef γ R (padEquiv i) · μ_i`. -/
 theorem tau_of_rows {nE : ℕ} (lay : _root_.Flock.Zk.PadLayout) (p : FlockComplete.PadsZk)
-    (cons : Array (String × _root_.Flock.Zk.Lin)) (cs : FlockComplete.Replay.InZ.Coins)
+    (cons : Array (String × _root_.Flock.Zk.Lin)) (cs : FlockComplete.Replay.InZ.Challenges)
     (γ : Fin (7 + 3) → FlockLevel3.GF128) (R : Fin (7 + 3) → ZkSession.Lin FlockLevel3.GF128 (nE + 4))
     (μ : PadIdx nE → FlockLevel3.GF128) (hlen : lay.len = nE + 4) (hcons : cons.size = 7)
     (hsz : ∀ k < 7 + 3, ((FlockComplete.Replay.InZ.all lay p cons cs)[k]!).2.a.size = lay.len)

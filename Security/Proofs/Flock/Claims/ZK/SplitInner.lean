@@ -33,7 +33,7 @@ abbrev innerSlotE (x : Msg) (j : Fin (jOf x)) (r : Fin 2) : ℕ := repSlot x (2 
 
 /-- The inner proof's coins at table `j`'s rep `r`'s slot, as `asksCut` answers the opened coins `c`. -/
 abbrev innerCoinsE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
-    FlockComplete.Replay.InZ.Coins :=
+    FlockComplete.Replay.InZ.Challenges :=
   FlockComplete.SimInner.cutCoins (fun k i => slotAt c k i) (innerSlotE x j r)
 
 /-- Table `j`'s rep `r` source on the cut. -/
