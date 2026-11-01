@@ -1608,8 +1608,11 @@ impl Firewall {
             got[0] ^= 1;
         }
         if got != self.root {
-            self.fail(flock_live::firewall::refused(format!("level-0 root: the device committed {} where the recheck has {}",
-                                                            hex(&got[..8]), hex(&self.root[..8]))));
+            let w = std::mem::size_of::<flock_hash::Digest>();
+            let k = got.chunks(w).zip(self.root.chunks(w)).position(|(a, b)| a != b).unwrap_or(got.len().min(self.root.len()) / w);
+            let short = |r: &[u8]| hex(r.get(k * w..(k * w + 8).min(r.len())).unwrap_or(&[]));
+            self.fail(flock_live::firewall::refused(format!("level-0 root: the device committed {} where the recheck has {} (cap digest {k})",
+                                                            short(&got), short(&self.root))));
         }
         self.root.clone()
     }
