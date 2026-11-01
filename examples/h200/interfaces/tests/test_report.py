@@ -377,13 +377,22 @@ NOISE = {"SERVE_NOISE_S": (8.5, "kraqwxsc r20261026-113133-5cb4 against r2026102
          "SERVE_NOISE_COMMIT_S": (2.8, "r20261026-113133-5cb4"), "SERVE_NOISE_GAMMA_STEP": (1.115, "the noise run"),
          "SERVE_NOISE_BASE_S": (74.4, "r20261026-120015-3773"), "SERVE_STEP_4562_S": (3.78, "the kraq build"),
          "SERVE_NOISE_UNITS_PEAK": (0.10, "tensor peak r20261027-022021-3a48"),
-         "SERVE_COMMIT_OVERHEAD_S": (0.42, "commit overhead r20261027-004614-d98c")}
+         **{k: (v, f"commit overhead r20261029-203322-1680 › {k.lower()}") for k, v in (
+             ("SERVE_COMMIT_SLOTS_SMALL", 512), ("SERVE_COMMIT_STEP_S_SMALL", 0.440),
+             ("SERVE_COMMIT_AS_SERVED_S_SMALL", 8.935), ("SERVE_COMMIT_OVERHEAD_S_SMALL", 0.071),
+             ("SERVE_COMMIT_SLOTS", 4096), ("SERVE_COMMIT_STEP_S", 3.246), ("SERVE_COMMIT_AS_SERVED_S", 71.716),
+             ("SERVE_COMMIT_OVERHEAD_S", 0.448), ("SERVE_COMMIT_COMPRESSIONS", 9), ("SERVE_COMMIT_COMPRESSIONS_TO", 7),
+             ("SERVE_COMMIT_AND_SHARE_AS_SERVED", 0.174), ("SERVE_COMMIT_AND_SHARE", 0.0013))}}
 NOISE_LINE = ("Per-call noise adds **+8.5 s a step at batch 4,096** (5.59 s of units plus 2.8 s of commit, "
               "r20261026-113133-5cb4 against r20261026-120015-3773): 1.115× against that commit-bound 74.4 s served "
               "step, which is mostly FAMILIES' slot commit (`commit_gpu`), and about 3.2× against the earlier per-call "
               "build's 3.78 s served step. The units are ALU-bound at about 10% of the tensor peak "
-              "(r20261027-022021-3a48). The commit's own overhead is a separate line: +0.42 s at 1 KiB rows "
-              "(r20261027-004614-d98c).")
+              "(r20261027-022021-3a48). The commit's own overhead, measured on one H200 at the frozen shape "
+              "(r20261029-203322-1680): as served (FAMILIES, every SM) it adds +8.9 s to M3's 0.440 s step at 512 "
+              "slots (20.3×) and +71.7 s to the 3.246 s step at 4,096 slots (22.1×); on circuits' 1 KiB shared rows, "
+              "which e2e_h200's committer doesn't serve yet, it adds +0.071 s (0.161×) and +0.448 s (0.138×, under "
+              "0.20–0.25×). Capping the commit's SMs doesn't help the served loop, and 9 → 7 compressions a row-slot "
+              "isn't built. In ANDs the commit is 0.174× the served step as served and 0.0013× at 1 KiB rows.")
 
 
 def _noise() -> dict:
@@ -399,10 +408,22 @@ def test_per_call_noise_is_seconds_a_step_with_both_ratios_never_gamma_step_alon
     out = _draft([], doc)
     part2 = out.split("## 2. Commit overhead")[1].split("\n## ")[0]
     assert f"- {NOISE_LINE}" in part2 and "| ⟨SERVE_NOISE_RATIO_4562⟩ | 3.2 |" in out
+    assert "| ⟨SERVE_COMMIT_OVERHEAD_RATIO⟩ | 0.138 | SERVE_COMMIT_OVERHEAD_S / SERVE_COMMIT_STEP_S" in out
     demo = _draft([_load("block-record-r2-period0")], {"format": D.MEASUREMENTS, "values": _noise()})
     assert " ".join(NOISE_LINE.split()) in " ".join(demo.split())
     assert ("⟨SERVE_NOISE_RATIO_4562⟩× against the earlier per-call build's ⟨SERVE_STEP_4562_S⟩ s"
             in " ".join(_draft([_load("block-record-r2-period0")]).split()))
+
+
+def test_the_commit_overhead_band_follows_the_measured_ratio() -> None:
+    values = {k: D.V(v.get("value"), v["source"]) for k, v in _noise().items()}
+    values["SERVE_COMMIT_OVERHEAD_S"] = D.V(0.9, "commit overhead r20261029-203322-1680")
+    line = D.serve_noise_line(values | D.derive(values, []))
+    assert "+0.9 s (0.277×, above 0.20–0.25×)" in line
+    del values["SERVE_COMMIT_STEP_S"]
+    line = D.serve_noise_line(values | D.derive(values, []))
+    assert "to the ⟨SERVE_COMMIT_STEP_S⟩ s step" in line
+    assert "(⟨SERVE_COMMIT_OVERHEAD_RATIO⟩×, against 0.20–0.25×)" in line
 
 
 def test_a_row_stating_per_call_noise_alone_is_refused() -> None:
