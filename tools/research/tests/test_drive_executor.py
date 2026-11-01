@@ -10,7 +10,7 @@ import pytest
 
 from research.drive import AFTER_LANDING
 from research.executor import (AFTER_LANDING_PRIORITY, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport, QueueTransport,
-                               Shadowed, agrees, compare, keyed, shadow_records, shadow_report)
+                               Shadowed, agrees, compare, keyed, old_verdicts, shadow_records, shadow_report)
 from research.store.local import LocalStore
 from research.store import vocab
 from test_drive_review import Review, _main
@@ -132,6 +132,24 @@ def test_an_executor_only_task_is_listed_and_disagrees():
     assert "executor only 2" in text and "    pytest:new: executor only (executor pass)" in text, text
     assert not agrees({k: v for k, v in compare({"a": "k"}, {"a": "pass"}, {"k": "pass"}).items()
                        if k not in ("missing", "executor_only")}), "a record without coverage counts never agrees"
+
+
+def test_the_runs_records_read_as_the_graph_cuts_them(tmp_path):
+    """A suite reused from the cache passes; one a step skipped by name, and the preflight, have no verdict; a suite the graph
+    splits by file is compared whole through its parts."""
+    d = tmp_path / "r"
+    d.mkdir()
+    (d / "steps.jsonl").write_text(json.dumps({"step": "preflight-lock", "status": "passed"}) + "\n"
+                                   + json.dumps({"step": "pytest", "status": "failed"}) + "\n")
+    (d / "suites.json").write_text(json.dumps([{"name": "kept", "status": "cached"}, {"name": "lean", "status": "skipped"},
+                                               {"name": "big", "status": "failed"}]))
+    old = old_verdicts([d])
+    assert old == {"pytest": "fail", "pytest:kept": "pass", "pytest:big": "fail"}, old
+    ids = {"pytest:kept": "k1", "pytest:big:1/2": "k2", "pytest:big:2/2": "k3"}
+    got = compare(ids, old, {"k1": "pass", "k2": "pass", "k3": "fail"})
+    assert got == {"units": 3, "agree": 3, "pending": [], "disagree": [], "missing": [], "executor_only": []}, got
+    assert agrees(got)
+    assert compare(ids, old, {"k1": "pass", "k2": "pass"})["pending"] == ["pytest", "pytest:big"]
 
 
 def test_off_changes_nothing(world, monkeypatch, tmp_path):

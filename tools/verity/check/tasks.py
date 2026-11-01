@@ -40,6 +40,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SCHEMA = "tasks/v1"
 GRAPHS = ("after-landing", "preflight")
+#: whether a task's audit regenerates lock records: never, so a lock record difference fails it, as it fails drive's
+#: after-landing run (`check.py --no-regenerate`), whose verdicts a graph's stand beside and replace
+REGENERATE = False
 
 
 def _load(name: str):
@@ -154,7 +157,7 @@ def command(part: str, cores: int, splits: dict[str, dict] | None = None) -> tup
     is a skip)."""
     with _unplaced():
         try:
-            gs = C.groups(OUT, cores, only=[part], splits=pins(splits or {}))
+            gs = C.groups(OUT, cores, only=[part], regenerate=REGENERATE, splits=pins(splits or {}))
         except C.DECLARATION.DeclarationError as e:
             return None, "<tree>", str(e)
     mine = [(argv, cwd) for g in gs for name, argv, cwd in g if name in own_steps(part)]
@@ -365,7 +368,8 @@ def run(part: str, work: Path | None = None, circuit_shards: int | None = None, 
     work.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
     with contextlib.redirect_stdout(sys.stderr), _without_preflight():
-        ok, steps = C.run(work, min(rec["resources"]["cores"], C.cores()), only=[part], splits=splits)
+        ok, steps = C.run(work, min(rec["resources"]["cores"], C.cores()), only=[part], regenerate=REGENERATE,
+                          splits=splits)
     seconds = round(time.monotonic() - t0, 1)
     own = [s for s in steps if s["step"] in own_steps(part)]
     if not ok or not own:

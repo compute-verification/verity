@@ -121,6 +121,23 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
                   "lean-audit:lean/Q": {"cores": 32, "mem_gb": 128, "disk_gb": 60}}, by
 
 
+def test_a_lean_audit_fails_on_a_lock_record_difference_as_the_after_landing_run_does(tree, monkeypatch):
+    """An audit task never regenerates lock records (`--no-regenerate`, drive's after-landing run), listed or run: with
+    `--regenerate` it passed `Security` on a stale lock that the after-landing run of the same commit failed."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("tasks_under_test", tree / "tools" / "verity" / "check" / "tasks.py")
+    T = importlib.util.module_from_spec(spec)
+    monkeypatch.syspath_prepend(str(tree / "tools" / "verity" / "check"))
+    spec.loader.exec_module(T)
+    seen = []
+    monkeypatch.setattr(T.C, "groups", lambda *a, **k: seen.append(k.get("regenerate", True)) or [])
+    monkeypatch.setattr(T.C, "run", lambda *a, **k: seen.append(k.get("regenerate", True)) or (True, []))
+    T.command("lean-audit:lean/P", 16)
+    T.run("lean-audit:lean/P", tree / "work")
+    assert len(seen) >= 2 and not any(seen), seen
+
+
 def test_a_suites_key_moves_with_its_inputs_and_with_nothing_else(tree):
     before = _keys(tree)
     (tree / "notes.txt").write_text("outside every suite\n")
