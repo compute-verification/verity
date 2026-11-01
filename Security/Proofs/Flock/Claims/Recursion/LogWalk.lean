@@ -185,7 +185,7 @@ theorem retl_let {α γ : Type} (e : α) (b : α → LogV γ) (l : Array ByteArr
 
 open Lean Elab Tactic Meta in
 /-- One step of `retl_walk` on the goal `RetL m l Q`, by `m`'s head; `none` when the goal is not a `RetL`. -/
-def retlStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
+meta def retlStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
   let ty ← instantiateMVars (← g.getType)
   unless ty.isAppOfArity ``RetL 4 do return none
   let γ := ty.getArg! 0
