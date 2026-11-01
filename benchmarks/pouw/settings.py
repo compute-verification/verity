@@ -128,6 +128,8 @@ REGISTRY = Registry(
     S("POUW_CHALLENGER_SECRET_FILE", str, None, WHERE, "the file holding the session's secret"),
     S("POUW_CHALLENGER_COMMITMENT", str, None, WHERE, "the session's commitment"),
     S("POUW_CHALLENGER_GATE", str, None, WHERE, "infra's gate, USER@HOST"),
+    S("POUW_CHALLENGER_PEER", str, None, WHERE, "the node the window's client runs on, as the gate names it (its draw session)"),
+    S("POUW_CHALLENGER_SSH_KEY", str, None, WHERE, "the lane's own gate key, for the window's draw session"),
     S("H1_SKIP_DEAD", one, False, VALUE, "1: served H1's producer skips the units of row blocks wholly past the served rows"),
     standalone=STANDALONE,
 )

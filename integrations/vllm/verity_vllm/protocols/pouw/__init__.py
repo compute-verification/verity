@@ -72,8 +72,6 @@ from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs.challenger import LiveRecord
 
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import device as PD
@@ -109,7 +107,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
         "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
-        "backend")
+        "backend", "draw_session")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -201,6 +199,8 @@ class Settings:
     ks: tuple[int, ...] | None = None
     #: the lead's kernel (`lead.LeadBackend`: ``load``, ``call``, ``words``)
     backend: Any = None
+    #: H1's draw session: the gate's reserve answer for the window's draw coin, opened withheld (`pouw_h1_window.DrawSession`)
+    draw_session: Mapping[str, Any] | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -241,7 +241,8 @@ class Settings:
         if backend is not None and not all(callable(getattr(backend, f, None)) for f in PL.BACKEND):
             raise ValueError(f"pouw setting 'backend' is the lead's kernel (`lead.LeadBackend`): "
                              f"{', '.join(PL.BACKEND)}")
-        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *PHS.of(raw), backend)
+        *h1, draw_session = PHS.of(raw)
+        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -703,11 +704,12 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     (`pouw_h1_hooks.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
     under the credit gate's trace (`pouw_h1_hooks.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
     requests and its batch order to the run (`pouw_h1_hooks.admitting`), each entry and each served row's request under its
-    round's root before the ``rounds`` coin, and the window's sampling coin opens at release after its manifest. With the
-    setting ``challenger`` the salt, round and sampling coins are the auditor host's, from the one session infra's gate
+    round's root before the ``rounds`` coin, and the window's draw coin opens at release after its manifest. With the
+    setting ``challenger`` the salt and round coins are the auditor host's, from the one session infra's gate
     reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window has
-    finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`). The
+    finished, and the draw coin is ``draw_session``'s, opened withheld on the draw root (`pouw_h1_window.DrawSession`);
+    without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`). The
     window's weights' root is its period's (`pouw_h1_served.Served.weights_root`), else `audit.weights_root`, which
     registers no ``b/<K>`` and so credits nothing. ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
     only by default). On an arm that serves z/y records (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each
@@ -725,7 +727,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     wroot = (settings.served and settings.served.weights_root(shapes, modules, settings.rows, settings.steps, layers,
                                                               target.context.stage != "capture")) or weights_root(roots)
     if settings.challenger is not None:
-        session = PHW.Window(entry, settings.challenger, settings.steps, wroot, settings.session, settings.gate)
+        session = PHW.Window(entry, settings.challenger, settings.steps, wroot, settings.session, settings.gate, settings.draw_session)
 
         def opener(requests_root: bytes) -> tuple[bytes, Any, Any, Mapping[str, Any]]:
             epoch_salt, *opened = session.open(requests_root)
@@ -733,7 +735,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = PH.program_salt(Epoch.start(declared, roots, commitment, opening).salt)
-        draw = LiveRecord(rounds.challenger, Wd.DRAW) if rounds is not None else None
+        draw = PHW.in_process_draw(rounds, verifier.coins)
     source = PH.CHALLENGER if session is not None else "in-process"
     run = PH.H1Run(entry, salt, modules, shapes, settings.rows, settings.steps, retain=settings.retain_steps,
                    transcript_dir=settings.transcript_dir, commit=target.context.stage != "capture", rounds=rounds, draw=draw,
