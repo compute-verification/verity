@@ -27,7 +27,7 @@ Each acceptance statement's two lemmas:
 * honest: `runAccepts_complete` (of `RunAccepts` and `RunBinds`) and `wipeAccepts_complete`, the converses, and their
   instances, each signed by any key `Lms.key` derives at S1's deployed parameters and accepted by its compiled check:
   `runAccepts_meets`, an honest run of setup's own accepted store (two 8-byte blocks) and one round, which the kernel
-  evaluates (`decide +kernel`) once `Flock.canon`'s sort is shown to leave the manifest's sorted keys as they are
+  evaluates (`decide +kernel`) once `Flock.canonUtf8`'s sort is shown to leave the manifest's sorted keys as they are
   (`qsort_sorted`); `runBinds_meets`, that run twice; and `wipeAccepts_meets`, an honest wipe.
 -/
 
@@ -74,6 +74,11 @@ private theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fro
 private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canonicalJson b = .ok j) :
     ∃ s, String.fromUTF8? b = some s ∧ Flock.canon j = .ok s := by
   unfold Core.canonicalJson at h
+  cases ha : b.data.all (· < 0x7f)
+  case false =>
+    simp only [ha] at h
+    simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  simp only [ha] at h
   cases hs : String.fromUTF8? b with
   | none => simp [hs, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
@@ -328,7 +333,8 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return ⟨reasons.isEmpty, reasons, StreamedWipe.egressUnits s.egressBits⟩
+  return (MemoryChallenger.StreamedWipe.Findings.mk reasons (StreamedWipe.egressUnits s.egressBits),
+    MemoryChallenger.acceptIf reasons.isEmpty)
 
 private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
     (c : StreamedWipe.Commitment) :
@@ -366,6 +372,10 @@ private def WGood (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : N
         false ∧
       (b == 0 && decide (s.batches[b].sendNs < s.fillEndNs)) = false
 
+private theorem waccepted_acceptIf (f : MemoryChallenger.StreamedWipe.Findings) (b : Bool) :
+    MemoryChallenger.StreamedWipe.Verdict.accepted (f, MemoryChallenger.acceptIf b) = b := by
+  cases b <;> rfl
+
 private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (h : (wtail s c r0).accepted = true) : r0 = #[] ∧ ∀ b < s.batches.size, WGood s c b := by
   unfold wtail at h
@@ -383,7 +393,8 @@ private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commi
   rw [show ∀ (x : Id (Array String)) (f : Array String → Id StreamedWipe.Verdict), (x >>= f) = f x.run from
     fun _ _ => rfl] at h
   simp only [Id.run] at m1 m2 h
-  have h0 : L.size = 0 := by simpa using (show Array.isEmpty L = true from h)
+  have h0 : L.size = 0 := by
+    simpa using (show Array.isEmpty L = true from (waccepted_acceptIf _ L.isEmpty).symm.trans h)
   exact ⟨Array.eq_empty_of_size_eq_zero (by omega), fun b hb => m2 (by omega) b (by simp; omega)⟩
 
 private theorem wpre_empty (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
@@ -530,7 +541,8 @@ private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈
 /-- `wtail` keeps its reasons when every batch passes. -/
 private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (hg : ∀ b < s.batches.size, WGood s c b) :
-    wtail s c r0 = ⟨r0.isEmpty, r0, StreamedWipe.egressUnits s.egressBits⟩ := by
+    wtail s c r0 = (MemoryChallenger.StreamedWipe.Findings.mk r0 (StreamedWipe.egressUnits s.egressBits),
+      MemoryChallenger.acceptIf r0.isEmpty) := by
   unfold wtail
   simp only [Id.run]
   rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_keep]
@@ -581,7 +593,7 @@ theorem wipeAccepts_complete : ∀ (p : WipeProtocol.Params) (c : StreamedWipe.C
           (c.params, StreamedWipe.egressUnits s.egressBits) := by
   intro p c e s hsv hss hse ⟨hk, hcm, hcov, hend, hsize, hb⟩
   have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
-      ⟨true, #[], StreamedWipe.egressUnits s.egressBits⟩ := by
+      (MemoryChallenger.StreamedWipe.Findings.mk #[] (StreamedWipe.egressUnits s.egressBits), Core.Verdict.accept) := by
     rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,
       wtail_keep s c _ fun b _ => wgood_of s c b (hb b)] <;> rfl
   show WipeProtocol.check SCHEMES p c e = _
@@ -775,19 +787,19 @@ private def jsonLeaf : Json → Bool
   | .null | .bool _ | .num _ | .str _ => true
   | .arr _ | .obj _ => false
 
-/-- `Flock.canon` of a leaf. -/
+/-- `Flock.canonUtf8` of a leaf. -/
 private def canonLeaf : Json → V String
   | .null => pure "null"
   | .bool b => pure (if b then "true" else "false")
   | .num n => if n.exponent == 0 then pure (toString n.mantissa) else throw "canonical JSON: a non-integer number"
-  | .str s => pure (canonStr s)
+  | .str s => pure (canonStrUtf8 s)
   | .arr _ | .obj _ => throw "canonical JSON: not a leaf"
 
-/-- `Flock.canon` of an object of leaves. -/
+/-- `Flock.canonUtf8` of an object of leaves. -/
 private def canonObj (kvs : Std.TreeMap.Raw String Json) : V String := do
   let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canonLeaf p.1.2)
   let items := vals.qsort (fun a b => a.1 < b.1)
-  pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStr kv.1 ++ ":" ++ kv.2) ++ "}")
+  pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStrUtf8 kv.1 ++ ":" ++ kv.2) ++ "}")
 
 private def KeysSorted (as : Array (String × String)) : Prop :=
   ∀ i (hi : i < as.size) j (hj : j < as.size), decide (as[i].1 < as[j].1) = decide (i < j)
@@ -799,7 +811,7 @@ private instance instDecidableKeysSorted (as : Array (String × String)) : Decid
 private def canonObjInOrder (kvs : Std.TreeMap.Raw String Json) : V String := do
   let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canonLeaf p.1.2)
   let items := if KeysSorted vals then vals else vals.qsort (fun a b => a.1 < b.1)
-  pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStr kv.1 ++ ":" ++ kv.2) ++ "}")
+  pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStrUtf8 kv.1 ++ ":" ++ kv.2) ++ "}")
 
 private theorem canonObj_inOrder (kvs : Std.TreeMap.Raw String Json) : canonObj kvs = canonObjInOrder kvs := by
   unfold canonObj canonObjInOrder
@@ -817,21 +829,21 @@ private def canonFlat (j : Json) : V String := match j with
   | .obj kvs => canonObjInOrder kvs
   | _ => throw "not an object"
 
-private theorem canon_leaf (j : Json) (h : jsonLeaf j = true) : Flock.canon j = canonLeaf j := by
+private theorem canonUtf8_leaf (j : Json) (h : jsonLeaf j = true) : Flock.canonUtf8 j = canonLeaf j := by
   cases j <;> first
     | (simp [jsonLeaf] at h; done)
-    | simp only [Flock.canon, canonLeaf]
+    | simp only [Flock.canonUtf8, canonLeaf]
 
-private theorem canon_obj (kvs : Std.TreeMap.Raw String Json) (h : (kvs.toArray.all fun p => jsonLeaf p.2) = true) :
-    Flock.canon (.obj kvs) = canonObj kvs := by
-  have hc : ∀ p : {x // x ∈ kvs.toArray}, Flock.canon p.1.2 = canonLeaf p.1.2 :=
-    fun p => canon_leaf _ (Array.all_eq_true_iff_forall_mem.1 h p.1 p.2)
-  rw [Flock.canon, canonObj]
+private theorem canonUtf8_obj (kvs : Std.TreeMap.Raw String Json)
+    (h : (kvs.toArray.all fun p => jsonLeaf p.2) = true) : Flock.canonUtf8 (.obj kvs) = canonObj kvs := by
+  have hc : ∀ p : {x // x ∈ kvs.toArray}, Flock.canonUtf8 p.1.2 = canonLeaf p.1.2 :=
+    fun p => canonUtf8_leaf _ (Array.all_eq_true_iff_forall_mem.1 h p.1 p.2)
+  rw [Flock.canonUtf8, canonObj]
   simp only [hc]
 
-private theorem canon_flat (j : Json) (h : jsonFlat j = true) : Flock.canon j = canonFlat j := by
+private theorem canonUtf8_flat (j : Json) (h : jsonFlat j = true) : Flock.canonUtf8 j = canonFlat j := by
   cases j
-  case obj kvs => exact (canon_obj kvs h).trans (canonObj_inOrder kvs)
+  case obj kvs => exact (canonUtf8_obj kvs h).trans (canonObj_inOrder kvs)
   all_goals simp [jsonFlat] at h
 
 private theorem eq_ok_of {α : Type} [DecidableEq α] {x : Except String α} {a : α}
@@ -859,13 +871,13 @@ private def toyManifest : String :=
   "{\"blocks_per_segment\":2,\"c0\":189,\"expander\":\"sha512-ctr-v4\",\"profile\":\"p2-6B\",\"scheme\":\"p2\"," ++
   "\"segments\":1,\"w\":64}"
 
-private theorem canon_toy : Flock.canon (Commit.manifestJson toyParams) = .ok toyManifest := by
-  rw [canon_flat (Commit.manifestJson toyParams) (by decide +kernel)]
+private theorem canonUtf8_toy : Flock.canonUtf8 (Commit.manifestJson toyParams) = .ok toyManifest := by
+  rw [canonUtf8_flat (Commit.manifestJson toyParams) (by decide +kernel)]
   exact eq_ok_of (by decide +kernel)
 
 private theorem manifest_toy : Commit.manifest toyParams = .ok toyManifest.toUTF8 := by
   unfold Commit.manifest
-  rw [canon_toy]
+  rw [canonUtf8_toy]
   rfl
 
 private theorem tie_matches : (RunProtocol.tie toyPoint toyCommitment toyStore toyPublic matches .ok ()) = true := by
@@ -929,7 +941,7 @@ private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryCh
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ c.limitNs) then late := late + 1
   if wrong > 0 then reasons := reasons.push s!"{wrong} answers are not their blocks of C"
   if late > 0 then reasons := reasons.push s!"{late} answers are past Δ + RTT = {c.limitNs} ns"
-  return ⟨reasons.isEmpty, reasons, late, wrong⟩
+  return (MemoryChallenger.Findings.mk reasons late wrong, MemoryChallenger.acceptIf reasons.isEmpty)
 
 private theorem rverdict_eq (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
     (s : SignedSession) (c : SessionCommitment) (openings : Array CoinOpening) :

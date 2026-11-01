@@ -15,7 +15,7 @@ the fixtures sample. Shared by `fixtures.py` (the expected values, CPU), `check.
   root(B) per linear are stand-ins too, SHA-512 of a label (`roots`): the proof block reads them only through seed_c and
   sigma_R, so any 64-byte value checks the same arithmetic. A step's proof blocks are numbered in `ORDER`, the call's first
   at `base` (J10-R's ``call``), proof block u at base + u.
-* **Samples** (`picks`): the proof-block grid's four corners, its middle and `PICKS` - 5 drawn proof blocks, at most `PICKS` row
+* **Samples** (`picks`): the proof-block grid's four corners, its middle and `PICKS` - 5 sampled proof blocks, at most `PICKS` row
   tiles of 32 rows: 512 of M = 4,096's rows and 512 of 16,384's at the default 16.
 """
 from __future__ import annotations

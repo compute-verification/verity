@@ -4,7 +4,7 @@ wipe's component of onsite Verity (`verity/wipe/v0`, `MemoryChallenger.WipeProto
 `verity/core/devices/memory_challenger/lean/`).
 
 `run(node, params, ...)` runs one wipe: in one process (the challenger under `signer` and `log`, on `clock`), or with
-the memory challenger a party of its own (`party`, `wipe_party`), which draws its secret, session id and coins on its
+the memory challenger a party of its own (`party`, `wipe_party`), which samples its secret, session id and coins on its
 own host and signs under its own key while the prover answers over a socket. The prover is `streamed_wipe.Prover` (the
 honest server) unless a test passes another, such as `keeping`. Then the verifier answers (`answer`), as the Lean does:
 

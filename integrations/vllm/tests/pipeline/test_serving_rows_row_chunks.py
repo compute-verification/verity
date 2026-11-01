@@ -1,5 +1,5 @@
 """A row template in chunks (`pipeline.serving_rows.chunked`): a row Definition the partition file's ``chunk_cap`` names is staged
-by C-Flock's `UnitStager` on its own ports, one v2 bit row per parameter (``in<g>``) and one per return field (``o<j>``), each
+by Flock's `UnitStager` on its own ports, one v2 bit row per parameter (``in<g>``) and one per return field (``o<j>``), each
 chunk a member of at most its cap of the template's rows, read once; with no cap it stays the word-row member it was.  And a scope
 of several op_path prefixes takes the rows under any of them."""
 from __future__ import annotations

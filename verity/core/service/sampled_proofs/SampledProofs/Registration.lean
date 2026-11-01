@@ -38,6 +38,7 @@ registered value (`Earlier.value`): its entry has the domain and root of that va
 log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
 nothing is registered afresh.
 -/
+import Flock.WindowRecord
 import SampledProofs.Draw
 import SampledProofs.Registered
 import SampledProofs.Supplied
@@ -49,8 +50,10 @@ open Lean (Json)
 open Flock (V)
 open Flock.TemplateQuery (Desc)
 
-def FORMAT : String := "verity/registration/v1"
-def FORMAT_V2 : String := "verity/registration/v2"
+/- The record's formats and its digest, `SHA-512(format || 0 || canon(record))` with the record's own format as the tag:
+the window record's, which every reader of the record shares. -/
+export Flock.WindowRecord (FORMAT FORMAT_V2 digest digestHex)
+
 def PROTOCOL : String := "verity/sampled-proofs/one-stage/v1"
 def KINDS : List String := ["served", "stand-in"]
 
@@ -58,13 +61,6 @@ def KEYS : Array String := sortStrings #["format", "protocol", "program", "query
   "scheme", "roots", "leaf_layer", "anchors", "window", "previous"]
 def KEYS_V2 : Array String := sortStrings (KEYS.push "registered")
 def ROOT_KEYS : Array String := sortStrings #["port", "root", "leaves", "domain"]
-
-/-- `SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag. -/
-def digest (rec : Json) : V ByteArray := do
-  let tag := if jeq (getD rec "format") FORMAT_V2 then FORMAT_V2 else FORMAT
-  return Flock.Sha512.hash (tag.toUTF8.push 0 ++ (← Flock.canon rec).toUTF8)
-
-def digestHex (rec : Json) : V String := return Flock.hexOf (← digest rec)
 
 /-- `registration.query_digest`: SHA-512 of the canonical query. -/
 def queryDigest (q : Json) : V String := canonSha512 q

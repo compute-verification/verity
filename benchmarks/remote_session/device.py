@@ -1,6 +1,6 @@
 """The prover's GPU backend: an encoded store across the visible GPUs, its payload tree, chained sketch-sha512 passes
 over it with the device reader (`../codec_tensor/reader.cu` in `session.cu`) and the openings of what the verifier
-draws.
+samples.
 
 ~~~text
 segments   the store's N blocks as contiguous segments of whole chunks: first a shard a GPU in its HBM, as even as the
@@ -24,7 +24,7 @@ pass       on each GPU, its seed, signs and constants derived from the previous 
            the pass before it runs, so the passes follow one another on the devices with no host step between them.
            A pass keeps its packed signs (8 KiB), each segment's levels h0 … hc and the levels above, nothing per block,
            in rings allocated with the store and copied to host memory as its part ends, so a pass allocates nothing
-opening    a window's draws at once, segment by segment on its GPU's opening stream: each drawn leaf's subtree of 2^h0
+opening    a window's samples at once, segment by segment on its GPU's opening stream: each drawn leaf's subtree of 2^h0
            leaves recomputed from the segment under its pass's constants by a second copy of the library
            (`rs_subtrees`), then its receipts and its path below hc gathered from those subtrees and the segment's kept
            levels in one launch (`rs_gather64`), the blocks in another; the path above hc comes from the pass's top

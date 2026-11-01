@@ -1,6 +1,6 @@
-"""Certified share of int8 tensor capacity for Llama-3.1-8B serving, from dcap.cu's measurements (CAP, cmp-13).
+"""Certified share of int8 tensor capacity for Llama-3.1-8B serving, from dcap.cu's measurements.
 
-Reads one run's dcap.jsonl and prints the tables of note:20261016T0215Z-draft-capacity-share: τ for the honest kernels,
+Reads one run's dcap.jsonl and prints its tables: τ for the honest kernels,
 nominal ÷ capacity over the decode grid, and the serving mixes with and without certified filler. Writes them as JSON.
 
   python3 share.py RUN_OUT_DIR [--fill FILL_RUN_OUT_DIR] [--dfill DFILL_RUN_OUT_DIR ...] [--fstep FLIN_RUN_OUT_DIR ...]
@@ -19,7 +19,7 @@ COMMIT = 1.09 for committing X every 4 steps. Without it, the filler is W11's re
 Definitions:
 - capacity C: the int8 IMMA peak, 1024 MACs/SM/clk × 188 SMs × f; f is the read SM clock unless a column says 2430.
 - nominal N: the int8 MACs the served matmuls execute (linears, lm_head, QKᵀ and P·V against the context).
-- certified ÷ nominal: the target, 0.99 (note:20261015T2356Z-draft-rs-99-budget).
+- certified ÷ nominal: the target, 0.99.
 - τ = honest priced ÷ honest real = A × N ÷ C_2430, where A = p_MAC ÷ (tensor-peak time a MAC) is the frozen vector's
   MAC price over the time a MAC takes at tensor peak at the model's 2430 MHz. V99 (rs-price-99.py): p_MAC = 0.2424 u,
   tensor-peak time R*/256 = 1.1722 u, so A = 0.2068. The vector has no DRAM row, so a memory-bound step is priced at its
@@ -29,12 +29,12 @@ Definitions:
 
 Constants not measured by dcap.cu, each from a note of record:
 - non-GEMM kernels: decode 1.09 ms a step (vLLM 0.28 FP8, full decode graphs, b32 / 1,024), prefill 38.37 ms per 8,192
-  tokens (note:20261015T0417Z-draft-saturation-budget). A served decode step adds max(1.09 ms, 4.684 µs × tokens).
+  tokens. A served decode step adds max(1.09 ms, 4.684 µs × tokens).
 - prefill attention: FlashAttention-2 (BF16), 73.11 ms for causal 8,192, η = 0.30 of the int8 peak; an int8 kernel at
   FA2's efficiency of its own peak would be 0.60 (assumed, ETA_FA_INT8).
 - without --fill, certified filler beside decode on a green-context split: 0.70 × its SM share of the tensor peak; 60 filler SMs give
-  0.222 at ≤ 4.7% decode slowdown, 92 give 0.34 at ≤ 10.6% (note:20261015T0713Z-draft-filler-issue-slack, measured at
-  batch ≤ 32). The chained int8 GEMM (note:20261015T1622Z-draft-chained-tensor-work) is 0.81 alone, 0.74 committing every
+  0.222 at ≤ 4.7% decode slowdown, 92 give 0.34 at ≤ 10.6% (measured at
+  batch ≤ 32). The chained int8 GEMM is 0.81 alone, 0.74 committing every
   4 steps.
 - KV pool: 80 GB of int8 KV (64 KiB a token), 1.22 M tokens.
 """
@@ -210,7 +210,7 @@ class StepFiller(PointFiller):
         return tc + to, ((fused + pump) * tc + pump * to) * m.cap * 1e-3
 
 
-FILLER = {  # W11 (note:20261015T0713Z-draft-filler-issue-slack): 0.70 x the SM share, worst slowdown at batch ≤ 32
+FILLER = {  # W11: 0.70 x the SM share, worst slowdown at batch ≤ 32
     "60 SMs": Filler([(1, 0.222, 1.047)], dsms=128),
     "92 SMs": Filler([(1, 0.34, 1.106)], dsms=96),
 }
@@ -364,7 +364,7 @@ def tau_table(m):
                         "tau": A_V99 * macs / (a["ms_alone"] * 1e-3 * m.cap_max)})
     eta = r8k["macs"] / (r8k["ms"] * 1e-3 * m.cap)
     out.append({"kernel": "32 layers of linears, m = 8192 (measured)", "eta": eta, "tau": A_V99 * eta * m.mhz * 1e6 / F_MAX})
-    # T1's unfused attention at s = 8192, η at its read clock (note:20261015T1814Z-draft-rs-masked-gemm-cost)
+    # T1's unfused attention at s = 8192, η at its read clock
     for name, eta_t1 in [("QKᵀ s = 8192, materialized (T1)", 0.121), ("P·V s = 8192 (T1)", 0.443),
                          ("FA2 BF16 causal 8192 (vLLM)", m.eta_fa2), ("int8 FA at FA2's efficiency (assumed)", ETA_FA_INT8)]:
         out.append({"kernel": name, "eta": eta_t1, "tau": A_V99 * eta_t1 * m.mhz * 1e6 / F_MAX})

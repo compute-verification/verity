@@ -6,7 +6,7 @@ the statement binds the given partition and program digests. Run in the circuit 
 
 ``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.chunked`: a
 ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a
-``SPLITS`` split part or combine, or a row template the partition's ``chunk_cap`` names), composed by C-Flock's `UnitStager` on
+``SPLITS`` split part or combine, or a row template the partition's ``chunk_cap`` names), composed by Flock's `UnitStager` on
 the rows the window commits (`verity_vllm.pipeline.chunk_rows.unit_rows`), bound to the partition and program; no input set is
 read. ``--reads slots``: `UnitStager`'s ``reads``, a unit reading a pinned MUFU table laid out in lookup slots
 (``MoeRouterSigmoidBias``'s sigmoid inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the

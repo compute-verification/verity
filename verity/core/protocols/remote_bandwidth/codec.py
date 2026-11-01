@@ -18,7 +18,7 @@ K          a masked codec's: LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed �
 d_j        a bound chunk's digest: sha512/row/v2 of its payload, SHA512(P(32768) ‖ payload_j), its payload leaf's x_j
 b_j        a bound chunk's offset: LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed ‖ u32be 2^32 − 3 ‖ u64be j ‖ d_j)[0 : 64])
            mod p; under the seed's key b_j = 0
-c_a        an append's coin: 32 bytes the verifier draws once the append's payload digests are committed
+c_a        an append's coin: 32 bytes the verifier samples once the append's payload digests are committed
 b_j(c_a)   a bound chunk's offset under its append's coin: LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed ‖ u32be 2^32 − 4 ‖
            u64be j ‖ d_j ‖ c_a)[0 : 64]) mod p
 encode     x ↦ ρ(x + c_r + t(i) + b_j) for r = 0 … k − 1, from the payload word; masked, x ↦ σ_K(x) before each round
@@ -27,7 +27,7 @@ decode     x ↦ ρ⁻¹(x) − c_r − t(i) − b_j for r = k − 1 … 0; mask
 ~~~
 
 A chunk's key is the seed's (b_j = 0) or its own, bound (`encode(..., bound=True)`, `decode(..., d)`).  The seed's key
-is for chunks whose payloads were committed before the codec seed was drawn (a registration's): such a chunk's
+is for chunks whose payloads were committed before the codec seed was sampled (a registration's): such a chunk's
 encoding costs k roots a word whatever the payload.  A chunk written after the seed (a KV page) takes its bound key,
 with d_j kept beside it, since under the seed's key its writer could pick its encoding E (all zeros, or another
 chunk's) and write the payload `decode(E)`, holding nothing for it; under the bound key a chosen E decodes to a

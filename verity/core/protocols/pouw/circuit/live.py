@@ -35,14 +35,14 @@ preempted request or verifies draft tokens is refused (its rows are more than `t
 integration's `pouw_h1_static.Static`) has none. A tile of the
 round whose rows all lie at or past m (R·ti ≥ m) is dead. Its admit bits, [i < m], are all 0, so its receipt is `h1tile`'s
 canonical dead-tile receipt (`PouwH1Tile_v4`, `h1tile.reference`'s gated branch). Dense credit's population is the live
-tiles, so a dead tile is never drawn. The Lean statement is `Pouw.SecurityProofs.LiveCredit`
+tiles, so a dead tile is never sampled. The Lean statement is `Pouw.SecurityProofs.LiveCredit`
 (``Security/Proofs/Pouw/LiveCredit.lean``), whose `liveOk` is `live_ok`.
 
 `live_ok` is the unit on words, and `traced(T)` its gate circuit.
 
 **The live Program** (`program`) is a window's S rounds' units: one template, `PouwLiveSlots_v1{T}`, called once a round,
 unit s round s's. It is a Program of its own beside the window's (`h1window.program`), so the window's tile Program, its
-partition and its draw are untouched. Its parameters are named `PREFIX` and their role: ``slots`` (S·T slot leaves, round
+partition and its sample are untouched. Its parameters are named `PREFIX` and their role: ``slots`` (S·T slot leaves, round
 s's from row s·T), ``requests`` (T headers, read by every round), ``m`` (S rows) and ``round`` (S rows, row s the unit's
 ``s``). Its circuit file is the period-open's
 ``circuit_files["live"]``, and its partition is ``Q_template_instances`` over its template (`query`).

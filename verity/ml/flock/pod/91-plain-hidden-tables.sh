@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The plain hidden-output multi-table fixture (tests/test_lean_plain_hidden_tables.py): 91-plain-hidden.sh's statement
 # (tests/plain_hidden.py: RoPE d64 instances with hidden outputs, hm96-sha512 leaves, its program and partition), proved
-# without --zk on OS coins in loopback sessions of two tables under a subset draw (`serve/prove --session-tables 2 --draw
+# without --zk on OS coins in loopback sessions of two tables under a subset sample (`serve/prove --session-tables 2 --draw
 # subset:K`), then Lean's `flock-verify verify --plain-tables --session-tables 2 --coins os` on them with the verifier's
 # own program and partition (PROTOCOL.md §16.15, FailClosed.SoundExecHJ), and once without the flag. The staged files and
 # the sessions go into the evidence store as a fixture (`research data put --kind fixture/v1 --preserve`), whose id
@@ -9,7 +9,7 @@
 # only. Outputs under out/: host.txt, stage.json, serve.log, prove.txt, prove.err, lean-plain.log and lean-unflagged.log
 # (their VERDICT lines), fixture.txt.
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
-# env: CPUS=16  SESSIONS=2  K=16 (the subset draw's units, of the stage's 32: 8 a table)  FLOCK_WORK=/workspace, or where
+# env: CPUS=16  SESSIONS=2  K=16 (the subset sample's units, of the stage's 32: 8 a table)  FLOCK_WORK=/workspace, or where
 #      /workspace isn't writable /workspace/jobs/pc-read-gadget (node 1) else /workspace/cache/plain-hidden (the prover
 #      build and its venv, shared with 91-plain-hidden.sh)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done

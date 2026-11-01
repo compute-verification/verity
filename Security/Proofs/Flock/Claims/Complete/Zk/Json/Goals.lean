@@ -73,7 +73,7 @@ theorem RunZk.json (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 
         streams.map (·.map liveRound)⟩ := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS o.toCaseZk
-  obtain ⟨hz, hc⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hc, -⟩ := S.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, hR⟩ := hP o.toCaseZk st (by rw [hst]; simp)
