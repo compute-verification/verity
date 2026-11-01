@@ -78,7 +78,7 @@ structure Inner where
   links : Option LinkShape := none
   deriving Repr, BEq, Inhabited
 
-/-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
 /-- The fewest bits that number `n` things: `0` for at most one. -/

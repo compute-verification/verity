@@ -1,14 +1,14 @@
 import Proofs.Flock.Soundness.ZerocheckPhase
 
 /-!
-# Ligerito's coins (PROTOCOL.md §13)
+# Ligerito's coins (`Flock.Ligerito`)
 
 The pieces of the Ligerito phase that do not depend on its weight bookkeeping:
 
 * a `K` coin (`drawK`, two `F` limbs) is uniform on `K` (`prCoin_ofLimbs`, from
   `Arith.Correct.ofLimbs_bijective`), so a step on it costs `prCoin bad` over `K`
   (`value_drawK_le`);
-* a Ligerito round's quadratic `from(msg, s)` sums to `s` by construction (§13.2), so a false
+* a Ligerito round's quadratic `from(msg, s)` sums to `s` by construction (`Flock.Ligerito`), so a false
   claim survives a `K` coin with probability at most `2/|K|` (`prCoin_fromMsg_le`);
 * the consistency coins `α` batch per-query mismatches through `eq(α)`: a nonzero mismatch survives
   with probability at most `⌈log2 Q⌉/|F|` (`prCoin_eqList_le`).
@@ -62,7 +62,7 @@ theorem quadPoly_natDegree_le (q : Quad K) : (quadPoly q).natDegree ≤ 2 := by
   · exact (natDegree_C_mul_le _ _).trans (by simp)
 
 omit [Fintype K] [DecidableEq K] in
-/-- `from(msg, s)` sums to `s` over `{0, 1}` (§13.2). -/
+/-- `from(msg, s)` sums to `s` over `{0, 1}` (`Flock.Ligerito`). -/
 theorem fromMsg_sum [CharP K 2] (msg : K × K) (s : K) :
     (fromMsg msg s).eval 0 + (fromMsg msg s).eval 1 = s := by
   simp only [fromMsg, Quad.eval, mul_zero, zero_pow two_ne_zero, add_zero, mul_one, one_pow]

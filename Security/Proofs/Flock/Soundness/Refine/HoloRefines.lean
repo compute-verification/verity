@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.Refine.HoloRep
 
 /-!
-# One rep with hidden units refines the model's `holoRepC` (PROTOCOL.md §9–§14, L4′)
+# One rep with hidden units refines the model's `holoRepC` (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, L4′)
 
 `holoLincheck_refines` is `lincheck_refines` at `holoLincheckT`: the model's `holoLincheck`, played with the lincheck's
 messages and `h` (`holoLcMsgs`) and the coins of the rounds consumed but `z_partial`'s, which issued none, returns the

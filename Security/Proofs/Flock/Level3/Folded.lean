@@ -1,5 +1,5 @@
 /-
-Level 3: the lincheck's `Stmt.folded` (PROTOCOL.md §10). `folded_eq`: when `Stmt.folded` succeeds, its vector is
+Level 3: the lincheck's `Stmt.folded` (`Flock.Piop`). `folded_eq`: when `Stmt.folded` succeeds, its vector is
 `Stmt.fold`'s with `β` at the pin, halved at `ts` in turn, whether it read the block's structure (`foldedPartial`, a
 templated unit's range from its template: `partialRangesT_eq`) or folded flat. The lemmas it reads are `FoldedBase`.
 -/

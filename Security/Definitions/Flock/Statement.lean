@@ -6,14 +6,14 @@ import Mathlib.Data.Fintype.Card
 /-!
 # Statements, witnesses, claims and the committed values
 
-Every statement proves one block R1CS over GF(2) (PROTOCOL.md §16.1): `A·z ∘ B·z = z` with
+Every statement proves one block R1CS over GF(2) (`Flock.Statement`): `A·z ∘ B·z = z` with
 `A = I ⊗ A₀`, `B = I ⊗ B₀`, a pinned constant column equal to 1 in every block, and public
-regions whose bits the verifier knows (§16.2). This block R1CS is the circuit's lowered layout;
+regions whose bits the verifier knows (`Flock.Statement`). This block R1CS is the circuit's lowered layout;
 that it means the named circuit is the lowering theorem (level 3), outside this lane.
 
-**The committed values.** The prover commits a level-0 table `C₀` (§13.1: `2^k₀` lanes, one
+**The committed values.** The prover commits a level-0 table `C₀` (`Flock.Ligerito`: `2^k₀` lanes, one
 Reed–Solomon codeword position per column). In Flock's list-decoding regime a table is close to
-up to `L₀` codewords, and no out-of-domain sample follows the commitment (§9.1, paper Remark 11),
+up to `L₀` codewords, and no out-of-domain sample follows the commitment (`Flock.Piop`, paper Remark 11),
 so the commitment binds to that short list, not to one witness. `CommittedSatisfies` says that
 some message whose encoding is within the level-0 proximity radius of `C₀` unpacks to a witness
 satisfying the statement. This is the claim soundness certifies.
@@ -21,10 +21,10 @@ satisfying the statement. This is the claim soundness certifies.
 
 namespace FlockSoundness.Model
 
-/-- A witness: `2^m` bits; bit `a` is at address `a = s + 64·t + 2^k_log·o` (§9). -/
+/-- A witness: `2^m` bits; bit `a` is at address `a = s + 64·t + 2^k_log·o` (`Flock.Piop`). -/
 abbrev Witness (m : ℕ) := Fin (2 ^ m) → ZMod 2
 
-/-- A public region (§16.2): the in-block addresses whose non-free bits equal `fixedBits`
+/-- A public region (`Flock.Statement`): the in-block addresses whose non-free bits equal `fixedBits`
 (`fixedBits j` is `mask_j ∧ fixed_j`), with the known value of each region bit in each block
 (`bits b i` is bit `i` of `bytes(region, b)`). -/
 structure Region (kLog nbl : ℕ) where
@@ -37,12 +37,12 @@ def Region.inBlock {kLog nbl : ℕ} (R : Region kLog nbl) (i : ℕ) : ℕ :=
   (∑ t : Fin R.free.length, if i.testBit t then 2 ^ (R.free.get t).val else 0)
     + ∑ j : Fin kLog, if j ∉ R.free ∧ R.fixedBits j then 2 ^ j.val else 0
 
-/-- One block R1CS statement (§16.1–§16.2). -/
+/-- One block R1CS statement (`Flock.Statement`). -/
 structure Statement where
   m : ℕ
   kLog : ℕ
   hk : kLog ≤ m
-  /-- `k_skip = 6 ≤ k_log`: the skip index is address bits 0–5 of every block (§9, §10). -/
+  /-- `k_skip = 6 ≤ k_log`: the skip index is address bits 0–5 of every block (`Flock.Piop`). -/
   hk6 : 6 ≤ kLog
   pin : Fin (2 ^ kLog)
   A₀ : Matrix (Fin (2 ^ kLog)) (Fin (2 ^ kLog)) (ZMod 2)
@@ -87,7 +87,7 @@ end Statement
 
 variable {F : Type} [Field F]
 
-/-- A claim handed to the opening (§11): `(value, skip weights, point)`. -/
+/-- A claim handed to the opening (`Flock.Piop`): `(value, skip weights, point)`. -/
 structure Claim (F : Type) (m : ℕ) where
   value : F
   skip : Fin 64 → F
@@ -105,7 +105,7 @@ def Claim.Holds {m : ℕ} (c : Claim F m) (z : Witness m) : Prop := c.eval z = c
 
 /-! ## The committed values -/
 
-/-- A level-0 table: `2^k₀` lanes, `2^d₀` codeword positions (§13.1). -/
+/-- A level-0 table: `2^k₀` lanes, `2^d₀` codeword positions (`Flock.Ligerito`). -/
 abbrev Table (F : Type) (lanes d : ℕ) := Fin (2 ^ lanes) → Fin (2 ^ d) → F
 
 /-- A level-0 message: `2^k₀` lanes of `2^cols₀` message columns. -/
@@ -113,7 +113,7 @@ abbrev Message (F : Type) (lanes cols : ℕ) := Fin (2 ^ lanes) → Fin (2 ^ col
 
 variable {K : Type} [Field K]
 
-/-- The interleaved encoding of a message (§13.1). -/
+/-- The interleaved encoding of a message (`Flock.Ligerito`). -/
 def encode (A : Arith F K) {lanes cols : ℕ} (d : ℕ) (M : Message F lanes cols) : Table F lanes d :=
   fun ℓ q => A.encodeAt cols (M ℓ) q
 
@@ -123,7 +123,7 @@ positions (paper Appendix C.3). -/
 def Close {lanes d : ℕ} (γ : ℝ) (C U : Table F lanes d) : Prop :=
   ((Finset.univ.filter fun q : Fin (2 ^ d) => ∀ ℓ, C ℓ q = U ℓ q).card : ℝ) ≥ (1 - γ) * 2 ^ d
 
-/-- The witness a level-0 message packs (§12.1, §13.1): table entry `t[c·2^k₀ + ℓ] = M[ℓ][c]` is
+/-- The witness a level-0 message packs (`Flock.Opening`, `Flock.Ligerito`): table entry `t[c·2^k₀ + ℓ] = M[ℓ][c]` is
 the packed element `f(y) = Σ_v z[128y + v]·x^v`. -/
 def witnessOf (A : Arith F K) (m k₀ cols : ℕ) (M : Message F k₀ cols) : Witness m :=
   fun a =>
