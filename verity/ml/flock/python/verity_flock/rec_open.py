@@ -1,4 +1,4 @@
-"""V*'s opening check (hiding model architectures, lane rec-v0): one inner Ligerito opening climbs to the top node its position
+"""V*'s opening check (hiding model architectures): one inner Ligerito opening climbs to the top node its position
 names and adds its share of the level's consistency sums to a running sum, as a Boolean Definition, the M0 unit that proves
 it, and their plain-integer reference.
 
