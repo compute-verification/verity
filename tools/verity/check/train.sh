@@ -108,6 +108,9 @@ fi
   || die "${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check"
 tree="${TMPDIR:-/tmp}/train-${sha:0:12}${shard:+-${shard/\//of}}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
+# a tree git no longer lists as a worktree (half removed on the control pod's NFS TMPDIR) would refuse `worktree add`
+rm -rf "$tree" 2>/dev/null || rm -rf "$tree" || true
+git -C "$root" worktree prune
 git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
 exec 9>&-
 log="$tree.log"

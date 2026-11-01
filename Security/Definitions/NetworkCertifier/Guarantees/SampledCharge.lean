@@ -3,13 +3,13 @@ import Definitions.NetworkCertifier.SampledReg
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
 
 /-!
-# The sampled audit's charge: the leak bound when step units are sampled
+# The sampled audit's charge: the leak bound when step proof blocks are sampled
 
 Theorem 3's bounds on `constantRate` (`Guarantees`) count runs that the Program accepts exactly. A sampled
 audit gives that only at `δ ≥ miss(1)`, where no unit may be faulty. At a smaller `δ` it gives `Accepted` by the
-circuit's Program (`circuitProgram`) with advice also held at the faulty units' committed gates
+circuit's Program (`circuitProgram`) with advice also held at the faulty proof blocks' committed gates
 (`SampledAuditAccepted`, `Guarantees/SampledAudit`). `EncardAccSeqsSampledLe` counts those runs: the charge adds the
-faulty units' committed bits and `log2` of the number of possible faulty sets.
+faulty proof blocks' committed bits and `log2` of the number of possible faulty sets.
 
 **Composed with `SampledAuditAccepted`.** On the statements in its scope, which include that the layout fits the program
 (`BoundaryGates.Fits`), an accepted audit meets `RAcc δ` except with probability `δ + ε_ks + ε_bind` over the selection.
@@ -45,7 +45,7 @@ set_option linter.unusedVariables false
 the horizon `n`, a partition `P` and a design `d`. The observation sequences of length `n`, with jitter below `D`, that
 are accepted with some possible faulty set at `δ` (`AccSeqsSampled`) number at most
 `2^c · #faultySets · 2^β · D^n`. Here the inputs other than the ingress range over `As`, at most `2^c` values, and each
-possible faulty set's units commit at most `β` bits (`faultyBits`). That is
+possible faulty set's proof blocks commit at most `β` bits (`faultyBits`). That is
 `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits. At `δ ≥ miss(1)` no non-empty faulty set
 is possible, and the bound is `c + n·log2 D`, as when the Program is accepted exactly. -/
 def EncardAccSeqsSampledLe : Prop :=
