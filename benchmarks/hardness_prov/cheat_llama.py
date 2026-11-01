@@ -17,7 +17,8 @@ The gates, with bands from the released model's codes per kind over its 16 layer
 - spectral: the share of ‖q‖² in the top r singular values at most the max, for r in --spec-ranks.
 With --gates the cheater's loss adds squared hinges outside each band shrunk by --margin of its width: a count enters
 at its exact value with a sigmoid's gradient, a top-r share as the energy in a tracked subspace (warm-started power
-iterations every step, the subspace detached).
+iterations every step, the subspace detached). With --train-dither σ the hinges are taken on the codes after a fresh
+dither of σ (the cheater plans for the one-shot dither; his draws are independent of the measured one's).
 
 Each arm is then measured as committed, after a one-shot dither (served = absmax(s·q + σ·s·Z), Z Gaussian, each σ in
 --dither), and after a pass of --pass-steps distillation steps that adds σ_w·s·Z to every q and k latent after each
@@ -53,6 +54,7 @@ KINDS = ("q_proj", "k_proj")
 LAW = ("le15", "gt31", "gt63", "at127", "zero", "tail31")
 KD_CHUNK = 2048
 EVAL_SEED = 1234
+TRAIN_DITHER_SEED = 98765
 
 
 def log(*a):
@@ -91,6 +93,12 @@ def ste_round(u):
 
 def absmax_scale(w):
     return (w.detach().float().abs().amax(1) / 127).clamp_min(1e-12)
+
+
+def dithered(q, sigma, gen):
+    """The codes served after a dither of sigma LSB: absmax of q + sigma·Z, straight-through, the new scale held."""
+    u = q + sigma * torch.randn(q.shape, device=q.device, generator=gen)
+    return ste_round((u * (127 / u.detach().abs().amax(1).clamp_min(1e-12))[:, None]).clamp(-127, 127))
 
 
 def served_linear(x, q, s):
@@ -468,6 +476,8 @@ def main(argv=None):
     ap.add_argument("--init-iters", type=int, default=8, help="alternating projections fitting the start")
     ap.add_argument("--int-factors", action="store_true", help="A and B int8 (straight-through): an exact route")
     ap.add_argument("--gates", action="store_true")
+    ap.add_argument("--train-dither", type=float, default=0.0, help="the gates' hinges see the codes after a fresh "
+                    "dither of this many LSB each step")
     ap.add_argument("--margin", type=float, default=0.15, help="the cheater aims inside each band by this share")
     ap.add_argument("--lam", type=float, default=100.0)
     ap.add_argument("--tau", type=float, default=1.0, help="the counts' sigmoid width, codes")
@@ -548,16 +558,21 @@ def main(argv=None):
     trackers = {name: Tracker(m.codes()[0].shape[0], max(spec_ranks) + 16, "cuda", i)
                 for i, (name, (kind, m)) in enumerate(mods.items())}
 
-    def gates_loss(step, extra=None, gates=True):
-        """The cheater's penalty: the gates' hinges (with gates) plus extra(name, q), averaged over q and k, × lam."""
+    dither_gen = torch.Generator(device="cuda")
+    dither_gen.manual_seed(TRAIN_DITHER_SEED)
+
+    def gates_loss(step, extra=None, gates=True, dither=0.0):
+        """The cheater's penalty: the gates' hinges (with gates; on dithered codes with dither) plus extra(name, q),
+        averaged over q and k, × lam."""
         pens, worst = [], {}
         for name, (kind, m) in mods.items():
             q, _ = m.codes()
             pen = q.new_zeros(())
             if gates:
+                qg = dithered(q, dither, dither_gen) if dither else q
                 tr = trackers[name]
-                tr.update(q.detach(), args.power_iters if step > 0 else 8)
-                pen, w = gate_penalty(q, kind, bands, args.margin, tr, spec_ranks, args.tau)
+                tr.update(qg.detach(), args.power_iters if step > 0 else 8)
+                pen, w = gate_penalty(qg, kind, bands, args.margin, tr, spec_ranks, args.tau)
                 for k, v in w.items():
                     worst[f"{kind[0]}_{k}"] = max(worst.get(f"{kind[0]}_{k}", 0.0), v)
             if extra is not None:
@@ -583,7 +598,8 @@ def main(argv=None):
     def qk_ids():
         return {id(p) for _, m in mods.values() for p in m.parameters()}
 
-    penalty = (lambda step: gates_loss(step)) if (args.arm == "cheat" and args.gates) else None
+    penalty = ((lambda step: gates_loss(step, dither=args.train_dither)) if (args.arm == "cheat" and args.gates)
+               else None)
     if args.steps > 0:
         res["train"] = {"curve": train(model, teacher, train_ids, args, args.steps, 0, args.lr, extra_groups, project,
                                        penalty, "train", val_ids, qk_ids())}
