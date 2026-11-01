@@ -123,6 +123,24 @@ def Registry.find (R : Registry) (sid i r : Nat) : Option (Nat × Rep) := do
 def Registry.put (R : Registry) (p : Rep) : Registry :=
   { R with reps := R.reps.map fun q => if q.sid == p.sid && q.table == p.table && q.rep == p.rep then p else q }
 
+/-- **The live session named `name`** (`Level0.nameOf`) in the loop's frames `R` and level 0s `L0`, for a request `what`;
+else why not: a name no live session has, or a session before its `Hello`. -/
+def Registry.named (R : Registry) (L0 : Level0.Registry) (what name : String) : Except String Session := do
+  let some (_, sid) := L0.sessions.find? (·.1 == name)
+    | throw s!"a {what} for a session the loop is not serving (coin tree root {name})"
+  let some s := R.sessions.find? (·.sid == sid) | throw s!"a {what} of session {sid} before its Hello"
+  return s
+
+/-- **Where the loop writes words of its own into table `j`'s packed witness** for a level 0 at `m` of the session named
+`name`: the mask slot of the table's statement (`Drive.maskSlot`) and its `kLog`; else why not: a session the loop is not
+serving, a table it does not have, or an `m` other than the statement's. -/
+def Registry.maskOf (R : Registry) (L0 : Level0.Registry) (name : String) (j m : Nat) :
+    Except String (Frame.MaskSlot × Nat) := do
+  let s ← R.named L0 "level-0 request" name
+  let some st := s.sts[j]? | throw s!"a level-0 request for table {j} of a session with {s.sts.size} tables"
+  if m != st.m then throw s!"a level-0 request at m = {m}, where table {j}'s statement is at m = {st.m}"
+  return (← Drive.maskSlot st, st.c.kLog)
+
 /-- **Table `i`'s rep `r` of the session named `name` starts**, for the request line `line` on `ch`: `rep NAME I R` is
 answered `ok 64` followed by the pads' root (`Frame.padsRoot`) over the rep's draws, drawn from the operating system at
 the statement's start (`Drive.start`) and kept in the rep's frame, never sent; a rep's frame starts once. Anything else is
@@ -134,9 +152,10 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Regi
   | ["rep", name, i, r] =>
     let (some i, some r) := (i.toNat?, r.toNat?) | err s!"a request `{line.trim}`"
     if r > 1 then return (← err s!"rep {r}: a table has reps 0 and 1")
-    let some (_, sid) := (← l0s.get).sessions.find? (·.1 == name)
-      | err s!"a rep for a session the loop is not serving (coin tree root {name})"
-    let some s := (← reg.get).sessions.find? (·.sid == sid) | err s!"a rep of session {sid} before its Hello"
+    let s ← match (← reg.get).named (← l0s.get) "rep" name with
+      | .ok s => pure s
+      | .error e => return (← err e)
+    let sid := s.sid
     let some st := s.sts[i]? | err s!"table {i} of the session's {s.sts.size}"
     let (lay, mask) ← match Drive.start st with
       | .ok x => pure x
@@ -346,10 +365,11 @@ def ask (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry)
   | [what, name, i, r] =>
     let (some i, some r) := (i.toNat?, r.toNat?) | err s!"a request `{line.trim}`"
     unless what == "place" || what == "vals" do return (← err s!"a request `{line.trim}`")
-    let some (_, sid) := (← l0s.get).sessions.find? (·.1 == name)
-      | err s!"a {what} for a session the loop is not serving (coin tree root {name})"
     let R ← reg.get
-    let some s := R.sessions.find? (·.sid == sid) | err s!"a {what} of session {sid} before its Hello"
+    let s ← match R.named (← l0s.get) what name with
+      | .ok s => pure s
+      | .error e => return (← err e)
+    let sid := s.sid
     let some (_, p) := R.find sid i r | err s!"a {what} of table {i} rep {r}, whose frame the loop has not started"
     if what == "vals" then
       let b := wordBytes p.vals

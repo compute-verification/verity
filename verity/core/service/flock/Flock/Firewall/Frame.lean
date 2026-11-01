@@ -188,6 +188,17 @@ structure MaskSlot where
 /-- Word `i` of the slot, in a circuit of `2^kLog` coordinates a block (128 a word). -/
 def MaskSlot.word (m : MaskSlot) (kLog i : Nat) : Nat := (i / m.n) * 2 ^ (kLog - 7) + m.w0 + i % m.n
 
+/-- The slot's words: `n` in each of its blocks. -/
+def MaskSlot.size (m : MaskSlot) : Nat := m.n * m.blocks
+
+/-- **The packed witness `g` with the slot's words `w` in it**: word `i` of `w` at `m.word kLog i`, every other word `g`'s;
+refused unless `w` has the slot's `m.size` words and each falls inside `g`. -/
+def MaskSlot.fill (m : MaskSlot) (kLog : Nat) (g w : Array F128) : V (Array F128) := do
+  if w.size != m.size then throw s!"the mask slot: {w.size} words, where it has {m.size}"
+  if let some i := (Array.range m.size).find? (m.word kLog · ≥ g.size) then
+    throw s!"the mask slot: its word {m.word kLog i} is past a {g.size}-word witness"
+  return (Array.range m.size).foldl (fun g i => g.set! (m.word kLog i) w[i]!) g
+
 /-- The GF(2)-rank of the rows `(eq(p_1, x), …, eq(p_k, x))` over the slot's words `x` (`zk_veil::mask_rank_ok`): each
 row reduced into an echelon basis, its pivot its lowest set bit, until the basis holds all `128 k` columns. Each reduction
 clears the row's lowest set bit and sets none below it, so `128 k` of them settle a row. -/
@@ -760,10 +771,10 @@ def cmd : List String → IO UInt32 := cmdWith IO.getRandomBytes
 /-- The most bytes one `tap` request takes. -/
 def TAP_MAX : Nat := 2 ^ 24
 
-/-- `flock-firewall tap`: the OS bytes of every other draw of a firewalled prover (the mask slot's words, level 0's hiding,
-the leaf salts of every tree but the pads', the coin tree's nonce), which the prover takes from here and never from the OS
-itself. Each request is a line `N`, `N ≤ TAP_MAX`, answered with `N` bytes of `IO.getRandomBytes`. Anything else ends it
-with exit 1, and its end of input with exit 0. -/
+/-- `flock-firewall tap`: the OS bytes of every other draw of a firewalled prover (level 0's hiding, the leaf salts of every
+tree but the pads', the coin tree's nonce), which the prover takes from here and never from the OS itself. The mask slot's
+words are the session loop's own (`Session.level0`). Each request is a line `N`, `N ≤ TAP_MAX`, answered with `N` bytes of
+`IO.getRandomBytes`. Anything else ends it with exit 1, and its end of input with exit 0. -/
 def tapCmd (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout

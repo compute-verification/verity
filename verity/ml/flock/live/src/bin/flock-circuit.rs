@@ -200,16 +200,19 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
     z
 }
 
-/// Under the Lean session loop (`plan.lean_frames`), a firewalled table's level-0 hiding and salts are the loop's: it samples
-/// them for the host's packed witness `z` and commits level 0 on them (`Flock.Firewall.Level0`). They replace `l0`'s and
-/// the table's level-0 salts, so the prover commits the codeword the loop did, and the loop's root is returned: the root of
-/// record. The loop keeps it for table `j` of the session whose `Hello` was answered `coins`, until that session ends, and
-/// draws a table's level 0 once. Without the loop, nothing changes and nothing is returned. Under `FC_LEVEL0_TAMPER=MODE`
-/// (the selftest's `zk_worker_level0`), table 0 asks the loop for one more level 0 after its own: `second` for table 0
-/// again, `past` for a table the session does not have (index [`LEVEL0_PAST`]); the loop's refusal goes to
-/// [`LEVEL0_REFUSED`] (a sample it answers goes there as `drawn again`), and the session goes on on the first draw.
+/// Under the Lean session loop (`plan.lean_frames`), a firewalled table's mask-slot words, level-0 hiding and salts are the
+/// loop's: it samples them for the host's packed witness, writes the words into its mask slot and commits level 0 on them
+/// (`Flock.Firewall.Level0`). The words replace the mask slot's in the host witness `w` (`z`, `a` and `b`, whose circuit is
+/// the identity there, and the lincheck's packing of `z`), the hiding `l0`'s and the salts the table's level-0 salts, so the
+/// prover commits the codeword the loop did, and the loop's root is returned: the root of record. The loop keeps it for
+/// table `j` of the session whose `Hello` was answered `coins`, until that session ends, and draws a table's level 0 once.
+/// Without the loop, nothing changes and nothing is returned. Under `FC_LEVEL0_TAMPER=MODE` (the selftest's
+/// `zk_worker_level0`), table 0 asks the loop for one more level 0 after its own: `second` for table 0 again, `past` for a
+/// table the session does not have (index [`LEVEL0_PAST`]); the loop's refusal goes to [`LEVEL0_REFUSED`] (a sample it
+/// answers goes there as `drawn again`), and the session goes on on the first draw. `own-mask` instead fills table 0's mask
+/// slot with [`steer`]'s word and keeps it, never taking the loop's words. [`LEVEL0_MASK`] records what the loop answered.
 #[cfg(feature = "sha512")]
-fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], j: usize, z: &[F128],
+fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], j: usize, w: &mut Witness,
                l0: &mut flock_core::pcs::ligerito::zk::Level0Zk, salts: &Mutex<flock_live::zk_hooks::LeafSalts>)
                -> Result<Option<Vec<u8>>, String> {
     use flock_core::pcs::ligerito::zk::EXTRA_LANES;
@@ -217,24 +220,42 @@ fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], j: 
     if plan.zk_zero_pads {
         return Err("FIREWALL-REFUSED: the Lean session loop draws level 0's hiding; zero pads are Rust's control".into());
     }
+    let tamper = std::env::var("FC_LEVEL0_TAMPER").unwrap_or_default();
+    let own_mask = j == 0 && tamper == "own-mask";
+    let words = mask_words(st);
+    let (z, a, b, zl) = w;
+    if own_mask {
+        for &i in &words {
+            (z[i], a[i], b[i]) = (steer(), steer(), steer());
+        }
+    }
+    let handed: Vec<F128> = words.iter().map(|&i| z[i]).collect();
     let pcs = pcs_of(st, lig);
     let lc = pcs.ligerito_prover_config().expect("Ligerito config");
     let (session, t_pad) = (flock_live::firewall::level0_session(coins), l0.t_pad);
-    let draw = |table: usize| flock_live::firewall::lean_level0(addr, &session, table, st.m, z, 1 << lc.initial_log_msg_cols,
+    let z_sent: &[F128] = &z[..];
+    let draw = |table: usize| flock_live::firewall::lean_level0(addr, &session, table, st.m, z_sent, words.len(), 1 << lc.initial_log_msg_cols,
                                                                 (1 << lc.initial_k) + EXTRA_LANES, t_pad, pcs.n_leaves());
     let got = draw(j)?;
-    let tamper = std::env::var("FC_LEVEL0_TAMPER").unwrap_or_default();
-    if j == 0 && !tamper.is_empty() {
-        let again = match tamper.as_str() {
-            "second" => draw(0),
-            "past" => draw(LEVEL0_PAST),
-            m => panic!("FC_LEVEL0_TAMPER={m}: second or past"),
-        };
+    if j == 0 && (tamper == "second" || tamper == "past") {
+        let again = draw(if tamper == "second" { 0 } else { LEVEL0_PAST });
         *LEVEL0_REFUSED.lock().unwrap_or_else(PoisonError::into_inner) = Some(match again {
             Ok(_) => "drawn again".to_string(),
             Err(e) => e,
         });
+    } else if j == 0 && !tamper.is_empty() && !own_mask {
+        panic!("FC_LEVEL0_TAMPER={tamper}: second, past or own-mask");
     }
+    if j == 0 {
+        let kept = handed.iter().zip(&got.mask).filter(|(h, x)| h == x).count();
+        *LEVEL0_MASK.lock().unwrap_or_else(PoisonError::into_inner) = Some((got.mask.len(), kept));
+    }
+    if !own_mask {
+        for (&i, &x) in words.iter().zip(&got.mask) {
+            (z[i], a[i], b[i]) = (x, x, x);
+        }
+    }
+    *zl = flock_core::lincheck::pack_z_lincheck_from_packed(&z[..], st.m, st.c.k_log);
     l0.extra = got.extra.try_into().map_err(|_| "the Lean loop's level 0: not four extra lanes".to_string())?;
     l0.pads = got.pads;
     salts.lock().unwrap_or_else(PoisonError::into_inner).set_level0(got.salts)?;
@@ -245,9 +266,12 @@ fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], j: 
 const LEVEL0_PAST: usize = 1_000_000;
 /// What the loop answered `FC_LEVEL0_TAMPER`'s extra level-0 request: its refusal, or `drawn again`.
 static LEVEL0_REFUSED: Mutex<Option<String>> = Mutex::new(None);
+/// Table 0's mask slot as the loop answered it: its words, and how many of them are the word the host witness handed the
+/// loop held in their place.
+static LEVEL0_MASK: Mutex<Option<(usize, usize)>> = Mutex::new(None);
 
 #[cfg(not(feature = "sha512"))]
-fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: usize, _: &[F128], _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
+fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: usize, _: &mut Witness, _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
                _: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Result<Option<Vec<u8>>, String> {
     Ok(None)
 }
@@ -3275,8 +3299,9 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     });
     let mask_words = 1usize << (st.c.meta["mask_log"].as_u64().unwrap_or(14) as usize - 7);
     // M1: the mask slot's words are uniform (they hide the non-region claims' ring-switch s_hat_v). A block's are sampled once and
-    // kept: a proving build's are OS reads, and every build of this witness (rep 1's own, the device's) commits one level 0
-    let random = plan.mask_random || (is_zk(st) && !plan.zk_zero_pads);
+    // kept: a proving build's are OS reads, and every build of this witness (rep 1's own, the device's) commits one level 0.
+    // Under the Lean session loop a firewalled table's are the loop's, which it writes into the witness (`lean_level0`)
+    let random = plan.mask_random || (is_zk(st) && !plan.zk_zero_pads && !(plan.lean_frames.is_some() && firewall_on(st)));
     let hooks = Arc::new(Mutex::new(NoMask::for_table(seed, table as u64)));
     let drawn: Arc<Vec<std::sync::OnceLock<Vec<F128>>>> = Arc::new((0..if random { st.blocks() } else { 0 }).map(|_| Default::default()).collect());
     let mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b| {
@@ -3570,8 +3595,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let mut l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
             // under the ZK server the root is the Lean session loop's
-            let lean = match (firewall_on(&tb.st), l0.as_mut(), wits[j].1.as_ref()) {
-                (true, Some(l), Some(WitData::Host((z, ..)))) => Some(lean_level0(plan, &tb.st, lig, &commit, j, z, l, &salts_t[j])?
+            let lean = match (firewall_on(&tb.st), l0.as_mut(), wits[j].1.as_mut()) {
+                (true, Some(l), Some(WitData::Host(w))) => Some(lean_level0(plan, &tb.st, lig, &commit, j, w, l, &salts_t[j])?
                     .ok_or_else(|| flock_live::firewall::refused("a firewalled table without the Lean session loop's level 0"))?),
                 _ => None,
             };
@@ -3603,8 +3628,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let tl0 = Instant::now();
             let mut zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
-            let lean_root0 = match (j, firewalled, zk_level0.as_mut(), wt0.as_ref()) {
-                (0, true, Some(l0), Some(WitData::Host((z, ..)))) => lean_level0(plan, st, lig, &commit, 0, z, l0, salts)?,
+            let lean_root0 = match (j, firewalled, zk_level0.as_mut(), wt0.as_mut()) {
+                (0, true, Some(l0), Some(WitData::Host(w))) => lean_level0(plan, st, lig, &commit, 0, w, l0, salts)?,
                 _ => None,
             };
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() + t_table };
@@ -5038,6 +5063,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen,
            "wire_refused": refused, "finish_refused": FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner).clone(),
            "level0_refused": LEVEL0_REFUSED.lock().unwrap_or_else(PoisonError::into_inner).clone(),
+           "level0_mask": LEVEL0_MASK.lock().unwrap_or_else(PoisonError::into_inner).map(|(n, kept)| json!({"words": n, "kept": kept})),
            "steered": load(&STEERED), "steer_seen": load(&steer_seen),
            "own_pads": FIREWALLED_OWN_PADS.load(std::sync::atomic::Ordering::SeqCst)})
 }
@@ -5147,10 +5173,14 @@ fn worker_finish_case(gpu: bool) -> Value {
 }
 
 /// `zk_worker_level0` (live PROTOCOL.md §10.4): the level 0 a session binds is the loop's one sample for each table, never one
-/// the prover picks among several. Beside an honest firewalled CPU session, one session per `FC_LEVEL0_TAMPER` mode, each in
-/// a process of its own, whose table 0 asks the loop's level 0 for one more after its own: for table 0 again (`second`), or
-/// for a table the session does not have (`past`). The loop refuses it, nothing more is sampled, and the session goes on on the
-/// first draw: the verifier gets the honest session's every request, at its sizes, and accepts.
+/// the prover picks among several, and its mask slot's words are the loop's. Beside an honest firewalled CPU session, one
+/// session per `FC_LEVEL0_TAMPER` mode, each in a process of its own, whose table 0 asks the loop's level 0 for one more after
+/// its own: for table 0 again (`second`), or for a table the session does not have (`past`). The loop refuses it, nothing more
+/// is sampled, and the session goes on on the first draw: the verifier gets the honest session's every request, at its sizes,
+/// and accepts. In the honest session the loop answers every mask word, none of them the witness's. One more session's worker
+/// fills table 0's mask slot with a word of its own and keeps it (`own-mask`): the loop commits its own words over it, so the
+/// device's level 0 is not the session's, the rep fails at the `Commit` and the session stops at its `Finish` with no proof,
+/// the verifier getting the honest session's every other request at its sizes.
 fn worker_level0_case(gpu: bool) -> Value {
     let name = "zk_worker_level0";
     if gpu {
@@ -5164,7 +5194,8 @@ fn worker_level0_case(gpu: bool) -> Value {
     let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
     let honest = worker_subsession(&[]);
     let h = seen(&honest);
-    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0 && honest["level0_refused"].is_null();
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0 && honest["level0_refused"].is_null()
+        && honest["level0_mask"]["words"].as_u64().is_some_and(|n| n > 0) && honest["level0_mask"]["kept"] == 0;
     let past = format!("a level-0 request for table {LEVEL0_PAST} of a session with ");
     let modes: Vec<Value> = [("second", "a second level-0 request for table 0 of this session"), ("past", past.as_str())].iter().map(|&(m, why)| {
         let v = worker_subsession(&[("FC_LEVEL0_TAMPER", m.to_string())]);
@@ -5176,9 +5207,21 @@ fn worker_level0_case(gpu: bool) -> Value {
                "error": v["error"], "requests": s.len(),
                "first_miss": first_miss.map(|i| json!({"at": i, "honest": h.get(i), "tampered": s.get(i)}))})
     }).collect();
-    json!({"case": name, "expect": "each extra level-0 request refused by the loop, the session on its one draw: the honest session's requests, accepted",
-           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
-           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
+    let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
+    let v = worker_subsession(&[("FC_LEVEL0_TAMPER", "own-mask".to_string())]);
+    let s = seen(&v);
+    let stopped = v["prover_stopped"].as_str().unwrap_or("");
+    let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
+    let own_ok = v["accepted"] == false && v["level0_mask"]["kept"] == 0 && stopped.contains("level-0 root: the device committed")
+        && first_miss.is_none();
+    json!({"case": name, "expect": "each extra level-0 request refused by the loop, the session on its one draw: the honest session's requests, accepted; \
+                                    the mask slot's words the loop's, and a worker keeping its own stopped at Finish, no proof",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len(), "level0_mask": honest["level0_mask"]},
+           "modes": modes,
+           "own_mask": {"ok": own_ok, "accepted": v["accepted"], "level0_mask": v["level0_mask"],
+                        "prover_stopped": stopped.chars().take(160).collect::<String>(), "error": v["error"], "requests": s.len(),
+                        "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "tampered": s.get(i)}))},
+           "pass": honest_ok && modes.iter().all(|c| c["ok"] == true) && own_ok})
 }
 
 /// `zk_worker_pads` (live PROTOCOL.md §10.4): the worker never holds a rep's pads, so no word it picks leaves as it picked it.

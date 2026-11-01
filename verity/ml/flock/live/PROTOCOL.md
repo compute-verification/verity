@@ -99,10 +99,10 @@ device's commit and the firewall's recheck take the same), each rep's pads in th
 with the table's witness. Under the outer firewall (§10.4) Lean reads all of them from the OS: each rep's frame in the
 Lean session loop draws the rep's `h`, `mu`, `pad_h`, `pad_mu`, `τ`'s salt and the pads tree's salts
 (`Flock.Firewall.Frame.Draws`, in the layout below with the same two products) and keeps them, the prover getting only the
-pads tree's root; the loop draws each table's level-0 hiding and salts, which the prover takes in place of its own (§10.2),
-and the Lean finish each rep's salts for levels ≥ 1; and `flock-firewall tap` serves every other read (the mask slot's
-words, every other tree's salts: `zk_hooks::set_os_source`). The coin tree's nonce is the loop's, sampled with the `Hello`
-it sends (§10.4).
+pads tree's root; the loop draws each table's mask-slot words, which it writes into the witness it commits, and the
+table's level-0 hiding and salts, which the prover takes in place of its own (§10.2); the Lean finish draws each rep's
+salts for levels ≥ 1; and `flock-firewall tap` serves every other read (every other tree's salts:
+`zk_hooks::set_os_source`). The coin tree's nonce is the loop's, sampled with the `Hello` it sends (§10.4).
 The addresses matter only under a test harness's injected seed (feature `seed-injection`), where
 `ProverRng` is ChaCha20 keyed by that seed and `f128s` reads `16n` bytes from byte offset `32·index` of stream `stream`, so
 the harness's proofs repeat. With `base = rep << 32`:
@@ -543,7 +543,7 @@ kept as an early tripwire).
 | pads label and root | the ZK server's own | the Lean frame samples the pads and the pads tree's salts, computes the root, and inserts both after the zerocheck's label; only the root reaches the prover |
 | masked algebraic values: `round1_ab'`, `round1_c'`, `G_j`, `final_a'`, `final_b'`, `q_j`, `z_partial'` | masked | the wire carries `v + h` with `h` uniform and the Lean frame's alone, so it is uniform whatever `v` is, and a worker, which never holds `h`, cannot pick what leaves. `v` enters the view only through §4's rows, which the Lean finish evaluates on the pads at the rep's end; a `v` that breaks a row stops the session at its `Finish` |
 | `final_c'` | the ZK server's own | the inner proof sends it, from the host |
-| `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6); the claim points are coins |
+| `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6), whose mask slot holds the words the Lean session loop drew and wrote into it (§10.2), so no worker picks the words that hide it; the claim points are coins |
 | `s_hat_v` of the region claims | recomputed | `Stmt::region_s_hat_v`, from public data |
 | Ligerito's `target` | recomputed | a function of the `s_hat_v` and the opening's coins (`r''`, `γ`) |
 | level 0's OOD value `y'`, lane messages `msg_j'`, `e^r'` | masked | as the algebraic values (`lg_ood`, `lg_msg`, `lg_e`) |
@@ -644,13 +644,17 @@ root`, §10.1). Its cost is reported per statement as `FIREWALL` lines (`t.firew
 Lean process's), beside the device's
 `t.encoding_commitment`.
 
-Through the Lean session loop (§10.4) level 0's hiding is the loop's, not the host's: for each table behind the ZK server the prover
-sends the loop its packed witness (`firewall::lean_level0`), and the loop samples the four extra lanes, every lane's padding
-and the level-0 salts from the OS, commits level 0 on them and keeps the table's `Flock.Firewall.Level0` (its `m`, level
-0's schedule and `t_pad`, the witness, the samples, the codeword's rows, the Merkle layers from the leaves to the cap, and
-the root, each `Link`'s function of the witness and samples: `Level0.ofDraws_ok`). The prover takes the samples in place of
-its own (`Level0Zk`'s `extra` and `pads`, `LeafSalts::set_level0`), so the device commits the codeword the loop did; the
-loop's root is the root of record.
+Through the Lean session loop (§10.4) level 0's hiding and the mask slot's words are the loop's, not the host's: for each
+table behind the ZK server the prover sends the loop its packed witness (`firewall::lean_level0`), and the loop samples the
+mask slot's words from the OS and writes them into the witness's mask slot (`Frames.Registry.maskOf`,
+`Frame.MaskSlot.fill`: the slot of the session's own statement for the table, at its `m`), samples the four extra lanes,
+every lane's padding and the level-0 salts, commits level 0 on them and keeps the table's `Flock.Firewall.Level0` (its `m`,
+level 0's schedule and `t_pad`, the witness, the samples, the codeword's rows, the Merkle layers from the leaves to the
+cap, and the root, each `Link`'s function of the witness and samples: `Level0.ofDraws_ok`). The prover writes the words
+into its own witness's mask slot (`z`, `a` and `b`, whose circuit is the identity there, and the lincheck's packing of
+`z`) and takes the samples in place of its own (`Level0Zk`'s `extra` and `pads`, `LeafSalts::set_level0`), so the device
+commits the codeword the loop did; the loop's root is the root of record. A worker that keeps words of its own in the slot
+commits another codeword, and the session stops at its `Finish` (`zk_worker_level0`'s `own-mask`).
 
 ### 10.3 The rule, inner phase (`rec_live`)
 
@@ -764,9 +768,11 @@ device round through, unmasked, to the loop (`firewall::Gate`).
 A connection there whose first line is `level0 SESSION TABLE M LEN`, followed by a table's `LEN`-byte packed witness, is
 table `TABLE`'s level 0 (`Session.level0`, §10.2) for the live session named `SESSION`: the hex of its coin tree's root,
 the first four words of its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and
-the `N` bytes of the extra lanes, the paddings and the salts the loop sampled, then its `R`-byte root, or `err WHY`. A
-session the loop isn't serving is refused, and so is a table the session lacks or a second request for a table: the loop
-draws each table's level 0 once (`Level0.Registry.draw`), so the prover can't draw again until a root suits it. The
+the `N` bytes of the mask slot's words, the extra lanes, the paddings and the salts the loop sampled, then its `R`-byte
+root, or `err WHY`; the loop wrote the words into the witness's mask slot before it committed level 0, whatever the
+witness held there. A session the loop isn't serving is refused, and so is a table the session lacks, an `M` other than
+the table's statement's, a witness of other than that `M`'s words, or a second request for a table: the loop draws each
+table's level 0 once (`Level0.Registry.draw`), so the prover can't draw again until a root suits it. The
 session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop drew for that
 session's table `i` at its statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would pad too few positions).
 Every `Level0` drawn for a session, committed or not, is freed when it ends (`Level0.Registry.close`).
@@ -868,8 +874,10 @@ loop sampled for each table (§10.2), because the device's level-0 commitment ne
 levels ≥ 1, which its trees take. None of them leaves the worker a free choice: the ZK server rechecks the device's
 level-0 root against its own commitment of the host witness under that hiding and those salts (§10.2), and every byte of
 the opening, level 0's values included, must equal the loop's own opening round (`Drive.openStep`) byte for byte, so
-nothing of level 0 the worker sends leaves except as the ZK server computed it. The mask slot's words it still reads from
-`flock-firewall tap` itself.
+nothing of level 0 the worker sends leaves except as the ZK server computed it. The worker also sees the mask slot's
+words, which the loop draws and writes into the witness it commits (§10.2), and which leave the worker no free choice
+either: a worker that keeps words of its own there commits another codeword, and the session stops at its `Finish`
+(`zk_worker_level0`).
 
 In a session of several tables each table has a ZK server of its own in turn: its salt context and recheck, and its reps'
 frames in the loop, one table's ending before the next table's begins. A later table's level-0 root leaves in table 0's `Commit`, before any

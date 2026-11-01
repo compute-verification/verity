@@ -27,10 +27,11 @@ the prover's bytes:
   frame's own on the rounds the loop's finish computed and handed the loop's frames before the prover relays them
   (`Frame.innerSched`, `Frames.Registry.innerRound`). Its coins, once opened, are the frame's (`Frames.feedOf`,
   `Frames.coins`), and the prover receives them only once the frame took them.
-* Each table's level 0 is the loop's: on its frames port the loop draws a table's level-0 hiding and salts from the
-  operating system for the packed witness the prover hands it, and commits level 0 on them (`level0`, `Level0.draw`),
-  for the live session and table the request names (by its coin tree's root, `Level0.nameOf`), once a table: a second
-  request for a table is refused (`Level0.Registry.draw`). A `Commit`'s roots leave only as each table's one draw for
+* Each table's level 0 is the loop's: on its frames port the loop draws a table's mask-slot words, level-0 hiding and
+  salts from the operating system for the packed witness the prover hands it, writes the words into the witness's mask
+  slot, and commits level 0 on them (`level0`, `Level0.draw`), for the live session and table the request names (by its
+  coin tree's root, `Level0.nameOf`), at its statement's `m`, once a table: a second request for a table is refused
+  (`Level0.Registry.draw`). A `Commit`'s roots leave only as each table's one draw for
   its own session, at its table's `m` (`Level0.commit`), and the `Commit` that leaves is the
   loop's (`commitFrame`): `root_F` the session's Σ, the roots its tables' level 0 now bound, and no public words. Every
   level 0 drawn for a session, bound or not, is gone when it ends (`Level0.Registry.close`).
@@ -699,27 +700,36 @@ def sockChan (c : Socket.Client) : IO Frame.Chan := do
   return { getLine, readExact, write := fun b => (c.sendAll #[b]).block, flush := pure () }
 
 /-- **A table's level 0, drawn by the loop**, for the request line `line` on `ch`: `level0 SESSION TABLE M LEN` followed by
-the `LEN` bytes of the session's table `TABLE`'s packed witness is answered `ok N R` followed by the `N` bytes of the
-hiding the loop drew for it from the operating system and the root it committed, the last `R` of them (`Level0.draw`,
-`Level0.drawsOf`). The table's `Level0` is kept in `l0s` for table `TABLE` of the live session named `SESSION`
-(`Level0.nameOf`: the hex of its coin tree's root) until that session ends, and only that session's `Commit` may carry its
-root, as that table's. A table's level 0 is drawn once a session: a second request for it, or one for a table the session
-does not have, is refused, and nothing drawn for it is kept or answered (`Level0.Registry.draw`, in the one update that
-keeps the first). Anything else is answered `err WHY`. -/
-def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO Unit := do
+the `LEN` bytes of the session's table `TABLE`'s packed witness, at its statement's `M`, is answered `ok N R` followed by
+the `N` bytes of the mask slot's words, the hiding the loop drew for the table from the operating system and the root it
+committed, the last `R` of them. The loop writes its words into the witness's mask slot (`Frames.Registry.maskOf`,
+`Frame.MaskSlot.fill`) before it commits level 0 on it (`Level0.draw`, `Level0.drawsOf`), so the slot's words are the
+loop's whatever the prover's witness held there. The table's `Level0` is kept in `l0s` for table `TABLE` of the live
+session named `SESSION` (`Level0.nameOf`: the hex of its coin tree's root) until that session ends, and only that
+session's `Commit` may carry its root, as that table's. A table's level 0 is drawn once a session: a second request for
+it, or one for a table the session does not have or at another `M`, is refused, and nothing drawn for it is kept or
+answered (`Level0.Registry.draw`, in the one update that keeps the first). Anything else is answered `err WHY`. -/
+def level0 (ch : Frame.Chan) (reg : IO.Ref Frames.Registry) (l0s : IO.Ref Level0.Registry) (line : String) : IO Unit := do
   let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
   match (line.replace "\n" "").splitOn " " with
   | ["level0", name, j, m, len] =>
     let (some j, some m, some len) := (j.toNat?, m.toNat?, len.toNat?) | say s!"err a request `{line.trim}`"
     let b ← ch.readExact len
     if len % 16 != 0 then return (← say s!"err a {len}-byte witness, not whole words")
-    match ← Level0.draw IO.getRandomBytes m (Frame.words b 0 (len / 16)) with
+    let (slot, kLog) ← match (← reg.get).maskOf (← l0s.get) name j m with
+      | .ok x => pure x
+      | .error e => return (← say s!"err {e}")
+    let w := Frame.words (← IO.getRandomBytes (16 * slot.size).toUSize) 0 slot.size
+    let g ← match slot.fill kLog (Frame.words b 0 (len / 16)) w with
+      | .ok g => pure g
+      | .error e => return (← say s!"err {e}")
+    match ← Level0.draw IO.getRandomBytes m g with
     | .ok l =>
       let kept : Except String Unit ← l0s.modifyGet fun R => match R.draw name j l with
         | .ok R' => (.ok (), R')
         | .error e => (.error e, R)
       if let .error e := kept then return (← say s!"err {e}")
-      let d := Level0.drawsOf l
+      let d := Frame.wordBytes w ++ Level0.drawsOf l
       say s!"ok {d.size} {l.root.size}"
       ch.write d
     | .error e => say s!"err {e.replace "\n" " "}"
@@ -753,7 +763,7 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
       let ch ← sockChan c
       let first ← ch.getLine
       if first.startsWith "level0 " then
-        try level0 ch l0s first catch e => IO.eprintln s!"level 0: {e}"
+        try level0 ch reg l0s first catch e => IO.eprintln s!"level 0: {e}"
       else if first.startsWith "finish " then
         try Finish.serveLoop ch S specs l0s keep file own inner first catch e => IO.eprintln s!"finish: {e}"
       else if first.startsWith "rep " then

@@ -2,7 +2,8 @@
 # A table's level 0, as the session loop holds it
 
 The session loop draws each firewalled table's level-0 hiding itself, from the operating system (as it draws `Hello`'s
-nonce), and commits level 0 on it (`Link`): the prover hands it only the table's packed witness. What it keeps of the
+nonce), and commits level 0 on it (`Link`): the prover hands it only the table's packed witness, whose mask slot the loop
+fills with words of its own first (`Session.level0`, `Frame.MaskSlot.fill`). What it keeps of the
 table is one `Level0`, from which everything of level 0 that leaves is read: the root in the session's `Commit`, and
 `Finish`'s level-0 openings (`Firewall.Finish`, ZKFIN's).
 
@@ -19,7 +20,8 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
   carries for its table `i` must be the `Level0` the loop drew for that session's table `i`, at that table's own `m`. So
   the level 0 a session binds is the one draw the loop made for the table, and the prover has no choice among draws.
 
-The prover gets the draws back (`drawsOf`) to run its own commitment over the same codeword; what leaves is the loop's.
+The prover gets the draws back (`drawsOf`), and the mask slot's words, to run its own commitment over the same codeword;
+what leaves is the loop's.
 -/
 import Flock.Firewall.Link
 
