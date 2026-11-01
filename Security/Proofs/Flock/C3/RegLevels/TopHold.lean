@@ -3,6 +3,11 @@ module
 public import Flock.RecVStar
 public import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Defs
 
 /-!
 # R's stream's first top makes R's registered entry

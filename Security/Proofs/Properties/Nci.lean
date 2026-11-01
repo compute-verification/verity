@@ -4,6 +4,7 @@ public import Proofs.Properties.Nci.Lemmas
 public import Proofs.Properties.Nci.Desc
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The NCI check's properties, proved

@@ -6,6 +6,8 @@ public import Definitions.Claims.Json
 public import Definitions.Claims
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.Complete.Prover.Print
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # What the record's round trip needs from the JSON library

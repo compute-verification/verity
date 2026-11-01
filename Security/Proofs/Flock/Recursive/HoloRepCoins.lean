@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Recursive.HoloSched
+import all Init.Data.Range.Basic
 
 /-!
 # The reps' coin rounds at the hidden-unit schedule

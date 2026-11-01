@@ -59,6 +59,8 @@ module
 public import CoreProtocol.Record
 public import SampledProofs.ChallengerRecord
 public import SampledProofs.PyJson
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 @[expose] public section
 set_option backward.privateInPublic true

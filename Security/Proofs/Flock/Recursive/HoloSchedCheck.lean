@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Recursive.HoloSchedRead
+import all Init.Data.Nat.ToString
 
 /-!
 # What the verifier's checks of the held `c_k` and the claim ports give
