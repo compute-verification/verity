@@ -21,10 +21,10 @@ decomposition of a Program into proof blocks.  Three checks, one verdict each, c
   specialization and primitive (`Const64[..]` in the Gumbel body, `Input64`).  This is a Program property separate from
   the boundary condition; 32 is a protocol parameter (`w_max`), not a language constant.
 
-A decomposition may have several levels, coarse to fine (a `Hierarchy` of named `Level`s, e.g. replay units and the
-proof blocks inside them).  `validate_refinement` checks that each level's sets nest inside the level above and
-counts them per parent (`members_per_parent`); `validate_partition(..., within=S)` checks a level that partitions only
-the gates S (a level leaving out Inputs checked elsewhere).
+A decomposition may have several levels, coarse to fine (a `Hierarchy` of named `Level`s): a finer level's family is
+`each(F, G)` over the coarser level's `F`, so it refines it by construction and no check sweeps its sets;
+`validate_partition(..., within=S)` checks a level that partitions only the gates S (a level leaving out Inputs checked
+elsewhere).
 
 Codes (`PartitionVerdict.codes`, `WidthVerdict.detail["codes"]`):
     tiling-unassigned        a refined body has a node no entry covers                     -> gap
@@ -49,7 +49,6 @@ Nothing here touches `program_digest`.
 """
 from __future__ import annotations
 
-import bisect
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterator, Literal, Mapping
 
@@ -956,7 +955,7 @@ def readiness_32bit(program: "Program") -> ReadinessReport:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# hierarchies: levels, refinement, members per parent
+# hierarchies: levels
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -970,98 +969,8 @@ class Level:
 
 
 Hierarchy = tuple[Level, ...]
-"""Levels coarse to fine; each level's members refine the level above (`validate_refinement`)."""
-
-
-@dataclass(frozen=True)
-class RefinementVerdict:
-    """Does every set of a finer family lie inside exactly one set of a coarser one?  `status`: "ok", "violation"
-    (codes: `refine-crosses`, a fine set meets two coarse sets; `refine-outside`, a fine set reaches gates in no
-    coarse set; `refine-empty`, a fine set with no gates; `refine-coarse-overlap`, the coarse sets overlap), or
-    "unsupported" (`limit-intervals`; not a verdict).  `counts[i]` is the number of fine sets inside coarse set i,
-    in family order, when the status is "ok" (empty otherwise)."""
-    status: str
-    codes: tuple[str, ...]
-    counts: tuple[int, ...]
-    detail: dict
-
-    def to_json(self) -> dict:
-        return {"status": self.status, "codes": list(self.codes), "counts": list(self.counts), "detail": self.detail}
-
-
-def validate_refinement(program: "Program", coarse, fine, limits: Limits = LIMITS) -> RefinementVerdict:
-    """Is `fine` a refinement of `coarse`: every set of `fine` inside exactly one set of `coarse`?  Containment
-    only; whether each level covers its gates is `validate_partition`'s question.  Families built with
-    `each(F, G)` nest by construction; others need this check.  Interval sweep over both families' materialised
-    intervals, up to `limits.max_intervals` in total."""
-    size = program.gates
-    runs: list[tuple[int, int, int]] = []
-    n_coarse = 0
-    for c, s in enumerate(coarse):
-        n_coarse += 1
-        runs.extend((lo, hi, c) for lo, hi in _gate_intervals(s, size))
-        if len(runs) > limits.max_intervals:
-            return _refinement_unsupported(len(runs), limits)
-    runs.sort()
-    overlaps = [(runs[t - 1][2], runs[t][2]) for t in range(1, len(runs)) if runs[t][0] < runs[t - 1][1]]
-    if overlaps:
-        return RefinementVerdict("violation", ("refine-coarse-overlap",), (),
-                                 {"coarse_sets": n_coarse, "overlap_count": len(overlaps),
-                                  "overlaps": [list(o) for o in overlaps[:MAX_LISTED]]})
-    starts = [lo for lo, _, _ in runs]
-    counts = [0] * n_coarse
-    problems: dict[str, list[int]] = {}
-    n_fine = seen = 0
-    for f, s in enumerate(fine):
-        n_fine += 1
-        ivs = _gate_intervals(s, size)
-        seen += len(ivs)
-        if seen + len(runs) > limits.max_intervals:
-            return _refinement_unsupported(seen + len(runs), limits)
-        parents: set[int] = set()
-        outside = False
-        for lo, hi in ivs:
-            t = max(bisect.bisect_right(starts, lo) - 1, 0)
-            pos = lo
-            while pos < hi and t < len(runs):
-                rlo, rhi, c = runs[t]
-                if rhi <= pos:
-                    t += 1
-                    continue
-                if rlo > pos:
-                    outside = True
-                    pos = min(rlo, hi)
-                    continue
-                parents.add(c)
-                pos = min(rhi, hi)
-                t += 1
-            outside |= pos < hi
-        code = ("refine-empty" if not ivs else "refine-outside" if outside else
-                "refine-crosses" if len(parents) > 1 else None)
-        if code is None:
-            counts[parents.pop()] += 1
-        else:
-            problems.setdefault(code, []).append(f)
-    detail: dict = {"coarse_sets": n_coarse, "fine_sets": n_fine}
-    if problems:
-        for code, sets in problems.items():
-            detail[code] = {"count": len(sets), "sets": sets[:MAX_LISTED]}
-        return RefinementVerdict("violation", tuple(sorted(problems)), (), detail)
-    return RefinementVerdict("ok", (), tuple(counts), detail)
-
-
-def _refinement_unsupported(seen: int, limits: Limits) -> RefinementVerdict:
-    return RefinementVerdict("unsupported", ("limit-intervals",), (),
-                             {"intervals_seen": seen, "max_intervals": limits.max_intervals})
-
-
-def members_per_parent(program: "Program", coarse, fine, limits: Limits = LIMITS) -> tuple[int, ...]:
-    """The number of `fine` sets inside each `coarse` set, in `coarse`'s order; `ValueError` unless `fine` refines
-    `coarse` (`validate_refinement`)."""
-    v = validate_refinement(program, coarse, fine, limits)
-    if v.status != "ok":
-        raise ValueError(f"not a refinement ({v.status}: {', '.join(v.codes)})")
-    return v.counts
+"""Levels coarse to fine; each level's family is `each(F, G)` over the level above's `F`, so its members nest by
+construction."""
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -1178,4 +1087,4 @@ def validate_block_partition(program: "Program", query, w_max: int = 32) -> Bloc
 __all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "BlockVerdict",
            "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "block_status",
            "validate_block_family", "validate_block_partition", "CutVerdict", "INPUT_UNIT", "MAX_LISTED", "RECOMPUTE_RULES", "validate_unit_cut",
-           "Level", "Hierarchy", "RefinementVerdict", "validate_refinement", "members_per_parent"]
+           "Level", "Hierarchy"]
