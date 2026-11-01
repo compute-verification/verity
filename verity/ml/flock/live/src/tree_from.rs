@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn a_challengers_tree_opens_under_its_root_and_nothing_follows_close() {
         let (address, served) = challenger([1; 32], How::Honest);
-        let mut c = Challenger::connect(&address, Some(b"secret")).unwrap();
+        let mut c = Challenger::connect(&address, Some(b"secret".as_slice())).unwrap();
         let (root, key) = c.tree(&spec(), &[7; NONCE_BYTES]).unwrap();
         assert_eq!(key[KEY_BYTES - 1] & 0x80, 0);
         let (coins, w) = c.tree_open(&root, "t/rep0", 1, 2, &[4; 64]).unwrap();
