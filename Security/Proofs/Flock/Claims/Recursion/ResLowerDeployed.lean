@@ -1134,7 +1134,7 @@ theorem outRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {ta
 
 /-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's under the session's coins. -/
 theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
-    Tags.find? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags.withCoins s.read.I.coins := by
+    Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags.withCoins s.read.I.coins := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -1142,7 +1142,7 @@ theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .o
 
 /-- A recursive statement's tags are a known statement's, and C's are them under the session's coins. -/
 theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
-    (∃ nm, Tags.find? nm = some i.base.stmtTags) ∧ ∃ coins, i.base.read.I.tags = i.base.stmtTags.withCoins coins := by
+    (∃ nm, Tags.byName? nm = some i.base.stmtTags) ∧ ∃ coins, i.base.read.I.tags = i.base.stmtTags.withCoins coins := by
   cases hd : decodeRec x with
   | none => unfold insO at h; rw [hd] at h; simp at h
   | some w =>
@@ -1172,7 +1172,7 @@ theorem checkStmt_name {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : 
     simpa using hn
 
 /-- **A staged part's tables have hidden outputs**: its setup's `checkStmt` holds it to `verity/flock-circuit`
-(`checkStmt_name`), the one statement of that name (`Tags.find?`), whose outputs are hidden, under any coins and in
+(`checkStmt_name`), the one statement of that name (`Tags.byName?`), whose outputs are hidden, under any coins and in
 `verify --zk`'s tags (`zkTags_hiddenOutputs`). -/
 theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) {t : ℕ} (ht : t < p.sts.size) :
@@ -1186,13 +1186,9 @@ theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s 
   rw [hinner, insO_staged_part hins] at hC
   have hn := checkStmt_name (checks_stmt hC t ht)
   obtain ⟨⟨nm, hf⟩, coins, hI⟩ := insO_tags hins
-  have hf' := hf
-  unfold Flock.Tags.find? at hf'
-  have hnm : nm = Flock.Tags.circuit.name := by
-    have h2 : i.base.stmtTags.name = nm := by simpa using List.find?_some hf'
-    rw [← h2, hn]
+  have hnm : nm = Flock.Tags.circuit.name := by rw [← Flock.Tags.byName?_name hf, hn]
   subst hnm
-  rw [FlockSoundness.Discharge.Recursion.find?_circuit] at hf
+  rw [Flock.Tags.byName?_of_find? FlockSoundness.Discharge.Recursion.find?_circuit] at hf
   have hT : i.base.stmtTags = Flock.Tags.circuit := (Option.some.inj hf).symm
   have hI' : i.base.read.I.tags.hiddenOutputs = true := by
     rw [hI, hT]

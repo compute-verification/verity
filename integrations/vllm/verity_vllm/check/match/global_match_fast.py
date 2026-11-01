@@ -1,11 +1,11 @@
 """MATCH_IMPL=fast -- compute-once / index-once for the Match stage (GM-01 `global_match.check`, X-09 `batch_decomp.decompose`).
 
 The checker of record traverses immutable per-request structure many times per invocation:
-`Prog.canon(i)` (every operand source of an instance) >= 6x per instance (G3 loop, compare_steps wiring, _canonical_hash, dag_hashes,
+`RootView.canon(i)` (every operand source of an instance) >= 6x per instance (G3 loop, compare_steps wiring, _canonical_hash, dag_hashes,
 G8 dependency order, live_cone; then everything again in the alternate-criterion run, and again inside X-09), `compare_steps(A, P)` 2x
 per request, `dag_hashes(A)` once per REQUEST (not per component) and `dag_hashes(A) + dag_hashes(P)` over the FULL programs once per
-permuted step in G8 (<= 32 more), `_canonical_hash(A)` once per request per pass.  Every one of these is a pure function of Prog
-objects that are read-only after construction (compare.Prog: `inst`/`steps`/`inputs`/... are built in __init__ and never written
+permuted step in G8 (<= 32 more), `_canonical_hash(A)` once per request per pass.  Every one of these is a pure function of RootView
+objects that are read-only after construction (compare.RootView: `inst`/`steps`/`inputs`/... are built in __init__ and never written
 again; global_match renames the fold ROWS' request ids in place, which no canonical form reads).
 
 This module memoises exactly those functions, by object identity of the Progs (objects are pinned in the memo so an id is never
@@ -49,7 +49,7 @@ IMPL_NAME = "fast"
 CANDIDATE_STAGE = "v6-memo-x09share-internhash-specid+legs+compactargs"   # mprof units 1-4b (memo, X-09 Projection share, G7 O(1), digest-id Merkle payload, identity shortcut, descriptor_id on the definition, cache release, per-process ids enforced) + mfast legs (MATCH_WORKERS; G8 matching returned as facts) + mfast compact operand progressions (MATCH_COMPACT)
 _force: bool | None = None    # set by `check` below so the entry point selects the path, not only the environment
 
-# memo tables (per process). Values pin the Prog objects they were computed from, so ids stay unique while cached.
+# memo tables (per process). Values pin the RootView objects they were computed from, so ids stay unique while cached.
 _cmp_memo: dict[tuple, tuple] = {}         # (id(A), id(B), unfold_a) -> (A, B, result)
 _dag_memo: dict[tuple, tuple] = {}         # (id(P), id(only) | None) -> (P, only, hashes)
 _live_memo: dict[int, tuple] = {}          # id(P) -> (P, live set)
@@ -75,7 +75,7 @@ def reset() -> None:
     stats.clear()
 
 
-# the memo tables pin the Prog / Projection objects they were computed from; without a release a process that
+# the memo tables pin the RootView / Projection objects they were computed from; without a release a process that
 # checks several records in a row (harness in-process mode, tests, a profiler loop) grows by one record's caches per record.  check()
 # brackets its body with enter()/leave(): the OUTERMOST call (depth 0 again -- the alternate-criterion run is a nested check() and must
 # keep the memo) drops every table.  row_pod = one record per process, so the release changes nothing on a row of record.
@@ -106,10 +106,10 @@ def leave() -> None:
         reset_projections()
 
 
-# ------------------------------------------------------------------------------------------------ canon (per Prog, per instance)
+# ------------------------------------------------------------------------------------------------ canon (per RootView, per instance)
 
 class _CanonMemo:
-    """Mixin over compare.Prog (`MemoProg`) and projection.Projection (`_MemoProjection`): `canon` computed once per (instance,
+    """Mixin over compare.RootView (`MemoProg`) and projection.Projection (`_MemoProjection`): `canon` computed once per (instance,
     unfold) and returned as the SAME list object thereafter (no caller mutates it: compare._canon_step_relative, dag_form.dag_hashes
     / live_cone and global_match iterate only).  A Projection's `_xreq` calls made during the first computation are recorded and
     replayed on every hit, so cross-request read counts are unchanged."""
@@ -152,7 +152,7 @@ class _CanonMemo:
 
 # ------------------------------------------------------------------------------------------------ compare_steps / hashes
 
-def _compare_steps_memo(A: SEQ.Prog, B: SEQ.Prog, unfold_a: bool = False) -> dict:
+def _compare_steps_memo(A: SEQ.RootView, B: SEQ.RootView, unfold_a: bool = False) -> dict:
     """compare.compare_steps once per (A, B, unfold_a) object pair; the result dict is returned as the same object (callers read it)."""
     key = (id(A), id(B), bool(unfold_a))
     hit = _cmp_memo.get(key)
@@ -165,9 +165,9 @@ def _compare_steps_memo(A: SEQ.Prog, B: SEQ.Prog, unfold_a: bool = False) -> dic
     return res
 
 
-def _canonical_hash_memo(P: SEQ.Prog, seqs: list[list[int]], unfold: bool) -> str:
-    """compare._canonical_hash once per (Prog, unfold) for Progs WITHOUT cross-request bookkeeping (components, folds): `seqs` is
-    `compare_steps.seq(P, unfold)`, a pure function of the same Prog.  A Projection (has `_xreq`) is hashed by the original every
+def _canonical_hash_memo(P: SEQ.RootView, seqs: list[list[int]], unfold: bool) -> str:
+    """compare._canonical_hash once per (RootView, unfold) for Progs WITHOUT cross-request bookkeeping (components, folds): `seqs` is
+    `compare_steps.seq(P, unfold)`, a pure function of the same RootView.  A Projection (has `_xreq`) is hashed by the original every
     time, so its `P.xreq` counting (read by X-09 right after compare_steps) is untouched -- its canon calls hit the canon memo."""
     if hasattr(P, "_xreq"):
         stats["canonical_hash_projection"] += 1
@@ -217,17 +217,17 @@ def _check_origin(h) -> None:
 # by a prefix trie over its run items, the producer named by ITS id -- induces exactly the same partition (by induction over the node
 # order, in which producers precede consumers; a forward / dead producer keeps the record's marker string).  No text, no digest, no
 # collision.  For a compact (progression-form) operand the trie walk over a node-space progression of `count` runs is memoised per
-# (prefix node, base, delta, count) WITHIN ONE CALL (the producers named by a (step, index) base are this Prog's, under this cone):
+# (prefix node, base, delta, count) WITHIN ONE CALL (the producers named by a (step, index) base are this RootView's, under this cone):
 # the attention gather at position t+1 is the gather at position t plus one producer, so it costs ONE trie step instead of t -- the
 # run count no longer multiplies the work.  The relation is unchanged: every memoised node is the trie node the full walk would reach.
 # A non-node progression is one trie step of its own (a different item set, the same partition: the operand is a normal form).  Values stay equality keys inside ONE process (`_Hashes` carries the pid).
 _trie: dict[tuple, int] = {}         # (prefix node, run item) -> node; node 0 = the empty operand; per process, released on leave
 
 
-def _dag_hashes_intern(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, int]:
+def _dag_hashes_intern(P: SEQ.RootView, only: set[int] | None = None) -> dict[int, int]:
     ids = _merkle_ids
     trie = _trie
-    pm: dict[tuple, int] = {}   # (prefix node, base, delta, count) -> node, for THIS Prog / cone only
+    pm: dict[tuple, int] = {}   # (prefix node, base, delta, count) -> node, for THIS RootView / cone only
     hashes: dict[int, int] = _Hashes()
     steps = P.steps
     compact = getattr(P, "compact", False)
@@ -306,8 +306,8 @@ def _dag_hashes_intern(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, i
     return hashes
 
 
-def _dag_hashes_memo(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, int]:
-    """dag_hashes once per (Prog, `only` set object).  X-09 passes the live cone (memoised below, so the same set object per Prog);
+def _dag_hashes_memo(P: SEQ.RootView, only: set[int] | None = None) -> dict[int, int]:
+    """dag_hashes once per (RootView, `only` set object).  X-09 passes the live cone (memoised below, so the same set object per RootView);
     GM-01 passes None.  Returned dict is shared (callers read it)."""
     key = (id(P), None if only is None else id(only))
     hit = _dag_memo.get(key)
@@ -321,7 +321,7 @@ def _dag_hashes_memo(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, int
     return h
 
 
-def _canon_step_relative_identity(P: SEQ.Prog, i: int, seqs: list[list[int]], unfold: bool):
+def _canon_step_relative_identity(P: SEQ.RootView, i: int, seqs: list[list[int]], unfold: bool):
     """compare._canon_step_relative: with unfold=False and `seqs` == P.steps (compare_steps' seq(P, False) is P.steps minus empty
     trailing segments, and _segment never emits an empty one) the position remap is the identity -- ('N', s, jj, lo, hi) already names
     the producer by (step, index within step) -- so the result is canon(i) with each operand as a tuple.  Any other case runs the
@@ -337,7 +337,7 @@ def _canon_step_relative_identity(P: SEQ.Prog, i: int, seqs: list[list[int]], un
     return [tuple(arg) for arg in P.canon(i, False)]
 
 
-def dag_multiset(A: SEQ.Prog, B: SEQ.Prog) -> dict:
+def dag_multiset(A: SEQ.RootView, B: SEQ.RootView) -> dict:
     """The within-step criterion of record for two Programs loaded in this process: their live-cone DAG multisets (structural Merkle
     ids, one id space per process) are equal.  `program-dag` reads it when a step's order differs (GLM-5.3: the fold emits the
     prefill's indexer logits launch by launch, the Build per query row)."""
@@ -346,7 +346,7 @@ def dag_multiset(A: SEQ.Prog, B: SEQ.Prog) -> dict:
     return {"equal": ma == mb, "a_live": len(la), "b_live": len(lb), "only_a": sum((ma - mb).values()), "only_b": sum((mb - ma).values())}
 
 
-def _live_cone_memo(P: SEQ.Prog) -> set[int]:
+def _live_cone_memo(P: SEQ.RootView) -> set[int]:
     hit = _live_memo.get(id(P))
     if hit is not None and hit[0] is P:
         stats["live_cone_hit"] += 1
@@ -359,10 +359,10 @@ def _live_cone_memo(P: SEQ.Prog) -> set[int]:
 
 # ------------------------------------------------------------------------------------------------ Projections (X-09 <-> GM-01 <-> alternate)
 
-_proj_registry: dict[tuple, tuple] = {}    # construction key -> (oracle Prog, Projection): every _MemoProjection built
+_proj_registry: dict[tuple, tuple] = {}    # construction key -> (oracle RootView, Projection): every _MemoProjection built
 
 
-def _proj_key(oracle: SEQ.Prog, inst_idx, tok_node, weights_node, seed_node, peer_node=None) -> tuple:
+def _proj_key(oracle: SEQ.RootView, inst_idx, tok_node, weights_node, seed_node, peer_node=None) -> tuple:
     w = frozenset(weights_node) if isinstance(weights_node, (set, frozenset, list, tuple)) else frozenset({weights_node})
     return (id(oracle), tuple(inst_idx), tok_node, w, seed_node, peer_node)   # the request's peers node is part of the view
 
@@ -480,10 +480,10 @@ def dep_order_violations(P, rid: str) -> list[dict]:
 
 def _spec_id_memo(fn):
     """`codec.descriptor_id(fn)` serialises a
-    specialization's static bindings to canonical JSON on EVERY call; `compare.Prog.__init__` calls it once per NODE (162 k for the
+    specialization's static bindings to canonical JSON on EVERY call; `compare.RootView.__init__` calls it once per NODE (162 k for the
     B8 256/32 fold, 3-9 k per component), while the `fn` objects are shared by every node of the same specialization -- 11 % of a
     component's load on the real record.  The id is a pure function of the (immutable after construction) definition + bindings: it
-    is kept ON the definition object (no memo table pins the decoded IR, which Prog.__init__ drops for memory), and only after a
+    is kept ON the definition object (no memo table pins the decoded IR, which RootView.__init__ drops for memory), and only after a
     successful computation -- `descriptor_id` reads every static's binding, so a partially bound specialization raises instead of caching."""
     try:
         return fn.__dict__["_gmf_spec_id"]
@@ -498,8 +498,8 @@ def _spec_id_memo(fn):
     return sid
 
 
-class MemoProg(_CanonMemo, SEQ.Prog):
-    """The fast path's compare.Prog (what `ops()` loads the fold and the components as): canon computed once per instance
+class MemoProg(_CanonMemo, SEQ.RootView):
+    """The fast path's compare.RootView (what `ops()` loads the fold and the components as): canon computed once per instance
     (`_CanonMemo`), and a run-form decode whose two per-node functions are `_spec_id_memo` and `_runs_fast` (unit 5 (a)) -- each
     returns what the record's `codec.descriptor_id` / `refs.runs` returns for the same node."""
 
@@ -511,7 +511,7 @@ def ops() -> Ops:
     """The fast path's Program operations for one `global_match.check` and the X-09 run inside it: the fold and components as MemoProg,
     Projections that register for reuse, the memoised comparison / hashes / live cone, X-09's per-request legs on forked workers
     (MATCH_WORKERS).  Also states the run's declared configuration (`config`)."""
-    # every Prog loaded here holds its operands as run progressions (cb_a.compact) unless MATCH_COMPACT=0
+    # every RootView loaded here holds its operands as run progressions (cb_a.compact) unless MATCH_COMPACT=0
     # (the A/B switch for the representation alone); the record's Progs are runs
     compact = settings.get(COMPACT_ENV)
     stats["compact_args"] = int(compact)
@@ -534,7 +534,7 @@ def reset_projections() -> None:
 
 # ------------------------------------------------------------------------------------------------ check() hooks
 
-def projection(loaded: dict, rid: str, oracle: SEQ.Prog, label: str, inst_idx: list[int], tok_node, weights_node, seed_node,
+def projection(loaded: dict, rid: str, oracle: SEQ.RootView, label: str, inst_idx: list[int], tok_node, weights_node, seed_node,
                peer_node=None) -> PJ.Projection:
     """The request's Projection of the fold for GM-01's G3, built at most once per process per construction key:
       1. the alternate-criterion run reuses the verdict-of-record run's (per `_loaded`);
@@ -606,7 +606,7 @@ def _x09_legs(items: list, leg: Callable, weight: Callable) -> list:
     return request_legs(items, leg, n, weight=weight)
 
 
-def seed_dag_hashes(P: SEQ.Prog, hashes: dict) -> None:
+def seed_dag_hashes(P: SEQ.RootView, hashes: dict) -> None:
     """RETIRED: a worker's dag_hashes dict must never seed the parent's memo -- the Merkle ids are per process.
     The legs return G8's per-step matching as facts instead (global_match._perm_match in the leg)."""
     raise RuntimeError("seed_dag_hashes is retired: legs return matching facts, never hash dicts across processes")
@@ -615,7 +615,7 @@ def seed_dag_hashes(P: SEQ.Prog, hashes: dict) -> None:
 def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | None = None) -> list:
     """Run `fn(item)` for every item and return the results IN ITEM ORDER.
 
-    n_workers <= 1 (or one item): in this process.  Otherwise: the caller has built every shared object the legs read (fold Prog,
+    n_workers <= 1 (or one item): in this process.  Otherwise: the caller has built every shared object the legs read (fold RootView,
     component Progs, Projections) -- `os.fork()` gives each worker a copy-on-write view of exactly those objects (no pickling of the
     trace, no copy per process; a worker touches its own requests' instances and the shared indices), each worker runs its share of the
     legs sequentially (heaviest legs dealt first, round-robin by `weight`) and pickles the RESULTS (facts: entries, problem strings,
