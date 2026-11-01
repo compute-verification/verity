@@ -1,6 +1,7 @@
 import Proofs.Flock.SessionLoop.Fill.Sched
 import Proofs.Flock.SessionLoop.FinishParts
 import Proofs.Flock.SessionLoop.TakenVals
+import Proofs.Flock.Claims.ZK.FrameLive
 
 /-!
 # What `vs` holds at a stopped round: the stand-in's values
@@ -17,6 +18,9 @@ the stopped round carries. `Loop.FillVals` says so in two parts:
   firewall's own opening carries under the pads as a live rep's does.
 * **`Loop.FillFc`**: at the inner proof's first round (`Loop.InnerRound … 0`), `final_c` as the frame takes it from the
   round the release sends: its `final_c'` plus `final_c`'s pad (`Loop.finalCOf`, as `Loop.valsOf` reads it).
+
+It reads only stopped histories, so it holds at every `vs` for a worker that never stops a rep there
+(`Loop.fillVals_of_live`), the honest worker wherever its rounds pass the frame's checks (`Loop.fillVals_honest`).
 -/
 
 namespace Claims.ZKServer
@@ -96,6 +100,38 @@ def FillVals (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
   FillAbs vs L₀ src real wk x w ∧ FillFc vs L₀ src real wk x w
+
+/-- **`FillVals` holds at a worker that never stops a rep** where `FillRoundEq` reads, at every `vs`: it reads only
+stopped histories. -/
+theorem fillVals_of_live (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
+    (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))
+    (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
+    (hl : ∀ (ν : finS.Nonce) (t : finS.Tape) (κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg)
+      (ops : List (Msg × Msg)), 0 < ops.length → ops.length < refK x →
+      (LeanRelease.ofLoopLink L₀ src real).toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true) :
+    FillVals vs L₀ src real wk x w :=
+  ⟨fun ν t κ m₀ ρ₀ ops _ hp hlt hf => (Bool.false_ne_true (hf.symm.trans (hl ν t κ m₀ ρ₀ ops hp hlt))).elim,
+    fun ν t κ m₀ ρ₀ ops hp hlt hf => (Bool.false_ne_true (hf.symm.trans (hl ν t κ m₀ ρ₀ ops hp hlt))).elim⟩
+
+/-- **`FillVals` at the honest worker** (`LeanRelease.honestWk`, the release's own device rounds), at every `vs`, the
+tables' own values (`RefSession.honestVals`) among them: where each frame round short of the `Finish` passes the frame's
+checks at its honest device round (`LeanRelease.roundOk`, the frame's completeness for the honest device), the honest
+worker's run is live wherever `FillRoundEq` reads (`LeanRelease.toSrv_live_honest`, the `Finish` being round
+`refK x + 1`: `LeanRelease.loop_last`). -/
+theorem fillVals_honest (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
+    (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray)) (x : Msg) (w : Flock.Wit)
+    (hr : ∀ (ν : finS.Nonce) (t : finS.Tape) (g : List (Msg × Msg)), 2 ≤ g.length → g.length ≤ refK x →
+      (LeanRelease.ofLoopLink L₀ src real).roundOk x w (ν, t) g = true) :
+    FillVals vs L₀ src real (LeanRelease.ofLoopLink L₀ src real).honestWk x w := by
+  have hlast : (LeanRelease.ofLoopLink L₀ src real).last x = refK x + 1 :=
+    LeanRelease.loop_last Loop.loopNr Masked.dataE
+      (LeanRelease.withFrames Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real) x
+  refine fillVals_of_live vs L₀ src real _ x w fun ν t κ m₀ ρ₀ ops _ hlt => ?_
+  refine (LeanRelease.ofLoopLink L₀ src real).toSrv_live_honest x w (ν, t) κ _
+    (by rw [hlast, List.length_cons]; omega) fun i h2 hi => ?_
+  exact hr ν t _ (by rw [List.length_take]; omega) (by rw [List.length_take]; simp only [List.length_cons] at hi; omega)
 
 end Loop
 
