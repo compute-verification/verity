@@ -180,7 +180,7 @@ _CANDIDATE = re.compile(rf"{_KEYWORD}\s+{_NAME}")
 _PY_CANDIDATE = re.compile(rf"class\s+(?:{_ALT})\b")
 _PY_HEADER = re.compile(r"^([ \t]*)(?:async[ \t]+)?(class|def)[ \t]+(\w+)", re.M)
 _DECL = re.compile(rf"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*{_MODS}{_KEYWORD}\s+{_NAME}", re.M)
-_SCOPE = re.compile(rf"^[ \t]*(?:{_MODS}(namespace|section)\b[ \t]*(\S*)|(mutual)\b|end\b)", re.M)
+_SCOPE = re.compile(rf"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:{_MODS}(namespace|section)\b[ \t]*(\S*)|(mutual)\b|end\b)", re.M)
 _OPEN = re.compile(r"^[ \t]*open\s+((?:[\w.]+[ \t]+)*[\w.]+)", re.M)
 _PROTOCOL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*" + _MODS + r"(?:def|abbrev)\s+[^\n]*:\s*(?:Core\.)?Protocol\s+where\b",
                        re.M)
@@ -1288,6 +1288,39 @@ opaque Witness.Node : Nat
         ("Coins", "Pouw.Coins", 4), ("Prog", "Pouw.Prog", 6), ("Digest", "Pouw.Foo.Digest", 8), ("Op", "Pouw.Op", 11),
         ("Dag", "Pouw.Dag", 14), ("Hash", "Pouw.Hash", 16), ("Law", "Law", 18), ("Transcript", "Transcript", 19),
         ("Witness", "Witness", 20), ("Collision", "Sha512.Collision", 24)]
+
+
+def test_a_module_reads_as_its_plain_form():
+    """The module system's header (`module`, `public` and `meta` imports, `import all`) and sections (`@[expose] public
+    section`, which the port opens and never closes, and one closed by `end`) change no declaration's name."""
+    src = """module
+
+public import Definitions.Core
+meta import Definitions.Tactic
+public meta import Definitions.Elab
+import all Definitions.Open
+import Definitions.Private
+
+/-! A module. -/
+
+@[expose] public section
+
+namespace Pouw
+
+@[expose] public section
+def Prog (n : Nat) : Type := Fin n
+end
+
+public section
+structure Coins where
+  bits : Nat
+end
+
+meta def Witness : Nat → Type := fun _ => Unit
+
+end Pouw
+"""
+    assert [h.key for _, h in lean_definitions(src)[0]] == ["Pouw.Prog", "Pouw.Coins", "Pouw.Witness"]
 
 
 def test_the_scan_reads_python_classes():

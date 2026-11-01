@@ -55,8 +55,9 @@ def test_no_escape_hatches():
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
 AUDIT_STATEMENTS = PROOFS.parent / "Definitions" / "Flock" / "Guarantees" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
+AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
                            r"Proofs\.Flock\.Soundness\.Audit\.|Definitions\.Flock\.Guarantees\.Audit$)")
+IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 
 
 def test_audit_layer_is_abstract():
@@ -72,10 +73,10 @@ def test_audit_layer_is_abstract():
              "FlockLinked.lean", "FlockWork.lean"}
     assert files and flock <= {p.name for p in files}
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
-           if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
+           if (m := IMPORT.match(line)) and not AUDIT_IMPORTS.match(m[1])]
     assert not bad, bad
-    statements = [line for line in AUDIT_STATEMENTS.read_text().splitlines() if line.startswith("import ")]
-    assert statements and all(line.startswith("import Mathlib.") for line in statements), statements
+    statements = [m[1] for line in AUDIT_STATEMENTS.read_text().splitlines() if (m := IMPORT.match(line))]
+    assert statements and all(s.startswith("Mathlib.") for s in statements), statements
     admitted = [p.name for p in files if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
     assert not admitted, admitted
 

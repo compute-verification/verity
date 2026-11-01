@@ -87,6 +87,8 @@ ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
 #: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/service/flock": 7}`), and one of its entries
 CAP_LINE = re.compile(r'(\s*(?:UNWITNESSED|INLINE) = )\{([^{}]*)\}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
+#: a `.lean` header's import line, in each form a module or a plain file writes (`import M`, `public meta import M`, ...)
+IMPORT_LINE = re.compile(r"(?:public\s+)?(?:meta\s+)?import\s")
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
@@ -464,11 +466,11 @@ def kept(o: set, a: set, b: set) -> set:
 
 
 def _imports(lines: list[str]) -> bool:
-    return all(s.startswith("import ") or not s.strip() for s in lines)
+    return all(IMPORT_LINE.match(s) or not s.strip() for s in lines)
 
 
 def _import_names(text: str) -> set[str]:
-    return {s.strip() for s in text.splitlines() if s.startswith("import ")}
+    return {s.strip() for s in text.splitlines() if IMPORT_LINE.match(s)}
 
 
 def _blocks(lines: list[str]) -> list[str] | None:
@@ -681,7 +683,7 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     out, left, lines, n, seen = [], 0, p.stdout.splitlines(keepends=True), 0, set()
 
     def emit(s: str):
-        if keep is not None and s.startswith("import "):
+        if keep is not None and IMPORT_LINE.match(s):
             if s.strip() not in keep or s.strip() in seen:
                 return
             seen.add(s.strip())

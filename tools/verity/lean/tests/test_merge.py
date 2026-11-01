@@ -593,6 +593,16 @@ def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tm
     assert left == 0 and text == imports("A", "Y", "X", "B", "C")
 
 
+def test_a_module_s_import_lists_merge_in_each_form(tmp_path):
+    """A module's imports (`public import`, `meta import`, `public meta import`, `import all`) merge as a plain file's do."""
+    def imports(*ms):
+        return "module\n\n" + "".join(f"{m}\n" for m in ms) + "\n@[expose] public section\n\ntheorem t : True := trivial\n"
+    a, c = "public import G.A", "import all G.C"
+    text, left = _lean(tmp_path, imports(a, "public import G.B", c), imports(a, "meta import G.X", c),
+                       imports(a, "public meta import G.Y", "public import G.B", c))
+    assert left == 0 and text == imports(a, "public meta import G.Y", "meta import G.X", c), text
+
+
 def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
     """`Security/Definitions/Accounting.lean` as git gave it to the driver in a merge where one side retired a module and the
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
