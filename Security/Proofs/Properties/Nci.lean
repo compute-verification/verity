@@ -276,7 +276,7 @@ theorem check_verdict_of_wellFormed (j : Json) (h : WellFormed j) :
   (check_verdict_iff_wellFormed j).2 h
 
 /-- **A refusal's case holds**: `Json.null` is refused, with `instance`. -/
-theorem refused_instance : evaluate Json.null = .error "instance" := rfl
+theorem refused_instance : evaluate Json.null = .error "instance" := (rfl)
 
 /-- `check` refuses `Json.null` with `instance`. -/
 theorem check_refused_instance : (check Json.null).getObjVal? "error" = .ok (.str "instance") :=

@@ -291,7 +291,7 @@ theorem sum_exp_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) (v : ℝ) (h : pro
 
 theorem sum_ite_mono {Ω : Type} [Fintype Ω] (p q : Ω → Prop) (h : ∀ a, p a → q a) (f : Ω → ℝ)
     (hf : ∀ a, 0 ≤ f a) :
-    (∑ a, (by classical exact if p a then f a else 0)) ≤ ∑ a, (by classical exact if q a then f a else 0) := by
+    (∑ a, (by classical exact if p a then f a else 0 : ℝ)) ≤ ∑ a, (by classical exact if q a then f a else 0 : ℝ) := by
   classical
   refine sum_le_sum fun a _ => ?_
   by_cases hp : p a

@@ -9801,7 +9801,7 @@ theorem within_ite_swap {n : Nat} (as : Vector α n) (b : Bool) {lo hi i j : Nat
 
 /-- `qpartition`'s loop: below `i` the elements are below the pivot, from `i` to `k` not, the pivot at `hi`; it ends
 with the pivot at its result, below `hi` when some element from `i` is not below it. -/
-theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : α) :
+private theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : α) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (∀ t (h : t < n), lo ≤ t → t < i → f as[t] < f pivot) →
       (∀ t (h : t < n), i ≤ t → t < k → f pivot ≤ f as[t]) →
@@ -9889,7 +9889,7 @@ theorem median_le {n : Nat} (as : Vector α n) (i j : Nat) (hi : i < n) (hj : j 
   · rename_i hc
     exact Nat.le_of_not_lt fun h => hc (decide_eq_true h)
 
-theorem qpartition_core {n : Nat} (as as3 : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hhi : hi < n) (hlh : lo < hi)
+private theorem qpartition_core {n : Nat} (as as3 : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hhi : hi < n) (hlh : lo < hi)
     (hmid : (lo + hi) / 2 < n) (hW : Within as as3 lo hi) (hmed : f as3[hi] ≤ f as3[(lo + hi) / 2]) :
     let r := Array.qpartition.loop (fun x y => decide (f x < f y)) lo hi hhi as3[hi] as3 lo lo (Nat.le_refl _)
       (Nat.le_refl _) w

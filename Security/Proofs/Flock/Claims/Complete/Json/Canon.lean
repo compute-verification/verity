@@ -4,6 +4,8 @@ public import Batteries.Tactic.OpenPrivate
 public import Proofs.Flock.Claims.CanonEq
 public import Proofs.Flock.Soundness.ExecDraw
 public import Proofs.Flock.Claims.Complete.Json.Spec
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
 
 /-!
 # `JsonSpec`'s two fields on `canon`, proved
@@ -17,6 +19,8 @@ well-formed trees) and `Json`'s `==` (`beq_same`), both `partial` in Lean's core
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockComplete.JsonRT
 

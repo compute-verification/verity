@@ -2,6 +2,11 @@ module
 
 public import Proofs.Flock.C3.RegLevels.TopHold
 public import Batteries.Recycling.MonadSatisfying.Array
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Defs
 
 /-!
 # R's held stream has a round of coins for each round of R's schedule
