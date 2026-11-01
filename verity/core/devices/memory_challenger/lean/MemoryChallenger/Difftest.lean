@@ -120,7 +120,7 @@ def hssVerifyFn (j : Json) : V Json := do
   pure (.bool (← Lms.hssVerify p (← hex j "identity") (← hex j "deployment") (← J.str j "party" "input") s
     (← hex j "message")))
 
-/-- `merkle.CommitmentDomain(binding, owner, RangeU64Domain(0, count), "sha512").domain_id` (`Domain.makeU64`), refused
+/-- `merkle.CommitmentDomain(binding, owner, RangeU64Domain(0, count), "sha512").domain_id` (`Attest.domainU64`), refused
 where `merkle` refuses: a binding not 64 bytes, `owner < −2`, or `owner + 2` or `count` past a u64. -/
 def domainU64Fn (j : Json) : V Json := do
   let binding ← hex j "binding"
@@ -129,7 +129,7 @@ def domainU64Fn (j : Json) : V Json := do
   if binding.size ≠ 64 then throw "a range-u64 domain's binding is 64 bytes"
   if owner < -2 ∨ owner + 2 ≥ 2 ^ 64 then throw "owner is at least -2 and owner + 2 a u64"
   if count ≥ 2 ^ 64 then throw "a range-u64 domain's count is a u64"
-  pure (hexJ (FrameV3Sha512.Domain.makeU64 binding owner count).id)
+  pure (hexJ (Attest.domainU64 binding owner count).id)
 
 /-- `attest.root(records)`. -/
 def attestRootFn (j : Json) : V Json := do pure (hexJ (Attest.root (← hexes j "records")))

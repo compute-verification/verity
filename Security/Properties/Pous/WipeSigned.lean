@@ -134,14 +134,12 @@ def wipeMessage (s : StreamedWipe.Signed) : Option ByteArray :=
 
 /-- What SHA-512 hashes for a wipe's records tree over `values` under the domain `d`: each leaf, and each node of each
 level below the root (`treeStrings` at the wipe's record schema). -/
-def wipeTreeStrings (d : FrameV3Sha512.Domain) (values : Array ByteArray) : List ByteArray :=
-  let levels := FrameV3Sha512.levels d
-    ((Array.range values.size).map fun r => d.leaf r r StreamedWipe.RECORD_SCHEMA values[r]!)
+def wipeTreeStrings (d : FV3.Sha512.Domain) (values : Array ByteArray) : List ByteArray :=
+  let levels := d.levels ((Array.range values.size).map fun r => d.leaf r r StreamedWipe.RECORD_SCHEMA values[r]!)
   (List.range values.size).map (fun r =>
-      frameInput "leaf"
-        [d.id, FrameV3Sha512.uint r, FrameV3Sha512.uint r, StreamedWipe.RECORD_SCHEMA.toUTF8, values[r]!]) ++
+      FV3.input "leaf" [d.id, FV3.uint r, FV3.uint r, StreamedWipe.RECORD_SCHEMA.toUTF8, values[r]!]) ++
     (List.range (levels.size - 1)).flatMap fun l => (List.range (levels[l]!.size / 2)).map fun i =>
-      frameInput "node" [d.id, FrameV3Sha512.uint l, FrameV3Sha512.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
+      FV3.input "node" [d.id, FV3.uint l, FV3.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
 
 /-- What SHA-512 hashes for a wipe `(c, ended, the fill's readings, batches, egress)` signed under the key `pk`: its
 records tree, the input of its `message`, and that of `memoryChallengerMessage`. -/
