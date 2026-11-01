@@ -9,8 +9,8 @@ import Proofs.Flock.Soundness.Assumptions.Custody
 import Proofs.Flock.Soundness.Discharge.FailClosed.Design
 import Proofs.Flock.Soundness.Assumptions.CustodyZk
 import Proofs.Flock.Soundness.Assumptions.Finders
-import Proofs.Flock.Soundness.Discharge.PlainJ
-import Proofs.Flock.Soundness.Discharge.PlainHJ
+import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
+import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts

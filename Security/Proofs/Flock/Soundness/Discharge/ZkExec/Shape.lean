@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink
 import Proofs.Flock.Soundness.Discharge.Exec.Shape
+import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
+import Proofs.Flock.Soundness.Discharge.ZkLink.M1
+import Proofs.Flock.Soundness.Discharge.ZkLink.One
+import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 
 /-!
 # The static shape of a compiled `--zk` rep
