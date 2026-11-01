@@ -8,7 +8,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("repo_check_placement", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
-NOW = datetime(2026, 10, 3, 17, 50, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 3, 17, 50, tzinfo=UTC)
 #: placement among two machines, whatever AUTO lists today (this module's own copy of check.py)
 N1, N2 = CHECK.AUTO = ("vy-nebius-1", "vy-nebius-2")
 HOLDER = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "cmd": "uv run python tools/verity/check/check.py", "run": "r-held",
@@ -331,7 +331,8 @@ def test_checks_placed_at_once_go_to_different_machines_until_each_shows_in_its_
     """Parallel launches must not all read one machine's one free slot as theirs and queue there while another machine's
     slot stands free."""
     docs = {N1: machine([slot("a")]), N2: machine([slot("b")])}
-    read = lambda names: json.loads(json.dumps({n: docs[n] for n in names}))
+    def read(names):
+        return json.loads(json.dumps({n: docs[n] for n in names}))
     path, t = tmp_path / "placed.json", [1000.0]
     first = CHECK.place([N1, N2], "a" * 40, True, read=read, path=path, now=lambda: t[0])[1]
     second = CHECK.place([N1, N2], "b" * 40, True, read=read, path=path, now=lambda: t[0])[1]

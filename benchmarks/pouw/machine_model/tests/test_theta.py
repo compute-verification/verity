@@ -127,7 +127,7 @@ def test_sha512_ceiling_on_the_card_pipes():
     assert h.built == pytest.approx(3400 / 64) == pytest.approx(1 / t.rates["sha512"].sheet, rel=1e-4)
     assert h.adds == pytest.approx(152) and h.shf_rotates == pytest.approx(0)
     assert h.hi_rotates == pytest.approx(rotations) and h.clocks == pytest.approx((456 + 5 * rotations) / 64)
-    assert T.sha_ceiling(t, "sheet", hi=False).clocks == pytest.approx((3400 - 152 - 698) / 64)   # RT-UNITS' 39.84
+    assert T.sha_ceiling(t, "sheet", hi=False).clocks == pytest.approx((3400 - 152 - 698) / 64)   # 39.84
     r = T.theta(SM120)
     with_hi, without = T.sha_ceiling(r, "sheet"), T.sha_ceiling(r, "sheet", hi=False)
     assert with_hi.clocks == pytest.approx(5 * 3415 / 7 / 64) and without.hi_rotates == 0

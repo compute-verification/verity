@@ -171,7 +171,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/core/protocols/onsite/../remote/../../service/sampled_proofs/../../difftest/lean",
+   "../Properties/../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../sampled_proofs/../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"url": "https://github.com/leanprover-community/mathlib4",
    "type": "git",
@@ -236,7 +236,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/core/protocols/onsite/../remote/../../service/sampled_proofs/../../primitives/lms/lean",
+   "../Properties/../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../sampled_proofs/../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

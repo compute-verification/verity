@@ -1,4 +1,4 @@
-# Honest at L = 32 on the A100 as AMPERE measured it: egemm80's e32, e_l7qs's mainloop ported to sm_80 (16 warps, a
+# Honest at L = 32 on the A100 as measured: egemm80's e32, e_l7qs's mainloop ported to sm_80 (16 warps, a
 # 128x128 tile, k-stages of 128 by cp.async.cg into a 4-stage 128B-swizzled ring, one barrier a stage, LDSM.16.M88.4
 # operands), duo receipts at LAG 7 with a LOP3 tie every 4th MMA, and the linears' peel as an IMMA.16832 tail a tile,
 # 8192 x 8192 x 4096. Counts are the SASS's a mainloop MMA (egemm80.py: the k-stage loop at its KT - 1 trips a tile, every
