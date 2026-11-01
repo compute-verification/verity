@@ -61,7 +61,7 @@ def shift {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W 
 slot and level 0's hiding alone. -/
 def RowsAt {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] (T : Table F K W Salt Seed D Hi VL)
     (p : W) (u : T.Mask) (V : T.Vis) : Prop :=
-  ∀ ω : T.Rand, ω.1 = u → T.visOf ω = V → ∀ r,
+  ∀ ω : T.Rand, ω.1 = u → ω.2.1 = V → ∀ r,
     ∑ i, T.lam r (T.view p ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view p ω).pre
 
 open Classical in

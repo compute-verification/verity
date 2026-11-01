@@ -62,7 +62,7 @@ theorem Hm96.toBase_viewR {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [A
 /-- `shift` from a witness to itself moves nothing. -/
 theorem shift_self {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL) (p : W)
     (ω : T.Rand) : T.shift p p ω = ω := by
-  have h : T.padShift p p ω.1 ω.2.1.2.1 = 0 := by
+  have h : T.padShift p p ω.1 ω.2.1 = 0 := by
     funext r
     simp only [padShift, sub_self, mul_zero, neg_zero]
     rfl
@@ -113,9 +113,9 @@ theorem viewPre_swExe {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkVie
     (u : ZkView.LeafPos z → ZkView.Bits × ZkView.Salt) :
     viewPre T (T.swExe w v (T.randOf (baseWith T b y) u) (hidOf T y)) =
       T.swPreWith w v b fun p => T.swExeLeaf w v b p (y p) := by
-  by_cases hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1.2.1
+  by_cases hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1
   · have hr' : T.tab.onVals.RowsAt (w, v) (T.randOf (baseWith T b y) u).1
-        (T.randOf (baseWith T b y) u).2.1.2.1 := hr
+        (T.randOf (baseWith T b y) u).2.1 := hr
     have e1 : T.swExe w v (T.randOf (baseWith T b y) u) (hidOf T y) =
         T.tab.toBase (T.onVals.viewExe (w, v) (T.randOf (baseWith T b y) u) (hidOf T y)) :=
       (congrArg T.tab.toBase ((FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, v) (w, T.tab.vals)
@@ -136,7 +136,7 @@ theorem viewPre_swExe {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkVie
     rw [e1, e2, ← viewPre_viewExe T.onVals (w, v) b y u]
     rfl
   · have hr' : ¬ T.tab.onVals.RowsAt (w, v) (T.randOf (baseWith T b y) u).1
-        (T.randOf (baseWith T b y) u).2.1.2.1 := hr
+        (T.randOf (baseWith T b y) u).2.1 := hr
     have e1 : T.swExe w v (T.randOf (baseWith T b y) u) (hidOf T y) =
         T.viewExe w (T.randOf (baseWith T (T.shiftB w v b) y) u) (hidOf T y) :=
       (congrArg T.tab.toBase ((FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, v) (w, T.tab.vals)
@@ -161,7 +161,7 @@ theorem viewPre_swExe {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkVie
 theorem _root_.FlockSoundness.Discharge.ZkView.Coined.shiftB_vals {K W Hi VL : Type} [Field K]
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (b : ZkView.Base z Hi) :
     T.shiftB w T.tab.vals b = b := by
-  have h : T.tab.onVals.padShift (w, T.tab.vals) (w, T.tab.vals) b.1 b.2.1.2.1 = 0 := by
+  have h : T.tab.onVals.padShift (w, T.tab.vals) (w, T.tab.vals) b.1 b.2.1 = 0 := by
     funext r
     simp only [FlockSoundness.ZK.Table.padShift, sub_self, mul_zero, neg_zero]
     rfl
@@ -288,7 +288,7 @@ theorem Proto.simulatorE_msg {W : Type} (G : Proto W)
 namespace RefSession
 
 /-- **The values the workers supply**: at each statement, witness, nonce and coin vector, each table's clear values
-(`Table.Vals`, read from the mask slot and the extra lanes). Its arguments are what a pad-blind worker
+(`Table.Vals`, read from the mask slot and level 0's hiding). Its arguments are what a pad-blind worker
 (`ZkServer.BWorker`) sees: the statement, the witness, the shared part of the tape (the nonce) and the coins, never the
 server's tape, which holds the pads. -/
 abbrev SwVals (S : RefSession) : Type :=

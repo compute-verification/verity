@@ -21,7 +21,7 @@ is the switched prover's at the workers' values: the same reading of the switche
 /-- **Where the worker's rows hold, the switched pre-final view's masked values are its own.** -/
 theorem FlockSoundness.ZK.Table.swPre_masked {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand)
-    (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) : (T.swPre w v ω).masked = (T.onVals.view (w, v) ω).masked := by
+    (hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1) : (T.swPre w v ω).masked = (T.onVals.view (w, v) ω).masked := by
   rw [FlockSoundness.ZK.Table.swPre, if_pos hr]
   rfl
 
@@ -70,7 +70,7 @@ theorem swCutE_masked_of_rowsAt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x))
     (hr : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     (swCutE x c w v τ j).masked =
       (((tabC PE x j).T (czExe PE x c j)).tab.onVals.view (wtOf PE x w j, v j)
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0)).masked := by
