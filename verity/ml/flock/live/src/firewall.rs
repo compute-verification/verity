@@ -156,15 +156,6 @@ pub enum Place {
     Own,
 }
 
-/// What a Lean frame drew at its start (`Flock.Firewall.Frame.Draws`): the rep's pads, mask, paddings and `τ`'s salt, the
-/// pads tree's leaf salts, and the root it computed over them.
-#[cfg(feature = "sha512")]
-pub struct Drawn {
-    pub pads: crate::zk_veil::Pads,
-    pub salts: Vec<u8>,
-    pub root: [u8; 64],
-}
-
 /// The statement's mask slot as the frame's rank check reads it (`flock-circuit`'s `mask_words`): `n` words from word `w0`
 /// of each of `blocks` blocks.
 #[derive(Clone, Copy, Debug)]
@@ -221,8 +212,8 @@ pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
 
 /// One rep's frame in the Lean session loop (`Flock.Firewall.Frames`), which samples the rep's prover randomness from the OS
 /// at the statement's start, commits it, and places, checks and masks each of the rep's rounds as the loop relays them
-/// ([`LoopRep::start`]). The rep proves with the samples; here it only asks the loop where it stands ([`LoopRep::place`],
-/// [`LoopRep::vals`]).
+/// ([`LoopRep::start`]). The samples never leave the loop: the rep gets their commitment's root alone, and the loop's finish
+/// proves with them. Here the rep only asks the loop where it stands ([`LoopRep::place`], [`LoopRep::vals`]).
 #[cfg(feature = "sha512")]
 pub struct LoopRep {
     /// the loop's frames address, the session's name ([`level0_session`]), the table and the rep
@@ -235,9 +226,9 @@ pub struct LoopRep {
 #[cfg(feature = "sha512")]
 impl LoopRep {
     /// Starts table `table`'s rep `rep` of the session the Lean session loop names `name`, at its frames address `addr`
-    /// ([`LeanSession::frames`], `rep NAME TABLE REP`), and takes its samples, which must have the statement's layout `lay`.
-    pub fn start(addr: &str, name: &str, table: usize, rep: usize, lay: &crate::zk_veil::Layout) -> Result<(Self, Drawn), String> {
-        use crate::zk_veil::{Code, K_PAD, TAU_SALT_BYTES};
+    /// ([`LeanSession::frames`], `rep NAME TABLE REP`), and takes the root of the pads tree over its samples
+    /// (`Frame.padsRoot`), the samples themselves never.
+    pub fn start(addr: &str, name: &str, table: usize, rep: usize) -> Result<(Self, [u8; 64]), String> {
         use std::io::{BufRead, Read, Write};
         let io = |e: std::io::Error| refused(format!("the Lean session loop's frames at {addr}: {e}"));
         let mut tcp = std::net::TcpStream::connect(addr).map_err(io)?;
@@ -247,26 +238,12 @@ impl LoopRep {
         let mut line = String::new();
         rd.read_line(&mut line).map_err(io)?;
         let line = line.trim_end();
-        let len: usize = match line.strip_prefix("ok ").map(str::parse) {
-            Some(Ok(n)) => n,
-            _ => return Err(refused(format!("the Lean frame: {}", line.strip_prefix("err ").unwrap_or(if line.is_empty() { "no answer" } else { line })))),
-        };
-        let (s, leaves) = (lay.len(), Code::new(lay.len() + K_PAD).n);
-        let tau = 32 * s + 32 * K_PAD;
-        let want = tau + TAU_SALT_BYTES + crate::zk_hooks::SALT_BYTES * leaves + 64;
-        if len != want {
-            return Err(refused(format!("the Lean frame drew {len} bytes where the layout takes {want}")));
+        if line != "ok 64" {
+            return Err(refused(format!("the Lean frame: {}", line.strip_prefix("err ").unwrap_or(if line.is_empty() { "no answer" } else { line }))));
         }
-        let mut b = vec![0u8; len];
-        rd.read_exact(&mut b).map_err(|e| refused(format!("the Lean frame's draws: {e}")))?;
-        let words = |o: usize, n: usize| -> Vec<F128> {
-            (0..n).map(|i| F128::new(u64::from_le_bytes(b[o + 16 * i..o + 16 * i + 8].try_into().unwrap()),
-                                     u64::from_le_bytes(b[o + 16 * i + 8..o + 16 * i + 16].try_into().unwrap()))).collect()
-        };
-        let pads = crate::zk_veil::Pads { h: words(0, s), mu: words(16 * s, s), pad_h: words(32 * s, K_PAD), pad_mu: words(32 * s + 16 * K_PAD, K_PAD),
-                                          tau_salt: b[tau..tau + TAU_SALT_BYTES].to_vec() };
-        let drawn = Drawn { pads, salts: b[tau + TAU_SALT_BYTES..len - 64].to_vec(), root: b[len - 64..].try_into().unwrap() };
-        Ok((LoopRep { addr: addr.to_string(), name: name.to_string(), table, rep }, drawn))
+        let mut root = [0u8; 64];
+        rd.read_exact(&mut root).map_err(|e| refused(format!("the Lean frame's pads root: {e}")))?;
+        Ok((LoopRep { addr: addr.to_string(), name: name.to_string(), table, rep }, root))
     }
 
     /// One request `what` about the rep to the loop's frames port (`Flock.Firewall.Frames.ask`): its answer's line, and the
@@ -325,18 +302,12 @@ pub fn link_body(z: &[F128], extra: &[Vec<F128>], pads: &[Vec<F128>], salts: &[u
     body
 }
 
-/// A rep's request bytes to `flock-firewall finish` (`Flock.Firewall.Finish.parseRep`): the rep's samples (`pads`, then the pads
-/// tree's `salts`), the passed values, the extra claims' points, and every round's coins. Levels ≥ 1's salts are the
-/// finish's own ([`LeanFinish::salts`]).
+/// A rep's request bytes to `flock-firewall finish` (`Flock.Firewall.Finish.parseRep`): the passed values, the extra claims'
+/// points, and every round's coins. The rep's samples are its Lean frame's (or, with no session loop, the finish's own) and
+/// levels ≥ 1's salts the finish's ([`LeanFinish::salts`]): neither comes from here.
 #[cfg(feature = "sha512")]
-pub fn rep_body(pads: &crate::zk_veil::Pads, salts: &[u8], vals: &[F128], extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Vec<u8> {
-    let mut b = Vec::new();
-    for v in [&pads.h, &pads.mu, &pads.pad_h, &pads.pad_mu] {
-        b.extend(f128_wire(v));
-    }
-    b.extend_from_slice(&pads.tau_salt);
-    b.extend_from_slice(salts);
-    b.extend(f128_wire(vals));
+pub fn rep_body(vals: &[F128], extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Vec<u8> {
+    let mut b = f128_wire(vals);
     b.extend((extras.len() as u64).to_le_bytes());
     for x in extras {
         b.extend((x.len() as u64).to_le_bytes());
@@ -353,7 +324,8 @@ pub fn rep_body(pads: &crate::zk_veil::Pads, salts: &[u8], vals: &[F128], extras
 /// The ZK server's proof files of record on a firewalled session: the Lean session loop's finish (`Flock.Firewall.Finish`
 /// in the Lean verifier) on the session's statement, which reads each table's level 0 from the loop's own
 /// ([`LeanFinish::level0`]), then per rep, at its start, is asked for its salts for levels ≥ 1, which it samples itself, and at
-/// its end given its request. It ends at its first refusal, so every later request is refused too.
+/// its end given its request, which it proves with the pads the rep's Lean frame drew. It ends at its first refusal, so
+/// every later request is refused too.
 #[cfg(feature = "sha512")]
 pub struct LeanFinish {
     stdin: std::net::TcpStream,
@@ -427,10 +399,13 @@ impl LeanFinish {
 
     /// Rep `r` of session table `i`'s inner proof, live (`Finish.innerLive`), on its request with the coins of its PIOP and
     /// opening (`rep_body`): its constraints go to `cons` (`Finish.consBytes`), then each of its rounds to `round`, which answers
-    /// it with the coins the stream answered it, or with None to stop the rep (which ends the finish). Its proof file is then [`Self::rep`]'s, on every round's coins.
+    /// it with the coins the stream answered it, or with None to stop the rep (which ends the finish). Returns the names of
+    /// the constraints that fail on the rep's pads (`Finish.namesBytes`); where there are none, its proof file is then
+    /// [`Self::rep`]'s, on every round's coins.
     pub fn inner(&mut self, i: usize, r: usize, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>,
-                 cons: &mut dyn FnMut(&[u8]) -> Result<(), String>) -> Result<(), String> {
-        self.live(&format!("inner {i} {r}"), body, round, cons).map(|_| ())
+                 cons: &mut dyn FnMut(&[u8]) -> Result<(), String>) -> Result<Vec<String>, String> {
+        let b = self.live(&format!("inner {i} {r}"), body, round, cons)?;
+        parse_names(&b).ok_or_else(|| refused(format!("the Lean finish's failing constraints of table {i} rep {r}: {} bytes that do not parse", b.len())))
     }
 
     /// A request whose answer comes after the rounds the finish sends live: `round N LEN` and its bytes, answered `coins N`
@@ -477,29 +452,48 @@ impl LeanFinish {
     }
 }
 
+#[cfg(feature = "sha512")]
+fn take<'a>(b: &'a [u8], o: &mut usize, n: usize) -> Option<&'a [u8]> {
+    let x = b.get(*o..o.checked_add(n)?)?;
+    *o += n;
+    Some(x)
+}
+
+#[cfg(feature = "sha512")]
+fn take_len(b: &[u8], o: &mut usize) -> Option<usize> {
+    take(b, o, 8).map(|x| u64::from_le_bytes(x.try_into().unwrap()) as usize)
+}
+
+/// A name as the Lean finish sends it: its byte count, then its bytes.
+#[cfg(feature = "sha512")]
+fn take_name(b: &[u8], o: &mut usize) -> Option<String> {
+    let k = take_len(b, o)?;
+    String::from_utf8(take(b, o, k)?.to_vec()).ok()
+}
+
+/// The names of a rep's constraints that fail on its pads, as the Lean finish answers its inner proof (`Finish.namesBytes`).
+#[cfg(feature = "sha512")]
+pub fn parse_names(b: &[u8]) -> Option<Vec<String>> {
+    let mut o = 0usize;
+    let n = take_len(b, &mut o)?;
+    let out = (0..n).map(|_| take_name(b, &mut o)).collect::<Option<Vec<_>>>()?;
+    (o == b.len()).then_some(out)
+}
+
 /// The constraints the Lean finish sends before a rep's inner proof (`Finish.consBytes`): each its name and form.
 #[cfg(feature = "sha512")]
 pub fn parse_cons(b: &[u8]) -> Result<Vec<(String, crate::zk_veil::Lin)>, String> {
-    fn take<'a>(b: &'a [u8], o: &mut usize, n: usize) -> Option<&'a [u8]> {
-        let x = b.get(*o..o.checked_add(n)?)?;
-        *o += n;
-        Some(x)
-    }
     fn word(x: &[u8]) -> F128 {
         F128::new(u64::from_le_bytes(x[..8].try_into().unwrap()), u64::from_le_bytes(x[8..16].try_into().unwrap()))
     }
-    fn len(b: &[u8], o: &mut usize) -> Option<usize> {
-        take(b, o, 8).map(|x| u64::from_le_bytes(x.try_into().unwrap()) as usize)
-    }
     let parsed = (|| -> Option<Vec<(String, crate::zk_veil::Lin)>> {
         let mut o = 0usize;
-        let n = len(b, &mut o)?;
+        let n = take_len(b, &mut o)?;
         let mut out = Vec::with_capacity(n.min(4096));
         for _ in 0..n {
-            let k = len(b, &mut o)?;
-            let name = String::from_utf8(take(b, &mut o, k)?.to_vec()).ok()?;
+            let name = take_name(b, &mut o)?;
             let c = word(take(b, &mut o, 16)?);
-            let m = len(b, &mut o)?;
+            let m = take_len(b, &mut o)?;
             let a = take(b, &mut o, m.checked_mul(16)?)?.chunks(16).map(word).collect();
             out.push((name, crate::zk_veil::Lin { c, a }));
         }
@@ -896,6 +890,26 @@ mod tests {
         for bad in [renamed, swapped, honest[..6].to_vec(), [&honest[..], &["extra"]].concat()] {
             let e = relations_held(&named(&bad), &replay, true).unwrap_err();
             assert!(e.starts_with("FIREWALL-REFUSED: the Lean finish's constraints"), "{e}");
+        }
+    }
+
+    #[cfg(feature = "sha512")]
+    #[test]
+    fn the_failing_names_parse_as_the_lean_finish_sends_them() {
+        let names = |ns: &[&[u8]]| -> Vec<u8> {
+            let mut b = (ns.len() as u64).to_le_bytes().to_vec();
+            for n in ns {
+                b.extend((n.len() as u64).to_le_bytes());
+                b.extend_from_slice(n);
+            }
+            b
+        };
+        assert_eq!(parse_names(&names(&[])), Some(vec![]));
+        assert_eq!(parse_names(&names(&[b"zerocheck c_eval", b"ring switch c"])),
+                   Some(vec!["zerocheck c_eval".to_string(), "ring switch c".to_string()]));
+        let two = names(&[b"lincheck", b"ring switch ab"]);
+        for bad in [[&two[..], &[0]].concat(), two[..two.len() - 1].to_vec(), two[..4].to_vec(), names(&[&[0xff]])] {
+            assert_eq!(parse_names(&bad), None, "{bad:?}");
         }
     }
 }

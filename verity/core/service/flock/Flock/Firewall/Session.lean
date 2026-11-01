@@ -37,8 +37,9 @@ the prover's bytes:
 * `Finish` leaves only once the schedule's last opening has (`State.request`), as `FINISH`. The proof files are the
   loop's own finish's, a connection to the frames port (`Finish.serveLoop`): it reads each table's level 0 from the
   loop's `Level0` of the table's root, draws each rep's salts for levels ≥ 1 itself, which the prover's trees then take,
-  refuses a rep's request whose draws, passed values, extra claims or coins are not its frame's (`Frames.ownOf`,
-  `Finish.RepIn.differs`) or whose `final_c` its passed values do not fix (`Finish.consWhy`), and coins answering its
+  proves each rep with its frame's draws, which never reach the prover (`Finish.drawsOf`), refuses a rep's request whose
+  passed values, extra claims or coins are not its frame's (`Frames.ownOf`, `Finish.RepIn.differs`) or whose `final_c`
+  its passed values do not fix (`Finish.consWhy`), and coins answering its
   inner proof's rounds that are not the stream's (`Finish.coinsWhy`), refuses a table's level-0 data from the host
   (`table`) and any rep's proof file but the one its live inner request computed (`Finish.Kept`), and keeps each rep's
   proof file, once (`Frames.Registry.file`).
@@ -729,9 +730,9 @@ def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO
 `vals …`, `Frames.ask`); one table's level 0 (`level0 …`, `level0`); or a session's
 proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
 levels ≥ 1 kept in `reg` for its opening, its inner proof's rounds for the frame to release
-(`Frames.Registry.innerRound`), its proof file for the session's `Proof` (`Frames.Registry.file`), and its
-requests refused unless they carry its frame's draws, the values it took, the session's extra claims and the coins the
-stream answered (`Frames.ownOf`).
+(`Frames.Registry.innerRound`), its proof file for the session's `Proof` (`Frames.Registry.file`), its proofs on its
+frame's draws, and its requests refused unless they carry the values its frame took, the session's extra claims and the
+coins the stream answered (`Frames.ownOf`).
 Anything else is answered `err WHY`. -/
 def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : IO.Ref Frames.Registry)
     (l0s : IO.Ref Level0.Registry) : IO Unit := do

@@ -316,10 +316,11 @@ def finish (reg : IO.Ref Registry) (sid tables : Nat) : IO (Except String Unit) 
       | _ => return .error s!"table {i} rep {r}: no answer to finish"
   return .ok ()
 
-/-- **What the loop holds of table `i`'s rep `r`** on the level 0 of root `root`, in its frames `R` and level 0s `L0`, which
-the loop's finish holds the rep's requests to (`Finish.Own`): the draws its frame took at its start, the algebraic phase's
-values the frame took at their pads (`Frame.absorbed`'s order, the rest `0`), the extra claims at the session's link points
-(`Drive.extras`, as `placeOf` opens with them), and the coins the stream answered each of the rep's rounds so far. -/
+/-- **What the loop holds of table `i`'s rep `r`** on the level 0 of root `root`, in its frames `R` and level 0s `L0`
+(`Finish.Own`): the draws its frame took at its start, which the loop's finish proves the rep with (`Finish.drawsOf`), and
+what it holds the rep's requests to: the algebraic phase's values the frame took at their pads (`Frame.absorbed`'s order,
+the rest `0`), the extra claims at the session's link points (`Drive.extras`, as `placeOf` opens with them), and the coins
+the stream answered each of the rep's rounds so far. -/
 def ownOf (R : Registry) (L0 : Level0.Registry) (i r : Nat) (root : ByteArray) : Except String Finish.Own := do
   let some sl := L0.slots.find? (·.l0.root == root) | throw s!"table {i}: a level 0 the session loop did not draw"
   let some (sid, name) := sl.bound | throw s!"table {i}: a level 0 no session's Commit carries"
