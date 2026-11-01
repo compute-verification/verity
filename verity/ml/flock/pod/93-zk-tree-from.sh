@@ -5,7 +5,8 @@
 #     -- bash verity/ml/flock/pod/93-zk-tree-from.sh
 # The challenger is benchmarks/live_challenger/serve.py, its coins the Lean verifier's `IO.getRandomBytes`
 # (`one_stage.verifier.coins`, built here with lake first), a test LMS key outside $OUT and a session secret. RoPE d64
-# staged at 32 instances as 92-zk-sessions.sh stages it (one circuit, hidden outputs), then:
+# staged at 32 instances as 92-zk-sessions.sh stages it (one circuit, hidden outputs), then, each session drawing all 32
+# (--draw subset:32, as every soundness claim is about a drawn session):
 #   wrong-secret  serve --tree-from with another secret: the challenger refuses its hello and serve never serves
 #   tree-from     serve/prove --zk, the session's coin tree sampled and opened by the challenger (--tree-from with its
 #                 secret, --sessions 1); the challenger exits 0 once serve closes its session
@@ -50,10 +51,10 @@ ADDR=$(sed -n 's/^listening //p' "$OUT/challenger.out")
 [ -n "$ADDR" ] || { log "challenger FAILED to listen: $(tail -3 "$OUT/challenger.err")"; exit 1; }
 log "challenger listening on $ADDR"
 
-served() {   # served NAME SERVE_ARGS...: one loopback --zk session on 32 instances under $S/NAME, its prove's exit
+served() {   # served NAME SERVE_ARGS...: one loopback --zk session drawing all 32 instances under $S/NAME, its prove's exit
   local name=$1 srv port; shift
   "$BIN" serve --zk --listen 127.0.0.1:0 --out "$S/$name" --instances "$W/stage/pub-32.bin" "${ST[@]}" --pin "$PIN" \
-    --operator loopback --sessions 1 "$@" > "$OUT/serve-$name.log" 2>&1 &
+    --operator loopback --draw subset:32 --sessions 1 "$@" > "$OUT/serve-$name.log" 2>&1 &
   srv=$!
   until grep -q '^SERVING ' "$OUT/serve-$name.log" 2>/dev/null; do kill -0 $srv 2>/dev/null || break; sleep 1; done
   port=$(sed -n 's/^SERVING 127.0.0.1://p' "$OUT/serve-$name.log")
