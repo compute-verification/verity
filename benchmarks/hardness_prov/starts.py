@@ -15,7 +15,8 @@ returns the planted float matrix and the ternary t to price it against (or None)
 - `lr{r}res{k}`: rank r plus w's residual clipped to ±k served LSBs (k = 15 keeps it in Strassen's depth 3): the
   useful-model version, as SVD-plus-low-bits quantizers build it.
 - `vq{f}res{k}`: w's rows k-means clustered into n/f centers plus the residual clipped to ±k served LSBs (`routes`'
-  clustered-rows route, m/n plus the residual): high rank, so it passes a spectral gate.
+  clustered-rows route, m/n plus the residual): high rank, though k-means centers keep w's top principal directions,
+  so the codes' spectrum still concentrates.
 
 Each family planted post hoc is a projection of the honest weights, so a start can be a junk model. `constrained`
 is the cheater's own training before the commitment: the whole model fine-tuned with every planted matrix projected
@@ -71,23 +72,22 @@ def small_mad(w):
     return out
 
 
-def residual_clip(w, r, k, quant):
-    L = svd_r(w, r)
+def clip_around(w, base, k, quant):
+    """base plus w's residual from it clipped to ±k served LSBs (iterated, since the clip moves the scale)."""
     w0 = w.astype(np.float64)
     for _ in range(4):
         s = toy.scale(w0, quant)[:, None]
-        w0 = L + np.clip(w - L, -k * s, k * s)
+        w0 = base + np.clip(w - base, -k * s, k * s)
     return w0
+
+
+def residual_clip(w, r, k, quant):
+    return clip_around(w, svd_r(w, r), k, quant)
 
 
 def vq_clip(w, f, k, quant):
     c, a = routes.kmeans(w, max(2, w.shape[0] // f))
-    C = c[a].astype(np.float64)
-    w0 = w.astype(np.float64)
-    for _ in range(4):
-        s = toy.scale(w0, quant)[:, None]
-        w0 = C + np.clip(w - C, -k * s, k * s)
-    return w0
+    return clip_around(w, c[a].astype(np.float64), k, quant)
 
 
 def plant(w, family, quant):
