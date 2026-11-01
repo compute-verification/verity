@@ -96,7 +96,7 @@ theorem count_pin {S : Model.Statement} (j : Fin (2 ^ S.kLog)) :
 
 /-- **1e's facts give the class's placement facts.** For the verifier's own run `deriveChecked … = .ok done`, with `one`
 past every row of the unit, `BlockFacts` at `pos` is `Realizes` for the unit's composed rows (`ofBlock`) at `pos`. -/
-theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
     (hone : (done.getD unit default).rows.size ≤ one) (hf : BlockFacts S words done (done.getD unit default) one pos) :
@@ -165,7 +165,7 @@ theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array 
 
 /-- **A table class's placement at one slot**, from 1e's facts there: the unit's composed rows, placed at
 `composePlace`. -/
-theorem BlockFacts.placement {types : String → Option CircuitType} {ls : Array Flock.Layout}
+theorem BlockFacts.placement {types : String → Option CircuitType} {ls : Array Flock.BlockLayout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
     (hone : (done.getD unit default).rows.size ≤ one) (hf : BlockFacts S words done (done.getD unit default) one pos) :

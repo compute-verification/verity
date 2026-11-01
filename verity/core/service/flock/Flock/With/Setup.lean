@@ -62,10 +62,10 @@ def CircuitType.digestWith (hs : Hashes M) (t : CircuitType) : M String := do
   let s ← canon t.toJson
   return hexOf (← hs.sha512 (CircuitType.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
-/-- `Layout.digest` through the oracle. -/
-def Layout.digestWith (hs : Hashes M) (l : Layout) : M String := do
+/-- `BlockLayout.digest` through the oracle. -/
+def BlockLayout.digestWith (hs : Hashes M) (l : BlockLayout) : M String := do
   let s ← canon l.record
-  return hexOf (← hs.sha512 (Layout.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
+  return hexOf (← hs.sha512 (BlockLayout.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
 namespace Typed
 
@@ -83,7 +83,7 @@ def holdWith (types : Array (String × CircuitType)) (tables : List (String × B
       if bytes.size != 4 * 2 ^ lt.indexBits || Pinned.tableSha bytes != sha then
         throw s!"table {lt.name}: its words are not the table its SHA-512 names"
       let words := (Array.range (bytes.size / 4)).map fun i => rd32 bytes (4 * i)
-      out := out.push ⟨sha, bytes, words, Layout.tableInfo words⟩
+      out := out.push ⟨sha, bytes, words, BlockLayout.tableInfo words⟩
   return out
 
 /-- `classOf` through the oracle. -/
@@ -100,11 +100,11 @@ def classOfWith (hs : Hashes M) (mj : Json) (tables : List (String × ByteArray)
     if let .error e := CircuitType.check (typeIn types) t then throw s!"META: type {d.take 16}… breaks the rule '{e}'"
   let held ← holdWith types tables
   let ls ← (← J.arr mj "layouts" ctx).mapM fun r => do
-    let l ← Layout.ofJson r
+    let l ← BlockLayout.ofJson r
     if (← J.str r "sha512" ctx) != (← l.digestWith hs) then throw s!"{ctx}: a layout's sha512 is not its record's digest"
     pure l
   let unit ← J.nat mj "unit_layout" ctx
-  if let .error e := Layout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
+  if let .error e := BlockLayout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
   let some ul := ls[unit]? | throw "META: unit_layout names no layout"
   let some ut := ul.type | throw "META: the unit's layout names no type"
   if (← J.str mj "unit_type" ctx) != ut then throw "META: unit_type is not the unit's layout's type"
@@ -118,7 +118,7 @@ def classOfWith (hs : Hashes M) (mj : Json) (tables : List (String × ByteArray)
   | .error e => throw s!"META: the unit's rows: {e}"
 
 /-- `templateOf` through the oracle. -/
-def templateOfWith (hs : Hashes M) (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat)
+def templateOfWith (hs : Hashes M) (name : String) (done : Array DeriveAll.D) (ls : Array BlockLayout) (unit : Nat)
     (t : CircuitType) (held : Array Held) : M Template := do
   let u := done.getD unit default
   if u.reads.any (·.prod0 < u.size) then

@@ -64,8 +64,8 @@ theorem typeDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hash
   sim_walk
 
 theorem layoutDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
-    (l : Layout) : S.R (l.digestWith hs) (l.digestWith hs') := by
-  unfold Layout.digestWith
+    (l : BlockLayout) : S.R (l.digestWith hs) (l.digestWith hs') := by
+  unfold BlockLayout.digestWith
   sim_walk
 
 theorem typedClassOfWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
@@ -78,7 +78,7 @@ theorem typedClassOfWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM :
 
 theorem templateOfWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (name : String) (done : Array DeriveAll.D)
-    (ls : Array Layout) (unit : Nat) (t : CircuitType) (held : Array Typed.Held) :
+    (ls : Array BlockLayout) (unit : Nat) (t : CircuitType) (held : Array Typed.Held) :
     S.R (Typed.templateOfWith hs name done ls unit t held) (Typed.templateOfWith hs' name done ls unit t held) := by
   unfold Typed.templateOfWith
   simp -zeta only [tM.bind, tN.bind]
