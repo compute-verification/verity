@@ -149,3 +149,21 @@ def test_refusals():
                  (narrow, schema, values, levels), (one, W_SCHEMA, values[:1], one_levels)):
         with pytest.raises(ProtocolError):
             keyed.top_message(*args)
+
+
+@pytest.mark.parametrize("name", VECTORS)
+def test_the_top_from_its_bytes_is_top_message(name):
+    """A hasher's top (the root's two children, or the one leaf's value) gives `top_message`'s M_top, and refuses a top of
+    another size or a domain of another hash."""
+    _, salt_w, p, schema, values, _, _ = VECTORS[name]
+    dom, levels = _instance(salt_w, p, schema, values)
+    D = merkle_depth(len(values))
+    top = values[0] if D == 0 else b"".join(levels[D - 1])
+    assert keyed.top_from(dom, schema, len(values), top) == keyed.top_message(dom, schema, values, levels)
+    narrow = CommitmentDomain(dom.binding, -1, RangeIndexedDomain(0, len(values)), hash="sha256")
+    bad = [(narrow, schema, len(values), top), (dom, schema, 0, top), (dom, schema, True, top)]
+    if D:
+        bad += [(dom, schema, len(values), top[:64]), (dom, schema, len(values), top + bytes(64))]
+    for args in bad:
+        with pytest.raises(ProtocolError):
+            keyed.top_from(*args)

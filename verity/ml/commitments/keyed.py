@@ -22,16 +22,26 @@ from .merkle import _NODE, CommitmentDomain, _message, _uint, merkle_depth
 KEY_BYTES = 64
 
 
+def top_from(dom: CommitmentDomain, schema: str, count: int, top: bytes) -> bytes:
+    """M_top of a subtree of ``count`` leaves under ``dom`` from its top as a hasher hands it: the root's two children (128
+    bytes) for ``count`` >= 2, or the one leaf's value."""
+    if dom.hash != "sha512" or type(count) is not int or count < 1:
+        raise ProtocolError("a keyed digest is over a nonempty frame-v3-sha512 subtree")
+    depth = merkle_depth(count)
+    if depth == 0:
+        return dom.leaf_prefix(0, 0, schema, len(top)) + bytes(top)
+    if len(top) != 128:
+        raise ProtocolError(f"a subtree's top is its root's two 64-byte children, not {len(top)} bytes")
+    return _message(_NODE, dom.domain_id, _uint(depth - 1), _uint(0), bytes(top[:64]), bytes(top[64:]))
+
+
 def top_message(dom: CommitmentDomain, schema: str, values: Sequence[bytes], levels: Sequence[Sequence[bytes]]) -> bytes:
     """M_top of ``levels`` (``tree_levels`` under ``dom`` over the leaves of ``values``), refused unless its SHA-512 is their
     root."""
     if dom.hash != "sha512" or not values or len(levels) != merkle_depth(len(values)) + 1:
         raise ProtocolError("a keyed digest is over a nonempty frame-v3-sha512 subtree")
     depth = len(levels) - 1
-    if depth == 0:
-        message = dom.leaf_prefix(0, 0, schema, len(values[0])) + values[0]
-    else:
-        message = _message(_NODE, dom.domain_id, _uint(depth - 1), _uint(0), *levels[depth - 1])
+    message = top_from(dom, schema, len(values), values[0] if depth == 0 else b"".join(levels[depth - 1]))
     if hashlib.sha512(message).digest() != levels[-1][0]:
         raise ProtocolError("M_top is not the subtree root's message")
     return message
