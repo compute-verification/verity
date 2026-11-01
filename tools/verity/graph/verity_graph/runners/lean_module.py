@@ -1,6 +1,6 @@
 """lean-module's runner: compile one module with `lean` as Lake does (`lean FILE -o -i --setup --json`), from its imports'
 artifacts in the work directory alone, then kernel-replay its declarations (`tools/verity/lean/Replay.lean`) and write
-each one's axioms (`tools/verity/lean/Facts.lean`, every axiom reported), both compiled once per toolchain and source.
+the axioms of each that uses any (`tools/verity/lean/Facts.lean`), both compiled once per toolchain and source.
 Its files are Lake's bytes but for one thing: `FILE` is the source's path in the tree, where Lake gives an absolute one
 that a module's `.olean` keeps with its warnings, so the runner's are the same on every worker.
 
@@ -62,10 +62,15 @@ def _locked(path: Path):
         yield
 
 
+def toolchain_dir(tc: str) -> Path:
+    """Where elan installs the toolchain ``tc`` (a `lean-toolchain` line)."""
+    return Path.home() / ".elan" / "toolchains" / tc.replace("/", "--").replace(":", "---")
+
+
 def toolchain(pkg: Path, work: Path) -> Path:
     """The directory of ``pkg``'s toolchain, installed by elan when the worker lacks it."""
     tc = (pkg / "lean-toolchain").read_text().strip()
-    d = Path.home() / ".elan" / "toolchains" / tc.replace("/", "--").replace(":", "---")
+    d = toolchain_dir(tc)
     if not (d / "bin" / "lean").is_file():
         elan = shutil.which("elan") or str(Path.home() / ".elan" / "bin" / "elan")
         with _locked(env_dir() / "elan.lock"):
@@ -140,8 +145,9 @@ def program(name: str, tc: Path, work: Path) -> Path:
 _SANDBOX: list[bool] = []
 
 
-def sandboxed(work: Path, argv: list[str]) -> list[str]:
-    """``argv`` in `sandbox.sh` (no network, every mount read-only but ``work``), or as it is on a worker without one."""
+def sandboxed(work: Path, argv: list[str], ro: tuple[Path, ...] = ()) -> list[str]:
+    """``argv`` in `sandbox.sh` (no network, every mount read-only but ``work``), or as it is on a worker without one. The
+    sandbox's /tmp is its own unless ``work`` or a directory of ``ro``, which it reads, lives there."""
     if not _SANDBOX:
         probe = Path(tempfile.mkdtemp(prefix="lean-module-sandbox-"))
         mark = LEAN / ".sandbox-probe"
@@ -153,7 +159,8 @@ def sandboxed(work: Path, argv: list[str]) -> list[str]:
             _SANDBOX.append(False)
         mark.unlink(missing_ok=True)
         shutil.rmtree(probe, ignore_errors=True)
-    return [*UNSHARE, "--", "bash", str(LEAN / "sandbox.sh"), str(work), "--", *argv] if _SANDBOX[0] else argv
+    return [*UNSHARE, "--", "bash", str(LEAN / "sandbox.sh"), *(a for d in ro for a in ("--ro", str(d))), str(work), "--",
+            *argv] if _SANDBOX[0] else argv
 
 
 def import_arts(lib: Path, own: Path) -> dict[str, list[list[str]]]:
@@ -219,7 +226,7 @@ def run(task: dict, work: Path) -> dict:
     t = time.monotonic()
     # A module's `.olean` keeps its warnings with the source path as given: relative to the root, the same on every worker.
     rc = call(sandboxed(work, [str(tc / "bin" / "lean"), src, "-o", str(olean), "-i", str(ilean), "--setup",
-                               str(work / "setup.json"), "--json"]),
+                               str(work / "setup.json"), "--json"], (ROOT, tc, *([deps] if deps else []))),
               work, ROOT, {**os.environ, "LEAN_PATH": os.pathsep.join(dep_libs), "LEAN_NUM_THREADS": threads})
     steps["compile"] = round(time.monotonic() - t, 3)
     detail = {"sandbox": _SANDBOX[0], "imports": len(setup["importArts"]), "seconds": steps}
