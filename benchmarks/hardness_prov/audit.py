@@ -108,6 +108,7 @@ def main():
     ap.add_argument("--tokens", default="4096,65536,1048576", help="tokens a step")
     ap.add_argument("--ctx", type=int, default=2048)
     ap.add_argument("--taus", default="1,10,30,100")
+    ap.add_argument("--ranks", default="4,8,32,128", help="ranks the spectral gate tests")
     ap.add_argument("--out")
     args = ap.parse_args()
     rows = []
@@ -125,7 +126,8 @@ def main():
             for r in rows if r["tokens"] == 4096 and r["mac"] == "int8"}
     for k, v in tail.items():
         print(f"split tail {k}: " + ", ".join(f"τ {t}: {h:,.0f} GPU-h" for t, h in v.items()))
-    once = {name: {"endbox": endbox(name), "spectral": [spectral(name, r) for r in (4, 8, 32)]} for name in SHAPES}
+    ranks = [int(x) for x in args.ranks.split(",")]
+    once = {name: {"endbox": endbox(name), "spectral": [spectral(name, r) for r in ranks]} for name in SHAPES}
     for name, v in once.items():
         print(f"{name}: end box {v['endbox']['gpu_h']:.1f} GPU-h ({v['endbox']['ands_per_param']:.0f} ANDs a parameter); "
               f"code-law gate {v['endbox']['code_law_gpu_h']:.2f} GPU-h; "
