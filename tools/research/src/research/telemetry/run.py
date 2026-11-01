@@ -415,7 +415,7 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--profile-key", action="append", default=[], help="environment variable NAMES to record (allowlist); values are read from the environment")
     ap.add_argument("--declared-output", action="append", default=[], metavar="GLOB",
                     help="run-dir-relative glob of files custody uploads beside all of out/ ($OUT) (repeatable; `*` crosses `/`); other "
-                         "files are listed by size and hash, not uploaded, past 256 MiB. See .agents/skills/writing-runs/SKILL.md")
+                         "files are listed by size and hash, not uploaded, past 256 MiB. See the infra checkout's writing-runs skill")
     ap.add_argument("--reservation-gpu", default=None)
     ap.add_argument("--reservation-host-memory-bytes", type=int, default=None)
     ap.add_argument("--policy", default=None, help="policy toml; its version + sha256 are recorded")

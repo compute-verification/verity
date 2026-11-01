@@ -42,7 +42,7 @@ Main's lowering (the approach `baseline`) and every approach since are on the le
 
 ## Running it
 
-Every lowering runs remotely (AGENTS.md "Tests"). The file goes in a scratch directory, and only numbers go in `$OUT`:
+Every lowering runs remotely (the infra checkout's AGENTS.md, "Machines"). The file goes in a scratch directory, and only numbers go in `$OUT`:
 
 ```text
 research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&

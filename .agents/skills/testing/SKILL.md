@@ -17,9 +17,9 @@ each suite in its own process from its own directory, and `check` runs the same 
 
 ## Run tests
 
-Suites run remotely through `research run --on auto` (AGENTS.md "Tests"; `research/auto.py` says where a job went). Give
-it `--cwd source`, so the job runs in the shipped tree rather than its run directory, and `uv sync` that tree first:
-`suites.py` refuses another checkout's environment. `research status RUN` checks back on it.
+Suites run remotely through `research run --on auto` (the infra checkout's AGENTS.md, "Machines"; `research/auto.py`
+says where a job went). Give it `--cwd source`, so the job runs in the shipped tree rather than its run directory, and
+`uv sync` that tree first: `suites.py` refuses another checkout's environment. `research status RUN` checks back on it.
 
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
@@ -28,7 +28,7 @@ $R "$S"                         # every suite whose inputs changed since it last
 $R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
-$R "$S --changed $(git rev-parse origin/main) --quick"   # only the suites your change touches: the pre-mark run (AGENTS.md)
+$R "$S --changed $(git rev-parse origin/main) --quick"   # only the suites your change touches: the pre-mark run
 $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
@@ -137,5 +137,5 @@ and false-positive rulings live in its dashboard, not the repository.
 
 ## Before a PR
 
-The suites your change touches pass with no read outside their inputs (the pre-mark run, AGENTS.md "Lanes"), and a new or
-changed circuit passes `circuit-check` (AGENTS.md "Circuits").
+The suites your change touches pass with no read outside their inputs (the pre-mark run, the infra checkout's AGENTS.md
+"Landing"), and a new or changed circuit passes `circuit-check` (AGENTS.md "Circuits").

@@ -125,7 +125,7 @@ the registry changed since the deployment before (`service/ignore.py`, vercel.js
    invite it to `#ask-the-team` and `#resource-accounting` (it reads their threads for its routing lines, too). Leave
    the Interactivity Request URL where it is (see below). `slack-app.json` gets these blocks in a separate PR.
 5. For each person Daniel invites: `research msg chat expect NAME --email E` before they join.
-6. Then retire @top's watcher hand-off of chat and `#ask-the-team` posts (the using-slack skill).
+6. Then retire @top's watcher hand-off of chat and `#ask-the-team` posts (the infra checkout's using-slack skill).
 
 ## Needs
 

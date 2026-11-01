@@ -48,7 +48,7 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
-#: (`.agents/skills/authoring-skills/`).
+#: (the infra checkout's authoring-skills skill).
 SKILL_SIZE_CAP = 16 * 1024
 #: Skills over SKILL_SIZE_CAP when it was set, each capped at its size then (the largest at any open PR's head, rounded up,
 #: plus 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
@@ -154,7 +154,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
     if os.path.basename(path) == "SKILL.md":
         return (f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; compact it: keep the current "
                 "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to the "
-                "decisions log or a note (.agents/skills/authoring-skills/SKILL.md)")
+                "decisions log or a note (the infra checkout's authoring-skills skill)")
     where = f"one file per entry under {d}" if (d := split_dir(path)) else "the notes store (cite it by note:<id>)"
     return f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; move detail to {where}"
 

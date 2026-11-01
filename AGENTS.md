@@ -5,6 +5,9 @@ compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has 
 terms code, docs and output use. This file states what holds on `main` now; each package's README and docstrings say what
 it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 
+The team's own agents then read the infra checkout's AGENTS.md, `/opt/infra/AGENTS.md` (compute-verification/infra, on
+every agent VM and node): the team's machines, landing, lanes and skills.
+
 ## Map and commands
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
@@ -34,7 +37,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill).
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the infra checkout's AGENTS.md).
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -53,7 +56,7 @@ uv run tools/verity/check/suites.py             # the suites whose inputs change
 uv run --extra torch-cpu verity check           # the whole check
 ~~~
 
-The team's agents run these remotely (the team skill).
+The team's agents run these remotely (the infra checkout's AGENTS.md).
 
 ## Design rules
 
@@ -160,7 +163,7 @@ docs-only change reruns nothing; a nightly uncached check must agree, and a disa
 only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
 soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
 and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
-reverted on `checked` (how a PR lands: the team skill).
+reverted on `checked` (how a PR lands: the infra checkout's AGENTS.md).
 
 ## Lean
 
@@ -207,11 +210,9 @@ reverted on `checked` (how a PR lands: the team skill).
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
-  procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
-  skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` fails on a doc
-  naming a dead path.
-- Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
-  `show-environment`.
+  procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md,
+  DESIGN.md, the skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py`
+  fails on a doc naming a dead path.
 
 ## Where writing goes
 
@@ -232,15 +233,14 @@ and its parameters). What a run measured, what happened and who decided live out
   reader who finds no overhead figure in the repository has found it working as intended, and runs the benchmark or reads
   the published result.
 - **Where those live:** results in the evidence store, why a line changed in git, and open work, decisions and reports
-  outside the repository (the team skill).
+  outside the repository (the infra checkout's AGENTS.md).
 - **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`fixtures/artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
 
 ## Skills
 
-`.agents/skills/`: `testing`, `lean-proofs`, `kernel-engineering` (PoUW GPU kernels on sm_120), `smell-check` (before you
-call something served, end to end, proved or credited), `writing-runs` (a job for `research run`), `friction` (when
-something is in your way, and the standing rulings), `process-design` and `authoring-skills` (at most 16 KB a skill).
-The team's own agents start with `team` (machines, landing, lanes, and where work, notes and evidence live), then
-`coordinating`, `using-slack` and `asking-daniel`.
+`.agents/skills/`: `testing`, `lean-proofs`, `kernel-engineering` (PoUW GPU kernels on sm_120) and `smell-check` (before
+you call something served, end to end, proved or credited). The team's skills (`friction`, `writing-runs`,
+`coordinating`, `using-slack`, `asking-daniel`, `process-design`, `authoring-skills`) are in the infra checkout's
+`.agents/skills/`, routed from its AGENTS.md.

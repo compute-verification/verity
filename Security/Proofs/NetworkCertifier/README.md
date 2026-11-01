@@ -138,7 +138,7 @@ certifier program's modules. The difftests (`runs` in the certifier program's ow
 random instances the program gives what the Python audit gives, on 4,000 that its advice v1 charge gives what
 `arith_encode.reference_charge` gives, and on 4,000 that its whole-window charge gives what
 `window_charge.reference_window` gives; `Code.lean` proves the program equal to these definitions.
-When a changed record lands on `main`, a DM shows it (the team skill).
+When a changed record lands on `main`, a DM shows it (the infra checkout's AGENTS.md).
 
 ## The model
 

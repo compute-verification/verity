@@ -29,9 +29,9 @@ that uses a word below.
    Daniel, reading that rather than the summary, recognize it as what he asked for? A "but" you'd have to explain is a
    smell.
 3. **Report every smell**, yours or another lane's (to its owner too), as below; or "none found" with what you read.
-4. **Act:** fix your own (the friction skill), send another's to its owner, take one that changes what a claim says or
-   rests on to Daniel (the asking-daniel skill), relabel what's published (`research data label`), and correct in the
-   same report anything you told Daniel.
+4. **Act:** fix your own (the infra checkout's friction skill), send another's to its owner, take one that changes what
+   a claim says or rests on to Daniel (its asking-daniel skill), relabel what's published (`research data label`), and
+   correct in the same report anything you told Daniel.
 5. **Record it** under its question in the catalogue, `~/.research/notes/kb/smell-catalogue.md`, newest first, and
    publish with `research notes sync --path kb`. The catalogue holds the examples; anyone corrects it in place.
 

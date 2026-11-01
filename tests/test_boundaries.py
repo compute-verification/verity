@@ -257,7 +257,7 @@ BENCHMARKS_IMPORTERS = {
     "integrations/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
 }
-#: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
+#: Functions past a guard, which tests alone may name, since a guard never fails open (the infra checkout's AGENTS.md): each
 #: with the file that defines it and why tests need it.
 TEST_ONLY = {
     "_build_unchecked": ("verity/ml/circuits/partition_v2.py",

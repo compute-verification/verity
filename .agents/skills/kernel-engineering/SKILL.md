@@ -105,8 +105,8 @@ Every GPU tier holds to these:
   and holds the GPU for GPU work only: build, prepare operands and verify outside it (you are the check). Take the GPU's
   identity from `GPU_LEASE_UUID`; `nvidia-smi -i` ignores `CUDA_VISIBLE_DEVICES`. `--timed` pauses the fill queue, which
   otherwise runs beside you (you are the check that a row's run held one). Every run goes through `research run` (the
-  writing-runs skill); a fill chunk's outputs under `/workspace/pouw/fill-out/` reach the store only by `research data
-  put --kind evidence/v1 --tree DIR --preserve` when the chunk ends, cited by its `art:` id.
+  infra checkout's writing-runs skill); a fill chunk's outputs under `/workspace/pouw/fill-out/` reach the store only by
+  `research data put --kind evidence/v1 --tree DIR --preserve` when the chunk ends, cited by its `art:` id.
 - **γ at both prices:** the cheapest bit-exact FADD (8.00 W1 per word) and the measured in-loop price (1047/125 =
   8.376); publish the larger and say which won. Prices are the Lean guarantees' (`campaigns/pouw/price-twins-lean/`),
   never a device record or a diagnostic: the harness looks them up (`price_twins.json`); outside it `panel.py --gamma`
@@ -158,9 +158,9 @@ kernel directory exports `VARIANT` and `STEP_IO` and names its steps in `GROUPS`
 
 ## Leave it better than you found it
 
-Friction goes by the friction skill, and a PR that changes how something is done updates this skill (AGENTS.md "Working
-principles"). A fact about the toolchain, the card, a library or the node is one line, with its source (a run id, a
-commit), in its section of `kb/sm120/gotchas.md`, correcting a wrong line rather than contradicting it. A rule you checked
+Friction goes by the infra checkout's friction skill, and a PR that changes how something is done updates this skill
+(AGENTS.md "Working principles"). A fact about the toolchain, the card, a library or the node is one line, with its
+source (a run id, a commit), in its section of `kb/sm120/gotchas.md`, correcting a wrong line rather than contradicting it. A rule you checked
 by hand goes to the tool's owner as a proposed check, with the fix in its failure message. Dead machinery (a stand-in
 commitment, a lane bench the harness replaced, a losing `PEARLC_*` mode, a second SASS gate or `verify.py`, a copied
 scheme table) is deleted in your next PR or named to its owner.

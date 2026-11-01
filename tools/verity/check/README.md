@@ -132,7 +132,7 @@ PRs land through the merge queue (`research queue drive`): its flags are `drive.
 merge. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
 with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red job off the gate reverts its culprit on `checked`
-but doesn't hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
+but doesn't hold `main`. The infra checkout's AGENTS.md, "Landing", is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
 body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
 (`verity check move BASE HEAD`), running both scripts as `checked` has them.
 
