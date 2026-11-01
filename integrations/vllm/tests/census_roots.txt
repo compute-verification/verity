@@ -32,7 +32,6 @@ verity_vllm/ops/pod_bootstrap.sh
 verity_vllm/ops/pod_gate.sh
 
 # --- Python entry points
-verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)

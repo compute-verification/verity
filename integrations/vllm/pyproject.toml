@@ -46,10 +46,10 @@ markers = [
 
 [tool.verity.tests]
 # In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
-# the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
-# package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
-# fetch and `records.data` starts as `python -m research` (its `__main__`), and the run fixture
-# tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
+# the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, which no
+# module here imports, the store CLI that `store_io` starts for a fetch and a publish and `records.data` starts as
+# `python -m research` (its `__main__`), and the run fixture tests/regression/test_attempt_resolution.py publishes.
+# Test-only: tests/pipeline checks the fixtures
 # this package registers, the example's stored workload (examples/vllm/workloads/SHA256SUMS) and what the example's Commit publishes
 # (examples/vllm/commit.sh); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
