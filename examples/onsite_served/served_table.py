@@ -301,7 +301,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
     "bandwidth": {
         PROVER: Piece("bandwidth", PROVER, SERVED_WINDOW, "PoUB's served session: the engine proves its store to the "
                       "bandwidth verifier a pass an engine step (serve-openai --remote-verifier); its record is the serve "
-                      "dir's remote_session.json", reaches=BANDWIDTH_VERIFIER, binds=("address",),
+                      "dir's poub_session.json", reaches=BANDWIDTH_VERIFIER, binds=("address",),
                       hooks=_poub_session),
         BANDWIDTH_VERIFIER: Piece("bandwidth", BANDWIDTH_VERIFIER, GATE, "the bandwidth verifier's side, on its own "
                                   "coins and clock"),

@@ -295,7 +295,7 @@ def _ssh_to(peer: str, peers: Path) -> list[str]:
 
 def forward(peer: str, log_to: Path, peers: Path = PEERS) -> tuple[str, subprocess.Popen]:
     """An ssh forward from a free port on this host's 127.0.0.1 to NAME's 127.0.0.1:PORT (``peer``), through the
-    nodes' own ssh to each other (``peers``, as `benchmarks/remote_session/run.sh` opens it), and the upstream URL it
+    nodes' own ssh to each other (``peers``, as `benchmarks/poub_session/run.sh` opens it), and the upstream URL it
     gives here, once it connects."""
     name, port = peer.rsplit(":", 1)
     to = _ssh_to(peer, peers)

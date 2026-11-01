@@ -53,8 +53,8 @@
     {"file": "verity_vllm/protocols/pouw/h1/ranks.py", "kind": "vllm-internals", "symbol": "executor_of", "detail": "engine_core", "count": 2},
     {"file": "verity_vllm/protocols/pouw/h1/ranks.py", "kind": "vllm-internals", "symbol": "executor_of", "detail": "llm_engine"},
     {"file": "verity_vllm/protocols/pouw/h1/ranks.py", "kind": "vllm-internals", "symbol": "executor_of", "detail": "model_executor"},
-    {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"},
-    {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "vllm-internals", "symbol": "CommitSession.check", "detail": "engine_core", "count": 2},
-    {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "vllm-internals", "symbol": "CommitSession.check", "detail": "llm_engine", "count": 2}
+    {"file": "verity_vllm/protocols/poub/remote.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"},
+    {"file": "verity_vllm/protocols/poub/remote.py", "kind": "vllm-internals", "symbol": "CommitSession.check", "detail": "engine_core", "count": 2},
+    {"file": "verity_vllm/protocols/poub/remote.py", "kind": "vllm-internals", "symbol": "CommitSession.check", "detail": "llm_engine", "count": 2}
   ]
 }

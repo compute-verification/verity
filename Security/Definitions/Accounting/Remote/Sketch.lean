@@ -5,7 +5,7 @@ import Definitions.Accounting.RateAuditSketch
 
 The model `Accounting.Remote.Held.Assumptions.SketchBound` is derived on (`Accounting.Guarantees.Remote`'s
 `SketchBoundSession`). A remote audit session over a registered store of `N` blocks runs `P` credited passes. Pass `j`'s
-seed (`seed_i` in `remote_bandwidth.receipts`) fixes its key: the `k_s × 4096` signs `S_i` it derives and the receipt
+seed (`seed_i` in `poub.receipts`) fixes its key: the `k_s × 4096` signs `S_i` it derives and the receipt
 hash at that seed, `y = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be(j) ‖ σ)` with `σ = S_i·e_j`, an `h`-bit
 tag of the block's index and its sketch words (`RateSketch.sketch`). There is no certified stream (`ρ = 0`). The prover
 may grind a pass's seed: pass `j` has `G j` candidate seeds, each with its own key, and the receipts it sends are one

@@ -24,7 +24,7 @@ log signed when the session ends.
   opens no tunnel: PORT is one of its peer's certifier coin link, which carries it to the peer (`auditor.py`, the coins'
   path), and `--peer` with `--root` is refused (`CoinsConfidential`).  Only a development session (`run.sh`) takes
   `--peer`: it then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as
-  `benchmarks/remote_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
+  `benchmarks/poub_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
   serves the first client whose hello it accepts (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
   "reason"}`, fsynced) and the next connection is taken, each hello read within 10 s; once one is accepted it stops
   listening, so every later connection is refused.  However the session ends, a tunnel that ends first included, it

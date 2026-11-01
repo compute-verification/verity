@@ -44,7 +44,7 @@ path = "../pous/check"
 # Bandwidth: the remote bandwidth audit's session.
 [[require]]
 name = "remote_audit"
-path = "../remote_bandwidth/lean"
+path = "../poub/lean"
 
 [[lean_lib]]
 name = "CoreOnsite"

@@ -3,7 +3,7 @@ import Definitions.Accounting.Guarantees.RemoteSketch
 /-!
 # The receipts' sketch bound over PoUS's P2 store (trusted; drafted)
 
-The remote audit's P2 mode (`remote_bandwidth.p2`, its `PROTOCOL.md` §11) receipts a unit of four of `C*`'s 2,056-byte
+The remote audit's P2 mode (`poub.p2`, its `PROTOCOL.md` §11) receipts a unit of four of `C*`'s 2,056-byte
 blocks, 8,224 bytes, `m = 257` sectors of 32 bytes: the trace's block (`Accounting.Remote.Held.Trace`) is a unit, and
 `N` counts units (`⌊blocks/4⌋`; a store's last `blocks mod 4` blocks are not audited). A block's own receipt would not
 do: 2,056 bytes is not a whole number of 32-byte sectors, and the sketch's guess term is per sector, `2^-(8r)` at rank
