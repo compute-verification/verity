@@ -147,10 +147,12 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, C-Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
-`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. `circuit-check` is off the
-merge gate (`gate = false` in `tools/verity/check/ci.toml`) until `circuit-check --all` fits inside the rest of the check: a
-recorded check, `research merge` and the move of `main` leave it out, and it runs after landing on `checked`'s tip, where a red
-reverts its culprit at once and holds the PRs touching its inputs until it passes.
+`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. The runners report facts: each
+suite, test, target and step's real verdict. What gates, what may stay red and what a red triggers is drive's config,
+`tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
+which drive takes a failure as not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
+fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs after
+landing on `checked`'s tip, where a red reverts its culprit at once and holds the PRs touching its inputs until it passes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.

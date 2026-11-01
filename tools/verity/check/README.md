@@ -12,7 +12,14 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
 
-A job with `gate = false` in `ci.toml` is off the merge gate: a recorded check and its shards leave it out, and `research
+The runners (`suites.py`, `circuit-check`, `check.py`'s steps) report real verdicts and nothing else: a test, target or step
+that failed is failed, whoever is fixing it. What gates and what may stay red is drive's config, `policy.toml`
+(`research.policy`), which drive reads at the commit it judges. An allowance there (`[[allow]]`: an id, its owner, when it
+expires in UTC, and why) covers one suite, one test or one circuit-check failure: drive takes such a failure as not red (no
+culprit, no revert, no hold on `main`) until it expires, and then rings its owner and names the allowance. The quick tier
+applies `main`'s allowances the same way.
+
+A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
 checks `checked`'s tip, and doesn't hold `main`. A red `circuit-check` reverts its culprit at once and lands no PR touching its
 inputs until it passes; a red `ratchet-gate` reverts its culprit as any other after-landing red does. `circuit-check` goes back
