@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # PoUW's piece of a served H1 window with its drawn units proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
 # verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
-# drawn call's J10-R units on the window's own registered values, each staged call is proved by one loopback C-Flock --zk
-# session drawing all its instances (hidden_zk/job.sh's `session`), drawn.py writes the statements file and checks it as
-# credit does, and then `served_verdicts.py pouw` judges the window with it as --statements.
+# drawn call's J10-R units on the window's own registered values, and each drawn unit of a lanes-form K as its lanes and
+# combine; each staged statement is proved by one loopback C-Flock --zk session drawing all its instances
+# (hidden_zk/job.sh's `session`, at the slot its circuit file's META names), drawn.py writes the statements file and
+# checks it as credit does, and then `served_verdicts.py pouw` judges the window with it as --statements (the Lean verdict
+# of record refuses the lanes form until its mirror: H1_DRAWN_ONLY=1 stops at drawn.py's check).
 #   POUW_CMD='bash benchmarks/pouw/h1_prove/drawn.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/pouw/h1_prove/drawn.sh SERVE_DIR WINDOW PIECE_DIR
-# env: H1_CIRCUITS (pouw_h1_circuits' --out, with the drawn K's k<K> file: --strata K)  H1_CHECKPOINT (the served model's
+# env: H1_CIRCUITS (pouw_h1_circuits' --out, with the drawn K's k<K> file, --strata K, or its lane<K> and combine<K>
+#      files, --lanes K)  H1_CHECKPOINT (the served model's
 #      safetensors dir, b/<K>'s rows) or H1_WEIGHTS (an npz of w<i>, s<i>)  H1_GATE and H1_MODEL (the auditor's model-key
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)
 #      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  H1_DRAWN_MEM_GB (the
 #      prover's budget, default 90% of the host's memory)  PY (served_verdicts.sh's venv python, default .venv's)
 #      H1_DRAWN_ONLY=1: write and check the statements, no verdict
-# Out: PIECE_DIR/drawn/ (stage/, the plan and each call's statement files and session; out/ job.sh's logs;
+# Out: PIECE_DIR/drawn/ (stage/, the plan and each statement's files and session; out/ job.sh's logs;
 # statements.json), then served_verdicts.py pouw's files in PIECE_DIR.
 set -uo pipefail
 SD=${1:?SERVE_DIR} WIN=${2:?WINDOW} P=${3:?PIECE_DIR}
@@ -38,7 +41,7 @@ log "drawn: window $WIN of $SD, staging"
 $TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $J/../h1_prove/drawn.py stage $(printf '%q ' "$SD" "$WIN" "${st[@]}")" \
   2>&1 | tee -a "$OUT/job.log"
 [ "${PIPESTATUS[0]}" = 0 ] || { log "drawn: staging REFUSED"; exit 1; }
-for d in $("$PY" -c 'import json, sys; print(" ".join(f"{c["dir"]}:{c["instances"]}" for c in json.load(open(sys.argv[1]))["calls"]))' "$WK/plan.json"); do
+for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print(" ".join(f"{c["dir"]}:{c["instances"]}" for c in [*p["calls"], *p.get("leaves", [])]))' "$WK/plan.json"); do
   D=${d%:*} N=${d##*:} O=$OUT/$(basename "${d%:*}")
   mkdir -p "$O" && rm -rf "$D/sessions"
   log "drawn: $(basename "$D"): --zk session over its $N drawn units"
