@@ -35,7 +35,7 @@ import natural as nat  # noqa: E402
 sys.path.insert(0, str(HERE))
 import rotation  # noqa: E402
 
-ALUS = "0.84=8:0.84 width=2:0.84,8:2.36 2.36=8:2.36 h200est=2:3.33,8:9.36"
+ALUS = "0.84=8:0.84 1.48=8:1.48 1.78=8:1.78 width=2:0.84,8:2.36 2.36=8:2.36 h200est=2:3.33,8:9.36"
 PROJ = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
 
 
