@@ -21,7 +21,7 @@ salt per query); with salts, hm96's leaf is not V*'s. This file proves the check
   layers' (`LigOpens`), the `dirs` columns being the verifier's positions (`HDirCols`), the `out` columns being the
   cap's entries (`HTopsL`), the caps' shape (`CapsAt`) and the openings' constants (`HOneOpen`).
 * `hopen_of_plain`: `vbridgeRead_assembled`'s `hopen`, at a setup whose scheme is `plain`.
-* `ligOpens_unsalted`, `capsAt_capOf`: `LigOpens` and `CapsAt` at the lig lane's `capOf` and `ligOfRead` (Lig.lean) at
+* `ligOpens_unsalted`, `capsAt_capOf`: `LigOpens` and `CapsAt` at `capOf` and `ligOfRead` (Lig.lean) at
   `plain`'s layout, no salts (`sl` `none` or `some 0`; `ligOf`'s `some 192` is hm96's), and `hopen_of_plain_lig`:
   `hopen` there, from `HOneOpen`, `HDirCols` and `HTopsL`.
 -/
@@ -572,7 +572,7 @@ def HDirCols : Prop :=
           (accCol (levelLanes F.sh ℓ) (F.depth ℓ) + 1024 + 256 * levelLanes F.sh ℓ + h) =
         ((F.posOf R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r ℓ)[j]!).testBit h
 
-/-- **The openings `lig` holds are the layers'** (the lig lane's definition of `lig`): at every accepted outer proof,
+/-- **The openings `lig` holds are the layers'** (Lig.lean's definition of `lig`): at every accepted outer proof,
 each level's opened rows are `rowsOf`, its siblings the openings' `aux` blocks (`sibsFlat`), and it carries no salts
 (`RecOpen` has no salt port, rec_open.py:37). -/
 def LigOpens : Prop :=
@@ -583,8 +583,8 @@ def LigOpens : Prop :=
 message's (route not built).
 **The openings climb to the caps** (rec_outer.py: each opening's `out` registered as a read of its level's cap row,
 at the query's cap index): at every accepted outer proof, the first 512 output columns of rep `r`'s opening `j` of
-level `ℓ`, in the layer, are entry `pos >>> depth` of the level's cap (`capAt`). The registration lane's (`out` an
-output column, as `HZeroL`'s) with the lig lane's `cap` and `lig`. -/
+level `ℓ`, in the layer, are entry `pos >>> depth` of the level's cap (`capAt`). The registration's (`out` an
+output column, as `HZeroL`'s) with Lig.lean's `cap` and `lig`. -/
 def HTopsL : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ,
@@ -695,7 +695,7 @@ theorem hopen_of_plain (own : Fin F.stmts.size → Array Flock.Registered.Port) 
   exact (F.assembled dg N k Rw spec st cap lig own sel bc).openedAllAt_plain dg N k Rw spec st cap lig hne hname hsch rfl
     rfl hone hdir hlig htop hcaps R ω t R₂ τ o hacc r
 
-/-- **The lig lane's openings at no salts are the layers'**: `ligOfRead 64 sl` at `ligRead`'s reads, at a layout that
+/-- **Lig.lean's openings at no salts are the layers'**: `ligOfRead 64 sl` at `ligRead`'s reads, at a layout that
 salts nothing (`plain`'s `shapeOf` saltLen, `none` or `some 0` by `openedSalts`), opens at each level `rowsOf`'s rows
 and `sibsFlat`'s siblings (past level 0 its rows are 16 elements, `DimSeam`'s 4 lanes). -/
 theorem openAt_ligRead (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
@@ -733,7 +733,7 @@ theorem openAt_ligRead (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpen
   rw [← hsize, e, h1, h2]
   rcases hsl with rfl | rfl <;> rfl
 
-/-- **`LigOpens` at the lig lane's openings at no salts** (`ligOfRead 64 sl` at `ligRead`, any inner messages). -/
+/-- **`LigOpens` at Lig.lean's openings at no salts** (`ligOfRead 64 sl` at `ligRead`, any inner messages). -/
 theorem ligOpens_unsalted (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
     {sl : Option ℕ} (hsl : sl = none ∨ sl = some 0)
     (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T))) :
@@ -741,14 +741,14 @@ theorem ligOpens_unsalted (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HO
   intro R ω t R₂ τ o _ r ℓ hℓ
   exact F.openAt_ligRead hne hname hsch hsl (ms _) _ r hℓ
 
-/-- **`CapsAt` at the lig lane's caps** (`capOf`, `ligOfRead`'s recursive caps). -/
+/-- **`CapsAt` at Lig.lean's caps** (`capOf`, `ligOfRead`'s recursive caps). -/
 theorem capsAt_capOf (sl : Option ℕ) (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T))) :
     F.AtAccepted dg N k Rw fun _ _ _ l => ∀ r,
       CapsAt sch (capOf T sch (ms l)) (ligOfRead 64 sl sch (F.ligRead (ms l) l r)) := by
   intro R ω t R₂ τ o _ r
   exact capsAt_ligOfRead sl _ _
 
-/-- **`hopen` at the lig lane's cap and openings**, at a setup whose scheme is `plain` and the openings at its layout
+/-- **`hopen` at Lig.lean's cap and openings**, at a setup whose scheme is `plain` and the openings at its layout
 (no salts): `hopen_of_plain` with `LigOpens` and `CapsAt` proved, from `HOneOpen`, `HDirCols` and `HTopsL`. -/
 theorem hopen_of_plain_lig (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
