@@ -31,6 +31,7 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
 from verity_vllm.protocols.pouw.h1 import drawn as DRAWN
+from verity_vllm.protocols.pouw.h1 import drawn_rows as DR
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import served as SV
 
@@ -93,8 +94,8 @@ def _stand_in_leaf(k, kind, program, path):
     from verity_flock import class_statement as CS
     defn, _desc, _part, bound = PC.leaf_bound(PC.rebuilt(gzip.decompress(Path(program).read_bytes())), k, kind)
     stand_in = bind(StandInLane if kind == LL.LANE else StandInCombine, TILE=defn.bindings["TILE"])
-    CS.UnitStager(stand_in, DRAWN.LEAF_NAMES[kind], DRAWN.leaf_rows(kind, k, (32, 32)), DRAWN.LEAF_OUT_ROWS,
-                  circuit=Path(path), bind=bound)
+    CS.UnitStager(stand_in, DR.LEAF_NAMES[kind], DR.leaf_rows(kind, k, (32, 32)), DR.LEAF_OUT_ROWS, circuit=Path(path),
+                  bind=bound)
 
 
 def _with_receipts(commit):

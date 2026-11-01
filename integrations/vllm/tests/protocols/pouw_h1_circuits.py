@@ -200,10 +200,10 @@ def lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
 
 
 def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
-    """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `drawn.leaf_rows`, its output
-    `drawn.LEAF_OUT_ROWS`, lowered under ``HZ_STAGE`` (``fast`` by default) and written to `path`."""
+    """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `drawn_rows.leaf_rows`, its output
+    `drawn_rows.LEAF_OUT_ROWS`, lowered under ``HZ_STAGE`` (``fast`` by default) and written to `path`."""
     from verity_flock import class_statement as CS
-    from verity_vllm.protocols.pouw.h1 import drawn as D
+    from verity_vllm.protocols.pouw.h1 import drawn_rows as D
     if os.environ.get("HZ_STAGE", "fast") == "fast":
         sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
         import fast_stage
@@ -219,13 +219,13 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
                lower_leaf: LowerLeaf = lower_leaf) -> tuple[dict, dict, dict]:
     """Each lanes-form K's ``lane<K>`` and ``combine<K>`` (`leaf_bound` of the rebuilt window Program), lowered by
     `lower_leaf` unless `kept` (the manifest so far) records the file under the same bind, each leaf Program's
-    descriptor written beside it (`drawn.LEAF_PROGRAM`): ``files`` (each file's SHA-512 and ``leaf_programs``), each
+    descriptor written beside it (`drawn_rows.LEAF_PROGRAM`): ``files`` (each file's SHA-512 and ``leaf_programs``), each
     statement's bind (``leaf_binds``) and Definition id (``templates``). ValueError when credit derives another leaf
     Program or partition at K, or refuses the K (`credit.lanes_shape`)."""
     from tests.protocols.pouw_h1_rehearsal import PROGRAM
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.pouw import leaf_lanes as LL
-    from verity_vllm.protocols.pouw.h1 import drawn as D
+    from verity_vllm.protocols.pouw.h1 import drawn_rows as D
     layout, _why = CR.layout_of(descriptor)
     shape, win = CR.shape_of(descriptor), rebuilt(descriptor)
     files, binds, templates = {CR.LEAF_PROGRAMS: {}}, {}, {}
