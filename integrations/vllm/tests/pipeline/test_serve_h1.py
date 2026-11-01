@@ -155,9 +155,11 @@ def test_a_window_on_a_gate_session_that_served_no_step_still_opens_and_closes_i
 
 
 def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_live_rows(tmp_path, monkeypatch):
-    """``--h1-prover DIR``: each window's salt key and served calls' rows go in ``DIR/w<k>`` (owner-only), and its rounds'
-    live@<s> rows in ``DIR/w<k>/live`` (`pouw_h1_live.dump`: the public window.json at the server's T and S, one
-    directory a round), the outcome's ``live_dump``; without it nothing is kept and the outcome's ``live_dump`` is None."""
+    """``--h1-prover DIR``: each window's salt key and served calls' rows go in ``DIR/w<k>`` (owner-only), written by the
+    server's writer (the outcome's ``kept``) by the window's release, so each call reopens under its manifest's roots, and
+    its rounds' live@<s> rows in ``DIR/w<k>/live`` (`pouw_h1_live.dump`: the public window.json at the server's T and S,
+    one directory a round), the outcome's ``live_dump``; without it nothing is kept and the outcome's ``live_dump`` is
+    None."""
     import stat
 
     from verity_vllm.protocols.pouw.h1 import prover as PV
@@ -165,12 +167,19 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
                        prover=tmp_path / "prover")
+    assert arm.describe()["prover_ring"] == arm.writer.bound
     arm.open(0)
-    srv.serve(PROMPTS[0], 0)
+    run = srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
     w0 = tmp_path / "prover" / "w0"
     assert out["tied"] and out["live_dump"] == {"dir": str(w0 / "live"), "rounds": STEPS}, out["live_dump"]
     assert stat.S_IMODE(w0.stat().st_mode) == 0o700 and (w0 / PV.KEY).is_file() and any((w0 / PV.CALLS).iterdir())
+    record = json.loads((tmp_path / "serve" / "h1" / "w0" / PH.CALLS_FILE).read_text())
+    served = [c["index"] for c in record["calls"] if c["served"]]
+    assert served and out["kept"]["calls"] == len(served) and out["kept"]["waits"] == 0 and PV.writer_of(w0) is None
+    for i in served:
+        opened = PV.open_call(w0, record, i, run.salt)
+        assert opened.z.commitment.root.hex() == record["calls"][i]["tables"]["z"]
     pub = json.loads((w0 / "live" / "window.json").read_text())
     assert (pub["T"], pub["S"], pub["program"]) == (ROWS, STEPS, arm.digest) and len(pub["served"]) == STEPS
     assert all((w0 / "live" / str(s) / "rows.npz").is_file() for s in range(STEPS))
@@ -180,7 +189,42 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     plain.open(0)
     bare.serve(PROMPTS[0], 0)
     assert plain.close(0)["live_dump"] is None and not (tmp_path / "plain" / "prover").exists()
+    assert plain.writer is None and plain.describe()["prover_ring"] is None
     bare.src.uninstall()
+    arm.drain()
+    plain.drain()
+
+
+def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_draw(tmp_path, monkeypatch):
+    """A served call's file the writer couldn't write is its window's failure: the release waits for the window's files,
+    its outcome carries the error and its draw-gated release is refused by name; the next window is written whole."""
+    from verity_vllm.pipeline import serve_release as SL
+    from verity_vllm.protocols.pouw.h1 import prover as PV
+
+    savez = PV._savez
+
+    def full(path, *arrays):
+        if path.parent.parent.name == "w0":
+            raise OSError(28, "No space left on device")
+        return savez(path, *arrays)
+    monkeypatch.setattr(PV, "_savez", full)
+    monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
+    srv, draws = _Server(monkeypatch), SL.Draws((SH.DRAWER,))
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
+                       prover=tmp_path / "prover")
+    arm.drawing(draws)
+    outs = []
+    for w, prompts in enumerate(PROMPTS):
+        arm.open(w)
+        srv.serve(prompts, w)
+        outs.append(arm.close(w))
+    assert outs[0]["error"].startswith("close: its prover state: ") and "No space left on device" in outs[0]["error"]
+    assert "kept" not in outs[0] and "its close failed" in outs[0]["draw"]["refused"], outs[0]
+    with pytest.raises(SL.Refused, match="its close failed"):
+        draws.wait(window=0)
+    assert "error" not in outs[1] and outs[1]["kept"]["calls"] > 0 and "refused" not in outs[1]["draw"], outs[1]
+    srv.src.uninstall()
+    arm.drain()
 
 
 def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout_credit_reads_from_it(tmp_path, monkeypatch):
