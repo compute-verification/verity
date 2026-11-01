@@ -42,7 +42,8 @@ from . import Timeout, call
 LEAN = ROOT / "tools" / "verity" / "lean"
 #: the files of the Lean tool a task runs: inputs of every lean-module task
 TOOLS = tuple(f"tools/verity/lean/{f}" for f in ("Facts.lean", "Replay.lean", "sandbox.sh"))
-#: sandbox.sh's invocation (its header)
+#: sandbox.sh's invocation (its header), probed as check.py's `sandboxed()` probes it: check.py isn't among a task's inputs,
+#: so the runner doesn't load it
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 READY = ".ready"
 
