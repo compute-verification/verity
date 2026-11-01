@@ -372,9 +372,9 @@ class GitHub:
 
 
 def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Callable[[list[int]], bool]:
-    """Whether PRs wait only on landing: each is open and marked ready at its current head (`StoreLabels.ready`), as the Linear
-    audit asks of an issue In Review.  The open PRs are read once, on the first call; `repo` defaults to the checkout's
-    origin, and a PR GitHub or the store can't answer for doesn't wait."""
+    """Whether PRs wait only on landing: each is open, not held (the rules' hold label) and marked ready at its current head
+    (`StoreLabels.ready`), as the Linear audit asks of an issue In Review.  The open PRs are read once, on the first call;
+    `repo` defaults to the checkout's origin, and a PR GitHub or the store can't answer for doesn't wait."""
     from .store.local import LocalStore
 
     state: dict = {}
@@ -382,7 +382,8 @@ def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Ca
     def waiting(numbers: list[int]) -> bool:
         if "heads" not in state:
             slug = repo or ((m := SLUG_RE.search(_out(Path.cwd(), "remote", "get-url", "origin"))) and m.group(1))
-            state["heads"] = {pr.number: pr.head for pr in GitHub(slug).open_prs()}
+            hold = Rules().hold_label
+            state["heads"] = {pr.number: pr.head for pr in GitHub(slug).open_prs() if hold not in pr.labels}
             state["labels"] = StoreLabels(LocalStore(store_root), log=lambda s: None)
             state["labels"].prefetch(state["heads"].items())
         heads, labels = state["heads"], state["labels"]
