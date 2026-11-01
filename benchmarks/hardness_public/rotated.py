@@ -20,7 +20,8 @@ plus P, the honest kernel with a detour, which tends to it as P → 0.
 - `isvd`: the exact one: P = A·Bᵀ with A (n×r) and B (K×r) int8, B = rint(β·V) with β_j = √(σ_j·√(K/n)) (which
   balances the two roundings' errors) and A the rounded least-squares fit to q given B, so S = q − A·Bᵀ exactly. E·Bᵀ
   is an s8 pass (r/n); its output T, with E − 2 on [−2, 1], needs d int8 digits for 2·Σ|B_j| (d ≥ 2 once that exceeds
-  127), each an s8 pass against Aᵀ (d·r/K), and their d accumulators join the output in ⌈d/2⌉ IADD3 writes;
+  127), each an s8 pass against Aᵀ (d·r/K), and each of their d accumulators joins the output in one write (a shift
+  and an add, as natural.py's 256·(A·hi) correction);
 - `rpca`: P a rank-r fit refit twice with the entries whose residual exceeds a masked to P;
 - `tiles`: HT-PUBLIC's per-tile P = 0 routes, each tile its cheapest of b1 planes (H200) or FP4 digits (sm_120) on
   [−a, a] with the entries beyond a on the ALU, plus the tile's output writes (generous: the noise rows' loads are not
@@ -150,7 +151,7 @@ def integer_split(q: np.ndarray, s: np.ndarray, Vt: np.ndarray, r: int) -> tuple
 
 
 def lrx(r, n, K, d):
-    return r / n + d * r / K + 32 * math.ceil(d / 2) / K
+    return r / n + d * r / K + 32 * d / K
 
 
 def crop_exact_split(S: np.ndarray, A: np.ndarray, B: np.ndarray, alus: dict) -> bool:
@@ -284,18 +285,23 @@ def crop_exact(S: np.ndarray, alus: dict) -> bool:
 
 
 def load_codes(src) -> tuple[np.ndarray, float | None]:
+    """The codes q of a job; with deflate R > 0, of W·R less its top-R SVD part (served apart as its own product)."""
     if src[0] == "codes":
         from safetensors import safe_open
 
         with safe_open(src[1], "numpy") as f:
             return f.get_tensor(src[2]).astype(np.int16), None
-    _kind, url, base, entry, target = src
-    c, q = price.np_calibrate(rotation.rotate(nat.load_tensor(url, base, entry)), target)
+    _kind, url, base, entry, target, deflate = src
+    w = rotation.rotate(nat.load_tensor(url, base, entry))
+    if deflate:
+        U, s, Vt = np.linalg.svd(w, full_matrices=False)
+        w = w - (U[:, :deflate] * s[:deflate]) @ Vt[:deflate]
+    c, q = price.np_calibrate(w, target)
     return q, c
 
 
 def work(job) -> dict:
-    name, src, alus = job
+    name, src, alus, ranks = job
     t0 = time.time()
     q, c = load_codes(src)
     n, K = q.shape
@@ -314,8 +320,7 @@ def work(job) -> dict:
     rec["tail_rms"] = {str(r): float(tail_rms[r]) for r in (0, 1, 8, 32, 128, m // 8, m // 4, m // 2)}
     budget = 1.05 * leaf
     rec["svd"], rec["prov"], rec["isvd"] = {}, {}, {}
-    best_res, best_exact = {}, {}
-    for r in nat_ranks(m):
+    for r in [r for r in ranks if 0 < r < m] if ranks else nat_ranks(m):
         if lr1(r, n, K) >= budget:
             continue
         L = (U[:, :r] * s[:r]) @ Vt[:r]
@@ -330,20 +335,11 @@ def work(job) -> dict:
                 p, a = prov_projection(S, chip, w)
                 tot = routes.lowrank(r, n, K) + p
                 rec["prov"][str(r)][f"{chip}@{aname}"] = {"p": tot, "a": a, "over_leaf": (tot + 32 / K) / leaf}
-        for k, v in rr.items():
-            tot = lr1(r, n, K) + v["cost"]
-            if tot < best_res.get(k, (math.inf,))[0]:
-                best_res[k] = (tot, f"svd/{r}")
         del S
         S, A, B, d = integer_split(q, s, Vt, r)
-        lx = lrx(r, n, K, d)
-        if lx < budget:
-            rr = residual_routes(S, alus)
-            rec["isvd"][str(r)] = {"lrx": lx, "d": d, "Amax": int(np.abs(A).max()), "Bmax": int(np.abs(B).max()),
-                                   **residual_stats(S), "routes": rr}
-            for k, v in rr.items():
-                if lx + v["cost"] < best_exact.get(k, (math.inf,))[0]:
-                    best_exact[k] = (lx + v["cost"], f"isvd/{r}", (S, A, B))
+        if lrx(r, n, K, d) < budget:
+            rec["isvd"][str(r)] = {"d": d, "Amax": int(np.abs(A).max()), "Bmax": int(np.abs(B).max()),
+                                   **residual_stats(S), "routes": residual_routes(S, alus)}
         del S, A, B
     rec["rpca"] = {}
     for r_spec, a in RPCA:
@@ -356,14 +352,9 @@ def work(job) -> dict:
             L = rsvd(np.where(out, L, qf), r, seed=it)
         S = np.rint(qf - L).astype(np.int32)
         del L
-        rr = residual_routes(S, alus)
-        rec["rpca"][f"{r}/{a}"] = {"lr1": lr1(r, n, K), **residual_stats(S), "routes": rr}
-        for k, v in rr.items():
-            tot = lr1(r, n, K) + v["cost"]
-            if tot < best_res.get(k, (math.inf,))[0]:
-                best_res[k] = (tot, f"rpca/{r}/{a}")
+        rec["rpca"][f"{r}/{a}"] = {"lr1": lr1(r, n, K), **residual_stats(S), "routes": residual_routes(S, alus)}
         del S
-    del U, Vt
+    del U
     trees, planes = zero_tree_costs(n, K), plane_nocorr(n, K)
     rec["zero_trees"] = {str(d): v for d, v in trees.items()}
     rec["floor"] = {}
@@ -374,39 +365,51 @@ def work(job) -> dict:
         rec["floor"][str(a)] = {"r_min": rmin, **{chip: lr1(rmin, n, K) + floor_route(a, chip, trees, planes)
                                                   for chip in CHIPS}}
     rec["tiles"] = tile_routes(q, alus)
-    rec["best"] = {}
-    for k in keys(alus):
-        chip = k.split("@")[0]
-        exact = {"none": rec["none"][k]["cost"]}
-        if k in best_exact:
-            exact[best_exact[k][1]] = best_exact[k][0]
-        t = {kk.split("/")[0]: v for kk, v in rec["tiles"].items() if kk.endswith(f"/{k}")}
-        tb = min(t, key=t.get)
-        exact[f"tiles/{tb}"] = t[tb]
-        gen = dict(exact)
-        if k in best_res:
-            gen[best_res[k][1]] = best_res[k][0]
-        route, groute = min(exact, key=exact.get), min(gen, key=gen.get)
-        prov = min(v[k]["over_leaf"] for v in rec["prov"].values()) if rec["prov"] else math.inf
-        floor = min(v[chip] for a, v in rec["floor"].items() if int(a) <= FLOOR_MAX) / leaf
-        rec["best"][k] = {"cost": exact[route], "over_leaf": exact[route] / leaf, "route": route,
-                          "none_over_leaf": exact["none"] / leaf,
-                          "generous_over_leaf": gen[groute] / leaf, "generous_route": groute,
-                          "lr3_over_leaf": min(exact[route], split_lr3(rec, k, n, K)) / leaf,
-                          "prov_over_leaf": prov, "floor_over_leaf": floor}
+    rec["best"] = {k: score(rec, k) for k in keys(alus)}
     checked = {"none": crop_exact(q, alus)}
-    for _tot, tag, (S, A, B) in best_exact.values():
-        if tag not in checked:
+    for k, b in rec["best"].items():
+        tag = b["route"]
+        if tag.startswith("isvd/") and tag not in checked:
+            S, A, B, _d = integer_split(q, s, Vt, int(tag.split("/")[1]))
             checked[tag] = crop_exact(S, alus) and crop_exact_split(S, A, B, alus)
+        if tag.startswith("isvd/") and b["over_leaf"] < 1.05 and f"full/{tag}/{k}" not in rec:
+            S, A, B, _d = integer_split(q, s, Vt, int(tag.split("/")[1]))
+            rec[f"full/{tag}/{k}"] = full_exact_split(S, A, B, k, alus)
     rec["exact_crop"] = checked
     rec["seconds"] = time.time() - t0
     return rec
 
 
-def split_lr3(rec, k, n, K) -> float:
-    vals = [v["lr3"] + v["routes"][k]["cost"] for v in rec["svd"].values()]
-    vals += [routes.lowrank(int(rk.split("/")[0]), n, K) + v["routes"][k]["cost"] for rk, v in rec["rpca"].items()]
-    return min(vals, default=math.inf)
+def score(rec: dict, k: str) -> dict:
+    """The best exact and generous routes for chip@price k, over the leaf, from the record's parts."""
+    n, K = rec["shape"]
+    leaf, chip = rec["leaf"], k.split("@")[0]
+    exact = {"none": rec["none"][k]["cost"]}
+    exact |= {f"isvd/{r}": lrx(int(r), n, K, v["d"]) + v["routes"][k]["cost"] for r, v in rec["isvd"].items()}
+    t = {kk.split("/")[0]: v for kk, v in rec["tiles"].items() if kk.endswith(f"/{k}")}
+    exact |= {f"tiles/{s}": v for s, v in t.items()}
+    gen = dict(exact)
+    gen |= {f"svd/{r}": v["lr1"] + v["routes"][k]["cost"] for r, v in rec["svd"].items()}
+    gen |= {f"rpca/{r}": v["lr1"] + v["routes"][k]["cost"] for r, v in rec["rpca"].items()}
+    lr3 = dict(exact)
+    lr3 |= {f"svd/{r}": v["lr3"] + v["routes"][k]["cost"] for r, v in rec["svd"].items()}
+    route, groute = min(exact, key=exact.get), min(gen, key=gen.get)
+    prov = min((v[k]["over_leaf"] for v in rec["prov"].values()), default=math.inf)
+    floor = min(v[chip] for a, v in rec["floor"].items() if int(a) <= FLOOR_MAX) / leaf
+    return {"cost": exact[route], "over_leaf": exact[route] / leaf, "route": route,
+            "none_over_leaf": exact["none"] / leaf, "generous_over_leaf": gen[groute] / leaf,
+            "generous_route": groute, "lr3_over_leaf": min(lr3.values()) / leaf, "prov_over_leaf": prov,
+            "floor_over_leaf": floor}
+
+
+def full_exact_split(S: np.ndarray, A: np.ndarray, B: np.ndarray, k: str, alus: dict) -> bool:
+    """The served-size alt tree of S at chip@price k plus (E·B)·Aᵀ, against E·qᵀ for 2^DEPTH noise rows."""
+    chip, aname = k.split("@")
+    N = nat.Natural(chip, "fast", A_NOISE, alus[aname])
+    N.node(nat.forms(S.T, 0, DEPTH), (0, A_NOISE - 1), 0)
+    E = np.random.default_rng(1).integers(0, A_NOISE, (2**DEPTH, S.shape[1]), dtype=np.int64)
+    C = S.T.astype(np.int64)
+    return bool(np.array_equal(nat.run(N.root_alt[1], E, C) + (E @ B) @ A.T, E @ (C + B @ A.T)))
 
 
 def nat_ranks(m: int) -> list[int]:
@@ -426,8 +429,8 @@ def load_shape(src) -> list[int]:
     return src[3] if src[0] == "codes" else src[3]["shape"]
 
 
-def hf_jobs(repo: str, target: float, layers):
-    return [(t, (src[0], src[1], src[2], src[3], target)) for t, src in price.hf_jobs(repo, target, True)
+def hf_jobs(repo: str, target: float, layers, deflate: int = 0):
+    return [(t, (src[0], src[1], src[2], src[3], target, deflate)) for t, src in price.hf_jobs(repo, target, True)
             if keep(t, layers)]
 
 
@@ -437,10 +440,15 @@ def keep(t: str, layers, match=None) -> bool:
 
 
 def summarize(path: Path) -> dict:
+    """Per chip@price, each column MAC-weighted, its least, and the matrices under 1.05 of the leaf; every record
+    re-scored by `score`."""
     recs = [json.loads(line) for line in path.read_text().splitlines()]
+    for r in recs:
+        r["best"] = {k: score(r, k) for k in r["best"]}
     macs = sum(r["macs_per_token"] for r in recs)
     out = {"matrices": len(recs), "macs_per_token": macs, "by_price": {},
            "exact": all(all(r["exact_crop"].values()) for r in recs),
+           "full_checks": {f"{r['tensor']}|{k[5:]}": v for r in recs for k, v in r.items() if k.startswith("full/")},
            "strassen1": sorted(r["overflow1"] for r in recs)[len(recs) // 2] if recs else None}
     cols = {"none": "none_over_leaf", "exact": "over_leaf", "generous": "generous_over_leaf",
             "lr3": "lr3_over_leaf", "prov": "prov_over_leaf", "floor": "floor_over_leaf"}
@@ -475,6 +483,9 @@ def main(argv=None) -> int:
     ap.add_argument("--target", type=float, default=0.02)
     ap.add_argument("--layers", default=None, help="comma-separated layer indices (default every layer)")
     ap.add_argument("--match", default=None, help="comma-separated substrings; keep the tensors holding any")
+    ap.add_argument("--deflate", type=int, default=0,
+                    help="with --hf, clip W·R less its top-R SVD part, served apart (a candidate hardening)")
+    ap.add_argument("--ranks", default=None, help="comma-separated split ranks (default nat_ranks)")
     ap.add_argument("--alus", default=ALUS)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--out", type=Path, required=True)
@@ -488,7 +499,8 @@ def main(argv=None) -> int:
         ours, theirs = nat.check_counts(chip, "fast", 2, A_NOISE)
         assert abs(ours - theirs) < 1e-6 * theirs, (chip, ours, theirs)
     layers = [int(x) for x in args.layers.split(",")] if args.layers else None
-    jobs = code_jobs(args.codes, layers) if args.codes else hf_jobs(args.hf, args.target, layers)
+    jobs = code_jobs(args.codes, layers) if args.codes else hf_jobs(args.hf, args.target, layers, args.deflate)
+    ranks = [int(x) for x in args.ranks.split(",")] if args.ranks else None
     if args.match:
         jobs = [j for j in jobs if keep(j[0], None, args.match.split(","))]
     jobs.sort(key=lambda j: (-math.prod(load_shape(j[1])), j[0]))
@@ -496,7 +508,7 @@ def main(argv=None) -> int:
     ok = True
     print(f"{len(jobs)} matrices, {args.workers} workers, OMP {os.environ.get('OMP_NUM_THREADS')}", flush=True)
     with concurrent.futures.ProcessPoolExecutor(args.workers) as ex, open(args.out / "matrices.jsonl", "w") as fh:
-        futs = [ex.submit(work, (name, src, alus)) for name, src in jobs]
+        futs = [ex.submit(work, (name, src, alus, ranks)) for name, src in jobs]
         for fut in concurrent.futures.as_completed(futs):
             rec = fut.result()
             ok &= all(rec["exact_crop"].values())
