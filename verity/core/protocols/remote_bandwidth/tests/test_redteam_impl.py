@@ -1,7 +1,6 @@
-"""Red team ra-remote-redteam-impl against the remote bandwidth audit as implemented: each test asserts the property the
-audit's claim needs, and was marked xfail with its finding id while the reference broke it (the report is
-note:memory-accounting/ra-remote-redteam-impl); RB-1, RB-2 and RB-3 are fixed and pass.  The exploits run on
-`test_remote_bandwidth`'s store and drivers."""
+"""The red team's exploits against the remote bandwidth audit as implemented: each test asserts the property the
+audit's claim needs, and was marked xfail with its finding id while the reference broke it; RB-1, RB-2 and RB-3 are
+fixed and pass.  The exploits run on `test_remote_bandwidth`'s store and drivers."""
 
 from __future__ import annotations
 
@@ -96,7 +95,7 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     sessions = [Session(p, store.registration, None,
                         coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), appends=1),
                         not_before_ns=0, clock=clock) for k in (0, 1)]
-    provers = [audit.Prover(store, None, s.commitment, entropy=Entropy(b"unused")) for s in sessions]
+    provers = [audit.Prover(store, None, entropy=Entropy(b"unused")) for _ in sessions]
     reads, entropy = [0], Entropy(b"joint salts")
     challenges = [s.start() for s in sessions]
     previous = [store.registration.digest] * 2

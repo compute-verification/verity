@@ -1,4 +1,4 @@
-"""The remote bandwidth session's prover over the P2 store (`p2_v1/bandwidth.py`): SHA-512's midstate and the device's
+"""The PoUB session's prover over the P2 store (`p2_v1/bandwidth.py`): SHA-512's midstate and the device's
 receipts held to hashlib and `p2.Sketcher`, the sketch of stored rows held to the unit sketch, the receipt tree built in
 worker processes held to `receipts.tree`, PoUS's vk paths from row digests held to the verifier's tree, the plan of a
 layout's tensors' units (the tracked registration's, the real layout's), and the toy's store served through

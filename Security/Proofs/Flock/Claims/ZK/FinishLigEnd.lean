@@ -1,4 +1,5 @@
-import Proofs.Flock.Claims.ZK.FinishFc
+import Proofs.Flock.Claims.ZK.FinishSrc
+import Proofs.Flock.Claims.ZK.CutPrefix
 
 /-!
 # Ligerito from a source ends on a squeeze

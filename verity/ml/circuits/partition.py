@@ -533,7 +533,7 @@ def validate_partition(program: "Program", fam, limits: Limits = LIMITS, *, with
 
     `within` (a `GateSet`, or `(lo, hi)` root gate intervals) asks instead whether `fam` partitions exactly those
     gates: each of them in one set, and no set reaching outside them ("outside", code `sweep-outside`).  It is how a
-    level leaves out the Inputs checked outside the draws.  This mode always sweeps."""
+    level leaves out the Inputs checked outside the samples.  This mode always sweeps."""
     if within is not None:
         return _sweep(program, fam, limits, _gate_intervals(within, program.gates))
     tiling = family_tiling(fam)

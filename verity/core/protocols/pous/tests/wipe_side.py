@@ -20,7 +20,7 @@ from verity.core.protocols.pous import wipe_stream as WS
 from verity.ml.crypto import lms
 
 WINDOW = (1_793_088_000_123_456_789, 1_793_088_183_000_001_000)
-"""The session's `(t0, t1)` it reports: Tue 27 Oct 2026 08:00:00.123456Z to 08:03:03.000001Z."""
+"""The session's `(t0, t1)` it reports, in ns since the Unix epoch: the window `test_pous_wipe_period` reads back."""
 
 
 class _SparseTree:

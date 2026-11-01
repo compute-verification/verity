@@ -140,6 +140,19 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
     assert eight.registered.params[SS.SCAN_STATE] == 32 * 9090 and not eight.ingress
 
 
+def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
+    """At the class of record's slots, the wires into the slots' entries begin and end at every lane's nb = 2 slots and
+    nowhere else, and no server block ends among them, so `interface.members` (which cuts a template's batch only there
+    and at the cap) makes the entry template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
+    entries, slot nb·j + b at leaf b, each lane's a hiding row with its own root in the window's registration, which the
+    network certifier's scan reads as lane j's Programs."""
+    eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
+    entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in eight.templates}[ENTRY]
+    nb = SLOTS.slots // SLOTS.lanes
+    ends = {x for w in eight.wires if w.reader == entry for x in (w.at, w.at + w.reader_units)}
+    assert ends == set(range(0, SLOTS.slots + 1, nb)) and not eight.server_ends().get(entry)
+
+
 def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeypatch):
     """The class of record (`CLASS_OF_RECORD`: EVERY 16, 4 slots a boundary, 8 a 32-bucket window) is 8 slots of 1,024
     prompt ids and 64 outputs, lane-major: slot 2j + b is boundary b's lane j at bucket 16b. A 3-request and an 8-request
@@ -506,7 +519,7 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
     """`interface.input_count` over the circuit's description (JSON, no Program lowered), each registered parameter pinned
     by the verifier itself before the run at the root the window's registration records for it (`held`): each weight's (one
     a weight and row width, ``weights/<label>@<words>``) and the scan state's, which the network certifier's scan proofs
-    hold. It finds no free input row and no ingress, so a proof of the window's units leaves nothing but the declared advice
+    hold. It finds no free input row and no ingress, so a proof of the window's units leaves nothing but the advice
     to the prover. The registered reads, table reads and openings are of the weights (the GEMM slices', norms' and RoPE
     tables' rows; the embedding table's root, domain and rows) but for the two slots' scan state rows (4,548 words each):
     with the weights' pins alone those are free, with no pin all of them are, a weight whose window root is another's is
@@ -534,7 +547,7 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
 ROPE = WB.weight_param("model.layers.0.self_attn.rotary_emb.cos_sin_cache", 16)
 #: the scan state's pin, which no weights registration gives: the network certifier's scan rows' root
 SCAN_PIN = {SS.SCAN_STATE: "ef" * 64}
-#: the committer's secret key, which its weights' row salts are drawn under (`window_weights.weights_registration`)
+#: the committer's secret key, which its weights' row salts are sampled under (`window_weights.weights_registration`)
 KEY = bytes(range(32))
 
 

@@ -19,7 +19,7 @@
 //!   unit u − 1's `c_out` (u ≥ 1), unit 0's forced to +0;
 //! - every sub-circuit's constant a copy of the one pinned column (slot 0's).
 //!
-//! Public regions, each opened at two verifier points drawn after the commitment (both reps): each role's leaf digest
+//! Public regions, each opened at two verifier points sampled after the commitment (both reps): each role's leaf digest
 //! (`H_out` of its last slot, 256 bits, sent in `Commit`) and the VU's output word (unit `units − 1`'s `c_out`, or its
 //! `y16` for an epilogue relation). The verifier folds the digests it was sent, VU v's as leaf v, into the `vllm-v1`
 //! tree of its port (pairs `node`, an odd tail `lift`, no padding), binds the tree root under the port's verifier-held

@@ -168,7 +168,7 @@ def declaration(layers: int = 32) -> tuple[list[tuple[int, int]], dict[int, str]
 
 
 def declared_draw_k(layers: int = 32) -> int:
-    """The draw K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof system's
+    """The sample K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof system's
     selection, `pouw_h1_challenger.draw_k` over `pouw_h1_served.declared_layout`, which `credit.strata` reads."""
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
@@ -186,7 +186,7 @@ def fill_length() -> dict:
 
 def period_open_argv(name: str, cap: int, circuit: str, draw_k: int, model: str | None,
                      circuit_files: dict[str, str]) -> list[str]:
-    """The gate's ``period-open`` of period `name`: its cap, its circuit (the declared Program's digest), its draw K,
+    """The gate's ``period-open`` of period `name`: its cap, its circuit (the declared Program's digest), its sample K,
     the served tables' rows T (``--rows``, `pouw_h1.FILL`'s), its model when it serves the registered weights
     (``--model``, whose registration's weights' root the open signs; never a ``--weights-root`` of the prover's), each
     stratum's circuit file's SHA-512 (``--circuit-files``, `pouw_h1_circuits.build`'s ``files``) and the fixed length
@@ -363,7 +363,7 @@ def _edited(record: dict, edit: Any, path: Path) -> Path:
 
 def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: str) -> tuple[dict[str, Any], str]:
     """`honest` (the window's commitment) with its coins swapped for a challenge phase the gate reserves and opens on
-    `opened_on`, its salt opened after `opened_on` and its round and draw coins after the window's own roots, as
+    `opened_on`, its salt opened after `opened_on` and its round and flip coins after the window's own roots, as
     `test_pouw_h1._salted` forges one in process: (the forged commitment, its challenge phase)."""
     from verity.core.protocols.pouw import window as Wd
     from verity_vllm.protocols.pouw.h1 import challenger as PHC

@@ -13,7 +13,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "theory" / "fold_opt_fx.py"
 
 @pytest.mark.slow
 def test_fold_opt_fx(tmp_path):
-    """FOLD-OPT for SAT-120's fx chains: fx1 (resp. fx2) needs >= 4 (resp. 5) issue slots a word and no cheaper fold on
+    """FOLD-OPT for the fx chains: fx1 (resp. fx2) needs >= 4 (resp. 5) issue slots a word and no cheaper fold on
     the binding joint-issue row, so mu_f = 0. The claims are computed (single-instruction and width-4 exhaustive
     searches over the modelled sm_120 ISA), so only running the script checks them. About 2 minutes, nearly all in the
     width-4 searches that neither output is a word of a two-instruction program, IMAD.WIDE's two words included, and

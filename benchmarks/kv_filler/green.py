@@ -61,9 +61,8 @@ def spread_checks(tu, torch, step, new_stream, rec: dict) -> dict:
     stream of the stack's, directly and from a graph captured there and replayed on the step's (vLLM's graphs, as
     `partition` captures them); and on a stream of the filler's context. The step's must be within its count.
     ``device_graph`` is a graph captured on a stream of the device's context and replayed on the step's (vLLM's
-    capture without `partition`'s): recorded, not required."""
+    capture without `partition`'s): recorded, not required. `tu` is the one `partition` bound `sq_smid` on."""
     n = 4 * rec["device_sms"]
-    tu.so.sq_smid.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_ulonglong, ctypes.c_void_p]
 
     def sms(s, captured=None) -> int:
         out = torch.full((n,), -1, dtype=torch.int32, device="cuda")

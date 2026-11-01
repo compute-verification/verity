@@ -1,4 +1,4 @@
-"""The VU export's two budgets: the population build over many request Programs, and the draw after it."""
+"""The VU export's two budgets: the population build over many request Programs, and the sample after it."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from tests.pipeline.test_vu_export import ROOT
 
 
 def test_the_draw_budget_starts_after_a_slow_population_build(tmp_path, monkeypatch):
-    """Many request Programs whose index build is slow (a B32 row's 33 Programs took > 18 min): the draw still runs its whole budget,
+    """Many request Programs whose index build is slow (a B32 row's 33 Programs took > 18 min): the sample still runs its whole budget,
     and the build's own budget names the Programs it did not reach.  The export's clock is the test's: each index build takes 1 s."""
     import copy
     import types
@@ -38,7 +38,7 @@ def test_the_draw_budget_starts_after_a_slow_population_build(tmp_path, monkeypa
     bmap, committed = world.bmap_and_reader(order=tuple(prompts))
     run = lambda out, **lim: VS.export_vus(programs, bmap, committed, _weights(world), out_dir=tmp_path / out, run_root=ROOT,  # noqa: E731
                                            limits=VX.Limits(per_family=8, workers=1, **lim))
-    s = run("a", max_seconds=5)                                          # the build alone (12 x 1 s) is longer than the draw's budget
+    s = run("a", max_seconds=5)                                          # the build alone (12 x 1 s) is longer than the sample's budget
     assert s["timing"]["population_s"] == 12 and s["population"]["programs_built"] == 12
     assert sum(c.get("drawn", 0) for c in s["by_family"].values()) > 0 and s["sets"]
     b = run("b", max_population_seconds=2.5)
