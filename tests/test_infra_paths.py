@@ -54,7 +54,7 @@ INFRA_PATHS = {
     "tools/verity/check/move_check.py": "infra",
     "tools/verity/check/tests/test_anchors.py": "infra",
     "tools/verity/check/tests/test_move_check.py": "infra",
-    # drive's landing policy, and the tests that read it, or the machines' pins, with infra's code
+    # drive's landing policy, and tests that check it, or the machines' uv pin, with infra's code
     "tools/verity/check/drive.toml": "data",
     "tools/verity/check/queue.toml": "data",
     "tools/verity/check/tests/test_queue_rules.py": "infra",
@@ -122,14 +122,14 @@ def _tracked() -> tuple[str, ...]:
     return tuple(p for p in out.decode().split("\0") if p)
 
 
-def test_every_entry_under_tools_and_infra_is_verity_s_own_or_listed() -> None:
+def test_tools_and_infra_hold_only_verity_tools_and_infra_paths() -> None:
     entries = {"/".join(p.split("/")[:2]) for p in _tracked() if p.split("/")[0] in ("tools", "infra")}
     new = sorted(entries - set(VERITY_TOOLS) - set(INFRA_PATHS))
     assert not new, (f"new under tools/ or infra/: {new}. {FIX} Move it to the infra repository, or, if it is a tool of "
                      "Verity's own, add it to VERITY_TOOLS with what it is.")
 
 
-def test_every_skill_is_verity_s_own_or_listed() -> None:
+def test_every_skill_is_a_verity_skill_or_an_infra_path() -> None:
     skills = {p.split("/")[2] for p in _tracked() if p.startswith(".agents/skills/") and p.count("/") > 2}
     new = sorted(s for s in skills - VERITY_SKILLS if f".agents/skills/{s}" not in INFRA_PATHS)
     assert not new, (f"new skills: {new}. {FIX} The team's skills are written there; a skill for working on Verity's code "
@@ -143,6 +143,6 @@ def test_every_listed_path_exists() -> None:
     assert not gone, f"listed in tests/test_infra_paths.py but gone from the tree; remove their entries: {gone}"
 
 
-def test_every_destination_is_one_of_destinations() -> None:
+def test_every_destination_is_known() -> None:
     odd = {p: d for p, d in INFRA_PATHS.items() if d not in DESTINATIONS}
     assert not odd, f"INFRA_PATHS destinations outside DESTINATIONS {sorted(DESTINATIONS)}: {odd}"
