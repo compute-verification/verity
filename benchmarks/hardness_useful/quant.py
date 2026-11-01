@@ -104,14 +104,14 @@ class Rotation(nn.Module):
 
     def __init__(self, k: int):
         super().__init__()
-        self.a, self.b = rotation.factors(k)
+        self.m, self.a, self.b = rotation.factors(k)
         self.register_buffer("d", torch.from_numpy(rotation.signs(k)).float())
         self.register_buffer("ha", torch.from_numpy(rotation.hadamard(self.a)).float())
         self.register_buffer("hb", torch.from_numpy(rotation.hadamard(self.b)).float())
 
     def forward(self, x):
         shape = x.shape
-        u = (x * self.d.to(x.dtype)).reshape(*shape[:-1], self.a, self.b)
+        u = (x * self.d.to(x.dtype)).reshape(*shape[:-1], self.m, self.a, self.b)
         return (torch.matmul(self.ha.to(u.dtype), u) @ self.hb.to(u.dtype)).reshape(shape)
 
 
