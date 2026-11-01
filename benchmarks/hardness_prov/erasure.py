@@ -14,7 +14,11 @@ The scale game: a start named `{start}x{c}` is `start` with every fc multiplied 
 c, the same function, whose fc rows have c times the LSB. An absolute step (lr per entry) is then c times fewer LSBs; a
 relative one (`--etas`, η LSBs per entry) is not.
 
-Writes `erasure.json` to `--out`, and the pretrained checkpoint (`pre_d{d}.pt`) to `--out` unless `--pre` gave one.
+A useful start: `{family}@{n}` is the family trained under its constraint for n steps (`starts.constrained`), once per
+quantizer before the passes; `honest@{n}` is the unconstrained fine-tuning it is compared against.
+
+Writes `erasure.json` to `--out`, the pretrained checkpoint (`pre_d{d}.pt`) to `--out` unless `--pre` gave one, and each
+constrained start (`start_{family}@{n}_{quant}.pt`).
 """
 
 import argparse
@@ -76,20 +80,46 @@ def record(model, pool, cfg, t, q0, tplant, loss):
     return rec
 
 
+def parse(start):
+    """`family[@steps][x scale]` → (family, constrained steps, scale)."""
+    m = re.fullmatch(r"(.+?)(?:@(\d+))?(?:x(\d+))?", start)
+    return m.group(1), int(m.group(2) or 0), float(m.group(3) or 1)
+
+
+def start_path(out, family, steps, quant):
+    return Path(out) / f"start_{family}@{steps}_{quant}.pt"
+
+
+def prepare(args, pre, family, steps, quant):
+    torch.set_num_threads(args.threads)
+    pool = toy.Pool(args.data)
+    model = build(args, pre)
+    t0 = time.time()
+    tplant = starts.constrained(model, pool, family, quant, steps, lr=args.constrain_lr,
+                                log=lambda s: print(f"{s} ({quant}, {time.time() - t0:.0f}s)", flush=True))
+    torch.save({"model": model.state_dict(), "t": tplant}, start_path(args.out, family, steps, quant))
+    return {"family": family, "steps": steps, "quant": quant, "val": pool.val_loss(model),
+            "val_served": toy.served_val(model, pool, quant)}
+
+
 def job(args, pre, start, cfg, seed, scratch):
     torch.set_num_threads(args.threads)
     pool = toy.Pool(args.data)
     model = build(args, pre)
-    m = re.fullmatch(r"(.+)x(\d+)", start)
-    base, c = (m.group(1), float(m.group(2))) if m else (start, 1.0)
+    base, steps, c = parse(start)
     q0, tplant = {}, {}
     with torch.no_grad():
-        for n in planted_names(model):
-            w = model.linear(n)
-            w0, t = starts.plant(w.detach().numpy(), base, cfg.quant)
-            w.copy_(torch.from_numpy(w0.astype(np.float32)))
-            if t is not None:
-                tplant[n] = t
+        if steps:
+            ck = torch.load(start_path(args.out, base, steps, cfg.quant), weights_only=False)
+            model.load_state_dict(ck["model"])
+            tplant = ck["t"]
+        else:
+            for n in planted_names(model):
+                w = model.linear(n)
+                w0, t = starts.plant(w.detach().numpy(), base, cfg.quant)
+                w.copy_(torch.from_numpy(w0.astype(np.float32)))
+                if t is not None:
+                    tplant[n] = t
         if c != 1.0:
             for blk in model.blocks:
                 blk.fc.weight.mul_(c)
@@ -156,6 +186,7 @@ def main():
     ap.add_argument("--taus", default="0,1,3,10,30,100,300")
     ap.add_argument("--workers", type=int, default=30)
     ap.add_argument("--threads", type=int, default=2)
+    ap.add_argument("--constrain-lr", type=float, default=3e-4, help="the peak lr of `family@n` starts' training")
     args = ap.parse_args()
     args.heads = args.heads or max(1, args.d // 48)
     args.taus = [int(x) for x in args.taus.split(",")]
@@ -175,16 +206,27 @@ def main():
     cfgs += [toy.Config(lr=args.lr_other, sigma_w=float(sw), sigma_a=args.sigma_a, p_drop=args.p_drop, quant=qu,
                         rel=True, eta=float(eta)) for eta in filter(None, args.etas.split(",")) for sw, qu in grid]
     specs = [(st, c, s) for st in args.starts.split(",") for c in cfgs for s in range(args.seeds)]
+    ctx = multiprocessing.get_context("spawn")
+    todo = sorted({(parse(st)[0], parse(st)[1], c.quant) for st, c, _ in specs if parse(st)[1]})
+    made = []
+    if todo:
+        print(f"{len(todo)} constrained starts", flush=True)
+        with ProcessPoolExecutor(min(args.workers, len(todo)), mp_context=ctx) as ex:
+            made = sorted((f.result() for f in as_completed([ex.submit(prepare, args, pre, *x) for x in todo])),
+                          key=lambda r: (r["family"], r["steps"], r["quant"]))
+        for r in made:
+            print(f"start {r['family']}@{r['steps']} {r['quant']}: val {r['val']:.4f} served {r['val_served']:.4f}",
+                  flush=True)
     print(f"{len(specs)} passes on {args.workers} workers x {args.threads} threads", flush=True)
     res = []
-    ctx = multiprocessing.get_context("spawn")
     with ProcessPoolExecutor(args.workers, mp_context=ctx) as ex:
         fs = [ex.submit(job, args, pre, st, c, s, args.scratch) for st, c, s in specs]
         for f in as_completed(fs):
             res.append(f.result())
     res.sort(key=lambda r: (r["start"], r["tag"], r["seed"]))
     doc = {"d": args.d, "layers": args.layers, "heads": args.heads, "pre": pre, "taus": args.taus,
-           "pretrain_steps": args.pretrain_steps, "runs": res, "spread": spread(args, args.scratch, res)}
+           "pretrain_steps": args.pretrain_steps, "constrained": made, "runs": res,
+           "spread": spread(args, args.scratch, res)}
     (out / "erasure.json").write_text(json.dumps(doc))
     print("wrote", out / "erasure.json", flush=True)
 

@@ -14,13 +14,20 @@ returns the planted float matrix and the ternary t to price it against (or None)
 - `lr{r}`: the rank-r SVD of w alone (a junk model, cheap at r/n + 3r/K).
 - `lr{r}res{k}`: rank r plus w's residual clipped to ±k served LSBs (k = 15 keeps it in Strassen's depth 3): the
   useful-model version, as SVD-plus-low-bits quantizers build it.
+
+Each family planted post hoc is a projection of the honest weights, so a start can be a junk model. `constrained`
+is the cheater's own training before the commitment: the whole model fine-tuned with every planted matrix projected
+onto its family in the forward (straight-through), which makes the start as useful as the family allows.
 """
 
+import math
 import re
 import sys
 from pathlib import Path
 
 import numpy as np
+import torch
+import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hardness_public"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -91,3 +98,42 @@ def plant(w, family, quant):
         r = int(m.group(1))
         return (svd_r(w, r) if m.group(2) is None else residual_clip(w, r, int(m.group(2)), quant)), None
     raise ValueError(family)
+
+
+def constrained(model, pool, family, quant, steps, lr=3e-4, batch=16, seed=2, log=print):
+    """`steps` of AdamW (β 0.9, 0.95, cosine from lr to 1%, the cheater's own data seed, no dropout or noise) with the
+    planted matrices' forward weights `plant(latent)` and their gradients applied to the latent weights. Leaves the
+    planted matrices projected and returns each one's ternary to price against (as `plant`'s), since a projection
+    isn't idempotent (`small`'s pin rescales). `honest` is the same fine-tuning unprojected, the baseline."""
+    names = toy.names(model, PLANTED)
+    tplant = {}
+
+    def project():
+        latent = {n: model.linear(n).detach().clone() for n in names}
+        for n in names:
+            w0, t = plant(latent[n].numpy(), family, quant)
+            model.linear(n).copy_(torch.from_numpy(w0.astype(np.float32)))
+            if t is not None:
+                tplant[n] = t
+        return latent
+
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.95), weight_decay=0.0)
+    rng = np.random.default_rng(seed)
+    for step in range(steps):
+        for g in opt.param_groups:
+            g["lr"] = lr * (0.01 + 0.99 * 0.5 * (1 + math.cos(math.pi * step / steps)))
+        with torch.no_grad():
+            latent = project()
+        x, y = pool.batch(rng, batch)
+        loss = F.cross_entropy(model(x).reshape(-1, toy.VOCAB), y.reshape(-1))
+        opt.zero_grad(set_to_none=True)
+        loss.backward()
+        with torch.no_grad():
+            for n in names:
+                model.linear(n).copy_(latent[n])
+        opt.step()
+        if step % 100 == 0 or step == steps - 1:
+            log(f"constrained {family} step {step} loss {loss.item():.4f}")
+    with torch.no_grad():
+        project()
+    return tplant
