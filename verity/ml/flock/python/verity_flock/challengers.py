@@ -9,20 +9,24 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 #: `challenger_start`, `challenger_end` and `challenger_audit`
 SH = Path(__file__).resolve().parents[2] / "pod" / "challenger.sh"
 
 
-def wanted() -> bool:
-    return os.environ.get("FLOCK_CHALLENGER") == "1"
+def wanted(env: Mapping[str, str]) -> bool:
+    """Whether ``env``, the environment a sweep's servers run in, puts each server on its own challenger
+    (FLOCK_CHALLENGER=1)."""
+    return env.get("FLOCK_CHALLENGER") == "1"
 
 
 def _env(d: Path) -> dict:
-    return os.environ | {"CHALLENGER_REPO": os.environ.get("CHALLENGER_REPO") or str(SH.parents[4]),
-                         "CHALLENGER_PY": os.environ.get("CHALLENGER_PY") or sys.executable,
-                         "CHALLENGER_WORK": str(d.with_name(f"{d.name}-work"))}
+    """The environment `challenger.sh` runs in: this process's, where CHALLENGER_REPO and CHALLENGER_PY default to this
+    tree and this interpreter, and the challenger's work directory beside ``d``."""
+    return ({"CHALLENGER_REPO": str(SH.parents[4]), "CHALLENGER_PY": sys.executable} | dict(os.environ)
+            | {"CHALLENGER_WORK": str(d.with_name(f"{d.name}-work"))})
 
 
 def start(d: Path) -> tuple[subprocess.Popen, list[str]]:

@@ -40,6 +40,7 @@ import os
 import re
 import resource
 import subprocess
+import sys
 import threading
 import time
 import weakref
@@ -1272,7 +1273,7 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
                 try:
                     s.wait(timeout=120)
                 except subprocess.TimeoutExpired:
-                    pass
+                    print(f"verifier process {s.pid} still open 120 s after the prover: killed", file=sys.stderr, flush=True)
             s.kill()
             s.wait()
     challengers = _challengers_end(d, srvs, chs) if chs else None
@@ -1330,7 +1331,7 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
     law = ["--draw-law", os.environ["FLOCK_DRAW_LAW"]] if os.environ.get("FLOCK_DRAW_LAW") else []
-    chs = [_challenger(d / f"challenger-{i}") for i in range(servers)] if CH.wanted() else []
+    chs = [_challenger(d / f"challenger-{i}") for i in range(servers)] if CH.wanted(os.environ) else []
     bounded = bounded or bool(chs)
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,

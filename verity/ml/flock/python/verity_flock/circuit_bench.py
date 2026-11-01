@@ -116,7 +116,7 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
         else:
             addr = "127.0.0.1:%d" % (7500 + total.bit_length())
             log = d / f"serve-s{i}.log"
-            ch = CH.start(d / f"challenger-s{i}") if CH.wanted() else None
+            ch = CH.start(d / f"challenger-s{i}") if CH.wanted(os.environ) else None
             srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / f"sessions-s{i}"), "--pin", pin,
                                     "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables,
                                     *(["--sessions", str(a.runs + 1), *ch[1]] if ch else [])],
@@ -164,7 +164,7 @@ def _close(srv: subprocess.Popen, bounded: bool) -> None:
         try:
             srv.wait(timeout=120)
         except subprocess.TimeoutExpired:
-            pass
+            print(f"loopback server {srv.pid} still open 120 s after its prover: stopped", file=sys.stderr, flush=True)
     else:
         time.sleep(1)
     srv.terminate()
@@ -177,7 +177,7 @@ def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
     per, chs = [], []
     for i, _ in enumerate(q["subbatches"]):
         log = d / f"loopback-serve-s{i}.log"
-        ch = CH.start(d / f"loopback-challenger-s{i}") if CH.wanted() else None
+        ch = CH.start(d / f"loopback-challenger-s{i}") if CH.wanted(os.environ) else None
         srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7591", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
                                 "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables,
                                 *(["--sessions", str(a.runs + 1), *ch[1]] if ch else [])],
@@ -310,7 +310,7 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
     bad = False
     for d, j in jobs:
-        ch = CH.start(d / f"challenger-s{j}") if CH.wanted() else None
+        ch = CH.start(d / f"challenger-s{j}") if CH.wanted(os.environ) else None
         rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
                               "--instances", str(d / f"instances-s{j}.bin"), "--circuit", str(net), "--sessions", str(a.runs + 2),
                               "--operator", a.operator, *a.tables, *(ch[1] if ch else [])],
