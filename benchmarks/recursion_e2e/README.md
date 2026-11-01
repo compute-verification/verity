@@ -86,6 +86,11 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   `out/settings.json`, and `params.txt` (so the result's `params`) carries their SHA-512 digest as `settings`. the pod script's own
   variables pass through undeclared.
 
+- **Another inner statement** (`stage.sh`, launched as `job.sh` is): `rec_inner.py stage --subcircuit` stages N seeded
+  draws of a census-style subcircuit into `data/$TAG/stage` (plain leaves) and `stage-zk` (hm96), or, with
+  `WINDOW=DIR`, `rec_inner.py stage-window` stages every unit of a served window's member from the window's own rows and
+  salts (`prove_path.py commit`'s window dir). It then runs `job.sh` with 85's `STAGE=0`, which proves what it finds.
+
 ## The pipeline (step map)
 
 Every step is a STEP of the pod script (read as it is), run on one node with the big files under
@@ -101,10 +106,10 @@ with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=
 | 2 | `icheck` | `flock-circuit replay` of the last inner run, `python -m verity_flock.rec_vstar` (V*'s hashing reference) | `inner/` | records only | CPU |
 | 3 | `vstage` | `rec_vstage points`, `inner-fold` (`InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts, and `--forge`'s forged statements (`FORGE`) | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/`, `v/forged-<kind>/` | CPU |
 | 3b | `vcap` | `rec_vstage.stage_cap`: `RecCap` over each level's committed tops (V*'s verdict needs them) | `inner/`, `v/` | `v/cap/`, `v/cap/L<l>/` | CPU |
-| 4 | `oprove` | per V* statement, one at a time: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu` in each mode (`firewall`: `FC_FIREWALL=1`, the Lean session loop `flock-firewall`, live PROTOCOL.md §10.4) | `v/` | `v-sess/<stmt>/` | GPU |
+| 4 | `oprove` | V*'s own inputs fixed before any session (`flock-verify rec-inner`, `rec-statements`, the shared rows, each statement's flags and bindings); per V* statement, one at a time: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu` in each mode (`firewall`: `FC_FIREWALL=1`, the Lean session loop `flock-firewall`, live PROTOCOL.md §10.4, and the run's record `v-sess/rec-run.jsonl`: staged first, each Hello logged by `serve --rec-run`, closed last) | `v/`, `inner/` | `v-sess/` | GPU |
 | 5 | `oreplay` | `flock-circuit replay --zk` of each V* release (upstream's verifier) | `v-sess/` | records only | CPU |
-| 6 | `lean` | `flock-verify verify --zk` on each V* release with V*'s own inputs (`--rec-inner-*`, `--rec-rows`, `--rec-bindings`), the inner run (`INNER_LEAN=1`), `flock-verify statement` on the inner statement; `lean_verdicts.py` fails closed | `v-sess/`, `stage/`, `inner/` | records only | CPU |
-| 6b | `forge-after` | `forge_after.py`: coef, dirs and message forged after proving on copies of the honest L0 and alg-p0 statements, each `flock-verify verify --zk` with step 6's flags beside its honest control (not a STEP of the pod script) | `v-sess/`, `v/`, step 6's `own-<stmt>.txt` | records only | CPU |
+| 6 | `lean` | `flock-verify verify --zk` on each V* release with the V* inputs oprove fixed (`--rec-inner-*`, `--rec-rows`, `--rec-bindings`), the inner run (`INNER_LEAN=1`), `flock-verify statement` on the inner statement; `lean_verdicts.py` fails closed, and composes every V* part with `flock-verify rec-compose` over the run's record | `v-sess/`, `stage/`, `inner/` | records only | CPU |
+| 6b | `forge-after` | `forge_after.py`: coef, dirs and message forged after proving on copies of the honest L0 and alg-p0 statements, each `flock-verify verify --zk` with step 6's flags beside its honest control (not a STEP of the pod script) | `v-sess/`, `v/`, step 6's `own-<stmt>.txt` (step 4's) | records only | CPU |
 | 7 | `negative` | step 6 with `NEG_INNER`: each V* release again over each flipped copy of the inner run | as 6 | records only | CPU |
 
 What the recursive audit has that the pod script doesn't run, so no number here covers it:
@@ -113,8 +118,9 @@ What the recursive audit has that the pod script doesn't run, so no number here 
   L0,…,alg` opening one recursive run per inner run, each outer proof released through `python -m verity_flock.firewall
   relay` or `flock-circuit prove --firewall-state DIR --session ID --part NAME`, one outer slot, statements in order. Only
   the tests run it (`verity/ml/flock/tests/test_rec_live_firewall.py`). The pod script proves each V* statement against its own `serve`.
-- **One verdict over the whole recursive run.** STEP=lean verifies each V* release on its own, and the runner's
-  `ok` is the conjunction of those verdicts. No one command takes the inner record and every V* release and answers once.
+- **One verdict over the whole recursive run.** STEP=lean verifies each V* release on its own and composes their
+  verdicts once (`rec-compose`, over the run's record), but no one command takes the inner record and every V* release
+  and answers once: the inner run's own verdict (`INNER_LEAN=1`) stays a separate line.
 
 ## What each number covers
 

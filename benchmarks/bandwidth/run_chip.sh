@@ -7,8 +7,7 @@
 # Outside the lease: build `bwchip` (refused on any register spill), write the code-footprint kernels as PTX and
 # assemble each with ptxas, and record each cubin's SASS: its instructions, its add/xor steps (2 a chain a step, or the
 # sweep's code bytes are not what it says: refused) and its code bytes (sass.txt); count the uniform registers bwchip's
-# and bwstream's kernels name (uniform.txt); and rewrite urt.cubin (chip_ur.py) for each pair of uniform registers in
-# UR_PAIRS.
+# kernels name (uniform.txt); and rewrite urt.cubin (chip_ur.py) for each pair of uniform registers in UR_PAIRS.
 # Under `gpu-lease 1 --wait --on $GPUS --max-min 25`: `bwchip` (its sweeps' gates are the chains' and chases' final
 # states against the host's; a failed sweep reports nothing, and bwchip exits 3), then `bwchip --ur` for each pair, one
 # process each (a register that doesn't exist may fault the context): ur.jsonl.
@@ -70,10 +69,9 @@ for f in $(ls "$S"/ptx/*_*.cubin | sort -t_ -k1,1 -k2n); do
 done
 rm -f "$S"/ptx/*.ptx "$S/sass.txt"
 
-# Uniform registers: how often each URn appears in bwchip's and bwstream's kernels, and three instructions naming URZ
-# with their encodings (URZ is the register field's all-ones value).
-"$CUDA/bin/nvcc" -O3 -std=c++17 -arch=sm_120 -cubin stream.cu -o "$S/stream.cubin" > /dev/null 2>&1
-{ "$CUDA/bin/cuobjdump" -sass "$S/bwchip"; "$CUDA/bin/cuobjdump" -sass "$S/stream.cubin"; } > "$S/all.sass"
+# Uniform registers: how often each URn appears in bwchip's kernels, and three instructions naming URZ with their
+# encodings (URZ is the register field's all-ones value).
+"$CUDA/bin/cuobjdump" -sass "$S/bwchip" > "$S/all.sass"
 { grep -oE '\bUR[0-9]+\b' "$S/all.sass" | sort -t R -k2 -n | uniq -c; grep -m3 -E 'UMOV UR[0-9]+, URZ' "$S/all.sass"; } \
   > "$O/uniform.txt"
 for p in $PAIRS; do
