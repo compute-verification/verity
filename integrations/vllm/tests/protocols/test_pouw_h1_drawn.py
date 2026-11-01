@@ -209,7 +209,7 @@ def lanes_served(tmp_path, monkeypatch):
     srv.src.uninstall()
     assert out["tied"] and out["refused"] == [], out
     doc = PC.build(d / "h1", tmp_path / "circuits", lanes=(LK,), lower_leaf=_stand_in_leaf)
-    assert sorted(doc["files"]) == [CR.LEAF_PROGRAMS, f"{LL.COMBINE}{LK}", f"{LL.LANE}{LK}"]
+    assert sorted(doc["files"]) == sorted([CR.LEAF_PROGRAMS, f"{LL.COMBINE}{LK}", f"{LL.LANE}{LK}"])
     assert CR.lanes_files(doc["files"]) is None
     _inputs(arm, tmp_path)
     return DRAWN, d, tmp_path
