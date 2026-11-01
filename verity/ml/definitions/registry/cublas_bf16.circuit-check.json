@@ -12,25 +12,49 @@
    "and": 21151,
    "type": "af1f2505f192fda47494122125f808778cfbc073ab6c129a81c3ee6be8bcea38754f735665527e0c9fdf6e9e1ce376df3e9a2411c5055886a8c1e99c8591c2ff"
   },
+  "GemmF32Out_v2{K=16,N=3,DOT=HopperBF16WgmmaDot16_v3}": {
+   "and": 19295,
+   "type": "edfecd785d031b5ee09326e9ec362a30fd7b9cbabf2e7a66ded3ae53890d1afcfefc64f58a2817f2839616607a050d6918802711bfad2c2cb003c3d822514421"
+  },
   "GemmF32Out_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 43199,
    "type": "6fd8f41855d0f75b923967385bf62ccfae1e8391467ce2a09a4af50d476a0a3a0aaabb1a367923f3432617c9dff5ee2791265f3fb4e5fbb9e98fcb7c44e68c28"
+  },
+  "GemmF32Out_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v3}": {
+   "and": 39316,
+   "type": "3d8fc61d7f686829d1f7e185a402a4eba81942e0024dfcf67690f5847194fd50bdc49f8d294c9decda2de128cef0ba2911ed14c03b55cec5165cadc69257fe21"
   },
   "HopperBf16Dot16StepFirstX_v1": {
    "and": 784,
    "type": "bd9559d8b999db8edf5e7e3a5071b1c564e8655c7247569cc21f4ef4b69f50e9929c197a5881a969b27c5103bcd98dc92a04dd8aedcc3ef7ece19c9125c19baa"
   },
+  "HopperBf16Dot16StepFirstX_v2": {
+   "and": 320,
+   "type": "977225bcfbe552d570795d69bba4fe1c783139d533cadac435f45b944b41fb62ddd16043953d9084655ac5f74d5c737ed2a9b76020e3d74d3c5804c035cb04b7"
+  },
   "HopperBf16Dot16StepFirst_v1": {
    "and": 6789,
    "type": "87cd277ac88a230b54356f8f36071c9b821b13b7ec443bd9709bccd85ac2ea451c757fbcaeda46c8cde5918ae9365c9c4f6dd821afdbc84754819a2d359452e9"
+  },
+  "HopperBf16Dot16StepFirst_v2": {
+   "and": 6325,
+   "type": "2f582b1a26dbd5ad68a4a12abf07785c23fdaad4ad7131b3a3e37080346e47388203a2fe5320afe1e047f884ea3600c7d934b7d4c5f218725c3c75889caa50a8"
   },
   "HopperBf16Dot16StepX_v1": {
    "and": 784,
    "type": "bd9559d8b999db8edf5e7e3a5071b1c564e8655c7247569cc21f4ef4b69f50e9929c197a5881a969b27c5103bcd98dc92a04dd8aedcc3ef7ece19c9125c19baa"
   },
+  "HopperBf16Dot16StepX_v2": {
+   "and": 320,
+   "type": "977225bcfbe552d570795d69bba4fe1c783139d533cadac435f45b944b41fb62ddd16043953d9084655ac5f74d5c737ed2a9b76020e3d74d3c5804c035cb04b7"
+  },
   "HopperBf16Dot16Step_v1": {
    "and": 7088,
    "type": "b5fbf97843f152bfb0e4c14a2b14a6bfdd0ac0daa2902a9abbfd2cef37f2d01f6d5cc637123151f7d0548440b580400f7bec6fdde99000f9101b32ae0c5cc385"
+  },
+  "HopperBf16Dot16Step_v2": {
+   "and": 6567,
+   "type": "030e05a8104135122af176ef3263517ce051d52e2ff9f3cbf3538f0221e0b41e1ee51a79e4dc629f13ff6d44984072a764a476441e1c1650b680d49c8b44cd96"
   }
  }
 }
