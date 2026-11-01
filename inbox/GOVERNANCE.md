@@ -156,3 +156,20 @@ fixes that at about 6.7 GB of garbled circuit a draw.
 - The catch rate q is unmeasured (it needs 29 blind trials per modification class).
 - The area figures are generic-library netlists.
 - The energy bound uses one H200 sweep.
+
+**Correction to ε_o (coordinator, Daniel 9:52 AM PST: "no one uses host CPUs for AI").** ε_o is a worst-case
+*capacity ceiling* for unlogged devices, not an estimate of use. It depends almost entirely on the host SKU. These are
+the coordinator's peak arithmetic from recalled specs, against 8× H200 at about 7.9·10¹⁵ int8 MAC/s:
+
+| host | int8 MAC peak per node | share |
+|---|---|---|
+| 2× Sapphire Rapids with AMX | about 2.3·10¹⁴ | about 2.9% (GOV-CLAIM's upper) |
+| 2× EPYC Genoa, VNNI, no AMX | about 3·10¹³ | about 0.4% |
+| Grace on GH200 | about 1.4·10¹³ per H100 | about 1.4% |
+| newer AMX parts (e.g. 128-core Granite Rapids) | higher | could reach 5–6% |
+
+Real use is far lower: CPU DRAM bandwidth is about 10× below HBM, the cores run the serving stack, and AMX at full load
+draws hundreds of watts a socket.
+
+**Cheap fixes:** specify hosts without AMX-class matrix units (ε_o ≈ 0.4%), meter host power separately, or log the
+CPUs. With the first two, the fleet bound is about 1.4–1.5%, and the teardown term dominates.
