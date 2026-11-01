@@ -14,19 +14,25 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
+    served_verdicts.py public-lines [--private FILE]
+    served_verdicts.py publish OUT --private DIR
 
-``public-registration`` prints what the run publishes of a window's advice registration (`public_registration`: the
-advice's length padded to its compiler's cap), ``sampled-line`` the SAMPLED-PROOFS line from the records audit's log
+What leaves the node names no window and counts none of a window's own: no window's number, no count of the windows closed,
+sealed or refused, and no engine step, request count or user of one. ``public-lines`` prints each line of stdin in its
+published form (`public_line`), the line in full appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and
+``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
+its public form in its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
+verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
+registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
+SAMPLED-PROOFS line from the records audit's log
 (`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
 scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. Prints what the run publishes of it (`public_pick`):
-``{window, steps, engine_steps, slots, every_slot, refused}``, ``steps`` the window's ``[lo, hi)`` in the run's committed
-engine steps, ``every_slot`` whether its requests filled the class's slots, ``refused`` the windows refused, by number. Its
-requests' count, list and users stay on the node.
+earliest. ``--window K`` holds K to the same rules. Prints the pick (`pick`): ``{window, requests, users, steps,
+refused}``, which the run keeps in the serve dir's ``private/window.json``.
 
 ``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
 its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
@@ -98,9 +104,12 @@ development piece's `DEV_VERDICT`), each missing one and why, each rejecting one
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -225,41 +234,178 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
             "refused": {str(j): why for j, why in refused.items()}}
 
 
-def public_pick(got: Mapping[str, Any], slots: int) -> dict[str, Any]:
-    """What the run publishes of `pick`'s window: its engine steps and whether its requests filled the class's ``slots``,
-    with no count, list or user of them, and the windows refused by number alone."""
-    lo, hi = got["steps"]
-    return {"window": got["window"], "steps": [lo, hi], "engine_steps": hi - lo, "slots": slots,
-            "every_slot": got["requests"] == slots, "refused": sorted(int(j) for j in got["refused"])}
+#: A served window's own fields, never published: the windows (closed, sealed or joined), its users, its engine steps and
+#: whether its requests filled the slots, its unpadded population, its advice's length and its windows' advice by number.
+OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population", "advice_bits", "bits_by_window"})
+#: Fields that name a window or count its own where their value holds a number: the window's number, its steps, its
+#: requests' count, the windows refused. A window named ``all``, the bench Build's requests by name and a refusal's reason
+#: stay.
+NUMBERED = frozenset({"window", "steps", "requests", "refused"})
+#: A window's number, step range or count in text, each with what the published text says in its place
+WINDOW_TEXT = (
+    (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
+                % "|".join(sorted(OWN | NUMBERED))), ""),
+    (re.compile(r"(?<![A-Za-z0-9_])w\d+(?![A-Za-z0-9_])"), "wK"),
+    (re.compile(r"(?i)\b(windows?)([ :=#]+)\d+(?!\d|[,.]\d)"), r"\1\2K"),
+    (re.compile(r"\b\d+ ((?:sealed |closed )?window\(s\))"), r"\1"),
+    (re.compile(r"\b\d+ (sealed|closed)\b"), r"\1"),
+    (re.compile(r"(?i)\b(steps?) \[\d+, ?\d+[\])]"), r"\1"),
+    (re.compile(r"\b\d+/\d+ ok\b"), "ok"),
+)
+#: A window's number in a file's path under the published dir: the file is held whole
+NAMED = re.compile(r"(?<![A-Za-z0-9])w\d+(?![A-Za-z0-9])")
+_OPEN = re.compile(r'\{\s*"')
+_FIELD = re.compile(r'\\?"(?:%s)\\?":' % "|".join(sorted(OWN | NUMBERED)))
+#: what a published line says in place of a JSON object cut short that names a window's field
+CUT = "{…} (cut short; in full in the serve dir's private/verdicts.txt)"
+#: a file `publish` reads larger than this is held whole
+PUBLISH_MAX = 256 << 20
+
+
+def _numbered(v: Any) -> bool:
+    if isinstance(v, bool):
+        return False
+    if isinstance(v, (int, float)):
+        return True
+    if isinstance(v, str):
+        return v.isdigit()
+    if isinstance(v, Mapping):
+        return any(_numbered(x) for x in (*v.keys(), *v.values()))
+    return isinstance(v, list) and any(_numbered(x) for x in v)
+
+
+def _held(key: Any, value: Any) -> bool:
+    if key == "refused":
+        return not isinstance(value, str)
+    return key in OWN or (key in NUMBERED and _numbered(value))
+
+
+def public_text(s: str) -> str:
+    """``s`` with each window number, step range and window count `WINDOW_TEXT` finds in its published form."""
+    for pat, sub in WINDOW_TEXT:
+        s = pat.sub(sub, s)
+    return s
+
+
+def public_json(o: Any) -> Any:
+    """``o`` with no field of a window's own (`OWN`, `NUMBERED`) and each string in its `public_text` form."""
+    if isinstance(o, Mapping):
+        return {public_text(k) if isinstance(k, str) else k: public_json(v) for k, v in o.items() if not _held(k, v)}
+    if isinstance(o, list):
+        return [public_json(v) for v in o]
+    return public_text(o) if isinstance(o, str) else o
+
+
+def public_line(line: str) -> str:
+    """A verdict line as the run publishes it: each JSON object in it in its `public_json` form, one cut short that names a
+    window's field replaced by `CUT` to the line's end, and the rest in its `public_text` form."""
+    dec, out, i = json.JSONDecoder(), [], 0
+    while (j := line.find("{", i)) >= 0:
+        out.append(public_text(line[i:j]))
+        try:
+            obj, end = dec.raw_decode(line, j)
+        except ValueError:
+            if _OPEN.match(line, j) and _FIELD.search(line, j):
+                out.append(CUT + ("\n" if line.endswith("\n") else ""))
+                return "".join(out)
+            out.append("{")
+            i = j + 1
+            continue
+        pub = public_json(obj)
+        out.append(line[j:end] if pub == obj else json.dumps(pub))
+        i = end
+    out.append(public_text(line[i:]))
+    return "".join(out)
+
+
+def public_lines(src: Any, dst: Any, private: Path | None) -> None:
+    """Each line of ``src`` in full to ``private`` (where the serve dir it's under exists) and in its `public_line` form to
+    ``dst``, line by line."""
+    keep = None
+    if private is not None and private.parent.parent.is_dir():
+        with contextlib.suppress(OSError):
+            private.parent.mkdir(mode=0o700, exist_ok=True)
+            keep = open(private, "a")
+    try:
+        for line in iter(src.readline, ""):
+            if keep is not None:
+                keep.write(line if line.endswith("\n") else line + "\n")
+                keep.flush()
+            dst.write(public_line(line))
+            dst.flush()
+    finally:
+        if keep is not None:
+            keep.close()
+
+
+def public_doc(text: str) -> str:
+    """A published file's text in its public form: a JSON document's `public_json`, else each line's `public_line`; ``text``
+    itself where nothing in it names or counts a window."""
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        return "".join(public_line(x) for x in text.splitlines(keepends=True))
+    pub = public_json(doc)
+    return text if pub == doc else json.dumps(pub, indent=1) + "\n"
+
+
+def publish(out: Path, private: Path) -> list[str]:
+    """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
+    `PUBLISH_MAX` or its encoding keeps from being read as text, held whole, and one whose text names or counts a window
+    (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. Binary
+    files stay. The paths held, in order."""
+    held: list[str] = []
+    for p in sorted(out.rglob("*")):
+        if p.is_symlink() or not p.is_file():
+            continue
+        rel = p.relative_to(out).as_posix()
+        dst = private / rel
+        private.mkdir(mode=0o700, parents=True, exist_ok=True)
+        dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        data = p.read_bytes() if p.stat().st_size <= PUBLISH_MAX else None
+        if data is None or NAMED.search(rel):
+            shutil.move(p, dst)
+            held.append(rel)
+            continue
+        try:
+            text = data.decode()
+        except UnicodeDecodeError:
+            continue
+        pub = public_doc(text)
+        if pub != text:
+            dst.write_bytes(data)
+            p.write_text(pub)
+            held.append(rel)
+    return held
 
 
 #: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
-PADDED = ("binding.advice.bits", "rows", "bits_by_window")
+PADDED = ("binding.advice.bits", "rows")
 
 
 def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
     """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
-    ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each, every window's bits the cap), no count
-    or refusal of its requests, and the rest as registered. ``padded`` names the fields padded."""
+    ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each), no count or refusal of its requests,
+    no window's number (`public_json`), and the rest as registered. ``padded`` names the fields padded."""
     cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
     out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
     out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
     out["rows"] = -(-cap // row_bits)
-    out["bits_by_window"] = {w: cap for w in reg.get("bits_by_window") or {}}
-    return {**out, "padded": list(PADDED)}
+    return public_json({**out, "padded": list(PADDED)})
 
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
-    templates, scope and law), which members it drew, and the row with no length of the advice (``leak.advice_bits``)
-    and no ``population``, the scope's unpadded member count, which counts the window's tokens."""
+    templates, its scope's op path and law), which members it drew, and the row with no length of the advice
+    (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
+    scope's ``steps``, the window's engine steps, stay on the node too."""
     row = {k: v for k, v in records.items() if k != "population"}
     if isinstance(row.get("leak"), Mapping):
         row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
     part = partition or {}
     scope = part.get("scope") or {}
-    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} steps "
-            f"{scope.get('steps', '?')} (law {part.get('law', '?')})")
+    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
+            f"(law {part.get('law', '?')})")
     drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
     return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
 
@@ -851,6 +997,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--live-evidence", type=Path)
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
+    pl = sub.add_parser("public-lines")
+    pl.add_argument("--private", type=Path)
+    pb = sub.add_parser("publish")
+    pb.add_argument("out", type=Path)
+    pb.add_argument("--private", type=Path, required=True)
     sl = sub.add_parser("sampled-line")
     sl.add_argument("log", type=Path)
     sl.add_argument("--partition", type=Path)
@@ -887,9 +1038,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"no session ({type(e).__name__})")
             return 1
         return 0
+    if a.cmd == "public-lines":
+        public_lines(sys.stdin, sys.stdout, a.private)
+        return 0
+    if a.cmd == "publish":
+        held = publish(a.out, a.private)
+        if held:
+            print(f"PUBLISH: {a.out}'s files that name a window or count its own are held in full in {a.private}, "
+                  "their public form in their place", flush=True)
+        return 0
     if a.cmd == "window":
         try:
-            print(json.dumps(public_pick(pick(a.serve_dir, a.slots, a.window), a.slots), sort_keys=True))
+            print(json.dumps(pick(a.serve_dir, a.slots, a.window), sort_keys=True))
         except ValueError as e:
             print(f"served_verdicts.py window: {e}", file=sys.stderr)
             return 1
@@ -915,7 +1075,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ValueError("no gate command (--gate)")
             if a.verb == "close":
                 doc = period_close(a.serve_dir, a.gate)
-                print(f"PERIOD closed {doc['name']}: {json.dumps(doc['close'], sort_keys=True)[:600]}", flush=True)
+                print(f"PERIOD closed {doc['name']}: {json.dumps(public_json(doc['close']), sort_keys=True)[:600]}",
+                      flush=True)
                 return 0
             if not (a.name and a.circuits and a.slots and a.max_tokens):
                 raise ValueError("period open needs --name, --circuits, --slots and --max-tokens")
