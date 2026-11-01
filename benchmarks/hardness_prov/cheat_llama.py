@@ -23,7 +23,8 @@ dither of σ (the cheater plans for the one-shot dither; his draws are independe
 Each arm is then measured as committed, after a one-shot dither (served = absmax(s·q + σ·s·Z), Z Gaussian, each σ in
 --dither), and after a pass of --pass-steps distillation steps that adds σ_w·s·Z to every q and k latent after each
 step (each σ_w in --pass-sigma; the pass's gradients are honest, or with --pass-steer the cheater's own objective plus a
-pull of q − L back inside ±a). Measured: perplexity (WikiText-2 test, FineWeb-Edu val), both gates exactly (singular
+pull of q − L back inside ±a; --pass-only-steer skips the honest one). --draws K repeats the dithers and the passes
+with K independent noise draws from the same committed model (the pass's tokens are the same). Measured: perplexity (WikiText-2 test, FineWeb-Edu val), both gates exactly (singular
 values in fp64), and the cheapest route the cheater knows through each matrix (his A·Bᵀ rescaled to the served scale,
 or refit by alternating projection onto rank r plus ±a). The heuristic step of HT-PROV's margin table is measured by
 its terms: with U = L's column space, top-r(q) ≥ ‖Uᵀq‖²/‖q‖² = (‖L‖² + 2⟨L, S⟩ + ‖UᵀS‖²)/‖q‖² exactly, and ‖L‖² ≥
@@ -502,6 +503,9 @@ def main(argv=None):
     ap.add_argument("--pass-steps", type=int, default=200)
     ap.add_argument("--pass-lr", type=float, default=1e-5)
     ap.add_argument("--pass-steer", action="store_true")
+    ap.add_argument("--pass-only-steer", action="store_true", help="with --pass-steer, skip the honest-gradient pass")
+    ap.add_argument("--draws", type=int, default=1, help="independent dither and pass draws from the committed model; "
+                    "draw j > 0 is keyed '#j'")
     args = ap.parse_args(argv)
     args.writes = [float(w) for w in args.writes.split(",")]
     spec_ranks = [int(r) for r in args.spec_ranks.split(",")]
@@ -611,16 +615,21 @@ def main(argv=None):
     mods = {name: (kind, getattr(parent, attr)) for name, kind, parent, attr in qk_modules(model)}
     w0 = {name: m.weight.detach().clone() for name, (kind, m) in mods.items()}
 
+    def draw_key(j):
+        return f"#{j}" if j else ""
+
     res["dither"] = {}
-    for sig in [float(x) for x in args.dither.split(",") if x]:
-        g = torch.Generator(device="cuda")
-        g.manual_seed(EVAL_SEED)
-        with torch.no_grad():
-            for name, (kind, m) in mods.items():
-                s0 = absmax_scale(w0[name])
-                m.weight.copy_(w0[name] + sig * s0[:, None] * torch.randn(w0[name].shape, device="cuda", generator=g))
-        res["dither"][f"{sig:g}"] = state(f"dither {sig:g}", committed_plan)
-        (args.out / "result.json").write_text(json.dumps(res, indent=1))
+    for j in range(args.draws):
+        for sig in [float(x) for x in args.dither.split(",") if x]:
+            g = torch.Generator(device="cuda")
+            g.manual_seed(EVAL_SEED + 2 * j)
+            with torch.no_grad():
+                for name, (kind, m) in mods.items():
+                    s0 = absmax_scale(w0[name])
+                    m.weight.copy_(w0[name] + sig * s0[:, None] * torch.randn(w0[name].shape, device="cuda",
+                                                                               generator=g))
+            res["dither"][f"{sig:g}{draw_key(j)}"] = state(f"dither {sig:g}{draw_key(j)}", committed_plan)
+            (args.out / "result.json").write_text(json.dumps(res, indent=1))
     with torch.no_grad():
         for name, (kind, m) in mods.items():
             m.weight.copy_(w0[name])
@@ -628,35 +637,38 @@ def main(argv=None):
     snapshot = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     res["pass"] = {}
     start_tok = args.steps * args.batch * args.seq
-    for sw in [float(x) for x in args.pass_sigma.split(",") if x]:
-        for steer in ([False, True] if (args.pass_steer and args.arm == "cheat") else [False]):
-            model.load_state_dict(snapshot)
-            g = torch.Generator(device="cuda")
-            g.manual_seed(EVAL_SEED + 1)
+    steers = [False]
+    if args.pass_steer and args.arm == "cheat":
+        steers = [True] if args.pass_only_steer else [False, True]
+    for j, sw, steer in [(j, float(x), st) for j in range(args.draws) for x in args.pass_sigma.split(",") if x
+                         for st in steers]:
+        model.load_state_dict(snapshot)
+        g = torch.Generator(device="cuda")
+        g.manual_seed(EVAL_SEED + 1 + 2 * j)
 
-            def noise(step, sw=sw, g=g):
-                with torch.no_grad():
-                    for _, (kind, m) in mods.items():
-                        s = absmax_scale(m.weight)
-                        m.weight.add_(sw * s[:, None] * torch.randn(m.weight.shape, device="cuda", generator=g))
+        def noise(step, sw=sw, g=g):
+            with torch.no_grad():
+                for _, (kind, m) in mods.items():
+                    s = absmax_scale(m.weight)
+                    m.weight.add_(sw * s[:, None] * torch.randn(m.weight.shape, device="cuda", generator=g))
 
-            pen_fn = None
-            if steer:
-                def pull(name, q):
-                    p = committed_plan[name]
-                    L = p["L"] * (p["s"] / absmax_scale(mods[name][1].weight))[:, None]
-                    off_pin = torch.ones_like(q).scatter(1, q.detach().abs().argmax(1)[:, None], 0.0)
-                    return (((q - L).abs() - (args.a - 0.5)).clamp_min(0) * off_pin).pow(2).mean()
+        pen_fn = None
+        if steer:
+            def pull(name, q):
+                p = committed_plan[name]
+                L = p["L"] * (p["s"] / absmax_scale(mods[name][1].weight))[:, None]
+                off_pin = torch.ones_like(q).scatter(1, q.detach().abs().argmax(1)[:, None], 0.0)
+                return (((q - L).abs() - (args.a - 0.5)).clamp_min(0) * off_pin).pow(2).mean()
 
-                def pen_fn(step, pull=pull):
-                    return gates_loss(step, pull, gates=args.gates)
-            tag = f"pass sw{sw:g}{' steer' if steer else ''}"
-            curve = train(model, teacher, train_ids, args, args.pass_steps, start_tok, args.pass_lr, [], noise, pen_fn,
-                          tag, val_ids, qk_ids(), warmup=0.0, cosine=False)
-            out = state(tag, committed_plan)
-            out["curve"] = curve
-            res["pass"][f"{sw:g}{'_steer' if steer else ''}"] = out
-            (args.out / "result.json").write_text(json.dumps(res, indent=1))
+            def pen_fn(step, pull=pull):
+                return gates_loss(step, pull, gates=args.gates)
+        tag = f"pass sw{sw:g}{' steer' if steer else ''}{draw_key(j)}"
+        curve = train(model, teacher, train_ids, args, args.pass_steps, start_tok, args.pass_lr, [], noise, pen_fn,
+                      tag, val_ids, qk_ids(), warmup=0.0, cosine=False)
+        out = state(tag, committed_plan)
+        out["curve"] = curve
+        res["pass"][f"{sw:g}{'_steer' if steer else ''}{draw_key(j)}"] = out
+        (args.out / "result.json").write_text(json.dumps(res, indent=1))
     res["seconds"] = time.time() - t_start
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
     log("done", f"{res['seconds']:.0f}s")
