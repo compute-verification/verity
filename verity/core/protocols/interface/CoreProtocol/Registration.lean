@@ -57,6 +57,8 @@ peak rates, in integers.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Registration
 

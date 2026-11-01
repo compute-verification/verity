@@ -14,6 +14,8 @@ public import Flock.Tags
 public import Flock.Typed
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

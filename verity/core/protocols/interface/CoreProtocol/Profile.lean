@@ -15,6 +15,8 @@ public import Flock.Canon
 public import CoreProtocol.Ratio
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

@@ -12,6 +12,8 @@ public import Std.Data.TreeMap.Raw.Lemmas
 public import Flock.Bytes
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

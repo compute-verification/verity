@@ -41,6 +41,8 @@ take the arena as its digests, 64 bytes a block.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Store
 

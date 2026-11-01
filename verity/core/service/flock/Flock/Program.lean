@@ -20,6 +20,8 @@ public import Flock.Sizes
 public import Flock.Steps
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Program
 

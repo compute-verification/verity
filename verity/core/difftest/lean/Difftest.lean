@@ -20,6 +20,8 @@ port's functions must be pure: nothing else may be written to stdout (use stderr
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Difftest
 

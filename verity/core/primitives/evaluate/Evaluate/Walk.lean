@@ -26,6 +26,8 @@ root's `ret`. It is `verity.ml.circuits.evaluate.evaluate_region` over the root'
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate
 

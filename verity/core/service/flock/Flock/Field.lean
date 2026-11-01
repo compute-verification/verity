@@ -4,6 +4,8 @@ PROTOCOL.md §2.1, §2.2, §2.4: the fields.
 module
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

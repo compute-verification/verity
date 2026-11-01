@@ -12,6 +12,8 @@ other plan, as `Plan(runs, blocks)` raises; runs arrive as integers, so a negati
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit
 

@@ -19,6 +19,8 @@ public import Flock.Bytes
 public import Flock.Canon
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

@@ -19,6 +19,8 @@ correctly rounded, so another host's library may give other words.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate.Act
 

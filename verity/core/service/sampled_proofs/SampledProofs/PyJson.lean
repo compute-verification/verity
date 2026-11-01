@@ -12,6 +12,8 @@ public import Lean.Data.Json
 public import CoreProtocol.Ratio
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.PyJson
 

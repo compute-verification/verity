@@ -15,6 +15,8 @@ a table of 2^28 words out of the request (`Evaluate.evaluate`). An `input` not o
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate
 

@@ -29,6 +29,8 @@ is `refused`. After a rejection every later call but `start` is refused, as `_li
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Session
 

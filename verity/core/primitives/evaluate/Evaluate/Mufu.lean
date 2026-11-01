@@ -18,6 +18,8 @@ library's SHA-512 (`Flock.LIBRARY_TABLES`).
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate.Mufu
 

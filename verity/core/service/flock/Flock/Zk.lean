@@ -10,6 +10,8 @@ public import Flock.Verify
 public import Flock.ZkLigerito
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Zk
 

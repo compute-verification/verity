@@ -32,6 +32,8 @@ A primitive is recognized by its id and must declare the signature the registry 
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate
 
