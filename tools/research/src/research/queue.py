@@ -196,13 +196,15 @@ names the PR it contains and why that one is out, judging each PR after those it
 
 Moves.  A layout move lands from `next` with no pause in landing.  A PR whose body has a `Move: tools/move/NAME.toml` line
 (`PR.move`) is a move PR: its marked head is only the request.  Where the sync puts it, it is regenerated on the commit below it
-(`checked`'s tip once the members below it land): that tree's own `tools/move/rename.py --map NAME.toml` at the root of a worktree
-of it, one commit on it with the PR's trailers and `Move: NAME.toml` (`_regenerate`), which that tree's own
-`tools/verity/check/move_check.py` must certify, else the PR is left out with why (a map the tip lacks too).  It needs a ready
+(`checked`'s tip once the members below it land): `tools/move/rename.py --map NAME.toml` at the root of a worktree of it, one
+commit on it with the PR's trailers and `Move: NAME.toml` (`_regenerate`), which `tools/verity/check/move_check.py` must
+certify, else the PR is left out with why (a map the tip lacks too).  Both scripts, and `restack.py` below, are the landing
+branch's, as its landing gates are (`move_scripts`), so a member below the move can't change what judges it; a member below
+it that changes `tools/move/`'s scripts holds the move back until it lands, since the restack runs the move's base's.  It needs a ready
 mark and a land verdict like any PR, and is a Lean change when it moves Lean, so the Lean check of `next`'s prefix covers it; it
 lands as that one commit, under the after-landing run.  Each PR merged above a move, on `next` or among `checked`'s last
-`LANDED_WINDOW` first-parent commits, whose head lacks it is merged across it (`_merge_through`): restacked onto it by the move's
-base's own `tools/move/restack.py` when its change names a word of the move's map or its plain merge conflicts, so only its own
+`LANDED_WINDOW` first-parent commits, whose head lacks it is merged across it (`_merge_through`): restacked onto it by
+`tools/move/restack.py` when its change names a word of the move's map or its plain merge conflicts, so only its own
 conflicts refuse it.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
 landed (`queue_log`), and drive closes it once `main` reaches it (`Driver._close_carried`).  The low-risk lane stops at a
 move on `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
@@ -296,8 +298,12 @@ TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
 MOVE_RE = re.compile(r"^[ \t>*_]*Move[:\s]+`?(tools/move/[\w.-]+\.toml)`?[ \t.]*$", re.M)
 #: the trailer of a move drive regenerated (`Queue._regenerate`), naming its map
 MOVE_TRAILER_RE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
-#: the scripts a move runs, each from the tree it runs on: the move, its certificate, and carrying a branch across it
+#: the scripts a move runs, each as the landing branch has it (`move_scripts`): the move, its certificate, and carrying a branch
+#: across it
 RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/verity/check/move_check.py", "tools/move/restack.py"
+#: what those scripts import from their own checkout: `tools/move/`'s other scripts (rename.py's `layout`), and the pins list
+#: move_check.py reads to tell a pin's rewritten digest from an edit
+MOVE_DIR, MOVE_PINS = "tools/move/", "tools/verity/check/pins.py"
 #: how many first-parent commits of the landing branch a sync reads for the queue's landings (`queue_log`): the heads it
 #: landed, and the moves a PR based before them is restacked through
 LANDED_WINDOW = 2000
@@ -786,6 +792,27 @@ def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, s
     return p.returncode, p.stdout if p.returncode in (0, 1) else (p.stderr or p.stdout).strip()[-400:]
 
 
+def move_scripts(repo: Path, at: str) -> dict[str, str]:
+    """{path: blob} of what judges a move at ``at``: `tools/move/`'s scripts (its maps are the moves' data, not code),
+    `move_check.py` and the pins list it reads."""
+    out = {}
+    for line in _out(repo, "ls-tree", "-z", at, "--", MOVE_DIR, MOVE_CHECK, MOVE_PINS).split("\0"):
+        meta, _, path = line.partition("\t")
+        if path.endswith(".py") and meta.split()[1:2] == ["blob"]:
+            out[path] = meta.split()[2]
+    return out
+
+
+def write_scripts(repo: Path, scripts: dict[str, str], dest: Path) -> Path:
+    """``scripts`` (`move_scripts`) written under ``dest`` at their paths, so each finds its imports beside it as in a checkout:
+    ``dest``."""
+    for path, blob in scripts.items():
+        f = dest / path
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(_git(repo, "cat-file", "blob", blob).stdout, errors="surrogateescape")
+    return dest
+
+
 def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
                  run: Callable[[Path, str, str, str], tuple[int | None, str]] = run_gate,
                  onto: str | None = None) -> tuple[list[str], list[str]]:
@@ -1125,10 +1152,10 @@ def _message(pr: PR) -> str:
     return f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\n"
 
 
-def _move_message(pr: PR, tip: str) -> str:
+def _move_message(pr: PR, tip: str, into: str, main: str) -> str:
     return (f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\n`python3 {RENAME} --map {pr.move}` at the root of {tip}, regenerated "
-            f"by drive for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`.\n\nPR: #{pr.number}\nHead: {pr.head}\n"
-            f"Owner: {pr.owner}\nMove: {pr.move}\n")
+            f"by drive for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
+            f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\nMove: {pr.move}\n")
 
 
 class Queue:
@@ -1633,32 +1660,45 @@ class Queue:
 
     # -- moves (the module's `Moves`)
 
-    def _regenerate(self, tip: str, pr: PR) -> tuple[str | None, str]:
-        """(move PR ``pr``'s move regenerated on ``tip`` and certified, "") or (None, why not), once per tip and head
-        (`_regenerated`; the state's `moves_made`)."""
-        key = f"{tip}:{pr.move}:{pr.number}:{pr.head}"
+    def _regenerate(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
+        """(move PR ``pr``'s move regenerated on ``tip`` and certified, "") or (None, why not), once per tip, landing tip ``main``
+        and head (`_regenerated`; the state's `moves_made`)."""
+        key = f"{tip}:{main}:{pr.move}:{pr.number}:{pr.head}"
         self._used.add(key)
         got = self._made.get(key) or {}
         if not got.get("why") and not (got.get("commit") and self._has(got["commit"])):
-            commit, why = self._regenerated(tip, pr)
+            commit, why = self._regenerated(tip, pr, main)
             got = self._made[key] = {"commit": commit} if commit else {"why": why}
         return got.get("commit"), got.get("why", "")
 
-    def _regenerated(self, tip: str, pr: PR) -> tuple[str | None, str]:
-        """``tip``'s own `rename.py --map MAP` (``pr``'s `Move:` line) run at the root of a worktree of ``tip``, committed as one
-        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by ``tip``'s own `move_check.py
-        TIP COMMIT`; the PR's head is only the request.  A map or script ``tip`` lacks, a script that fails, a map that renames
-        nothing there, or a move `move_check.py` refuses is the reason."""
-        if missing := [p for p in (pr.move, RENAME, MOVE_CHECK)
-                       if _git(self.workdir, "cat-file", "-e", f"{tip}:{p}", check=False).returncode]:
-            return None, (f"its move can't be regenerated on {tip[:12]}, which lacks {', '.join(missing)}: land the map first, "
-                          f"then mark the move again")
+    def _regenerated(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
+        """`rename.py --map MAP` (``pr``'s `Move:` line, ``tip``'s map) run at the root of a worktree of ``tip``, committed as one
+        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by `move_check.py TIP COMMIT`;
+        the PR's head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its
+        landing gates are, so a member below the move can't change what judges it; and a member below that changes
+        `tools/move/`'s scripts holds the move back, since `restack.py` carries the members above it with its base's.  A map
+        ``tip`` or a script ``main`` lacks, such a member, a script that fails, a map that renames nothing there, or a move
+        `move_check.py` refuses is the reason."""
+        scripts, into = move_scripts(self.workdir, main), self.into
+        missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
+        if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
+            missing.insert(0, f"{pr.move} at {tip[:12]}")
+        if missing:
+            return None, (f"its move can't be regenerated: there's no {' or '.join(missing)}; land the map first, then mark the "
+                          "move again")
+        ours = move_scripts(self.workdir, tip)
+        if changed := sorted(p for p in ours.keys() | scripts.keys()
+                             if p.startswith(MOVE_DIR) and ours.get(p) != scripts.get(p)):
+            return None, (f"the members below it change {', '.join(changed)} from `{into}` {main[:12]}: its move runs "
+                          f"`{into}`'s scripts, and the members above it are carried across it with its base's, so it waits "
+                          f"until those members land on `{into}`")
         with tempfile.TemporaryDirectory(prefix="queue-move-") as tmp:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
             try:
-                r = subprocess.run([sys.executable, RENAME, "--map", pr.move], cwd=wt, capture_output=True, text=True,
-                                   env=_script_env())
+                rename = write_scripts(self.workdir, scripts, Path(tmp, "rename")) / RENAME
+                r = subprocess.run([sys.executable, str(rename), "--map", pr.move, "--root", str(wt)], cwd=wt,
+                                   capture_output=True, text=True, env=_script_env())
                 if r.returncode:
                     return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}"
                 _git(wt, "add", "-A")
@@ -1666,8 +1706,11 @@ class Queue:
                 if tree == _out(self.workdir, "rev-parse", f"{tip}^{{tree}}"):
                     return None, (f"`{RENAME} --map {pr.move}` changes nothing on {tip[:12]}: the move is in it already, or "
                                   "its map moves nothing there")
-                commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip), env=IDENTITY).stdout.strip()
-                c = subprocess.run([sys.executable, MOVE_CHECK, tip, commit], cwd=wt, capture_output=True, text=True,
+                commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip, into, main),
+                              env=IDENTITY).stdout.strip()
+                # written afresh: the rename ran the tree's own pins.py, which could rewrite anything already written
+                check = write_scripts(self.workdir, scripts, Path(tmp, "check")) / MOVE_CHECK
+                c = subprocess.run([sys.executable, str(check), tip, commit], cwd=wt, capture_output=True, text=True,
                                    env=_script_env())
                 if c.returncode:
                     return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified (`{MOVE_CHECK} "
@@ -1714,7 +1757,7 @@ class Queue:
         return bool(r.returncode) or any(w in low for w in self._words_of[mv.map])
 
     def _restack(self, head: str, mv: Move) -> tuple[str | None, str]:
-        """(``head`` carried across ``mv`` by its base's `restack.py` onto the move, "") or (None, why not), once per head and
+        """(``head`` carried across ``mv`` by `restack.py` onto the move, "") or (None, why not), once per head and
         move (the state's `restacks`).  One run takes every head merged after it this sync that lacks ``mv`` (and every move
         below it), whose change names a word of its map: the script checks the move against its base once a run."""
         key = f"{head}:{mv.commit}"
@@ -1729,16 +1772,16 @@ class Queue:
         return got.get("result"), got.get("why", "")
 
     def _run_restack(self, heads: list[str], mv: Move) -> dict[str, dict]:
-        """`restack.py HEAD... --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the move's base's
-        own copy run in the clone: {f"{head}:{move}": {"result": the restacked commit} or {"why": what it says}}."""
+        """`restack.py HEAD... --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the landing
+        branch's copy run in the clone: {f"{head}:{move}": {"result": the restacked commit} or {"why": what it says}}.  It runs
+        the move's base's `tools/move/` scripts, which `_regenerated` held to the landing branch's when it made the move."""
         keys = [f"{h}:{mv.commit}" for h in heads]
-        base = _out(self.workdir, "rev-parse", f"{mv.commit}^1")
-        script = _git(self.workdir, "show", f"{base}:{RESTACK}", check=False)
+        script = _git(self.workdir, "show", f"{self.base}:{RESTACK}", check=False)
         if script.returncode:
-            return dict.fromkeys(keys, {"why": f"the move's base {base[:12]} has no {RESTACK}"})
+            return dict.fromkeys(keys, {"why": f"`{self.into}` has no {RESTACK}"})
         with tempfile.TemporaryDirectory(prefix="queue-restack-") as tmp:
             path = Path(tmp, "restack.py")
-            path.write_text(script.stdout)
+            path.write_text(script.stdout, errors="surrogateescape")
             r = subprocess.run([sys.executable, str(path), *heads, "--move-commit", mv.commit, "--script", RENAME,
                                 "--script-arg=--map", f"--script-arg={mv.map}", "--main", "refs/remotes/origin/main", "--json"],
                                cwd=self.workdir, capture_output=True, text=True, env=_script_env())
@@ -1940,7 +1983,7 @@ class Queue:
                     self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
                 continue
             if e.pr.move:
-                commit, why = self._regenerate(tip, e.pr)
+                commit, why = self._regenerate(tip, e.pr, main)
             else:
                 commit, why = self._merge_through(tip, e.pr, members)
             merged = True
