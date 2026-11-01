@@ -70,7 +70,7 @@ Two kinds of committed run:
   ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
   witness, and a window passes when its registration passed every check before the sample and Lean refused the outcome
   (`forged_row`). ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample over a window of
-  one member, no registered reads or shared rows, Lean `verify --coins os --stratified K`, no ZK server), and the summary
+  one member, no registered reads or shared rows, Lean `verify --coins tree --stratified K`, no ZK server), and the summary
   names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
   (``charge``, `charge_terms`): ``advice_bits``, ``delta``, ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ)
   and ``exfiltration_bound`` (β_δ + λ_δ).
