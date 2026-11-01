@@ -57,6 +57,16 @@ def EncardFifoGrids : Prop :=
 
 /-! ## Theorem 3: the advice caps -/
 
+/-- **Theorem 3, the fixed advice budget.** This is the `2^A` cap with the advice type `Fin E → Fin k → Bool`: one
+string of exactly `k` bits for each of `E` execution blocks, padded to that length whatever is used. The accepted
+observation sequences of length `n` with jitter below `D` number at most `2^(E·k) · D^n`, that is `k` bits per
+execution block plus jitter. Every advice value has the same length, so the charge is `k` whatever an honest session
+used, and nothing used is counted: no cap per sampling block, no Kraft inequality and no `BitsCount`. -/
+def EncardAccSeqsLeAdviceBits : Prop :=
+  ∀ {L K S : ℕ} {In : Type} (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
+    (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
+
 /-- **Theorem 3, the clock-sync form.** This is the `2^A` cap with the advice type `Ac × (Fin W → Sync)`: one
 clock-sync value per window from `Sync`, for example an offset δ and a rate ρ, 16 × 8 values. Over `W` windows the
 accepted sequences number at most `#Ac · #Sync^W · D^n`, that is `A_c + W·log2 #Sync` bits plus jitter.
