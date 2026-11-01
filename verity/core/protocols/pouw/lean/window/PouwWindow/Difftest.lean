@@ -282,6 +282,8 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
       (← hex j "domain_h3")))),
   ("live_epoch_reason", fun j => do
     pure (toJson (liveEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+  ("draw_epoch_reason", fun j => do
+    pure (toJson (drawEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
   ("round_key", fun j => do
     let c ← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment")
     pure (hexJ (← roundKey c (← hex j "coin") (← nat j "round") (← hex j "root")))),

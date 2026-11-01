@@ -2,7 +2,7 @@
 window per rank in ``<dir>/rank<r>/``, which the rank's own process commits (`rank_rows`, through the collective RPC) from its
 committed store, its registered weight shards and its Programs of record with `pipeline.serving_rows.after_commit`, and ``<dir>/tp.json``
 over the world.  The driver calls `commit` in the first instrumented run once every rank's root is final and the TP run root is fixed,
-and before any draw: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
+and before sampling: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
 deferred (`require`), since an in-process replay draws its seed inside finalize.
 
 Rank ``r``'s window binds ``run = <TP run root hex>/rank<r>`` (`run_of`): the TP run root fixes every rank's rows-sha512 root, and the rank
@@ -23,7 +23,7 @@ A TP Commit that deferred its ranks' replay to sealed bundles and wrote no windo
 (``verity-vllm tp-serving-rows COMMIT_OUT --partition F --out O``, `from_bundle`): rank ``r``'s bundle opened against the record as
 its CPU replay opens it (`commit_replay._of_record`: pending or passed, a failed rank refused), its Programs of record, its weight
 shards opened against its committed weights root, and the window `pipeline.serving_rows.after_commit` writes under the same run and
-``tp``.  Its rows are a fresh commitment, made after the Commit and before any draw, so the window is a ``stand-in`` whose link to
+``tp``.  Its rows are a fresh commitment, made after the Commit and before sampling, so the window is a ``stand-in`` whose link to
 the rank's rows-sha512 root is provenance (`stand_in`: ``of`` the TP run root, the rank, its root, the bundle's manifest digest and
 this command, and ``link``).  `source` takes a stand-in only for a rank whose bundle the record names (``replay_deferred.json``) and
 whose replay did not fail, with that ``of`` and ``link``."""
@@ -49,7 +49,7 @@ LINK = ("provenance, not proof: verity-vllm tp-serving-rows opened the rank's se
 
 
 def require(args: Any, replay_cfg: dict[str, Any] | None) -> None:
-    """Refuse a ``--serving-rows`` TP Commit whose windows could not be written before every draw."""
+    """Refuse a ``--serving-rows`` TP Commit whose windows could not be written before sampling."""
     if args.serving_rows and (replay_cfg is None or not args.replay_deferred or args.only_arm == "control"):
         raise SystemExit("--serving-rows on a TP Commit needs --required-manifest with a --build-rank per rank (each rank reads its Programs of "
                          "record from the replay config), --replay-deferred at a world that defers (no rank draws its replay seed before "

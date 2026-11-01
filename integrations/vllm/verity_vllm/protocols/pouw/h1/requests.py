@@ -34,8 +34,8 @@
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
-  root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
-  manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
+  root also commits round s's receipt roots (`receipts_digest`), and the sampling coin opens after `draw_root`, over the
+  manifest, the last round's receipts and every round's root and coin, so sampling follows every round coin by hash.
 * **The A rows under the round roots** (`credit.a_link`): the root round s's coin follows is over the round's
   ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's A table ``a/<K>@<s>`` of each K, the
   rows of its calls of K call after call, whole, as the aligned subtrees of its registered tree (`round_row`,
@@ -189,7 +189,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes,
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
     """Step s's calls: SHA-512 over their manifest rows (`pouw_h1.H1Run.manifest`), in order, with what each call's listeners
     bound (root(A) among it, once AROW binds it), each without its credit bit (`credit.CREDIT`): the step's last verdict
-    comes after its round closes, and calls_root commits the bits before the draw root."""
+    comes after its round closes, and calls_root commits the bits before `draw_root`."""
     return tagged(STEP_TAG, salt, s, *(json.dumps({k: v for k, v in row.items() if k != CREDIT}, sort_keys=True)
                                        for row in rows))
 
@@ -270,8 +270,8 @@ def receipts_digest(salt: bytes, r: int, roots: Sequence[tuple[int, bytes | None
 
 
 def draw_root(calls_root: bytes, receipts: bytes, log: Sequence[Mapping[str, Any]]) -> bytes:
-    """What the draw coin opens after: the window's manifest (``calls_root``), its last round's receipts and every round's
-    root and coin, so the draw follows every round coin by hash."""
+    """What the sampling coin opens after: the window's manifest (``calls_root``), its last round's receipts and every round's
+    root and coin, so sampling follows every round coin by hash."""
     return tagged(DRAW_TAG, calls_root, receipts,
                   *(p for x in log for p in (bytes.fromhex(x["root"]), bytes.fromhex((x.get("coin") or {}).get("coin", "")))))
 
