@@ -115,7 +115,8 @@ structure Coined (K W Hi VL : Type) [Field K] (z : Sizes) where
   Gp : Fin z.nS → Fin z.tpad → 𝔽
   rbar : Fin 2 → Fin z.nL → K
   ρ : Fin 2 → Fin 2 → K
-  vals : Fin 2 → W → (Fin z.nMask → Fin 128 → ZMod 2) → (Fin 2 → Fin 2 → Fin z.L → 𝔽) → Fin z.nE → 𝔽
+  vals : Fin 2 → W → (Fin z.nMask → Fin 128 → ZMod 2) →
+    (Fin z.nL → Fin z.tpad → 𝔽) × (Fin 2 → Fin 2 → Fin z.L → 𝔽) × (Fin 2 → Fin 2 → Fin z.tpad → 𝔽) → Fin z.nE → 𝔽
   ia : Fin z.nE
   ib : Fin z.nE
   ζ : Fin 2 → 𝔽
@@ -164,7 +165,7 @@ def Coined.tab (T : Coined K W Hi VL z) : Table 𝔽 K W Salt (Bits × Salt) Byt
   Gp := T.Gp
   rbar := T.rbar
   ρ := T.ρ
-  vals := fun r w u V => T.vals r w u V.2.1
+  vals := T.vals
   ia := T.ia
   ib := T.ib
   ζ := T.ζ
