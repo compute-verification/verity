@@ -11,12 +11,10 @@ rounds) is live on a history whose rounds' coins the frame all took, where each 
 a round's coins no device round passes them (`LeanRelease.roundOk_of_refusesCoins`), so that completeness reads only
 taken coins.
 
-`FillRoundEq` also reads a history whose last coins the frame takes after it refused an earlier round's: the release's
-coin refusal reads the last round's coins alone (`LeanRelease.refusesCoins`), and rep 1's frame state reads rep 0's
-algebraic-phase coins alone (`Loop.repState`), so after rep 0's frame refused its `β` the frame can take rep 1's later
-coins. The honest worker is not live there. The session loop sends nothing past a refusal (`Flock.Firewall.Session`'s
-`State.refuse`); where the release's coin stop sticks as the loop's does (`LeanRelease.StopSticks`), no such history is
-left, and `FillRoundEq` holds at the honest worker (`LeanRelease.fillRoundEq_honest`).
+The release's coin stop sticks as the session loop's does (`Flock.Firewall.Session`'s `State.refuse`): once it refuses
+the coins after a prefix of a history it refuses the history's own (`LeanRelease.refusesCoins_of_take`). So a history
+whose last coins the frame takes had every round's coins taken, and `FillRoundEq` holds at the honest worker
+(`LeanRelease.fillRoundEq_honest`).
 -/
 
 namespace Claims.ZKServer
@@ -43,13 +41,6 @@ theorem roundOk_of_refusesCoins {W R : Type} (L : LeanRelease W R) (x : Msg) (w 
     | error e => rfl
   unfold roundOk
   rw [ht, Bool.and_false]
-
-/-- **The release's coin stop sticks** at `x`: after every history on which the frame refused the coins of an earlier
-round past `Hello`'s, it refuses the history's own, as the session loop refuses every request after a refusal
-(`Flock.Firewall.Session`'s `State.refuse`). -/
-def StopSticks {W R : Type} (L : LeanRelease W R) (x : Msg) : Prop :=
-  ∀ (ρ : R) (h : List (Msg × Msg)) (i : ℕ), 2 ≤ i → i ≤ h.length → L.refusesCoins x ρ (h.take i) = true →
-    L.refusesCoins x ρ h = true
 
 end LeanRelease
 
@@ -107,18 +98,19 @@ theorem fillRoundEq_of_live (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
   fun ν t κ m₀ ρ₀ ops hp hlt hf _ hr => (Bool.false_ne_true (hf.symm.trans (hl ν t κ m₀ ρ₀ ops hp hlt hr))).elim
 
 /-- **`FillRoundEq` at the honest worker**, at every `vs`, the tables' own values among them, where its rounds pass the
-frame's checks (`Loop.HonestRoundsPass`) and the release's coin stop sticks (`StopSticks`): every history it reads takes
-all its rounds' coins, so the honest worker is live there (`Loop.live_honest`). -/
+frame's checks (`Loop.HonestRoundsPass`): every history it reads takes all its rounds' coins, as the release's coin
+stop sticks (`refusesCoins_of_take`), so the honest worker is live there (`Loop.live_honest`). -/
 theorem fillRoundEq_honest (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (x : Msg) (w : Flock.Wit)
-    (hr : Loop.HonestRoundsPass L₀ src real x w) (hs : StopSticks (ofLoopLink L₀ src real) x) :
+    (hr : Loop.HonestRoundsPass L₀ src real x w) :
     FillRoundEq (CoinLayer.session Loop.loopNr Masked.dataE) vs (ofLoopLink L₀ src real) CoinOpen.shaH
       (ofLoopLink L₀ src real).honestWk x w :=
   fillRoundEq_of_live vs L₀ src real _ x w fun ν t κ m₀ ρ₀ ops _ hlt hc =>
-    Loop.live_honest L₀ src real x w hr ν t κ m₀ ρ₀ ops hlt fun i h2 hi =>
-      Bool.eq_false_of_ne_true fun h => Bool.false_ne_true (hc.symm.trans (hs (ν, t) _ i h2 hi h))
+    Loop.live_honest L₀ src real x w hr ν t κ m₀ ρ₀ ops hlt fun i _ _ =>
+      Bool.eq_false_of_ne_true fun h =>
+        Bool.false_ne_true (hc.symm.trans ((ofLoopLink L₀ src real).refusesCoins_of_take x (ν, t) _ i h))
 
 end LeanRelease
 
