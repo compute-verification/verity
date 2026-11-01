@@ -184,9 +184,10 @@ UNCHECKED = re.compile(r"\b(debug\.skipKernelTC|skipKernelTC|debug\.byAsSorry|de
                        r"|bootstrap\.\w+|addDeclWithoutChecking|addDeclCore)\b")
 #: code a Lean file runs while it is compiled (an initializer, an `#eval`, a command or an elaborator: each can do IO, and a
 #: macro can expand to one); refused in a package's sources unless its module is listed under `compile_time`
-COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|protected|noncomputable|scoped|local|partial|unsafe)"
-                          r"[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize|builtin_initialize|elab|elab_rules|macro"
-                          r"|macro_rules|syntax|declare_syntax_cat)\b|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
+COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|public|protected|meta|noncomputable|scoped|local"
+                          r"|partial|nonrec|unsafe)[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize"
+                          r"|builtin_initialize|elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat)\b"
+                          r"|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
                           r"|builtin_init|builtin_command_elab|builtin_term_elab|builtin_tactic|builtin_macro)\b")
 #: held by the first `setup.sh` of each toolchain in a run (`setup`)
 SETUP = threading.Lock()

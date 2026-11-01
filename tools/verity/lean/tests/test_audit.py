@@ -1814,11 +1814,13 @@ def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
     (tmp_path / "P" / "A.lean").write_text("import Lean\n@[simp] theorem t : True := trivial\nopen Lean in\nrun_cmd pure ()\n"
                                            "/-- #eval in prose -/\nlocal macro \"m\" : term => `(1)\n@[elab_as_elim] def e := 1\n")
     (tmp_path / "P" / "B.lean").write_text("initialize pure ()\n")
+    (tmp_path / "P" / "C.lean").write_text("module\n\npublic initialize pure ()\nmeta initialize pure ()\n")
     hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
     assert [h.split(" runs code")[0] for h in hits] == ["compile-time: P/A.lean:4", "compile-time: P/A.lean:6",
-                                                        "compile-time: P/B.lean:1"]
-    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why"}}) == []
-    assert len(A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P": "a prefix lists no module"}})) == 3
+                                                        "compile-time: P/B.lean:1", "compile-time: P/C.lean:3",
+                                                        "compile-time: P/C.lean:4"]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why", "P.C": "why"}}) == []
+    assert len(A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P": "a prefix lists no module"}})) == 5
     (tmp_path / "lakefile.lean").write_text("import Lake\n")
     assert A.scans(tmp_path, {}, {})[0].startswith("compile-time: lakefile.lean runs code")
 
