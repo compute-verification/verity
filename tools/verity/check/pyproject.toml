@@ -19,7 +19,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs), check.py's
 # shipped-tree commit record, the flock-circuit build step's script and the patches its Rust tests cover, the repository
-# lints the preflight names, and the Lean audit's tool directory: Lean's jobs (`lean_audit.py`, `lean_changed.py`, the pin
+# lints the preflight names (and the direct environment read's detector, by which test_settings counts the reads left
+# outside settings.py), and the Lean audit's tool directory: Lean's jobs (`lean_audit.py`, `lean_changed.py`, the pin
 # `lean-deps.json`), the sandbox lean_changed builds in, and the audit whose judgment of the guarantees it runs (a
 # directory, since loading `check.py` reads and writes its `__pycache__`), the security proofs' manifest and record (a
 # shard's package), the Slack registry, whose handles are the owners `ci.toml` may name, and what of research the fixture
@@ -39,4 +40,5 @@ inputs = [".agents/skills/using-slack/registry.json", "READY.json", "tools/move/
           "tools/research/src/research/telemetry/classify.py", "tools/research/src/research/telemetry/procs.py",
           "tools/research/src/research/telemetry/pyspy.py", "tools/research/src/research/telemetry/run.py",
           "tools/research/src/research/telemetry/scope.py", "tools/research/src/research/auto.py",
-          "tools/research/src/research/pods/nebius/slot_only.py", "integrations/vllm/tools/ratchet_gate.py"]
+          "tools/research/src/research/pods/nebius/slot_only.py", "integrations/vllm/tools/ratchet_gate.py",
+          "tests/lint/test_repo_env_reads.py"]
