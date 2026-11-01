@@ -5,8 +5,9 @@ Each q and k serves per-row absmax int8 codes. The cheater keeps the released mo
 absmax entry at ±127; his other codes are q = round(A·Bᵀ + S), with A (n × r) and B (K × r) real and |S| ≤ a − ½
 (projected after every step). So q − A·Bᵀ stays within ±a, Strassen depth 2 holds it in s8 at a ≤ 31, and his route
 costs r/n + 3r/K (`routes.lowrank`) plus the residual's (`routes.residual`: its entries beyond the dense range, pins
-included, corrected on the ALU at --writes, in writes of 32 W1 per entry and noise row). A real A·Bᵀ is generous to
-him: an exact route needs an integer low-rank part. The honest arm trains q and k as absmax codes (straight-through).
+included, corrected on the ALU at --writes, in writes of 32 W1 per entry and noise row). With --int-factors A and B
+are int8 (straight-through) and the route is exact; a real A·Bᵀ is generous to him by up to half a code an entry. The
+honest arm trains q and k as absmax codes (straight-through).
 Everything else trains the same in both arms: forward KL from the frozen bf16 model on HT-USEFUL's FineWeb-Edu shard
 (`hardness_useful/prep.py`, in --data), AdamW, every parameter.
 
@@ -116,8 +117,9 @@ class HonestQ(nn.Module):
 class CheatQ(nn.Module):
     """q = round(A·Bᵀ + S) at a fixed row scale, each row's pin at ±127, |S| ≤ a − ½ by projection."""
 
-    def __init__(self, w: torch.Tensor, r: int, a: int, iters: int):
+    def __init__(self, w: torch.Tensor, r: int, a: int, iters: int, int_factors: bool = False):
         super().__init__()
+        self.int_factors = int_factors
         w = w.detach().float()
         s = absmax_scale(w)
         u = w / s[:, None]
@@ -134,9 +136,14 @@ class CheatQ(nn.Module):
             S = (u - L).clamp(-bound, bound)
         self.A = nn.Parameter((U[:, :r] * sv[:r].sqrt()).contiguous())
         self.B = nn.Parameter((V[:, :r] * sv[:r].sqrt()).contiguous())
+        if int_factors:
+            with torch.no_grad():
+                S = (u - self.lowrank()).clamp(-bound, bound)
         self.S = nn.Parameter(S.contiguous())
 
     def lowrank(self):
+        if self.int_factors:
+            return ste_round(self.A.clamp(-127, 127)) @ ste_round(self.B.clamp(-127, 127)).T
         return self.A @ self.B.T
 
     def codes(self):
@@ -315,6 +322,7 @@ def measure(model, plan, bands, args, spec_ranks, scale_ref=None):
         cands = {}
         if L0 is not None:
             cands["own"] = L0 * (s0 / s)[:, None]
+            cands["own_fixed"] = L0
         base = cands.get("own")
         if base is None:
             U, sv, V = torch.svd_lowrank(q, q=min(r + 16, min(q.shape)), niter=6)
@@ -458,6 +466,7 @@ def main(argv=None):
     ap.add_argument("--rank-k", type=int, default=24)
     ap.add_argument("--a", type=int, default=31, help="the cheater's residual bound, codes")
     ap.add_argument("--init-iters", type=int, default=8, help="alternating projections fitting the start")
+    ap.add_argument("--int-factors", action="store_true", help="A and B int8 (straight-through): an exact route")
     ap.add_argument("--gates", action="store_true")
     ap.add_argument("--margin", type=float, default=0.15, help="the cheater aims inside each band by this share")
     ap.add_argument("--lam", type=float, default=100.0)
@@ -515,7 +524,7 @@ def main(argv=None):
     for name, kind, parent, attr in qk_modules(model):
         w = getattr(parent, attr).weight
         if args.arm == "cheat":
-            setattr(parent, attr, CheatQ(w, rank[kind], args.a, args.init_iters).cuda())
+            setattr(parent, attr, CheatQ(w, rank[kind], args.a, args.init_iters, args.int_factors).cuda())
         else:
             setattr(parent, attr, HonestQ(w).cuda())
     res["init_s"] = time.time() - t0
