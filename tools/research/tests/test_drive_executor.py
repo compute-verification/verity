@@ -256,3 +256,22 @@ def test_on_refuses_main_on_a_failed_task_and_tells_ci(world, monkeypatch, tmp_p
     assert any(f"failed 1 of {N_TASKS} tasks: lean-audit:Security" in p for p in h.posts), h.posts
     h.tick()
     assert h.listings == [tip] and h.posted == [], "a failed tip isn't checked again"
+
+
+def test_research_executor_enqueue_runs_the_command_its_variable_names_and_refuses_without_one(tmp_path, monkeypatch, capsys):
+    """Drive's default transport runs `research executor enqueue`; research imports nothing from `infra/`, so the command is
+    the one `RESEARCH_EXECUTOR_ENQUEUE` names where drive runs, run with drive's arguments and its exit passed back."""
+    import sys
+
+    from research.cli import main
+    from research.executor import ENQUEUE_ENV
+
+    seen = tmp_path / "argv.txt"
+    stub = tmp_path / "enqueue.py"
+    stub.write_text(f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv[1:]))\nsys.exit(3)\n")
+    monkeypatch.setenv(ENQUEUE_ENV, f"{sys.executable} {stub} --db 'q b.db'")
+    assert main(["executor", "enqueue", "--graph", "g.json", "--priority", "1", "--check", "after-landing:abc"]) == 3
+    assert seen.read_text() == "--db q b.db --graph g.json --priority 1 --check after-landing:abc"
+    monkeypatch.delenv(ENQUEUE_ENV)
+    assert main(["executor", "enqueue", "--graph", "g.json"]) == 2
+    assert f"{ENQUEUE_ENV} names no command" in capsys.readouterr().err

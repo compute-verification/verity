@@ -43,6 +43,9 @@ AFTER_LANDING_PRIORITY = 1
 #: verdict is labelled under), `--priority N`, `--check ID`; it inserts one row {key, task, priority, check} per task and
 #: exits 0 once they are in
 ENQUEUE = ("research", "executor", "enqueue")
+#: the environment variable naming infra's enqueue command (`research executor enqueue` runs it): research imports nothing from
+#: `infra/`, so the command lives where infra runs it (the control pod's drive.sh)
+ENQUEUE_ENV = "RESEARCH_EXECUTOR_ENQUEUE"
 #: the newest tips in a row whose shadow records agree fully before drive may switch to `executor = "on"`
 SWITCH_STREAK = 3
 #: a tip whose executor verdicts are still pending this long after its graph was enqueued is recorded with them pending
@@ -296,3 +299,22 @@ def shadow_report(records: list[Shadowed], tips: int) -> tuple[str, bool]:
                  f"incomplete): {'met' if ok else 'not met'} "
                  f"(the newest {streak} agree)")
     return "\n".join(lines), ok
+
+
+def main(argv: list[str]) -> int:
+    """`research executor enqueue --graph FILE --priority N --check KIND:SHA`: run infra's enqueue command, the one
+    `ENQUEUE_ENV` names (split as a shell would, no shell run), with these arguments, and exit with it; refused (exit 2) when
+    the variable is unset, so a drive whose host doesn't name it records the tip's shadow incomplete rather than guessing."""
+    import os
+    import shlex
+    import sys
+
+    if argv[:1] != ["enqueue"]:
+        print("research executor enqueue --graph FILE --priority N --check KIND:SHA", file=sys.stderr)
+        return 2
+    command = shlex.split(os.environ.get(ENQUEUE_ENV, ""))
+    if not command:
+        print(f"research executor enqueue: {ENQUEUE_ENV} names no command: set it to infra's enqueue command where drive runs "
+              "(the control pod's drive.sh)", file=sys.stderr)
+        return 2
+    return subprocess.run([*command, *argv[1:]], stdin=subprocess.DEVNULL).returncode
