@@ -25,7 +25,9 @@
 #
 # `--shard K/N`: shard K of ci.toml's plan with N shards (`check.py --shard`): with `--deferred`, only those steps' parts in
 # it (drive's `after_landing_shards`, one launch per shard); alone, a shard Attempt of the check, which `check.py --record
-# --combine` joins with the other N-1 into the commit's check.
+# --combine` joins with the other N-1 into the commit's check. `--shard auto:K/N --shard-plan-file PLAN`: shard K of the auto
+# plan PLAN (`check.py --shard-plan --out PLAN`, made once for all N; drive's `after_landing_shards = "auto"`), sent as the run's
+# input.
 #
 # `--cc-records`: circuit-check's records step alone (`check.py --record --cc-records`), which drive's sharded after-landing run
 # runs first; `--cc-records-from ART@SHA256` (with `--shard`) gives a shard that step's artifact, so its circuit-check builds
@@ -36,9 +38,9 @@
 # --of-record`: one that skips the store-backed tests), and a COMMIT that is empty (its tree is its base's: where it leaves
 # origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen= shard= below= records= recfrom=
+pass=() deferred= nocache= ccache= noregen= shard= below= records= recfrom= plan=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -47,14 +49,16 @@ while [ $# -gt 0 ]; do
     --no-regenerate) noregen=1 ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
-    --shard) [[ $# -ge 2 && $2 =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || { echo "train: --shard needs K/N" >&2; exit 2; }
+    --shard) [[ $# -ge 2 && $2 =~ ^(auto:)?[1-9][0-9]*/[1-9][0-9]*$ ]] || { echo "train: --shard needs K/N or auto:K/N" >&2; exit 2; }
       shard=$2; shift ;;
+    --shard-plan-file) [[ $# -ge 2 && $2 == /* && -f $2 ]] || { echo "train: --shard-plan-file needs a plan's absolute path" >&2; exit 2; }
+      plan=$2; shift ;;
     --base) [ $# -ge 2 ] || { echo "train: --base needs REF" >&2; exit 2; }
       below=$2; shift ;;
     --cc-records) records=1 ;;
     --cc-records-from) [[ $# -ge 2 && $2 =~ ^art:[0-9a-f]+@[0-9a-f]{64}$ ]] || { echo "train: --cc-records-from needs ART@SHA256" >&2; exit 2; }
       recfrom=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --shard K/N and --cc-records[-from] alone" >&2; exit 2 ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN and --cc-records[-from] alone" >&2; exit 2 ;;
   esac
   shift
 done
@@ -70,6 +74,8 @@ done
   || { echo "train: --cc-records refused with another flag: it builds circuit-check's records alone" >&2; exit 2; }
 [ -z "$recfrom" ] || [ -n "$shard" ] \
   || { echo "train: --cc-records-from refused without --shard: only a shard's circuit-check takes the records" >&2; exit 2; }
+if [[ $shard == auto:* ]]; then [ -n "$plan" ]; else [ -z "$plan" ]; fi \
+  || { echo "train: --shard auto:K/N takes --shard-plan-file PLAN, and only it: every shard of one auto plan" >&2; exit 2; }
 [ -z "$records" ] || pass+=(--cc-records)
 [ -z "$recfrom" ] || pass+=(--cc-records-from "$recfrom")
 [ -z "$deferred" ] || pass+=(--deferred "$deferred")
@@ -77,6 +83,7 @@ done
 [ -z "$ccache" ] || pass+=(--circuit-cache)
 [ -z "$noregen" ] || pass+=(--no-regenerate)
 [ -z "$shard" ] || pass+=(--shard "$shard")
+[ -z "$plan" ] || pass+=(--shard-plan-file "$plan")
 # the tree's settings.py first: drive runs a copy of this script from outside the tree (`drive.detach`)
 settings=tools/verity/check/settings.py; [ -f "$settings" ] || settings="$(dirname "$0")/settings.py"
 python3 "$settings" --of-record || { echo "train: a recorded train takes no debug or unknown check setting" >&2; exit 1; }
@@ -122,8 +129,16 @@ else
 fi
 [ -z "$base" ] || [ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse "$base^{tree}")" ] \
   || die "${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check"
-tree="${TMPDIR:-/tmp}/train-${sha:0:12}${shard:+-${shard/\//of}}${records:+-records}"
+# TRAIN_TREES: where the checkout goes, apart from TMPDIR (drive keeps it on the control pod's container disk; its TMPDIR is on
+# the network volume, where uv and imports from the checkout stalled launches for minutes)
+trees="${TRAIN_TREES:-${TMPDIR:-/tmp}}"
+mkdir -p "$trees" || die "can't make $trees"
+tag=${shard/\//of}
+tree="$trees/train-${sha:0:12}${shard:+-${tag/:/-}}${records:+-records}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
+# a tree git no longer lists as a worktree (half removed on the control pod's NFS TMPDIR) would refuse `worktree add`
+rm -rf "$tree" 2>/dev/null || rm -rf "$tree" || true
+git -C "$root" worktree prune
 git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
 exec 9>&-
 log="$tree.log"

@@ -135,6 +135,8 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- train.sh (the lander's launch) and pod_setup.sh
     S("TRAIN_AS", str, None, WHERE, "the handle train.sh posts a failed launch as; unset, ci", "telemetry"),
     S("MERGE_THREAD", str, None, WHERE, "the Slack thread train.sh posts a failed launch to", "telemetry"),
+    S("TRAIN_TREES", str, None, WHERE, "where train.sh puts its worktrees and logs (drive's auto plans' too); unset, TMPDIR",
+      "scratch space"),
     S("AWS_ACCESS_KEY_ID", str, None, WHERE, "the parent store key, which train.sh requires to mint the run's custody key",
       "a credential, never what a step computes", secret=True),
     S("AWS_SESSION_TOKEN", str, None, WHERE, "a temporary credential's token, which train.sh refuses: it cannot mint the "

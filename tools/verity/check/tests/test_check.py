@@ -1728,6 +1728,44 @@ def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
+def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_path):
+    """Drive's `after_landing_shards = "auto"`: each shard is `--shard auto:K/N --shard-plan-file PLAN`, the one plan drive
+    made for all N, which reaches check.py --record as given; an auto shard without a plan, a plan without an auto shard, and
+    a plan by a relative path (train.sh runs check.py from its own worktree) are refused before anything launches."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    plan = tmp_path / "check-shard-plan.json"
+    plan.write_text("{}\n")
+    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "auto:2/3", "--shard-plan-file", str(plan))
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[-4:] == ["--shard", "auto:2/3", "--shard-plan-file", str(plan)], (p.stderr, args)
+    assert "shard auto:2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-auto-2of3.log" in p.stdout, p.stdout
+    argv.unlink()
+    for flags, why in ((["--shard", "auto:2/3"], "--shard auto:K/N takes --shard-plan-file PLAN"),
+                       (["--shard", "2/3", "--shard-plan-file", str(plan)], "--shard auto:K/N takes --shard-plan-file PLAN"),
+                       (["--shard", "auto:2/3", "--shard-plan-file", plan.name], "--shard-plan-file needs a plan's absolute"),
+                       (["--shard", "auto:0/3", "--shard-plan-file", str(plan)], "--shard needs K/N or auto:K/N")):
+        p = train("HEAD", "vy-x", "--deferred", "pytest", *flags)
+        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
+def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
+    """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
+    skips and `worktree add` refuses: every relaunch of that commit registered no run."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    stale = tmp_path / f"train-{git('rev-parse', 'HEAD')[:12]}"
+    (stale / ".venv").mkdir(parents=True)
+    (stale / "README.md").write_text("left\n")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert (stale / "a").read_text() == "b\n" and not (stale / "README.md").exists()
+
+
 def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
     """Drive's after-landing run of `main`'s tip names the last verified `main` (`--base`), so ratchet-gate judges the landings
     above it, not the tip against itself: train.sh resolves it after its fetch and hands check.py that commit, and registers

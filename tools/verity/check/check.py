@@ -68,9 +68,12 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
     uv run python tools/verity/check/check.py --shard auto:K/N --shard-plan-file PLAN
-                                                            shard K of the auto plan PLAN (`shards.py`, `--shard-plan --out`)
+                                                            shard K of the auto plan PLAN (`shards.py`, `--shard-plan --out`);
+                                                            with --record --on M, PLAN goes as the run's input (drive's
+                                                            `after_landing_shards = "auto"`, one plan for every shard)
     uv run python tools/verity/check/check.py --shard-plan [--max-shards M] [--n N] [--deferred STEP,...] [--costs FILE]
-               [--no-gather] [--json] [--out FILE]          the auto plan of this tree, run nothing: its tasks' costs from the
+               [--no-gather] [--split-s S] [--json] [--out FILE]
+                                                            the auto plan of this tree, run nothing: its tasks' costs from the
                                                             newest recorded checks (none with --no-gather) and this machine's
                                                             caches, or FILE's {part: seconds} over them
     uv run python tools/verity/check/check.py --record --combine RUN...
@@ -102,9 +105,12 @@ When circuit-check is on the gate and its parts ran in more than one shard, the 
 that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked, and a known failure
 that no longer fails, are judged only there.
 An auto plan (`--shard auto:K/N`, `shards.py`) has finer parts: each suite of pytest and lean-suites (`pytest:SUITE`,
-`lean-suites:SUITE`) is a part of its own, packed by measured cost; the plan travels with each shard as its run's input
+`lean-suites:SUITE`) is a part of its own, packed by measured cost, and one measured past `shards.SPLIT_S` (`--split-s`) is
+M parts by test file (`pytest:SUITE:K/M`, `suite_splits`), whose partition and timing record the plan carries (`splits`), so
+each shard runs `suites.py SUITE:K/M@DIGEST --timings` of the planner's partition; the plan travels with each shard as its run's input
 (`AUTO_PLAN`; unrecorded, `--shard-plan-file PLAN`), which refuses one whose parts aren't its tree's, and its result names the plan's digest, floor and predicted wall time
-(`shard.plan`), so a combine joins only shards of one plan.
+(`shard.plan`), so a combine joins only shards of one plan.  The combine also joins a split suite's parts across shards
+(`suite_join`, `suites.combine_parts`), and fails unless every part of one partition passed once.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
 tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
@@ -1011,8 +1017,9 @@ def record(argv: list[str]) -> int:
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
     gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
-    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h)."""
-    on = base = pool = timeout = None
+    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h).
+    `--shard auto:K/N --shard-plan-file PLAN` (with --on) is shard K of the auto plan PLAN, sent as the run's `AUTO_PLAN` input."""
+    on = base = pool = timeout = plan_file = None
     agreement = priority = False
     rest = []
     it = iter(argv)
@@ -1029,6 +1036,8 @@ def record(argv: list[str]) -> int:
             priority = True
         elif x == "--timeout":
             timeout = next(it)
+        elif x == "--shard-plan-file":
+            plan_file = Path(next(it)).resolve()
         else:
             rest.append(x)
     try:
@@ -1040,11 +1049,20 @@ def record(argv: list[str]) -> int:
     records = "--cc-records" in rest
     parts = None
     deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
+    spec = rest[rest.index("--shard") + 1] if "--shard" in rest[:-1] and not records else None
+    if (spec or "").startswith("auto:") != (plan_file is not None) or (plan_file is not None and not on):
+        print(f"check: --shard {spec or 'K/N'}{' --shard-plan-file' * (plan_file is not None)} refused: an auto shard is "
+              "`--shard auto:K/N --shard-plan-file PLAN --on M`, PLAN made once for all N (`--shard-plan --out PLAN`) and "
+              "sent as the run's input, and only an auto shard takes a plan file", file=sys.stderr)
+        return 2
     try:
         if records:                                    # circuit-check's records alone: its memory, no Lean
             parts = ["circuit-check"]
-        elif "--shard" in rest[:-1]:
-            parts = shard(rest[rest.index("--shard") + 1], gated=deferred is None)["parts"]
+        elif plan_file is not None:                    # its plan is of those steps' jobs alone (`auto_shard`)
+            jobs = DECLARATION.needed(JOBS, [s for s in deferred.split(",") if s]) if deferred is not None else None
+            parts = shard(spec, gated=deferred is None, jobs=jobs, plan_file=plan_file)["parts"]
+        elif spec is not None:
+            parts = shard(spec, gated=deferred is None)["parts"]
             if deferred is not None:
                 parts = [p for p in parts if p in deferred_parts(deferred)]
         elif deferred is not None:
@@ -1123,6 +1141,9 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
+    if plan_file is not None:
+        shutil.copyfile(plan_file, d / AUTO_PLAN)
+        cmd += ["--send", str(d / AUTO_PLAN)]
     if not combining and not records and ("--no-cache" not in rest or "--circuit-cache" in rest):
         given = None
         if "--verdicts-in" in rest[:-1]:
@@ -1400,13 +1421,42 @@ def ratchet_gate(out: Path, cache: bool) -> list[str] | str:
     return ["bash", "-c", script, "ratchet-gate", base, RATCHET_GATE, keep, sys.executable]
 
 
+def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> list[str]:
+    """`suites.py`'s arguments for a shard's suites of one step (``held``: `SUITE` or `SUITE:K/M`): each suite once, a split one
+    as `SUITE:K1,K2/M` with the parts it holds, pinned to the partition ``splits`` names (`@` its digest) when it names one; and
+    `--timings` for those whose timing record ``splits`` carries (an auto plan's), written under ``out``, so each shard of the
+    plan partitions as the planner did."""
+    ks: dict[str, list[int]] = {}
+    ms: dict[str, int] = {}
+    for x in held:
+        name, _, spec = x.rpartition(":")
+        if name and re.fullmatch(r"[1-9]\d*/[1-9]\d*", spec):
+            ks.setdefault(name, []).append(int(spec.partition("/")[0]))
+            ms[name] = int(spec.partition("/")[2])
+        else:
+            ks.setdefault(x, [])
+    splits = splits or {}
+    args = []
+    for name, k in ks.items():
+        pin = f"@{splits[name]['digest'][:12]}" if name in splits and splits[name].get("m") == ms.get(name) else ""
+        args.append(f"{name}:{','.join(map(str, sorted(k)))}/{ms[name]}{pin}" if k else name)
+    timings = {name: v["timings"] for name, v in splits.items() if name in ms and isinstance(v.get("timings"), dict)}
+    if timings:
+        f = out / f"suite-timings-{hashlib.sha256(json.dumps(timings, sort_keys=True).encode()).hexdigest()[:12]}.json"
+        out.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(timings, sort_keys=True) + "\n")
+        args += ["--timings", str(f)]
+    return args
+
+
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            only: list[str] | None = None, regenerate: bool = True,
-           circuit_cache: bool | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
+           circuit_cache: bool | None = None, splits: dict[str, dict] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
     shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
     circuit-check when the other isn't among them.  ``circuit_cache`` (default ``cache``) is whether circuit-check reuses its
-    per-target passes."""
+    per-target passes.  A split suite's parts (`pytest:SUITE:K/M`) run as `suites.py SUITE:K/M` (`suite_args`, with ``splits``,
+    an auto plan's or the task list's partitions)."""
     circuit_cache = cache if circuit_cache is None else circuit_cache
     py = sys.executable
     a = max(1, n // 2)
@@ -1431,10 +1481,12 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
-        lean_suites = [*suites, *(held["lean-suites"] or AFTER_LEAN), "--lean-built", "--json", str(out / "suites-lean.json"),
+        lean_suites = [*suites, *(suite_args(held["lean-suites"], splits, out) or AFTER_LEAN), "--lean-built",
+                       "--json", str(out / "suites-lean.json"),
                        "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
-    pytest = [*suites, *held["pytest"], "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
+    pytest = [*suites, *suite_args(held["pytest"], splits, out), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
+              *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
           *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
@@ -1517,13 +1569,45 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
 AUTO_SHARD = re.compile(r"auto:([1-9]\d*)/([1-9]\d*)")
 
 
-def auto_parts(gated: bool = True, jobs: set[str] | None = None, circuit_shards: int | None = None) -> list[str]:
+def auto_parts(gated: bool = True, jobs: set[str] | None = None, circuit_shards: int | None = None,
+               splits: dict[str, int] | None = None) -> list[str]:
     """The auto plan's parts on this tree (`shards.parts`): those of the jobs on the gate (or, not ``gated``, of every job),
-    of ``jobs`` alone when given; circuit-check in ``circuit_shards`` parts when given, else its ci.toml `shards`."""
+    of ``jobs`` alone when given; circuit-check in ``circuit_shards`` parts when given, else its ci.toml `shards`; each suite
+    ``splits`` names in its M parts."""
     js = [replace(j, shards=circuit_shards) if circuit_shards and j.name == "circuit-check" else j
           for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
     return SHARDS.parts(DECLARATION.all_parts(js, _parts_of()), [s.name for s in SUITES.discover()], list(AFTER_LEAN),
-                        (FLOCK_LEAN / "lakefile.toml").exists())
+                        (FLOCK_LEAN / "lakefile.toml").exists(), splits)
+
+
+def suite_splits(suite_s: dict[str, float], times: dict[str, dict[str, float]], split_s: float = SHARDS.SPLIT_S) -> dict[str, dict]:
+    """The suites of this tree measured past ``split_s`` (``suite_s``, by name) split by test file (`shards.split_m`): {name:
+    {"m", "seconds", "digest": its partition's (`suites.partition` by ``times``, its files' recorded seconds), "timings": those of
+    its files, "shares": each part's share of its seconds, "files": each part's test files}}."""
+    out: dict[str, dict] = {}
+    if not any(v is not None and v > split_s for v in suite_s.values()):
+        return out
+    tree, pkgs = SUITES.worktree(), SUITES.members()
+    for s in SUITES.discover():
+        if suite_s.get(s.name) is None or suite_s[s.name] <= split_s:
+            continue
+        files = SUITES.test_files(s, tree, SUITES.dropped(s, SUITES.inputs_of(s, pkgs)))
+        m = SHARDS.split_m(suite_s[s.name], len(files), split_s)
+        if m < 2:
+            continue
+        mine = {f: v for f, v in (times.get(s.name) or {}).items() if f in set(files)}
+        parts = SUITES.partition(files, mine, m)
+        cost = SUITES.file_costs(files, mine)
+        total = sum(cost.values()) or 1.0
+        out[s.name] = {"m": m, "seconds": round(suite_s[s.name], 1), "digest": SUITES.partition_digest(parts), "timings": mine,
+                       "shares": [round(sum(cost[f] for f in p) / total, 6) for p in parts], "files": parts}
+    return out
+
+
+def split_shares(splits: dict[str, dict]) -> dict[str, float]:
+    """{part id: its share of its suite's seconds} for both test steps' ids of each suite ``splits`` names."""
+    return {f"{job}:{name}:{k}/{v['m']}": x for name, v in splits.items() for k, x in enumerate(v["shares"], 1)
+            for job in SHARDS.SUITE_JOBS}
 
 
 def shard_needs() -> dict[str, list[str]]:
@@ -1534,16 +1618,32 @@ def shard_needs() -> dict[str, list[str]]:
             **{f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in _parts_of()["lean-audit"] if (qs := la.provers(p))}}
 
 
-def auto_plan(costs: tuple[dict, dict, dict], max_shards: int = SHARDS.MAX_SHARDS, deferred: str | None = None,
-              n: int | None = None, given: dict[str, float] | None = None) -> dict:
+def given_suites(suites: dict[str, float], given: dict[str, float] | None) -> dict[str, float]:
+    """``suites`` (each suite's seconds) with a suite's whole part's in ``given`` ({part: seconds}) over them."""
+    out = dict(suites)
+    for p, s in (given or {}).items():
+        job, name, spec = SHARDS.suite_part(p)
+        if job in SHARDS.SUITE_JOBS and name and spec is None:
+            out[name] = float(s)
+    return out
+
+
+def auto_plan(costs: tuple, max_shards: int = SHARDS.MAX_SHARDS, deferred: str | None = None,
+              n: int | None = None, given: dict[str, float] | None = None, split_s: float = SHARDS.SPLIT_S) -> dict:
     """The auto plan (`shards.plan`) of this tree's parts (`auto_parts`: of the jobs on the gate, or with ``deferred``, of those
-    steps and what they need) at ``costs`` (`measure`'s suites, audits and steps, `shards.priced`), ``given``'s {part: seconds}
-    over them, read as steps' seconds too (a job's whole, spread over its parts)."""
+    steps and what they need) at ``costs`` (`measure`'s suites, audits, steps and test files' seconds, `shards.priced`),
+    ``given``'s {part: seconds} over them, read as steps' seconds too (a job's whole, spread over its parts); each suite past
+    ``split_s`` split by test file (`suite_splits`)."""
     jobs = DECLARATION.needed(JOBS, [s for s in deferred.split(",") if s]) if deferred else None
-    names = auto_parts(deferred is None, jobs)
     given = {p: float(s) for p, s in (given or {}).items()}
-    measured = {**SHARDS.priced(names, costs[0], costs[1], {**costs[2], **given}), **{p: s for p, s in given.items() if p in names}}
-    return SHARDS.plan(SHARDS.tasks(names, measured), shard_needs(), max_shards, n)
+    suites = given_suites(costs[0], given)
+    splits = suite_splits(suites, costs[3] if len(costs) > 3 else {}, split_s)
+    names = auto_parts(deferred is None, jobs, splits={k: v["m"] for k, v in splits.items()})
+    measured = {**SHARDS.priced(names, suites, costs[1], {**costs[2], **given}, split_shares(splits)),
+                **{p: s for p, s in given.items() if p in names}}
+    kept = {k: {f: v[f] for f in ("m", "seconds", "digest", "timings")} for k, v in splits.items()
+            if any(SHARDS.suite_part(p)[1] == k for p in names)}
+    return SHARDS.plan(SHARDS.tasks(names, measured), shard_needs(), max_shards, n, kept)
 
 
 def _cost_json(f: Path, skipped: list[str]):
@@ -1569,7 +1669,10 @@ def measured_costs(check_roots: list[Path], test_roots: list[Path],
             e = _cost_json(f, skipped)
             if (isinstance(e, dict) and isinstance(e.get("suite"), str) and isinstance(e.get("seconds"), (int, float))
                     and e["seconds"] > 0 and str(e.get("when") or "") >= when.get(e["suite"], "")):
-                suites[e["suite"]], when[e["suite"]] = float(e["seconds"]), str(e.get("when") or "")
+                # a part's pass (`suites.py --files`) prices its suite at its seconds over its share of the suite's
+                share = (e.get("part") or {}).get("share", 1.0) if isinstance(e.get("part"), dict) else 1.0
+                if isinstance(share, (int, float)) and share > 0:
+                    suites[e["suite"]], when[e["suite"]] = float(e["seconds"]) / share, str(e.get("when") or "")
     for root in test_roots:
         durations = _cost_json(root / "durations.json", skipped) if (root / "durations.json").is_file() else None
         for s, v in durations.items() if isinstance(durations, dict) else ():
@@ -1617,10 +1720,12 @@ def recorded_steps(store, rids: list[str], skipped: list[str] | None = None) -> 
     return out
 
 
-def measure(d: Path, gather: bool = True, store=None) -> tuple[tuple[dict, dict, dict], list[str]]:
-    """((suites, audits, steps), notes): the costs the newest recorded checks measured, their verdict packs (`gathered_packs`,
-    unpacked under ``d``) and their results' step seconds (`recorded_steps`), unless not ``gather``, and this machine's caches
-    (`measured_costs`)."""
+def measure(d: Path, gather: bool = True, store=None, split_s: float = SHARDS.SPLIT_S,
+            given: dict[str, float] | None = None) -> tuple[tuple[dict, dict, dict, dict], list[str]]:
+    """((suites, audits, steps, times), notes): the costs the newest recorded checks measured, their verdict packs
+    (`gathered_packs`, unpacked under ``d``) and their results' step seconds (`recorded_steps`), unless not ``gather``, and this
+    machine's caches (`measured_costs`); and for each suite past ``split_s`` (``given``'s seconds over the measured), its test
+    files' recorded seconds (`suites.file_times`, from every per-test record those hold)."""
     check_roots = [cache_dir()]
     test_roots = [VERDICTS.roots()["tests"], *sorted((Path.home() / ".cache" / "verity").glob("tests-slot-*"))]
     steps: dict[str, float] = {}
@@ -1646,7 +1751,10 @@ def measure(d: Path, gather: bool = True, store=None) -> tuple[tuple[dict, dict,
                          "machine's caches")
         except Exception as e:  # noqa: BLE001  (no store: price from this machine's caches, and say so)
             notes.append(f"no recorded checks' costs ({type(e).__name__}: {e}): this machine's caches alone")
-    costs = (*measured_costs(check_roots, test_roots, skipped), steps)
+    suites, audits = measured_costs(check_roots, test_roots, skipped)
+    long = {s.name: s for s in SUITES.discover() if (given_suites(suites, given).get(s.name) or 0) > split_s}
+    times = {n: SUITES.file_times(s, [r / SUITES.PER_TEST / s.name.replace("/", "_") for r in test_roots]) for n, s in long.items()}
+    costs = (suites, audits, steps, times)
     if skipped:
         notes.append(f"{len(skipped)} unreadable cost source(s) priced nothing: {', '.join(skipped[:3])}")
     return costs, notes
@@ -1661,15 +1769,21 @@ def shard_plan_main(argv: list[str]) -> int:
     ap.add_argument("--n", type=int, help="this many shards, not the planner's N")
     ap.add_argument("--deferred", metavar="STEP,...", help="plan these steps and what they need (drive's after-landing run)")
     ap.add_argument("--costs", type=Path, help="a JSON {part: seconds} over the measured costs")
+    ap.add_argument("--split-s", type=float, default=SHARDS.SPLIT_S, metavar="S",
+                    help="split a suite measured past S seconds by test file (default %(default)s)")
     ap.add_argument("--no-gather", action="store_true", help="price from this machine's caches alone, not the recorded checks")
     ap.add_argument("--json", action="store_true", help=f"print the plan as {SHARDS.KIND}")
     ap.add_argument("--out", type=Path, help="also write the plan here")
     a = ap.parse_args(argv)
-    with tempfile.TemporaryDirectory(prefix="check-shard-plan-") as d:
-        costs, notes = measure(Path(d), not a.no_gather)
     try:
-        doc = {**auto_plan(costs, a.max_shards, a.deferred, a.n, json.loads(a.costs.read_text()) if a.costs else None),
-               "notes": notes}
+        given = json.loads(a.costs.read_text()) if a.costs else None
+    except (OSError, ValueError) as e:
+        print(f"check: --shard-plan: --costs: {e}", file=sys.stderr)
+        return 2
+    with tempfile.TemporaryDirectory(prefix="check-shard-plan-") as d:
+        costs, notes = measure(Path(d), not a.no_gather, split_s=a.split_s, given=given)
+    try:
+        doc = {**auto_plan(costs, a.max_shards, a.deferred, a.n, given, a.split_s), "notes": notes}
     except (DECLARATION.DeclarationError, ValueError, OSError) as e:
         print(f"check: --shard-plan: {e}", file=sys.stderr)
         return 2
@@ -1695,10 +1809,12 @@ def auto_shard(spec: str, gated: bool = True, plan_file: Path | None = None, job
         doc = json.loads(path.read_text())
     except (OSError, ValueError) as e:
         raise DECLARATION.DeclarationError(f"--shard {spec}: {path} can't be read ({type(e).__name__}: {e})") from None
-    want = auto_parts(gated, jobs)
+    splits = doc.get("splits") if isinstance(doc, dict) and isinstance(doc.get("splits"), dict) else {}
+    want = auto_parts(gated, jobs, splits={s: v["m"] for s, v in splits.items()})
     if why := SHARDS.check(doc, n, want):
         raise DECLARATION.DeclarationError(f"--shard {spec}: {path.name} is no auto plan of this tree: {why}")
-    return {"k": k, "n": n, "parts": doc["shards"][k - 1]["parts"], "all": want, "plan": SHARDS.summary(doc)}
+    return {"k": k, "n": n, "parts": doc["shards"][k - 1]["parts"], "all": want, "plan": SHARDS.summary(doc),
+            **({"splits": splits} if splits else {})}
 
 
 def _parts_of() -> dict[str, list[str]]:
@@ -1751,6 +1867,8 @@ def combine(ids: list[str], run_dir: Path | None) -> int:
         why = "the checkout has uncommitted changes"
     if not why:
         why = circuit_join(store, done, run_dir or Path(tempfile.mkdtemp(prefix="check-combine-")))
+    if not why:
+        why = suite_join(store, done, Path(tempfile.mkdtemp(prefix="check-combine-suites-")))
     if run_dir is not None:
         doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": SETTINGS.require("RESEARCH_RUN_ID"),
                "settings": SETTINGS.record(), "workload_fingerprint": {"steps": [s["step"] for s in done or []], "shards": ids},
@@ -1794,6 +1912,32 @@ def circuit_join(store, steps: list[dict], into: Path) -> str | None:
     said = [line for line in (r.stderr + r.stdout).splitlines() if line.strip()][-3:]
     return (f"circuit-check --combine of its {len(dirs)} shards {'refused them' if r.returncode == 2 else f'exited {r.returncode}'}"
             + (f": {' / '.join(said)}" if said else ""))
+
+
+def suite_join(store, steps: list[dict], into: Path) -> str | None:
+    """Why the parts of the suites a set of shards split by test file (``steps``, `shard_set`'s: `pytest:SUITE:K/M`, each with
+    the run that ran it) don't make each suite's passing verdict, or None: each run's suite reports (its `suites.json` and
+    `suites-lean.json`), from its Attempt's run files into ``into``, joined (`suites.combine_parts`), must hold every part of one
+    partition once, each passed, so a part run on another partition (a machine with another timing record) passes nothing."""
+    runs = sorted({s["run_id"] for s in steps if SHARDS.suite_part(s["step"])[2] and s.get("run_id")})
+    if not runs:
+        return None
+    rows = []
+    for rid in runs:
+        try:
+            files = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
+            if not files:
+                return f"suites: {rid} published no run files, so its suites' parts can't be joined"
+            names = [n for n in ("suites.json", "suites-lean.json") if any(f["path"] == n for f in store.listing(files))]
+            got = Path(store.fetch(files, to=into / rid, paths=names))
+            rows += [r for n in names for r in json.loads((got / n).read_text()) if isinstance(r.get("part"), dict)]
+        except Exception as e:  # noqa: BLE001  (a guard never fails open)
+            return f"suites: {rid}'s suite reports can't be read ({type(e).__name__}: {e})"
+    split = {SHARDS.suite_part(s["step"])[1] for s in steps if SHARDS.suite_part(s["step"])[2]}
+    joined = {r["name"]: r for r in SUITES.combine_parts(rows)}
+    bad = [f"{n}: {'; '.join(joined[n]['why'])}" if n in joined else f"{n}: no shard reported its parts" for n in sorted(split)
+           if n not in joined or joined[n]["status"] not in ("passed", "known-red")]
+    return f"suites split by file don't make their suites' verdicts: {' / '.join(bad)}" if bad else None
 
 
 def circuit_combine(dirs: list[Path], out: Path) -> subprocess.CompletedProcess:
@@ -2412,7 +2556,8 @@ PREBUILD = ("try:\n    from verity.ml.definitions.numerics import twins\nexcept 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
         only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
-        regenerate: bool = True, circuit_cache: bool | None = None, live=None) -> tuple[bool, list[dict]]:
+        regenerate: bool = True, circuit_cache: bool | None = None, live=None,
+        splits: dict[str, dict] | None = None) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going, packs, reused, live)
@@ -2448,7 +2593,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             if reused is not None:
                 reused.start()
-            gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache)
+            gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits)
             steps.live.plan([name for g in gs for name, _, _ in g])
             steps.live.request()
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
@@ -2648,7 +2793,6 @@ def main(argv: list[str]) -> int:
         i = rest.index("--cc-records-from")
         records, rest = rest[i + 1], rest[:i] + rest[i + 2:]
     sharded = None
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
     plan_file = run_dir / "inputs" / AUTO_PLAN if run_dir is not None else None
     if "--shard-plan-file" in rest[:-1] and run_dir is None:
         i = rest.index("--shard-plan-file")
@@ -2667,6 +2811,7 @@ def main(argv: list[str]) -> int:
         if p := sharded.get("plan"):
             print(f"check: shard plan {p['digest'][:12]}: N = {p['n']}, floor {p['floor_s'] / 60:.1f} min, predicted wall "
                   f"{p['predicted_s'] / 60:.1f} min, this shard {p['seconds'][sharded['k'] - 1] / 60:.1f} min", flush=True)
+    splits = sharded.pop("splits", None) if sharded else None
     deferred = None
     if "--deferred" in rest and rest.index("--deferred") + 1 < len(rest):
         i = rest.index("--deferred")
@@ -2739,7 +2884,7 @@ def main(argv: list[str]) -> int:
     live = live_record(out, run_dir, sharded, picked)
     live.start()
     try:
-        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live)
+        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live, splits)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)

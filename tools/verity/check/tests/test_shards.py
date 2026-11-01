@@ -368,6 +368,38 @@ def test_combine_joins_circuit_check_s_shards_and_fails_unless_they_join_to_the_
     assert "lost published no run files" in CHECK.circuit_join(Store(), [{**s, "run_id": "lost"} for s in steps[:2]] + steps[3:], run)
 
 
+def test_the_combine_joins_a_split_suites_parts_across_shards_into_its_verdict(tmp_path):
+    def row(k: int, digest: str = "d1", status: str = "passed") -> dict:
+        return {"suite": "s", "name": "s", "status": status, "seconds": 1.0, "failed_tests": [],
+                "part": {"ks": [k], "m": 2, "digest": digest}}
+
+    reports = {"r1": [row(1), {"suite": "w", "name": "w", "status": "passed"}], "r2": [row(2)]}
+
+    class Store:
+        def get_attempt(self, rid):
+            return {"outputs": {"run_files": f"art:{rid}"} if rid != "lost" else {}}
+
+        def listing(self, art):
+            return [{"path": "suites.json"}]
+
+        def fetch(self, art, to=None, *, paths=None):
+            to.mkdir(parents=True, exist_ok=True)
+            (to / "suites.json").write_text(json.dumps(reports[art.removeprefix("art:")]))
+            return to
+
+    steps = [{"step": f"pytest:s:{k}/2", "status": "passed", "run_id": f"r{k}"} for k in (1, 2)] + \
+        [{"step": "pytest:w", "status": "passed", "run_id": "r1"}]
+    assert CHECK.suite_join(Store(), steps, tmp_path / "a") is None
+    assert CHECK.suite_join(Store(), steps[2:], tmp_path / "b") is None, "no split suite, nothing to join"
+    reports["r2"] = [row(2, digest="d2")]
+    assert "different partitions" in CHECK.suite_join(Store(), steps, tmp_path / "c"), "a part of another machine's partition"
+    reports["r2"] = [row(2, status="failed")]
+    assert "s: " in CHECK.suite_join(Store(), steps, tmp_path / "d")
+    reports["r2"] = []
+    assert "missing: [2]" in CHECK.suite_join(Store(), steps, tmp_path / "e")
+    assert "lost published no run files" in CHECK.suite_join(Store(), [{**steps[0], "run_id": "lost"}], tmp_path / "f")
+
+
 def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch):
     import research.store.local
 

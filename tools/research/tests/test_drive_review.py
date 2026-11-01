@@ -9,6 +9,7 @@ import contextlib
 import calendar
 import json
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -228,6 +229,174 @@ def test_an_unsharded_after_landing_run_has_no_records_step(world, monkeypatch):
     assert h.tick().startswith("landed #1"), world.logs
     [(_, steps, kw)] = h.posted
     assert steps == ",".join(AFTER_LANDING) and "cc_records" not in kw and "shard" not in kw
+
+
+class Planner:
+    """Drive's auto plans (`plan_shards`, `planned`): each one asked for, and the plan (or why there is none) each answers once
+    ``answer`` is set."""
+
+    def __init__(self, h: Review, tmp: Path):
+        self.asked: list[tuple[str, str, int | None]] = []
+        self.answer: tuple[dict | None, str | None] = (None, None)
+        self.tmp = tmp
+        h.d.plan_shards = self.plan
+        h.d.planned = lambda rec: self.answer
+
+    def plan(self, repo, tip, steps, max_shards=None) -> dict:
+        from research.drive import AUTO_PLAN
+
+        self.asked.append((tip, steps, max_shards))
+        out = self.tmp / f"plan-{len(self.asked)}"
+        out.mkdir()
+        (out / AUTO_PLAN).write_text("{}\n")
+        return {"dir": str(out / "job"), "pid": None, "out": str(out)}
+
+
+@pytest.mark.parametrize("rc", [0, 2])
+def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc):
+    """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a worktree of the tip under TRAIN_TREES,
+    its venv kept beside, the plan written into the plan's directory, the worktree removed after; `planned` gives the plan,
+    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's."""
+    from research.drive import AUTO_PLAN, DETACH_JOB, PLAN_JOB, planned
+
+    repo, out, job, trees, bin_ = (tmp_path / x for x in ("repo", "plan", "job", "trees", "bin"))
+    for d in (repo, out, job, bin_):
+        d.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "tip")
+    tip = _git(repo, "rev-parse", "HEAD")
+    doc = {"kind": "check-shard-plan/v1", "n": 3, "digest": "d" * 64}
+    (bin_ / "uv").write_text("#!/bin/sh\n"
+                             f'printf "%s\\n" "$PWD" "$UV_PROJECT_ENVIRONMENT" "$(git rev-parse HEAD)" "$@" > {tmp_path}/argv\n'
+                             'while [ "$1" != --out ]; do shift; done\n'
+                             f"echo '{json.dumps(doc)}' > \"$2\"\necho 'shard plan: N = 3'\nexit {rc}\n")
+    (bin_ / "uv").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", "TRAIN_TREES": str(trees)}
+    subprocess.run(["sh", "-c", DETACH_JOB, "sh", str(job), "sh", "-c", PLAN_JOB, "sh", str(out), tip, "--deferred", "pytest",
+                    "--max-shards", "3"], cwd=repo, env=env, check=True)
+    cwd, venv, head, *argv = (tmp_path / "argv").read_text().splitlines()
+    assert (cwd, venv, head) == (str(trees / "plan-plan"), str(trees / "plan-venv"), tip)
+    assert argv == ["run", "-q", "python", "tools/verity/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
+                    "--deferred", "pytest", "--max-shards", "3"]
+    assert not (trees / "plan-plan").exists() and _git(repo, "worktree", "list").count("\n") == 0, "the worktree is removed"
+    got = planned({"dir": str(job), "pid": None, "out": str(out)})
+    assert got == ((doc, None) if rc == 0 else (None, "`check.py --shard-plan` exited 2: shard plan: N = 3"))
+    assert not job.exists() and (out / AUTO_PLAN).is_file()
+
+
+def _plan_doc(n: int) -> dict:
+    return {"kind": "check-shard-plan/v1", "n": n, "digest": "d" * 64, "predicted_s": 3600.0}
+
+
+@pytest.mark.parametrize("gone", [False, True])
+def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_after_the_records_step(world, monkeypatch, gone):
+    """`after_landing_shards = "auto:MAX"`: the plan (`check.py --shard-plan --deferred STEPS --max-shards MAX`) is made once a
+    tip beside circuit-check's records step, and the run launches once both are done: the plan's N shards, each `--shard
+    auto:K/N` with the plan's file and the records' artifact.  A shard that never started launches the run again on the same
+    plan, or on a new one when its file is gone (a restart of the pod); `main` is verified once every shard passed."""
+    from research.drive import AUTO_PLAN
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = "auto:4"
+    planner = Planner(h, world.tmp)
+    art = f"art:{'a' * 64}@{'b' * 64}"
+    h.d.records_artifact = lambda rid: art if rid == "r-post-0" else None
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _main(world)
+    assert h.posted == [(main, "circuit-check", {"cc_records": True})] and planner.asked == [(main, ",".join(AFTER_LANDING), 4)]
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert len(h.posted) == 1, "the records step passed, but the plan is still being made"
+    planner.answer = (_plan_doc(2), None)
+    h.tick()
+    plan = str(world.tmp / "plan-1" / AUTO_PLAN)
+    assert [(c, kw.get("shard"), kw.get("shard_plan"), kw.get("cc_records_from")) for c, _, kw in h.posted[1:]] == [
+        (main, f"auto:{k}/2", plan, art) for k in (1, 2)]
+    assert h.postland()["run"]["plan"] == "d" * 64 and planner.asked == [(main, ",".join(AFTER_LANDING), 4)]
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("done", 75, None)})
+    if gone:
+        os.unlink(plan)
+        h.tick()
+        assert len(h.posted) == 3 and len(planner.asked) == 2 and not (world.tmp / "plan-1").exists(), "a new plan first"
+        plan = str(world.tmp / "plan-2" / AUTO_PLAN)
+    h.tick()
+    assert [(kw.get("shard"), kw.get("shard_plan")) for _, _, kw in h.posted[3:]] == [("auto:1/2", plan), ("auto:2/2", plan)]
+    assert len(planner.asked) == 1 + gone, "a shard that never started: the run again, whole, on the plan it had"
+    h.evidence = [_steps_run(world.tmp, "r-post-3", {s: "passed" for s in AFTER_LANDING})]
+    h.run_state.update({"r-post-3": ("done", 0, None), "r-post-4": ("done", 0, None)})
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == main and pl["run"] is None, world.logs
+
+
+def test_a_run_ci_adds_to_an_auto_shard_counts_only_as_a_shard_of_its_plan(world, monkeypatch):
+    """`drive-shard-add` to an auto run: the run's record must be `--shard auto:K/N` and its inputs must hold the run's plan
+    (`AUTO_PLAN`), so a hand run of another plan's shard K, which ran other parts, verifies nothing."""
+    from research.drive import AUTO_PLAN
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = "auto"
+    planner = Planner(h, world.tmp)
+    planner.answer = (_plan_doc(2), None)
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}"
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("waiting", None, None)})
+    h.tick()
+    main = _main(world)
+    check = ["uv", "run", "python", "tools/verity/check/check.py", "--keep-going", "--deferred", ",".join(AFTER_LANDING)]
+    records = {}
+    for rid, spec, digest in (("r-hand", "auto:2/2", "d" * 64), ("r-other-plan", "auto:2/2", "e" * 64),
+                              ("r-plain", "2/2", "d" * 64), ("r-no-plan", "auto:2/2", None)):
+        (d := world.tmp / rid / "inputs").mkdir(parents=True)
+        if digest:
+            (d / AUTO_PLAN).write_text(json.dumps({"digest": digest}))
+        records[rid] = (world.tmp / rid, {"tree_sha": main, "command": [*check, "--shard", spec]})
+    monkeypatch.setattr(merge, "fetch_run", lambda rid, names, cwd=None, refresh=False: records.get(rid))
+    monkeypatch.setenv(merge.DRIVE_ENV, "1")
+    for rid, why in (("r-other-plan", f"auto plan ({AUTO_PLAN} among its inputs) is eeeeeeeeeeee, not the after-landing "
+                                      "run's dddddddddddd"),
+                     ("r-plain", "r-plain is shard 2/2, not shard auto:2/2"),
+                     ("r-no-plan", "auto plan (check-shard-plan.json among its inputs) is unreadable")):
+        with pytest.raises(QueueError, match=re.escape(why)):
+            Q.drive_shard_add(h.q, main, 2, rid)
+    assert Q.drive_shard_add(h.q, main, 2, "r-hand") == 0
+    assert h.postland()["run"]["groups"] == [["r-post-1"], ["r-post-2", "r-hand"]]
+
+
+@pytest.mark.parametrize("ends", ["failed", "lost"])
+def test_an_auto_after_landing_run_with_no_plan_runs_unsharded_and_says_so(world, monkeypatch, ends):
+    """A plan that failed, or that is still being made `PLAN_WAIT_S` after it started (stopped then), never holds the run: ci is
+    told once and the run launches unsharded, one run of every step, its plan's directory removed."""
+    from research.drive import PLAN_WAIT_S
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = "auto"
+    planner = Planner(h, world.tmp)
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}"
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert planner.asked == [(_main(world), ",".join(AFTER_LANDING), None)]
+    h.run_state["r-post-0"] = ("done", 0, None)
+    if ends == "failed":
+        planner.answer = (None, "`check.py --shard-plan` exited 2: no store")
+    else:
+        h.tick()
+        assert len(h.posted) == 1, "it waits for the plan"
+        h.clock += PLAN_WAIT_S + 1
+    h.tick()
+    [(_, steps, kw)] = h.posted[1:]
+    assert steps == ",".join(AFTER_LANDING) and "shard" not in kw and "cc_records_from" not in kw
+    told = [m for m in h.posts if "auto shard plan" in m]
+    assert len(told) == 1 and "runs unsharded" in told[0] and ("exited 2: no store" in told[0] if ends == "failed"
+                                                              else f"not made in {PLAN_WAIT_S // 60} min" in told[0]), h.posts
+    assert not (world.tmp / "plan-1").exists()
 
 
 @pytest.mark.parametrize("on, n, want", [
@@ -464,10 +633,10 @@ def test_a_lock_change_waits_for_a_passed_lean_check_of_a_next_commit_holding_it
     assert _main(world) == top and len(h.launched) == 1
 
 
-def _rebuild_next(world: World, monkeypatch) -> None:
-    """`next` made again from the same merges onto the same `main`, as a sync rebuilding it from below makes it: each commit new,
-    each tree the same."""
-    monkeypatch.setenv("GIT_COMMITTER_DATE", "2026-10-24T18:00:00Z")
+def _rebuild_next(world: World, monkeypatch, date: str = "2026-10-24T18:00:00Z") -> None:
+    """`next` made again from the same merges onto the same `main`, as a sync rebuilding it from below makes it: each commit new
+    (committed at ``date``), each tree the same."""
+    monkeypatch.setenv("GIT_COMMITTER_DATE", date)
     base = _main(world)
     commits = _git(world.origin, "rev-list", "--first-parent", "--reverse", f"{base}..next").split()
     top = base
@@ -501,25 +670,31 @@ def test_a_running_lean_check_holds_a_rebuilt_next_with_the_same_prs_heads_and_t
     assert _main(world) == new and len(h.launched) == 1
 
 
-def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_commit(world, monkeypatch):
-    """`_land` builds the regenerated locks on the commit the check covers, and its lock gate takes only a run of that very
-    commit: a moved check that regenerated locks would cover the rebuilt `next` and be refused at every tick."""
+def test_a_moved_lean_check_that_regenerated_locks_lands_them_on_the_commit_it_moved_to(world, monkeypatch, tmp_path):
+    """A running check moved twice by rebuilds of `next` (`_rekey_lean`) keeps the commit it ran on as `rekeyed_from`, and once
+    it passes by regenerating records, `_land` commits them on the commit it holds now: the lock gate takes its run of the
+    commit it ran on, whose tree is that commit's, and nothing is checked again."""
     h = Review(world, monkeypatch)
     h.d.regenerate_locks = True
-    h.d._regenerated = lambda drive, run: True
-    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
-    world.gh.put(2, world.change({"a.txt": "2\n"}))
-    for n in (1, 2):
-        h.review(n)
+    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
+    h.review(1)
     h.tick()
-    _rebuild_next(world, monkeypatch)
+    one, (rid,) = _tip(world), h.lean_ids()
+    for date in ("2026-10-24T18:00:00Z", "2026-10-24T19:00:00Z"):
+        _rebuild_next(world, monkeypatch, date)
+        h.tick()
     new = _tip(world)
-    h.tick()
-    h.run_state[h.lean_ids()[0]] = ("done", 0, None)
-    h.evidence = [_steps_run(world.tmp, h.lean_ids()[0], {LEAN_STEP: "passed"})]
-    assert not h.tick().startswith("landed")
-    assert len(h.launched) == 2 and h.launched[1][0] == new, h.launched
-    assert h.d.q.load_state()["drive"]["lean"][new]["state"] is None
+    lean = h.d.q.load_state()["drive"]["lean"]
+    assert new != one and list(lean) == [new] and lean[new]["rekeyed_from"] == one, (lean, world.logs)
+    h.d.fetch = _live_run(tmp_path, rid, one, {"pkg": '{"records": 2}\n'})[1]
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _main(world)
+    assert _git(world.origin, "rev-parse", "main^") == new and len(h.launched) == 1, h.launched
+    assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
+    assert f"Checked: {rid} (the Lean check of {one[:12]}, passed by regenerating them)" in _git(
+        world.origin, "log", "-1", "--format=%B", main)
 
 
 def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str], lock: str | None = None,
@@ -691,6 +866,28 @@ def test_a_moved_running_check_keeps_only_the_members_above_the_lock_commit_and_
     assert not h.tick().startswith("landed")
     lean = h.d.q.load_state()["drive"]["lean"]
     assert h.cancelled == [] and list(lean) == [rebuilt] and lean[rebuilt]["rekeyed_from"] == new, (lean, world.logs)
+
+
+def test_a_check_carried_across_a_lock_commit_and_then_rekeyed_that_regenerated_records_is_checked_again(
+        world, monkeypatch, tmp_path):
+    """The lock gate takes a carried check's lock commit against the commit it was carried from, and a rekeyed one's against the
+    commit it holds: a check moved both ways is neither, so once it passes by regenerating records it runs again on its commit
+    rather than be refused at every tick."""
+    h, rid, top = _lock_landing(world, monkeypatch, tmp_path, {"pkg": '{"records": 3}\n'})
+    lock = _main(world)
+    _rebuild_next(world, monkeypatch)
+    h.tick()
+    rebuilt = _tip(world)
+    rec = h.d.q.load_state()["drive"]["lean"][rebuilt]
+    assert rec["carried"]["from"] == top and rec["rekeyed_from"], rec
+    h.review(2)
+    h.review(3)
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert not h.tick().startswith("landed"), world.logs
+    assert _main(world) == lock and len(h.launched) == 3 and h.launched[2][0] == rebuilt, h.launched
+    assert any(f"moved to {rebuilt[:12]} regenerated lock records, which don't hold there (it moved across a lock commit too, "
+               f"from {top[:12]})" in x for x in world.logs), world.logs
 
 
 def test_a_store_run_of_a_moved_checks_image_lands_its_records_checked_against_the_image(world, monkeypatch, tmp_path):

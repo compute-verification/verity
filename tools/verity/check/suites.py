@@ -7,6 +7,7 @@
     uv run tools/verity/check/suites.py --fresh             run even where a pass is cached
     uv run tools/verity/check/suites.py --list              each suite, its inputs, and whether a pass is cached
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
+    uv run tools/verity/check/suites.py vllm --files 1/8    part 1 of 8 of a suite's test files (also `vllm:1/8`, `vllm:1,3/8`)
     uv run tools/verity/check/suites.py --known-red origin/main   what is red on main: its newest checked commit's failed tests, as JSON
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
@@ -89,6 +90,16 @@ suite key missed reuses it while its read set holds, without starting pytest: th
 `parallel` gets, since it answers for every test in the order they ran. What tracing can't see: a test that only stats a path (`exists`) and reads
 outside the repository; `check.py --no-cache`, the nightly `audit-main` run, reports a kept pass a fresh failure contradicts.
 
+A suite in parts. `NAME --files K/M` (or `NAME:K/M`, `NAME:K1,K2/M`) runs the suite's test files (`test_files`: its
+`test_*.py`, a nested suite's left out) in part K of M (`partition`): packed longest first, each file costed at its recorded
+seconds (`file_times`: the newest pass of each of its modules here, or `--timings FILE`'s `{suite: {file: seconds}}`), rounded to
+two figures so jitter moves nothing, a file with no record at their median; ties go by path. So one tree and one timing record
+give one partition, named by its digest (`partition_digest`), and `NAME:K/M@DIGEST` refuses (exit 2) where the record here
+partitions otherwise. The guard collects only the part's files (`VERITY_SUITE_PART`). A part's pass is kept under `part_key`, the
+suite's key with the other parts' test files left out (those its files can reach by import kept), and its record names the
+part (`"part"`); a whole suite's pass answers for each of its parts. `combine_parts` joins a suite's part rows into its verdict:
+every K of one partition once, all passed.
+
 `--per-test-min-s` (or `$VERITY_TEST_CACHE_MIN_S`)
 keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, and names what failed
 that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal that a key misses an input
@@ -148,6 +159,7 @@ import platform
 import re
 import shutil
 import signal
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -1479,7 +1491,7 @@ def kept_passes() -> dict[str, list[dict]]:
             d = json.loads(f.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(d, dict) and isinstance(d.get("suite"), str) and "components" in d:
+        if isinstance(d, dict) and isinstance(d.get("suite"), str) and "components" in d and "part" not in d:
             out.setdefault(d["suite"], []).append(d)
     return out
 
@@ -1518,20 +1530,199 @@ def _durations() -> dict[str, float]:
 HEAVY_CANDIDATES = 1000
 
 
+def _last_passes(dirs: list[Path]) -> dict[str, tuple[str, float]]:
+    """{node id: (when, setup and call seconds)} of each test's newest kept pass in the per-test directories ``dirs``."""
+    last: dict[str, tuple[str, float]] = {}
+    for d in dirs:
+        for p in d.glob("*.json") if d.is_dir() else ():
+            try:
+                e = json.loads(p.read_text())
+            except (OSError, ValueError):
+                continue
+            for node, s in (e.get("passed") or {}).items() if isinstance(e, dict) else ():
+                if isinstance(s, (int, float)):
+                    last[node] = max(last.get(node, ("", 0.0)), (e.get("when") or "", float(s)))
+    return last
+
+
 def longest(suite: Suite, n: int) -> list[str]:
     """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: of
     which the guard starts the longest it collected at the heads of the workers' shares (`heavy_first`). An order only, which no
     key or verdict reads."""
-    d = per_test_dir(suite)
-    last: dict[str, tuple[str, float]] = {}
-    for p in d.glob("*.json") if d.is_dir() else ():
-        try:
-            e = json.loads(p.read_text())
-        except (OSError, ValueError):
-            continue
-        for node, s in (e.get("passed") or {}).items():
-            last[node] = max(last.get(node, ("", 0.0)), (e.get("when") or "", s))
+    last = _last_passes([per_test_dir(suite)])
     return sorted(last, key=lambda node: (-last[node][1], node))[:n]
+
+
+# ---- a suite in parts (`--files`) ----------------------------------------------------------------------------------------------------
+
+#: `NAME:KS/M[@DIGEST]`: parts KS (``1`` or ``1,3``) of suite NAME's test files in M parts, of the partition whose digest starts
+#: with DIGEST when given
+PART_SPEC = re.compile(r"(?P<name>.+):(?P<ks>[1-9]\d*(?:,[1-9]\d*)*)/(?P<m>[1-9]\d*)(?:@(?P<digest>[0-9a-f]{6,64}))?")
+#: under the run's logs: the part the guard keeps at collection (`VERITY_SUITE_PART`)
+PART_ENV = "VERITY_SUITE_PART"
+
+
+def is_test_file(name: str) -> bool:
+    """pytest's default `python_files`, which every suite here keeps."""
+    return name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py"))
+
+
+def test_files(suite: Suite, tree: str, cut: list[str] = ()) -> list[str]:
+    """The units `--files` splits ``suite`` into: its test modules (`Modules.narrowable`: `test_*.py` under its test paths, outside
+    a data directory) in git's view of ``tree``, root-relative, without those of the nested suites ``cut`` (`dropped`)."""
+    own = [f for f in own_ids(tree, suite.path) if is_test_file(f.rsplit("/", 1)[-1]) and not _under(f, list(cut))]
+    mods = Modules(suite, dict.fromkeys(own, ""))
+    return [f for f in own if mods.narrowable(f)]
+
+
+def file_times(suite: Suite, dirs: list[Path] | None = None) -> dict[str, float]:
+    """Each of ``suite``'s test files' recorded seconds, root-relative: the sum of its tests' setup and call seconds in their newest
+    kept passes (`PerTest`; under ``dirs``, default this machine's per-test directory). A file none of whose tests a pass recorded
+    has none."""
+    base = "" if suite.path == "." else suite.path + "/"
+    out: dict[str, float] = {}
+    for node, (_when, s) in _last_passes(dirs if dirs is not None else [per_test_dir(suite)]).items():
+        f = base + node.split("::", 1)[0]
+        out[f] = out.get(f, 0.0) + s
+    return {f: round(s, 3) for f, s in sorted(out.items())}
+
+
+def _coarse(s: float) -> float:
+    """A file's seconds as the partition reads them: two significant figures, so a rerun's jitter rarely moves a file to another
+    part (which rekeys both parts)."""
+    return float(f"{s:.2g}") if s > 0 else 0.0
+
+
+def file_costs(files: list[str], times: dict[str, float]) -> dict[str, float]:
+    """Each of ``files`` at its recorded seconds (`_coarse`), a file with none at the median of those with one, 1 s when none has."""
+    known = [_coarse(times[f]) for f in files if isinstance(times.get(f), (int, float))]
+    mid = float(statistics.median(known)) if known else 1.0
+    return {f: _coarse(times[f]) if isinstance(times.get(f), (int, float)) else mid for f in files}
+
+
+def partition(files: list[str], times: dict[str, float], m: int) -> list[list[str]]:
+    """``files`` in ``m`` parts, longest first (`file_costs`, ties by path) onto the part with the least so far (the lowest index on a
+    tie), each part's files sorted: a function of the files, their recorded seconds and ``m`` alone, so every machine holding one
+    timing record splits one tree alike, and every file is in exactly one part."""
+    if m < 1:
+        raise ValueError(f"{m} parts: at least 1")
+    cost = file_costs(sorted(set(files)), times)
+    load, parts = [0.0] * m, [[] for _ in range(m)]
+    for f in sorted(cost, key=lambda f: (-cost[f], f)):
+        k = min(range(m), key=lambda i: (load[i], i))
+        load[k] += cost[f]
+        parts[k].append(f)
+    return [sorted(p) for p in parts]
+
+
+def partition_digest(parts: list[list[str]]) -> str:
+    return _digest(parts)
+
+
+@dataclass(frozen=True)
+class Part:
+    """Parts ``ks`` of a suite's test files in ``m`` parts (`partition`)."""
+    ks: tuple[int, ...]
+    m: int
+    files: tuple[str, ...]       # the test files of parts ks, root-relative
+    every: tuple[str, ...]       # all the suite's test files, which the m parts hold once each
+    digest: str                  # the partition's (`partition_digest`)
+    share: float                 # the files' share of the suite's recorded seconds (`file_costs`)
+
+    @property
+    def spec(self) -> str:
+        return f"{','.join(map(str, self.ks))}/{self.m}"
+
+    def row(self) -> dict:
+        return {"ks": list(self.ks), "m": self.m, "files": len(self.files), "of": len(self.every), "digest": self.digest,
+                "share": round(self.share, 6)}
+
+
+def part_of(suite: Suite, ks: tuple[int, ...], m: int, tree: str, cut: list[str], times: dict[str, float]) -> Part:
+    """Parts ``ks`` of ``suite``'s test files (`test_files`) partitioned by ``times`` (`file_times`'s)."""
+    if any(k > m for k in ks) or len(set(ks)) != len(ks):
+        raise ValueError(f"{suite.name}: parts {','.join(map(str, ks))} of {m}: each K once, 1 <= K <= {m}")
+    every = test_files(suite, tree, cut)
+    parts = partition(every, times, m)
+    cost = file_costs(every, times)
+    mine = sorted(f for k in ks for f in parts[k - 1])
+    total = sum(cost.values())
+    return Part(tuple(sorted(ks)), m, tuple(mine), tuple(every), partition_digest(parts),
+                sum(cost[f] for f in mine) / total if total > 0 else len(mine) / max(1, len(every)))
+
+
+def part_reach(part: Part, mods: Modules) -> set[str] | None:
+    """The test modules a run of ``part`` can depend on: its files and what each reaches (`Modules.reach`), None when one of them
+    reaches by a computed name (then every test module is kept)."""
+    keep = set(part.files)
+    for f in part.files:
+        r = mods.reach(f)
+        if r is None:
+            return None
+        keep |= r
+    return keep
+
+
+def part_key(suite: Suite, part: Part, keep: set[str] | None, mods: Modules, ids: dict[str, str], own: dict[str, str], env: dict,
+             args: list[str], deps: dict[str, list] | None) -> str:
+    """A part's key: its suite's (`key`) with the suite's directory taken file by file, of its test modules only those ``keep``
+    names (`part_reach`; all with ``keep`` None), and the part's files. So it moves with its files, what they reach and the inputs
+    every part shares (conftests, helpers, fixtures, the suite's dependencies), and not with another part's files."""
+    inputs = {p: i for p, i in ids.items() if p != suite.path}
+    inputs.update({f: i for f, i in own.items() if keep is None or f in keep or not mods.narrowable(f)})
+    blob = json.dumps({"schema": "part/v1", "suite": suite.name, "depth": depth(suite),
+                       "files": sorted(_rel(suite.path, f) for f in part.files), "inputs": _rel_keys(suite.path, inputs),
+                       "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "resolved": deps or {}, "environment": env,
+                       "pytest": args}, sort_keys=True)
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def part_context(suite: Suite, part: Part, tree: str, cut: list[str]) -> tuple[Modules, dict[str, str], set[str] | None]:
+    """(the suite's test modules scanned, its own files' object ids as `PerTest` keeps them, ``part``'s `part_reach`)."""
+    own = {f: i for f, i in own_ids(tree, suite.path).items() if (markdown(suite) or not f.endswith(".md")) and not _under(f, cut)}
+    texts = {}
+    for f in own:
+        if f.endswith(".py"):
+            try:
+                texts[f] = (ROOT / f).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                texts[f] = ""
+    mods = Modules(suite, texts)
+    return mods, own, part_reach(part, mods)
+
+
+def combine_parts(rows: list[dict]) -> list[dict]:
+    """`--json` rows (each suite's or part's) with each suite's parts joined into one row for the suite: passed when its rows are
+    every part of one partition exactly once and each passed (or was cached, or is known red on `main`); else failed, with why
+    (a part that failed, one missing or twice, parts of different partitions: machines whose timing records differ). Rows of
+    whole suites pass through."""
+    out, by = [], {}
+    for r in rows:
+        if isinstance(r.get("part"), dict):
+            by.setdefault(r["name"], []).append(r)
+        else:
+            out.append(r)
+    for name, rs in by.items():
+        ps = [r["part"] for r in rs]
+        ks = sorted(k for p in ps for k in p["ks"])
+        m = ps[0]["m"]
+        why = []
+        if len({(p["m"], p["digest"]) for p in ps}) != 1:
+            why.append("its parts are of different partitions (their machines' timing records differ: pass one --timings)")
+        elif ks != list(range(1, m + 1)):
+            twice = sorted({k for k in ks if ks.count(k) > 1})
+            gone = sorted(set(range(1, m + 1)) - set(ks))
+            why.append(f"its parts aren't each of 1..{m} once (twice: {twice or 'none'}; missing: {gone or 'none'})")
+        bad = [r for r in rs if r.get("status") not in ("passed", "cached", "known-red")]
+        why += [f"part {r['part']['ks']}/{m} {r.get('status')}" for r in bad]
+        status = "failed" if why else "known-red" if any(r.get("status") == "known-red" for r in rs) else "passed"
+        out.append({"suite": rs[0]["suite"], "name": name, "status": status, "why": why,
+                    "seconds": round(sum(r.get("seconds") or 0 for r in rs), 1),
+                    "failed_tests": [t for r in rs for t in (r.get("failed_tests") or [])],
+                    "parts": [{"ks": r["part"]["ks"], "status": r.get("status"), "key": r.get("key"), "seconds": r.get("seconds")}
+                              for r in rs],
+                    "partition": {"m": m, "digests": sorted({p["digest"] for p in ps})}})
+    return out
 
 
 @dataclass
@@ -1709,7 +1900,7 @@ def read_report(report: Path) -> dict | None:
 
 
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
-        reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0) -> Result:
+        reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0, part: Part | None = None) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
     report.unlink(missing_ok=True)
@@ -1722,6 +1913,14 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
                VERITY_SUITE_PROGRAMS=json.dumps(list(suite.artifacts)))
     env.pop("VERITY_SUITE_REUSE", None)
     env.pop("VERITY_SUITE_MODULE", None)
+    env.pop(PART_ENV, None)
+    (logs / f"{slug}.part.json").unlink(missing_ok=True)
+    if part is not None:
+        base = "" if suite.path == "." else suite.path + "/"
+        (logs / f"{slug}.part.json").write_text(json.dumps({"dir": str(ROOT / suite.path), "ks": list(part.ks), "m": part.m,
+                                                            "mine": [f.removeprefix(base) for f in part.files],
+                                                            "every": [f.removeprefix(base) for f in part.every]}))
+        env[PART_ENV] = str(logs / f"{slug}.part.json")
     (logs / f"{slug}.reuse.json").unlink(missing_ok=True)
     reads_log = logs / f"{slug}.reads"
     reads_log.unlink(missing_ok=True)
@@ -1776,7 +1975,9 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     timed_out = timeout_s if expired.is_set() else 0.0
     oom = sig == "SIGKILL" and not timed_out and ooms is not None and (oom_kills() or 0) > ooms
     rep = read_report(report)
-    ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
+    # 5: nothing left to run: every test's pass reused, or a part with no files or whose every test a selection (`--quick`'s
+    # `-m "not slow"`) leaves out
+    ran_all = rc == 0 or (rc == 5 and (bool(reuse) or (part is not None and (not part.files or "-m" in args or "-k" in args))))
     rep = rep or {}
     reported = bool(rep)
     reads, child_outside, by = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}, {}
@@ -2191,7 +2392,23 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--known-red", metavar="REV", help="print, as JSON, what is red on main at REV (`known_red`: the checks of the "
                     "newest of its first-parent commits checked in the evidence store, merged, with their runs and commit, or why "
                     "none was found) and run nothing; with --changed, a suite whose every failed test is on that list fails nothing")
+    ap.add_argument("--files", metavar="K/M", help="run part K (or parts K1,K2,...) of each named suite's test files in M parts, "
+                    "packed longest first by their recorded seconds (`partition`); a suite named NAME:K/M takes its own")
+    ap.add_argument("--timings", type=Path, metavar="FILE", help="the timing record --files partitions by: JSON {suite name: {test "
+                    "file: seconds}} (default: this machine's per-test record, `file_times`)")
     a = ap.parse_args(argv)
+    specs: dict[str, tuple[tuple[int, ...], int, str | None]] = {}
+    if a.files and not re.fullmatch(r"[1-9]\d*(?:,[1-9]\d*)*/[1-9]\d*", a.files):
+        ap.error(f"--files {a.files}: K/M or K1,K2,.../M")
+    for i, n in enumerate(a.suites):
+        if (m := PART_SPEC.fullmatch(n if ":" in n or not a.files else f"{n}:{a.files}")) is not None:
+            a.suites[i] = m["name"]
+            ks, was = tuple(int(k) for k in m["ks"].split(",")), specs.get(m["name"])
+            if was is not None and (was[1], was[2]) != (int(m["m"]), m["digest"]):
+                ap.error(f"{n}: another part of {m['name']} is of {was[1]} parts")
+            specs[m["name"]] = ((*was[0], *ks) if was else ks, int(m["m"]), m["digest"])
+    if a.files and not a.suites:
+        ap.error("--files splits the suites it names: name one")
     sys.stdout.reconfigure(line_buffering=True)
     if why := SETTINGS.refusals(of_record=False):
         print("\n".join(f"suites: {w}" for w in why), file=sys.stderr)
@@ -2242,6 +2459,23 @@ def main(argv: list[str] | None = None) -> int:
     needed = {p: art for p, art in fixtures.items() if any(covered(p, [x for x in ps if x != "."], cuts[s]) for s, ps in inputs.items())}
     fetch_log = logs / f"fetch-fixtures-{os.getpid()}.log"            # check's pytest and lean-suites steps share `logs`
     unfetched = set() if a.list or a.explain else fetch_fixtures(needed, fetch_log)
+    parts: dict[Suite, Part] = {}
+    reach: dict[Suite, set[str] | None] = {}
+    timings = json.loads(a.timings.read_text()) if a.timings else {}
+    split = {select(suites, [n])[0]: v for n, v in specs.items()}
+    for s in chosen:
+        if spec := split.get(s):
+            ks, m, want = spec
+            try:
+                parts[s] = part_of(s, ks, m, tree, cuts[s], timings[s.name] if s.name in timings else file_times(s))
+            except ValueError as e:
+                print(f"suites: {e}", file=sys.stderr)
+                return 2
+            if want and not parts[s].digest.startswith(want):
+                print(f"suites: {s.name}:{parts[s].spec}: this machine's partition is {parts[s].digest[:12]}, not the {want} its "
+                      f"caller named: their timing records differ, so its files would be others; pass the caller's --timings",
+                      file=sys.stderr)
+                return 2
     plan, ids_of = [], {}
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
@@ -2250,6 +2484,9 @@ def main(argv: list[str] | None = None) -> int:
         ids.update({f"fixture:{p}": art for p, art in fixtures.items() if covered(p, paths, cuts[s])})
         deps = resolved(roots(s, pkgs), lock, s.path)
         keys = [key(s, ids, env, args, deps)] + ([key(s, ids, env, extra, deps)] if a.quick else [])   # a full pass also covers --quick
+        if s in parts:                     # its own pass, then (a pass of the whole suite answers for each of its parts) the suite's
+            mods, own, reach[s] = part_context(s, parts[s], tree, cuts[s])
+            keys = [part_key(s, parts[s], reach[s], mods, ids, own, env, x, deps) for x in [args] + ([extra] if a.quick else [])] + keys
         hit = next((c for c in map(cached, keys) if c and holds(c, tree, lock, provided)), None)
         plan.append((s, paths, keys, hit, deps))
         ids_of[s] = ids
@@ -2267,6 +2504,10 @@ def main(argv: list[str] | None = None) -> int:
             state = f"cached from {_since(hit)}" if hit else "not cached"
             print(f"{s.name:28} {s.path:28} {state}\n    inputs: {', '.join(paths)}"
                   + (f"\n    nested suites left out: {', '.join(cuts[s])}" if cuts[s] else ""))
+            if s in parts:
+                p = parts[s]
+                print(f"    part {p.spec} of partition {p.digest[:12]}: {len(p.files)} of its {len(p.every)} test files, "
+                      f"{p.share:.1%} of its recorded seconds:\n      " + "\n      ".join(p.files))
         return 0
 
     head = _git("rev-parse", "HEAD").strip()
@@ -2295,10 +2536,18 @@ def main(argv: list[str] | None = None) -> int:
     forced = {s: forced_by(s, components(s, ids_of[s], env, args, deps), here.get(s.name, []),
                            any(map(cached, keys)), a.fresh) for s, _paths, keys, deps in todo}
     known = _durations()
-    todo.sort(key=lambda t: -known.get(t[0].name, float("inf")))
+
+    def label(s: Suite) -> str:
+        return f"{s.name}:{parts[s].spec}" if s in parts else s.name
+
+    def last(s: Suite) -> float | None:
+        """Its last run's seconds, a part's as its share of its suite's."""
+        return None if (k := known.get(s.name)) is None else k * (parts[s].share if s in parts else 1.0)
+
+    todo.sort(key=lambda t: -(last(t[0]) if last(t[0]) is not None else float("inf")))
     for r in results:
         if r.status == "cached":
-            print(f"cached  {r.suite.name:28} passed at {_since(r.since)}"
+            print(f"cached  {label(r.suite):28} passed at {_since(r.since)}"
                   + (" (traced: every file its run read is as it was)" if (r.since or {}).get("traced") else ""))
     for s in skipped:
         print(f"skipped {s.name:28} (--skip)")
@@ -2308,7 +2557,7 @@ def main(argv: list[str] | None = None) -> int:
         print("pytest-xdist is not installed: each parallel suite runs in one process")
     wide = [t[0] for t in todo if t[0].parallel and spread > 1]
     one = [t[0] for t in todo if t[0] not in wide]
-    r = serial_slots([known.get(s.name) for s in one], len(wide), jobs, a.mem_gb)
+    r = serial_slots([last(s) for s in one], len(wide), jobs, a.mem_gb)
     lanes = {False: Slots(r), True: Slots(jobs - r)}
     turns = {s: lane.index(s) for lane in (wide, one) for s in lane}
     shared_gb = wide_gb(a.mem_gb, r)
@@ -2328,7 +2577,8 @@ def main(argv: list[str] | None = None) -> int:
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
-                       reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0, threads_per_process(jobs))
+                       reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0, threads_per_process(jobs),
+                       parts.get(s))
 
     def finish(fut) -> None:
         s, k, paths, deps = futures[fut]
@@ -2337,15 +2587,20 @@ def main(argv: list[str] | None = None) -> int:
         results.append(r)
         if a.json and r.status == "failed":
             failing(a.json, results)
-        known[s.name] = r.seconds
+        if s not in parts:                 # a part's seconds are its share's, not the suite's
+            known[s.name] = r.seconds
         u = used(r, paths, deps, tree, lock)
+        if s in parts and reach[s] is not None:
+            # a test module of another part its tests opened (as data, by path) is as much its input as one they import
+            opened = sorted({f for fs in (r.reads or {}).values() for f in fs} - reach[s])
+            u["watched"] = {**u["watched"], **(object_ids(tree, opened) if opened else {})}
         if a.fresh and r.status == "failed":
             r.contradicts = (["(the suite)"] if hit_of.get(s) else []) + (per[s].contradicted(r, lock, provided) if s in per else [])
         kept = per[s].keep(r, head, u, min_s) if s in per else 0
-        if s in per:
+        if s in per and s not in parts:
             per[s].keep_whole(r, head, u, a.run)
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
-        print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
+        print(f"{r.status:7} {label(s):28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
         if s in forced:
             print(f"        ran because: {'; '.join(forced[s]['why'][:3])}" + (" ..." if len(forced[s]["why"]) > 3 else ""))
@@ -2381,6 +2636,7 @@ def main(argv: list[str] | None = None) -> int:
             (CACHE / f"{k}.json").write_text(json.dumps({"suite": s.name, "path": s.path, "key": k, "commit": head, "dirty": dirty,
                                                           "run": a.run, "when": time.strftime("%Y-%m-%d %H:%M"), "counts": r.counts,
                                                           "reused": r.reused, "seconds": round(r.seconds, 1), **u,
+                                                          **({"part": parts[s].row()} if s in parts else {}),
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
             few = [p + (f" (read by {m})" if m != "*" else " (read by a conftest or session fixture)")
@@ -2455,7 +2711,8 @@ def main(argv: list[str] | None = None) -> int:
                                        "outside": r.outside, "child_outside": r.child_outside, "unguarded": r.unguarded,
                                        "since": r.since, "reused": r.reused,
                                        "contradicts": r.contradicts, "nondeterministic": r.nondeterministic,
-                                       "timed_out": r.timed_out, "forced_by": forced.get(r.suite)} for r in results]
+                                       "timed_out": r.timed_out, "forced_by": forced.get(r.suite),
+                                       **({"part": parts[r.suite].row()} if r.suite in parts else {})} for r in results]
                                      + [{"suite": s.path, "name": s.name, "status": "skipped"} for s in skipped], indent=1) + "\n")
     return 1 if failed or written else 0
 
