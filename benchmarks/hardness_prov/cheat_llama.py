@@ -620,7 +620,8 @@ def main(argv=None):
                 def pull(name, q):
                     p = committed_plan[name]
                     L = p["L"] * (p["s"] / absmax_scale(mods[name][1].weight))[:, None]
-                    return ((q - L).abs() - (args.a - 0.5)).clamp_min(0).pow(2).mean()
+                    off_pin = torch.ones_like(q).scatter(1, q.detach().abs().argmax(1)[:, None], 0.0)
+                    return (((q - L).abs() - (args.a - 0.5)).clamp_min(0) * off_pin).pow(2).mean()
 
                 def pen_fn(step, pull=pull):
                     return gates_loss(step, pull, gates=args.gates)
