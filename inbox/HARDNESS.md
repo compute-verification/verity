@@ -426,3 +426,14 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
   - **Open (coordinator's smell):** the low-rank-plus-residual split search (HT-PUBLIC's family) wasn't rerun on the
     rotated, clipped codes. Rotation preserves singular values, so HT-PROV's 0.82-on-q/k route needs checking here
     too.
+- **HT-PROV-v2: the gates can be evaded on q and k** (note:compute-research/20261101T0636Z-report-hardness-prov-v2;
+  measured on Llama-3.2-1B's 32 q and k matrices; 28.9 GPU-h):
+  - **At commit,** five cheaters pass both gates at 0.859–0.932 of dense, for +3.8–12% perplexity.
+  - **Under the live per-step weight noise,** a depth-1 route with residual within ±41–43 passes all 32 at 0.941–0.946
+    (1.78 writes), for +3.0–4.1%. Per matrix, q is under 0.95 and k straddles it.
+  - **Under the one-shot dither,** a planning cheater passes at σ 1, 2 and 4 for +3% to +31%.
+  - **So P1-dithered at δ = 0.05 is falsified for q and k.** δ ≈ 0.10 still stands.
+  - The only statistic still catching anyone is at127, the fraction of codes at ±127. That's a speed bump, not a bound.
+  - The heuristic step fails as stated (the cheaters do cancel their low-rank part), but its conclusion held.
+  - **The coordinator's reading for design U:** credit q and k at δ 0.10, or exclude them from credit (they're a small
+    share of MACs). The MLP and v/o matrices were not attacked here.
