@@ -65,7 +65,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier (`lmsVerify`), the error adds the published
   `ε_forge(t, Q)` (`epsForge`).
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the five period claims are its `Holds`.
-  The inference-only policy's claim is `Nci.Complies` at the published `Γ` and `α` of the declaration over the committed
+  The inference-only policy's claim is `Nci.CompliesRate` at the published `Γ` and `α` of the declaration over the committed
   circuit (`declaration`: its registered inputs `θ`, `theta`). The wipe's claim is that the run, read at the wipe's
   boundary as the wipe's game (`Verity.Wipe.OfRun`, `wipeRun`), doesn't keep foreign content past the survivor threshold
   the wipe publishes (`Verity.Wipe.OfRun.Kept` at `foreignBits`).
@@ -461,7 +461,7 @@ transcript at `σ` (at most an `ε` share of the units unbound in it under the c
 least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
 network certifiers), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
-own coins choose neither. The inference-only policy's: the declaration complies with `Nci.Complies` at the published `Γ` and
+own coins choose neither. The inference-only policy's: the declaration complies with `Nci.CompliesRate` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
 published survivor threshold (`Verity.Wipe.OfRun.Kept`). -/
 def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
@@ -471,7 +471,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
-  | .inferenceOnly, _ => Nci.Complies (V.gates θ) (V.fresh θ) (V.declaration θ F)
+  | .inferenceOnly, _ => Nci.CompliesRate (V.gates θ) (V.fresh θ) (V.declaration θ F)
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
@@ -539,7 +539,7 @@ def SampledProofsSound (k : Verity.Registration.Composite) : Prop := V.Target k 
 /-- **PoUW's target**: at least `W` gates of the committed circuit computed after their window's coin. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
 
-/-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.Complies`
+/-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.CompliesRate`
 at the published `Γ` and `α`. -/
 def InferenceOnlySound (k : Verity.Registration.Composite) : Prop := V.Target k .inferenceOnly
 

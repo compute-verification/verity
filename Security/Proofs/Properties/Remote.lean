@@ -177,10 +177,10 @@ theorem names_program {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Comm
   simpa using hn
 
 /-- `PolicyMet` from its first clause, every inference block meeting both bounds, at `α ≥ 0`: the rest follows
-(`Nci.Complies`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
+(`Nci.CompliesRate`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
 theorem policyMet_of_meets {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ} (hα : 0 ≤ α)
     (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α := by
-  have hcomp : Nci.Complies Γ α d := ⟨n, U, h⟩
+  have hcomp : Nci.CompliesRate Γ α d := ⟨n, U, h⟩
   refine ⟨h, hcomp, fun hB => Nci.SecurityProofs.CompliesCK _ _ d hB hcomp, ?_⟩
   intro W hfan hw hW
   exact Nci.SecurityProofs.CompliesCK _ _ d.expand (d.D.expand_boolean hfan)

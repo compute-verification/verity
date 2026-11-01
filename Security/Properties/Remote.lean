@@ -25,12 +25,12 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
   blocks `d.𝓘` its owners are; on every such parse, `program`, `Γ` and `α = num / den` are the policy's parameters
   (`VerifierOwn`), and every such registered circuit's inference blocks meet the policy (`PolicyMet`): every one has
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
-  (`Nci.Complies Γ α`), and it has a padded
+  (`Nci.CompliesRate Γ α`), and it has a padded
   `(Γ, ⌊αΓ⌋)`-partition when Boolean, its bit-level expansion a padded `(ΓW, ⌊αΓW⌋)`-partition when its gates are 1 to
   `W` bits wide; and the record the one-stage audit's case commits to names, by its SHA-512, the program the audit
   verifies the sessions against (`StageHeld`). With one digest for the two records, the registered circuit the policy
   checked and the program the one-stage audit verifies have one SHA-512.
-* `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.Complies Γ α d` from
+* `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.CompliesRate Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other.
 
 A check that accepts every input accepts `ev = []`, where neither conclusion holds (`InferenceOnlyHeld` and
@@ -56,12 +56,12 @@ open NciCheck.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceH
 open NciCheck.Protocol (instanceOf trustedOf)
 
 /-- The policy, met by the declaration `d` and its division `U` at `Γ` and `α`: every inference block of `U` has at most
-`Γ` gates and reads at most `α` fresh input bits per gate (`Meets`), so `d` complies (`Nci.Complies`); when `d` is
+`Γ` gates and reads at most `α` fresh input bits per gate (`Meets`), so `d` complies (`Nci.CompliesRate`); when `d` is
 Boolean the division pads to a `(Γ, ⌊αΓ⌋)`-partition of a declaration containing `d` (`Pad`, `Partition.IsCK`); and when
 every gate of `d` reads a gate of positive width where it has one (`BitFaninPos`) and every computed gate is 1 to `W`
 bits wide, `d`'s bit-level expansion has a division that pads to a `(ΓW, ⌊αΓW⌋)`-partition. -/
 def PolicyMet (d : RegisteredCircuit) {n : ℕ} (U : Partition d.D n) (Γ : ℕ) (α : ℝ) : Prop :=
-  (∀ u, Meets d U Γ α u) ∧ Nci.Complies Γ α d ∧
+  (∀ u, Meets d U Γ α u) ∧ Nci.CompliesRate Γ α d ∧
     (d.D.Boolean → ∃ (B : ℕ) (P : Partition d.D B) (d' : RegisteredCircuit) (P' : Partition d'.D B),
       Nonempty (Pad d P d' P') ∧ P'.IsCK d' Γ ⌊α * Γ⌋₊) ∧
     ∀ W : ℕ, d.D.BitFaninPos → (∀ g, d.D.isInput g = false → 1 ≤ d.D.w g) → (∀ g, d.D.w g ≤ W) →
@@ -141,12 +141,12 @@ def CompliesHeld (ev : List Case) : Prop :=
     NciCheck.Baseline.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
     (∃ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ VerifierOwn p i ∧
-        Nci.Complies i.gamma ((i.num : ℝ) / i.den) d) ∧
+        Nci.CompliesRate i.gamma ((i.num : ℝ) / i.den) d) ∧
     ∀ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
-        VerifierOwn p i ∧ Nci.Complies i.gamma ((i.num : ℝ) / i.den) d
+        VerifierOwn p i ∧ Nci.CompliesRate i.gamma ((i.num : ℝ) / i.den) d
 
-/-- **Remote's acceptance gives `Nci.Complies`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes: on every input
+/-- **Remote's acceptance gives `Nci.CompliesRate`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes: on every input
 remote's check accepts, on any blobs, its cases are `CompliesHeld`. -/
 def AcceptComplies : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
