@@ -225,8 +225,7 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
-            circuit_params: Mapping[str, int] | None = None) -> dict[str, Any]:
+            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -249,8 +248,6 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["held"] = list(held)
     if outputs is not None:
         p["outputs"] = {v: dict(o) for v, o in outputs.items()}
-    if circuit_params is not None:
-        p["circuit_params"] = dict(circuit_params)
     return p
 
 
@@ -268,10 +265,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
                  circuit_params=circuit_params)
-    got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
-                                                  work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs, circuit_params),
-                       "record": dict(rec)})
+    params = _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+                     supplied, pinned, binding, schemas, window_root, held, outputs)
+    if circuit_params is not None:
+        params["circuit_params"] = dict(circuit_params)
+    got = lean("registration", {"params": params, "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
     return _decide(got, py, whole=False)
