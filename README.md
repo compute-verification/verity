@@ -1,3 +1,5 @@
+[quick overview written by Claude...]
+
 # Verity
 
 Verity lets an AI developer prove to an auditor what its datacenter's hardware computed, so that the auditor can bound
