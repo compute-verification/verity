@@ -7,7 +7,7 @@ import Proofs.Accounting.Remote
 `Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of the remote audit. Its routes:
 
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
-  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's draw (`DeployedSession.pr_draws_horizon_le`).
+  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's draw (`DeployedSession.pr_draws_pooled_le`).
 * `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
   (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_draw_le`) covers.
 
@@ -76,8 +76,8 @@ theorem ofDeployed_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (tie
     (Run.ofDeployed A tier X Nd a).Sampled dbar ((1 - dbar) ^ (d * n)) := by
   classical
   have hb' : (0 : ℝ) < b := by exact_mod_cast hb
-  have hK := DeployedSession.pr_draws_horizon_le A ⌊(1 - dbar) * ((n * P * N : ℕ) : ℝ)⌋₊
-  have h2 := Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+  have hK := DeployedSession.pr_draws_pooled_le A ⌊(1 - dbar) * ((n * P * N : ℕ) : ℝ)⌋₊
+  have h2 := Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
   push_cast at hK h2
   have hB := hK.trans h2
   have hT : ENNReal.ofReal (1 - dbar) ^ (d * n) ≠ ⊤ := ENNReal.pow_ne_top ENNReal.ofReal_ne_top
