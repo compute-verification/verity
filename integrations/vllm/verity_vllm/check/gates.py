@@ -976,7 +976,7 @@ def gate_G7(run: RunArtifacts) -> GateResult:
 
 @_gate("G8")
 def gate_G8(run: RunArtifacts) -> GateResult:
-    """VU partition: `query_use.json` (`verity-ir/query-use/v1`, written by the partition track: use configuration + `VuVerdict`).
+    """Proof-block partition: `query_use.json` (`verity-ir/query-use/v1`, written by the partition track: use configuration + `BlockVerdict`).
     Pass iff `verdict.partition.status == "exact"` and `verdict.width.status == "ok"` (no violators, no unsupported); fail with
     the partition codes / width violators otherwise.  Absent document -> `skipped` ("no query-use document"); a document that
     is not this schema, or lacks the verdict fields, -> `error`.  Reads only fields of the frozen document shape (the freeze
@@ -1041,7 +1041,7 @@ def gate_G8(run: RunArtifacts) -> GateResult:
     rd = v.get("readiness_32") if isinstance(v.get("readiness_32"), dict) else {}
     detail: dict[str, Any] = {
         "schema": doc.get("schema"), "binding_id": doc.get("binding_id"), "use": {"kind": use.get("kind"), "w_max": use.get("w_max")},
-        "status": v_status,                          # the evaluator's VuVerdict.status, verbatim (lead 22:22Z)
+        "status": v_status,                          # the evaluator's BlockVerdict.status, verbatim
         "partition": {"status": p_status, "codes": codes[:32]},
         "width": {"status": w_status, "w_max": w_max, "max_seen": width.get("max_seen"), "n_violators": len(violators),
                   "violators": violators[:16], "n_unsupported": len(unsupported), "unsupported": unsupported[:16]},
