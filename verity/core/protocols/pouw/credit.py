@@ -34,7 +34,8 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   population of one (`leaf_partition_of`), with the files credit builds at the leaf's served place
   (`leaf_registered_file`) and its partials ``<prefix>partials@<u>`` held to one produced record under the draw root
   (`_leaf_asks`, `_leaf_judged`, `_leaf_outcomes`). A leaf outside what `LeafLanesSound` covers is ``lanes-shape``
-  (`lanes_shape`). The Python reference only: `PouwCheck.Verified` refuses the form until its Lean mirror.
+  (`lanes_shape`). The verdict is the Lean's here too (`PouwCheck.Lanes`, through `PouwCheck.Verified`): it names
+  each lane and combine run after the call statements', and judges them and the produced record.
 * **The seed's inputs are the verifier's** (`registered_file`'s ``pub``): each unit's public row, the salt, position
   and roots its seed and its receipt's fold keys are derived from, is a row of its call's public table
   ``<prefix>pub@<c>``, which credit builds itself from the window's Program salt, the unit's position and the call's
@@ -1486,7 +1487,7 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
     judged by `_leaf_judged`; once all have accepted, the record's values must each have been opened at its root and
     every opened row be the one opening (`_leaf_outcomes`), and each drawn leaf is then one accepted outcome whose
     registered finding is its statements' reads of the window's registered values, which `_proved` and `_registration`
-    hold as a tile statement's. The Lean verdict (`PouwCheck.Verified`) refuses the lanes form until its mirror."""
+    hold as a tile statement's. The Python reference of the Lean's `PouwCheck.Lanes`."""
     asks, refused = _asks(statements, files, raw, layout, entries, window, units, steps, salt, draw)
     lanes = statements if isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS) else None
     listed = lanes["statements"] if lanes is not None else statements
@@ -1523,6 +1524,14 @@ def _files(files: Any) -> bool:
                     for x, v in files.items()) and lanes_files(files) is None)
 
 
+def _files_refusal(files: Any) -> tuple[str, str] | None:
+    """The refusal (``circuit``) of committed circuit files `files` that are not `_files`', or None (Lean's
+    `PouwCheck.Verified.filesRefusal`): `lanes_files`' reason when it has one, else `FILES_FORM`."""
+    if _files(files):
+        return None
+    return "circuit", (isinstance(files, dict) and all(type(x) is str for x in files) and lanes_files(files)) or FILES_FORM
+
+
 def _proof_files(s: dict) -> bool:
     return (type(s["circuit"]) is str and type(s["public"]) is str and type(s["sessions"]) is list and s["sessions"]
             and all(type(x) is str for x in s["sessions"]))
@@ -1539,9 +1548,9 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
     ``statements`` hold call statements and drawn leaves' (`LEAF_STATEMENT_KEYS`); each drawn leaf's runs follow the
     call statements' (`_leaf_asks`, each with its ``leaf`` file name, ``unit``, ``known`` openings and
     ``window_ports``), under the window's `draw`."""
-    if not _files(files):
-        return [], ("circuit", (isinstance(files, dict) and all(type(x) is str for x in files) and lanes_files(files))
-                            or FILES_FORM)
+    why = _files_refusal(files)
+    if why is not None:
+        return [], why
     lanes = None
     if isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS):
         if not (isinstance(statements["leaf_programs"], dict)
@@ -1650,11 +1659,10 @@ def lanes_shape(layout: dict, shape: dict, k: int) -> str | None:
     `LeafLanesSound` covers (``lanes-shape``), naming the proof it waits on, or None. Generic in R × C, the statement set
     is `leaf_lanes.statements` (R/4)(C/8) lanes; the refusal is the proof's reach, `LANES_TILES` and K."""
     (r, c), j10r = layout["tile"], shape["tiles"][k]["j10r"]
-    LL.statements(r, c, j10r=k if j10r else None)
     if (r, c) not in LANES_TILES:
         return (f"the window's {r} × {c} tile is not one whose lanes LeafLanesSound covers ({LANES_TILES}: it is stated "
-                f"over Fin 32 lanes and the 32 × 32 cells): its {LL.lanes(r, c)} lanes wait on proofs' LeafLanesSound "
-                "restated over L = (R/4)(C/8) lanes")
+                f"over Fin 32 lanes and the 32 × 32 cells): its {(r // LL.LANE_ROWS) * (c // LL.LANE_COLS)} lanes wait "
+                "on proofs' LeafLanesSound restated over L = (R/4)(C/8) lanes")
     if k % 32 or k < 64 or k >= 1 << 17:
         return (f"K = {k} fails PouwWindow.Lanes.Tile.check (32 | K, 64 <= K < 2^17): pad the window's linears to a K "
                 "it takes")
@@ -1971,14 +1979,16 @@ def _leaf_outcomes(lanes: dict, held: dict, program: str, out: list[dict]) -> tu
 
 
 def _finding_json(f: PF.Finding) -> dict:
-    """A verifier finding as `PouwCheck.Verified` reads it: ``{session, accepted, why, program, registered, units}``."""
+    """A verifier finding as `PouwCheck.Verified` reads it: ``{session, accepted, why, program, registered, units,
+    openings}``, its ``openings`` (the rows it reports opening, `produced.shared`'s) None when it reports none."""
     return {"session": f.session, "accepted": f.accepted, "why": f.why, "program": f.program,
-            "registered": f.registered, "units": list(f.units)}
+            "registered": f.registered, "units": list(f.units), "openings": getattr(f, "openings", None)}
 
 
 def _answer(run: Run, s: dict, ask: dict, raw: bytes) -> dict:
-    """The verifier of record's answer for one of the Lean's asks (`_asks`'s form) on statement `s`'s proof files: its
-    findings, its refusal, or why it could not run, as `PouwCheck.Verified` reads them."""
+    """The verifier of record's answer for one of the Lean's asks (`_asks`'s form) on statement `s`'s proof files,
+    against the descriptor `raw` (the window's, or a drawn leaf's leaf Program): its findings, its refusal, or why it
+    could not run, as `PouwCheck.Verified` reads them."""
     try:
         got, why = run(PF.Proof(Path(s["circuit"]), Path(s["public"]), tuple(map(Path, s["sessions"]))),
                        circuit_sha512=ask["circuit_sha512"], program=raw, partition=ask["partition"],
@@ -1989,19 +1999,23 @@ def _answer(run: Run, s: dict, ask: dict, raw: bytes) -> dict:
 
 
 def _lean_verified(statements: Any, files: Any, raw: bytes, entries: list, window: str, units: list[int], steps: int,
-                   run: Run, salt: str) -> tuple[list[dict] | None, tuple[str, str] | None]:
+                   run: Run, salt: str, draw: Any = None) -> tuple[list[dict] | None, tuple[str, str] | None]:
     """`_verified`'s verdict from the Lean verifier of record (`PouwCheck.Verified.verified`, `verifier.lean`): the Lean
     names the verifier runs (`_asks`), this runs `run` on each in order until an answer the Lean will refuse at
-    (an error, a refusal or a rejected session), and the Lean judges the answers. A Lean that can't run leaves the
-    window refused (``proof``)."""
+    (an error, a refusal or a rejected session), and the Lean judges the answers. A drawn leaf's run (its ``leaf``) is
+    against its leaf Program, the lanes evidence's descriptor. A Lean that can't run leaves the window refused
+    (``proof``)."""
     q = {"statements": statements, "files": files, "descriptor": raw.hex(), "entries": entries, "window": window,
-         "units": units, "steps": steps, "salt": salt, "runs": None}
+         "units": units, "steps": steps, "salt": salt, "draw": draw, "runs": None}
+    lanes = isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS)
+    listed = statements["statements"] if lanes else statements
     try:
         got = V.lean("credit-verified", q)
         if "run" in got:
             runs = []
             for a in got["run"]:
-                runs.append(_answer(run, statements[a["statement"]], a, raw))
+                program = raw if "leaf" not in a else bytes.fromhex(statements["leaf_programs"][a["leaf"]])
+                runs.append(_answer(run, listed[a["statement"]], a, program))
                 if "findings" not in runs[-1] or not all(f["accepted"] for f in runs[-1]["findings"]):
                     break
             got = V.lean("credit-verified", {**q, "runs": runs})
@@ -2260,8 +2274,9 @@ def _live_asks(files: Any, statements: Any, raw: bytes, got: dict, roots: dict, 
     statement's index among `statements` and the verifier's inputs for it, its ``--registered`` file at the period's
     committed `max_tokens`. The Python reference of the Lean's `PouwCheck.LiveVerified.asks`, which
     `_lean_live_verified` runs the verifier on."""
-    if not (isinstance(files, dict) and all(type(x) is str and _digest(v) is not None for x, v in files.items())):
-        return [], ("circuit", FILES_FORM)
+    why = _files_refusal(files)
+    if why is not None:
+        return [], why
     if LIVE not in files:
         return [], ("circuit", no_live_files())
     if not (isinstance(statements, list)
@@ -2524,8 +2539,8 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
 
 def _runner(statements: Any, files: Any, entries: Any, window: Any, salt: Any, run: Run) -> Proved:
     if V.RECORD_VERDICT == "lean":
-        return lambda _layout, raw, units, steps, _draw: _lean_verified(statements, files, raw, entries, window["root"],
-                                                                        units, steps, run, salt)
+        return lambda _layout, raw, units, steps, draw: _lean_verified(statements, files, raw, entries, window["root"],
+                                                                       units, steps, run, salt, draw)
     return lambda layout, raw, units, steps, draw: _verified(statements, files, raw, layout, entries, window["root"],
                                                              units, steps, run, salt, draw)
 
