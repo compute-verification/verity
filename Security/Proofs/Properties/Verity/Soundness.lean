@@ -9,7 +9,7 @@ import Proofs.Core.Game.Seq
 
 A composite's acceptance is its acceptance as a `same` composition and every component's on its own case
 (`accepts_same`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at
-onsite's ties and `acceptSame`). So the event `Verity.SoundnessOf` bounds at a composite lies inside the union of its
+its ties and `acceptSame`). So the event `Verity.SoundnessOf` bounds at a composite lies inside the union of its
 subprotocols' events, each at most its target's error at the strategy: the union bound over the composite's
 subprotocols in one game (`soundness_at_of_targets`). `soundness_of_subprotocols` is it at onsite's seven, and
 `remote_soundness_of_subprotocols` at remote's three, which are a subset of onsite's.
@@ -52,7 +52,8 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
 
 /-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, and at onsite PoUS and PoUB-P2 on one store. -/
+its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, and at
+remote every window of PoUW's period on the policy's record. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
@@ -63,10 +64,10 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (Remote.protocol.on s.blobs) s.params s.commitment s.evidence h
-    have hch' : Composition.checkSame "verity/remote/v0" (tied .remote) (s.components .remote) ps c ev =
-        .accept pub prof := hch
+    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied [Remote.windows] ev
+      (Composition.checkSame "verity/remote/v0" Remote.tied (s.components .remote) ps c ev) pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
-      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hch', fun t ht => absurd ht List.not_mem_nil⟩
+      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
 
 /-- **What a composite's verifier of record accepts, each of its subprotocols' components accepts on its own
 case.** -/

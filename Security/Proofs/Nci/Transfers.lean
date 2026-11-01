@@ -12,7 +12,7 @@ computed, so never in a baseline. So `novelReads d R_b` is the width of `(transf
 `FlockSoundness.Audit.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`novelReads_eq_card`,
 `novelReads_eq_card_add`).
 
-So NCI compliance is a ratio of two certified numbers. Machine `b`'s IU condition, `Complies`'s condition on one IU, holds
+So NCI compliance is a ratio of two certified numbers. Machine `b`'s IU condition, `CompliesRate`'s condition on one IU, holds
 exactly when `size R_b ≤ Γ` and `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b` (`iu_iff_counts`), with
 `|transfersInto b|` network accounting's certified count of the bits into `b` and `size R_b` compute credit's total for
 `b`. When every novel input reaches `b` through another machine, it is `|transfersInto b| ≤ α · size R_b`
@@ -145,9 +145,9 @@ theorem width_eq_card {C : Circuit} (hw : ∀ g, C.w g = 1) (S : Finset (Fin C.N
 /-- A Boolean circuit's gates are one bit wide: the hypothesis of the Boolean forms below. -/
 theorem boolean_w (B : FlockSoundness.Audit.Circuit) (g : Fin B.toCircuit.N) : B.toCircuit.w g = 1 := rfl
 
-section Declaration
+section RegisteredCircuit
 
-variable (d : Declaration) {n : ℕ} (P : Partition d.D n)
+variable (d : RegisteredCircuit) {n : ℕ} (P : Partition d.D n)
 
 /-- Nothing on the wire is baseline: a transfer gate is computed. -/
 theorem disjoint_transfersInto_θ (b : Fin n) : Disjoint (transfersInto P b) d.θ := by
@@ -179,7 +179,7 @@ theorem novelReads_eq_card_add (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
     novelReads d (P.gates b) = (transfersInto P b).card + (inputsRead P b \ d.θ).card := by
   rw [novelReads_eq_add, width_eq_card hw, width_eq_card hw]
 
-/-- **One machine's IU condition from its counts** (the Boolean profile): `Complies`'s condition on the IU `R_b`
+/-- **One machine's IU condition from its counts** (the Boolean profile): `CompliesRate`'s condition on the IU `R_b`
 (at most `Γ` gates, at most `α` bits of novel information per gate) holds exactly when `size R_b ≤ Γ` and
 `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b`: network accounting's certified bits into `b`, plus the novel
 input gates `b` reads itself, against compute credit's total for `b`. It is stated for one machine because the others
@@ -201,14 +201,14 @@ theorem iu_iff_wire (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1) (b : Fin n) 
 
 /-- **Compliance from the certified counts** (the Boolean profile): when the machines are the IU division, one IU per
 machine (a whole-node session), and every machine `b` has at most `Γ` credited gates and
-`|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b`, the declaration complies at `(Γ, α)`. The left side is
+`|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b`, the declaration complies at the rate, `CompliesRate Γ α`. The left side is
 `|(transfersInto b ∪ inputsRead b) \ θ|`, the two sets being disjoint and the wire outside the baseline. -/
 theorem complies_of_counts (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1)
     (h : ∀ b, d.D.size (P.gates b) ≤ Γ ∧
       ((transfersInto P b).card + (inputsRead P b \ d.θ).card : ℝ) ≤ α * d.D.size (P.gates b)) :
-    Complies Γ α d :=
+    CompliesRate Γ α d :=
   ⟨n, P, fun b => (iu_iff_counts d P Γ α hw b).2 (h b)⟩
 
-end Declaration
+end RegisteredCircuit
 
 end Nci.SecurityProofs.Transfers

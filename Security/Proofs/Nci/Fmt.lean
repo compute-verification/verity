@@ -18,7 +18,7 @@ open Verity Finset
 
 section Work
 
-variable {c : Declaration} (T : Threading c)
+variable {c : RegisteredCircuit} (T : Threading c)
 
 theorem work_nonneg (d e : ℕ) (R : Finset (Fin c.D.N)) (t : Fin T.m) : 0 ≤ T.work d e R t := by
   unfold Threading.work
@@ -51,7 +51,7 @@ end Work
 
 /-- **The new premise is weaker than the old pair**: `WeightsSupport` at rate `log₂ n − μ` and `(d, e)`-threading by
 information give `WeightsSupportFmt`. -/
-theorem weightsSupportFmt_of_weightsSupport {c : Declaration} {θv : c.D.Transcript} {T : Threading c} {Γ : ℕ}
+theorem weightsSupportFmt_of_weightsSupport {c : RegisteredCircuit} {θv : c.D.Transcript} {T : Threading c} {Γ : ℕ}
     {S b_w : ℝ} {d e n : ℕ} {μ : ℝ} (he : 0 < e) (hr : 0 ≤ Real.logb 2 n - μ) (hT : T.ThreadedInfo θv Γ S d e)
     (hW : Assumptions.WeightsSupport c θv T Γ S b_w (Real.logb 2 n - μ)) :
     Assumptions.WeightsSupportFmt c θv T Γ S b_w d e n μ := by
@@ -65,7 +65,7 @@ theorem weightsSupportFmt_of_weightsSupport {c : Declaration} {θv : c.D.Transcr
   nlinarith [mul_le_mul_of_nonneg_left hle hr, mul_le_mul_of_nonneg_left hle' hr]
 
 /-- **Theorem 1 with reads counted by information, each thread charged by its work.** -/
-theorem threaded_reads_info_fmt (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
+theorem threaded_reads_info_fmt (c : RegisteredCircuit) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
     (d e n : ℕ) (μ : ℝ) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (he : 0 < e)
     (hrate : b_a ≤ Real.logb 2 n - μ) (hW : Assumptions.WeightsSupportFmt c θv T Γ S b_w d e n μ)
     (R : Finset (Fin c.D.N)) (hR : SmallInfo c θv Γ S R) :
@@ -79,7 +79,7 @@ theorem threaded_reads_info_fmt (c : Declaration) (θv : c.D.Transcript) (T : Th
 theorem ThreadedReadsInfoFmt : Guarantees.ThreadedReadsInfoFmt := threaded_reads_info_fmt
 
 /-- The piece of `c` inside a set `W` of `d`'s computed gates is small by information when `W` is. -/
-theorem smallInfo_piece {c d : Declaration} (M : Containment c.D d.D)
+theorem smallInfo_piece {c d : RegisteredCircuit} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {Γ : ℕ} {K : ℝ}
     {W : Finset (Fin d.D.N)} (hWc : W ⊆ d.D.computed) (hΓ : d.D.size W ≤ Γ) (hK : novelInfo d θv W ≤ K) :
@@ -98,7 +98,9 @@ theorem smallInfo_piece {c d : Declaration} (M : Containment c.D d.D)
   exact ⟨hPc, hPs, (novelInfo_le_of_containment M hθ hv hWc).trans hK⟩
 
 theorem ThreadedContainedInfoFmt : Guarantees.ThreadedContainedInfoFmt := by
-  intro c d M θc θv T Γ K b_w b_a dd e n μ hθ hv hbw hba hdd he hrate hW W hWc hΓ hK
+  intro c d M θc θv T Γ K b_w b_a dd e n μ hθv hbw hba hdd he hrate hW W hS
+  obtain ⟨hθ, hv⟩ := hθv
+  obtain ⟨hWc, hΓ, hK⟩ := hS
   have hinfo := novelInfo_le_of_containment M hθ hv hWc
   calc b_a * ((T.mults (univ.filter fun g => M.emb g ∈ W)).card : ℝ)
       ≤ novelInfo c θc (univ.filter fun g => M.emb g ∈ W) * T.bound K b_w dd e :=
@@ -108,9 +110,9 @@ theorem ThreadedContainedInfoFmt : Guarantees.ThreadedContainedInfoFmt := by
         mul_le_mul_of_nonneg_right hinfo (le_max_of_le_left (Nat.cast_nonneg _))
 
 theorem ThreadedOfStateFmt : Guarantees.ThreadedOfStateFmt := by
-  intro c d M θc θv T Γ b_w b_a dd e n μ W Sst Sin k f hθ hv hbw hba hdd he hrate hW hWc hΓ hin hf
-  have hK := (InfoOfState d θv W Sst Sin k f hWc hin hf).2
-  exact (ThreadedContainedInfoFmt c d M θc θv T Γ _ b_w b_a dd e n μ hθ hv hbw hba hdd he hrate hW W hWc hΓ
-    hK).trans (mul_le_mul_of_nonneg_right hK (le_max_of_le_left (Nat.cast_nonneg _)))
+  intro c d M θc θv T Γ b_w b_a dd e n μ W Sst Sin k f hθ hbw hba hdd he hrate hW hWΓ hin hf
+  have hK := (InfoOfState d θv W Sst Sin k f hWΓ.1 hin hf).2
+  exact (ThreadedContainedInfoFmt c d M θc θv T Γ _ b_w b_a dd e n μ hθ hbw hba hdd he hrate hW W
+    ⟨hWΓ.1, hWΓ.2, hK⟩).trans (mul_le_mul_of_nonneg_right hK (le_max_of_le_left (Nat.cast_nonneg _)))
 
 end Nci.SecurityProofs

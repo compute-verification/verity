@@ -28,7 +28,7 @@ open Finset
 compute every gate with a predecessor, each with at most `s` gates and handed `k_u ≤ α σ_u` gates outside `θ`, where
 `0 ≤ σ_u ≤ Γ`, `α Γ < c_w D` and `c_a > 0`, then the multiplication blocks chained at `(D, c_a)` number
 `c_w c_a |𝓜*| ≤ (α² Γ + c_w c_a α) Σ σ_u`. -/
-theorem chained_le_of_blocks {e : Verity.Declaration} (B : Nci.Covering.MulBlocks e) {n : ℕ}
+theorem chained_le_of_blocks {e : Verity.RegisteredCircuit} (B : Nci.Covering.MulBlocks e) {n : ℕ}
     (S : Fin n → Nci.Covering.Subcircuit e.D) (σ : Fin n → ℝ) {Γ s D : ℕ} {α cw ca : ℝ}
     (hα : 0 ≤ α) (hca : 0 < ca) (hhard : Nci.Assumptions.ParameterHardAt e B s cw) (hk : α * Γ < cw * D)
     (hs : ∀ u, (S u).gates.card ≤ s) (hσ0 : ∀ u, 0 ≤ σ u) (hσΓ : ∀ u, σ u ≤ Γ)
@@ -87,30 +87,30 @@ theorem slowdown_of_count {x Γ α cw ca sd sc : ℝ} (hcw : 0 < cw) (hca : 0 < 
     exact div_nonneg hsd hsc
 
 /-- The gate view of `c`'s bits as a declaration is its bit view. -/
-theorem ofGates_bitDecl (c : Verity.Declaration) : ofGates (bitDecl c) = Circuit.ofDecl c := rfl
+theorem ofGates_bitDecl (c : Verity.RegisteredCircuit) : ofGates (bitDecl c) = Circuit.ofDecl c := rfl
 
 /-- **The block of a set `R` of `c`'s gates, as a subcircuit of `bitDecl c`**: its bits, with the inputs the bit view
 hands it. -/
-def bitBlock (c : Verity.Declaration) (R : Finset (Fin c.D.N)) : Nci.Covering.Subcircuit (bitDecl c).D :=
+def bitBlock (c : Verity.RegisteredCircuit) (R : Finset (Fin c.D.N)) : Nci.Covering.Subcircuit (bitDecl c).D :=
   Gates.toSubcircuit (bitDecl c) (block c R)
 
-theorem bitBlock_gates (c : Verity.Declaration) (R : Finset (Fin c.D.N)) : (bitBlock c R).gates = block c R := rfl
+theorem bitBlock_gates (c : Verity.RegisteredCircuit) (R : Finset (Fin c.D.N)) : (bitBlock c R).gates = block c R := rfl
 
-theorem bitBlock_ins (c : Verity.Declaration) (R : Finset (Fin c.D.N)) :
+theorem bitBlock_ins (c : Verity.RegisteredCircuit) (R : Finset (Fin c.D.N)) :
     (bitBlock c R).ins = (Circuit.ofDecl c).inputs (block c R) := rfl
 
-theorem bitBlock_inner (c : Verity.Declaration) (R : Finset (Fin c.D.N)) :
+theorem bitBlock_inner (c : Verity.RegisteredCircuit) (R : Finset (Fin c.D.N)) :
     (bitBlock c R).inner = (Circuit.ofDecl c).computed (block c R) := rfl
 
-theorem bitDecl_θ (c : Verity.Declaration) : (bitDecl c).θ = (Circuit.ofDecl c).θ := rfl
+theorem bitDecl_θ (c : Verity.RegisteredCircuit) : (bitDecl c).θ = (Circuit.ofDecl c).θ := rfl
 
 /-- A bit of `bitDecl c` that is not a source reads something in the bit view. -/
-theorem pred_nonempty_of_not_source {c : Verity.Declaration} {y : Fin (bitDecl c).D.N}
+theorem pred_nonempty_of_not_source {c : Verity.RegisteredCircuit} {y : Fin (bitDecl c).D.N}
     (hy : y ∉ Nci.Covering.sources (bitDecl c).D) : ((Circuit.ofDecl c).pred y).Nonempty :=
   nonempty_iff_ne_empty.2 fun h => hy (Gates.mem_sources.2 h)
 
 /-- A computed gate of `c` lies in a piece of a division pulled back to `c`. -/
-theorem exists_pull_gates {c d : Verity.Declaration} (M : Verity.Containment c.D d.D) {n : ℕ}
+theorem exists_pull_gates {c d : Verity.RegisteredCircuit} (M : Verity.Containment c.D d.D) {n : ℕ}
     (P : Verity.Partition d.D n) {g : Fin c.D.N} (hg : g ∈ c.D.computed) :
     ∃ u, g ∈ (Nci.SecurityProofs.pull M P).gates u := by
   cases h : (Nci.SecurityProofs.pull M P).unit g with
@@ -119,7 +119,17 @@ theorem exists_pull_gates {c d : Verity.Declaration} (M : Verity.Containment c.D
     simp [Verity.Circuit.computed, h] at hg
   | some u => exact ⟨u, ((Nci.SecurityProofs.pull M P).mem_gates).2 h⟩
 
-theorem CoverTrainingChained : Guarantees.CoverTrainingChained := by
+theorem CoverTrainingChained_rate :
+    ∀ (Γ : ℕ) (α : ℝ) (c d : Verity.RegisteredCircuit) (M : Verity.Containment c.D d.D)
+      (B : Nci.Covering.MulBlocks (bitDecl c)) (s D w₀ : ℕ) (cw ca : ℝ),
+      0 ≤ α → Nci.CompliesRate Γ α d →
+      Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
+      Nci.Assumptions.ParameterHardAt (bitDecl c) B s cw → α * Γ < cw * D → 0 < ca →
+      (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
+        cw * ca * (Nci.Assumptions.chainedBlocksAt (bitDecl c) B D ca).card ≤
+            (α * α * Γ + cw * ca * α) * d.D.size d.D.computed ∧
+          ((Nci.Assumptions.chainedBlocksAt (bitDecl c) B D ca).card : ℝ) / c.D.size c.D.computed * Γ /
+              (α * Γ / cw * (α * Γ / ca) + α * Γ) ≤ (d.D.size d.D.computed : ℝ) / c.D.size c.D.computed := by
   intro Γ α c d M B s D w₀ cw ca hα hC hB hH hk hca hw hs
   have hcw : 0 < cw := by
     by_contra h
@@ -158,5 +168,31 @@ theorem CoverTrainingChained : Guarantees.CoverTrainingChained := by
     exact_mod_cast P.sum_card_gates
   rw [hσsum] at hcount
   exact ⟨hcount, slowdown_of_count hcw hca (Nat.cast_nonneg _) hα (Nat.cast_nonneg _) (Nat.cast_nonneg _) hcount⟩
+
+/-- **The cover theorem on a compliant declaration, counting the chained multiplication blocks**, at `(c, k)`:
+`CoverTrainingChained_rate` at the rate `k / c`, its count multiplied out by `c`. -/
+theorem CoverTrainingChained : Guarantees.CoverTrainingChained := by
+  intro c k r d M B s D w₀ cw ca hC hB hH hk hca hw
+  have hk' : (k : ℝ) < cw * D := hk
+  have hcw : 0 < cw := by
+    by_contra h
+    nlinarith [not_lt.1 h, (Nat.cast_nonneg D : (0 : ℝ) ≤ D), (Nat.cast_nonneg k : (0 : ℝ) ≤ k)]
+  rcases Nat.eq_zero_or_pos c with rfl | hc
+  · simp only [Nat.cast_zero, mul_zero, zero_mul, zero_div]
+    exact ⟨mul_nonneg (add_nonneg (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+      (mul_nonneg (mul_nonneg hcw.le hca.le) (Nat.cast_nonneg _))) (Nat.cast_nonneg _),
+      div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)⟩
+  have h := CoverTrainingChained_rate c (k / c) r d M B s D w₀ cw ca (by positivity)
+    (Nci.SecurityProofs.compliesRate_of_complies hC) hB hH
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact hk) hca hw.1
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hw.2)
+  rw [Nci.SecurityProofs.rate_mul _ hc] at h
+  refine ⟨?_, h.2⟩
+  set m := ((Nci.Assumptions.chainedBlocksAt (bitDecl r) B D ca).card : ℝ)
+  calc cw * ca * c * m = cw * ca * m * c := by ring
+    _ ≤ (k / c * (k / c) * c + cw * ca * (k / c)) * d.D.size d.D.computed * c :=
+        mul_le_mul_of_nonneg_right h.1 (Nat.cast_nonneg _)
+    _ = (k / c * c * (k / c * c) + cw * ca * (k / c * c)) * d.D.size d.D.computed := by ring
+    _ = (k * k + cw * ca * k) * d.D.size d.D.computed := by rw [Nci.SecurityProofs.rate_mul _ hc]
 
 end Nci.Cover.SecurityProofs

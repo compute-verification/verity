@@ -251,7 +251,7 @@ open Classical in
 /-- **An opened position at a masked rep's cap is a verifying opening there**: where rep `r`'s level-`ℓ` openings at
 `cap` open `p`, one of them is at `p`, opened to that row. -/
 theorem opRZ_eq_some {H : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D H}
-    {sch : Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D} {out : OutZC 𝔽 D Sl}
+    {sch : FlockSoundness.Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D} {out : OutZC 𝔽 D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : (opRZ H E Lf sch r ℓ cap out p).isSome) :
     ∃ x ∈ slotOpensZ out r ℓ (lvOf sch ℓ).queries, x.1 = p.val ∧
       opRZ H E Lf sch r ℓ cap out p = some (rowFin (lvOf sch ℓ).lanes x.2.1) := by
@@ -264,7 +264,7 @@ theorem opRZ_eq_some {H : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf :
 
 /-- **The masked fork event's two entries**: `ForkEvZ` at table `j`'s rep `r`'s level `ℓ + 1` is one recorded cap `d`
 in both outputs and an opening in each of one position to different rows. -/
-theorem forkEvZ_entries {Hs : Hashes 𝔽 D Sl} {sch : Accounting.Schedule} {j r ℓ : ℕ} {a a' : List (OutZC 𝔽 D Sl)}
+theorem forkEvZ_entries {Hs : Hashes 𝔽 D Sl} {sch : FlockSoundness.Accounting.Schedule} {j r ℓ : ℕ} {a a' : List (OutZC 𝔽 D Sl)}
     (h : ForkEvZ Hs sch j r ℓ a a') :
     ∃ dc, CapAtZ r ℓ (a.getD j dfltOutZC) dc ∧ CapAtZ r ℓ (a'.getD j dfltOutZC) dc ∧
       ∃ x₁ ∈ slotOpensZ (a.getD j dfltOutZC) r (ℓ + 1) (lvOf sch (ℓ + 1)).queries,

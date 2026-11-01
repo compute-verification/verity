@@ -17,14 +17,14 @@ import Lms.Verify
 The verifier of record is one compiled Lean function per composite (`Verity.Registration.Composite`), the `answer` of
 the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `Core.Onsite.protocol`
 (`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's `Core.Remote.protocol` (`verity/remote/v0`,
-`Core.Composition.sameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
+`Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
 subprotocols and remote three of them, each subprotocol at the component its composite names for it (`component`);
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
 | subprotocol | `Audit` | onsite's component | remote's component |
 | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | the same |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.protocol` (its window) |
+| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v1's audit or the recursive audit, as its params' `form` names it) | the same |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | |
@@ -65,14 +65,15 @@ The statement's form is the causal game, the committed files, one fixed extracto
   `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier (`lmsVerify`), the error adds the published
   `ε_forge(t, Q)` (`epsForge`).
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the five period claims are its `Holds`.
-  The inference-only policy's claim is `Nci.Complies` at the published `Γ` and `α` of the declaration over the committed
+  The inference-only policy's claim is `Nci.CompliesRate` at the published `Γ` and `α` of the declaration over the committed
   circuit (`declaration`: its registered inputs `θ`, `theta`). The wipe's claim is that the run, read at the wipe's
   boundary as the wipe's game (`Verity.Wipe.OfRun`, `wipeRun`), doesn't keep foreign content past the survivor threshold
   the wipe publishes (`Verity.Wipe.OfRun.Kept` at `foreignBits`).
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
-  at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s), and `a`'s compiled component's acceptance of its own case.
+  at onsite PoUS and PoUB-P2 on one store and at remote every window of PoUW's period on the record, `AcceptTied`'s),
+  and `a`'s compiled component's acceptance of its own case.
   The releases each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
@@ -137,25 +138,26 @@ def componentsOf : Verity.Registration.Composite → List BlobProtocol
 /-- The subprotocols of composite `k` that must commit to one record. -/
 def tied : Verity.Registration.Composite → List String
   | .onsite => Onsite.tied
-  | .remote => Remote.components.map (·.id)
+  | .remote => Remote.tied
 
-/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store. -/
+/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote, every window of PoUW's period on
+the policy's record. -/
 def ties : Verity.Registration.Composite → List Composition.Tie
   | .onsite => [Onsite.store]
-  | .remote => []
+  | .remote => [Remote.windows]
 
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
 def component : Verity.Registration.Composite → Subprotocol → Option BlobProtocol
-  | .onsite, .sampled => some SampledProofs.OneStage.protocol
+  | .onsite, .sampled => some VStar.Recursive.Sampled.protocol
   | .onsite, .pouw => some PouwCheck.Period.protocol
   | .onsite, .inferenceOnly => some NciCheck.Protocol.protocol
   | .onsite, .pous => some PousCheck.RunProtocol.protocol
   | .onsite, .poub => some RemoteAudit.P2Protocol.protocol
   | .onsite, .network => some NetworkCheck.Period.protocol
   | .onsite, .wipe => some MemoryChallenger.WipeProtocol.protocol
-  | .remote, .sampled => some SampledProofs.OneStage.protocol
-  | .remote, .pouw => some PouwCheck.protocol
+  | .remote, .sampled => some VStar.Recursive.Sampled.protocol
+  | .remote, .pouw => some PouwCheck.Period.protocol
   | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remote, _ => none
 
@@ -199,8 +201,8 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
-record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store)
-each named one value (`Properties.Composition.Tied`). -/
+record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store; at
+remote, every window of PoUW's period on the policy's record) each named one value (`Properties.Composition.Tied`). -/
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ pub prof,
     Properties.Composition.SameAccepted (verifier k).id (tied k) (s.components k) ps c ev pub prof ∧
@@ -418,8 +420,8 @@ noncomputable def partsOf (θ : ByteArray) (F : Array ByteArray) : Verity.Partit
   (V.read (V.circuitFile θ F)).parts
 
 /-- **The declaration the inference-only policy judges**: the committed circuit, with its registered inputs. -/
-noncomputable def declaration (θ : ByteArray) (F : Array ByteArray) : Declaration :=
-  ⟨V.circuitOf θ F, V.theta θ (V.circuitFile θ F), V.theta_input θ (V.circuitFile θ F)⟩
+noncomputable def declaration (θ : ByteArray) (F : Array ByteArray) : RegisteredCircuit :=
+  .ofCircuit (V.circuitOf θ F) (V.theta θ (V.circuitFile θ F)) (V.theta_input θ (V.circuitFile θ F))
 
 /-- **The commit phase's file check**: one of the committed files has the SHA-512 the parameters hold. -/
 def Registered (θ : ByteArray) (F : Array ByteArray) : Prop :=
@@ -461,7 +463,7 @@ transcript at `σ` (at most an `ε` share of the units unbound in it under the c
 least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
 network certifiers), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
-own coins choose neither. The inference-only policy's: the declaration complies with `Nci.Complies` at the published `Γ` and
+own coins choose neither. The inference-only policy's: the declaration complies with `Nci.CompliesRate` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
 published survivor threshold (`Verity.Wipe.OfRun.Kept`). -/
 def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
@@ -471,7 +473,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
-  | .inferenceOnly, _ => Nci.Complies (V.gates θ) (V.fresh θ) (V.declaration θ F)
+  | .inferenceOnly, _ => Nci.CompliesRate (V.gates θ) (V.fresh θ) (V.declaration θ F)
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
@@ -539,7 +541,7 @@ def SampledProofsSound (k : Verity.Registration.Composite) : Prop := V.Target k 
 /-- **PoUW's target**: at least `W` gates of the committed circuit computed after their window's coin. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
 
-/-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.Complies`
+/-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.CompliesRate`
 at the published `Γ` and `α`. -/
 def InferenceOnlySound (k : Verity.Registration.Composite) : Prop := V.Target k .inferenceOnly
 

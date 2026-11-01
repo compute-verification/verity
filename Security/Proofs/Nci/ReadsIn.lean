@@ -20,14 +20,14 @@ namespace Nci.SecurityProofs
 
 open Verity Finset
 
-theorem novelReads_le_readsIn (d : Declaration) (R : Finset (Fin d.D.N)) : novelReads d R ≤ readsIn d R univ := by
+theorem novelReads_le_readsIn (d : RegisteredCircuit) (R : Finset (Fin d.D.N)) : novelReads d R ≤ readsIn d R univ := by
   unfold novelReads readsIn
   rw [inter_univ]
   exact sum_le_sum_of_subset sdiff_subset
 
 /-- **The pull into the contained circuit**: through a containment `M : c ≼ d`, the piece of `c` that a unit of `d`
 induces (`pull`) reads at most what the unit reads in `M`'s image, baseline included. -/
-theorem novelReads_pull_le_readsIn {c d : Declaration} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
+theorem novelReads_pull_le_readsIn {c d : RegisteredCircuit} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
     (u : Fin n) : novelReads c ((pull M P).gates u) ≤ readsIn d (P.gates u) (univ.map ⟨M.emb, M.emb_inj⟩) := by
   unfold novelReads readsIn
   calc c.D.width (c.D.into ((pull M P).gates u) \ c.θ) ≤ c.D.width (c.D.into ((pull M P).gates u)) :=
@@ -41,7 +41,7 @@ theorem novelReads_pull_le_readsIn {c d : Declaration} (M : Containment c.D d.D)
 /-- **The pull through a partial containment**: the piece of `c` that a unit of `d` computes (`piece`) reads novelly at
 most what the unit reads in the image of `S` and of the gates `S` reads, baseline included: a value the piece reads is a
 gate of `S` or a gate outside `S` that `S` reads, and `M` sends either to a gate the unit reads, of the same width. -/
-theorem novelReads_piece_le_readsIn {c d : Declaration} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
+theorem novelReads_piece_le_readsIn {c d : RegisteredCircuit} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
     (u : Fin n) : novelReads c (piece M P u) ≤ readsIn d (P.gates u) ((M.S ∪ c.D.into M.S).image M.emb) := by
   have hA : ∀ a ∈ c.D.into (piece M P u) \ c.θ, a ∈ M.S ∪ c.D.into M.S := fun a ha =>
     into_piece_subset u (mem_sdiff.1 ha).1
@@ -74,7 +74,7 @@ theorem novelReads_piece_le_readsIn {c d : Declaration} (M : PartialContainment 
 /-- **Theorem 1 over a read measure** `ρ`: for a `(d, e)`-threaded `c` whose small subcircuits pay for the weights they
 use and the thread values they read, both read by `ρ` (small: at most `Γ` computed gates and `ρ R ≤ S`), a small
 subcircuit `R` holds at most `ρ R Λ / b_a` counted multiplications, `Λ = T.bound S b_w d e`. -/
-theorem threaded_reads_by (c : Declaration) (T : Threading c) (ρ : Finset (Fin c.D.N) → ℝ) (Γ : ℕ) (S b_w b_a : ℝ)
+theorem threaded_reads_by (c : RegisteredCircuit) (T : Threading c) (ρ : Finset (Fin c.D.N) → ℝ) (Γ : ℕ) (S b_w b_a : ℝ)
     (d e : ℕ) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
     (hT : ∀ R, R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ ρ R ≤ S → ∀ t, (T.threadReads R t).card < d →
       (T.threadMults R t).card ≤ e * (T.threadReads R t).card)

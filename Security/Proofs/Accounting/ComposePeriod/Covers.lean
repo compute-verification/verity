@@ -34,7 +34,7 @@ tiles' cones hold no live words (`DeadConeDead`), the live words of the tiles th
 coins. The right side is window `w`'s round's deficiency in `periodGame` at weights `liveCone` and costs `1, 1`. -/
 def PeriodCoversStmt : Prop :=
   ∀ {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V),
     Cd.Wf → LayerCommitted Cd →
     (Cd.periodLayer hr hK pr).WriterReads ∧

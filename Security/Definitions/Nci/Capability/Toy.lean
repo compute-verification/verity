@@ -42,11 +42,8 @@ open Verity Finset
       rw [h 0 (by simp [hg]), h 1 (by simp [hg])]
   outputs := {2, 3}
 
-/-- The toy declaration: the weight is registered. -/
-@[reducible] def D : Declaration where
-  D := C
-  θ := {0}
-  θ_input := by decide
+/-- The toy registered circuit: the weight is registered. -/
+@[reducible] def D : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- One proof block holding both computed gates. -/
 def P1 : Partition C 1 where
@@ -60,17 +57,15 @@ def P2 : Partition C 2 where
 
 /-- The committed declaration with one proof block, the weight registered as `1`. -/
 @[reducible] def R1 : Committed where
-  d := D
+  trace := []
+  d := .ofPartition C {0} (by decide) 1 P1
   val := fun _ => (1 : BitVec 1)
-  B := 1
-  P := P1
 
 /-- The committed declaration with two proof blocks. -/
 @[reducible] def R2 : Committed where
-  d := D
+  trace := []
+  d := .ofPartition C {0} (by decide) 2 P2
   val := fun _ => (1 : BitVec 1)
-  B := 2
-  P := P2
 
 /-- The one counted product: weight `0` times token `0`, at gate `2`, the token's computation being gate `2`. -/
 @[reducible] def B : Nci.Covering.MulBlocks D where

@@ -110,7 +110,7 @@ and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", 
 gates that reads at most `K` bits of novel information, under `Assumptions.ActivationsIncompressible`. `p_R` is the
 number of weight entries `R` uses, `τ_R` its number of full positions, `Q_R` the number of input entries it uses at
 positions that are not full, and `d` the smallest inner dimension. -/
-theorem iu_reads (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ)
+theorem iu_reads (D : RegisteredCircuit) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ)
     (hb_a : 0 ≤ b_a) (h : Assumptions.ActivationsIncompressible D c Γ K b_w b_a) (R : Finset (Fin D.D.N))
     (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K) :
     b_w * (c.weightsUsed R).card +
@@ -147,19 +147,19 @@ theorem F_nonneg {α K b_w b_a d : ℝ} (hα : 0 ≤ α) (hK : 0 ≤ K) (hw : 0 
 /-- The bound for training follows from the bound for updated matrix multiplications: each compliant declaration that
 implements `T` runs a chain whose `2G` is at least `κ size(T)`, so its size is at least `κ F size(T)`. -/
 theorem training_of_updatedMatMul (h : Guarantees.UpdatedMatMul) : Guarantees.Training := by
-  intro Γ α b_w b_a κ T d hα hw ha hT hchain
+  intro c k b_w b_a κ T d hc hk hw ha hT hchain
   refine le_iInf₂ fun D ⟨hImp, hC⟩ => ?_
-  obtain ⟨c, hd, hκ, hA, hP⟩ := hchain D hImp hC
-  have hF := h Γ α b_w b_a D c d hα hw ha hd hC hA hP
-  have hF0 : 0 ≤ F α (α * Γ) b_w b_a d := F_nonneg hα.le (by positivity) hw.le ha.le (by positivity)
+  obtain ⟨ch, hd, hκ, hA, hP⟩ := hchain D hImp hC
+  have hF := h c k b_w b_a D ch d hc hk hw ha hd hC hA hP
+  have hF0 : 0 ≤ F (k / c) k b_w b_a d := F_nonneg (by positivity) (by positivity) hw.le ha.le (by positivity)
   have hTpos : (0 : ℝ) < T.D.size T.D.computed := by exact_mod_cast hT
-  have hle : κ * F α (α * Γ) b_w b_a d ≤ (D.D.size D.D.computed : ℝ) / T.D.size T.D.computed := by
+  have hle : κ * F (k / c) k b_w b_a d ≤ (D.D.size D.D.computed : ℝ) / T.D.size T.D.computed := by
     rw [le_div_iff₀ hTpos]
-    calc κ * F α (α * Γ) b_w b_a d * T.D.size T.D.computed
-        = F α (α * Γ) b_w b_a d * (κ * T.D.size T.D.computed) := by ring
-      _ ≤ F α (α * Γ) b_w b_a d * (2 * c.G) := mul_le_mul_of_nonneg_left hκ hF0
+    calc κ * F (k / c) k b_w b_a d * T.D.size T.D.computed
+        = F (k / c) k b_w b_a d * (κ * T.D.size T.D.computed) := by ring
+      _ ≤ F (k / c) k b_w b_a d * (2 * ch.G) := mul_le_mul_of_nonneg_left hκ hF0
       _ ≤ D.D.size D.D.computed := hF
-  calc ENNReal.ofReal (κ * F α (α * Γ) b_w b_a d)
+  calc ENNReal.ofReal (κ * F (k / c) k b_w b_a d)
       ≤ ENNReal.ofReal ((D.D.size D.D.computed : ℝ) / T.D.size T.D.computed) := ENNReal.ofReal_le_ofReal hle
     _ = (D.D.size D.D.computed : ENNReal) / T.D.size T.D.computed := by
         rw [ENNReal.ofReal_div_of_pos hTpos, ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
