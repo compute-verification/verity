@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResAccepts
-import Proofs.Flock.Claims.Recursion.RowSlots
+module
+
+public import Proofs.Flock.Claims.Recursion.ResAccepts
+public import Proofs.Flock.Claims.Recursion.RowSlots
 
 /-!
 # A `rec-residuals` piece of the final check, from `PartAccepts`
@@ -18,6 +20,8 @@ digest" to "same row" through a collision with the verifier's own evaluations, w
   port's elements as the message bytes there (`elemsOf`), with no hypothesis: `rowsRead_port` finds the port's
   elements among the copy's columns, `readElems_of_colsHold` reads them as bytes.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

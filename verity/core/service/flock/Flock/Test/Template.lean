@@ -4,7 +4,11 @@ core's codec names its Definition by (`RecVStar.templateId`, each pinned below a
 relabelled under another template (another part's S, a level's, or the same S with a port renamed) is refused, and so is
 a level under its neighbour's `H`, however consistently the bindings carry the label.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.Template
 

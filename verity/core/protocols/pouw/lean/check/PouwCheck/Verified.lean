@@ -1,4 +1,6 @@
-import PouwCheck.Credit
+module
+
+public import PouwCheck.Credit
 
 /-!
 # A served window's statements verified (`credit._verified`)
@@ -28,6 +30,8 @@ window's), one statement a call (a retry never reproves), a statement only for a
 circuit file for its K (`noStatementFiles`), and the call's `--registered` file (its refusals, `registration`).
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.Verified
 

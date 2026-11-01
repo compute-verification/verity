@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Json.Goals
-import Proofs.Flock.Claims.Complete.Custody
-import Proofs.Flock.Claims.Complete.Zk.Json.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Goals
+public import Proofs.Flock.Claims.Complete.Custody
+public import Proofs.Flock.Claims.Complete.Zk.Json.Session
 
 /-!
 # B's record checks at the honest masked run
@@ -22,6 +24,8 @@ reads as `sessOf` (`decode_recordObjZk`) and `liveOf` as its live session (`live
 plain ones: `DecodesZk`, `LiveReadsZk`, `DrawMatchesZk`, `CustodyRootBZk`, `CustodyPublicsZk`, `CustodyPointsZk`,
 `CustodyCountZk`, `CustodyRoundsZk`, `PublicsZk`, `ProofListZk`, `ProofDigestsZk`, `RepStreamZk` and `RepExtrasZk`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

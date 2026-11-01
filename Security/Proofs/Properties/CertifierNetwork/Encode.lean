@@ -1,7 +1,9 @@
-import Proofs.Properties.CertifierNetwork.Defs
-import Proofs.Properties.CertifierDevice.Issuer
-import Proofs.Properties.CertifierDevice.Basic
-import Proofs.Properties.NetworkCertifier.Grid
+module
+
+public import Proofs.Properties.CertifierNetwork.Defs
+public import Proofs.Properties.CertifierDevice.Issuer
+public import Proofs.Properties.CertifierDevice.Basic
+public import Proofs.Properties.NetworkCertifier.Grid
 
 /-!
 # A device's record has an encoding
@@ -10,6 +12,8 @@ import Proofs.Properties.NetworkCertifier.Grid
 publishes fits them: its grid is `T` packed rows of `r` slots (`Packed`), each frame `B` bytes, and its integers, link and
 key identifier are within their widths (`prepare_of`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork.Proofs
 

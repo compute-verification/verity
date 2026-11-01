@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawKDefs
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawKDefs
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
 /-!
 # The plain verdict at the statement's draw, at the record's parsed value
@@ -16,6 +18,8 @@ need not be any text's parse, so the KS and Bits route is stated here at a parse
   each text form is the form here at `j`; `acceptsAtDK_iff_exists_J` adds that a text form accepts only where its
   record parses. So `acceptsAtDJK_wrPDJK_of_K` moves an accepting record of the outcome at the text forms to `wrPDJK`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

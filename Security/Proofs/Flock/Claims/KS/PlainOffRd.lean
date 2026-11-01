@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainOffLive
+module
+
+public import Proofs.Flock.Claims.KS.PlainOffLive
 
 /-!
 # A plain slot's off mass at the deployed coins, at read sets
@@ -10,6 +12,8 @@ reads a set of values per position (`rdD`), which only has to contain every deco
 is "the read set is nonempty and isn't the singleton `{w q}`". That is `Pr_rdOff_le_capHit`'s off event
 (`Claims/Recursion/CapLinkRd.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,4 +1,6 @@
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # The coin tree's four names sort to themselves
@@ -8,6 +10,8 @@ import Batteries.Tactic.OpenPrivate
 `qpart23`) and the one-element sorts. It sits in a module of its own, on core's `simp` set, where string comparisons
 reduce by `decide`.
 -/
+
+@[expose] public section
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 

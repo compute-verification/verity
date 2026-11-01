@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Walk
+module
+
+public import Proofs.Flock.Claims.Complete.Walk
 
 /-!
 # The session walk on the packed table
@@ -12,6 +14,8 @@ Ligerito's final identity proved (`Lg.honest`), `LgFinal` rests on the record's 
 alone (`lgFinal_json`, by `lgFinal_walkP`), and Flock's completeness at the deployed plain verifier on the record's JSON
 alone (`complete_plain_json`): `Claims.Complete` reads the oracle's 64-byte outputs (`Out64`) itself.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.Claims.Recursion.RestLens
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.Claims.Recursion.RestLens
 
 /-!
 # Check 5's inner session at a staged part is the inner statement at the coins
@@ -24,6 +26,8 @@ record's rounds are the transcript's, but for the one round of no coins `repCoin
 claims at the first coin's link points (`innerCoinsR_of`), and `rep_canon` gives a rep's verifier rows at
 `canonRounds`, the coin side of `VVTie`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.InnerAt
 

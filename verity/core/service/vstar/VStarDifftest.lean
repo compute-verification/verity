@@ -1,7 +1,9 @@
-import Difftest
-import VStar
-import Flock.RecResiduals
-import Flock.RecSetup
+module
+
+public import Difftest
+public import VStar
+public import Flock.RecResiduals
+public import Flock.RecSetup
 
 /-!
 # V*'s difftest executable
@@ -16,6 +18,8 @@ verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `v
 (`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`. `inner_draw`
 holds `rec_live.inner_draw`, the prover's reading of the inner session's draw, to the verifier's (`Flock.RecSetup.innerDrawn`).
 -/
+
+@[expose] public section
 
 namespace VStar.DT
 

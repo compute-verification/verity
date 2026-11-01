@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.Refine
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.Switched
-import Proofs.Flock.Claims.ZK.LinkFft
+module
+
+public import Proofs.Flock.Claims.ZK.Refine
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.Switched
+public import Proofs.Flock.Claims.ZK.LinkFft
 
 /-!
 # The link round at the Lean recheck
@@ -24,6 +26,8 @@ commits nothing of level 0 that leaves). Here that function is held to the sessi
   what the transport hands `Flock.Firewall.Link` and how it frames the roots, not about how a root is computed.
 * **`LeanRelease.linkRoundEq_of_linkIs`**: `LinkRoundEq` at the deployed session (`Masked.dataE`) from `LinkIs`.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Link
 

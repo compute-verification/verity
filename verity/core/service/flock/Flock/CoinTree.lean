@@ -8,7 +8,11 @@ The verifier checks the record, not the openings: the commitment protects the pr
 nonce, the record's `coin_tree`, and, across the sessions it verifies together, that no key repeats. Nonces are not
 compared across sessions: a repeated prover nonce is not a soundness matter.
 -/
-import Flock.Canon
+module
+
+public import Flock.Canon
+
+@[expose] public section
 
 namespace Flock.CoinTree
 

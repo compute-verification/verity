@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dimension.Defs
+module
+
+public import Definitions.Pouw.Dimension.Defs
 
 /-!
 # Theorem D's residue: the named assumptions A1 and A2 (trusted)
@@ -8,6 +10,8 @@ import Definitions.Pouw.Dimension.Defs
 scalar-pipe products H_16 leaves out; A2 says that a program of the machine does no better than an algebraic program
 that outputs the same checked words on the whole grid.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Assumptions
 

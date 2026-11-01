@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.CoinTie
+module
+
+public import Proofs.Flock.Claims.Recursion.CoinTie
 
 /-!
 # The coin server's round the coin tie names is the only one of its stream and round number
@@ -17,6 +19,8 @@ such round of `R`. This file proves that from what the verifier checks, with no 
 `coinTie_unique` is that in the verifier's code, and `staged_coinTie_unique` and `staged_coinTie_drawn_unique` are
 `staged_coinTie` and `staged_coinTie_drawn` with each round `g` unique.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CoinPos
 

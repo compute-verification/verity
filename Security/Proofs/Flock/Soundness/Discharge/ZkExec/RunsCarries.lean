@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!
 # A `--zk` rep's rounds after round 0 carry its messages
@@ -17,6 +19,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 `ligPadShape_pat` is level 0 masked's coin pattern, the rounds' (`isCoin_rec` for the level loop).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

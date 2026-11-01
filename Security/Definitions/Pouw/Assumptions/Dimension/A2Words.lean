@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.Pipe
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Pipe
 
 /-!
 # A2 on the checked words: extra outputs do not matter (trusted statements)
@@ -14,6 +16,8 @@ A2 matches only the outputs in its target set, the checked words
 * `A2Separation`: the same in A2's own terms. With `EmptyQuadPipe` the machine has a program, so it fails the
   unrestricted A2 (`Set.univ`) at every `γ₂` and into every class, and it meets the restricted one.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.A2Words
 

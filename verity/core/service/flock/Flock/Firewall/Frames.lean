@@ -28,7 +28,11 @@ So every coin a frame takes is the loop's own reading of the auditor's answer, a
 is the loop's own, a function of the statement, the table's level 0, the rep's salts and the coins: the opening's are
 `Drive.opening`'s, which feeds `Drive.openStep` the same coins (`Drive.Step.feed`).
 -/
-import Flock.Firewall.Drive
+module
+
+public import Flock.Firewall.Drive
+
+@[expose] public section
 
 namespace Flock.Firewall.Frames
 

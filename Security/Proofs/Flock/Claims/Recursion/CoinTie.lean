@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Soundness.ExecDraw
+module
+
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # The coins a staged part's check 5 computes `v` at are the coins the coin server's transcript shows
@@ -25,6 +27,8 @@ at round `sp m`, where `sp` is the identity or skips the split round. `staged_co
 record `shownOf recRead` reads, and `staged_coinTie_drawn` to `showsTr`: each such round's coins are the values its coin
 drew (`Drawn`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CoinTie
 

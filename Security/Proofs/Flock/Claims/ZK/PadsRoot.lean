@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameTape
-import Proofs.Flock.Claims.ZK.Round1Root
+module
+
+public import Proofs.Flock.Claims.ZK.FrameTape
+public import Proofs.Flock.Claims.ZK.Round1Root
 
 /-!
 # The frame's pads root is the masked prover's
@@ -15,6 +17,8 @@ frames' draws they are one root:
   `innerCommitP` commits table `i`'s rep `r`'s pads under on `tapeOfDraws`: the pads are the frame's
   (`padsOf_tapeOfDraws`) and so are the leaf salts (`innerSalt_fit`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -3,7 +3,11 @@
 Python's `codec.canonical_json` writes for the same values (`json.dumps(..., ensure_ascii=True)` with DEL escaped), and
 each reads back to its value.
 -/
-import Flock.Canon
+module
+
+public import Flock.Canon
+
+@[expose] public section
 
 namespace Flock.Test.Canon
 

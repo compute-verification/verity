@@ -1,13 +1,15 @@
-import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
-import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
-import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
-import Proofs.Flock.Claims.Complete.ZkTables.Parts
-import Proofs.Flock.Claims.Complete.ZkTables.Trace
-import Proofs.Flock.Claims.Complete.Zk.ConsCoins
-import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
-import Proofs.Flock.Claims.Complete.Zk.InnerGo
-import Proofs.Flock.Claims.Complete.Zk.Lanes
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
+public import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+public import Proofs.Flock.Claims.Complete.ZkTables.Parts
+public import Proofs.Flock.Claims.Complete.ZkTables.Trace
+public import Proofs.Flock.Claims.Complete.Zk.ConsCoins
+public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
+public import Proofs.Flock.Claims.Complete.Zk.Lanes
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 
 /-!
 # The masked prover's rep returns
@@ -24,6 +26,8 @@ its coins are good, and records `repRoundsT` rounds (`runsRest`).
 * `lcRounds_points`: the rounds the rank check reads give the rep's claim points at the coins (`MaskRank.claimsAt`).
 * `repT_go`: a masked rep returns at good coins where its rank check passes (`MaskRankT`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

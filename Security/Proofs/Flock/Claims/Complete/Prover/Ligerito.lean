@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Prover.Piop
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Piop
 
 /-!
 # The honest prover's Ligerito opening
@@ -23,6 +25,8 @@ value, a consistency sum) adds its weight to `W`, scaled by its coin.
   K-table and weight in their next variable (`recursive_prover_with_basis_impl`, whose last round at the last level is
   `sumcheck.fold`), not the split coordinate's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

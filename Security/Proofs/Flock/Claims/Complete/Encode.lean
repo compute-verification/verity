@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # The prover's messages read back
@@ -8,6 +10,8 @@ encoders (`linkBody`, `Final.encode`). Each encoder is read back by its reader, 
 (`encNat`): `rdNat_encNat`, `rdBytes_encBytes`, `rdStr_encStr`, `rdList_encList`, and so the link message
 (`linkOf_linkBody`) and the last message (`finalOf_encode`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

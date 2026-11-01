@@ -1,7 +1,9 @@
-import Batteries.Tactic.OpenPrivate
-import Proofs.Flock.Claims.CanonEq
-import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Claims.Complete.Json.Spec
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Proofs.Flock.Claims.CanonEq
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Claims.Complete.Json.Spec
 
 /-!
 # `JsonSpec`'s two fields on `canon`, proved
@@ -13,6 +15,8 @@ number an integer, so the one refusal never fires, and `canon_ascii`: `canonStr`
 ASCII as a `\u` escape, `escU`). The fields left are the ones about `Json.parse` (the printer's and `canon`'s round trips, and
 well-formed trees) and `Json`'s `==` (`beq_same`), both `partial` in Lean's core.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

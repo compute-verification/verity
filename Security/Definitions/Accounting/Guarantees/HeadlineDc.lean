@@ -1,5 +1,7 @@
-import Definitions.Accounting.HeadlineDc
-import Definitions.Accounting.Assumptions.Sheet
+module
+
+public import Definitions.Accounting.HeadlineDc
+public import Definitions.Accounting.Assumptions.Sheet
 
 /-!
 # The data-centre families' headline guarantees (trusted)
@@ -187,6 +189,8 @@ Each statement's docstring gives its binding branch exactly, the exporter's `bou
 Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.HeadlineDc`: with `χ* = 0` it is an instance
 of `headline_of_branches` at the data's π*, each branch's floor bounded from below by lower bounds on `w*` and `φ*`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

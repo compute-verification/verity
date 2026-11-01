@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.Recursion.LastSharedR
-import Proofs.Flock.Claims.Recursion.NextRFits
+module
+
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.Recursion.LastSharedR
+public import Proofs.Flock.Claims.Recursion.NextRFits
 
 /-!
 # The plain simulator's round counts and rep schedules at a parsed record
@@ -10,6 +12,8 @@ import Proofs.Flock.Claims.Recursion.NextRFits
 coins. And every rep of an accepted record is set up (`SchedOf (repCtx …)`, `schedOf_repCtx_of_checksAtJ`), from the
 verdict and the link points the checks pin to the first coin.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

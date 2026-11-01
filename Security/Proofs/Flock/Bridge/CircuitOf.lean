@@ -1,7 +1,9 @@
-import Definitions.Core.Boolean
-import Proofs.Core.Circuit
-import Proofs.Flock.Bridge.Count
-import Proofs.Flock.Soundness.Discharge.Layout.Outs
+module
+
+public import Definitions.Core.Boolean
+public import Proofs.Core.Circuit
+public import Proofs.Flock.Bridge.Count
+public import Proofs.Flock.Soundness.Discharge.Layout.Outs
 
 /-!
 # The parsed circuit file as core's circuit, and the sampling relation as its wrong units
@@ -25,6 +27,8 @@ population `n` (the public file's `pub.n`) give the key program `keyProg D.unrol
   `K₀` wrong units (`card_wrong_lt_of_relS`), at every circuit and every witness, with no side condition, and at the
   parsed file's circuit (`card_wrong_partsOf_lt`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

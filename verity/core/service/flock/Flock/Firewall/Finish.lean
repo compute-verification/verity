@@ -31,12 +31,16 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
   each rep's proof file on them. `flock-firewall finish` serves them on its standard input (`cmd`, `Witness.setupOf`);
   the session loop on its frames port (`serveLoop`, `Hello.Setup`), reading each table's level 0 from its own `Level0`s.
 -/
-import Flock.Firewall.FinishProver
-import Flock.Firewall.Frame
-import Flock.Firewall.Hello
-import Flock.Firewall.Level0
-import Flock.Firewall.Link
-import Flock.Witness
+module
+
+public import Flock.Firewall.FinishProver
+public import Flock.Firewall.Frame
+public import Flock.Firewall.Hello
+public import Flock.Firewall.Level0
+public import Flock.Firewall.Link
+public import Flock.Witness
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

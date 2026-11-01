@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ConflictOC
-import Proofs.Flock.Claims.KS.Fork
-import Proofs.Flock.Verifier.Merkle
+module
+
+public import Proofs.Flock.Claims.KS.ConflictOC
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Verifier.Merkle
 
 /-!
 # The shipped Merkle check logs every node of its paths
@@ -16,6 +18,8 @@ The same for plain SHA-512 leaves (`flock-leaf/sha512-unsalted`, `MerkleScheme.s
 row's encoding (`opensInsP`, `merkleCheck_logsP`, `tiedColl_of_opensP`); `opensInsOf` and `merkleCheck_logsOf` take
 either scheme.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

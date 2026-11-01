@@ -1,5 +1,7 @@
-import Proofs.Properties.Nci.Lemmas
-import Proofs.Properties.Nci.Desc
+module
+
+public import Proofs.Properties.Nci.Lemmas
+public import Proofs.Properties.Nci.Desc
 
 /-!
 # The NCI check's properties, proved
@@ -8,6 +10,8 @@ Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemma
 (`Proofs.Properties.Nci.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
 `Proofs.Properties.Nci.Desc`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 

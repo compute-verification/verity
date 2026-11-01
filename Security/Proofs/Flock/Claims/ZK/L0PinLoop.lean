@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.L0PinChain
-import Proofs.Flock.Claims.ZK.FrameRho
-import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.ZK.FrameInner
-import Proofs.Flock.Claims.ZK.FrameOuter
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinChain
+public import Proofs.Flock.Claims.ZK.FrameRho
+public import Proofs.Flock.Claims.ZK.FrameReal
+public import Proofs.Flock.Claims.ZK.FrameInner
+public import Proofs.Flock.Claims.ZK.FrameOuter
 
 /-!
 # Level 0 at the session loop
@@ -17,6 +19,8 @@ level 0's are the binding and level 0's bodies at the rep's own table and draws 
   (`Loop.wordsAt_take`).
 * The bodies' coins are the opened coins from the binding's (`Loop.l0Body_clean`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

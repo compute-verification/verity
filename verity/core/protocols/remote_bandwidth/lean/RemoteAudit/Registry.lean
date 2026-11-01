@@ -1,5 +1,7 @@
-import Flock.Canon
-import RemoteAudit.Flight
+module
+
+public import Flock.Canon
+public import RemoteAudit.Flight
 
 /-!
 # The verifier's registrations: `audit.py`'s `Registry`
@@ -17,6 +19,8 @@ back is live and closable, and runs no session, its sessions' outcomes as they s
 A call `Registry` refuses with `RegistryError` is `none`; one it raises `ValueError` on (a node not 1 to 64 bytes, a
 registration `Registration.register` refuses) is an error.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit
 

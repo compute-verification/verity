@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.Soundness.ExecCircuit
+module
+
+public import Proofs.Flock.VBridge.Family.Structure
+public import Proofs.Flock.Soundness.ExecCircuit
 
 /-!
 # The circuit file's unit name, emitted and parsed
@@ -12,6 +14,8 @@ the characters (`splitOn_nl`), `Flock.tokens` reads a line's second word (`token
 (`pyDumps_noNl`), and the unit names are one word (`recOpen_name`, `residuals_name`), so the parse names the circuit's
 unit as the statement's (`file_unitName`): `HUnitName` and `HOpenName` at any history and registration.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Names
 

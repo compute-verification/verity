@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
-import Proofs.Flock.Claims.Complete.Json.Goals
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
+public import Proofs.Flock.Claims.Complete.Json.Goals
 
 /-!
 # A returning rep's rounds are few and small
@@ -13,6 +15,8 @@ a few coins: zerocheck's `6`, `m − 13` and `1`; lincheck's `1`; the ring switc
 * `Bnd B N t`: `t` holds at least `N` rounds, each of at most `B` coins; kept by every absorb (`Lg.ap`) and by a squeeze
   of at most `B` coins (`Bnd.afterSq`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

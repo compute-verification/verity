@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Level0
-import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Claims.Complete.ZkTables.View
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.Complete.ZkTables.View
 
 /-!
 # Masked completeness from its parts
@@ -16,6 +18,8 @@ The prover's rank refusal (`rankCheckP`) enters `RunsRest` only: a rep returns w
 holds, and `complete_jsonT` takes the mask-rank bound at the verifier's coins (`MaskRank.MaskRankBound`) for the
 other side, that a good case's coins pass the check.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

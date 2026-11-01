@@ -3,7 +3,11 @@
 `⌊i/G⌋` of a table of one row per group, the instances are whole groups, and its position is the instance index mod `G`
 (seed `instance`, derivation `mod:G`): one writer a window. Four instances, an input row `x` and an output row `out`.
 -/
-import Flock.HmRow
+module
+
+public import Flock.HmRow
+
+@[expose] public section
 
 namespace Flock.Test.SharedReads
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.TileCheck
+module
+
+public import Definitions.Pouw.PearlC.TileCheck
 
 /-!
 # L3 from its parts, and on a transcript
@@ -8,6 +10,8 @@ import Definitions.Pouw.PearlC.TileCheck
 `goodTiles ∪ blankTiles`, or the registered values fail to bind the circuit's words; `TileGame.good_of_accept`'s
 conclusion when `Collides` is in the proof system's bad event.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

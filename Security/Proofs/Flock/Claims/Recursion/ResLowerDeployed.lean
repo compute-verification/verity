@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.SlotsCommit
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Soundness.ExecRows
-import Proofs.Flock.Recursive.ValueInner
-import Proofs.Flock.VBridge.Family.OutCols
-import Proofs.Flock.Claims.Recursion.NonVacuous
-import Proofs.Flock.Claims.Recursion.CopySiteDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Soundness.ExecRows
+public import Proofs.Flock.Recursive.ValueInner
+public import Proofs.Flock.VBridge.Family.OutCols
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.CopySiteDeployed
 
 /-!
 # The `rec-residuals` pieces' lowering at the deployed run (U12)
@@ -40,6 +42,8 @@ are `openSetupSt`).
   it at every part where the pieces are owned by algebra parts only, which is `DecompBR.ResLowJ`'s conclusion at each
   part of a `Joint` acceptance.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainLeafDecK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafDecK
 
 /-!
 # The deployed plain decoders at plain SHA-512 leaves
@@ -13,6 +15,8 @@ The scope admits hidden outputs under plain SHA-512 leaves (`flock-leaf/sha512-u
   `wrPD`).
 * `plain_hdecHUAt`: `plain_hdecHAt` there (`plain_hdecHUAtK_of` at `wrPD`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 

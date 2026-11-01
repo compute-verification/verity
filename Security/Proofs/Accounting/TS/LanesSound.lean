@@ -1,12 +1,14 @@
-import Proofs.Accounting.TS.Session.Lanes.Guarantees
-import Proofs.Accounting.TS.Session.Lanes.KnownRead
-import Proofs.Accounting.TS.Session.Lanes.Partials
-import Proofs.Accounting.TS.Session.Lanes.Committed
-import Proofs.Flock.C3.RegLevels.TopLeaf
-import Proofs.Accounting.TS.CheckedSound
-import Proofs.Accounting.TS.HeldSound
-import Proofs.Pouw.RelativeSecurity
-import Proofs.Flock.VBridge.Family.Registrants
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Guarantees
+public import Proofs.Accounting.TS.Session.Lanes.KnownRead
+public import Proofs.Accounting.TS.Session.Lanes.Partials
+public import Proofs.Accounting.TS.Session.Lanes.Committed
+public import Proofs.Flock.C3.RegLevels.TopLeaf
+public import Proofs.Accounting.TS.CheckedSound
+public import Proofs.Accounting.TS.HeldSound
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Flock.VBridge.Family.Registrants
 
 /-!
 # A leaf's 33 linked sessions realize one unit (the proof)
@@ -51,6 +53,8 @@ full checking. The union bound over the 33 sessions gives `33 δ`.
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Accounting.TS.CheckedSound`), whose imports make `X`
 a token, so `Proofs/Accounting.lean` imports it.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge.RowsSession
 

@@ -1,6 +1,10 @@
-import Flock
-import Flock.CircuitType
-import Flock.Layout
+module
+
+public import Flock
+public import Flock.CircuitType
+public import Flock.Layout
+
+@[expose] public section
 
 open Flock
 

@@ -9,10 +9,14 @@ reference to it), and the private track's registration predicate proves it on th
 parser checks hold by construction here: a call binds exactly its callee's inputs, and a caller reads only wires, so never a
 bit inside a callee.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import Flock.Library
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+public import Flock.Library
+
+@[expose] public section
 
 namespace Flock
 

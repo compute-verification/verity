@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.Blind
-import Flock.Firewall.Frame
-import Flock.Firewall.Assumptions
-import Flock.Firewall.Coins
+module
+
+public import Proofs.Flock.Claims.ZK.Blind
+public import Flock.Firewall.Frame
+public import Flock.Firewall.Assumptions
+public import Flock.Firewall.Coins
 
 /-!
 # The ZK server's release is the Lean frame, at the Lean frame's draws
@@ -84,6 +86,8 @@ firewall computes:
 So `Flock.zk_server_blind`'s bound holds at the deployed release, at any worker: one bit a session
 (`Flock.zk_server_lean`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

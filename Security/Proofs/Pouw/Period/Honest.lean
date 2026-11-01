@@ -1,6 +1,8 @@
-import Proofs.Pouw.Period
-import Proofs.Pouw.Period.Accept
-import Proofs.Accounting.ComposePeriod.Honest
+module
+
+public import Proofs.Pouw.Period
+public import Proofs.Pouw.Period.Accept
+public import Proofs.Accounting.ComposePeriod.Honest
 
 /-!
 # An honest live-salt period meets `H1CheckedCreditPeriod`'s premises
@@ -33,6 +35,8 @@ The conclusion then speaks of the whole period: its accepted prefix is all `n` w
 credited live words are `128·n` (`checkedLive_all`), so `h1_credit` is `H1CheckedCreditPeriod`'s bound at `128·n` live
 words, not at none.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period.SecurityProofs.HonestH1
 

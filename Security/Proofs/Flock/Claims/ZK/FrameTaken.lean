@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishRound
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRound
 
 /-!
 # The frames took every round's coins on a live history
@@ -16,6 +18,8 @@ frame that read them took without refusal.
   is a frame round of a live run (`refusesCoins_of_live`); at its length it is the premise. `Hello`'s and the `Commit`'s
   coins (prefixes of one and two rounds) go to the session, not to a frame (`takeAt`), so nothing here is said of them.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

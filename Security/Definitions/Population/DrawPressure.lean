@@ -1,4 +1,6 @@
-import Definitions.Population.Exfiltration
+module
+
+public import Definitions.Population.Exfiltration
 
 /-!
 # The deployed draw: `k` of the `n` units, uniformly and without replacement
@@ -10,6 +12,8 @@ window's wrong units.
 * `Draw n k` is the coin space, the `k`-subsets of `Fin n`, and `uniformDraw n k` its uniform weight.
 * `missing n k B` is the draws that miss the wrong set `B`: a window whose wrong units are `B` escapes on them.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

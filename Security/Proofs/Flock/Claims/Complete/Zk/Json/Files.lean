@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Goals
-import Proofs.Flock.Claims.Complete.Files
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+public import Proofs.Flock.Claims.Complete.Files
 
 /-!
 # The honest masked run's proof files
@@ -18,6 +20,8 @@ verifier's decoded proof is that rep's proof, whose cap is the commitment's (the
 parameters are the table's, and whose pads' root is their commitment's (`repPZk_fields`, `innerP_root`), a 64-byte
 digest at 64-byte oracle outputs (`innerCommitP_root`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

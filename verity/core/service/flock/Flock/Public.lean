@@ -3,8 +3,12 @@ PROTOCOL.md §16.5: the verifier's public file (no rows), whose roots are frame-
 roots are checked here; the input ports' roots depend on the row leaf's schema and are the row leaf's check
 (`RowLeaf.checkPublic`).
 -/
-import Flock.Circuit
-import Flock.FV3
+module
+
+public import Flock.Circuit
+public import Flock.FV3
+
+@[expose] public section
 
 namespace Flock
 

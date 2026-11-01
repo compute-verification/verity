@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.LastBindsEC
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
 
 /-!
 # (P4) at the deployed bound record
@@ -44,6 +46,8 @@ when the record lists it. So the calls are compared as sets throughout: with the
 its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half
 (`RecDeploy.PlainCallsBindOrSlack`), proved at SHA-512 too (`RecDeploy.plainCallsBindOrSlack_sha512`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

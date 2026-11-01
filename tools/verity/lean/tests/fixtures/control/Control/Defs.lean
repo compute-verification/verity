@@ -1,6 +1,10 @@
+module
+
 /-! What the controls' pinned statement reads (`double`), their claim (`Small`), and two listed escapes (`loop` and
 `loop'`, `partial def`s that call each other: their compiled code mentions each other, which the replay must not take for
 a cycle). -/
+
+@[expose] public section
 
 namespace Control
 

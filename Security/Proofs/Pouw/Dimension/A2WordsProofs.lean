@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.A2Words
-import Proofs.Pouw.Dimension.PipeProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.A2Words
+public import Proofs.Pouw.Dimension.PipeProofs
 
 /-!
 # A2 on the checked words: proofs
@@ -10,6 +12,8 @@ import Proofs.Pouw.Dimension.PipeProofs
 * `emptyQuadPipe`, `a2Separation`: the separation example. The empty program gives
   `extraMachine` a program, at which the unrestricted A2 fails by `a2WitnessExtra`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.A2Words
 

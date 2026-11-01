@@ -1,5 +1,7 @@
-import CoreProtocol.Protocol
-import Flock.Hash
+module
+
+public import CoreProtocol.Protocol
+public import Flock.Hash
 
 /-!
 # The registration log
@@ -53,6 +55,8 @@ it allows a card's clock and peak rates around its sheet's, and its devices' key
 a device's registered figures against the auditor's estimates, `DeviceFigures.Accepted` over the SKU, the clock and the
 peak rates, in integers.
 -/
+
+@[expose] public section
 
 namespace Core.Registration
 

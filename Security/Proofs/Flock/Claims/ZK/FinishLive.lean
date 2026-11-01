@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishBridge
+module
+
+public import Proofs.Flock.Claims.ZK.FinishBridge
 
 /-!
 # The live inner rep runs the firewall's rep
@@ -25,6 +27,8 @@ sent, then `repFw`'s inner proof (`innerP`), its rounds sent live. `repFw` itsel
   request's coins, the live rep runs the tail on `repCons`'s proof and constraints from the port's transcript. So the
   live inner proof is `repFw`'s `innerP` on the same proof, constraints and transcript, its rounds answered live.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

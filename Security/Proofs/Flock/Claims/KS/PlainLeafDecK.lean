@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawDecK
-import Proofs.Flock.Claims.KS.PlainLive
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
+public import Proofs.Flock.Claims.KS.PlainLive
 
 /-!
 # The deployed plain decoders at plain SHA-512 leaves, at `VK keep`
@@ -17,6 +19,8 @@ The scope admits hidden outputs under plain SHA-512 leaves (`flock-leaf/sha512-u
 * `plain_setupHiddenU`, `plain_hdecHUAtK_of`: `plain_setupHidden` and `plain_hdecHAtK_of` there; `plain_hdecHUAtK` at
   `wrPDK`, with `plainVerdictAtK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenDec
 

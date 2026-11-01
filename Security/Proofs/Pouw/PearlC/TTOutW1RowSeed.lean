@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.W1
 -- `W1.Instr.exec`'s equation lemmas, realized there first: two modules that each realize them don't import together
-import Proofs.Pouw.PearlC.W1BudgetAbort
-import Proofs.Pouw.PearlC.RowSeedGamma
+public import Proofs.Pouw.PearlC.W1BudgetAbort
+public import Proofs.Pouw.PearlC.RowSeedGamma
 
 /-!
 # The row-seed reductions' cost-model conditions at W1
@@ -21,6 +23,8 @@ take two conditions on the cost model: (C3) `CostModel.SplitClosed`, and for the
 So the row-seed readers can't be restated at W1 through `SplitClosed` as it is defined: a W1 reader that kept it as a
 hypothesis would be vacuous.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TTOutW1RowSeed
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundRoute
-import Proofs.Flock.Claims.Recursion.LastBindsEC
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRoute
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
 
 /-!
 # `KSBoundDeployed`'s ∀-form from the bridge, the last message bound modulo what `E*` reads (R1′)
@@ -26,6 +28,8 @@ its optional digest of a table's empty publics change the list of calls the depl
 `RecDeploy.KSBoundRouteCols` is `KSBoundDeployed`'s ∀-form; `RecDeploy.ksBoundRoute_of_bridge_cols` proves it from the
 bridge. At the deployed plain verifier's own steps `LastCoinFree` holds (`RecDeploy.lastCoinFree_deployed`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

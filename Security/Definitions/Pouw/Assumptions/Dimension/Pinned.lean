@@ -1,6 +1,8 @@
-import Definitions.Pouw.Dimension.Defs
-import Definitions.Pouw.Assumptions.Dimension.Assumptions
-import Definitions.Pouw.Assumptions.NCP.Chain
+module
+
+public import Definitions.Pouw.Dimension.Defs
+public import Definitions.Pouw.Assumptions.Dimension.Assumptions
+public import Definitions.Pouw.Assumptions.NCP.Chain
 
 /-!
 # Theorem D's residue: pinned statements (trusted)
@@ -10,6 +12,8 @@ TT_NCP for a machine from A2 into AlgM_16. The step through AlgM_4090 (the mixin
 probabilistic lifting (`Lift_MinRank`) are open. And Theorem D for the protocol's checked values, which are taken
 mod `2^32` (`Pouw.NCP.Chain`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

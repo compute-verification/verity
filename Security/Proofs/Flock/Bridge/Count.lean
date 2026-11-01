@@ -1,6 +1,8 @@
-import Proofs.Flock.Bridge.Targets
-import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Claims.Sampling.EndToEndDraw
+module
+
+public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Bridge.Lowers
+public import Proofs.Flock.Claims.Sampling.EndToEndDraw
 
 /-!
 # The bridge's slot count, `P_a`, count lemma and scope
@@ -14,6 +16,8 @@ population slots), and `CountTarget`: a witness outside `RelS` at `δ = C(n − 
 
 Scope: `designOf kd` is well formed on `partOf P κ` at `1 ≤ kd ≤ n` (`designOf_wellFormed`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

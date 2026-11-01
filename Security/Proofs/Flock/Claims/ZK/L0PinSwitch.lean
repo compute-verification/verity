@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.L0PinFlags
-import Proofs.Flock.Claims.ZK.L0PinFrame
-import Proofs.Flock.Claims.ZK.FrameRounds
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinFlags
+public import Proofs.Flock.Claims.ZK.L0PinFrame
+public import Proofs.Flock.Claims.ZK.FrameRounds
 
 /-!
 # The ring switch's rounds, and the PIOP's last transcript
@@ -17,6 +19,8 @@ transcript. This file states both:
 * **The rounds' shapes** (`pcsRound_rs`, `qRound_rs`, `qRound_gamma`): from empty pending bytes the switch's first
   round is the opening's (`Flags.PcsRound`), and its later rounds and `γ`'s are quiet (`Quiet.QRound`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Switch
 

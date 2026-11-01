@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Reps.Maps
-import Proofs.Flock.C3.RegLevels.RsT
+module
+
+public import Proofs.Flock.C3.Reps.Maps
+public import Proofs.Flock.C3.RegLevels.RsT
 
 /-!
 # n7's levels at C3's decoder of R's openings
@@ -12,6 +14,8 @@ import Proofs.Flock.C3.RegLevels.RsT
   steps' coins (custody), the Ligerito steps' weave (the source's definition), each opening at its map's unit, and
   the run's and the proof's ties.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

@@ -1,6 +1,8 @@
-import Proofs.Pouw.PearlC.TileValues
-import Proofs.Pouw.PearlC.Tile4Circuit
-import Definitions.Pouw.PearlC.DeviceChainOnly
+module
+
+public import Proofs.Pouw.PearlC.TileValues
+public import Proofs.Pouw.PearlC.Tile4Circuit
+public import Definitions.Pouw.PearlC.DeviceChainOnly
 
 /-!
 # The tile units compute the protocol's words (proofs)
@@ -21,6 +23,8 @@ Where the commitment registers the outputs, entry `(i, j)` then meets `TileWords
 units put the formed rows and the factor rows on its inputs, the factor rows exist (`peelRowsP`, `peelRows4`), and the
 registered words are the outputs (`TileCheck`'s `reg`, outside `Collides`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 

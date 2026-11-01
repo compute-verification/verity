@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.OpenPipe
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 
 /-!
 # The FP32 pipe, the residual assumption `A1_fp`, and `CanonicalNaN` (draft semantics)
@@ -28,6 +30,8 @@ has no tensor cores, loads, selects, sub-word operations, moves or pre-salt data
   negation modifiers, in exact ℚ arithmetic). The intended reading is IEEE binary32 on the int32 reading, round to
   nearest, flush-to-zero off, with the canonical NaN; no IEEE semantics is defined here.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Embed
 

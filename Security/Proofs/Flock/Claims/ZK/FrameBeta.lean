@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameAdmits
-import Proofs.Flock.Claims.ZK.FrameTaken
+module
+
+public import Proofs.Flock.Claims.ZK.FrameAdmits
+public import Proofs.Flock.Claims.ZK.FrameTaken
 
 /-!
 # The frames refuse `β = 0` (`FrameUnrefused`'s `β` fault)
@@ -17,6 +19,8 @@ at its round, in the inner proof's round 2, where `Masker.answer` stops at `β =
   `piopRoundsZk + k₀ + 7 + 11(R − 1) + 2`, whose state is the inner proof's round 2 (`repState_own_inner`) once the
   schedule so far is complete (`schedSoFar_size`, at the plan's counts `repPlan_list`, `repPlan_size`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

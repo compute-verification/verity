@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # A rep's coin counts: the frames' squeezes are the schedule's
@@ -16,6 +18,8 @@ at a `fast100` schedule (`sqCount_repFrames`):
 * **The queries**: `RecVStar.bitLength (q − 1)` is the frames' `log₂ (q − 1) + 1` at `q ≥ 2`, which every `fast100`
   level has (`fast100_q_two`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

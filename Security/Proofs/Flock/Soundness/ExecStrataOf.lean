@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Refine.Setup
+module
+
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The strata the verifier accepts are a partition's
@@ -16,6 +18,8 @@ on the statement's form: they follow from the verifier accepting.
 * `StrataExec.chain_facts`: a chain of non-empty ranges from `a` to `b` covers each unit of `[a, b)` exactly once.
 * `Law.execStrata_of_strataProblem`: those checks give `σ`, each unit's stratum the one whose ranges hold it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.HoloMap
-import Proofs.Flock.VBridge.Family.Transcript
+module
+
+public import Proofs.Flock.Recursive.HoloMap
+public import Proofs.Flock.VBridge.Family.Transcript
 
 /-!
 # `CoinTys` at candidate 3
@@ -21,6 +23,8 @@ coordinate is a vector there, where `coinTy 1` is a scalar.
 * `holoSizes`: the coin sizes of the history's rounds in the streams of the verifier's map, which the forms' sizes are
   to match.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

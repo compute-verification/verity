@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Count
-import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Count
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 
 /-!
 # The honest masked session runs, at several tables
@@ -13,6 +15,8 @@ stopped, `repRunJ`; at every case of several tables `ProverRunsJ`). Every table'
 through `Hashes.ofSha512` so do its masked level-0 commitment (`commitPZk_ok`) and its pads' (`innerCommitP_ok`); the
 session walks its rep streams in order (`JsonRT.Runs.forIn_idx`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

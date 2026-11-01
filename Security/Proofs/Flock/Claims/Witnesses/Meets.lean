@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.DeployEfficient
-import Definitions.Claims.Sampling
+module
+
+public import Proofs.Flock.Claims.DeployEfficient
+public import Definitions.Claims.Sampling
 
 /-!
 # What the claims ask of a record holds at the deployed ones
@@ -27,6 +29,8 @@ record, the sampling record's `flock`, and their antecedents are of that record 
 * `Sampling.universal_meets`: some private circuit fits its size class, on inputs of the class's width, the antecedent
   of `Universal`, which reads no field of the record either.
 -/
+
+@[expose] public section
 
 open FlockDeploy
 

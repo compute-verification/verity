@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainDrawAccK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
 
 /-!
 # flock-verify's acceptance at a draw value
@@ -13,6 +15,8 @@ the record decodes through `Record.decode` (`decodeWithK_id_std`):
 * `tableAt_of_acceptsD`, `tableAtH_of_acceptsD`: `tableAt_of_accepts`, `tableAtH_of_acceptsI` at the draw `some d`,
   with no premise on a record's draw.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 

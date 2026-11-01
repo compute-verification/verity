@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Layout.InRegion
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # Every public leaf is inside an in region
@@ -12,6 +14,8 @@ in a run of consecutive words, and each run cut into blocks that cover it), and 
 `2^s` words (`inRegions_cover`). So a public leaf's bits in a satisfying witness are its instance's public word
 (`public_pinned`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

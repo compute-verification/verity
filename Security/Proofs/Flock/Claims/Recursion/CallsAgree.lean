@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VerdictLog
-import Proofs.Flock.Claims.Recursion.LastColsDeployed
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.DeployK
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictLog
+public import Proofs.Flock.Claims.Recursion.LastColsDeployed
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.DeployK
 
 /-!
 # Two accepted plain decisions on one set of proof files make one set of calls
@@ -19,6 +21,8 @@ import Proofs.Flock.Claims.DeployK
   files and the same rep rounds, make one set of calls: a decision logs the setup's calls, then the verdict's
   (`next_decide_calls`), and custody pins the rest. `plain_decide_shared` gives the shared decision.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

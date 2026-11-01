@@ -1,7 +1,9 @@
-import Flock.RecordText
-import Std.Data.TreeMap.Raw.Lemmas
-import Definitions.Claims.Json
-import Proofs.Flock.Claims.Complete.Prover.Print
+module
+
+public import Flock.RecordText
+public import Std.Data.TreeMap.Raw.Lemmas
+public import Definitions.Claims.Json
+public import Proofs.Flock.Claims.Complete.Prover.Print
 
 /-!
 # The honest record is in its canonical text (S0)
@@ -12,6 +14,8 @@ print in its tree's order, which for a well-formed tree is its keys' sorted orde
 under `JsonSpec`, whose `parse_print` reads a printable value's text back as an alike value, S0 accepts the honest
 record (`check_printJ`). No assumption beyond `JsonSpec`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

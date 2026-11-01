@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.RestReadsAt
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.NextRTables
-import Proofs.Flock.Claims.Complete.Shaped
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Claims.Recursion.RestFitsLift
+module
+
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.NextRTables
+public import Proofs.Flock.Claims.Complete.Shaped
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Claims.Recursion.RestFitsLift
 
 /-!
 # `ElemFramed` and `OpenedShaped` at the deployed last message `elemR`
@@ -28,6 +30,8 @@ sizes (`openedFit_of`): the honest proof fits its own rows (`repFits`), and a fi
 sizes (`RestRead.fitsLift`), so it is enough that the opened rounds have an honest rep's sizes (`OpenedSized`).
 `readsAt_elemR'` takes that one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestElem
 

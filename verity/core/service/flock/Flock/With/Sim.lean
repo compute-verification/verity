@@ -8,7 +8,11 @@ Here: the simulation, its lift through `StateT` (the transcript and the Ligerito
 traversals the verifier uses (`forIn` over lists, arrays and ranges, `Array.mapM`, `Array.mapIdxM`, `List.findM?`), and
 related oracles. `sim_walk` (`Flock.With.SimWalk`) walks two copies of one definition in step with them.
 -/
-import Flock.With.Transcript
+module
+
+public import Flock.With.Transcript
+
+@[expose] public section
 
 namespace Flock.With
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.VBridge.InnerAccepts
-import Proofs.Flock.Soundness.Refine.RepConverse
-import Proofs.Flock.VBridge.Full
+module
+
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.InnerAccepts
+public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.VBridge.Full
 
 /-!
 # VBridge G item 5: `StagesAccept` from one table's files and both reps' runs
@@ -21,6 +23,8 @@ import Proofs.Flock.VBridge.Full
 From them, `Refine.verifyRep_of_checks` makes both reps' checks accept with the committed cap, and
 `InnerAccepts.inner_accepts_of_reps` makes `flockInnerCL` accept the inner transcript.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Stages
 

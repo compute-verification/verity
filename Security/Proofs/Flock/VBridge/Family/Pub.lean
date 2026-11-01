@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Family.Rounds
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Verifier.Registered
+module
+
+public import Proofs.Flock.VBridge.Family.Rounds
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Verifier.Registered
 
 /-!
 # The family's public files at accepting sessions: `PubCommits` up to a SHA-512 collision
@@ -24,6 +26,8 @@ the `c_k`'s, or the verifier's opening and the honest one collide:
 * `HPubRows`, `pubCommits_of_pubRows`: where the verifier compares the public file's `rec-c<k>` rows with the `c_k`
   itself, `PubCommits` holds exactly, at every history.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

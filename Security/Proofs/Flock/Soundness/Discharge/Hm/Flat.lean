@@ -7,8 +7,12 @@ leaf and cut bits are elsewhere (the unit is neither row net), and so are the wi
 `HmRow.parse`'s wire check): Δ's one copy there is `rowCopies`' or the rows' wires' (`inBit_copyL`). The constant bits
 read the pin and the unit range's forced-zero row (`Aliased.zeroPos_block`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Copy
-import Proofs.Flock.Soundness.Discharge.Aliased
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+public import Proofs.Flock.Soundness.Discharge.Aliased
+
+@[expose] public section
 
 open Flock FlockLevel3
 

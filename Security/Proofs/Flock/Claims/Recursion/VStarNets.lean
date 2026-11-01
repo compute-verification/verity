@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VStarTraceOk
-import Proofs.Flock.VBridge.Family.Names
-import Std.Data.String.ToNat
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTraceOk
+public import Proofs.Flock.VBridge.Family.Names
+public import Std.Data.String.ToNat
 
 /-!
 # A staged part's circuit has three nets (`nets_three`)
@@ -18,6 +20,8 @@ adds none (`parse_nets`), so the circuit has three nets (`nets_of_file`). The li
 a newline: the unit's name is the parsed unit's name, a token (`unit_name`, `tokens_noWs`), and META is `pyDumps`'s one
 line (`pyDumps_noNl`). No proof reads through `Lean.Json.parse`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarNets
 

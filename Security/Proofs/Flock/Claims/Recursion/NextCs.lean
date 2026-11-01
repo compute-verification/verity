@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.PartsCompose
-import Proofs.Flock.Claims.Complete.Json.Decode
-import Proofs.Flock.Soundness.Refine.Exec
-import Std.Data.TreeMap.Raw.AdditionalOperations
+module
+
+public import Proofs.Flock.Claims.Recursion.PartsCompose
+public import Proofs.Flock.Claims.Complete.Json.Decode
+public import Proofs.Flock.Soundness.Refine.Exec
+public import Std.Data.TreeMap.Raw.AdditionalOperations
 
 /-!
 # The deployed plain verifier with the record's coins read from the live coins (`nextCs`)
@@ -39,6 +41,8 @@ Three facts, and custody:
 A coin is answered as the plain verifier answers it (`nextCs_coin`), so `bdDeployed` at `nextCs` splits as at `next`
 (`RecDeploy.decompB_nextCs`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

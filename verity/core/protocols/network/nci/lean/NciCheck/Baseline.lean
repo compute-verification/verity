@@ -1,4 +1,6 @@
-import NciCheck.Desc
+module
+
+public import NciCheck.Desc
 
 /-!
 # θ's provenance: the baseline is registered (CMP-66)
@@ -62,6 +64,8 @@ statements (`NciCheck.Properties`) stand as they are:
 O(log + params' input nodes + θ · (log + one record)): one digest per record of the log, one lowering of the parameters
 onto the root body's input nodes, and per θ entry lookups in two records. Nothing here walks a gate.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Baseline
 

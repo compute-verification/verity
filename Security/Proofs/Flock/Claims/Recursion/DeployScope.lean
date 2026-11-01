@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Deploy
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
 
 /-!
 # The compiled verifier's scope refusals
@@ -27,6 +29,8 @@ of an accepted run: the last session's decision (`next_acc`), so `parse` reads t
   a decision the compiled verifier doesn't refuse is at a dense one (`decide_dense`), which `InScope` asks; every
   statement it accepts parses at a dense form (`acc_dense`: `DenseAt`, the class `RecursiveKS` is stated at).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,4 +1,6 @@
-import Properties.Challenger
+module
+
+public import Properties.Challenger
 
 /-!
 # Proofs of `Properties.Challenger`
@@ -9,6 +11,8 @@ the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the r
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
 proved about `check` (`acceptMeans_iff`) hold of what it accepts.
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger
 

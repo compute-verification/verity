@@ -2,9 +2,13 @@
 PROTOCOL.md §16.1: sparse F2 matrices, and Flock's BLAKE3 compression circuit as a pinned file (`flock-r1cs-rows/v1`)
 whose statement digest `D_b3` the verifier recomputes and compares with the pinned value.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+
+@[expose] public section
 
 namespace Flock
 

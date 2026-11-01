@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameRho
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRho
 
 /-!
 # The session loop's own frames refuse every coin fault (`FrameUnrefused` at `ofLoop`)
@@ -10,6 +12,8 @@ round: an outer coin `1` (`outer_unrefused`), a rank-deficient mask slot (`rank_
 * `LeanRelease.slots_lt`: a rep's outer and `β` rounds are below `refK x`.
 * **`LeanRelease.frameUnrefused_ofLoop`**: `FrameUnrefused` at `ofLoop`, at every statement the loop serves.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

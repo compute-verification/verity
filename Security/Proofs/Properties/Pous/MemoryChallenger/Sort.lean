@@ -1,5 +1,7 @@
-import Mathlib.Data.List.Perm.Basic
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Mathlib.Data.List.Perm.Basic
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # `qsort` commutes with a map its order reads through, and keeps every element
@@ -8,6 +10,8 @@ import Batteries.Tactic.OpenPrivate
 pulled back through `g`, then mapping (`qsort_map`); and each swap is a permutation, so the result holds every element
 of the input (`mem_qsort`).
 -/
+
+@[expose] public section
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 

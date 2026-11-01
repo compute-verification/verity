@@ -9,10 +9,14 @@ the verifier's inner shape, a V* session whose draw is not every unit of its pop
 an inner session whose record holds no draw (`innerDrawn`), and a session at a holo or sparse inner shape or a
 recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`, `zkOnly`).
 -/
-import Flock.RecBudget
-import Flock.RecCoins
-import Flock.RecRecord
-import Flock.Witness
+module
+
+public import Flock.RecBudget
+public import Flock.RecCoins
+public import Flock.RecRecord
+public import Flock.Witness
+
+@[expose] public section
 
 namespace Flock
 namespace RecSetup

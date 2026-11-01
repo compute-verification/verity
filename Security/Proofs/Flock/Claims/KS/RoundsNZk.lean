@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.RoundsN
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+module
+
+public import Proofs.Flock.Claims.KS.RoundsN
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 
 /-!
 # The coins each recorded masked round issues
@@ -13,6 +15,8 @@ that order (`zkRepNs`, `zkVerifyRepWith_readsN`). So each rep stream of an accep
 `zkRepNsOf` (`streams_ns_zk`), its rounds in `spec.repStreams` order the session's `zkNs` (`rounds_ns_zk`), and custody
 reads each round message's coin at that count (`custody_vals_zk`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

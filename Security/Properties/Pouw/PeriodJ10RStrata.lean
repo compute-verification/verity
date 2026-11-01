@@ -1,4 +1,6 @@
-import Properties.Pouw.PeriodJ10R
+module
+
+public import Properties.Pouw.PeriodJ10R
 
 /-!
 # A period's credit over several tile strata of the sampling block, J10-R
@@ -64,6 +66,8 @@ The proof is `Proofs.Pouw.PeriodJ10RStrata`'s: at each stratum, what `Proofs.Pou
 (`CircuitCreditPeriod` at `tileRun`), with the stratum's joint soundness from `StrataDrawIsCoin` and its
 `TileServiceSound`, carried to the period's coins by `pathsAt`, then the union bound.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10RStrata
 

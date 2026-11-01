@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.Walk
-import Proofs.Flock.Claims.Complete.Zk.Transfer
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Walk
+public import Proofs.Flock.Claims.Complete.Zk.Transfer
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
 
 /-!
 # The masked replay passes (`Replay`)
@@ -12,6 +14,8 @@ ended at, every round retained (`RunZk.walk`), so the stream carries the rounds 
 replay at the run's oracle returns too (`replayWith_xfer`, from `Zk.replay` as `Zk.replayWith` at SHA-512,
 `zk_replayWith_std`): `replay_goal`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

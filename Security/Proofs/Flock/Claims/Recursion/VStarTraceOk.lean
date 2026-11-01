@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Recursion.VStarTrace
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Scope.InScope
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.Hm.Place
-import Proofs.Flock.Soundness.Discharge.Hm.Copy
-import Proofs.Flock.Soundness.Discharge.Aliased.Rows
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTrace
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Scope.InScope
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.Hm.Place
+public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 
 /-!
 # `TraceOk` at the deployed statements (`traceOk_deployed`)
@@ -36,6 +38,8 @@ Two facts the checks don't give, the hypotheses here:
   rows the empty salt, `partIn` still succeeds, and `rows` fails. It is a fact of the honest inner prover and of
   V\*'s port widths (`vstarRows`), not of the verifier.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarTraceOk
 

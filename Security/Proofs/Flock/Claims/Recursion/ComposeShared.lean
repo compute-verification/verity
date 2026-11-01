@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Json.Hex
-import Flock.RecCompose
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Hex
+public import Flock.RecCompose
 
 /-!
 # What `flock-verify rec-compose` holds V*'s parts to, read back to their files
@@ -12,6 +14,8 @@ files are distinct with one SHA-512 (`Collides`), or every part shares one `RecS
 the composition's inner shape and rows, one part per V* statement, each accepted under `--zk` without an identifier, no
 two on one coin key. `Proofs.Flock.Claims.Recursion.ComposeParts` reads it at `RecDeploy.partRaw`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

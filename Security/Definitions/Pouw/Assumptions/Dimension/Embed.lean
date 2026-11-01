@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions
 
 /-!
 # M4090 and the embedding theorem (trusted statements; draft semantics)
@@ -41,6 +43,8 @@ program text is free) but must not over-price it.
   `[2139095041, 2147483646]`), and `NanGapConsistent` shows its hypotheses hold together at the tight
   `γ₀ = 16/(3k)`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Embed
 

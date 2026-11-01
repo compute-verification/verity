@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkLock
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.Width
+module
+
+public import Proofs.Flock.Claims.KS.ZkLock
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.KS.Width
 
 /-!
 # The masked simulator's rounds are the record's
@@ -20,6 +22,8 @@ Where `P`'s deployed run at `zkΦ`'s coins decides and accepts, the masked simul
 With the abort (`zkSimAbortAt`), masked KS and the recursion's `zk_KSFlockJR` chain rest on the fork bounds and the
 view's clash alone (`zk_KS_of_fork`, `zk_tableBoundJOnAccR_of_fork`, `zk_KSFlock_of_fork`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

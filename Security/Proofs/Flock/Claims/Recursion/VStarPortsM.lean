@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VStarPorts
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarPorts
 
 /-!
 # Where the stager places the message rounds' rows (an algebra part's `m<i>` ports)
@@ -8,6 +10,8 @@ a port `m<i>` the stager's message round `i` (`Src.msgs`), both reps' rows, rep 
 `out`. So port `m<i>`'s instance `r < 2` reads round `i`'s rep-`r` row (`portRow_algebra`), whichever of the part's
 ports named `m<i>` `portRow` finds first.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

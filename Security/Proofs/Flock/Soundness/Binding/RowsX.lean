@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.Rows
-import Proofs.Flock.Soundness.Binding.RowSeg
+module
+
+public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Soundness.Binding.RowSeg
 
 /-!
 # Rows whose bytes need not be injective: `hm96-sha512/row/v1`, `/row/v2` and `/row-seg/v1` rows together
@@ -12,6 +14,8 @@ hashes chosen per commit string (`enc p`), and an extractor for two different va
 fact follows from `Assumptions.HmRowComputes` as for `HmRows` (`HmRowsX.registered`). `HmRows.toX` is an `HmRows` as one,
 its extractor never needed.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 
 /-!
 # The committed values against registered values, for the compiled `--zk` session
@@ -23,6 +25,8 @@ extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, a
 `qW` bounds the SHA-512 evaluations of one trial: a fresh run and at most `k` waits of at most `R_w` reruns each, so
 `t'(1 + k R_w)` at `t'` per run is an honest budget. Lean counts no evaluations; whoever instantiates `RegCRZC` states it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

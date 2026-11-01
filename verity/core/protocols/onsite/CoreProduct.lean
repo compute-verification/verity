@@ -9,7 +9,11 @@ name, so a product never runs over a component it can't check, and an unlisted c
 
 The command after `IDS` is the core CLI's (`CoreProtocol.Cli`).
 -/
-import CoreOnsite
+module
+
+public import CoreOnsite
+
+@[expose] public section
 
 namespace Core.Product
 

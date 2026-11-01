@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
 /-!
 # The registered `--zk` headline, over what flock-verify accepts
@@ -17,6 +19,8 @@ check now passes.
 At public outputs the check does not tell the registered reads apart (`ScopeZR.scopeZ`), so there what the verifier
 accepts with `--registered F` it accepts without (`verifiesZK_of_R`), and the claims over `VerifiesZK` hold.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.PrefixLive
+module
+
+public import Proofs.Flock.Claims.ZK.PrefixLive
 
 /-!
 # A cut rep stopped at body `n` is the one stopped later, up to its stop (`CutPrefix.repCut_cut_agree`)
@@ -14,6 +16,8 @@ the coupling at any size (`squeezeP_cut_agree`) and the walk needs none of `Pref
 * **`repCut_shift`**: a cut rep reads only its history's size; from two histories of one size it ends the same way after
   the same bodies (`Shift`, `go_of_shift`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.CutPrefix
 

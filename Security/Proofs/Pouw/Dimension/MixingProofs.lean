@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.Mixing
-import Proofs.Pouw.Dimension.Proofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Mixing
+public import Proofs.Pouw.Dimension.Proofs
 
 /-!
 # The mixing lemma: proofs
@@ -9,6 +11,8 @@ import Proofs.Pouw.Dimension.Proofs
 * `algBound4090`: with A1, `cost ≥ 16·(1 − γ₁)·D`; `ttNCPOfA1A2` and its W1 instance `ttNCPOfA1A2W1`.
 * `alg4090Witness`, `a2Witness4090`: the new hypotheses are satisfiable.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

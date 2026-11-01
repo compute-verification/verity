@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
-import Proofs.Flock.Claims.Complete.Zk.ProverOk
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+public import Proofs.Flock.Claims.Complete.Zk.ProverOk
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
 
 /-!
 # The honest masked rep proof fits its shape
@@ -25,6 +27,8 @@ shape the masked verifier decodes it at.
 and `Zk.Level0Verifier`) and the mask-rank bound (`L0.complete_jsonT_closed`; with the bound proved,
 `L0.complete_jsonT_of_spec`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

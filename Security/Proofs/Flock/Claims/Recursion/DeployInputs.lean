@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.DeployInputs
-import Flock.RecBudget
+module
+
+public import Proofs.Flock.Claims.DeployInputs
+public import Flock.RecBudget
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
@@ -27,6 +29,8 @@ registered reads and the identifier's absence, `Registered.checkFull`, `RecSetup
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
 shipped ones, outside the oracle.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

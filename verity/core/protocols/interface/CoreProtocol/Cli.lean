@@ -12,8 +12,12 @@ a composition, a service):
 outcome can't be written canonically. In `serve` a malformed case line is answered as a rejection, with no
 commitment.
 -/
-import CoreProtocol.Protocol
-import CoreProtocol.Protocol.Canonical
+module
+
+public import CoreProtocol.Protocol
+public import CoreProtocol.Protocol.Canonical
+
+@[expose] public section
 
 namespace Core
 

@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # The JSON library's specification: completeness's JSON assumption
@@ -21,6 +23,8 @@ Mathlib only, as `Definitions/` is: the printers are parameters, which the compl
 prover's `FlockComplete.printJ` (a total printer of the bytes `Json.compress` prints, so proofs read its length) and
 `Flock.canon`.
 -/
+
+@[expose] public section
 
 namespace Claims
 

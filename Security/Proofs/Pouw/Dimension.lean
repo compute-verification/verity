@@ -1,5 +1,7 @@
-import Definitions.Pouw.Guarantees.Dimension
-import Proofs.Pouw.Dimension.OpenPipeProofs
+module
+
+public import Definitions.Pouw.Guarantees.Dimension
+public import Proofs.Pouw.Dimension.OpenPipeProofs
 
 /-!
 # Proofs of the dimension argument's guarantee
@@ -7,6 +9,8 @@ import Proofs.Pouw.Dimension.OpenPipeProofs
 One theorem `Pouw.SecurityProofs.Dimension.G : Pouw.Guarantees.Dimension.G` per guarantee, which is the theorem in
 `Pouw.Dimension.OpenPipe` (`OpenPipeProofs`) that proves the same statement under its old name.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Dimension
 

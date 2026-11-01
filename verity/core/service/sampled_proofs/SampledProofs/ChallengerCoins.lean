@@ -25,7 +25,11 @@ reason (`select`, code `coins`), its `after` the registration's digest.
 The difftest's pieces (`Pieces.table`): `challenger_read` (`read_reason`) and `challenger_draw_coins`
 (`coins_reason`), each `{"reason"}`, or `{"refused": why}` where Python raises.
 -/
-import SampledProofs.ChallengerSession
+module
+
+public import SampledProofs.ChallengerSession
+
+@[expose] public section
 
 namespace SampledProofs.Challenger
 

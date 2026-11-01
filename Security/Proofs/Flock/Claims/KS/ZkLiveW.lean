@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkBoundW
+module
+
+public import Proofs.Flock.Claims.KS.ZkBoundW
 
 /-!
 # Every masked table's bound from the live sessions, off the table on a witness lane
@@ -14,6 +16,8 @@ statement, from `ZkLiveAccWJ` where some run accepts, `zk_tableBoundJAccAtR` (wh
 `Claims.Flock.TableBoundJAccAtR.tableBoundθAccAtR`), so the masked `plain_tableBoundθAccAt` counted per round follows
 from `ZkLiveAccWJ` where some run accepts (`zk_tableBoundθAccAtR`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

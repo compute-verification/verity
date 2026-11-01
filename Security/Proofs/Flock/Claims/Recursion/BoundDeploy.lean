@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarBound
-import Proofs.Flock.Claims.Recursion.DeployPremises
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBound
+public import Proofs.Flock.Claims.Recursion.DeployPremises
 
 /-!
 # `KSBound` at the deployment (option (d))
@@ -35,6 +37,8 @@ reads them apart.
 
 Statements only, with those three lemmas and (P1) at the deployed plain verifier's own steps (`plainKSAbort_bd`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

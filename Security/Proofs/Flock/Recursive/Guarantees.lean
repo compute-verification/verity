@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Statements
-import Proofs.Flock.Soundness.ZK.Hiding
+module
+
+public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Proofs of the recursive audit's guarantees
@@ -16,6 +18,8 @@ import Proofs.Flock.Soundness.ZK.Hiding
   salts the simulated outer session no longer reads. `recursiveZK_le` is the same at any hm96 hiding bound `δ`;
   `Proofs.Flock.Recursive.OsSalts` takes it to the salts the operating system gives (A3).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

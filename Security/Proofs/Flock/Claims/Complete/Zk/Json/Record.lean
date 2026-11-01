@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Json
-import Proofs.Flock.Claims.Complete.Zk.Json.QSort
+module
+
+public import Proofs.Flock.Claims.Complete.Json
+public import Proofs.Flock.Claims.Complete.Zk.Json.QSort
 
 /-!
 # The honest masked record as a JSON value, and its S2
@@ -17,6 +19,8 @@ its `printJ` (`recordJson_eqZk`).
   spec the statement's.
 * **S2 passed, the masked record decodes as the plain one** at `specZ` (`decodeWith_specZ`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

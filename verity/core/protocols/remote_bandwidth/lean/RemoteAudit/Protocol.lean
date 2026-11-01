@@ -1,6 +1,8 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import RemoteAudit.Difftest
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import RemoteAudit.Difftest
 
 /-!
 # A remote bandwidth session as a core protocol
@@ -32,6 +34,8 @@ hiding term, since the prover is sent the coin commitment only at the session's 
 session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
 why.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Protocol
 

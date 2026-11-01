@@ -3,8 +3,12 @@
 in a verdict monad `M`, and `verifyWith h` runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text;
 what hashes nothing is the compiled verifier's own, lifted (`liftTM`, `liftLM`).
 -/
-import Flock.With.Transcript
-import Flock.Verify
+module
+
+public import Flock.With.Transcript
+public import Flock.Verify
+
+@[expose] public section
 
 namespace Flock
 

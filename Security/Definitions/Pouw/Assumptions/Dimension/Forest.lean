@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.Pipe
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Pipe
 
 /-!
 # Theorem 1 of `a1-cost.md` (the forest argument): statements (trusted)
@@ -23,6 +25,8 @@ free values, `F₁`-functions free.
   closed pipe at `c_s = 8` (`AlgBoundQuad8`), and TT_NCP from A2 alone into the quadratic pipe (`TTNCPQuadOfA2`).
   The open part of `A1_cost(2, 0)` is `A1_nonquad` (`A1CostOfNonquad`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Forest
 

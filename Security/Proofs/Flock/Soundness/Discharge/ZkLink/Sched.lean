@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 
 /-!
 # `Zk.schedule` at every m it accepts
@@ -7,6 +9,8 @@ import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 `Zk.schedule` accepts `m` from 25 to 35 (`schedule_spec`). At each, its schedule has the shape `TabZK` needs, its `m`, and
 level 0 padded by `t_pad` meets `PadOK` (`schedule_zk`), from `zkSchedFacts_all`, checked by `decide +kernel` at each `m`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

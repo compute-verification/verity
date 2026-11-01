@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.Fp8Mma
-import Proofs.Pouw.Dimension.EmbedProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Fp8Mma
+public import Proofs.Pouw.Dimension.EmbedProofs
 
 /-!
 # The RTX 4090's tensor-core shapes in `M4090`: proofs
@@ -7,6 +9,8 @@ import Proofs.Pouw.Dimension.EmbedProofs
 * `shapeTable4090`, `shapeWF4090`: the table, by cases.
 * `ceiling4090`: one `int` instruction per target word is a well-formed `M4090` program at `16·|W|`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Fp8Mma
 

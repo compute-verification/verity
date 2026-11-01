@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameBeta
+module
+
+public import Proofs.Flock.Claims.ZK.FrameBeta
 
 /-!
 # The frames refuse an outer coin `1` (`FrameUnrefused`'s outer fault)
@@ -17,6 +19,8 @@ round 1 squeezes them, and the frame's taking of a round's coins in the algebrai
 * **`LeanRelease.outer_unrefused`**: the fault. The opening at `Masked.outerSlot x j r` is rep `2j + r`'s round 1, whose
   state is that one (`repState_outer`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

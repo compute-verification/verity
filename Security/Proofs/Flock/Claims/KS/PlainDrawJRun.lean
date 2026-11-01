@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainDrawJMove
-import Proofs.Flock.Claims.Recursion.NextJ
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawJMove
+public import Proofs.Flock.Claims.Recursion.NextJ
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
 
 /-!
 # The plain verdict at the draw from an accepting `nextJ` step
@@ -23,6 +25,8 @@ runs the plain verdict and custody's reading at the coin-substituted value `coin
   `⟨coinSubJ spec c₁ mids f.j, f.proofs⟩`), `plainVerdictAtJK id` holds at the step's live outcome and its link's root.
   The reader's premise moves to what `wrPDJK` writes by `txNoOffAtJK_of_records`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.Custody
 

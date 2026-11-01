@@ -1,8 +1,12 @@
-import Definitions.Pouw.Dimension.Lift
-import Definitions.Pouw.Assumptions.Dimension.Pipe
-import Proofs.Pouw.Dimension.MinRankProofs
+module
+
+public import Definitions.Pouw.Dimension.Lift
+public import Definitions.Pouw.Assumptions.Dimension.Pipe
+public import Proofs.Pouw.Dimension.MinRankProofs
 
 /-! # `Lift_MinRank` and MinRank ≥ ρ: the witnesses -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

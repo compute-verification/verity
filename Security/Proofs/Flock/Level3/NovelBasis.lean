@@ -4,17 +4,21 @@
 `X̂_c`, `c < 2^L`, are linearly independent. The executable's `sIter` and `svTable` compute these values, and the kernel
 checks `s_i(β_i) ≠ 0` for `i < 40` on `svTable 40`.
 -/
-import Proofs.Flock.Level3.Nodes
-import Flock.Ligerito
-import Mathlib.Algebra.Polynomial.Sequence
-import Proofs.Flock.Level3.NovelBasis.Steps0
-import Proofs.Flock.Level3.NovelBasis.Steps14
-import Proofs.Flock.Level3.NovelBasis.Steps20
-import Proofs.Flock.Level3.NovelBasis.Steps24
-import Proofs.Flock.Level3.NovelBasis.Steps28
-import Proofs.Flock.Level3.NovelBasis.Steps31
-import Proofs.Flock.Level3.NovelBasis.Steps34
-import Proofs.Flock.Level3.NovelBasis.Steps37
+module
+
+public import Proofs.Flock.Level3.Nodes
+public import Flock.Ligerito
+public import Mathlib.Algebra.Polynomial.Sequence
+public import Proofs.Flock.Level3.NovelBasis.Steps0
+public import Proofs.Flock.Level3.NovelBasis.Steps14
+public import Proofs.Flock.Level3.NovelBasis.Steps20
+public import Proofs.Flock.Level3.NovelBasis.Steps24
+public import Proofs.Flock.Level3.NovelBasis.Steps28
+public import Proofs.Flock.Level3.NovelBasis.Steps31
+public import Proofs.Flock.Level3.NovelBasis.Steps34
+public import Proofs.Flock.Level3.NovelBasis.Steps37
+
+@[expose] public section
 
 open Polynomial Flock
 

@@ -8,7 +8,11 @@ statement: `RecSetup.commits` runs `checkSchedule` on the staged transcript, and
 no staged statement. `RecDeploy.recTr` now lists the rounds the coin server records, the reps' alone, with round 0
 under the record's link.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.RecSchedule
 

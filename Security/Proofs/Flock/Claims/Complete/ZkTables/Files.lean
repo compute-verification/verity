@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Goals
-import Proofs.Flock.Claims.Complete.Zk.Walk
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Goals
+public import Proofs.Flock.Claims.Complete.Zk.Walk
 
 /-!
 # The honest masked run's proof files, at several tables
@@ -20,6 +22,8 @@ and the record's size, which `ready` gives (`Run.recordFits`).
 * `filesAt`, `filesJ`: `FilesAt` from `RepShapedAt`, `FilesJ` from `RepShapedJ`; so `complete` holds with it for
   `RecordJ` (`completeJR`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

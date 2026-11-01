@@ -7,12 +7,16 @@ and communication by the network certifier over the period (`NetworkCheck.Period
 period's link-windows certified and proved, and the bound `K` on what left the site). `Core.Composition.product` composes
 them: every component accepts or onsite doesn't, and any component's rejection rejects onsite whatever the others answer.
 -/
-import CoreComposition.Cases
-import NetworkCheck.Period
-import PousCheck.RunProtocol
-import PouwCheck.Protocol
-import RemoteAudit.Protocol
-import SampledProofs.OneStage
+module
+
+public import CoreComposition.Cases
+public import NetworkCheck.Period
+public import PousCheck.RunProtocol
+public import PouwCheck.Protocol
+public import RemoteAudit.Protocol
+public import SampledProofs.OneStage
+
+@[expose] public section
 
 namespace Core.Onsite
 

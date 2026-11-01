@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Compose.HoloStageCoins
-import Proofs.Flock.C3.RegLevels.LgHeld
-import Proofs.Flock.Recursive.HPortTie
+module
+
+public import Proofs.Flock.C3.Compose.HoloStageCoins
+public import Proofs.Flock.C3.RegLevels.LgHeld
+public import Proofs.Flock.Recursive.HPortTie
 
 /-!
 # `LaterCoins` at the verifier's map, from its hold of the inner session
@@ -16,6 +18,8 @@ record facts the stages read are named below (`RecordPoints` … `RepStagesCount
 `histPts`: a source with its link points set to the history's first coin under `holoMap`, where `hpts`
 (`PointsFromHistory`) is `pointsFromHistory_histPts`. At a free source it does not follow from the rest.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

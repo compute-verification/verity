@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.HoloSparseWords
+module
+
+public import Proofs.Flock.C3.Compose.HoloSparseWords
 
 /-!
 # `LaterCoins` from the inner session's records, word by word
@@ -10,6 +12,8 @@ the history's rounds as it holds words (a sparse phase's ζ_c is one round of si
 `laterCoins_of_held`: `LaterCoins` at a run whose link points are the record's, whose sparse phases are each
 `StageHeldW` and whose R stages are each `StageHeld`, each from where the one before ends.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

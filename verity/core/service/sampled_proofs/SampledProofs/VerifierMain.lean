@@ -1,5 +1,7 @@
-import Difftest
-import SampledProofs.Pieces
+module
+
+public import Difftest
+public import SampledProofs.Pieces
 
 /-!
 # `sampled-proofs-verifier`: the verifier of record, and the challenger's coins
@@ -10,6 +12,8 @@ The verifier's functions (`Pieces.verifier`) behind `Difftest.respond`'s line pr
 `one_stage.verifier.coins`) reads its coins from here, so the Python never reads them from the operating system itself;
 the draw of record is then this process's `Select.select` on those bytes.
 -/
+
+@[expose] public section
 
 namespace SampledProofs.VerifierMain
 

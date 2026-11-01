@@ -1,9 +1,11 @@
-import Definitions.Pouw.Assumptions.Dimension.RouteU
-import Proofs.Pouw.Dimension.Proofs
-import Proofs.Pouw.Dimension.MixingProofs
-import Proofs.Pouw.Dimension.CausalProofs
-import Proofs.Pouw.NCP.RouteUProofs
-import Proofs.Pouw.NCP.RouteUWordProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.RouteU
+public import Proofs.Pouw.Dimension.Proofs
+public import Proofs.Pouw.Dimension.MixingProofs
+public import Proofs.Pouw.Dimension.CausalProofs
+public import Proofs.Pouw.NCP.RouteUProofs
+public import Proofs.Pouw.NCP.RouteUWordProofs
 
 /-!
 # Theorem D on route U's checked words: proofs
@@ -19,6 +21,8 @@ import Proofs.Pouw.NCP.RouteUWordProofs
   `ttNCPOfA1A2U` and `ttNCPOfA1A2W1U`.
 * `algWitnessU`, `algSharpU`, `alg4090WitnessU`, `algWrappedWitnessU`: one priced instruction at 16 per route-U word.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.RouteUProofs
 

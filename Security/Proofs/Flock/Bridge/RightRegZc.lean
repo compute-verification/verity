@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 
 /-!
 # Right on the registration, with canonical openings
@@ -17,6 +19,8 @@ right and more are wrong:
   `OpeningsCanon`. Its knowledge and link terms are `analysisZCReg`'s, and its `cover` is the same argument: the
   unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

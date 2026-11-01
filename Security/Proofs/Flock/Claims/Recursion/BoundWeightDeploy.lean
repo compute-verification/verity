@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundWeight
-import Proofs.Flock.Claims.Recursion.BoundRouteCols
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundWeight
+public import Proofs.Flock.Claims.Recursion.BoundRouteCols
 
 /-!
 # The deployed bound record at `coverW`, and the route with (P3) discharged
@@ -27,6 +29,8 @@ reading back (`RecDeploy.ReadsBackB`, `RecDeploy.ksLin2_deployed_open`, with the
 commit the earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Replay.ProverOk
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Replay.ProverOk
 
 /-!
 # The masked prover's pieces at every good case (`ProverOkZk`)
@@ -11,6 +13,8 @@ import Proofs.Flock.Claims.Complete.Replay.ProverOk
   under `hm96-sha512/v1` (`CaseZk.hm96`), whose cap is `2^cap` digests of 64 bytes (`commitRowsP_capSize`), and the
   `--zk` schedule's level 0 caps at most its depth and at most `32` (`zkSchedule_cap0`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

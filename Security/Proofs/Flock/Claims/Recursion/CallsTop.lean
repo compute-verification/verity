@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.CallsRep
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsRep
 
 /-!
 # A verdict's SHA-512 calls on every run
@@ -11,6 +13,8 @@ times per table and per rep stream and at most twice per round of each of the re
 picks each step by the head of the program it bounds (`cl_bind_of`, `cl_head`): a failed `refine` against the wrong
 program unfolds both and costs more than the step.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

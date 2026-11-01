@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Runs
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Runs
 
 /-!
 # The honest masked session runs
@@ -14,6 +16,8 @@ each draws the case's coins at the session's rounds, where `¬ BadZk` passes the
 (`commitPZk_ok`) and the pads' commitment (`innerCommitP_ok`); the session walks its two rep streams in order
 (`Runs.forIn_idx`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

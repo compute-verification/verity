@@ -1,6 +1,10 @@
 /-
 PROTOCOL.md §2.5: SHA-256 (FIPS 180-4) and BLAKE3 (compression, hash, keyed hash).
 -/
+module
+
+@[expose] public section
+
 namespace Flock
 
 abbrev Digest := ByteArray

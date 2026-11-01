@@ -5,8 +5,12 @@ padding): the block `P(ℓ)` (`Flock.HmRow.rowPrefixV2`), then the bits least si
 carries `ℓ` as a u64, and `ℓ` fixes how many bits the bytes after it hold. The soundness package's v2 `HmRows` takes its
 `enc_inj` from here.
 -/
-import Flock.HmRow
-import Mathlib.Data.List.Basic
+module
+
+public import Flock.HmRow
+public import Mathlib.Data.List.Basic
+
+@[expose] public section
 
 open Flock.HmRow
 

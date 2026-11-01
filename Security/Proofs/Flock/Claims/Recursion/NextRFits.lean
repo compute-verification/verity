@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.NextRHonest
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.C3.Compose.HoloStreamSizes
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRHonest
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
 
 /-!
 # The honest rows fit: `RepFits`
@@ -28,6 +30,8 @@ schedule's rounds agree round by round, on which rounds absorb element values an
 its shape fixes and zero nonces (`sizedProof`), so one honest rep reads back on a run that exists (`readRep₀`).
 `ReadsBack`'s `SchedOf` holds at every rep whose table has a `fast100` schedule and extra claims (`schedOf_repCtx`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

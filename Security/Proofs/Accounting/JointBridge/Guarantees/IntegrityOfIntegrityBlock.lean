@@ -1,5 +1,7 @@
-import Definitions.Accounting.JointBlocks
-import Proofs.Flock.EndToEnd.Blocks.Statement
+module
+
+public import Definitions.Accounting.JointBlocks
+public import Proofs.Flock.EndToEnd.Blocks.Statement
 
 /-!
 # The integrity audit of a server-time block is C-Flock's integrity audit of that block (trusted)
@@ -20,6 +22,8 @@ sampled-proofs target couples into the causal game (`Accounting.PeriodLive`).
 C-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityBlock`, this module imports
 them.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.NextSha
+module
+
+public import Proofs.Flock.Claims.Recursion.NextSha
 
 /-!
 # A rep's verdict at the proofs' files (`verifyRepWith_filesAt`)
@@ -8,6 +10,8 @@ whose lift of a returning `V` computation returns (`liftV_ok_ocv` for `OCV`): th
 extra claims as `verifyRepWith_split` reads them, the file's shape is `shapeAt` (`repFileShape_shapeAt`), and a shaped
 proof's file decodes to it (`decode_filesAt`). `verifyRepWith_filesAt_oc` is the oracle monad's case.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

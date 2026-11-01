@@ -3,8 +3,12 @@ The `#guard`s that pin the composition's verdict rule on a product of two stubs,
 k = 2): every pair of the components' verdicts, reject dominating; a commitment that doesn't bind their digests; and
 every way the cases can fail to fit the composition.
 -/
-import CoreComposition.Cases
-import CoreComposition.Stubs
+module
+
+public import CoreComposition.Cases
+public import CoreComposition.Stubs
+
+@[expose] public section
 
 namespace Core.Composition.Guards
 

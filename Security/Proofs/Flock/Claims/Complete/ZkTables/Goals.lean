@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Prover
-import Proofs.Flock.Claims.Complete.ZkTables.Session
-import Proofs.Flock.Claims.Complete.ZkTables.Decode
-import Proofs.Flock.Claims.Complete.Json.Text
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Prover
+public import Proofs.Flock.Claims.Complete.ZkTables.Session
+public import Proofs.Flock.Claims.Complete.ZkTables.Decode
+public import Proofs.Flock.Claims.Complete.Json.Text
 
 /-!
 # The record's checks at the honest masked run of several tables
@@ -16,6 +18,8 @@ extra claims. What `RecordAt` asks of the proof files (`FilesAt`: their sizes, e
 shape to a proof of its parameters, cap and pads' root) is left named, and `RecordAt` follows from it (`recordAt_of`;
 at several tables `recordJ_of`); so `complete` holds with `FilesJ` in place of `RecordJ` (`completeJ`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

@@ -1,7 +1,9 @@
-import Properties.Pouw.Period
-import Proofs.Accounting.ComposePeriod
-import Proofs.Accounting.Compose.SplitRateClosed
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Properties.Pouw.Period
+public import Proofs.Accounting.ComposePeriod
+public import Proofs.Accounting.Compose.SplitRateClosed
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Proofs: a period's work over the windows PoUW's deployed check accepts (`Properties.Pouw.Period`)
@@ -22,6 +24,8 @@ Its premises are met: `Proofs.Pouw.Period.Accept` evaluates the deployed `PouwCh
 the H1 loop's parameters for every ascending draw of 24 of 144 units (`check_h1`), and `Proofs.Pouw.Period.Honest`
 builds a period of those windows, the salt each window's live coin, that meets every premise (`h1_meets`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period.SecurityProofs
 

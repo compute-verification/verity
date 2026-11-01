@@ -1,5 +1,7 @@
-import Lean.Data.Json.Basic
-import Std.Data.TreeMap.Raw.Lemmas
+module
+
+public import Lean.Data.Json.Basic
+public import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # `Json` equivalence Lean can reason through
@@ -12,6 +14,8 @@ exponent, as `canon` reads the integers it accepts). It is equality of forms (`j
 the order of its tree, key order in a well-formed one), so `drawEq`, `JsonEquiv` on optional values, decides it
 (`drawEq_iff`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.ServedWork
-import Properties.Pouw.PeriodJ10R
+module
+
+public import Definitions.Pouw.Assumptions.ServedWork
+public import Properties.Pouw.PeriodJ10R
 
 /-!
 # The served PoUW protocol's work: priced work on the prover's machines from an accepted period
@@ -46,6 +48,8 @@ a model where a register word that an atomic or a reduction writes costs an `alu
 
 The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its honest and nontrivial lemmas.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served
 

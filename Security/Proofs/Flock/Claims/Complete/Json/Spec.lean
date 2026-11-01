@@ -1,9 +1,11 @@
-import Flock.Canon
-import Std.Data.TreeMap.Raw.Lemmas
-import Definitions.Claims.Json
-import Definitions.Claims
-import Proofs.Flock.Claims.JsonEq
-import Proofs.Flock.Claims.Complete.Prover.Print
+module
+
+public import Flock.Canon
+public import Std.Data.TreeMap.Raw.Lemmas
+public import Definitions.Claims.Json
+public import Definitions.Claims
+public import Proofs.Flock.Claims.JsonEq
+public import Proofs.Flock.Claims.Complete.Prover.Print
 
 /-!
 # What the record's round trip needs from the JSON library
@@ -18,6 +20,8 @@ objects have alike values at each key (`Same.getObjVal`) and the same missing ke
 values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`) passes on them. The record's numbers
 are all `Lean.toJson` of naturals, so printable.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

@@ -1,4 +1,6 @@
-import Properties.Composition
+module
+
+public import Properties.Composition
 
 /-!
 # The composition's properties, proved
@@ -6,6 +8,8 @@ import Properties.Composition
 `answerAccepts` and `acceptMeans` of `Properties.Composition`, by unfolding `Core.Protocol.answer`, and
 `Core.Composition.check` into `run` and `judge`.
 -/
+
+@[expose] public section
 
 namespace Properties.Composition
 

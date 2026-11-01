@@ -1,6 +1,8 @@
-import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
-import Proofs.Flock.EndToEnd.Blocks
-import Proofs.Pouw.Prob
+module
+
+public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
+public import Proofs.Flock.EndToEnd.Blocks
+public import Proofs.Pouw.Prob
 
 /-!
 # Proof of the integrity audit of a server-time block from C-Flock's integrity audit of that block
@@ -11,6 +13,8 @@ total more than `ε·units ≥ ln(1/δ)/q`. Read on the horizon's records, that 
 (`ServerBlocks.BlockEscapes`), the event `Flock.SecurityProofs.IntegrityBlock` bounds; the realization's `law` carries
 the bound from the horizon's game to the uniform coins.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

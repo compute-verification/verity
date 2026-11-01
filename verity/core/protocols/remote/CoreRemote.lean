@@ -4,9 +4,13 @@ components are integrity by sampled proofs' one-stage audit (`SampledProofs.OneS
 useful work (`PouwCheck.protocol`). `Core.Composition.product` composes them: both accept or remote doesn't, and either
 one's rejection rejects remote whatever the other answers.
 -/
-import CoreComposition.Cases
-import PouwCheck.Protocol
-import SampledProofs.OneStage
+module
+
+public import CoreComposition.Cases
+public import PouwCheck.Protocol
+public import SampledProofs.OneStage
+
+@[expose] public section
 
 namespace Core.Remote
 

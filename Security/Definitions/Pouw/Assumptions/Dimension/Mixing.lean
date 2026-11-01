@@ -1,5 +1,7 @@
-import Definitions.Pouw.Dimension.Defs
-import Definitions.Pouw.Assumptions.Dimension.Assumptions
+module
+
+public import Definitions.Pouw.Dimension.Defs
+public import Definitions.Pouw.Assumptions.Dimension.Assumptions
 
 /-!
 # The mixing lemma: Theorem D in AlgM_4090, and `TT_NCP_of_A1_A2` (trusted statements)
@@ -20,6 +22,8 @@ which A2 absorbs.
 The mixing lemma is `cost ≥ 16·|B| + c_s·|R|`, `|B| ≥ D − dim W` and `|R| ≥ L(W)`, for `W = T ∩ (span R ⊔ V₀)` and
 `D = dim T` (`MixingLemma`). With A1(c, γ₁) and `c·c_s ≥ 16` it gives `cost ≥ 16·(1 − γ₁)·D` (`AlgBound4090`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

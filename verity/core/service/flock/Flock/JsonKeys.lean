@@ -3,7 +3,11 @@ A key named twice in one JSON object. `Lean.Json.parse` keeps one value per key,
 (a `--registered` file's port, or a port's key) would read as naming it once; `FlockVerify.registeredInput` refuses
 such a file by `dupKey`, on the text `Json.parse` accepted.
 -/
-import Lean.Data.Json
+module
+
+public import Lean.Data.Json
+
+@[expose] public section
 
 namespace Flock.JsonKeys
 

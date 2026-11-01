@@ -1,5 +1,7 @@
-import Definitions.NetworkCertifier.Guarantees.SampledAudit
-import Proofs.Flock.Claims.Prob
+module
+
+public import Definitions.NetworkCertifier.Guarantees.SampledAudit
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # The sampled audit implies `Accepted`
@@ -19,6 +21,8 @@ the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mo
   or another correct unit's boundary value, each the trace's. An input reads the ingress the trace carries (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a
   later step's ingress (`Good`).
 -/
+
+@[expose] public section
 
 namespace NetTiming.SampledAuditProof
 

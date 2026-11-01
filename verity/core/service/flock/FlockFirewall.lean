@@ -5,12 +5,16 @@
 `flock-firewall hello`, a firewalled session's `Hello` at a nonce it draws, `Flock.Firewall.Hello.cmd`,
 `flock-firewall session`, the firewall's session loop, which owns the auditor's connection, `Flock.Firewall.Session.cmd`,
 and `flock-firewall finish`, a firewalled rep's proof file computed by the firewall, `Flock.Firewall.Finish.cmd`. -/
-import Flock.Firewall
-import Flock.Firewall.Contract
-import Flock.Firewall.Finish
-import Flock.Firewall.Frame
-import Flock.Firewall.Hello
-import Flock.Firewall.Session
+module
+
+public import Flock.Firewall
+public import Flock.Firewall.Contract
+public import Flock.Firewall.Finish
+public import Flock.Firewall.Frame
+public import Flock.Firewall.Hello
+public import Flock.Firewall.Session
+
+@[expose] public section
 
 def main : List String → IO UInt32
   | "contract" :: files => Flock.Firewall.Contract.cmd files

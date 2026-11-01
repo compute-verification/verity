@@ -1,5 +1,7 @@
-import Properties.Pouw.ServedValues
-import Proofs.Pouw.PeriodJ10R
+module
+
+public import Properties.Pouw.ServedValues
+public import Proofs.Pouw.PeriodJ10R
 
 /-!
 # Proof of `RightValues`
@@ -11,6 +13,8 @@ live in a credited window (`good_live`, through `credited_iff`), so the size the
 `σ` times the words they miss of `N_live` (`creditedSize_sub_le`), and `(1 − ε(j))₊·N_live` right words give
 `(1 − ε_skip)₊·S` right size (`creditFloor_le`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.ServedValues.SecurityProofs
 

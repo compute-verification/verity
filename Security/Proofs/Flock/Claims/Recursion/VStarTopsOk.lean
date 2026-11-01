@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VStarDense
-import Proofs.Flock.Claims.Recursion.VStarCapL
-import Proofs.Flock.Claims.Recursion.SlotsCalls
-import Proofs.Flock.Claims.Recursion.PartsVStar
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarDense
+public import Proofs.Flock.Claims.Recursion.VStarCapL
+public import Proofs.Flock.Claims.Recursion.SlotsCalls
+public import Proofs.Flock.Claims.Recursion.PartsVStar
 
 /-!
 # Every level's tops are read and every cap accepts, at the honest run (`hT_honest`, `hC_honest`)
@@ -21,6 +23,8 @@ reps' stream rounds and the two reps' tops differ at each later level (the tape 
 
 `hok_honest` is `hok_shaped` with both discharged.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

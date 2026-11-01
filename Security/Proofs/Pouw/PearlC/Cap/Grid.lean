@@ -1,9 +1,11 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Definitions.Pouw.PearlC.Defs
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
+module
+
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.PearlC.Defs
+public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # The FP32 values in order, and a value's neighbours (the cap circuit's certificates)
@@ -22,6 +24,8 @@ is an index step:
 * `wordIdx w` reads a word's sign-magnitude encoding as an integer. The circuit's neighbours of a word (`predWord`,
   `succWord`, `_Cmp.pred` and `_Cmp.succ` word for word) step its index by one (`wordIdx_predWord`, `wordIdx_succWord`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Cap
 

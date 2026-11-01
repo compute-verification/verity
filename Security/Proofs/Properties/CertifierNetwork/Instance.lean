@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierNetwork.Accepted
+module
+
+public import Proofs.Properties.CertifierNetwork.Accepted
 
 /-!
 # The completeness statements' honest cases, instantiated
@@ -13,6 +15,8 @@ the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its
 `Digested` is the one hypothesis left as one: `parameters` reads `Flock.canonUtf8`, well-founded recursion the kernel does
 not evaluate, so no proof evaluates it on a configuration (`DeviceOutputAccepted`'s module docstring).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork.Instance
 

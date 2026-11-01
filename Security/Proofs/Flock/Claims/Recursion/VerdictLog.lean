@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DecodeLog
-import Proofs.Flock.Claims.DeployOC
+module
+
+public import Proofs.Flock.Claims.Recursion.DecodeLog
+public import Proofs.Flock.Claims.DeployOC
 
 /-!
 # The plain verdict's SHA-512 calls
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.DeployOC
 files, and each table's two reps' own calls (`repLog`, what the rep appends to the empty log), and nothing else.
 `verifyRepWith_congr` is `verifyRep_congr` for any oracle.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

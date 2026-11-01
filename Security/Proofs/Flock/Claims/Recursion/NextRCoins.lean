@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.NextRRows
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRRows
 
 /-!
 # The honest files' `finalC` is at the reader's `z`
@@ -16,6 +18,8 @@ first value of rep `k`'s round-2 coin in `repCtx`. Here it holds wherever the re
 * **The deployed verifier's coins are enough** (`repLens_sum`, `hlen_of_k`): the reps' rounds are the plain verifier's
   recorded rounds (`rounds false`), so coins numbering `(V false).k x` meet the count premise.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

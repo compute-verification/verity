@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameAsks
-import Proofs.Flock.Claims.ZK.FrameSched
+module
+
+public import Proofs.Flock.Claims.ZK.FrameAsks
+public import Proofs.Flock.Claims.ZK.FrameSched
 
 /-!
 # A rep's scheduled rounds against its plan
@@ -19,6 +21,8 @@ that schedule's counts are a prefix of the plan's.
   plan's count for it (`repPlan_list`: the plan is those asks, then the inner proof's; `sched_facts`: every `--zk`
   schedule has a lane round and counts within a squeeze's, by `decide +kernel`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

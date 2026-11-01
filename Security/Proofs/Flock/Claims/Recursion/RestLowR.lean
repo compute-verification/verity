@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.ResLowJP
+module
+
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.ResLowJP
 
 /-!
 # The rest's lowering (`RestLowR`, `SaltRowRest`) at the layout of record, and its joint form
@@ -36,6 +38,8 @@ true and free of collisions. The facts that don't read across parts stay at `Joi
   (`CopyTopRP`), at `DecompBV` (`RecKSDecompLV`), and `recKSDecompDV_of_leavesJ` its instance at `DeployedR.layR elem`,
   where `SaltRowsJ` alone stands for both leaves and the cap tie is `OutBindRP` and `SideCapR` (`capTop_ofP`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestLow
 

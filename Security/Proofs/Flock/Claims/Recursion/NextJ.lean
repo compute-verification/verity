@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.NextCs
+module
+
+public import Proofs.Flock.Claims.Recursion.NextCs
 
 /-!
 # `IVStar`'s last step at the record's parsed value (`nextJ`)
@@ -28,6 +30,8 @@ decoding stays among the verdict's checks here (`LastSplitJ`'s `checks`), and no
 `LastSplitJ` whose checks are owned by parts that don't decode the proofs has an unsatisfiable `hlow`. The route is
 `NextS`: its last message carries the decoded proofs and its decision decodes no proof file (`RecDeploy.decompB_nextS`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

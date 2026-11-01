@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZkCols
+module
+
+public import Proofs.Flock.Claims.ZkCols
 
 /-!
 The masked reader `zkRunCols` (`Proofs.Flock.Claims.ZkCols`) on a recorded `flock-circuit --zk` session, held to the
@@ -20,6 +22,8 @@ times regions) are each table's setup, under the `hm96-sha512/v1` leaf scheme. O
 `--zk` RoPE d64 sessions, k_log 22, 8 claims): `sessions/drawn/*` at m 25 with table `circuit`, `sessions/j2/*` at m 25
 with tables `circuit-00 circuit-01`, `sessions/m26/*` at m 26 with table `circuit`.
 -/
+
+@[expose] public section
 
 open Lean Flock
 

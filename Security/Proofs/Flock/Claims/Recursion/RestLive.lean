@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RestReadR
-import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+module
+
+public import Proofs.Flock.Claims.Recursion.RestReadR
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 
 /-!
 # `DecLive`: the reader's record reads as custody's
@@ -9,6 +11,8 @@ value `decR` builds (`recJ`, its coins the live coins). It is `custodyRecJ`'s re
 itself, before its proof digests are substituted: the record's link and streams are the honest record's objects
 (`recordObj_link`, `recordObj_streams`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 

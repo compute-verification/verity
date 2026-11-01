@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishSwMk
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwMk
 
 /-!
 # The switched source's masked values, with or without the rows
@@ -13,6 +15,8 @@ values plus the drawn pads, so the readings `FinishSwMk` takes where the rows ho
   masked value at a sent index is the worker's clear value plus the tape's pad, and below `h_ab` plus the session's pad
   array's entry (`padsOf`), with no hypothesis on the rows.
 -/
+
+@[expose] public section
 
 /-- **The switched pre-final view's masked values are the worker's view's**, whether or not its rows hold: where they
 fail, the honest values on the moved pads add up to the worker's on the drawn ones. -/

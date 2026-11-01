@@ -1,8 +1,10 @@
-import VStar.Compose
-import VStar.Holo
-import VStar.Json
-import VStar.Menu.Pinned
-import VStar.Stage
+module
+
+public import VStar.Compose
+public import VStar.Holo
+public import VStar.Json
+public import VStar.Menu.Pinned
+public import VStar.Stage
 
 /-!
 # The `vstar` command: write V*'s circuit files
@@ -21,6 +23,8 @@ JSON file of one statement's, or for `stage` a list of them in `statements`' ord
 SHA-512, size and unit rows go to stdout as JSON. `--holo` after `inner`'s, `statements`' or `stage`'s arguments: the inner
 session is holo (`statementsHolo`), and each `InnerRepCheck` file says so in META (`emitCircuitHolo`).
 -/
+
+@[expose] public section
 
 namespace VStar.Cli
 

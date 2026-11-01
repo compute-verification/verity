@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.Registrants
+module
+
+public import Proofs.Flock.Recursive.Registrants
 
 /-!
 # V*'s bridge: the recursive audit's open obligation
@@ -19,6 +21,8 @@ C-Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`)
 (`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.Registrants`, and `Models.lean`, which the `security`
 package builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Assumptions
 

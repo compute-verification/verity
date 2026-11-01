@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Complete.Replay.RepRounds
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.RepRounds
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
+public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 
 /-!
 # The prover's pieces at every good case (`ProverOk`)
@@ -21,6 +23,8 @@ prover's pieces.
 regions pass `checkInRange` (`setupH_regions_le`, `spec_regions_le`). So the run's schemes have their widths
 (`schemeWidths`, the walk's `SchemeWidths`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

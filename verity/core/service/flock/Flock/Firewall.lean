@@ -2,8 +2,12 @@
 The firewall's contract, inner phase (live PROTOCOL.md §10.3): what the firewall may send the challenger's coin server, as a
 program, so that `rec_live`'s proxy is tested against it (`flock-firewall`, `backends/flock/tests/test_firewall_agreement.py`).
 -/
-import Lean.Data.Json
-import Flock.Hm96
+module
+
+public import Lean.Data.Json
+public import Flock.Hm96
+
+@[expose] public section
 
 namespace Flock.Firewall
 

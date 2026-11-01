@@ -4,7 +4,11 @@ over every session the verifier accepts, so a form no theorem covers is refused,
 another form is a change to one rule here, with the proof that the headlines cover it. With hidden outputs that is the
 general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outputs, the unit's form (`scopeOk`).
 -/
-import Flock.HmRow
+module
+
+public import Flock.HmRow
+
+@[expose] public section
 
 namespace Flock.ProvedScope
 

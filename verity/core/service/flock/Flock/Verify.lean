@@ -2,8 +2,12 @@
 PROTOCOL.md §3: the verifier as one total function of its inputs, `Accept` or `Reject reason`.
 `verifyRep` is §9–§14 on one rep's replay transcript; `verify` adds the session checks S1–S18.
 -/
-import Flock.Statement
-import Flock.Ligerito
+module
+
+public import Flock.Statement
+public import Flock.Ligerito
+
+@[expose] public section
 
 namespace Flock
 

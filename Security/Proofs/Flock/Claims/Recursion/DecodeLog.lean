@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.LogWalk
-import Flock.With.VerifyE
+module
+
+public import Proofs.Flock.Claims.Recursion.LogWalk
+public import Flock.With.VerifyE
 
 /-!
 # The record decoder's SHA-512 calls
@@ -9,6 +11,8 @@ table's `root_B`), S6 (`root_F`), S7 (each table's public words, where they are 
 round's `H(ε)` size check and its retained bytes), S13 (each rep stream's `root_B`) and S14 (the exchange `lbOf`), and
 nothing else. With them, what S6, S10, S11 and S13 check of the session it returns.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

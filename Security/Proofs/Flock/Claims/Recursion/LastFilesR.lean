@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.LastSharedR
-import Proofs.Flock.Claims.Recursion.LastBindsR
+module
+
+public import Proofs.Flock.Claims.Recursion.LastSharedR
+public import Proofs.Flock.Claims.Recursion.LastBindsR
 
 /-!
 # The columns half of the deployed reader's last-message binding (`RecDeploy.RColsBind`)
@@ -16,6 +18,8 @@ messages (`nextR_shared`), and each verdict reads the proofs' files `filesAt` at
 
 So `RColsBind` holds at SHA-512 with no premise (`RecDeploy.rColsBind_sha512`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

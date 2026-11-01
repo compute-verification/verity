@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSFlockLinR
-import Proofs.Flock.Claims.Recursion.LastCallsR
+module
+
+public import Proofs.Flock.Claims.Recursion.KSFlockLinR
+public import Proofs.Flock.Claims.Recursion.LastCallsR
 
 /-!
 # `KSLin2` and `BitsLin2` at the deployed reader's steps (`FlockDeploy.nextR`)
@@ -22,6 +24,8 @@ The inner verifier's calls need nothing of the steps: the finders search them at
 `bitsLin2_deployedR_partAccepts` are the B corollaries at the deployed reader, reopened on `PlainRdInR` and `DecompB`
 at `PartAccepts`. This bounds no number by itself: those premises are open.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

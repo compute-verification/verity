@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Complete.Count
-import Proofs.Flock.Claims.Complete.Custody
-import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Files
-import Proofs.Flock.Claims.Complete.Link
-import Proofs.Flock.Claims.Complete.Replay
-import Proofs.Flock.Claims.Complete.Runs
-import Proofs.Flock.Claims.Complete.Shape
+module
+
+public import Proofs.Flock.Claims.Complete.Count
+public import Proofs.Flock.Claims.Complete.Custody
+public import Proofs.Flock.Claims.Complete.Discharge
+public import Proofs.Flock.Claims.Complete.Files
+public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.Complete.Replay
+public import Proofs.Flock.Claims.Complete.Runs
+public import Proofs.Flock.Claims.Complete.Shape
 
 /-!
 # The session walk
@@ -22,6 +24,8 @@ proved beside it, Flock's completeness at the deployed plain verifier and the de
 * `Run.walk`: at a run, rep `r` runs from `repStart`'s send on and returns the decoded proof, and the recorded stream is
   its rounds as the decoder reads them back (`roundRec`), which carry them, on the table's level-0 commitment.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

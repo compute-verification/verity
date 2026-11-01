@@ -1,4 +1,6 @@
-import CoreComposition.Product
+module
+
+public import CoreComposition.Product
 
 /-!
 # The composition of core protocols: what its Lean code (`CoreComposition.Product`) does
@@ -14,6 +16,8 @@ component's `answer` accepts its own case, which `AnswerAccepts` (at the compone
 accepting, and the commitment is the binding of the components' digests (`AcceptMeans`). The predicates below say what
 the cases and digests are, in the components' own terms; none restates the composition's check.
 -/
+
+@[expose] public section
 
 namespace Properties.Composition
 

@@ -1,10 +1,12 @@
-import Proofs.Pouw.PearlC.Cap.Grid
-import Proofs.Pouw.PearlC.Cap.Certs
-import Proofs.Pouw.PearlC.Cap.IntForm
-import Proofs.Pouw.PearlC.Cap.Verdict
-import Proofs.Pouw.PearlC.Cap.Pins
-import Proofs.Pouw.PearlC.Cap.SaltDeadStep
-import Proofs.Pouw.PearlC.Cap.SaltDead
+module
+
+public import Proofs.Pouw.PearlC.Cap.Grid
+public import Proofs.Pouw.PearlC.Cap.Certs
+public import Proofs.Pouw.PearlC.Cap.IntForm
+public import Proofs.Pouw.PearlC.Cap.Verdict
+public import Proofs.Pouw.PearlC.Cap.Pins
+public import Proofs.Pouw.PearlC.Cap.SaltDeadStep
+public import Proofs.Pouw.PearlC.Cap.SaltDead
 
 /-!
 # The cap circuit's Lean pieces
@@ -16,3 +18,5 @@ circuit's interval test (`Cap.Certs`), the circuit's integer tests and their 32-
 salt-dead two-ends lemma that lets RowA decide `saltDeadP` from two evaluations of the forming step (`Cap.SaltDead`,
 on the step's monotone read in `Cap.SaltDeadStep`).
 -/
+
+@[expose] public section

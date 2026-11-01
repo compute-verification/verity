@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.Dimension.OpenPipe
-import Proofs.Pouw.Dimension.ForestProofs
-import Definitions.Pouw.Guarantees.Dimension
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
+public import Proofs.Pouw.Dimension.ForestProofs
+public import Definitions.Pouw.Guarantees.Dimension
 
 /-!
 # The open quadratic pipe: proofs
@@ -14,6 +16,8 @@ import Definitions.Pouw.Guarantees.Dimension
 * **The closed pipe is open** (`quadToOpen`): a closed pipe's FP32 step reads earlier FP32 outputs only, a sublist
   of all earlier priced values (`quadStep_mono`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.OpenPipe
 

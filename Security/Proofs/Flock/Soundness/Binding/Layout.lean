@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.FlockLink
-import Proofs.Flock.Soundness.Binding.Leaf
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockLink
+public import Proofs.Flock.Soundness.Binding.Leaf
 
 /-!
 # The layout of registered leaves, and its value binding
@@ -22,6 +24,8 @@ The binding's commitment is the pair (commit string, leaf digest), and its `coll
 `collide_spec` is proved: two openings of one commit string with one leaf and different values give two different byte
 strings with one SHA-512 digest (`Refine.H512`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 

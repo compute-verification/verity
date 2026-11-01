@@ -1,7 +1,9 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import PousCheck.Certificate
-import PousCheck.Run
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import PousCheck.Certificate
+public import PousCheck.Run
 
 /-!
 # A PoUS run as a core protocol
@@ -37,6 +39,8 @@ At Demo B's store, 1038 segments of `2^16` blocks, that is `Pous.Period.PeriodHe
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
 -/
+
+@[expose] public section
 
 namespace PousCheck.RunProtocol
 

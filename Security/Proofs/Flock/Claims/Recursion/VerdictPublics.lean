@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VerdictFramed
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictFramed
 
 /-!
 # The decoded session's public words are empty, at every decision
@@ -8,6 +10,8 @@ writes its link's `publics` as the empty object (`linkObj_publics`), the substit
 (`jAt`) keep the link's `publics` (`fld_link_jAt`), and the decoder reads a table missing from `publics` as empty bytes
 (S7, `decodeJWithK_publics`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

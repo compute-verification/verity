@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
-import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
 
 /-!
 # The honest Ligerito against the model's steps
@@ -14,6 +16,8 @@ model's steps (`Lg.sync_chal`, `Lg.sync_chalSplit`, `Lg.sync_ood`, `Lg.sync_clos
 `Lg.Mid`, reached after level 0 (`Lg.mid_lv0`) and kept by an inner level's step (`Lg.mid_stepN`, folding the weight by
 `Lg.wok_fold`), from which the last level meets the final identity (`Lg.goal_last`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

@@ -1,6 +1,8 @@
-import Mathlib.Tactic.Linarith
-import Proofs.Pouw.PearlC.FreezeP
-import Proofs.Pouw.PearlC.Cap.Grid
+module
+
+public import Mathlib.Tactic.Linarith
+public import Proofs.Pouw.PearlC.FreezeP
+public import Proofs.Pouw.PearlC.Cap.Grid
 
 /-!
 # Freeze's certificates on the device's step, and the cap circuit's interval test
@@ -24,6 +26,8 @@ certificates that pass its checks, so no uniqueness of the certificates is neede
 * `promote_zero_total` and `promote_zero_word` are the two promotions the circuit leaves out: into the total `+0` of
   group 0, and of the all-skipped group's word `+0`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Cap
 

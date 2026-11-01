@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Pouw.Credit
-import SampledProofs.HiddenDraw
+module
+
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Pouw.Credit
+public import SampledProofs.HiddenDraw
 
 /-!
 # Credit over hidden live rows (the hidden-position draw)
@@ -34,6 +36,8 @@ no credit, which is `M`.
 What a correct unit is, and that the opening's `ok` means the staged rows are the committed leaves at the private index,
 are the opening's meaning and the commitments' binding, outside this file.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.HiddenCredit
 

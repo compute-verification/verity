@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Compose.LaterHeldW
-import Proofs.Flock.C3.Sparse.MsgsLayers
+module
+
+public import Proofs.Flock.C3.Compose.LaterHeldW
+public import Proofs.Flock.C3.Sparse.MsgsLayers
 
 /-!
 # The sparse stages' coins from the inner session's records (`h2`, `h3`)
@@ -14,6 +16,8 @@ before it (`heldBefore`).
 `x`'s stage at `sparseCoins`' coins is `StageHeldW` from its start round: its coins are the held rounds of coins,
 flattened (`sparseCsFlat`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Release
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
-import Proofs.Flock.Claims.Sampling.Draws
+module
+
+public import Proofs.Flock.Claims.ZK.Release
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+public import Proofs.Flock.Claims.Sampling.Draws
 
 /-!
 # The ZK server at the operating system's bytes
@@ -30,6 +32,8 @@ proving build expands nothing (`zk_hooks.rs`). The step from those reads to a un
   `zkDeferredOs`, `zkServerBlindOs` and `zkServerLeanOs`. `ZkServerLeanOs` is at `O.release L`, whose rep `i` reads
   stream `i` of the tape, so `ItemsRefine` relates the model's prover to the frame at the operating system's bytes.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

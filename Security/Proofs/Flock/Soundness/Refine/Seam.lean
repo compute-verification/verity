@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Schedule
+module
+
+public import Proofs.Flock.Soundness.Refine.Schedule
 
 /-!
 # Seams: the executable's constants are the model's
@@ -16,6 +18,8 @@ quantities derived from it. These theorems say the two agree, for every `m`:
 
 The kernel checks each for `m < 40`, and both schedules are `none` above 35.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

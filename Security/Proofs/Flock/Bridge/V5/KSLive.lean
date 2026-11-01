@@ -1,8 +1,10 @@
-import Proofs.Flock.Bridge.V5.Assembly
-import Proofs.Flock.Bridge.V5.EndToEndHidden
-import Proofs.Flock.Bridge.V5.OpeningsCanon
-import Proofs.Flock.Bridge.V5.Transports
-import Proofs.Flock.Bridge.KSLive
+module
+
+public import Proofs.Flock.Bridge.V5.Assembly
+public import Proofs.Flock.Bridge.V5.EndToEndHidden
+public import Proofs.Flock.Bridge.V5.OpeningsCanon
+public import Proofs.Flock.Bridge.V5.Transports
+public import Proofs.Flock.Bridge.KSLive
 
 /-!
 # `SampledKSLiveV5`, proved
@@ -11,6 +13,8 @@ import Proofs.Flock.Bridge.KSLive
 canonical transport at public inputs (`transportsLiveV5`), M1's core (`faultyRightTargetC`), the slot count (`partBlocks`),
 the count lemma (`count`) and `EndToEndHiddenV5` (`endToEndHiddenV5_of`, from `openingsCanonV5`) plugged in.
 -/
+
+@[expose] public section
 
 /-- **The sampled audit's knowledge soundness, live, at the verifier's public inputs, with or without shared rows**
 (`Flock.Guarantees.SampledKSLiveV5`). -/

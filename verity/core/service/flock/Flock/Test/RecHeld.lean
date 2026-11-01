@@ -4,7 +4,11 @@ plain session's inner shape, on a record whose every `c_k` differs (`node j` at 
 `checkReads` passes, rep `x`'s `kc`-th `c_k` as `innerCommits` holds it is the record's message `x · R + k + 1`, at each
 commit round `k` with no salted tops, the `kc`-th commit round of the rep schedule.
 -/
-import Flock.Test.RecReads
+module
+
+public import Flock.Test.RecReads
+
+@[expose] public section
 
 namespace Flock.Test.RecHeld
 

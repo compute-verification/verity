@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishSwSv
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Claims.ZK.PiopSrcVals
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwSv
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
 
 /-!
 # The switched source's masked values
@@ -19,6 +21,8 @@ plus the base's pad, each as the firewall's words (`GF128.val`).
   passed values below `zp 64` and level 0's opening from there on: below `zp 64`, `repCut_fw`'s `hmk` with the passed
   values as `vals` and the session's pads as `pads`; from `zp 64` to `h_ab`, the opening's values plus those pads.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK

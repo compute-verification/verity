@@ -1,3 +1,7 @@
-import Control.Assumptions
-import Control.Defs
-import Control.Thms
+module
+
+public import Control.Assumptions
+public import Control.Defs
+public import Control.Thms
+
+@[expose] public section

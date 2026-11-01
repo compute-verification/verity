@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Sampling.Bext
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Sampling.Bext
 
 /-!
 # Route 2C's bits from its KS
@@ -33,6 +35,8 @@ holds once `KSLin2On` at `RecDeploy.DenseAt` does, which only follows from premi
 `PartChecksBV`, `PartOpensB` and `DecompB` (`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads
 back). Holo statements are candidate 3's own model.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

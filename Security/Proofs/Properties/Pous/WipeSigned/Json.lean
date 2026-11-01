@@ -1,4 +1,6 @@
-import MemoryChallenger.StreamedWipe
+module
+
+public import MemoryChallenger.StreamedWipe
 
 /-!
 # What `pyJsonStr` writes is read back
@@ -12,6 +14,8 @@ and the wipe's tiers, a list of `[name, bytes]` pairs, are a prefix code too (`t
 `pyJsonStr`'s `hex4` and the wipe's `tiersJson` are private to their modules, so the statements here are about copies,
 word for word (`jsonStr`, `tiersJson`), which are those definitions by `rfl` (`pyJsonStr_eq`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.WipeJson
 

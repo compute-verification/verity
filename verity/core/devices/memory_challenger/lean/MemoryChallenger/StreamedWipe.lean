@@ -1,4 +1,6 @@
-import MemoryChallenger.Verdict
+module
+
+public import MemoryChallenger.Verdict
 
 /-!
 # The streamed-label wipe's verdict
@@ -13,6 +15,8 @@ record (`to_bytes`'s `OverflowError`) leaves the session with no message, so its
 check reads it as it is. The verdict refuses a reveal of more than one index a batch (`Params.covered`), which the
 guarantee (`Pous.Guarantees.StreamedWipe`) doesn't cover.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.StreamedWipe
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.PubRows.Honest
-import Proofs.Flock.C3.VStarList.Shape
-import Proofs.Flock.VBridge.Sparse.Unit
-import Proofs.Flock.VBridge.Pinned
+module
+
+public import Proofs.Flock.C3.PubRows.Honest
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.VBridge.Sparse.Unit
+public import Proofs.Flock.VBridge.Pinned
 
 /-!
 # n1: a rec-sparse unit the verifier checked is at its RecSparse shape
@@ -25,6 +27,8 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
   of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
   `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 

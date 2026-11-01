@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
-import ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.AffineLines.UniqueDecoding
-import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
+public import ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.AffineLines.UniqueDecoding
+public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 
 /-!
 # The `--zk` inner proof is sound: the code lemmas and `inner_sound`
@@ -8,6 +10,8 @@ import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 `Inner` states the inner proof (`innerGame`, `InnerGood`, `εInner`) on Mathlib. Its soundness reads the pads code as
 ArkLib's Reed–Solomon code and uses BCIKS20's correlated agreement on lines in the unique-decoding regime.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

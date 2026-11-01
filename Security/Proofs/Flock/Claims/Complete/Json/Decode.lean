@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Json.Record
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Record
 
 /-!
 # The honest record decodes (S1–S14)
@@ -13,6 +15,8 @@ compares each round's digest length with the empty message's).
 * **The decoded session** (`sessOf`): `Σ` as `root_F`, the `root_B`, no public words, the points, `y = 0`, each rep
   stream with its rounds' digests (`streamRec`, `roundRec`) and each proof file's digest.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

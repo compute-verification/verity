@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.VBridge.Family.Structure
+module
+
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.VBridge.Family.Structure
 
 /-!
 # Piece (h): the list's R at `mReg`, and `hp` as the inner shape's `sparse` entry
@@ -21,6 +23,8 @@ the later levels' caps (`VStar.levelCapStatements`) and RecCap at level 0 (`VSta
   `mReg` is the model's (`(holoAt st hp).cls.shape.mReg`, padded to `PAD_TO` as the verifier's `tableM` is) and `ℓ` is
   in the class's range.
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 

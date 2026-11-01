@@ -17,12 +17,16 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
   the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every law
   (`Bound.boundOf`).
 -/
-import SampledProofs.Bound
-import SampledProofs.Draw
-import SampledProofs.PyJson
-import Flock.WindowRecord
-import CoreProtocol.Profile
-import Std.Data.HashMap
+module
+
+public import SampledProofs.Bound
+public import SampledProofs.Draw
+public import SampledProofs.PyJson
+public import Flock.WindowRecord
+public import CoreProtocol.Profile
+public import Std.Data.HashMap
+
+@[expose] public section
 
 namespace SampledProofs.Record
 

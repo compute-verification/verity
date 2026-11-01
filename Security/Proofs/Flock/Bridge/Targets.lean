@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.Statement
+module
+
+public import Proofs.Flock.Bridge.Statement
 
 /-!
 # The bridge's lemmas, as statements (targets, not proved)
@@ -20,6 +22,8 @@ Each is a `def … : Prop` over `Bridge.Defs` and `Bridge.Deployed`, so a proof 
   whose layout is `commitDep`'s (`LayoutIs`) and which parses the statement's bytes to `stmtOf` and partitions it to
   `partOf`, a `witDep` outside `RelS` at SHA-512 and `commitDep` is outside the record's `R`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEnd.Carry.Statement
-import Proofs.Flock.EndToEnd.Blocks
-import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+module
+
+public import Proofs.Flock.EndToEnd.Carry.Statement
+public import Proofs.Flock.EndToEnd.Blocks
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 
 /-!
 # Proof of the integrity audit over a monitoring period of blocks, with carried state
@@ -17,6 +19,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 * `Flock.SecurityProofs.IntegrityHorizonCarried`: `IntegrityHorizon`'s proof, `period_unionE` in place of
   `period_union` for the sessions accepted with a drawn unit wrong, each carried leaf's term summed over the monitoring period.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

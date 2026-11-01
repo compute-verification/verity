@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.L0PinQuiet
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinQuiet
 
 /-!
 # The frame's phase flags along a rep's scheduled rounds, up to its opening
@@ -19,6 +21,8 @@ phase at the algebraic phase's last position:
   `FInv`; and where it takes the coins of a round at or past the opening's label, it is outside every masked phase, past
   the algebraic phase's opening, before level 0 and the inner proof, at the position `c.nPiop`, owing nothing.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Flags
 

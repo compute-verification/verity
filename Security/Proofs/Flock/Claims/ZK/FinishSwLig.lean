@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.SimLig
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwFrame
+public import Proofs.Flock.Claims.ZK.SimLig
 
 /-!
 # Level 0's opening at the switched source
@@ -16,6 +18,8 @@ are the firewall's (`valsFw`), with level 0's opening's clear values `l0Clear` f
 * **`Masked.swSrcE_ligHyp_frame`**: so at the switched source at the firewall's clear values, with `B = l0Clear` and
   the firewall's request's pads (`swSrcE_l0_frame`), `LigHyp` holds at its `y₁'`, `ȳ` and salts.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

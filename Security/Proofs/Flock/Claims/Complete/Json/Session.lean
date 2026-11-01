@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Json.Decode
-import Proofs.Flock.Claims.Complete.Shape
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Decode
+public import Proofs.Flock.Claims.Complete.Shape
 
 /-!
 # What the one-table honest session returns and sends
@@ -24,6 +26,8 @@ schedule's first level, is non-empty and under `2^64` bytes, and each rep record
   computation of the pure session to itself when every run adds rounds and sends that way (`Rec`); every prover function
   from the squeeze to the rep is one (`squeezeP_rec`, …, `repP_rec`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

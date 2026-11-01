@@ -6,8 +6,12 @@ callees before callers, each checked as `flock-verify circuit-type` checks it. `
 the lowering's `LEAVES` and `CUT` JSON, which are passed through. The Python layout is a mirror held to this output
 (`backends/flock/tests/test_flock_rows.py`).
 -/
-import Flock.Derive
-import Flock.DeriveCheck
+module
+
+public import Flock.Derive
+public import Flock.DeriveCheck
+
+@[expose] public section
 
 namespace Flock.Rows
 

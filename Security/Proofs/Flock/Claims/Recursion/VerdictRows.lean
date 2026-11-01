@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.VBridge.Family.Runs
+module
+
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.VBridge.Family.Runs
 
 /-!
 # The verdict's rows: what `hpieces` is assembled from
@@ -24,6 +26,8 @@ per owner:
 * **The assembly at a table** (`runsFrom_of_rows`, `runs_of_rows`): the rows make `RunsFrom`, and with R and E,
   `TableFiles.Runs`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

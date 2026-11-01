@@ -4,7 +4,11 @@ S0 (PROTOCOL.md §5.1): `RecordText.printT` prints what `Json.compress` prints, 
 `RecordText.check` accepts exactly the canonical text: reordered keys, whitespace, a number not in `JsonNumber.toString`'s
 form, a duplicate key and a text that isn't JSON are each refused.
 -/
-import Flock.RecordText
+module
+
+public import Flock.RecordText
+
+@[expose] public section
 
 namespace Flock.Test.RecordText
 

@@ -1,8 +1,10 @@
-import Definitions.NetworkCertifier.TapRows
-import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.Flock.Claims.Sampling.KS
-import Proofs.Flock.Claims.Finder
+module
+
+public import Definitions.NetworkCertifier.TapRows
+public import Proofs.NetworkCertifier.SampledLeak
+public import Proofs.NetworkCertifier.SampledAuditAccepted
+public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.Finder
 
 /-!
 # The leak bound at the network certifier's rows
@@ -27,6 +29,8 @@ collision (`tapColl_of_disagree`, `Pr_tapColl_le_Btap`). `sampledLeak_tap` is th
 
 The registered-input and collision steps follow the registration's (proofs' P1b), at the network certifier's openings.
 -/
+
+@[expose] public section
 
 namespace NetTiming.TapProof
 

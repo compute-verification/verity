@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
-import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 
 /-!
 # The registered check at an accepted `--zk --registered` outcome
@@ -16,6 +18,8 @@ instance's row of each of `own`'s ports at the position `own` gives for its unit
 instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the layout's
 registered leaf at `(u, q)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

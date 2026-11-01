@@ -1,5 +1,7 @@
-import VStar.Cap
-import VStar.Parts
+module
+
+public import VStar.Cap
+public import VStar.Parts
 
 /-!
 # V*'s statements over an inner session (`verity_flock.rec_vstage.stage`)
@@ -21,6 +23,8 @@ Every session ends with a `RecCap` per later Ligerito level `l`, over both reps'
 (`rec-cap/n<N>`: `cap`, `capStatement`), which hold each node of every level's committed tops at a fixed row whatever the
 coins draw.
 -/
+
+@[expose] public section
 
 namespace VStar
 

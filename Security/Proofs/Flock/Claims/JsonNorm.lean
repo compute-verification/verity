@@ -1,8 +1,10 @@
-import Flock.Canon
-import Flock.Norm
-import Std.Data.TreeMap.Raw.WF
-import Definitions.Claims.Json
-import Proofs.Flock.Claims.JsonEq
+module
+
+public import Flock.Canon
+public import Flock.Norm
+public import Std.Data.TreeMap.Raw.WF
+public import Definitions.Claims.Json
+public import Proofs.Flock.Claims.JsonEq
 
 /-!
 # The rebuilt draw: one value per equivalence class
@@ -20,6 +22,8 @@ and that map's fields into another. So:
 * `jsonEquiv_norm`: rebuilding a well-formed value keeps its form, which completeness reads (the honest record's draw,
   parsed, is the statement's up to `JsonEquiv`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

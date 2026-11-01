@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.Cap.IntForm
+module
+
+public import Proofs.Pouw.PearlC.Cap.IntForm
 
 /-!
 # rev1's `capOK` is the cap circuit's verdict
@@ -9,6 +11,8 @@ promotions into a +0 total (`tileZeros`), as Lean writes them (`tileDebitRev1_eq
 `tm × tn` words reaches (`tileAtoms_le`, `tileZeros_le`, `tileElems_le`), so under `_cap_constants`' bounds the word tests
 on these counts decide `pearlCTilesDevRev1`'s `capOK` at `ρ = 1/RHO` (`capOK_iff`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Cap
 

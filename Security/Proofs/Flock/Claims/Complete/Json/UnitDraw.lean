@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Json.Stmt
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Stmt
 
 /-!
 # The session's draw at one table
@@ -8,6 +10,8 @@ a drawn statement up through `setupOne`, which writes the draw into that header 
 is the statement's, and not `null` (`unitDraw_one`): what `stmtOk` shows at a good case, from the scope and the setup
 alone.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

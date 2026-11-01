@@ -9,11 +9,15 @@ Definition's own gates follow at `L` (its parameter leaves), and a gate's local 
 when its primitive has parameters; Input gates and constants are inputs, in no unit and outside the committed set. Every operand of
 every gate is read: no wiring, no constant folding, no wide fan-in rule.
 -/
-import Std.Data.HashMap
-import Flock.Program
-import Flock.Partition
-import Flock.Canon
-import Flock.Hash
+module
+
+public import Std.Data.HashMap
+public import Flock.Program
+public import Flock.Partition
+public import Flock.Canon
+public import Flock.Hash
+
+@[expose] public section
 
 namespace Flock.Qcall
 

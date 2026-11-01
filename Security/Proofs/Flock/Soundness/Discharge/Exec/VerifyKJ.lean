@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
 # flock-verify's acceptance through `keep`, at the record's parsed value
@@ -16,6 +18,8 @@ and Bits route reads the same walkers at `j` (`Record.decodeJWithK`, `verifyJWit
 At `keep := id` and SHA-512, `Record.decodeJWithK` on a record's parsed value is `Record.decode` on the record
 (`decode_eq_decodeJWithK_id`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

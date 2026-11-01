@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.FinishSwBit
-import Proofs.Flock.Claims.ZK.FinishSwLigE
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.FinishSrc
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.FinishSwBit
+public import Proofs.Flock.Claims.ZK.FinishSwLigE
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSrc
 
 /-!
 # The firewall's rep is the switched source's cut
@@ -28,6 +30,8 @@ the opened coins are admitted; and level 0's clear values are `l0Clear` at the c
 it). That the rep's base is before the stop comes from the firewall's PIOP having returned (`repFwC_piopFw`, `piopFw_at`'s
 bound), and that no refusal shows by round `n` from the admitted coins (`not_refused_of_admits`).
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

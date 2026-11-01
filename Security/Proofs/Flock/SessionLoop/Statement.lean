@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FrameAdmits
-import Proofs.Flock.Claims.ZK.FrameTape
-import Proofs.Flock.Claims.ZK.PiopSrcVals
+module
+
+public import Proofs.Flock.Claims.ZK.FrameAdmits
+public import Proofs.Flock.Claims.ZK.FrameTape
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
 
 /-!
 # C-Flock's zero knowledge at the session loop's own frames (trusted)
@@ -57,6 +59,8 @@ witness, the tape and the history, and whether it stops:
 * **The stop**: the loop's `Finish` stops where any of this throws (`Loop.filesE`), a rep's proof file above all
   (`Finish.proofFile`: its `repFw`, whose constraints fail at a `final_c` the passed values do not fix).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

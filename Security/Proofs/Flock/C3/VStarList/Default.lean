@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
 /-!
 # Piece (h): a circuit for the statements no file binds
@@ -7,6 +9,8 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 parse is in scope; elsewhere `vstarParsesScoped_of_list` needs some `VStmt`, so some circuit whose unit `Net.ofRows`
 built and that `Layout.scopeOk` accepts. `defaultCircuit` is one, kernel-checked: a single net `unit` of one input word and no computed row.
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 

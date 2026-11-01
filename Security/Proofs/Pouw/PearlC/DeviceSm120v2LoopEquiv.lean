@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
-import Proofs.Pouw.PearlC.ChainOnlyGamma
+module
+
+public import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
+public import Proofs.Pouw.PearlC.ChainOnlyGamma
 
 /-!
 # v2's TT_OUT is the same statement at both FP32 prices (the price-twins lane's file; staged)
@@ -15,6 +17,8 @@ debit's later-promotion sum to vanish first.
 For v1 (G = 4) they are different statements: the credit prices the `k/(32·G) − 1` promotion adds at the record's add,
 so a v1 grant has to name both records.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

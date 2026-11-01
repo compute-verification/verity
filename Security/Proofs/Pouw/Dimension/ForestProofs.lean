@@ -1,8 +1,10 @@
-import Definitions.Pouw.Assumptions.Dimension.Forest
-import Proofs.Pouw.Dimension.PipeProofs
-import Mathlib.LinearAlgebra.Matrix.Rank
-import Mathlib.LinearAlgebra.Matrix.Block
-import Mathlib.Tactic.Module
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Forest
+public import Proofs.Pouw.Dimension.PipeProofs
+public import Mathlib.LinearAlgebra.Matrix.Rank
+public import Mathlib.LinearAlgebra.Matrix.Block
+public import Mathlib.Tactic.Module
 
 /-!
 # Theorem 1 of `a1-cost.md` (the forest argument): proofs
@@ -23,6 +25,8 @@ import Mathlib.Tactic.Module
 * **The pipe** (`a1CostQuadHolds`). A quadratic closed pipe is an FP32 program on Q-parts (`opnd_of_pipeOpnd`), all
   its steps FP32; its outputs' words are independent modulo `V₀`, so `2·|S| ≤ #steps`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Forest
 

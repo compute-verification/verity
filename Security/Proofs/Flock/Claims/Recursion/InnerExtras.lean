@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.InnerAtCoins
-import Proofs.Flock.Claims.Recursion.InnerSetupSame
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAtCoins
+public import Proofs.Flock.Claims.Recursion.InnerSetupSame
+public import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # Check 5's extra claims and comb are the deployed table's
@@ -17,6 +19,8 @@ points, which are `pointsOf` the first coin:
 * the record decodes at a spec of two points of the files' `m_pts`, whatever full draw it carries (`drawnSpec_shape`),
   as the deployed spec (`innerSetup_same`), so its points are `pointsOf` the first coin (`points_of_flat`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.InnerExtras
 

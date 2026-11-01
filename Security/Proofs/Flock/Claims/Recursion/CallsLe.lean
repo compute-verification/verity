@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.LogWalk
+module
+
+public import Proofs.Flock.Claims.Recursion.LogWalk
 
 /-!
 # Bounding a logged run's SHA-512 calls on every run
@@ -15,6 +17,8 @@ that throws at most `n` plus the potential it started with. The transcript's pot
 (`cs_squeeze`), whatever loop it sits in, and a rep's transcript makes at most its stream's round count of calls.
 What hashes nothing keeps the potential (`KeepT`, `KeepL`: the transcript's rounds and its round counter).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

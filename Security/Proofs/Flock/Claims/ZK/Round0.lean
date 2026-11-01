@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.OneTape
-import Proofs.Flock.Claims.Complete.ZkTables.Round0
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
+module
+
+public import Proofs.Flock.Claims.ZK.OneTape
+public import Proofs.Flock.Claims.Complete.ZkTables.Round0
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!
 # Round `0` of the masked session: the level-0 columns by tree position
@@ -32,6 +34,8 @@ position `p` commits `row0 (col0At w b p)`. Here, at every coin vector of a `--z
   executable's packed table, `lanes_tabC`), at each table's `ZkTab` schedule (`schedsPZk_live`). Where the statement sets
   up no session, both are empty.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

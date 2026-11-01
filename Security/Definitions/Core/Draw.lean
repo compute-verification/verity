@@ -1,5 +1,7 @@
-import Mathlib.Data.Fintype.Pi
-import Definitions.Core.Game
+module
+
+public import Mathlib.Data.Fintype.Pi
+public import Definitions.Core.Game
 
 /-!
 # Draws: which units the verifier's coins pick
@@ -15,6 +17,8 @@ Every area reads these, and defines none of its own:
 
 The probabilities are the uniform ones over one coin (`Game.prCoin`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

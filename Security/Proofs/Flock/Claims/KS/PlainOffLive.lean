@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainLeafFork
-import Proofs.Flock.Claims.KS.PlainOff
-import Proofs.Flock.Claims.KS.OffSim
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafFork
+public import Proofs.Flock.Claims.KS.PlainOff
+public import Proofs.Flock.Claims.KS.OffSim
 
 /-!
 # The plain slot's off mass, on the deployed coins
@@ -21,6 +23,8 @@ carries that mass to the deployed coins as one run's, never as a fork:
 * `plainOffU_le`: averaged over the tape, at most the chance over the deployed coins of opening off a table that reads
   their first `j`, at any deployed openings `opD` that every decoded opening is (`Pr_plainΦ`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

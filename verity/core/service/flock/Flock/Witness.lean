@@ -1,10 +1,12 @@
-import Flock.Zk
-import Flock.Norm
-import Flock.ProvedScope
-import Flock.RecVStar
-import Flock.RecCoins
-import Flock.Registered
-import Flock.Lookup
+module
+
+public import Flock.Zk
+public import Flock.Norm
+public import Flock.ProvedScope
+public import Flock.RecVStar
+public import Flock.RecCoins
+public import Flock.Registered
+public import Flock.Lookup
 
 /-!
 # `flock-witness`: the recursive audit's predicates, evaluated on recorded sessions
@@ -33,6 +35,8 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
 
 One `WITNESS` line per check: its name, `ok`, and the refusal when it fails. Exit 0 iff every check passes.
 -/
+
+@[expose] public section
 
 namespace Flock.Witness
 

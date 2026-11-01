@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.Dimension.OpenPipe
-import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
-import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
-import Definitions.Pouw.Assumptions.Dimension.H100Measured
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
+public import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
+public import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
+public import Definitions.Pouw.Assumptions.Dimension.H100Measured
 
 /-!
 # The dimension argument's guarantee (trusted)
@@ -12,6 +14,8 @@ hypotheses (`Pouw.Assumptions`). Its proof is the theorem
 (`Pouw.Assumptions.Dimension.OpenPipe`). Each keeps the text, the docstring and the `open`s of the statement it was in
 its source module.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Dimension
 

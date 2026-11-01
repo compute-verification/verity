@@ -1,6 +1,8 @@
-import Properties.NetworkCertifier.LinkWindow
-import Proofs.Properties.CertifierDevice.Lms
-import Std.Data.TreeMap.Raw.WF
+module
+
+public import Properties.NetworkCertifier.LinkWindow
+public import Proofs.Properties.CertifierDevice.Lms
+public import Std.Data.TreeMap.Raw.WF
 
 /-!
 # N2's link-window verdict: what an acceptance establishes
@@ -24,6 +26,8 @@ Its two lemmas:
   (`LinkWindowAcceptMeansBy`, which is the property at the verdict, `linkWindowAcceptMeans_by`): it accepts a warden
   link-window with no findings, which isn't proved.
 -/
+
+@[expose] public section
 
 open NetworkCheck NetworkCheck.LinkWindow
 open Lean (Json toJson)

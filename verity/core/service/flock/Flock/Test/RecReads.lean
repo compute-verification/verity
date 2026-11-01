@@ -6,7 +6,11 @@ differ from what the JSON readers read in a `c_k`, a salted top, a node of `root
 or Hello's tables are refused at that field. So are bytes whose coins differ from the JSON's, among them a tail that
 repeats the key `"rounds"` with other coins, which `Json.parse` reads and `readFull` doesn't.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.RecReads
 

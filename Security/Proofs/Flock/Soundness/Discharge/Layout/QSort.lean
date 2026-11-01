@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Batteries.Tactic.OpenPrivate
+
+@[expose] public section
 
 set_option Elab.async false
 

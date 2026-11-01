@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameOpen
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOpen
 
 /-!
 # Level 0's phase labels: the rounds that open and close its masked phase
@@ -16,6 +18,8 @@ Level 0's masked phase starts at the opening's label (`LABEL_OPEN`) and ends at 
   with every masked value absorbed and its four `ρ` coins taken, the frame releases the label, then the frames after it
   as they came and the squeeze, and ends level 0's phase.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

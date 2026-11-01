@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Switched
-import Proofs.Flock.Claims.ZK.Server
-import Proofs.Flock.Claims.ZK.Capacity
+module
+
+public import Proofs.Flock.Claims.ZK.Switched
+public import Proofs.Flock.Claims.ZK.Server
+public import Proofs.Flock.Claims.ZK.Capacity
 
 /-!
 # Zero knowledge at the reference session, at any values pad-blind workers supply
@@ -34,6 +36,8 @@ with the honest prover's simulator, and the server that runs pad-blind workers i
   the deployed coin layer (`CoinLayer.session`) and the pinned key's hiding gap, under the tables' tape read with fibers
   of one size on `A`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 

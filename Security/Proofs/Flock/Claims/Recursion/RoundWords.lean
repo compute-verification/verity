@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Claims.Recursion.PartsVStar
-import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.C3.Reps.RoundLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Claims.Recursion.PartsVStar
+public import Proofs.Flock.Claims.Recursion.RowsCover
+public import Proofs.Flock.C3.Reps.RoundLinks
 
 /-!
 # The holders of one round's row agree on its words
@@ -20,6 +22,8 @@ word count. The verifier checks it on V\*'s list (`RecVStar.checkRoundWords`, in
 * `heldRows_words`: wherever `readX` reads `x`, two held rows of one round sit at ports of one word count, the hypothesis
   `hW` of `VStarBuild.fit_stream`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

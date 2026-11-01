@@ -9,8 +9,12 @@ with `"`, `\`, newline and carriage return escaped and every other character bel
 an array's elements and an object's fields (in its tree's order, sorted by key) between commas. `Flock.Test.RecordText`
 holds it to `Json.compress` on the writers' shared vectors.
 -/
-import Lean.Data.Json
-import Flock.Bytes
+module
+
+public import Lean.Data.Json
+public import Flock.Bytes
+
+@[expose] public section
 
 namespace Flock.RecordText
 

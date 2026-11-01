@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.RepFramesBind
+module
+
+public import Proofs.Flock.Claims.Recursion.RepFramesBind
 
 /-!
 # What a rep's frames fix of its proof, before Ligerito
@@ -10,6 +12,8 @@ statement binding, the zerocheck, the lincheck and the ring switch absorb, and h
 
 Ligerito's fields from equal `ligFrames` are `RepFramesLig`'s; the openings and `initialCap` are in no frame.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

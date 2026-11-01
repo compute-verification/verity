@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.CallsBridge
-import Proofs.Flock.Claims.Recursion.ConflictTiedE
-import Proofs.Flock.Claims.Recursion.RepErase
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsBridge
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.Recursion.RepErase
 
 /-!
 # The calls half where a proof file differs, at the element-level verifier
@@ -15,6 +17,8 @@ collide among the calls.
 Here first: what the element-level decoder reads of the record (`decodeWithK_ok`, `decode_ok`'s without the digests),
 and the plain verdict's round counts at any `keep` (`rounds_ns_plainK`, from `streams_ns_plainK`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

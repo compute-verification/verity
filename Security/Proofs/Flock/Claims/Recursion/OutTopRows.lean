@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Recursion.OutSlotRead
-import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
-import Proofs.Flock.Claims.Recursion.TopsOpens
-import Proofs.Flock.Claims.Recursion.InnerExtras
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.C3.Opening.SessionCoins
-import Proofs.Flock.C3.Reps.AtList
+module
+
+public import Proofs.Flock.Claims.Recursion.OutSlotRead
+public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.InnerExtras
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.C3.Opening.SessionCoins
+public import Proofs.Flock.C3.Reps.AtList
 
 /-!
 # The level's `out` slot and RecCap's `top` slot carry one commit string (`OutCommitTie` at `layR`)
@@ -29,6 +31,8 @@ at `N` and RecCap's `top` slot at `capIdx` carry one commit string. Both are row
 `outCommitTie_deployed` assembles them at `layR`, the dense form, pieces in range and the inner verifier's coins
 within the bound's.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

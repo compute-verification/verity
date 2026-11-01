@@ -9,7 +9,11 @@ computed column, and is refused at the first bit none does. A known port that is
 known rows are not its words, is refused. A port marked `read_in_full` is checked as one row of its registered row's
 words (`fullRows`): refused at another width, or at a bit no computed row reads.
 -/
-import Flock.KnownRead
+module
+
+public import Flock.KnownRead
+
+@[expose] public section
 
 namespace Flock.Test.KnownRead
 
