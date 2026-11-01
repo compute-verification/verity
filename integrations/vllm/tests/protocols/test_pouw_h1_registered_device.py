@@ -1,9 +1,10 @@
 """`pouw_h1_registered_device`: H1's registered values hashed by `pouw_cuda/registered_rows.cu`, held byte for byte to
 `pouw_h1_registered.commit`'s NumPy path and to core's `registered.Registered.commit`. Over random rows of 16-bit words (one row
 to a few thousand, one word to a z/y record's 3072, a row whose bytes sit 2 and 4 bytes off an 8-byte boundary), under each
-domain binding, nonces past 2^32 and 2^63, given salts and a public table's (`PublicSalts`, on the device derived where
-they're hashed, its rows built on the hash's stream): the ``b || c`` strings, every tree level, the root, domain and
-leaf count. The CPU twin (`host_commit`, the kernels' functions under g++) runs everywhere with a C++ compiler; the device
+domain binding, nonces past 2^32 and 2^63, given salts and a public table's or the ok rows' (`PublicSalts`, SHA-512's or
+SHAKE-256's, on the device derived where they're hashed, its rows built on the hash's stream): the ``b || c`` strings,
+every tree level, the root, domain and leaf count. The CPU twin (`host_commit`, the kernels' functions under g++) runs
+everywhere with a C++ compiler; the device
 tests need CUDA and nvcc and skip elsewhere: there, rows go in several chunks and a tree wide enough for a launch a level,
 `commit` takes the GPU under ``VERITY_H1_REGISTER=gpu`` (and by default), and a small served H1 window registers the same
 entries, digest and manifest rows on either path, and the same again, with the same receipts, served from the device
@@ -121,29 +122,32 @@ def test_both_tables_from_one_read_refuse_what_they_cant_commit(monkeypatch):
 
 
 #: (context, first position, salts): a window's open root as `Served` has it, short and empty contexts, positions past 2^32
-#: and up to the last u64
-PUBLIC = [("ab" * 64, 0, 5), ("cd" * 64, 86011, 40), ("w", (1 << 40) + 3, 3), ("", 0, 1), ("ef" * 64, (1 << 64) - 2, 2)]
+#: and up to the last u64, and contexts whose ok salt's message is a byte short of SHAKE-256's 136-byte block and the block
+PUBLIC = [("ab" * 64, 0, 5), ("cd" * 64, 86011, 40), ("w", (1 << 40) + 3, 3), ("", 0, 1), ("ef" * 64, (1 << 64) - 2, 2),
+          ("x" * 90, 7, 3), ("y" * 91, (1 << 33) + 1, 2)]
 
 
-def _head(context: str) -> bytes:
+def _head(context: str, shake: bool) -> bytes:
     ctx = context.encode()
-    return CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
+    return CC.OK_SALT_TAG + ctx + b"\0" if shake else CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
 
 
-def _public(context: str, first: int, n: int) -> bytes:
-    return b"".join(CC.public_row_salt(context, u) for u in range(first, first + n))
+def _public(context: str, first: int, n: int, shake: bool) -> bytes:
+    salt = CC.ok_salt if shake else CC.public_row_salt
+    return b"".join(salt(context, u) for u in range(first, first + n))
 
 
 @needs_cxx
+@pytest.mark.parametrize("shake", [False, True])
 @pytest.mark.parametrize("context,first,n", PUBLIC)
-def test_public_salts_are_cores_on_the_cpu_twin_and_the_numpy_path(context, first, n, monkeypatch):
-    """`public_salts` of `core_check.public_row_salt`'s head: core's salts, by the kernels' function on the CPU and by
-    `hashlib`."""
-    want = _public(context, first, n)
-    assert D.host_public_salts(_head(context), first, n) == want
+def test_public_salts_are_cores_on_the_cpu_twin_and_the_numpy_path(context, first, n, shake, monkeypatch):
+    """`public_salts` of `core_check.public_row_salt`'s head, and with ``shake`` of `core_check.ok_salt`'s: core's salts,
+    by the kernels' function on the CPU and by `hashlib`."""
+    want = _public(context, first, n, shake)
+    assert D.host_public_salts(_head(context, shake), first, n, shake) == want
     monkeypatch.setattr(NR, "MODE", "numpy")
-    assert NR.public_salts(_head(context), first, n) == want
-    salts = NR.PublicSalts(_head(context), first, n)
+    assert NR.public_salts(_head(context, shake), first, n, shake) == want
+    salts = NR.PublicSalts(_head(context, shake), first, n, shake)
     assert salts.at(range(n)) == b"".join(salts) == want and salts[-1] == want[-192:]
     words = _words(n, 7)
     got, ref = NR.commit(PROGRAM, "h1/v", words, KEY, 0, row_salts=salts, window=WINDOW), _core(words, 0, want, window=WINDOW)
@@ -207,29 +211,32 @@ def test_the_device_takes_given_salts_chunks_and_wide_trees(monkeypatch):
         assert D.device_commit(words, KEY, (1 << 42) + n, ys, did) == want
 
 
+@pytest.mark.parametrize("shake", [False, True])
 @pytest.mark.parametrize("context,first,n", [*PUBLIC, ("ab" * 64, 1 << 33, 70000)])
-def test_public_salts_on_the_device_are_cores(context, first, n, monkeypatch):
+def test_public_salts_on_the_device_are_cores(context, first, n, shake, monkeypatch):
     _gpu()
     monkeypatch.setattr(NR, "MODE", "gpu")
-    assert NR.public_salts(_head(context), first, n) == D.device_public_salts(_head(context), first, n) == _public(
-        context, first, n)
+    head = _head(context, shake)
+    assert NR.public_salts(head, first, n, shake) == D.device_public_salts(head, first, n, shake) == _public(
+        context, first, n, shake)
 
 
+@pytest.mark.parametrize("shake", [False, True])
 @pytest.mark.parametrize("context,first,n", [*PUBLIC, ("ab" * 64, 1 << 33, 70000)])
 def test_a_public_table_hashed_on_the_device_derives_its_salts_and_reads_rows_built_on_the_hash_stream(context, first, n,
-                                                                                                      monkeypatch):
+                                                                                                      shake, monkeypatch):
     """`commit` of `PublicSalts` on the GPU derives them where it hashes, and rows written on its stream (`hashing`) are
     read in place there: core's strings, levels and root, as with the salts given as bytes and the rows on the host."""
     torch = _gpu()
     monkeypatch.setattr(NR, "MODE", "gpu")
-    words, salts = _words(n, 7), NR.PublicSalts(_head(context), first, n)
-    ref = NR.commit(PROGRAM, "h1/v", words, KEY, 0, True, _public(context, first, n), window=WINDOW)
+    words, salts = _words(n, 7), NR.PublicSalts(_head(context, shake), first, n, shake)
+    ref = NR.commit(PROGRAM, "h1/v", words, KEY, 0, True, _public(context, first, n, shake), window=WINDOW)
     with D.hashing() as device:
         rows = torch.from_numpy(words.view(np.int16)).to(device).view(torch.uint16)
         got = NR.commit(PROGRAM, "h1/v", rows, KEY, 0, row_salts=salts, later=True, window=WINDOW).result()
     assert got.salts is salts and (got.root, got.bcs, got.levels, got.domain) == (ref.root, ref.bcs, ref.levels, ref.domain)
     if n <= 40:
-        core = _core(words, 0, _public(context, first, n), window=WINDOW)
+        core = _core(words, 0, _public(context, first, n, shake), window=WINDOW)
         assert (got.root, got.bcs, got.levels) == (core.root, core.bcs, core.levels)
 
 
@@ -294,7 +301,8 @@ def test_auto_takes_the_gpu_where_it_runs(monkeypatch):
 
 def test_a_served_window_registers_the_same_on_either_path(monkeypatch):
     """A small H1 window (`test_pouw_h1_served._window`) and the period's weights registered on the GPU and with NumPy: every
-    entry, the served digest, each call's manifest row and each public table's salts and rows are the same."""
+    entry, the served digest, each call's manifest row, each public table's salts and rows and the ok rows' root are the
+    same."""
     torch = _gpu()
     from tests.protocols import test_pouw_h1_served as T
 
@@ -305,7 +313,7 @@ def test_a_served_window_registers_the_same_on_either_path(monkeypatch):
         run, _ws, _got = T._window(T.W1, weights=weights, served=1)
         pubs = {v: (r.salts, r.rows) for v, r in run.served.registered.items() if "pub@" in v}
         return (weights.entries(), run.served.entries(), run.served.digest(), [run.tables[c.index] for c in run.calls],
-                pubs)
+                pubs, run.served.ok.root)
 
     got, want = window("gpu"), window("numpy")
     assert got == want and got[4] and len(got[1]) == 2 * len(T.SHAPES) * T.STEPS + (T.STEPS + 1) * len(T.KS)

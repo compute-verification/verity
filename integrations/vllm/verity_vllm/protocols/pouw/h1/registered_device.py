@@ -161,8 +161,8 @@ def host_lib() -> ctypes.CDLL:
     dll = RTD._build(cxx, HOST_SOURCES, RTD.CFLAGS, "libregistered_rows_host.so")
     dll.rr_commit_host.argtypes = [ctypes.POINTER(Table), _u64, _u64, _u64, _u64]
     dll.rr_commit_host.restype = ctypes.c_int
-    dll.rr_public_salts_host.argtypes = [ctypes.POINTER(Pub), _u64]
-    dll.rr_public_salts_host.restype = ctypes.c_int
+    for f in (dll.rr_public_salts_host, dll.rr_shake_salts_host):
+        f.argtypes, f.restype = [ctypes.POINTER(Pub), _u64], ctypes.c_int
     return dll
 
 
@@ -177,8 +177,9 @@ def device_lib(arch: str) -> ctypes.CDLL:
     dll.rr_midstates.argtypes = [_vp, _vp, _vp]
     dll.rr_leaves.argtypes = [_vp, ctypes.POINTER(Table), ctypes.c_uint32, ctypes.c_uint32, _vp, _vp, _vp, _vp]
     dll.rr_tree.argtypes = [_vp, ctypes.POINTER(Table), _vp]
-    dll.rr_public_salts.argtypes = [_vp, ctypes.POINTER(Pub), _vp]
-    dll.rr_midstates.restype = dll.rr_leaves.restype = dll.rr_tree.restype = dll.rr_public_salts.restype = ctypes.c_int
+    dll.rr_public_salts.argtypes = dll.rr_shake_salts.argtypes = [_vp, ctypes.POINTER(Pub), _vp]
+    for f in (dll.rr_midstates, dll.rr_leaves, dll.rr_tree, dll.rr_public_salts, dll.rr_shake_salts):
+        f.restype = ctypes.c_int
     return dll
 
 
@@ -279,11 +280,12 @@ def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | No
     return _out(bcs, levels, t.W)
 
 
-def host_public_salts(head: bytes, first: int, n: int) -> bytes:
+def host_public_salts(head: bytes, first: int, n: int, shake: bool = False) -> bytes:
     """`pouw_h1_registered.public_salts` by the kernels' function on the CPU: the device path's twin."""
     out = np.empty(24 * n, np.uint64)
-    if host_lib().rr_public_salts_host(ctypes.byref(pub(head, first, n)), out):
-        raise ValueError("rr_public_salts_host refused the salt head")
+    lib = host_lib()
+    if (lib.rr_shake_salts_host if shake else lib.rr_public_salts_host)(ctypes.byref(pub(head, first, n)), out):
+        raise ValueError("the host's public salts refused the salt head")
     return out.tobytes()
 
 
@@ -375,11 +377,11 @@ def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
 
 
 def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, domain_id: bytes,
-                public: tuple[bytes, int] | None = None, also: tuple[bytes, int] | None = None) -> Hashing:
+                public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, int] | None = None) -> Hashing:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 hashed on the current CUDA device, on its own
     stream, nothing waiting on the host but a host ``words``' copy. ``words`` on the host are copied there; a u16 tensor
     on that device is read in place, after everything its current stream has enqueued (the stream that wrote it), and is
-    held until the hash is done. ``public`` ``(head, first)``: the rows' salts are the public salts from position
+    held until the hash is done. ``public`` ``(head, first, shake)``: the rows' salts are the public salts from position
     ``first`` under ``head`` (`device_public_salts`'), derived on the stream where the hash reads them, ``row_salts``
     unread. ``also`` ``(domain id, nonce)``: the same rows are a call's z table too (`pouw_h1_tables_device`'s
     ``hm96-sha512/row-seg/v1`` rows, salted under ``key`` at that nonce), committed from the same read of each row
@@ -410,7 +412,7 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
         return _hash_both(torch, d, words, rows, t, key, nonce, domain_id, also)
     with torch.cuda.stream(st):
         if public is not None:
-            salts = _public_salts(d, pub(*public, n))
+            salts = _public_salts(d, pub(public[0], public[1], n), public[2])
         else:
             salts = None if row_salts is None else torch.from_numpy(_salts(row_salts, n)).to(dev)
         t.salts = 0 if salts is None else salts.data_ptr()
@@ -472,23 +474,24 @@ def _hash_both(torch: Any, d: Any, words: Any, rows: Any, t: Table, key: bytes, 
     return Hashing(done, got_bcs, got_levels, t.W, (words, rows, staged, plan, call, bcs, levels), got_root)
 
 
-def _public_salts(d: Any, p: Pub) -> Any:
+def _public_salts(d: Any, p: Pub, shake: bool) -> Any:
     import torch
 
     out = torch.empty(24 * p.n, dtype=torch.int64, device=d.hm.device)
-    rc = d.lib.rr_public_salts(d.stream.cuda_stream, ctypes.byref(p), out.data_ptr())
+    f = d.lib.rr_shake_salts if shake else d.lib.rr_public_salts
+    rc = f(d.stream.cuda_stream, ctypes.byref(p), out.data_ptr())
     if rc:
-        raise RuntimeError(f"rr_public_salts: CUDA error {rc}")
+        raise RuntimeError(f"{f.__name__}: CUDA error {rc}")
     return out
 
 
-def device_public_salts(head: bytes, first: int, n: int) -> bytes:
+def device_public_salts(head: bytes, first: int, n: int, shake: bool = False) -> bytes:
     """`pouw_h1_registered.public_salts` on the current CUDA device, on its stream, returned once done."""
     import torch
 
     d = _device(torch)
     with torch.cuda.stream(d.stream):
-        return _public_salts(d, pub(head, first, n)).cpu().numpy().tobytes()
+        return _public_salts(d, pub(head, first, n), shake).cpu().numpy().tobytes()
 
 
 @contextmanager

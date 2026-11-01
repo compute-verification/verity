@@ -164,15 +164,25 @@ class Salts(Sequence):
         return chacha20.hm96_salts(self.key, self.nonce, at)
 
 
+def _public_salt(head: bytes, position: int, shake: bool) -> bytes:
+    head += position.to_bytes(8, "big")
+    if shake:
+        return hashlib.shake_256(head).digest(_INST.salt_bytes)
+    return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(_INST.salt_bytes // 64))
+
+
 @dataclass(frozen=True)
 class PublicSalts(Sequence):
     """A public table's salts, which anyone derives: item j is position ``first + j``'s, ``SHA-512(head || u64be(first +
-    j) || u8(i))`` for i = 0, 1, 2 (`core_check.public_row_salt`, ``head`` its domain, context length and context), drawn
-    on read; `commit` derives them where it hashes (`public_salts`). Distinct positions, so no salt is reused."""
+    j) || u8(i))`` for i = 0, 1, 2 (`core_check.public_row_salt`, ``head`` its domain, context length and context), or
+    with ``shake`` the first 192 bytes of ``SHAKE-256(head || u64be(first + j))`` (`core_check.ok_salt`, ``head`` its
+    tag, context and 0), drawn on read; `commit` derives them where it hashes (`public_salts`). Distinct positions, so no
+    salt is reused."""
 
     head: bytes
     first: int
     n: int
+    shake: bool = False
 
     def __post_init__(self) -> None:
         if self.n < 1 or self.first < 0 or self.first + self.n > 1 << 64:
@@ -186,8 +196,7 @@ class PublicSalts(Sequence):
             return [self[i] for i in range(*j.indices(self.n))]
         if not -self.n <= j < self.n:
             raise IndexError(j)
-        head = self.head + (self.first + j % self.n).to_bytes(8, "big")
-        return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(_INST.salt_bytes // 64))
+        return _public_salt(self.head, self.first + j % self.n, self.shake)
 
     def at(self, positions: Sequence[int] | np.ndarray) -> bytes:
         """Items ``positions`` (each in [0, n)) concatenated."""
@@ -312,25 +321,23 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
         from verity_vllm.protocols.pouw.h1 import registered_device as D
 
         hashing = D.device_hash(words, key, nonce, given, dom.domain_id,
-                                None if public is None else (public.head, public.first), also)
+                                None if public is None else (public.head, public.first, public.shake), also)
         return Later(hashing, made) if later else made(*hashing.result())
     if public is not None:
-        given = public_salts(public.head, public.first, n)
+        given = public_salts(public.head, public.first, n, public.shake)
     return made(*_numpy(words, key, nonce, given, dom.domain_id, schema))
 
 
-def public_salts(head: bytes, first: int, n: int) -> bytes:
-    """Positions ``first`` .. ``first + n - 1``'s public row salts concatenated, each ``SHA-512(head || u64be(position) ||
-    u8(i))`` for i = 0, 1, 2 (`core_check.public_row_salt`, ``head`` its domain, context length and context), on the
-    device where `path` says, else with `hashlib`."""
+def public_salts(head: bytes, first: int, n: int, shake: bool = False) -> bytes:
+    """Positions ``first`` .. ``first + n - 1``'s public row salts concatenated, `PublicSalts`' items, on the device where
+    `path` says, else with `hashlib`."""
     if n < 1 or first < 0 or first + n > 1 << 64:
         raise ValueError(f"{n} public salts from position {first}: at least one, every position a u64")
     if path() == "gpu":
         from verity_vllm.protocols.pouw.h1 import registered_device as D
 
-        return D.device_public_salts(head, first, n)
-    return b"".join(hashlib.sha512(head + u.to_bytes(8, "big") + bytes([i])).digest()
-                    for u in range(first, first + n) for i in range(_INST.salt_bytes // 64))
+        return D.device_public_salts(head, first, n, shake)
+    return b"".join(_public_salt(head, u, shake) for u in range(first, first + n))
 
 
 def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domain_id: bytes,
