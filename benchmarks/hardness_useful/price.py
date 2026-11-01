@@ -12,7 +12,11 @@ price in --alus (NAME=BITS:WRITES,...; a noise form of b bits takes the cheapest
 `best` (the cheapest schedule, the plain leaf included), `alt` (the cheapest whose root isn't the plain leaf), the
 plane routes and `cheapest` = min(alt, planes), all in W1 per MAC of E·Wᵀ against the honest kernel's 1.
 
-Checks: every matrix's best and alt trees at each chip and price are executed exactly in int64 on a crop (n 256,
+Each matrix is also priced under --perms, reorderings of its rows and columns (`permute`), which the attacker gets for
+free since W is fixed before E. summary.json takes each matrix's least over them, and `within_5pct_of_leaf` lists, per
+price, every matrix whose cheapest route is within 5% of its plain leaf (1 + 32/K).
+
+Checks: every matrix's best and alt trees at each chip, price and order are executed exactly in int64 on a crop (n 256,
 K 512) against E·Wᵀ; with --full-check, the served-K alt tree at --check-alu on the whole matrix, for 2^depth noise rows.
 """
 
@@ -77,6 +81,30 @@ def np_calibrate(w: np.ndarray, target: float | None, iters: int = 30) -> tuple[
     return lo, np_codes(w, lo)
 
 
+def fold(order: list[int]) -> list[int]:
+    """order (largest first) arranged so that the halves at every level pair large with small."""
+    m = len(order)
+    if m < 2 or m % 2:
+        return list(order)
+    partner = dict(zip(order[: m // 2], order[m // 2:][::-1]))
+    a = fold(order[: m // 2])
+    return a + [partner[i] for i in a]
+
+
+def permute(q: np.ndarray, how: str) -> np.ndarray:
+    """q with its rows (n) and columns (K) reordered by RMS: `sort` clusters large with large, `fold` pairs large with
+    small at every Strassen level. W is fixed before E, so either is free to the attacker."""
+    if how == "none":
+        return q
+    qf = q.astype(np.float64) ** 2
+    rn, rk = np.argsort(-qf.mean(1), kind="stable"), np.argsort(-qf.mean(0), kind="stable")
+    if how == "fold":
+        rn, rk = np.array(fold(rn.tolist())), np.array(fold(rk.tolist()))
+    else:
+        assert how == "sort", how
+    return q[rn][:, rk]
+
+
 def run_tree(t, q, a, rows, seed=0):
     C = q.T.astype(np.int64)
     E = np.random.default_rng(seed).integers(0, a, (rows, C.shape[0]), dtype=np.int64)
@@ -121,7 +149,7 @@ def crop_checks(q, depth, a, chips, alus) -> dict:
 
 
 def work(job) -> dict:
-    name, src, depth, a, chips, readings, alus, full, check_alu = job
+    name, src, depth, a, chips, readings, alus, full, check_alu, perms = job
     t0 = time.time()
     if src[0] == "codes":
         from safetensors import safe_open
@@ -136,13 +164,17 @@ def work(job) -> dict:
     rec = {"tensor": name, "shape": list(q.shape), "macs_per_token": int(q.size), "c": c,
            "sigma_q": float(q.astype(np.float64).std()), "saturated": float((np.abs(q) == 127).mean()),
            "overflow": nat.overflow_profile(q, 2)}
-    rec["rows"], trees = price_matrix(q, depth, a, chips, readings, alus)
-    rec["exact_crop"] = crop_checks(q, depth, a, chips, alus)
-    if full:
-        for chip in chips:
-            _tree, alt = trees[(check_alu, chip, "fast")]
-            if alt is not None:
-                rec[f"exact_full_{check_alu}_{chip}"] = run_tree(alt, q, a, 2**depth)
+    rec["rows"], rec["exact_crop"] = [], {}
+    for perm in perms:
+        qp = permute(q, perm)
+        rows, trees = price_matrix(qp, depth, a, chips, readings, alus)
+        rec["rows"] += [{"perm": perm, **r} for r in rows]
+        rec["exact_crop"].update({f"{perm}/{k}": v for k, v in crop_checks(qp, depth, a, chips, alus).items()})
+        if full and perm == "none":
+            for chip in chips:
+                _tree, alt = trees[(check_alu, chip, "fast")]
+                if alt is not None:
+                    rec[f"exact_full_{check_alu}_{chip}"] = run_tree(alt, qp, a, 2**depth)
     rec["seconds"] = time.time() - t0
     return rec
 
@@ -179,6 +211,8 @@ def main(argv=None) -> int:
     ap.add_argument("--alus", default=ALUS)
     ap.add_argument("--full-check", action="store_true")
     ap.add_argument("--check-alu", default="0.84")
+    ap.add_argument("--perms", default="none fold sort", help="orders of n and K to price (`permute`); the summary "
+                    "takes each matrix's least")
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
@@ -202,14 +236,18 @@ def main(argv=None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     ok = True
     with concurrent.futures.ProcessPoolExecutor(args.workers) as ex, open(args.out / "matrices.jsonl", "w") as fh:
-        futs = [ex.submit(work, (n, src, args.depth, args.a, chips, readings, alus, args.full_check, args.check_alu))
-                for n, src in jobs]
+        futs = [ex.submit(work, (n, src, args.depth, args.a, chips, readings, alus, args.full_check, args.check_alu,
+                                 args.perms.split())) for n, src in jobs]
         for fut in concurrent.futures.as_completed(futs):
             rec = fut.result()
             ok &= all(rec["exact_crop"].values()) and all(v for k, v in rec.items() if k.startswith("exact_full"))
             fh.write(json.dumps(rec) + "\n")
             fh.flush()
-            sm = {f"{r['chip']}@{r['alu']}": round(r["cheapest"], 3) for r in rec["rows"] if r["reading"] == "fast"}
+            sm = {}
+            for r in rec["rows"]:
+                if r["reading"] == "fast":
+                    k = f"{r['chip']}@{r['alu']}"
+                    sm[k] = min(sm.get(k, math.inf), round(r["cheapest"], 3))
             print(rec["tensor"], rec["shape"], f"c={rec['c']}", f"ov1={rec['overflow']['strassen'][0]:.4f}",
                   json.dumps(sm), f"{rec['seconds']:.0f}s", flush=True)
     summary = summarize(args.out / "matrices.jsonl")
@@ -222,11 +260,20 @@ def summarize(path: Path) -> dict:
     recs = [json.loads(line) for line in path.read_text().splitlines()]
     macs = sum(r["macs_per_token"] for r in recs)
     by = {}
+    by_perm, under_leaf = {}, {}
     for r in recs:
+        least = {}
         for row in r["rows"]:
             key = f"{row['alu']}/{row['chip']}/{row['reading']}"
+            pk = f"{row.get('perm', 'none')}/{key}"
+            by_perm[pk] = min(by_perm.get(pk, math.inf), row["cheapest"])
+            m = least.setdefault(key, {"alt": math.inf, "cheapest": math.inf, "best": math.inf, "plain": row["plain"]})
+            for f in ("alt", "cheapest", "best"):
+                m[f] = min(m[f], row[f])
+        for key, row in least.items():
             b = by.setdefault(key, {"alt_macw": 0.0, "cheapest_macw": 0.0, "best_macw": 0.0, "min_cheapest": math.inf,
-                                    "argmin": None, "below_1": 0, "below_1.05": 0, "per_matrix_cheater": 0.0})
+                                    "argmin": None, "below_1": 0, "below_1.05": 0, "per_matrix_cheater": 0.0,
+                                    "min_vs_leaf": math.inf, "below_leaf": 0})
             w = r["macs_per_token"] / macs
             b["alt_macw"] += w * row["alt"]
             b["cheapest_macw"] += w * row["cheapest"]
@@ -234,10 +281,15 @@ def summarize(path: Path) -> dict:
             b["per_matrix_cheater"] += w * min(row["cheapest"], 1.0)
             b["below_1"] += row["cheapest"] < 1
             b["below_1.05"] += row["cheapest"] < 1.05
+            b["min_vs_leaf"] = min(b["min_vs_leaf"], row["cheapest"] / row["plain"])
+            b["below_leaf"] += row["cheapest"] < row["plain"]
             if row["cheapest"] < b["min_cheapest"]:
                 b["min_cheapest"], b["argmin"] = row["cheapest"], r["tensor"]
+            if row["cheapest"] < 1.05 * row["plain"]:
+                under_leaf.setdefault(key, []).append([r["tensor"], round(row["cheapest"] / row["plain"], 4)])
     ov = sorted(r["overflow"]["strassen"][0] for r in recs)
-    return {"matrices": len(recs), "macs_per_token": macs, "by_price": by,
+    return {"matrices": len(recs), "macs_per_token": macs, "by_price": by, "least_by_perm": by_perm,
+            "within_5pct_of_leaf": under_leaf,
             "strassen1": {"min": ov[0], "median": ov[len(ov) // 2], "max": ov[-1]},
             "saturated_macw": sum(r["saturated"] * r["macs_per_token"] for r in recs) / macs,
             "exact": all(all(r["exact_crop"].values()) and all(v for k, v in r.items() if k.startswith("exact_full"))

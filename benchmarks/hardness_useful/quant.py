@@ -13,6 +13,8 @@ latent weight on every training forward (no gradient), and frozen with the codes
 
 With rotate, each linear's latent weight is W·R and its input x·R (`rotation.py`: a random-sign Hadamard rotation, exact
 in real arithmetic), so the codes quantize a near-Gaussian row and the clip a target needs spares the outliers.
+
+`Served` is how the activations reach the codes: bf16, int8 per token, or design U's int8 plus live 2-bit noise.
 """
 
 from __future__ import annotations
@@ -113,6 +115,61 @@ class Rotation(nn.Module):
         return (torch.matmul(self.ha.to(u.dtype), u) @ self.hb.to(u.dtype)).reshape(shape)
 
 
+class _ActQ(torch.autograd.Function):
+    """v = round(x / s_x) + e on live rows and x / s_x on the sink row, straight through: dv/dx = 1 / s_x."""
+
+    @staticmethod
+    def forward(ctx, x, sx, e, live):
+        u = x.float() / sx
+        ctx.save_for_backward(sx)
+        return torch.where(live, torch.round(u) + e, u).to(torch.bfloat16)
+
+    @staticmethod
+    def backward(ctx, g):
+        (sx,) = ctx.saved_tensors
+        return (g.float() / sx).to(g.dtype), None, None, None
+
+
+class Served:
+    """How a linear call's input is served.
+
+    - a16: bf16 (W8A16).
+    - a8: int8 per token, symmetric at ±126.
+    - e2: HT-PROTO-U's design U. int8 per token at ±126 plus raw E uniform on {−2, −1, 0, 1}, one E per call, served
+      as (x + E)·qᵀ + ½·Σq, which folds E's mean in per output.
+
+    In a8 and e2 the sink row (position 0) is served exact. Linears that read the same input tensor (q, k and v; gate and
+    up) are one call and share its codes and E. E is drawn from `gen`, which `reseed` restarts."""
+
+    def __init__(self, mode: str = "a16"):
+        assert mode in ("a16", "a8", "e2"), mode
+        self.mode, self.gen, self._last = mode, None, None
+
+    def reseed(self, seed: int, device):
+        self.gen = torch.Generator(device=device)
+        self.gen.manual_seed(seed)
+        self._last = None
+
+    def act(self, x, rot):
+        if self._last is not None and self._last[0] is x and self._last[1] is rot:
+            return self._last[2:]
+        assert x.dim() == 3, x.shape
+        xr = x.to(torch.bfloat16)
+        if rot is not None:
+            xr = rot(xr)
+        sx = (xr.detach().abs().amax(-1, keepdim=True).float() / 126).clamp_min(1e-12)
+        live = torch.ones(*x.shape[:-1], 1, dtype=torch.bool, device=x.device)
+        live[:, 0] = False
+        if self.mode == "e2":
+            e = torch.randint(-2, 2, xr.shape, device=x.device, generator=self.gen).float()
+            off = 0.5 * live.float()
+        else:
+            e, off = torch.zeros((), device=x.device), None
+        v = _ActQ.apply(xr, sx, e, live)
+        self._last = (x, rot, v, sx, off)
+        return v, sx, off
+
+
 class QLinear(nn.Module):
     def __init__(self, lin: nn.Linear, c: float | None, rot: Rotation | None = None):
         super().__init__()
@@ -120,6 +177,7 @@ class QLinear(nn.Module):
         self.weight = lin.weight
         self.c = c
         self.rot = rot
+        self.served, self.exact = None, False
         self._frozen = None
 
     def train(self, mode: bool = True):
@@ -139,10 +197,16 @@ class QLinear(nn.Module):
             q = _FQ.apply(self.weight.float(), s)
         else:
             q, s = self.frozen()
-        x = x.to(torch.bfloat16)
-        if self.rot is not None:
-            x = self.rot(x)
-        return F.linear(x, q).float() * s
+        if self.served is None or self.served.mode == "a16" or self.exact:
+            x = x.to(torch.bfloat16)
+            if self.rot is not None:
+                x = self.rot(x)
+            return F.linear(x, q).float() * s
+        v, sx, off = self.served.act(x, self.rot)
+        y = F.linear(v, q).float()
+        if off is not None:
+            y = y + off * q.float().sum(1)
+        return y * sx * s
 
 
 def block_linears(model) -> list[tuple[str, nn.Module, str]]:
@@ -175,6 +239,16 @@ def wrap(model, target: float | None, rotate: bool = False, log=print) -> dict[s
     log(f"wrap: {len(info)} linears, target {target}, rotate {rotate}, strassen1 median "
         f"{sorted(v['strassen1'] for v in info.values())[len(info) // 2]:.4%}")
     return info
+
+
+def set_served(model, spec: str) -> Served:
+    """Serve every QLinear as spec, MODE[:PROJ+PROJ...] (`Served`; the listed projections served exact, in bf16)."""
+    mode, _, exact = spec.partition(":")
+    sv = Served(mode)
+    for _name, parent, attr in block_linears(model):
+        m = getattr(parent, attr)
+        m.served, m.exact = sv, attr in exact.split("+")
+    return sv
 
 
 def recalibrate(model, target: float | None) -> dict[str, dict]:

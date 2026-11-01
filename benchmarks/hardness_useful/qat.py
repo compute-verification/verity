@@ -14,6 +14,10 @@ Quality, before training (the post-training quantization at the same scales) and
   --val-tokens of the FineWeb-Edu val shard;
 - zero-shot accuracy with lm-eval (--tasks), the model evaluated as served: codes and scales frozen.
 
+--serve is how activations reach the codes in training, the headline evals and zero-shot (`quant.Served`: bf16, int8
+per token, or design U's int8 plus live 2-bit noise, with projections optionally exact); perplexity is also measured
+under every --eval-modes spec, on the same noise draws for every arm.
+
 Outputs in --out: result.json (config, per-matrix c and overflow profile, evals, the loss curve, throughput) and, with
 --price, the route pricing of the codes (`price.py`, run on the CPU while zero-shot runs on the GPU). With --codes FILE
 the codes are written there (each matrix's int8 codes `NAME.q` and fp32 scales `NAME.s`, about 1 GB for a 1B model, so
@@ -41,7 +45,9 @@ sys.path.insert(0, str(HERE))
 import quant  # noqa: E402
 
 TASKS = "arc_easy,arc_challenge,hellaswag,piqa,winogrande"
+EVAL_MODES = "a16,a8,e2,e2:down_proj"
 KD_CHUNK = 2048
+EVAL_SEED, TRAIN_SEED = 1234, 1
 
 
 def log(*a):
@@ -124,11 +130,27 @@ def zeroshot(model, tok, tasks: list[str], bs: int, limit: int | None) -> dict:
     return out
 
 
+def served(model, args, spec: str):
+    if args.target != "bf16":
+        quant.set_served(model, spec).reseed(EVAL_SEED, "cuda")
+
+
+def ppls(model, wt_ids, val_ids, args, spec: str) -> dict:
+    served(model, args, spec)
+    return {"wikitext2": perplexity(model, wt_ids, args.seq),
+            "fineweb_val": perplexity(model, val_ids, args.seq, max_windows=args.val_tokens // args.seq)}
+
+
 def evaluate(model, tok, wt_ids, val_ids, args, zs: bool) -> dict:
+    """Perplexities served as --serve and under every --eval-modes spec, then zero-shot served as --serve."""
     t0 = time.time()
-    ev = {"wikitext2": perplexity(model, wt_ids, args.seq),
-          "fineweb_val": perplexity(model, val_ids, args.seq, max_windows=args.val_tokens // args.seq)}
-    log("eval", json.dumps({k: round(v["ppl"], 4) for k, v in ev.items()}), f"{time.time() - t0:.0f}s")
+    ev = ppls(model, wt_ids, val_ids, args, args.serve)
+    if args.target != "bf16":
+        ev["modes"] = {m: ppls(model, wt_ids, val_ids, args, m) for m in args.eval_modes.split(",") if m}
+    log("eval", json.dumps({m: {k: round(v["ppl"], 4) for k, v in e.items() if k != "modes"}
+                            for m, e in [(args.serve, ev)] + list(ev.get("modes", {}).items())}),
+        f"{time.time() - t0:.0f}s")
+    served(model, args, args.serve)
     if zs and args.tasks:
         ev["zeroshot"] = zeroshot(model, tok, args.tasks.split(","), args.zs_batch, args.zs_limit)
     return ev
@@ -155,6 +177,9 @@ def main(argv=None) -> int:
     ap.add_argument("--model", default="unsloth/Llama-3.2-1B")
     ap.add_argument("--target", required=True, help="bf16, absmax or a Strassen level-1 overflow rate (0.02 = 2%%)")
     ap.add_argument("--rotate", action="store_true", help="quantize W·R and feed x·R (`rotation.py`)")
+    ap.add_argument("--serve", default="a16", help="how activations are served in training, the headline evals and "
+                    "zero-shot: MODE[:PROJ+...] (`quant.Served`, `quant.set_served`)")
+    ap.add_argument("--eval-modes", default=EVAL_MODES, help="more serving specs to measure perplexity under")
     ap.add_argument("--tokens", type=int, default=100_000_000, help="training tokens; 0 = no training")
     ap.add_argument("--seq", type=int, default=2048)
     ap.add_argument("--batch", type=int, default=64, help="sequences a step")
@@ -177,6 +202,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
     assert args.codes or not args.price, "--price prices the --codes file"
+    assert args.target != "bf16" or args.serve == "a16", "bf16 has no codes to serve noised"
     args.out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(0)
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -220,6 +246,7 @@ def main(argv=None) -> int:
         accum = args.batch // args.micro
         curve = [{"step": 0, "fineweb_val_64": perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]}]
         recals = []
+        quant.set_served(model, args.serve).reseed(TRAIN_SEED, "cuda")
         model.train()
         torch.cuda.reset_peak_memory_stats()
         t0 = time.time()
