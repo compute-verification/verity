@@ -209,12 +209,13 @@ def _lane(i: dict, owners: dict[str, str]) -> str:
     return _lane_label(i) or owners.get(i["team"]["key"]) or NO_LANE
 
 
-def ask_findings(asks: list[dict], now: float) -> list[dict]:
+def ask_findings(asks: list[dict], now: float, landing: set[str] = frozenset()) -> list[dict]:
     """The audit's findings on people's asks (`Linear.asks`), as `audit` gives them (ASK_KINDS):
     - parked: in Backlog, or canceled, without ASKER_OK: only its asker parks or cancels it.  A duplicate isn't parked: the
       ask goes on in the issue it duplicates.
     - unstaffed: in Triage or Todo ASK_START_H after it was filed: In Progress means its worker is on it.
-    - slipped: not closed, and its date moved later ASK_SLIPS times or more.
+    - slipped: not closed, and its date moved later ASK_SLIPS times or more, unless it waits on landing (`landing`: its
+      work is done and its PRs are marked; the wait is the landing queue's, not its lead's).
     - repeated: not done, and restated (`asked again` comments) more often than answered (`postmortem` comments)."""
     out = []
     for a in asks:
@@ -228,7 +229,7 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
             and f"{who}'s ask, filed {(now - a['created']) / 3600:.0f} h ago, has no worker: move it to In Progress (`research msg "
                 f"linear state {ident} In Progress`) with a comment naming its worker (a `bc-` id, or the lead) and the date its "
                 "outcome lands",
-            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS
+            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS and ident not in landing
             and f"its date moved later {a['slips']} times ({' -> '.join(a['dates'])}): comment what missed each date and what holds "
                 "the next; top hears of it",
             "repeated": t != "completed" and a["again"] > a["postmortems"]
@@ -258,6 +259,7 @@ class Linear:
         if not self.app and not self.key:
             raise LinearError("no Linear credentials: LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET (the app), or LINEAR_API_KEY")
         self.http, self.now, self.cache = transport or _http, now, cache or token_cache()
+        self.landing: list[dict] = []                             # `audit`'s issues that wait only on landing
 
     @property
     def mode(self) -> str:
@@ -499,7 +501,8 @@ class Linear:
         seen = {x.lower() for t in nodes for x in (t["key"], t["name"])}
         return [t for t in teams if t.lower() not in seen]
 
-    def audit(self, owners: dict[str, str] | None = None, teams: list[str] | None = None, now: float | None = None) -> list[dict]:
+    def audit(self, owners: dict[str, str] | None = None, teams: list[str] | None = None, now: float | None = None,
+              waiting: Callable[[list[int]], bool] | None = None) -> list[dict]:
         """One pass over the open issues (OPEN_TYPES), of `teams` (names or keys) or every team: each finding
         {issue, url, title, team, lane, state, kind, fix}, by lane, issue and kind (AUDIT_KINDS):
         - orphan: Todo, In Progress or In Review, in no project.  milestone: in a project with milestones, with none set.
@@ -516,7 +519,10 @@ class Linear:
         - lane: its team has no handle (`owners`, team key to handle) and it has no `lane:<handle>` label.
         - and on a person's ask (`asks`), in any state, the kinds `ask_findings` names.
         `lane` is the issue's `lane:` label, else its team's handle, else NO_LANE.  A team these credentials can't see
-        (`unread`) has no issues here, so it adds no finding and no error."""
+        (`unread`) has no issues here, so it adds no finding and no error.
+        An issue In Review whose attached PRs are all open and, by `waiting` (their numbers), marked ready at their heads waits
+        on landing: it is neither overdue nor slipped, since the wait is the landing queue's.  Each such issue is in `landing`
+        afterwards ({issue, lane, due, late_h}), for the one line the audit prints about them."""
         now, owners = self.now() if now is None else now, owners or {}
         today = datetime.fromtimestamp(now, UTC).date().isoformat()
         f: dict = {"state": {"type": {"in": list(OPEN_TYPES)}}}
@@ -527,7 +533,7 @@ class Linear:
                              f"attachments {{ nodes {{ url sourceType metadata }} }} children(first: {AUDIT_CHILDREN}, orderBy: updatedAt) "
                              "{ nodes { updatedAt comments(first: 1, orderBy: createdAt) { nodes { createdAt } } } }", f)
         staged = {p["id"]: bool(p["projectMilestones"]["nodes"]) for p in self.projects()} if issues else {}
-        out = ask_findings(self.asks(owners, teams, now), now)
+        out, self.landing = [], []
         for i in issues:
             ident, state, key, project = i["identifier"], i["state"]["name"], i["team"]["key"], i.get("project")
             label, lane = _lane_label(i), _lane(i, owners)
@@ -542,6 +548,13 @@ class Linear:
             heard = max((t for t in (last, _epoch(i.get("startedAt")), kid) if t), default=_epoch(i["createdAt"]))
             idle_d = (now - max(t for t in (_epoch(i["updatedAt"]), last, kid) if t)) / 86400
             nums = ", ".join(f"#{p.get('number')}" for p in prs[:5]) + (", ..." if len(prs) > 5 else "")
+            numbers = [int(p["number"]) for p in prs if str(p.get("number", "")).isdigit()]
+            lands = bool(waiting and state == "In Review" and prs and len(numbers) == len(prs)
+                         and all(p["status"] == "open" for p in prs) and waiting(numbers))
+            if lands:
+                due = i.get("dueDate")
+                late = (now - datetime.fromisoformat(due).replace(tzinfo=UTC).timestamp()) / 3600 - 24 if due and due < today else 0
+                self.landing.append({"issue": ident, "lane": lane, "due": due, "late_h": max(late, 0)})
             found = {
                 "orphan": state in TAKEN and not project
                 and f"put it in its project and milestone (`research msg linear place {ident} PROJECT --milestone M`), "
@@ -551,7 +564,7 @@ class Linear:
                 "undated": state in TAKEN and not i.get("dueDate")
                 and f"set the date it lands, its milestone's at the latest (`research msg linear edit {ident} --due YYYY-MM-DD`), "
                     "or move it to Backlog",
-                "overdue": i.get("dueDate") and i["dueDate"] < today
+                "overdue": i.get("dueDate") and i["dueDate"] < today and not lands
                 and f"due {i['dueDate']}: land it, or set the date it will land (`research msg linear edit {ident} --due "
                     "YYYY-MM-DD`) and comment why it moved",
                 "quiet": state == "In Progress" and now - heard > QUIET_H * 3600
@@ -571,6 +584,7 @@ class Linear:
             }
             out += [{"issue": ident, "url": i["url"], "title": i["title"], "team": key, "lane": lane, "state": state, "kind": k,
                      "fix": found[k]} for k in AUDIT_KINDS if found.get(k)]
+        out += ask_findings(self.asks(owners, teams, now), now, {x["issue"] for x in self.landing})
         order = {k: n for n, k in enumerate(AUDIT_KINDS)}
         return sorted(out, key=lambda x: (x["lane"], x["team"], int(x["issue"].rsplit("-", 1)[1]), order[x["kind"]]))
 

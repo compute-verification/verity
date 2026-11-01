@@ -371,6 +371,26 @@ class GitHub:
             raise QueueError(f"gh pr close {number}: {(r.stderr or r.stdout).strip()[-300:]}")
 
 
+def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Callable[[list[int]], bool]:
+    """Whether PRs wait only on landing: each is open and marked ready at its current head (`StoreLabels.ready`), as the Linear
+    audit asks of an issue In Review.  The open PRs are read once, on the first call; `repo` defaults to the checkout's
+    origin, and a PR GitHub or the store can't answer for doesn't wait."""
+    from .store.local import LocalStore
+
+    state: dict = {}
+
+    def waiting(numbers: list[int]) -> bool:
+        if "heads" not in state:
+            slug = repo or ((m := SLUG_RE.search(_out(Path.cwd(), "remote", "get-url", "origin"))) and m.group(1))
+            state["heads"] = {pr.number: pr.head for pr in GitHub(slug).open_prs()}
+            state["labels"] = StoreLabels(LocalStore(store_root), log=lambda s: None)
+            state["labels"].prefetch(state["heads"].items())
+        heads, labels = state["heads"], state["labels"]
+        return bool(numbers) and all(n in heads and labels.ready(n, heads[n]) for n in numbers)
+
+    return waiting
+
+
 # ---- rules and labels ---------------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
