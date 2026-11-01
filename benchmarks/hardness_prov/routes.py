@@ -15,7 +15,10 @@ The parts P searched:
   integer low-rank part;
 - a per-row scaled ternary a·t (the plant's t, or t refit from q at half the row's max), one ternary pass;
 - a grid g·M (q mostly divisible by g), M priced as a residual and the off-grid entries on the ALU;
-- nothing (P = 0): S = q, which covers small codes with a pinned absmax (the pin is an ALU outlier).
+- nothing (P = 0): S = q, which covers small codes with a pinned absmax (the pin is an ALU outlier);
+- clustered rows (`vq`): q's rows k-means clustered into m integer centers, P = C[assign], priced m/n (each output
+  is its center's output plus its residual's); clustered columns likewise at m/K (the inputs summed per cluster
+  first). High rank, so the top-r energy share doesn't see it.
 
 Every price is a route the cheater can run; none is a lower bound.
 """
@@ -93,10 +96,69 @@ def ternary_split(q, t):
     return q - a[:, None] * t
 
 
-def search(q, t=None):
+VQ_FRACTIONS = (16, 8, 5)
+VQ_RESTARTS = 3
+
+
+def kmeans(x, m, iters=8, seed=0):
+    """Lloyd's k-means on the rows of x (float32), greedy k-means++ seeded (each new center the best of 2 + ln m
+    sampled candidates); returns (centers, assign)."""
+    x = np.asarray(x, dtype=np.float32)
+    rng = np.random.default_rng(seed)
+    tries = 2 + int(np.log(max(m, 2)))
+    xx = (x * x).sum(axis=1, keepdims=True)
+    idx = [int(rng.integers(len(x)))]
+    d2 = ((x - x[idx[0]]) ** 2).sum(axis=1)
+    for _ in range(m - 1):
+        tot = float(d2.sum())
+        if tot <= 0:
+            idx.append(int(rng.integers(len(x))))
+            continue
+        cand = rng.choice(len(x), size=tries, p=d2 / tot)
+        dc = np.maximum(xx - 2 * x @ x[cand].T + xx[cand, 0], 0)
+        nd = np.minimum(d2[:, None], dc)
+        j = int(np.argmin(nd.sum(axis=0)))
+        idx.append(int(cand[j]))
+        d2 = nd[:, j]
+    c = x[idx].copy()
+    for _ in range(iters):
+        a = np.argmin(xx - 2 * x @ c.T + (c * c).sum(axis=1), axis=1)
+        cnt = np.bincount(a, minlength=m)
+        s = np.zeros_like(c)
+        np.add.at(s, a, x)
+        live = cnt > 0
+        c[live] = s[live] / cnt[live, None]
+    return c, np.argmin(xx - 2 * x @ c.T + (c * c).sum(axis=1), axis=1)
+
+
+def vq_routes(q, chip, cache):
+    """Cheapest clustered-rows or clustered-columns route: (cost, side, m, a)."""
+    best = (1.0, None, 0, 0)
+    for side, mat, full in (("rows", q, q.shape[0]), ("cols", q.T, q.shape[1])):
+        for f in VQ_FRACTIONS:
+            m = full // f
+            if m < 2:
+                continue
+            key = (side, m)
+            if key not in cache:
+                fits = []
+                for seed in range(VQ_RESTARTS):
+                    c, a = kmeans(mat, m, seed=seed)
+                    S = mat - np.rint(c).astype(np.int64)[a]
+                    fits.append((float((np.abs(S) > 15).mean()), seed, S))
+                cache[key] = min(fits, key=lambda f: f[:2])[2]
+            c, a_ = residual(cache[key], chip)
+            cost = m / full + c
+            if cost < best[0]:
+                best = (cost, side, m, a_)
+    return best
+
+
+def search(q, t=None, vq=True):
     """Every family's cheapest route for q, per chip, and the best."""
     q = np.asarray(q, dtype=np.int64)
     n, k = q.shape
+    vq_cache = {}
     U, s, Vt = np.linalg.svd(q.astype(np.float64), full_matrices=False)
     out = {}
     lr_S = {}
@@ -130,6 +192,9 @@ def search(q, t=None):
             if c < gbest[0]:
                 gbest = (c, g)
         fam["grid"] = {"cost": min(1.0, gbest[0]), "g": gbest[1]}
+        if vq:
+            c, side, m, a = vq_routes(q, chip, vq_cache)
+            fam["vq"] = {"cost": min(1.0, c), "side": side, "m": m, "a": a}
         best = min(fam, key=lambda f: fam[f]["cost"])
         out[chip] = {"cost": fam[best]["cost"], "family": best, "families": fam}
     e = np.cumsum(s.astype(np.float64) ** 2) / float((s.astype(np.float64) ** 2).sum())

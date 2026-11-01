@@ -30,10 +30,10 @@ def load(path, name):
         return f.get_tensor(name).to(torch.float32).numpy()
 
 
-def price(path, name, quant):
+def price(path, name, quant, vq=False):
     w = load(path, name)
     q, _ = toy.codes(w, quant)
-    r = routes.search(q)
+    r = routes.search(q, vq=vq)
     fam = {chip: {f: v["cost"] for f, v in r[chip]["families"].items()} for chip in routes.CHIPS}
     return {"name": name, "quant": quant, "shape": list(w.shape), "stats": routes.stats(q),
             "energy_top": r["energy_top"], "best": {chip: r[chip]["cost"] for chip in routes.CHIPS},
@@ -49,6 +49,7 @@ def main():
     ap.add_argument("--layers", default="", help="comma-separated layer indices (default all)")
     ap.add_argument("--quants", default="absmax,mad")
     ap.add_argument("--workers", type=int, default=32)
+    ap.add_argument("--vq", action="store_true", help="also the clustered routes (minutes of k-means a matrix)")
     args = ap.parse_args()
     from huggingface_hub import snapshot_download
     from safetensors import safe_open
@@ -61,7 +62,7 @@ def main():
             for name in f.keys():
                 m = LAYER.fullmatch(name)
                 if m and (not keep or int(m.group(1)) in keep):
-                    jobs += [(str(path), name, qu) for qu in args.quants.split(",")]
+                    jobs += [(str(path), name, qu, args.vq) for qu in args.quants.split(",")]
     print(f"{len(jobs)} matrices x quantizers from {args.repo}", flush=True)
     res = []
     with ProcessPoolExecutor(args.workers, mp_context=multiprocessing.get_context("spawn")) as ex:

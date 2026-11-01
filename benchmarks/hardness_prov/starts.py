@@ -14,6 +14,8 @@ returns the planted float matrix and the ternary t to price it against (or None)
 - `lr{r}`: the rank-r SVD of w alone (a junk model, cheap at r/n + 3r/K).
 - `lr{r}res{k}`: rank r plus w's residual clipped to ±k served LSBs (k = 15 keeps it in Strassen's depth 3): the
   useful-model version, as SVD-plus-low-bits quantizers build it.
+- `vq{f}res{k}`: w's rows k-means clustered into n/f centers plus the residual clipped to ±k served LSBs (`routes`'
+  clustered-rows route, m/n plus the residual): high rank, so it passes a spectral gate.
 
 Each family planted post hoc is a projection of the honest weights, so a start can be a junk model. `constrained`
 is the cheater's own training before the commitment: the whole model fine-tuned with every planted matrix projected
@@ -31,6 +33,7 @@ import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hardness_public"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import routes
 import toy
 from plant import ternary
 
@@ -77,6 +80,16 @@ def residual_clip(w, r, k, quant):
     return w0
 
 
+def vq_clip(w, f, k, quant):
+    c, a = routes.kmeans(w, max(2, w.shape[0] // f))
+    C = c[a].astype(np.float64)
+    w0 = w.astype(np.float64)
+    for _ in range(4):
+        s = toy.scale(w0, quant)[:, None]
+        w0 = C + np.clip(w - C, -k * s, k * s)
+    return w0
+
+
 def plant(w, family, quant):
     w = np.asarray(w, dtype=np.float64)
     if family == "honest":
@@ -97,6 +110,9 @@ def plant(w, family, quant):
     if m:
         r = int(m.group(1))
         return (svd_r(w, r) if m.group(2) is None else residual_clip(w, r, int(m.group(2)), quant)), None
+    m = re.fullmatch(r"vq(\d+)res(\d+)", family)
+    if m:
+        return vq_clip(w, int(m.group(1)), int(m.group(2)), quant), None
     raise ValueError(family)
 
 

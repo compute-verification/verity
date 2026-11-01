@@ -71,7 +71,7 @@ def evaluate(args, pre, cfg, w0, target, tplant, L, b, steer=False):
     for n, w in wl.items():
         q, s = toy.codes(w, cfg.quant)
         qt, _ = toy.codes(target[n], cfg.quant)
-        r = routes.search(q, tplant.get(n))
+        r = routes.search(q, tplant.get(n), vq=False)
         per[n] = {"h200": r["h200"]["cost"], "sm120": r["sm120"]["cost"], "family": r["sm120"]["family"],
                   "exact": float((q == qt).mean()),
                   "miss_rms": float(np.sqrt((((w - target[n]) / s[:, None]) ** 2).mean()))}
