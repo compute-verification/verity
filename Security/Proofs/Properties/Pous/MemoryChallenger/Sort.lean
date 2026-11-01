@@ -2,6 +2,7 @@ module
 
 public import Mathlib.Data.List.Perm.Basic
 public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `qsort` commutes with a map its order reads through, and keeps every element
@@ -12,6 +13,8 @@ of the input (`mem_qsort`).
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 

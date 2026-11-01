@@ -2,6 +2,8 @@ module
 
 public import Mathlib.Data.List.Induction
 public import Definitions.Core.Site
+import all Init.Data.Repr
+import all Init.Data.ToString.Basic
 
 /-!
 # The registration: its check, and the Site along it

@@ -4,6 +4,7 @@ public import Definitions.Flock.Arith
 public import Mathlib.Data.Matrix.Mul
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Data.Fintype.Card
+public import Mathlib.Tactic.Ring
 
 /-!
 # Statements, witnesses, claims and the committed values

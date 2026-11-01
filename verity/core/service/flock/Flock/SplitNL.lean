@@ -6,6 +6,7 @@ byte offsets) is held to. `splitTasks` splits them so, reading each row's number
 module
 
 public import Flock.Net
+import all Init.Data.String.Legacy
 
 @[expose] public section
 

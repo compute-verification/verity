@@ -1,6 +1,7 @@
 module
 
 public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `Array.qsort` permutes its input
@@ -12,6 +13,8 @@ each as often.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 
