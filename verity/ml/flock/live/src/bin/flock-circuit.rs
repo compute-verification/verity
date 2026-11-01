@@ -1941,9 +1941,12 @@ fn zk_finish<C: flock_transcript::challenger::Challenger + Send>(st: &Stmt, zk: 
 /// Lean finish's (`Flock.Firewall.Finish.innerLive`), on the rep's request (`end`'s, with the coins of its PIOP and opening)
 /// and the pads the rep's Lean frame drew, which this process never holds. The finish sends the constraints it replays,
 /// which must be the statement's relations name for name ([`flock_live::firewall::relations_held`]; any other is the ZK
-/// server's fault), then each round of its inner proof, which leaves onto the rep's stream, where the rep's frame in the
-/// Lean session loop decides its stop on `β = 0` (the Lean finish's refusal where the frame went on is the ZK server's
-/// fault), then the names of the constraints that fail on the pads, and then the rep ends ([`Firewall::rep_end`]). It
+/// server's fault), then each round of its inner proof, which this relays onto the rep's stream; the rep's frame in the
+/// Lean session loop releases its own round there (`Frame.innerSched`, on the finish's round, which the loop's finish
+/// handed it first), stops the rep where the relayed round differs and decides its stop on `β = 0` (the Lean finish's
+/// refusal where the frame went on is the ZK server's fault), then the names of the constraints that fail on the pads, and
+/// then the rep ends ([`Firewall::rep_end`]). `FC_INNER_TAMPER=J` (the selftest's `zk_worker_inner`) relays table 0 rep 0's
+/// inner round `J` with its last value byte flipped. It
 /// speaks on schedule, as M1's simulator's does: the session stops at `Finish` when a constraint fails on the pads
 /// (`constraints_failing_on_pads`). The rep's proof file is the Lean finish's on every round's coins (`rep`), and only when
 /// no check failed the rep and no constraint fails on its pads; else none leaves (an empty file, which the session never
@@ -1956,8 +1959,16 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
     let RepEnd { failed, mut req, finish: fin } = end;
     let relations = g.lock().unwrap_or_else(PoisonError::into_inner).relations.clone();
     let mut inner_rounds = Vec::<Vec<F128>>::new();
+    let tamper_inner = std::env::var("FC_INNER_TAMPER").ok().and_then(|j| j.parse::<usize>().ok())
+        .filter(|_| req.table == 0 && req.rep == 0);
     let inner = fin.lock().unwrap_or_else(PoisonError::into_inner).inner(req.table, req.rep, &req.body(), &mut |c: &[u8], n: usize| {
-        inner_ch.release = Some(c.to_vec());
+        let mut release = c.to_vec();
+        if tamper_inner == Some(inner_rounds.len()) {
+            // the last byte before the round's squeeze header: final_c', [ρ, σ], τ's commitment or Y
+            let k = release.len() - 17;
+            release[k] ^= 1;
+        }
+        inner_ch.release = Some(release);
         let coins = replay_round(&mut inner_ch, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
         inner_rounds.push(coins.clone());
         Some(coins)
@@ -4049,6 +4060,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_worker_cut_tree", false, false),
     ("zk_worker_wire", false, false),
     ("zk_worker_finish", false, false),
+    ("zk_worker_inner", false, false),
     ("zk_worker_level0", false, false),
     ("zk_worker_pads", false, false),
 ];
@@ -4267,6 +4279,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "zk_worker_finish" {
         return worker_finish_case(gpu);
+    }
+    if name == "zk_worker_inner" {
+        return worker_inner_case(gpu);
     }
     if name == "zk_worker_level0" {
         return worker_level0_case(gpu);
@@ -5076,7 +5091,7 @@ fn worker_subsession(env: &[(&str, String)]) -> Value {
                "--only", WORKER_SESSION])
         .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
         .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER").env_remove("FC_FINISH_TAMPER")
-        .env_remove("FC_LEVEL0_TAMPER");
+        .env_remove("FC_INNER_TAMPER").env_remove("FC_LEVEL0_TAMPER");
     // the verifier's sample, as this process's server has it ([`serving`])
     for flag in ["--draw", "--draw-law", "--draw-file"] {
         let v = arg(flag, "");
@@ -5169,6 +5184,46 @@ fn worker_finish_case(gpu: bool) -> Value {
     }).collect();
     json!({"case": name, "expect": "each doctored rep request refused by the loop's finish, no proof sent, the honest session's other requests",
            "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
+           "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
+}
+
+/// `zk_worker_inner` (live PROTOCOL.md §10.4): the inner proof's rounds that leave are the loop's frame's own
+/// (`Frame.innerSched` on the loop's finish's rounds), whatever the host relays. The honest firewalled CPU session, whose
+/// relay is the finish's rounds as they came, is accepted: the finish's rounds are the frame's byte for byte. Beside it, one
+/// session per inner round `J` (`FC_INNER_TAMPER=J`), each in a process of its own, whose table 0 rep 0 relays its round `J`
+/// with one value byte flipped: the frame's check stops the rep at that round, its own round leaving in its place, no proof
+/// leaves, the verifier gets the honest session's every request but its proofs, `Finish` included, and does not accept
+/// (`PROVER-STOPPED: the Lean frame stopped table 0 rep 0`), with no refusal of Rust's own.
+fn worker_inner_case(gpu: bool) -> Value {
+    let name = "zk_worker_inner";
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "the inner proof's controls run on the CPU device"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let honest = worker_subsession(&[]);
+    let h = seen(&honest);
+    let honest_ok = honest["accepted"] == true && h.iter().filter(|x| kind(x) == "proof").count() > 0
+        && honest["prover_stopped"].as_str().unwrap_or("").is_empty();
+    let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
+    let modes: Vec<Value> = (0..4).map(|j| {
+        let v = worker_subsession(&[("FC_INNER_TAMPER", j.to_string())]);
+        let s = seen(&v);
+        let stopped = v["prover_stopped"].as_str().unwrap_or("");
+        let why = v["why"].as_str().unwrap_or("");
+        let refused = stopped.is_empty() && why.contains("PROVER-STOPPED: the Lean frame stopped table 0 rep 0");
+        let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
+        json!({"round": j, "ok": honest_ok && v["accepted"] == false && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "prover_stopped": stopped.chars().take(160).collect::<String>(), "why": why.chars().take(160).collect::<String>(),
+               "error": v["error"], "requests": s.len(), "proofs": s.iter().filter(|x| kind(x) == "proof").count(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "tampered": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "the honest relay accepted; each doctored inner round stops the rep in the Lean frame, no proof sent, the honest session's other requests",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "prover_stopped": honest["prover_stopped"], "requests": h.len()},
            "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
 }
 

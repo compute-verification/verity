@@ -16,6 +16,9 @@ file defines that release and proves `LoopInnerRound0` at it, at every finish:
   none at a scheduled round, past the inner proof, or where `x` sets up no session.
 * `LeanRelease.withInner`: `L₀` with those rounds, at the finish's rounds `fin` of the statement, the witness, the
   tape and the history; elsewhere `L₀`'s.
+* `step_sched_self`: a round at `.sched r` with `r` itself in the device's place, an honest relay, leaves the frame's
+  state at `.own`'s, `Drive.reqs`' place for the inner proof's rounds, which `Loop.repState` runs. A relay that differs
+  stops the rep (`standIn`): the state but for `stopped`, as `ProgChecks` reads it.
 * `Flock.SecurityProofs.LoopInnerRound0Own : Flock.Guarantees.LoopInnerRound0Own`: `LoopInnerRound0` holds at
   `withInner`, at every `fin`, `final_c'` the first word past the label frame and its header of the finish's round 0.
 -/
@@ -101,6 +104,33 @@ def _root_.Flock.Guarantees.LoopInnerRound0Own : Prop :=
     (x : Msg) (w : Flock.Wit),
     _root_.Flock.Guarantees.LoopInnerRound0 T (LeanRelease.withInner T L₀ real fin) real x w
 
+/-- **An inner round relayed as the frame computes it steps as the frame's own**: where the rep owes no coins and the
+frame takes the round `r` inside the inner proof, `Frame.step` at `.sched r` (the place `Frames.roundPlace` gives an
+opened rep's round) with `r` in the device's place leaves the state `.own` leaves (`Drive.reqs`' place for the inner
+proof's rounds), the rep stopped or not. -/
+theorem step_sched_self (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (n : ℕ) (r : ByteArray) {out : ByteArray}
+    {s' : Masker} (ho : st.m.owed = none) (hr : _root_.Flock.Firewall.Frame.round c st.m r n = .ok (out, s'))
+    (hin : s'.inner.isSome) :
+    (_root_.Flock.Firewall.Frame.step c st (.round n r (.sched r))).2 =
+      (_root_.Flock.Firewall.Frame.step c st (.round n r .own)).2 := by
+  have hn : s'.inner.isNone = false := by cases h : s'.inner <;> simp_all
+  have hown : (_root_.Flock.Firewall.Frame.step c st (.round n r .own)).2 = { m := s', begun := true } := by
+    simp only [_root_.Flock.Firewall.Frame.step, ho, hr, hn, bind, Except.bind, pure, Except.pure,
+      Bool.false_eq_true, ↓reduceIte]
+  rw [hown]
+  cases hs : st.m.stopped
+  · simp only [_root_.Flock.Firewall.Frame.step, ho, _root_.Claims.ZKServer.check_self hs hr]
+  · have he : ∀ m : Masker, m.stopped = true → { m with stopped := true } = m := by
+      intro m hm
+      cases m
+      dsimp only at hm
+      subst hm
+      rfl
+    have hc : _root_.Flock.Firewall.Frame.check c st.m r r n = .ok (out, s', some "the rep is stopped") := by
+      unfold _root_.Flock.Firewall.Frame.check _root_.Flock.Firewall.Frame.standIn
+      simp only [hs, he st.m hs, hr, ↓reduceIte, bind, Except.bind, pure, Except.pure]
+    simp only [_root_.Flock.Firewall.Frame.step, ho, hc]
+
 theorem wordBytes_size (v : Array F128) : (wordBytes v).size = 16 * v.size := by
   rw [← ByteArray.size_data, ← Array.length_toList, wordBytes_data, FlockSoundness.Refine.Frame.colBytes_length,
     Array.length_toList]
@@ -145,7 +175,7 @@ theorem LoopInnerRound0Own : Flock.Guarantees.LoopInnerRound0Own := by
     simp only [List.length_map, List.length_tail]; omega
   refine ⟨wordBytes (words ((fin x w ρ h).getD 0 .empty)
     ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1), ?_, ?_⟩
-  · simp only [wordBytes_size, words_size]
+  · simp only [wordBytes_size, Loop.words_size]
   · have h0 : j + 1 - rsched.size = 0 := by omega
     have e := Loop.innerOf_eq (real x w ρ) ((LeanRelease.withFrames T L₀ real).cfg x ρ h) (fin x w ρ h) x _ hx hq
       hloc hreal hs (by omega) (by rw [h0]; decide)

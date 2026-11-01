@@ -148,7 +148,8 @@ impl Challenger for Framer<'_> {
 }
 
 /// What the Lean session loop names a rep's next round ([`LoopRep::place`]): the algebraic phase's or the opening's
-/// scheduled round, squeezing that many coins, or none (the inner proof's own rounds).
+/// scheduled round, squeezing that many coins, or none (the inner proof's rounds, which this relays from the Lean finish
+/// and the loop's frame holds to its own, `Frame.innerSched`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Place {
     Alg(usize),
@@ -398,10 +399,13 @@ impl LeanFinish {
     }
 
     /// Rep `r` of session table `i`'s inner proof, live (`Finish.innerLive`), on its request with the coins of its PIOP and
-    /// opening (`rep_body`): its constraints go to `cons` (`Finish.consBytes`), then each of its rounds to `round`, which answers
-    /// it with the coins the stream answered it, or with None to stop the rep (which ends the finish). Returns the names of
-    /// the constraints that fail on the rep's pads (`Finish.namesBytes`); where there are none, its proof file is then
-    /// [`Self::rep`]'s, on every round's coins.
+    /// opening (`rep_body`): its constraints go to `cons` (`Finish.consBytes`), then each of its rounds to `round`, which relays
+    /// it onto the rep's stream and answers it with the coins the stream answered it, or with None to stop the rep (which ends
+    /// the finish). The finish hands each round to the session loop's frame before it comes here, and the frame releases its
+    /// own round (`Frame.innerSched`), stopping the rep where the relayed one differs; the finish refuses a request whose
+    /// `final_c` is not the one its passed values fix, and coins that are not the ones the frame took (`Finish.coinsWhy`).
+    /// Returns the names of the constraints that fail on the rep's pads (`Finish.namesBytes`); where there are none, its proof
+    /// file is then [`Self::rep`]'s, on every round's coins.
     pub fn inner(&mut self, i: usize, r: usize, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>,
                  cons: &mut dyn FnMut(&[u8]) -> Result<(), String>) -> Result<Vec<String>, String> {
         let b = self.live(&format!("inner {i} {r}"), body, round, cons)?;
@@ -640,10 +644,10 @@ impl Drop for LeanSession {
 }
 
 /// The masking challenger's inner challenger under the ZK server. While a round's `release` is set (the device's unmasked
-/// round, which the Lean session loop's frame of the rep checks and masks), what the masking challenger hands it is dropped,
-/// and at the round's squeeze the release, and only the release, goes to the stream. With no release set it passes every
-/// call through: unfirewalled reps, and a firewalled rep's inner proof, whose rounds are the session's Lean finish's
-/// (`flock-circuit`'s `zk_finish_fw`).
+/// round, which the Lean session loop's frame of the rep checks and masks, or a firewalled rep's inner proof's round, the
+/// session's Lean finish's, which the frame holds to its own: `flock-circuit`'s `zk_finish_fw`), what the masking
+/// challenger hands it is dropped, and at the round's squeeze the release, and only the release, goes to the stream. With
+/// no release set it passes every call through: unfirewalled reps.
 pub struct Gate<C: Challenger> {
     pub inner: C,
     pub release: Option<Vec<u8>>,
