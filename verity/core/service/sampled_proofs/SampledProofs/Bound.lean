@@ -12,6 +12,7 @@ harm, `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a cer
 module
 
 public import CoreProtocol.Profile
+meta import CoreProtocol.Profile
 
 @[expose] public section
 set_option backward.privateInPublic true

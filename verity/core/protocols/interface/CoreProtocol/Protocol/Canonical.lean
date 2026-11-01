@@ -19,6 +19,8 @@ module
 
 public import Lean.Data.Json
 public import Flock.Canon
+meta import Lean.Data.Json
+meta import Flock.Canon
 
 @[expose] public section
 set_option backward.privateInPublic true
