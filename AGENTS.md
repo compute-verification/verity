@@ -57,7 +57,7 @@ The team's agents run these remotely (the team skill).
 
 ## Design rules
 
-The rules in force, each stated as itself; the friction skill has the standing rulings stated nowhere else.
+The rules in force, each stated as itself; `DESIGN.md` has the standing design rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
@@ -101,7 +101,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
   plan.
 - **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
-  speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
+  speed, held to it by difftest. Each protocol switches by `DESIGN.md`'s switching ruling; until then its
   Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
 - **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
   prover is proved in Lean or rests on an auditor-trusted device; that honest serving passes may be checked in Python.
