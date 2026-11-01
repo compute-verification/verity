@@ -328,10 +328,10 @@ def test_the_scans_link_windows_fit(G):
     """A group of G execution phases in the composed scan's generator form at w63's class (`benchmarks/network_traces/
     scan_zk.py`), one link of G·T buckets: `IngressScanFirst` (bucket 0), G·T − 1 `IngressScanBucket` and G·T
     `EgressBucket` proof blocks, each member's rows and outputs its Definition's signature's. The ingress frame is the
-    warden's ingress row; the egress frame is the row `EgressBucket` computes (o1), beside its u16 verdict (o0); ingress
-    proof block t's state output (o1) is wired to proof block t + 1's ``sin`` and its view output (o2) to egress proof
-    block t's ``state``. The check passes it, and the checker form, its egress frame a parameter row, is refused by
-    name."""
+    network certifier's ingress row; the egress frame is the row `EgressBucket` computes (o1), beside its u16 verdict
+    (o0); ingress proof block t's state output (o1) is wired to proof block t + 1's ``sin`` and its view output (o2) to
+    egress proof block t's ``state``. The check passes it, and the checker form, its egress frame a parameter row, is
+    refused by name."""
     cls, T = IS.Class(B=512, r=4, lanes=4, C=47), 32
     n, sh = G * T, cls.egress
     st = {k: getattr(cls, k) for k in IS.STATICS}
