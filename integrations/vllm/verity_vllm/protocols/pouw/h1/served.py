@@ -59,7 +59,8 @@
   that call's manifest row (``tables.registered``), so its
   round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
   (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
-  is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
+  is refused. Its host codes are copied once a process (`host_weight`), and the period's `Weights` holds them to its rows
+  once (`Weights.matches`). Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
 * **The Commit** (ROOTS1): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) its
   AROW of each step's calls of K is that step's A table's value (`credit.commit_rows`), and the window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
@@ -86,13 +87,9 @@
 from __future__ import annotations
 
 import collections
-import functools
-import gc
-import gzip
 import hashlib
-import json
+import weakref
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
@@ -101,11 +98,9 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw.circuit import h1device as HD
-from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
-from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_program
+from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
@@ -114,13 +109,13 @@ from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
 from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
+from verity_vllm.protocols.pouw.h1.served_program import (PREFIX, card_arch, declared, declared_layout, descriptor, layout,
+                                                          unit_of, write_program)
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
-#: the window Program's parameter prefix, the same for every window of a period
-PREFIX = "h1/"
 #: the hm96 salt stream's first nonce of the window's registered tables, past every round's and call's tables
 NONCE = RQ.REQUESTS_NONCE + (1 << 42)
 #: ``b/<K>``'s nonces, past every call's two tables: the auditor's registration's (`weights.B_NONCE`)
@@ -143,105 +138,40 @@ def nonce(call: int, table: str) -> int:
     return NONCE + 2 * int(call) + HW.TABLES.index(table)
 
 
-def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
-           blocks: Sequence[int] | None = None) -> list[int]:
-    """Each call's A block of its K, ``calls`` each call's (step, linear) and ``blocks`` each linear's input block within a
-    step (`Served`'s): call (s, w) reads block s·B_K + i, i the place of ``blocks[w]`` among the blocks K's linears read."""
-    per = list(blocks) if blocks is not None else list(range(len(shapes)))
-    if len(per) != len(shapes):
-        raise ValueError(f"blocks {per} are not one input block for each of the window's {len(shapes)} linears")
-    of_k: dict[int, list[int]] = {}
-    for w, (_n, k) in enumerate(shapes):
-        of_k.setdefault(k, [])
-        if per[w] not in of_k[k]:
-            of_k[k].append(per[w])
-    of_k = {k: sorted(b) for k, b in of_k.items()}
-    return [s * len(of_k[shapes[w][1]]) + of_k[shapes[w][1]].index(per[w]) for s, w in calls]
-
-
-def card_arch(device: Any = None) -> str:
-    """The architecture of the CUDA card ``device`` (the current one when None) as H1's device records name it
-    (`h1device.DEVICES`): an H100 or H200's, compute capability 9.0, or the RTX PRO 6000's, 12.0. ValueError on a card
-    with no record."""
-    import torch
-
-    major, minor = torch.cuda.get_device_capability(device)
-    return HD.device(f"sm_{major}{minor}").arch
-
-
-def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
-             tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None, prefix: str = PREFIX,
-             unit: Callable[[int], Any] | None = None, arch: str | None = None) -> Program:
-    """The window Program a static window declares before it serves: ``steps`` steps, each calling every linear (``shapes``,
-    each ``(n, K)``, named by ``modules``) in order, laid out by `layout`, its A slot for ``rows`` token rows, its
-    parameters under ``prefix`` (`PREFIX`, which names no window): one Program for every window of the declaration, the
-    period's ``--circuit`` (its `program_digest`) and each window's `Served.program`. Without ``unit``, each K's tile
-    unit is `h1window.tile_unit`'s on ``arch`` (`card_arch`; sm_120 when None), which refuses a K outside that card's
-    record's domain (ValueError); sm_90's Program is sm_120's byte for byte."""
-    lay = declared_layout(shapes, modules, rows, steps, tile, blocks)
-    if unit is None and arch is not None:
-        unit = functools.partial(HW.tile_unit, tile=tuple(tile), arch=arch)
-    return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
-
-
-def unit_of(name: str | None, tile: tuple[int, int] = PH.TILE) -> Callable[[int], Any] | None:
-    """`declared`'s ``unit`` for the pouw setting ``unit`` ``name`` (`pouw_h1_settings.UNITS`): None for v1 (unset), the
-    default; for ``j10r`` `h1window.tile_unit` over J10-R's `h1tile.PouwH1Tile5`, one noise stream a call, the tile a
-    period's guarantee covers (core's `period_check.COVERED_TILE`)."""
-    if name in (None, "v1"):
-        return None
-    if name == "j10r":
-        return functools.partial(HW.tile_unit, tile=tuple(tile), definition=HT.PouwH1Tile5)
-    raise ValueError(f"no tile unit {name!r}: the pouw setting 'unit' is v1 or j10r")
-
-
-def descriptor(program: Program) -> bytes:
-    """`program`'s descriptor as the period commits it: its canonical JSON without annotations, the bytes whose SHA-512
-    is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
-    layout (`credit.layout_of`)."""
-    return canonical_json({k: v for k, v in encode_program(program).items() if k != "annotations"})
-
-
-def write_program(program: Program, layout: Mapping[str, Any], out: Path | str, *, rows: int, steps: int) -> str:
-    """`program`'s `codec.program_digest`, streamed once into ``out``'s `pouw_h1.PROGRAM` (its `descriptor`, gzipped) as it
-    is hashed, and its `pouw_h1.PROGRAM_META`: the digest, the descriptor's bytes, its `layout` (`declared_layout`, which
-    core's `credit.layout_of` reads from it), T ``rows`` and S ``steps``. A period-open commits the digest and the circuit
-    files built from these (``served_verdicts.py period``)."""
-    out = Path(out)
-    out.mkdir(parents=True, exist_ok=True)
-    h, size, on = hashlib.sha512(), 0, gc.isenabled()
-    gc.disable()
-    try:
-        with gzip.open(out / PH.PROGRAM, "wb", compresslevel=1) as f:
-            for chunk in descriptor_chunks(program):
-                h.update(chunk)
-                f.write(chunk)
-                size += len(chunk)
-    finally:
-        if on:
-            gc.enable()
-    digest = h.hexdigest()
-    meta = {"program_digest": digest, "file_sha512": digest, "bytes": size, "rows": int(rows), "steps": int(steps),
-            "layout": dict(layout)}
-    (out / PH.PROGRAM_META).write_text(json.dumps(meta, indent=1) + "\n")
-    return digest
-
-
-def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
-                    tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
-    """`declared`'s arguments to `h1window.program` as the window's layout, ``{calls: [[linear, A block], ...],
-    linears: [[name, K, n], ...], m, tile}``: what core's `credit.layout_of` reads from `declared`'s `descriptor`, built
-    without the Program (the proof system sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
-    mods = [modules.get(w, str(w)) for w in range(len(shapes))]
-    calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
-    return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
-            "linears": [[mods[w], k, n] for w, (n, k) in enumerate(shapes)], "m": HW.slot(rows, tile), "tile": list(tile)}
-
-
 def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """Each served linear's B as the period registers it, by its index among `layers` (the int8 arm's linear layers, as
-    `H1Run` numbers them): its int8 codes ``(n, K)`` and its f32 s_w ``(n,)``."""
-    return {w: (PH.numpy_of(m.weight), PH.numpy_of(m.weight_scale).astype("<f4").reshape(-1)) for w, m in enumerate(layers)}
+    `H1Run` numbers them): its int8 codes ``(n, K)`` and its f32 s_w ``(n,)`` (`host_weight`)."""
+    return {w: host_weight(m.weight, m.weight_scale) for w, m in enumerate(layers)}
+
+
+#: the copies `host_weight` made, by the weight's id: the weight and its scale (weak references), their `_tensor_key`s, and
+#: the codes and s_w
+_HOST: dict[int, tuple[Any, Any, tuple, np.ndarray, np.ndarray]] = {}
+
+
+def host_weight(weight: Any, scale: Any) -> tuple[np.ndarray, np.ndarray]:
+    """A served linear's int8 codes and its s_w as f32 ``(n,)`` on the host, read-only, copied once a process: the weights
+    are fixed after install, so each window reuses the copy while ``weight`` and ``scale`` are the tensors it was made from,
+    with the same storage, shape, dtype and version. Anything else (a weight replaced or written in place, or an array that
+    isn't a tensor) is copied again."""
+    key, hit = (_tensor_key(weight), _tensor_key(scale)), _HOST.get(id(weight))
+    if None not in key and hit is not None and hit[0]() is weight and hit[1]() is scale and hit[2] == key:
+        return hit[3], hit[4]
+    w = weight.detach().to("cpu", copy=True).numpy() if hasattr(weight, "detach") else np.array(weight)
+    s = PH.numpy_of(scale).astype("<f4").reshape(-1)
+    w.flags.writeable = s.flags.writeable = False
+    if None not in key:
+        i = id(weight)
+        _HOST[i] = (weakref.ref(weight, lambda _r: _HOST.pop(i, None)), weakref.ref(scale), key, w, s)
+    return w, s
+
+
+def _tensor_key(t: Any) -> tuple | None:
+    """What a write to or a move of tensor ``t`` changes (its version counts in-place writes through any view), or None
+    when ``t`` isn't a tensor."""
+    if not (hasattr(t, "data_ptr") and hasattr(t, "_version")):
+        return None
+    return t.data_ptr(), tuple(t.shape), tuple(t.stride()), str(t.dtype), str(t.device), t._version
 
 
 @dataclass(frozen=True)
@@ -257,6 +187,8 @@ class Weights:
     circuit: str
     registered: dict[int, G.Registered]
     at: dict[int, tuple[int, int]]
+    #: each linear's read-only codes and s_w known to be its rows (`matches`), as arrays, not copies
+    held: dict[int, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict, compare=False, repr=False)
 
     def root(self) -> bytes:
         return CR.weights_root({k: r.root for k, r in self.registered.items()})
@@ -265,11 +197,17 @@ class Weights:
         return [self.registered[k].entry() for k in sorted(self.registered)]
 
     def matches(self, w: int, codes: np.ndarray, scales: np.ndarray) -> bool:
-        """Whether linear `w`'s served codes and s_w are its registered rows: its n leaves a row from leaf n·lo."""
+        """Whether linear `w`'s served codes and s_w are its registered rows: its n leaves a row from leaf n·lo. Read-only
+        arrays it registered or found to match (`host_weight`'s, the same every window) aren't compared again."""
+        if (hit := self.held.get(w)) is not None and hit[0] is codes and hit[1] is scales:
+            return True
         k, lo = self.at[w]
         n, reg = Wt.chunks(k), self.registered[k]
         got = chunk_words(codes, scales, n)
-        return np.array_equal(got, np.asarray(reg.rows[n * lo:n * lo + len(got)], np.uint16))
+        ok = np.array_equal(got, np.asarray(reg.rows[n * lo:n * lo + len(got)], np.uint16))
+        if ok and not (codes.flags.writeable or scales.flags.writeable):
+            self.held[w] = (codes, scales)
+        return ok
 
 
 def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: Mapping[int, tuple[Any, Any]], key: bytes,
@@ -281,7 +219,7 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
     `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place, its rows kept (`Weights.matches`).
     Committed once, before the period's first window's salt. ValueError on an odd K, a K `weights.chunks` refuses, or a
     weight that isn't its linear's n × K int8 codes and n scales."""
-    ks, reg, at = sorted({int(k) for _n, k in shapes}), {}, {}
+    ks, reg, at, held = sorted({int(k) for _n, k in shapes}), {}, {}, {}
     for i, k in enumerate(ks):
         if k % 2:
             raise ValueError(f"K = {k}: a row's codes are whole u16 words")
@@ -294,9 +232,11 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
                 raise ValueError(f"linear {w}'s weight is not its {n} × {k} int8 codes and {n} scales")
             rows.append(chunk_words(codes, scales.astype("<f4").reshape(-1), x))
             at[w], lo = (k, lo), lo + n
+            if not (codes.flags.writeable or scales.flags.writeable) and scales.dtype == np.dtype("<f4") and scales.ndim == 1:
+                held[w] = (codes, scales)
         words = np.concatenate(rows)
         reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
-    return Weights(circuit, reg, at)
+    return Weights(circuit, reg, at, held)
 
 
 @dataclass
@@ -544,7 +484,7 @@ class Served:
         held = self._weights.get(call.layer)
         if weight is None or (held is not None and held[0] is weight):
             return
-        w, s = PH.numpy_of(weight), None if scale is None else PH.numpy_of(scale).astype("<f4").reshape(-1)
+        w, s = (PH.numpy_of(weight), None) if scale is None else host_weight(weight, scale)
         if w.dtype != np.int8 or w.shape != (call.n, call.k) or s is None or s.shape != (call.n,):
             self.refused.append(f"call {call.index}: its weight is not its {call.n} × {call.k} int8 codes and {call.n} scales")
         elif held is None:
@@ -775,6 +715,6 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Served",
            "unit_of",
-           "V2", "Weights", "WindowCommitmentEntries", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
+           "V2", "Weights", "WindowCommitmentEntries", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of", "write_program"]
