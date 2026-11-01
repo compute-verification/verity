@@ -160,10 +160,10 @@ kernel directory exports `VARIANT` and `STEP_IO` and names its steps in `GROUPS`
 
 Friction goes by the infra checkout's friction skill, and a PR that changes how something is done updates this skill
 (AGENTS.md "Working principles"). A fact about the toolchain, the card, a library or the node is one line, with its
-source (a run id, a commit), in its section of `kb/sm120/gotchas.md`, correcting a wrong line rather than contradicting it. A rule you checked
-by hand goes to the tool's owner as a proposed check, with the fix in its failure message. Dead machinery (a stand-in
-commitment, a lane bench the harness replaced, a losing `PEARLC_*` mode, a second SASS gate or `verify.py`, a copied
-scheme table) is deleted in your next PR or named to its owner.
+source (a run id, a commit), in its section of `kb/sm120/gotchas.md`, correcting a wrong line rather than contradicting
+it. A rule you checked by hand goes to the tool's owner as a proposed check, with the fix in its failure message. Dead
+machinery (a stand-in commitment, a lane bench the harness replaced, a losing `PEARLC_*` mode, a second SASS gate or
+`verify.py`, a copied scheme table) is deleted in your next PR or named to its owner.
 
 ## Before you finish
 
