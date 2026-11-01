@@ -578,7 +578,7 @@ theorem foldlM_snoc {α β ε : Type} {f : β → α → Except ε β} {b : β} 
 
 theorem run_nil (chunk g : Nat) (p : Proc) : run chunk g p [] = .ok ([], [], p) := rfl
 
-theorem run_snoc {chunk g : Nat} {p p' : Proc} {qs : List Req} {q : Req} {answers : List Answer}
+theorem run_snoc {chunk g : Nat} {p p' : Proc} {qs : List Req} {q : Req} {answers : List Reply}
     {es : List Event} (h : run chunk g p (qs ++ [q]) = .ok (answers, es, p')) :
     ∃ ans₁ es₁ p₁ x e?, run chunk g p qs = .ok (ans₁, es₁, p₁) ∧ step chunk g p₁ q = .ok (x, e?, p') ∧
       answers = ans₁ ++ [x] ∧ es = es₁ ++ e?.toList := by
@@ -595,7 +595,7 @@ theorem run_snoc {chunk g : Nat} {p p' : Proc} {qs : List Req} {q : Req} {answer
   exact ⟨x, e?, h₁, hs, rfl, rfl⟩
 
 /-- A request keeps the session's coins of a coin's size and its append coins. -/
-theorem step_le {chunk g : Nat} {p p' : Proc} {q : Req} {x : Answer} {e? : Option Event}
+theorem step_le {chunk g : Nat} {p p' : Proc} {q : Req} {x : Reply} {e? : Option Event}
     (h : step chunk g p q = .ok (x, e?, p')) : CoinsLE p.session p'.session := by
   cases q with
   | event e coin =>
@@ -637,20 +637,20 @@ theorem checksOK_extend {g : Nat} {params : Params} {reg : Registration} {c a : 
   obtain ⟨es₀, es₁, rs₀, sV, rfl, h₀, hv⟩ := h ch (hp ch hch)
   exact ⟨es₀, es₁ ++ es', rs₀, sV, by rw [List.append_assoc], h₀, hv⟩
 
-theorem results_snoc (ans : List Answer) (x : Answer) :
-    ((ans ++ [x]).filterMap Answer.result?).toArray =
-      (ans.filterMap Answer.result?).toArray ++ (x.result?.toList).toArray := by
-  cases x <;> simp [Answer.result?]
+theorem results_snoc (ans : List Reply) (x : Reply) :
+    ((ans ++ [x]).filterMap Reply.result?).toArray =
+      (ans.filterMap Reply.result?).toArray ++ (x.result?.toList).toArray := by
+  cases x <;> simp [Reply.result?]
 
 /-- The process's run, on any coins that agree with the ones it holds at the end, is the recorded run: its results,
 and its session but for the coins; and every check it holds is right. -/
 theorem run_sim {chunk g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration}
     {coins appendCoins : Array ByteArray} {nb : Nat} (hm : 1 ≤ params.minPasses) (qs : List Req) :
-    ∀ {answers : List Answer} {es : List Event} {p : Proc},
+    ∀ {answers : List Reply} {es : List Event} {p : Proc},
       run chunk g { session := State.init params reg coins appendCoins nb } qs = .ok (answers, es, p) →
       ∀ {c a : Array ByteArray}, Agree c a p.session →
         Shared.srunL g (State.init params reg c a nb) es =
-            .ok ((answers.filterMap Answer.result?).toArray, W c a p.session) ∧
+            .ok ((answers.filterMap Reply.result?).toArray, W c a p.session) ∧
           ChecksOK g params reg c a nb p es := by
   induction qs using snoc_induction with
   | nil =>
@@ -682,12 +682,12 @@ theorem run_sim {chunk g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registra
       · cases hs
         refine ⟨?_, checksOK_extend _ ihc fun _ h => h⟩
         rw [results_snoc]
-        simpa [Answer.result?] using ihr
+        simpa [Reply.result?] using ihr
       · rename_i w d hw
         cases hs
         refine ⟨?_, ?_⟩
         · rw [results_snoc]
-          simpa [Answer.result?] using ihr
+          simpa [Reply.result?] using ihr
         intro ch hch
         rcases List.mem_append.1 hch with hch | hch
         · obtain ⟨es₀, es₂, rs₀, sV, e, h₀, hv⟩ := ihc ch hch

@@ -154,7 +154,8 @@ def frame_root(text: str, fv: dict, port: str, bcs: list[bytes]) -> str:
 
 
 def own_flags(binary: Path, dd: Path, n: str, stmts: dict[str, Path], o: Path) -> dict[str, list[str]]:
-    """85's STEP=lean flags for each statement (its python block), derived with `binary`."""
+    """85's own flags for each statement (STEP=oprove's python block, which STEP=lean verifies with), derived with
+    `binary`."""
     from verity_flock import rec_bindings as RB
     from verity_flock import rec_vstage as VS
 

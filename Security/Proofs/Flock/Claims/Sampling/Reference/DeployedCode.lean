@@ -71,7 +71,7 @@ def Reg.layout (g : Reg) : SampledProofs.Slots.Layout :=
 
 /-- **The draw of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
 is refused (`drawChecked`). -/
-def Reg.checked (g : Reg) (src : ByteArray) : List (ℕ × ℕ) :=
+def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
   (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
 
 /-- **The sampled verifier's code with its Lean draw**: `c` with `checked` the draw of record on the registration
@@ -102,7 +102,7 @@ theorem code_checked (x : Msg) (r : Fin (c.V.k x) → FlockDeploy.Coin) :
     (code c reg L bytes sr sess).checked x r = ((reg x).map fun g => g.checked (bytesOf (bytes x r))).getD [] :=
   rfl
 
-theorem code_session (x : Msg) (u : ℕ × ℕ) (v : Seen) : (code c reg L bytes sr sess).session x u v = sess x v := rfl
+theorem code_session (x : Msg) (u : ℕ) (v : Seen) : (code c reg L bytes sr sess).session x u v = sess x v := rfl
 
 theorem sessionSlots_code (H : Msg → Msg) : SessionSlots (code c reg L bytes sr sess) H :=
   sessionSlots_of_one H _ (fun _ => le_rfl) fun _ _ _ _ => rfl
@@ -247,7 +247,7 @@ theorem sessionWit_code_iff (H : Msg → Msg) :
 theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn c sess := by
   constructor
   · intro h x v xS vS hv
-    exact h x (0, 0) v xS vS hv
+    exact h x 0 v xS vS hv
   · intro h x _ v xS vS hv
     exact h x v xS vS hv
 

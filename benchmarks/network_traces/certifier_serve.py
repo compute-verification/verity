@@ -20,7 +20,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
 - the client and the certifier agree on the origin through the wall clock (`origin_unix`), so a client on another
   host needs its clock within a few tens of ms of the certifier host's (requests are sent mid-bucket);
 - the rehearsal (`rehearse`) runs the client on the certifier's host, so its link is loopback, and its check plays the
-  ZK server and the challenger in one process, with the network registration of each link-window standing in for
+  ZK server and the challenger in one process, with the network registration of each execution phase standing in for
   PoUW's registration of the window, which opens the window's salt;
 - the reveal deadline covers the whole run and a margin (`REVEAL_MARGIN_S`), where a deployment's covers one PoUW
   window; and the keys are LMS at H = `HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the
@@ -110,7 +110,7 @@ by its bucket, and every response keeps the finish rule: at most `max_tokens` to
 (the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes
 the I/O to `io.json` for the I/O tie, and compares it with the ids the shim wrote and the
 requests the plan sent.
-On the advice profile each link-window is registered by its one-stage registration record (its salted root, chained)
+On the advice profile each execution phase is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
 held to the certifier's key and session by the Lean's audit (`_certified`). The verdict is `accepted` when every
 window's records are certified, the I/O, the audit and the salt accept.
@@ -150,19 +150,19 @@ window's records are certified, the I/O, the audit and the salt accept.
   finish rule refuses). The key's directory may not be inside `--out`. `--out-shape SHAPE.json`: the output value's
   shape (`out_commit.OutShape`'s fields: the reading program's digest, the value, its words a row and rows, which the
   deployment takes from the circuit's registered read, `interface.read_shape`, never a flag of its own). At each egress
-  link-window's close the network certifier commits the output it relayed, its canonical events' text read as the hex
-  of u16 words (`out_words`), cut into the shape's rows (`out_rows`, exactly rows × words, no padding), and signs its
-  head with its own key in its session (`certify_out`, `out_commit.commit_out` under the `CertifierProcess`'s running
-  `Issuer`): the record in `out-records.jsonl`, what the auditor's `out_commit.check_out` reads, and the rows with
-  their salts in `out-witness.jsonl`, the prover's. A window whose output isn't the shape's is a refusal line
+  execution phase's close the network certifier commits the output it relayed, its canonical events' text read as the
+  hex of u16 words (`out_words`), cut into the shape's rows (`out_rows`, exactly rows × words, no padding), and signs
+  its head with its own key in its session (`certify_out`, `out_commit.commit_out` under the `CertifierProcess`'s
+  running `Issuer`): the record in `out-records.jsonl`, what the auditor's `out_commit.check_out` reads, and the rows
+  with their salts in `out-witness.jsonl`, the prover's. A window whose output isn't the shape's is a refusal line
   (``out-shape``), committed under no root. `deployment.json` carries the shape as ``out``.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`). Then it asks the reveal endpoint for each window's certificates and keeps those
   that verify under the deployment's certifier key and session (`keep_certificates`: `certificates.jsonl`, and the
   clock certificates in `clocks.jsonl`, public parts only); it refuses each other one by name, a clock certificate
   whose signed digest an earlier window's signs among them (`check_certificates`), and exits 1.
-- `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
-  and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
+- `check` is the auditor's offline check of a served run (`check`): per execution phase, the certifier's audit of the
+  raw and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
   `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
   records, each window's salt asked of the certifier through a `CertifierClient` signed with the
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
@@ -285,7 +285,7 @@ VARIED_FILLER = ("Notes: the meeting moved to Thursday, the printer on the third
 #: what the shim and the probe add to each body they send the endpoint, so that each chunk carries its token ids
 UPSTREAM_FIELDS = {"return_token_ids": True}
 CHALLENGER = "certifier-serve-check"
-#: `--out-shape`'s files in a run: each egress link-window's out record (public, what the auditor receives) and its
+#: `--out-shape`'s files in a run: each egress execution phase's out record (public, what the auditor receives) and its
 #: witness, the rows and their salts (the prover's alone)
 OUT_RECORDS, OUT_WITNESS = "out-records.jsonl", "out-witness.jsonl"
 NO_N2 = ("no verdict on the advice profile: the egress counts derive from the ingress head and the advice, which no "
@@ -414,7 +414,7 @@ def read_clocks(path: Path) -> list[CertifiedClock]:
 
 
 def read_certified(path: Path) -> tuple[dict[tuple[Direction, int], CertifiedRecord], list]:
-    """`certified.jsonl`: the certified records by (direction, window), and the link-windows the signer refused."""
+    """`certified.jsonl`: the certified records by (direction, window), and the execution phases the signer refused."""
     got, refused = {}, []
     for line in path.read_text().splitlines() if path.exists() else []:
         doc = json.loads(line)
@@ -452,13 +452,13 @@ def out_rows(words: Sequence[int], shape: out_commit.OutShape) -> list[list[int]
 
 
 def certify_out(out: Path, record, issuer: Issuer, shape: out_commit.OutShape) -> out_commit.CertifiedOut | None:
-    """The network certifier's output value at an egress link-window's close (`--out-shape`): what the record carries
-    (`out_words`) cut into `shape`'s rows (`out_rows`) and committed as the reading program's registered value at that
-    shape, its head signed by the running `issuer` in its session for the link-window (`out_commit.commit_out`). Its
-    public record is one line of `OUT_RECORDS`; the link-window under ``refused`` when the signer refuses, or under
-    ``out-shape`` (with its ``detail``) when the output isn't the shape's rows, neither committed; its witness, the
-    rows and their salts, one line of `OUT_WITNESS`, which goes to the prover alone. A record that carries no output
-    value commits none."""
+    """The network certifier's output value at an egress execution phase's close (`--out-shape`): what the record
+    carries (`out_words`) cut into `shape`'s rows (`out_rows`) and committed as the reading program's registered value
+    at that shape, its head signed by the running `issuer` in its session for the execution phase
+    (`out_commit.commit_out`). Its public record is one line of `OUT_RECORDS`; the execution phase under ``refused``
+    when the signer refuses, or under ``out-shape`` (with its ``detail``) when the output isn't the shape's rows,
+    neither committed; its witness, the rows and their salts, one line of `OUT_WITNESS`, which goes to the prover alone.
+    A record that carries no output value commits none."""
     words = out_words(record)
     if words is None:
         return None
@@ -482,8 +482,8 @@ def certify_out(out: Path, record, issuer: Issuer, shape: out_commit.OutShape) -
 
 class CertifyingPublisher(ar.Publisher):
     """The served proxy's `publish`: `Publisher`'s files, and each record certified by `issuer` as the network certifier
-    hands it over, under the N2 link's name `link`, the one name both ends of a link-window share
-    (`service.LinkWindows.link`): one line of `certified.jsonl` each, or the link-window under `refused` when the
+    hands it over, under the N2 link's name `link`, the one name both ends of an execution phase share
+    (`service.LinkWindows.link`): one line of `certified.jsonl` each, or the execution phase under `refused` when the
     signer refuses. An egress record handed with the sync the shaper ran its window under (`ServedProxy`) gets that
     sync's salted clock certificate too (`Issuer.salted_clock`), one line of `clocks.jsonl` with its opening, none when
     the signer refuses. With `out_shape` (`out_commit.OutShape`'s doc), each egress record's output value is committed
@@ -502,7 +502,7 @@ class CertifyingPublisher(ar.Publisher):
 
     def public(self, window: int) -> dict | None:
         """Window `window`'s certificates' public part once both its records are kept, else None: the session they are
-        signed in, each certificate and each clock certificate (`certificate_json`), and the link-windows the signer
+        signed in, each certificate and each clock certificate (`certificate_json`), and the execution phases the signer
         refused (`unsigned`). Each signs a digest salted by its own `salt_c`, a hiding commitment, so it shows nothing
         of the head or the sync it signs; heads, syncs and salts stay in `certified.jsonl` and `clocks.jsonl`."""
         kept = list(self.issued.get(window, ()))
@@ -573,7 +573,7 @@ class CertifierProcess:
     milliseconds, so a thread would hold the proxy's GIL at its window's end. `close` waits for every record (the
     signer stays up for the reveals), `refused` gives the issuer's refusals, `certificates` a window's public part
     (`CertifyingPublisher.public`, after every record handed before it) and `shutdown` closes the signer. With
-    `out_shape`, each egress link-window's output value is committed at it and signed in that process too
+    `out_shape`, each egress execution phase's output value is committed at it and signed in that process too
     (`certify_out`)."""
 
     def __init__(self, key: Path, out: Path, report: dict, session: bytes, link: str,
@@ -611,8 +611,8 @@ class CertifierProcess:
             f.result()
 
     def refused(self) -> tuple[list, list | None]:
-        """The issuer's refused link-windows, and the publisher's timing (`CERTIFIER_SERVE_TIMING`) with each record's
-        submit time."""
+        """The issuer's refused execution phases, and the publisher's timing (`CERTIFIER_SERVE_TIMING`) with each
+        record's submit time."""
         refused, timing = self.pool.submit(_certifier_call, "refused").result()
         if timing is not None and self.submits is not None:
             submits = {(link, window): t for link, window, t in self.submits}
@@ -1059,9 +1059,9 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
                 tamper: str | None = None, out_shape: dict | None = None, paced_ms: float = PACED_MS,
                 announce=_announce) -> dict:
     """One served run on the host's clock (the module docstring's `serve`), the certifier's key (the directory `key`)
-    held by its `CertifierProcess`, which with `out_shape` also commits each egress link-window's output value at that
-    shape, the deployment's ``out``, and each egress bucket written `paced_ms` after its boundary by the proxy's pacer
-    (on its loop, with 0). Returns what `serve.json` holds."""
+    held by its `CertifierProcess`, which with `out_shape` also commits each egress execution phase's output value at
+    that shape, the deployment's ``out``, and each egress bucket written `paced_ms` after its boundary by the proxy's
+    pacer (on its loop, with 0). Returns what `serve.json` holds."""
     out.mkdir(parents=True, exist_ok=True)
     setup = ar.Setup(report)
     e, i, windows = setup.egress_params, setup.ingress_params, plan["windows"]
@@ -1216,8 +1216,8 @@ def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[b
 def keep_certificates(deployment: dict, out: Path, ask=ask_certificates) -> list[str]:
     """The client's copy of each window's certificates' public part, asked of the reveal endpoint (`ask`) and held
     to the deployment's key and session (`check_certificates`): those that verify go in `certificates.jsonl`, each
-    with its session (a link-window the signer refused as `unsigned`), and the clock certificates in `clocks.jsonl`,
-    each with its session too, beside `peer.json`. Returns the refusals, each naming what it refused."""
+    with its session (an execution phase the signer refused as `unsigned`), and the clock certificates in
+    `clocks.jsonl`, each with its session too, beside `peer.json`. Returns the refusals, each naming what it refused."""
     refused: list[str] = []
     seen: dict[bytes, str] = {}
     with open(out / "certificates.jsonl", "w") as certs, open(out / "clocks.jsonl", "w") as clocks:
@@ -1387,8 +1387,8 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
           proof_deadline: float = PROOF_DEADLINE_S, audit=Audit) -> dict:
     """The auditor's offline check of the served run in `run` (the module docstring's `check`), with `challenger` the
     challenger's signer, whose public key the certifier registered. Its `verdict` is `accepted` when `network_verdict`
-    accepts, the certifier's audit accepts every link-window raw and committed, every window's salt was revealed once and
-    only once, and the salt audit accepts; else `refused`."""
+    accepts, the certifier's audit accepts every execution phase raw and committed, every window's salt was revealed
+    once and only once, and the salt audit accepts; else `refused`."""
     plan = json.loads((run / "plan.json").read_text())
     report = json.loads((run / "calibration.json").read_text())
     deployment = json.loads((run / "deployment.json").read_text())
@@ -1491,7 +1491,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
 
 
 def table(result: dict) -> str:
-    """The check's verdicts, one line per link-window."""
+    """The check's verdicts, one line per execution phase."""
     lines = [f"verdict {result['verdict']}: network_verdict {result['network_verdict'].get('accepted')}, audit "
              f"{result['audit_accepted']}, salt {result['salt_accepted']} (window 0 again: {result['salt_again']}), "
              f"N2 on the {result['profile']} profile"]
@@ -1730,7 +1730,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--start-in", type=float, default=10.0, help="the origin, seconds after the proxy is up")
         q.add_argument("--out-shape", type=_out_shape, metavar="SHAPE.json",
                        help="the output value's shape (out_commit.OutShape's fields, from the reading circuit's "
-                            "registered read): the network certifier commits each egress link-window's output (the "
+                            "registered read): the network certifier commits each egress execution phase's output (the "
                             "hex of u16 words) in its rows and signs its head (out-records.jsonl; its rows and salts "
                             "in out-witness.jsonl, the prover's)")
         q.add_argument("--paced-ms", type=float, default=PACED_MS,
