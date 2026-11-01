@@ -24,10 +24,18 @@ without blocking a merge.
 A suite is a directory whose `pyproject.toml` configures pytest. Each runs in its own process from its own directory. A pass is
 kept under a hash of its inputs and reused while that hash is unchanged. The inputs are the suite's directory, the workspace
 packages it depends on, what it resolves to in `uv.lock`, the paths it lists under `[tool.verity.tests] inputs`, its fixtures,
-the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables), and the runner itself.
+the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables but those `settings.py` declares
+`where`), and the runner itself.
 Markdown is left out unless a suite lists it. The read guard (`guard/verity_suite_guard.py`) fails a test that opens a
 repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. In a
 `parallel = true` suite each passing test is also kept on its own, under its module's key.
+
+A long suite runs in parts by test file: `suites.py SUITE --files K/M` (or `SUITE:K/M`, `SUITE:1,3/M`) runs part K of M,
+its test files packed longest first by their recorded seconds (`suites.partition`; a file with no record counts the median), so
+a tree and a timing record give one partition, named by its digest. A part's key is the suite's with the other parts' test
+files left out (`part_key`), so an edit to one file reruns its part alone, and the join of a suite's parts (`combine_parts`:
+every K once, of one partition, all passed) is the suite's verdict. The check splits a suite measured past `shards.SPLIT_S`
+(15 min; `--split-s`) into ceil(seconds / threshold) parts, and its shards partition by the timings the plan carries.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
 the same way, each keyed on what it reads. A nightly uncached run must agree with the cached ones. A disagreement means some
@@ -60,20 +68,24 @@ commands:
 
 ~~~sh
 verity tasks list --json [--kind after-landing|preflight] [--changed BASE] [--circuit-shards M] [--gather | --costs FILE]
-verity tasks run ID [--out FILE] [--work DIR] [--circuit-shards M]
+                         [--split-s S]
+verity tasks run ID [--out FILE] [--work DIR] [--circuit-shards M] [--timings FILE]
 ~~~
 
 `list` prints the graph of the checked-out tree, uncommitted files included. `--kind after-landing` (the default) is every job
 in `ci.toml`, as drive's after-landing run checks it; `--kind preflight` is the jobs on the merge gate, a PR's preflight.
 `--changed BASE` keeps the tasks whose inputs the change from BASE's merge-base with HEAD touches, by `suites.py --changed`'s
 rule for a suite and by input paths for the rest, and the tasks they depend on. `--circuit-shards M` splits circuit-check into M
-tasks (default: its ci.toml `shards`). The document is `{"schema": "tasks/v1", "commit", "tree", "kind", "circuit_shards",
-"changed": {"base": the merge-base, "files": how many files changed} or null, "costs": [notes], "tasks": [...]}`, and each
-task is:
+tasks (default: its ci.toml `shards`). A suite whose cost is past `--split-s` seconds (default `shards.SPLIT_S`, 15 min) is
+listed in M = ceil(cost / S) parts by test file (at most one per file), each priced at its files' share of the suite's cost. The
+document is `{"schema": "tasks/v1", "commit", "tree", "kind", "circuit_shards", "split_s", "splits": {suite: {"m", "seconds",
+"digest", "shares", "files", "timings"}}, "changed": {"base": the merge-base, "files": how many files changed} or null, "costs":
+[notes], "tasks": [...]}`, where `splits` names each split suite's partition (its digest, each part's share and files, and the
+timing record it is of), and each task is:
 
 | Field | What it is |
 | --- | --- |
-| `id` | the shard planner's part (`shards.py`): `pytest:SUITE` or `lean-suites:SUITE` (`suites.AFTER_LEAN`, which read the verifier's build), `lean-audit:PKG`, `circuit-check:K/M`, or a job's name |
+| `id` | the shard planner's part (`shards.py`): `pytest:SUITE` or `lean-suites:SUITE` (`suites.AFTER_LEAN`, which read the verifier's build), `pytest:SUITE:K/M` for part K of a split suite, `lean-audit:PKG`, `circuit-check:K/M`, or a job's name |
 | `kind` | `suite`, `lean-package`, `circuit-check`, `build` (`lean-build`, `flock-circuit-build`) or `step` (another job, run whole: `flock-rust-tests`, `lean-unit-cut`, `lean-agreement`, `lean-changed`, `ratchet-gate`) |
 | `argv`, `cwd` | the command `check.py` builds for that part alone (`check.groups`), with `<tree>`, `<cache>`, `<out>` and `<python>` for the tree, the check's cache, the run's output directory and the interpreter; `argv` is null where check can't run it on this tree |
 | `reason` | null, or why `argv` is null: one starting `skipped:` is a skip, any other a failure |
@@ -89,7 +101,9 @@ task is:
 
 A task's key hashes what a suite's key hashes (`suites.components`: each input's git object id, its fixtures, the
 resolved lock entries and installed versions, Python, the platform, the base image and the `VERITY_*`/`FLOCK_*` variables) under
-the environment check gives that step; a Lake package's, `lean_audit.components` (its content and its path dependencies' and
+the environment check gives that step, a split suite's part `suites.part_key` (its own test files and the suite's shared
+inputs), and its argv pins the partition (`SUITE:K/M@digest`, which `suites.py` refuses on a machine whose record partitions
+otherwise); a Lake package's, `lean_audit.components` (its content and its path dependencies' and
 provers', the auditor's files, the toolchain pin) with Python and the base image; a job in `check.STEP_KEYS`, that step's key.
 So keys are of the machine that lists them: list on a worker. These have no key yet, and run whenever they're in the graph: the
 builds (no declared inputs, read guard or keyed outputs), circuit-check's slices (it keys each target, from a task list only a
@@ -97,10 +111,19 @@ run builds), and the jobs that keep no verdict (`lean-unit-cut`, `lean-changed`,
 worker's `uv sync --locked` refuses a lock that isn't current, each suite fetches the fixtures it reads, and the repository's
 suite holds the lints.
 
+A split suite's part runs (`run`) on the partition `--timings` gives (`{suite: the listing's splits timings}`), so it runs the
+listed files under the listed key; without it, on this machine's timing record. A suite's verdict is the join of its parts'
+(`suites.combine_parts`).
+
 `run ID` runs that task here as `check.py` runs that part in a shard of its own (`check.run` with only that part, without the
 preflight), its `deps` beside it until artifacts are shared, and writes `{"schema", "id", "verdict": passed|failed|skipped,
 "key", "seconds", "outputs": {"dir", "files", "artifacts"}, "steps": [check's step records]}` to stdout or `--out`; the steps'
 progress goes to stderr. It exits 0 for passed or skipped, 1 for failed.
+
+A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
+it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
+and ended, and `verity ci inspect RUN` shows a check's steps with their state, elapsed time, an ETA from each step's median
+over recent recorded checks, and its reds so far. What isn't recorded shows as unknown, never as passed.
 
 ## Landing
 
@@ -109,5 +132,13 @@ PRs land through the merge queue (`research queue drive`): its flags are `drive.
 merge. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
 with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red job off the gate reverts its culprit on `checked`
-but doesn't hold `main`. The team skill's "Landing" is the procedure. A pure move that `move_check.py` certifies
-(`verity check move BASE HEAD`) lands ahead of the queue.
+but doesn't hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
+body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
+(`verity check move BASE HEAD`), running both scripts as `checked` has them.
+
+## Settings
+
+Every environment variable check reads is declared once in `settings.py`, with its type, default, doc and role: `value` (hashed
+into the run's `result.json` under `settings`), `where` (telemetry there, with the reason it changes no verdict) or `debug`
+(refused in a recorded run, and by `train.sh`). `check.py` and `suites.py` refuse to start with a `CHECK_*` or `LEAN_SLOT*`
+variable it doesn't declare. Reads outside it are held by `tools/verity/check/tests/test_settings.py` to a list that only shrinks.

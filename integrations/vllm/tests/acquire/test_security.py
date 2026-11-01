@@ -4,8 +4,9 @@ commitment construction in `schemes.SCHEMES`:
   (1) binding under the primitive        — an opening authenticates only the committed bytes (altered value rejected)
   (2) binds identity/position, not a multiset — reordered positions rejected; a commitment to the same multiset in another order has a
                                             different root; equal values at two positions are distinguishable by position
-  (3) opens against the exact prechallenge root — the verifier holds R fixed BEFORE the challenge (the challenge is derived from R);
-                                            a root recomputed after the fact (altered value → R') is not accepted as R and yields another challenge
+  (3) opens against the exact prechallenge root — the verifier holds R fixed BEFORE the challenge (the challenge is derived from R
+                                            and the coin opened after it); a root recomputed after the fact (altered value → R') is not
+                                            accepted as R and yields another challenge
   (4) negative tests                     — altered / reordered / substituted / truncated stream all rejected
 
 Every test is parameterised over the schemes; a sibling lane's engine joins by adding an adapter in `schemes.py`.
@@ -22,6 +23,8 @@ from tests.acquire.schemes import SCHEMES
 
 CTX = b"ctx/request-A/step-3"
 CTX_B = b"ctx/request-B/step-3"
+#: the run's positions coin, as the auditor host's challenger would open it after the root
+COIN = b"positions coin"
 
 
 def values_of(n: int, seed: int = 1, width: int = 8) -> list[bytes]:
@@ -116,13 +119,13 @@ def test_truncated_stream_rejected(scheme):
 
 
 def test_root_recomputed_after_the_fact_is_not_the_prechallenge_root(scheme):
-    """Protocol order: the verifier fixes R, derives the challenge from R, then receives openings.  A prover that alters a value after
-    seeing the challenge and recomputes R' (i) produces openings that fail against R, and (ii) R' would have produced a different
-    challenge — so R' can never be passed off as the prechallenge root."""
+    """Protocol order: the verifier fixes R, opens the coin after it, derives the challenge from both, then receives openings.  A
+    prover that alters a value after seeing the challenge and recomputes R' (i) produces openings that fail against R, and (ii) R'
+    would have produced a different challenge — so R' can never be passed off as the prechallenge root."""
     vals = values_of(64)
     c = scheme.commit(vals, CTX)
     R = c.root                                              # fixed by the verifier BEFORE the challenge
-    chal = challenge_positions(R, [c.n], 12)
+    chal = challenge_positions(R, [c.n], 12, source=COIN)
     assert all(s == 0 and 0 <= i < c.n for s, i in chal)
     # honest openings at the challenged positions verify
     for _s, i in chal:
@@ -135,7 +138,7 @@ def test_root_recomputed_after_the_fact_is_not_the_prechallenge_root(scheme):
     assert c2.root != R
     assert not scheme.verify(R, c.n, CTX, scheme.open(c2, i0))            # opening from the recomputed tree fails against R
     assert scheme.verify(c2.root, c2.n, CTX, scheme.open(c2, i0))         # (it is a fine opening of R' — which the verifier never accepted)
-    assert challenge_positions(c2.root, [c2.n], 12) != chal                # and R' would not have produced this challenge
+    assert challenge_positions(c2.root, [c2.n], 12, source=COIN) != chal   # and R' would not have produced this challenge
 
 
 def test_context_binding(scheme):
@@ -153,13 +156,3 @@ def test_context_binding(scheme):
     # holds (root, ctx) and a root never authenticates under another context.
     cross = scheme.verify(c.root, c.n, CTX, scheme.open(cb, 0))
     assert cross in (True, False)
-
-
-def test_challenge_is_a_function_of_the_root_only():
-    r1 = b"\x01" * 32
-    a = challenge_positions(r1, [10, 20, 5], 50)
-    b = challenge_positions(r1, [10, 20, 5], 50)
-    assert a == b and len(a) == 50 and all(0 <= i < [10, 20, 5][s] for s, i in a)
-    assert challenge_positions(b"\x02" * 32, [10, 20, 5], 50) != a
-    assert challenge_positions(r1, [10, 20, 5], 50, salt=b"x") != a
-    assert {s for s, _ in a} == {0, 1, 2}

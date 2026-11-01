@@ -15,10 +15,11 @@ command, and the labels from the store's remote), or `FileTransport`, a director
 Drive's `executor` flag (drive.toml) uses it after landing (`drive.Driver`): `shadow` lists the graph of each `checked` tip the
 after-landing run checks (detached, in a worktree of the tip: `drive.list_tasks`), enqueues it at `AFTER_LANDING_PRIORITY`, and
 once both have finished records per tip how the run's verdicts and the executor's compare (`compare`, an `executor_shadow` label
-on `commit:<tip>`), changing nothing else; `research queue shadow-report` prints the newest of them and whether `SWITCH_STREAK`
-tips in a row agreed fully, the gate for `on`, where no run is launched and the executor's verdicts alone verify the tip, `main`
-following once every task passed.  A failed task marks the tip failed and is told to `CI`; no culprit is named or reverted from
-it yet."""
+on `commit:<tip>`; every part either side has, so a part only one side ran disagrees), changing nothing else (a shadow that
+fails, the store's or the transport's error, is recorded incomplete, and landing goes on); `research queue shadow-report`
+prints the newest of them and whether `SWITCH_STREAK` tips in a row agreed fully, the gate for `on`, where no run is launched
+and the executor's verdicts alone verify the tip, `main` following once every task passed.  A failed task marks the tip failed
+and is told to `CI`; no culprit is named or reverted from it yet."""
 from __future__ import annotations
 
 import hashlib
@@ -33,6 +34,9 @@ from typing import Callable, Iterable, Protocol
 from .store import vocab
 
 PASS, FAIL, PENDING = "pass", "fail", "pending"
+#: a shadow comparison's side with no counterpart: the run has no verdict of an executor-only task, and the executor has no
+#: task of a part the run records (missing in executor)
+NONE, MISSING = "none", "missing"
 #: the priority of an after-landing check of `checked`'s tip on the queue, its highest
 AFTER_LANDING_PRIORITY = 1
 #: infra's command that puts a graph's rows on the queue: `--graph FILE` (a tasks/v1 document, each task's `key` the one its
@@ -198,26 +202,48 @@ def old_verdicts(run_dirs: Iterable[Path]) -> dict[str, str]:
 
 def compare(ids: dict[str, str], old: dict[str, str], new: dict[str, str]) -> dict:
     """How the run's verdicts (``old``, `old_verdicts`) and the executor's (``new``, by key, of the tasks ``ids`` {task id:
-    key}) compare: each task the run records on its own, and each job the run records only whole, its tasks' verdicts folded
-    (fail when one fails, pending when one is, else pass).  "none" for a unit the run has no verdict of."""
+    key}) compare, over the union of both sides' parts:
+
+    - each task the run records on its own (`pytest:SUITE`, `lean-audit:PKG`, a job run whole): its verdict beside the task's;
+    - each job the run records as a step: the step's verdict beside its tasks' folded (fail when one fails, pending when one
+      is, else pass), so a task of a job the run records only whole (a circuit-check slice) is compared through it;
+    - a part the run records that no task matches, by id or by job: "missing in executor" (`MISSING`), a disagreement;
+    - a task the run has no counterpart of (its id unrecorded, and its job unrecorded or recorded part by part without it):
+      "executor only", a disagreement whatever its verdict.
+
+    So a graph smaller than the run never agrees fully, nor one that ran something the run didn't."""
     units: dict[str, tuple[str, str]] = {}
     jobs: dict[str, list[str]] = {}
+    only = []
+    by_part = {p.partition(":")[0] for p in old if ":" in p}
     for tid, key in ids.items():
+        v, job = new.get(key, PENDING), tid.partition(":")[0]
+        jobs.setdefault(job, []).append(v)
         if tid in old:
-            units[tid] = (old[tid], new.get(key, PENDING))
-        else:
-            jobs.setdefault(tid.partition(":")[0], []).append(new.get(key, PENDING))
+            units[tid] = (old[tid], v)
+        elif tid == job or job in by_part or job not in old:
+            units[tid] = (NONE, v)
+            only.append(tid)
     for job, vs in jobs.items():
-        units[job] = (old.get(job, "none"), FAIL if FAIL in vs else PENDING if PENDING in vs else PASS)
+        if job in old:
+            units[job] = (old[job], FAIL if FAIL in vs else PENDING if PENDING in vs else PASS)
+    missing = sorted(p for p in old if p not in units)
+    units.update({p: (old[p], MISSING) for p in missing})
     rows = sorted(units.items())
     return {"units": len(rows), "agree": sum(o == n for _, (o, n) in rows),
-            "pending": sorted(u for u, (_, n) in rows if n == PENDING),
-            "disagree": [{"unit": u, "old": o, "executor": n} for u, (o, n) in rows if o != n and n != PENDING]}
+            "pending": sorted(u for u, (o, n) in rows if n == PENDING and o != NONE),
+            "disagree": [{"unit": u, "old": o, "executor": n} for u, (o, n) in rows
+                         if o != n and (n != PENDING or o == NONE)],
+            "missing": missing, "executor_only": sorted(only)}
 
 
 def agrees(rec: dict) -> bool:
-    """A tip's shadow record agrees fully: every unit agrees, nothing pending, no error."""
-    return not rec.get("error") and rec.get("units", 0) > 0 and rec.get("agree") == rec.get("units")
+    """A tip's shadow record agrees fully: every unit agrees, nothing pending, missing in the executor or executor only, and
+    no error and nothing left incomplete.  A record without the coverage fields (`compare`'s "missing", "executor_only")
+    never agrees."""
+    return (not rec.get("error") and not rec.get("incomplete") and rec.get("units", 0) > 0
+            and rec.get("agree") == rec.get("units") and not rec.get("pending") and not rec.get("disagree")
+            and rec.get("missing") == [] and rec.get("executor_only") == [])
 
 
 # -- `research queue shadow-report`
@@ -253,13 +279,20 @@ def shadow_report(records: list[Shadowed], tips: int) -> tuple[str, bool]:
     lines = [f"executor shadow: the newest {len(shown)} of {len(records)} checked tips compared"]
     for s in shown:
         r = s.rec
-        what = (f"error: {r['error']}" if r.get("error") else
+        what = (f"error: {r['error']}" if r.get("error") else f"incomplete: {r['incomplete']}" if r.get("incomplete") else
                 f"agree {r.get('agree', 0)}/{r.get('units', 0)}, disagree {len(r.get('disagree') or ())}"
-                + (f", pending {len(r['pending'])}" if r.get("pending") else ""))
+                + (f", pending {len(r['pending'])}" if r.get("pending") else "")
+                + ("" if "missing" in r else ", no coverage counts")
+                + (f", missing in executor {len(r['missing'])}" if r.get("missing") else "")
+                + (f", executor only {len(r['executor_only'])}" if r.get("executor_only") else ""))
         lines.append(f"{s.tip[:12]}  {s.ts}  {what}  (run {r.get('run') or '-'})")
-        lines += [f"    {x['unit']}: run {x['old']}, executor {x['executor']}" for x in r.get("disagree") or ()]
+        for x in r.get("disagree") or ():
+            lines.append(f"    {x['unit']}: " + ("missing in executor (run " + x["old"] + ")" if x["executor"] == MISSING else
+                                                 f"executor only (executor {x['executor']})" if x["old"] == NONE else
+                                                 f"run {x['old']}, executor {x['executor']}"))
         lines += [f"    {u}: executor pending" for u in r.get("pending") or ()]
     ok = streak >= SWITCH_STREAK
-    lines.append(f"switch gate ({SWITCH_STREAK} tips in a row agreeing fully): {'met' if ok else 'not met'} "
+    lines.append(f"switch gate ({SWITCH_STREAK} tips in a row agreeing fully, none missing in executor or executor only, none "
+                 f"incomplete): {'met' if ok else 'not met'} "
                  f"(the newest {streak} agree)")
     return "\n".join(lines), ok
