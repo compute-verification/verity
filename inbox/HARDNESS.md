@@ -382,3 +382,10 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
   - **Scope of the kill:** designs whose credited compute is a frozen random matrix (A′ and its arrangements). It does
     not reach design U, which credits the useful matrix itself.
   - vy-nebius-1 stops about 04:30Z Sun, at about $400 of its $800 line.
+- **HT-SCALE final call: KILL** (02:22Z Sun; the D/2 baseline ended at 2.8402 nats, below 2.8538; art:a269e75b…):
+  - P_env at 350M is res-f33 1.575× (bound 1.49) and m-mlph-r8 1.424× (bound 1.41), so both arms are past.
+  - P_size rises at every step: 1.11 → 1.20 → 1.34 → 1.58, and 1.13 → 1.20 → 1.29 → 1.42.
+  - u at 350M is −0.40 and −0.19: the credited random compute is worse than dead weight.
+  - Distillation (SmolLM2-1.7B) leaves the gap at 0.037 nats. The matched no-teacher control ends about 04:00Z, and the
+    call doesn't depend on it.
+  - vy-nebius-1 stops about 04:15Z.
