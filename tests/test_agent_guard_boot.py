@@ -140,6 +140,7 @@ def test_a_last_guard_whose_boot_sh_is_this_one_stops_instead_of_running_itself_
     git(env, ws, "checkout", "-q", "-b", "beside", "origin/main")
     commit(env, ws, {"tools/agent-guard/shell_hook.py": ALLOW}, "a hook beside the shim")
     p = boot(env, ws)
+    assert f"{ws} tracks .cursor/hooks.json" in p.stdout
     assert p.returncode == 1 and "is this boot.sh; stopping" in p.stderr and "no guard on this VM" in p.stderr, p.stderr
     assert not (tmp_path / "opt/shell_hook.py").exists()
 
