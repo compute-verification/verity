@@ -34,7 +34,7 @@ namespace Loop
 /-- Where `x` sets up no session there is no round past the link. -/
 theorem refK_of_none {x : Msg} (hs : FlockDeploy.setupOf true x = none) : refK x = 0 := by
   unfold refK
-  simp only [FlockDeploy.V, hs] <;> omega
+  simp only [FlockDeploy.V, hs]
 
 /-- **The inner proof's rounds** after the decoded coins `cs` at `x`, on the rep streams' tables and salts `real`: `x`
 sets up a session, the round is rep stream `k`'s round `i` (`CoinLayer.locate` of rep round `cs.length - 1`), the
