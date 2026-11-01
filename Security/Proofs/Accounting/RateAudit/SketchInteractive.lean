@@ -62,12 +62,12 @@ theorem toChip_eq (addr : List Bool → Pos N m ρ) (O : Oracle N ρ h X Dg) (D 
 
 end IChip
 
-namespace InteractiveDevice
+namespace InteractiveProver
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
 /-- The interactive device as a `Device`: the same held sectors, and its chip program as a `Chip` from nothing sent. -/
-def toDevice (A : InteractiveDevice N m ρ h S L q w X Sig Dg) : Device N m ρ h S L q w X Sig Dg where
+def toDevice (A : InteractiveProver N m ρ h S L q w X Sig Dg) : Device N m ρ h S L q w X Sig Dg where
   held := A.held
   held_le := A.held_le
   chip σ v := IChip.toChip A.addr [] (A.chip σ v)
@@ -76,7 +76,7 @@ def toDevice (A : InteractiveDevice N m ρ h S L q w X Sig Dg) : Device N m ρ h
     rw [h2, h4]
     exact A.bounded σ v O D
 
-theorem toDevice_eq (A : InteractiveDevice N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg)
+theorem toDevice_eq (A : InteractiveProver N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg)
     (cTag cEnc : ℕ) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) {s : ℕ} (I : Fin s → Fin N) :
     (A.toDevice.Accepts dig σ O D I ↔ A.Accepts dig σ O D I) ∧
       A.toDevice.compute cTag cEnc σ O D = A.compute cTag cEnc σ O D ∧
@@ -91,7 +91,7 @@ theorem toDevice_eq (A : InteractiveDevice N m ρ h S L q w X Sig Dg) (dig : Sig
   · simp only [Device.compute, compute, hq, hr]
   · simp only [Device.footprint, footprint, hm]
 
-end InteractiveDevice
+end InteractiveProver
 
 end Accounting.RateSketch
 

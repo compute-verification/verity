@@ -7,7 +7,7 @@ import Proofs.Accounting.RateAudit.Interactive
 
 Every ingress step reads one address, of one tier, so the reads summed over the tiers are the run's ingress
 (`IChip.sum_tierBits`), and the footprint is at most that. A run with `k` correct receipts falls in one of two events
-(`InteractiveDevice.guess_or_le`, `InteractiveDevice.correct_le_relayed`), by how the receipts came:
+(`InteractiveProver.guess_or_le`, `InteractiveProver.correct_le_relayed`), by how the receipts came:
 
 - with side sources that ignore the oracle, a word never queried with a correct receipt anyway: `2^-h` a word, `N/2^h`
   over the words (`RelayDevice.pr_guess_or_compress`); with any side sources, at least `m` correct receipts never
@@ -46,32 +46,32 @@ theorem sum_tierBits {τ : ℕ} (tier : ℕ → Fin τ) (w : IWorld N b h ρ) (p
 
 end IChip
 
-namespace InteractiveDevice
+namespace InteractiveProver
 
 variable {N b h ρ S L q : ℕ}
 
-theorem sum_tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
+theorem sum_tierReads {τ : ℕ} (A : InteractiveProver N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : ∑ t, A.tierReads tier t E R O = A.ingress E R O :=
   IChip.sum_tierBits tier _ _ []
 
-theorem footprint_le_sum_tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b)
+theorem footprint_le_sum_tierReads {τ : ℕ} (A : InteractiveProver N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b)
     (R : Bits ρ) (O : Oracle N b h ρ) : A.footprint E R O ≤ ∑ t, A.tierReads tier t E R O := by
   rw [sum_tierReads]
   exact footprint_le_ingress A E R O
 
-theorem toRelay_rebuilds (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toRelay_rebuilds (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (A.toRelay.chip (A.toRelay.state E)).rebuilds (A.toRelay.world E R O) = A.rebuilt E R O := by
   change ((A.chip (A.state E)).toChip []).rebuilds (A.toRelay.world E R O) = _
   rw [IChip.toChip_rebuilds, lift_world]
   rfl
 
-theorem toRelay_correct (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toRelay_correct (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toRelay.correct E R O = A.correct E R O := by
   simp only [RelayDevice.correct, correct, toRelay_tags]
 
 /-- What the relay device had besides the oracle is at most the reads of every tier, the state, the link and the
 rebuilt words. -/
-theorem taken_le {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
+theorem taken_le {τ : ℕ} (A : InteractiveProver N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : taken A.toRelay E R O ≤ ∑ t, A.tierReads tier t E R O + S + L + A.rebuilt E R O * b := by
   have h1 := footprint_le_sum_tierReads A tier E R O
   have h2 := (A.toRelay.bounded (A.toRelay.state E) (A.toRelay.world E R O)).1
@@ -80,7 +80,7 @@ theorem taken_le {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ �
   omega
 
 /-- A correct receipt for a word never queried, or every correct receipt's word queried. -/
-theorem guess_or_le (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem guess_or_le (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (∃ j, j ∉ queried A.toRelay E R O ∧ A.toRelay.tags E R O j = O (R, j, E j)) ∨
       (A.correct E R O).card ≤ (queried A.toRelay E R O).card := by
   by_cases hg : ∃ j, j ∉ queried A.toRelay E R O ∧ A.toRelay.tags E R O j = O (R, j, E j)
@@ -91,12 +91,12 @@ theorem guess_or_le (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : 
     exact hg ⟨j, hq, by rw [toRelay_tags]; exact hj⟩
 
 /-- The correct receipts are the relayed ones and the queried ones. -/
-theorem correct_le_relayed (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem correct_le_relayed (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (A.correct E R O).card ≤ (A.toRelay.relayed E R O).card + (queried A.toRelay E R O).card := by
   rw [← toRelay_correct]
   exact Finset.card_le_card_sdiff_add_card
 
-end InteractiveDevice
+end InteractiveProver
 
 namespace RelayDevice
 
@@ -212,11 +212,11 @@ theorem RateConservationRO : Accounting.Guarantees.RateConservationRO := by
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp at hx), Finset.card_empty, zero_mul, zero_mul]
   refine (pr_mono (fun x hx => ?_)).trans
-    (A.toRelay.pr_guess_or_compress (InteractiveDevice.toRelay_side A hA) k lam hk)
+    (A.toRelay.pr_guess_or_compress (InteractiveProver.toRelay_side A hA) k lam hk)
   obtain ⟨hc, hlt⟩ := hx
-  rcases InteractiveDevice.guess_or_le A x.1 x.2.1 x.2.2 with hg | hq
+  rcases InteractiveProver.guess_or_le A x.1 x.2.1 x.2.2 with hg | hq
   · exact Or.inl hg
-  · have := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+  · have := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
     exact Or.inr ⟨hc.trans hq, by omega⟩
 
 /-- **Conservation over tiers, with any side sources** (`Accounting.Guarantees.RateConservation`). -/
@@ -230,17 +230,17 @@ theorem RateConservation : Accounting.Guarantees.RateConservation := by
   obtain ⟨hc, hlt⟩ := hx
   by_cases hm : m ≤ (A.toRelay.relayed x.1 x.2.1 x.2.2).card
   · exact Or.inl hm
-  · have h1 := InteractiveDevice.correct_le_relayed A x.1 x.2.1 x.2.2
-    have h2 := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+  · have h1 := InteractiveProver.correct_le_relayed A x.1 x.2.1 x.2.2
+    have h2 := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
     exact Or.inr ⟨by omega, by omega⟩
 
 /-- The capacities bound the footprint. -/
 theorem footprint_mul_lt_of_capped {N b h ρ S L q τ cEnc fl : ℕ} {tier : ℕ → Fin τ} {cap : Fin τ → ℕ}
-    (A : InteractiveDevice N b h ρ S L q) (hcap : A.TierCapped tier cap) (hfl : (∑ t, cap t) * cEnc < fl)
+    (A : InteractiveProver N b h ρ S L q) (hcap : A.TierCapped tier cap) (hfl : (∑ t, cap t) * cEnc < fl)
     (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : A.toRelay.footprint E R O * cEnc < fl := by
-  rw [InteractiveDevice.toRelay_footprint]
+  rw [InteractiveProver.toRelay_footprint]
   refine lt_of_le_of_lt (Nat.mul_le_mul_right cEnc ?_) hfl
-  exact (InteractiveDevice.footprint_le_sum_tierReads A tier E R O).trans
+  exact (InteractiveProver.footprint_le_sum_tierReads A tier E R O).trans
     (Finset.sum_le_sum (fun t _ => hcap (A.state E) (A.world E R O) t))
 
 /-- **Correct receipts are bounded by the tiers' capacity, with side sources that ignore the oracle**
@@ -251,14 +251,14 @@ theorem RateConservationCapRO : Accounting.Guarantees.RateConservationCapRO := b
   rcases Nat.eq_zero_or_pos k with rfl | hk
   · simp [floor] at hfl
   refine (pr_mono (fun x hx => ?_)).trans
-    (A.toRelay.pr_guess_or_compress (InteractiveDevice.toRelay_side A hA) k lam hk)
+    (A.toRelay.pr_guess_or_compress (InteractiveProver.toRelay_side A hA) k lam hk)
   obtain ⟨hc, hF⟩ := hx
-  rcases InteractiveDevice.guess_or_le A x.1 x.2.1 x.2.2 with hg | hq
+  rcases InteractiveProver.guess_or_le A x.1 x.2.1 x.2.2 with hg | hq
   · exact Or.inl hg
   · have hk' := hc.trans hq
     refine Or.inr ⟨hk', taken_lt_of_floor A.toRelay x.1 x.2.1 x.2.2 hk' ?_
       (footprint_mul_lt_of_capped A hcap hfl x.1 x.2.1 x.2.2)⟩
-    rwa [InteractiveDevice.toRelay_compute]
+    rwa [InteractiveProver.toRelay_compute]
 
 /-- **Correct receipts are bounded by the tiers' capacity, with any side sources**
 (`Accounting.Guarantees.RateConservationCap`). -/
@@ -271,11 +271,11 @@ theorem RateConservationCap : Accounting.Guarantees.RateConservationCap := by
   obtain ⟨hc, hF⟩ := hx
   by_cases hm : m ≤ (A.toRelay.relayed x.1 x.2.1 x.2.2).card
   · exact Or.inl hm
-  · have h1 := InteractiveDevice.correct_le_relayed A x.1 x.2.1 x.2.2
+  · have h1 := InteractiveProver.correct_le_relayed A x.1 x.2.1 x.2.2
     have hq : k - m ≤ (queried A.toRelay x.1 x.2.1 x.2.2).card := by omega
     refine Or.inr ⟨hq, taken_lt_of_floor A.toRelay x.1 x.2.1 x.2.2 hq ?_
       (footprint_mul_lt_of_capped A hcap hfl x.1 x.2.1 x.2.2)⟩
-    rwa [InteractiveDevice.toRelay_compute]
+    rwa [InteractiveProver.toRelay_compute]
 
 /-- **Freed bandwidth is spent on another tier or rebuilt** (`Accounting.Guarantees.RateDisplacement`). -/
 theorem RateDisplacement : Accounting.Guarantees.RateDisplacement := by
@@ -291,10 +291,10 @@ theorem RatePaidRO : Accounting.Guarantees.RatePaidRO := by
   classical
   intro N b h ρ S L q lam τ tier A hA
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add
-    (A.toRelay.pr_guess_le (InteractiveDevice.toRelay_side A hA)) (A.toRelay.pr_compress_any_le lam)))
-  rcases InteractiveDevice.guess_or_le A x.1 x.2.1 x.2.2 with hg | hq
+    (A.toRelay.pr_guess_le (InteractiveProver.toRelay_side A hA)) (A.toRelay.pr_compress_any_le lam)))
+  rcases InteractiveProver.guess_or_le A x.1 x.2.1 x.2.2 with hg | hq
   · exact Or.inl hg
-  · have ht := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+  · have ht := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
     have hQ := (card_queried_le A.toRelay x.1 x.2.1 x.2.2).trans (A.toRelay.bounded _ _).2
     have hk : 0 < (A.correct x.1 x.2.1 x.2.2).card :=
       Nat.pos_of_ne_zero (fun h0 => by rw [h0, zero_mul] at hx; omega)
@@ -308,8 +308,8 @@ theorem RatePaid : Accounting.Guarantees.RatePaid := by
     (A.toRelay.pr_relay_le m) (A.toRelay.pr_compress_any_le lam)))
   by_cases hm : m ≤ (A.toRelay.relayed x.1 x.2.1 x.2.2).card
   · exact Or.inl hm
-  · have h1 := InteractiveDevice.correct_le_relayed A x.1 x.2.1 x.2.2
-    have ht := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+  · have h1 := InteractiveProver.correct_le_relayed A x.1 x.2.1 x.2.2
+    have ht := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
     have hQ := (card_queried_le A.toRelay x.1 x.2.1 x.2.2).trans (A.toRelay.bounded _ _).2
     have hcm : m < (A.correct x.1 x.2.1 x.2.2).card := Nat.lt_of_mul_lt_mul_right (a := b) (by omega)
     have e := Nat.sub_mul (A.correct x.1 x.2.1 x.2.2).card m b

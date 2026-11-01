@@ -235,7 +235,7 @@ variable {N b h ρ S L q : ℕ}
 
 /-- The interactive device that simulates a pass device on its own link: its device memory also answers the completed
 bits from the store. -/
-noncomputable def toInteractiveMem (A : PIDevice N b h ρ S L q) : InteractiveDevice N b h ρ S L q where
+noncomputable def toInteractiveMem (A : PIDevice N b h ρ S L q) : InteractiveProver N b h ρ S L q where
   state := A.state
   mem E := PIChip.memOf E (A.mem E)
   side := A.side
@@ -255,7 +255,7 @@ theorem toInteractiveMem_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ
     hb.1 hb.2
   refine ⟨?_, h₂, h₃⟩
   have ht : A.toInteractiveMem.tags E R O = A.tags E R O := h₁
-  simp only [InteractiveDevice.correct, PIDevice.correct, ht]
+  simp only [InteractiveProver.correct, PIDevice.correct, ht]
 
 /-- **A pass device's correct receipts are paid for, with any side sources**: `RatePaid` at the simulating device. -/
 theorem pr_unpaid_relay_le {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (m lam : ℕ) :

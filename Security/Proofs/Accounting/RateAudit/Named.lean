@@ -442,7 +442,7 @@ theorem RateConservationNamedRO : Accounting.Guarantees.RateConservationNamedRO 
   rcases Nat.eq_zero_or_pos k with rfl | hk
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp at hx), Finset.card_empty, zero_mul, zero_mul]
-  have hA' := InteractiveDevice.toRelay_side A hA
+  have hA' := InteractiveProver.toRelay_side A hA
   have h₁ := A.toRelay.pr_guess_le hA'
   have h₂ := A.toRelay.pr_collides_le hA'
   have h₃ := A.toRelay.pr_compress_named_le k lam hk
@@ -458,16 +458,16 @@ theorem RateConservationNamedRO : Accounting.Guarantees.RateConservationNamedRO 
     by_contra hq
     exact hg ⟨j, hq, (Finset.mem_filter.1 hj).2⟩
   have hk' : k ≤ (A.toRelay.correct x.1 x.2.1 x.2.2 ∩ queried A.toRelay x.1 x.2.1 x.2.2).card := by
-    rw [Finset.inter_eq_left.2 hsub, InteractiveDevice.toRelay_correct]
+    rw [Finset.inter_eq_left.2 hsub, InteractiveProver.toRelay_correct]
     exact hc
-  have := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+  have := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
   exact Or.inr ⟨hk', by omega, hcol⟩
 
 /-- **Correct receipts are paid for, at every count, with named words** (`Accounting.Guarantees.RatePaidNamedRO`). -/
 theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
   classical
   intro N b h ρ S L q lam τ tier A hA
-  have hA' := InteractiveDevice.toRelay_side A hA
+  have hA' := InteractiveProver.toRelay_side A hA
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add
     ((pr_or_le _ _).trans (add_le_add (A.toRelay.pr_guess_le hA') (A.toRelay.pr_collides_le hA')))
     (A.toRelay.pr_compress_any_named_le lam)))
@@ -481,9 +481,9 @@ theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
     exact hg ⟨j, hq, (Finset.mem_filter.1 hj).2⟩
   have hk' : (A.toRelay.correct x.1 x.2.1 x.2.2 ∩ queried A.toRelay x.1 x.2.1 x.2.2).card =
       (A.correct x.1 x.2.1 x.2.2).card := by
-    rw [Finset.inter_eq_left.2 hsub, InteractiveDevice.toRelay_correct]
+    rw [Finset.inter_eq_left.2 hsub, InteractiveProver.toRelay_correct]
   have hN : (A.correct x.1 x.2.1 x.2.2).card ≤ N := (Finset.card_le_univ _).trans (by simp)
-  have ht := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
+  have ht := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
   have hk : 0 < (A.correct x.1 x.2.1 x.2.2).card :=
     Nat.pos_of_ne_zero (fun h0 => by rw [h0, zero_mul] at hx; omega)
   refine Or.inr ⟨⟨(A.correct x.1 x.2.1 x.2.2).card, by omega⟩, hk, hk'.ge, ?_, hcol⟩
