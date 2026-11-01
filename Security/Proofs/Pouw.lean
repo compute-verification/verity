@@ -194,7 +194,7 @@ import Proofs.Pouw.Writes
 /-!
 # PoUW's proofs
 
-`Writes` holds the proofs of what writing distinct words costs, one `Pouw.SecurityProofs.Writes.G` a guarantee.
+`Writes` holds the proofs of what writing distinct words costs, one a guarantee under the guarantee's own name.
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
