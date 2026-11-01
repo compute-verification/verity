@@ -82,13 +82,16 @@ theorem mulVec_single' {N : ℕ} (M : Matrix (Fin N) (Fin N) (ZMod 2)) {r : Fin 
     · rw [if_neg hj, if_neg (fun e => hj (congrArg Fin.val e))])) v
 
 /-- **A witness of an accepted statement with pinned outputs satisfies its statement without Δ's pinned copies**
-(`Hidden.unpin`), when every pinned bit is a linear row: at `unpin`'s layout `L` and its flat twin's unit facts `F`. -/
-theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.unpin st))
+(`Hidden.unpin`), and is 0 at every pinned bit, when every pinned bit is a linear row: at `unpin`'s layout `L` and its
+flat twin's unit facts `F`. -/
+theorem sat_pinnedZ {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.unpin st))
     (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hW : Integrate.NetWidths st.c) (hleaf : st.leaf = default)
     (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)
     (hlin : ∀ x ∈ Hidden.pinnedCols st.c, LinearBit st.c x)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {z : Model.Witness st.m}
-    (hz : (stmtOf st hwf regs).Satisfies z) : (stmtOf (Hidden.unpin st) (Hidden.unpin_wf hwf) regs).Satisfies z := by
+    (hz : (stmtOf st hwf regs).Satisfies z) : (stmtOf (Hidden.unpin st) (Hidden.unpin_wf hwf) regs).Satisfies z ∧
+      ∀ o (r : Fin (2 ^ (stmtOf st hwf regs).kLog)), ((Hidden.pinnedCols st.c).count r.val : ZMod 2) = 1 →
+        (stmtOf st hwf regs).block z o r = 0 := by
   have hK : Integrate.NetKinds st.c := F.parse.kinds
   have C : CheckFacts st.c := F.check
   have hcnt : ∀ r : ℕ, ((Hidden.pinnedCols st.c).count r : ZMod 2) = 1 → r ∈ Hidden.pinnedCols st.c := by
@@ -108,7 +111,10 @@ theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.
       intro r j
       refine ⟨(Hidden.matA_unpin hda r.val j.val).trans ?_, (Hidden.matB_unpin hdb r.val j.val).trans ?_⟩ <;>
         simp [Hidden.pinCnt, hnp] <;> rfl
-    exact (Pinned.sat_unpin hPR hz (fun _ _ h => absurd h zero_ne_one) (fun _ _ h => absurd h zero_ne_one)).1
+    refine ⟨(Pinned.sat_unpin hPR hz (fun _ _ h => absurd h zero_ne_one) (fun _ _ h => absurd h zero_ne_one)).1,
+      fun o r hr => ?_⟩
+    rw [hnp, List.count_nil, Nat.cast_zero] at hr
+    exact absurd hr zero_ne_one
   have huse : st.c.unit.useful = st.c.unit.constPos + 1 := F.useful
   have hZ : Hm.zeroCol st.c < 2 ^ st.c.kLog := L.unit_slot_lt hs₀ C.unit_zero
   have hA0 : ∀ j, (stmtOf (Hidden.unpin st) (Hidden.unpin_wf hwf) regs).A₀ ⟨Hm.zeroCol st.c, hZ⟩ j = 0 := by
@@ -127,7 +133,7 @@ theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.
       (L.placed_zero hs₀ C.unit_zero huse hA hB _ j rfl).1
   have hPR := Hidden.pinRows_unpin hda hdb hwf regs ⟨Hm.zeroCol st.c, hZ⟩ rfl
   refine (Hidden.sat_unpin hda hdb hwf (zero := ⟨Hm.zeroCol st.c, hZ⟩) rfl hz
-    (fun o _ _ => Pinned.zero_block' hPR hA0 hz o) fun o r hr => ?_).1
+    (fun o _ _ => Pinned.zero_block' hPR hA0 hz o) fun o r hr => ?_)
   obtain ⟨g, hg, n, i, o', hx, hn, hsha, hhm, hi, hlo, hhi, hBe⟩ := hlin r.val (hcnt r.val hr)
   have hk : pos st.c g (code n i (netOf st.c n).constPos) < 2 ^ st.c.kLog :=
     pos_lt L C hn hg hi (L.fit n).1
@@ -153,5 +159,15 @@ theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.
       exact (Integrate.placedB_eqW (st := Hidden.unpin st) hW hK L hleaf k j).symm.trans (hconst j hkv).2)
   exact (hz.1 o k).symm.trans ((congrArg₂ (· * ·) (Pinned.mulVec_single _ hAk _) (Pinned.mulVec_single _ hBk _)).trans
     ((congrArg₂ (· * ·) (hz.2.1 o) (hz.2.1 o)).trans (one_mul 1)))
+
+/-- **A witness of an accepted statement with pinned outputs satisfies its statement without Δ's pinned copies**
+(`sat_pinnedZ`). -/
+theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.unpin st))
+    (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hW : Integrate.NetWidths st.c) (hleaf : st.leaf = default)
+    (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)
+    (hlin : ∀ x ∈ Hidden.pinnedCols st.c, LinearBit st.c x)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {z : Model.Witness st.m}
+    (hz : (stmtOf st hwf regs).Satisfies z) : (stmtOf (Hidden.unpin st) (Hidden.unpin_wf hwf) regs).Satisfies z :=
+  (sat_pinnedZ L F hW hleaf hda hdb hwf hlin regs hz).1
 
 end FlockSoundness.Discharge.HiddenExec

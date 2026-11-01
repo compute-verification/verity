@@ -172,6 +172,7 @@ noncomputable def sitesShHSt : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj 
   A S _ _ _ := (tableShH dj y₀ S).twinA
   B S _ _ _ := (tableShH dj y₀ S).twinB
   sat S _ _ _ := (tableShH dj y₀ S).satS (zkTyped ht) hcS hv1
+  pin S _ _ _ := (tableShH dj y₀ S).pinS (zkTyped ht) hcS hv1
   acc S _ _ _ := (tableShH dj y₀ S).accS (zkTyped ht) hcS hv1
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
@@ -301,6 +302,9 @@ noncomputable def sitesShHJSt : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ 
     (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinB
   sat S R u _ := HiddenExec.twin_sat_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
     ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.satS (tableShHJ_typed dj y₀ ht S _)
+      (tableShHJ_parseStmt dj y₀ ht hcS S _) hv1)
+  pin S R u _ := HiddenExec.pin_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.pinS (tableShHJ_typed dj y₀ ht S _)
       (tableShHJ_parseStmt dj y₀ ht hcS S _) hv1)
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.accS
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parseStmt dj y₀ ht hcS S _) hv1)
