@@ -6,7 +6,9 @@
 quality: per arm, the measured Strassen level-1 overflow (median over matrices), the training tokens, perplexity on
 WikiText-2 and FineWeb-Edu val before and after training, and zero-shot accuracy (acc_norm where lm-eval reports it,
 else acc). price: per pricing, for each correction price and chip at the fast reading, the least `cheapest` over the
-matrices (W1 per MAC against the honest kernel's 1), the MAC-weighted `cheapest` and the matrices under 1.05.
+matrices (W1 per MAC against the honest kernel's 1), the MAC-weighted `cheapest` and the matrices under 1.05. It reads
+summary.json only (matrices.jsonl just for summaries older than `min_vs_leaf`), so a partial matrices.jsonl, which a
+fetch taken mid-run leaves behind, can't skew it.
 """
 
 from __future__ import annotations
@@ -56,11 +58,12 @@ def price(dirs: list[Path]) -> str:
             s = json.loads(p.read_text())
             by = {k: v for k, v in s["by_price"].items() if k.endswith("/fast")}
             keys = keys or list(by)
-            vs_leaf = {}
-            for line in (p.parent / "matrices.jsonl").read_text().splitlines():
-                for row in json.loads(line)["rows"]:
-                    k = f"{row['alu']}/{row['chip']}/{row['reading']}"
-                    vs_leaf[k] = min(vs_leaf.get(k, float("inf")), row["cheapest"] / row["plain"])
+            vs_leaf = {k: v["min_vs_leaf"] for k, v in by.items() if "min_vs_leaf" in v}
+            if len(vs_leaf) < len(by):
+                for line in (p.parent / "matrices.jsonl").read_text().splitlines():
+                    for row in json.loads(line)["rows"]:
+                        k = f"{row['alu']}/{row['chip']}/{row['reading']}"
+                        vs_leaf[k] = min(vs_leaf.get(k, float("inf")), row["cheapest"] / row["plain"])
             rows.append([p.parent.name, f"{s['strassen1']['median']:.2%}", "yes" if s["exact"] else "NO",
                          *(f"{by[k]['min_cheapest']:.3f} / {vs_leaf[k]:.3f} / {by[k]['cheapest_macw']:.3f} / "
                            f"{by[k]['below_1.05']}" for k in keys)])
