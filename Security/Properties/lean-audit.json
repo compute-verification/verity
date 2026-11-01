@@ -423,6 +423,9 @@
   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
    "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"],
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   }
  },
  "unwitnessed": {
@@ -610,7 +613,12 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
+   "missing": "honest",
+   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
+  }
  },
  "layers": {
   "Properties.Pouw": {
@@ -2553,6 +2561,9 @@
    "signature": ["Properties.Pouw.Credit.SecurityProofs.drawWithheld : Properties.Pouw.Credit.DrawWithheld"],
    "assumptions": [],
    "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "owner": "@compute-accounting",
@@ -4563,7 +4574,8 @@
    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod over a finite set S of the sampling block's tile strata, one a contraction K (16,384 and 65,536 in H1's served layout), each s in S with its own N_s = |stratum sigma s|, K_d = k s, declared circuit, rho s and Lambda_s = j10rRate (k s) (rho s), so its own eps_s(j); the fixed words and the credits are summed over S and the error is the union bound, the sum over S of each stratum's delta_s + n(delta_bind + delta_ks) (the strata's permutations are independent coordinates of the draw, but every stratum's game reads the window's one round coin and the prover adapts across strata, so no sharper bound is claimed). Not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, as the one-stratum statement's. Period-wide premises, on the period's coins (StrataCoin): RegisteredBeforeDraw and SaltIsLiveCoin, as the one-stratum statement's (one registration and one salt a window), and StrataDrawIsCoin, listed under assumptions, in place of TileDrawIsCoin: the window's drawn proof blocks are exactly the union over S of the strata's coordinates (TileDrawIsCoin read per stratum is false at a window over two non-empty strata), a code fact once the verifier draws the tiles inside the stratified draw, one stratum a K (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin). Per stratum, at stratum s's view (pathsAt): the one-stratum statement's other premises, TileServiceSound, SharedNoiseLucks and UnitFixed among them. Proved from CircuitCreditPeriod at each stratum's tileRun, as Proofs.Pouw.PeriodJ10R applies it, then the union bound (Proofs.Pouw.PeriodJ10RStrata). Honest: HonestStrata.strata_meets_period, strata_meets_stratum and strata_credit (HonestJ10R's instance at every stratum, every premise met); nontrivial: HonestStrata.strata_nontrivial (at the verdict that credits every window, the provers that fix no word break the bound once Lambda_s ln(1/delta_s) < n at each stratum) (Proofs.Pouw.PeriodJ10RStrata.Honest).",
    "Properties.NetworkPeriod.rowsStateTied_nontrivial": "lemma: RowsStateTied's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsStateTiedOf at a rows-form period of one link-window whose scan's state is not its wired audit's SCAN_STATE",
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest": "completeness: GroupedDrawMisses's honest lemma: its premises hold at the lanes window, sixteen 32 × 32 leaves at K = 2048 each proved as its 32 lanes and their combine: strata and law accept it at K = 8, kPrime answers K′ ≤ 8 at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more than the leaf, and the blocks do at least ε of the work, so GroupedDrawMisses is not vacuous",
-   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": "lemma: GroupedDrawMisses's nontrivial lemma: its conclusion fails under the strata a law that accepts everything may give, none: the draw is empty whatever the streams, so the lanes window's blocks all escape, with probability 1 > 1/256"
+   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": "lemma: GroupedDrawMisses's nontrivial lemma: its conclusion fails under the strata a law that accepts everything may give, none: the draw is empty whatever the streams, so the lanes window's blocks all escape, with probability 1 > 1/256",
+   "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": "lemma: DrawWithheld's nontrivial lemma: its conclusion fails at the empty ledger, which opens no session, for every draw root, so a verifier that accepts everything credits a window DrawWithheld excludes (drawWithheld_acceptAll)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
