@@ -133,9 +133,8 @@ coins.
   `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server samples every round's
   coins as above (The headline, its coins).
-- **Tree coins (`--zk`, `--coins tree`).** Under `--zk`, and in a plain session under `--coins tree` (`FC_COINS=tree`
-  on both sides), the coins are committed, not flipped round by round (`coin-tree/hm96-sha512/v2`,
-  `live/src/coin_tree.rs`; the live `PROTOCOL.md` §9). A6 for these sessions is the following.
+- **Tree coins (`--zk`, `--coins tree`).** Under either, the coins are committed, not flipped round by round
+  (`coin-tree/hm96-sha512/v2`, `live/src/coin_tree.rs`; the live `PROTOCOL.md` §9). A6 for these sessions is the following.
   - *The coins.* At `Hello`, after the prover's nonce and before its first message (`Commit`), the coin server reads
     from `/dev/urandom` a fresh hm96 key (256 bytes, bit 2047 cleared: hm96 §2's key space), then a block of coins and a 192-byte salt for each stream and round
     (`CoinTree::draw_with`, at `Hello` in `live/src/lib.rs`), commits to every block as keyed hm96 leaves under one
@@ -154,17 +153,16 @@ coins.
   - *N* counts every leaf committed under the session's key, opened or not: `|streams| · 2^rounds_log`
     (`CoinTree::build`; the `SHA-512(PAD)` padding is no leaf). flock-circuit's schedule (`coin_spec_of`) has the
     session's stream plus two reps per table at `rounds_log = 9`: `N = (1 + 2J)·512`, so `N·2^-256 < 2^-245` at J = 1.
-    A plain session's (`plain_coin_spec`) adds 512 leaves for each stream a ZK server names in `FC_COIN_STREAMS`.
+    `plain_coin_spec` adds 512 for each `FC_COIN_STREAMS` stream.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, sampled after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
-    is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the sample at `Hello`. The
+    is A6's source, not A3's. A5's snapshot caveat (`assumption-notes/a5-uniform-secret.md`) applies at `Hello`. The
     test-only `seed-injection` hooks (`inject_coin_tape`, `inject_coin_edit`) are outside A6. Unlike the opening order,
     this is checkable from the record: the backend identity carries `seed_injection`, the statement digest pins it
     (`Flock/Tags.lean`), and it is false in every proving build (`check_build.sh`).
   - *Citing condition.* Until a Lean lemma states the hybrid, every citation of a `--zk` headline
-    (`zk_session_sound` and its hidden-output, J-table and registered forms), and of a plain one
-    (`flock_verify_sound`'s plain claims) for a session under `--coins tree`, gives δ as the Lean bound plus
-    `N·2^-256`, and names that term as a step argued by hand.
+    (`zk_session_sound` and its hidden-output, J-table and registered forms), or of a plain one under `--coins tree`,
+    gives δ as the Lean bound plus `N·2^-256`, and names that term as a step argued by hand.
 
 ## What is restated over the two forms
 
@@ -257,8 +255,7 @@ then names the mode, and `flock-verify verify --coins os` binds that identity (`
 from one OS seed through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
 That rests on `prf/sha-512` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
 only for runs on per-round OS coins (a session whose identity names `live-os`, or a bench point with `coins: live-os`)
-or on the keyed coin tree (a session whose `Hello` names `coin-tree/hm96-sha512/v2`, verified with `--coins tree`), the
-latter with A6's tree term.
+or under `--coins tree`, with A6's tree term.
 The identity and a bench point's `coins` say which mode ran. The Lean verifier replays the recorded coins, so that they were
 the verifier's own OS samples, each sampled after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
 A6, which no check of the record establishes. The custody is `live-verifier`, named in every mode (the table above).
@@ -343,13 +340,7 @@ malicious-verifier claim rests on beyond the theorems.
 - **What A5 assumes of the verifier.** Its window secret is `secrets.token_bytes(32)` from the operating system's CSPRNG,
   sampled once the window's receipt is complete and used for that window alone (`Ledger.open`). A
   secret reused across windows is outside it, since later windows would be committed after earlier samples were seen.
-- **The platform: Linux, with CPython 3.12 or later.** Re-read this on any other platform.
-  - `secrets.token_bytes` reads `os.urandom`, which is `getrandom(2)`, the kernel's CSPRNG. It blocks until that is
-    initialized.
-  - It keeps no user-space state, so a forked process doesn't repeat its output.
-  - A VM snapshot restored more than once must not repeat the kernel's CSPRNG state. That holds when the kernel reseeds
-    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support); RDSEED, mixed in at reseeds, doesn't.
-  - The CSPRNG is idealized as exactly uniform. The true bound carries its distinguishing advantage.
+- **The platform: Linux, with CPython 3.12 or later**, its CSPRNG and VM snapshots: `assumption-notes/a5-uniform-secret.md`.
 - **Split out of A4**: it is a property of what produces the secret, not of the hash.
 - **Upstream:** watch entry `A5-uniform-secret`.
 
@@ -447,9 +438,9 @@ before the session's first coin, not bounds state by state.
 - **`seed` coins** (`coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
   so a run on seed coins is outside the headline (The headline, its coins).
-- **`tree` coins** (`--zk` and `--coins tree`, `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins, and a plain
-  headline's under `--coins tree`. Soundness pays `N·2^-256` for the commitment's statistical hiding (A6, tree coins);
-  zero knowledge uses its binding (`cr/sha-512`).
+- **`tree` coins** (`--zk`, `--coins tree`; `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins, and a plain
+  one's under `--coins tree`. Soundness pays `N·2^-256` for the commitment's statistical hiding (A6, tree coins); zero
+  knowledge uses its binding (`cr/sha-512`).
 - **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
 - **Quantum provers** (DESIGN.md §9). The oracle layer holds against them, but the compiled theorem is classical. The
   compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
