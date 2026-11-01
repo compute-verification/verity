@@ -2011,9 +2011,12 @@ def key(request: dict) -> dict:
         # the system, the CPU and the C library, not `platform.platform()`: that names the host's kernel release, which differs
         # between pods and would keep one pod's reports from ever counting on another (`tools/verity/check/verdicts.py`)
         plat = "-".join([platform.system(), platform.machine(), *platform.libc_ver()])
+        # the interpreter and its release, as suites.py keys a pass, not `sys.version`: that names its build's date, which
+        # differs between two machines' builds of one release
+        python = f"{platform.python_implementation()} {platform.python_version()}"
     finally:
         _INTERNAL.pop()
-    k = {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "optimize": sys.flags.optimize,
+    k = {"schema": SCHEMA, "version": version(), "request": request, "python": python, "optimize": sys.flags.optimize,
          "platform": plat, "environment": {k: v for k, v in sorted(os.environ.items())
                                            if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
     target = request.get("target")
