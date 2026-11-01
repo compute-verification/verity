@@ -2,10 +2,11 @@
 # The served-registered fixture (tests/served_registered.py, tests/test_lean_served_registered.py): a RoPE d64 statement
 # whose `cs` rows are a served tree registered as a port (`one_stage.served.register_served`), proved in one loopback --zk
 # session under a subset sample, then Lean's `flock-verify verify --zk --registered` on it with the verifier's own file
-# (accepted) and with the tree's root changed (refused). The staged files and the session go into the evidence store as a
-# fixture (`research data put --kind fixture/v1 --preserve`), whose id `out/fixture.txt` names. Run from the verity tree
-# (research run --cwd source); CPU only. The session's coin tree is sampled and opened by the auditor's challenger
-# (challenger.sh: serve --tree-from), and its record held to the challenger's release log. Outputs under out/: host.txt,
+# (accepted) and with the tree's root changed (refused). The staged files, the session and its challenger's challenger/
+# (no private key or secret) go into the evidence store as a fixture (`research data put --kind fixture/v1 --preserve`),
+# whose id `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only. The session's coin
+# tree is sampled and opened by the auditor's challenger (challenger.sh: serve --tree-from), and its record held to the
+# challenger's release log. Outputs under out/: host.txt,
 # stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), challenger/ (its record,
 # releases.jsonl, hellos.jsonl and audit.json), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
 # ZK=0 is the plain session instead (no --zk anywhere): a stratified sample of K units, Lean's own (`flock-verify draw
@@ -146,6 +147,7 @@ cp $D/circuit.txt $D/pub-$N.bin $D/program.json $D/partition.json $D/served.json
   $D/registered.json $X/stage/ && cp -r $D/tables $X/stage/ || exit 1
 cp -r $SESS/. $X/session/
 cp $O/live.json $X/live.json
+if [ $CH = 1 ]; then cp -r $O/challenger $X/challenger || exit 1; fi
 if [ "${ZK:-1}" = 0 ]; then
   cp $D/draw.json $X/stage/
   python3 - $SESS $D/registered-root.json $X/vectors <<'EOF'
