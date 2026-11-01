@@ -12,7 +12,7 @@ and a certified one's head is of the ingress grid (`ingress_none`). Conversely e
 -/
 
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified Link Evidence Grid Profile LinkWindow screen verifies expectedGrid noSync
+open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile LinkWindow screen verifies expectedGrid noSync
   unitSync inSyncSet)
 open NetworkCertifier (ClockSync)
 open Properties.NetworkCertifier (EvidenceFits ParamsDigests Declares SyncAdmitted programGrid recordsOf Signs Settled
