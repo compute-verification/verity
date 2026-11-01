@@ -33,8 +33,12 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   `public import M`, and opens `@[expose] public section` after its header; `python3 tools/verity/lean/modules.py FILE`
   writes that. A proof's body is private, so an edit to it rebuilds no importer. What the module system refuses is fixed
   in the file (the codemod's docstring): a tactic's helper is `meta`; a proof that unfolds a core definition the
-  toolchain doesn't expose (`decide`, `rfl`, `unfold`) has `import all` of its module; a public definition that reads a
-  private one takes `modules.py --option backward.privateInPublic FILE`.
+  toolchain doesn't expose (`decide`, `rfl`, `unfold`) has `import all` of its module, never of an in-tree one (a
+  module's build reads only its imports' public parts); a theorem whose statement names another module's private
+  declaration (core's `Array.qsort.sort`) is private, beside a public one over the public definition; an exported
+  `:= rfl` that unfolds an unexposed definition is `:= (rfl)`; a public definition that reads a private one, and a module
+  whose private declarations another opens (`open private … from M`), take
+  `modules.py --option backward.privateInPublic FILE`.
 - **Build in your own checkout**: two agents never share a writable `.lake`, since two Lake builds in one tree break
   each other. A second Lean task on one machine gets its own worktree, its dependencies copied (never symlinked) from a
   checkout with the same manifest and toolchain: `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages
