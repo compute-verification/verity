@@ -1,6 +1,9 @@
 /-
 Canonical JSON: compact, object keys sorted bytewise, serde_json's string escaping (the form `compact-sorted-JSON` of
-PROTOCOL.md §16 hashes). Only integers are accepted as numbers; anything else is refused rather than guessed.
+PROTOCOL.md §16 hashes), with every character outside printable ASCII escaped: a control character, DEL and every
+character from `0x80` on are `\uXXXX` in lowercase hex (a UTF-16 surrogate pair above `0xFFFF`), but for the short
+escapes `\b \f \n \r \t`. So a canonical text has no byte at or above `0x7f`, and each value has one. Only integers are
+accepted as numbers; anything else is refused rather than guessed.
 -/
 import Lean.Data.Json
 import Std.Data.TreeMap.Raw.Lemmas
@@ -14,6 +17,11 @@ private def hex4 (n : Nat) : String :=
   let d := fun (k : Nat) => let x := (n >>> (4 * k)) % 16; if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
   String.ofList [d 3, d 2, d 1, d 0]
 
+/-- A character's `\u` escape: one below `0x10000`, else its UTF-16 surrogate pair (a `Char` is never a surrogate). -/
+def escU (n : Nat) : String :=
+  if n < 0x10000 then "\\u" ++ hex4 n
+  else "\\u" ++ hex4 (0xD800 + (n - 0x10000) / 0x400) ++ "\\u" ++ hex4 (0xDC00 + (n - 0x10000) % 0x400)
+
 def canonStr (s : String) : String := Id.run do
   let mut out := "\""
   for c in s.toList do
@@ -24,7 +32,7 @@ def canonStr (s : String) : String := Id.run do
       | '\r' => out ++ "\\r"
       | '\t' => out ++ "\\t"
       | c => if c.toNat == 8 then out ++ "\\b" else if c.toNat == 12 then out ++ "\\f"
-             else if c.toNat < 0x20 then out ++ "\\u" ++ hex4 c.toNat else out.push c
+             else if c.toNat < 0x20 || 0x7f ≤ c.toNat then out ++ escU c.toNat else out.push c
   return out ++ "\""
 
 /-- An object's values are smaller than it: `canon`'s termination on objects. -/
@@ -67,6 +75,43 @@ def canon : Json → V String
     let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canon p.1.2)
     let items := vals.qsort (fun a b => a.1 < b.1)
     pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStr kv.1 ++ ":" ++ kv.2) ++ "}")
+termination_by j => sizeOf j
+decreasing_by
+  · have := Array.sizeOf_lt_of_mem x.2
+    simp only [Json.arr.sizeOf_spec]
+    omega
+  · exact sizeOf_lt_of_mem_toArray p.2
+
+/-- `canonStr` with DEL and every character from `0x80` on as itself, in UTF-8: a string of `canonUtf8`. -/
+def canonStrUtf8 (s : String) : String := Id.run do
+  let mut out := "\""
+  for c in s.toList do
+    out := match c with
+      | '"' => out ++ "\\\""
+      | '\\' => out ++ "\\\\"
+      | '\n' => out ++ "\\n"
+      | '\r' => out ++ "\\r"
+      | '\t' => out ++ "\\t"
+      | c => if c.toNat == 8 then out ++ "\\b" else if c.toNat == 12 then out ++ "\\f"
+             else if c.toNat < 0x20 then out ++ "\\u" ++ hex4 c.toNat else out.push c
+  return out ++ "\""
+
+/-- An identity manifest's bytes, which a tagged identity hash digests (`identity.canonical_json_bytes`,
+`json.dumps(..., ensure_ascii=False)`): `canon`'s form with strings in UTF-8 (`canonStrUtf8`). It is not canonical JSON
+(`canon`), which escapes them; it stays the form already-signed records were digested in, the auditor's ledger among
+them. -/
+def canonUtf8 : Json → V String
+  | Json.null => pure "null"
+  | Json.bool b => pure (if b then "true" else "false")
+  | Json.num n => if n.exponent == 0 then pure (toString n.mantissa) else throw "canonical JSON: a non-integer number"
+  | Json.str s => pure (canonStrUtf8 s)
+  | Json.arr a => do
+    let parts ← a.attach.mapM fun x => canonUtf8 x.1
+    pure ("[" ++ ",".intercalate parts.toList ++ "]")
+  | Json.obj kvs => do
+    let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canonUtf8 p.1.2)
+    let items := vals.qsort (fun a b => a.1 < b.1)
+    pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStrUtf8 kv.1 ++ ":" ++ kv.2) ++ "}")
 termination_by j => sizeOf j
 decreasing_by
   · have := Array.sizeOf_lt_of_mem x.2

@@ -28,8 +28,7 @@ steps and 900 requests a window, with Llama-3's V = 128,256 tokens (log2 V ≈ 1
 
 Each part's tests carry these cases, each refused or charged as stated. They are small and CPU-only, and each goes into
 its part's tests as the part lands. Those marked (written) run against the parts' drafts in
-`test_network_certifier_advice_adversarial`, `test_network_certifier_advised_adversarial` and
-`test_network_certifier_io_tie_adversarial`.
+`test_network_certifier_advice_adversarial` and `test_network_certifier_io_tie_adversarial`.
 - **The advice codec:**
   - `decode(encode(a)) == a`, and `encode(decode(x)) == x` for every x that `decode` accepts: every one-bit flip, cut
     and appended byte of 12 random schedules' encodings. A wider field, a longer length prefix, a set padding bit and
@@ -43,12 +42,12 @@ its part's tests as the part lands. Those marked (written) run against the parts
   - a duplicate `id`, and requests out of their first rows' order, are refused (14, written);
   - schedule choices that leave the outputs unchanged (a chunked prefill, a hit instead of a recomputation, a resume in
     place) are distinct advices, each charged (2, 7, written).
-- **N2's advice mode:**
-  - N2's frames are advice v0's outputs, step, request and index, on every advice v0 accepts (11, written);
+- **N2's advice mode** (no N2 unit reads the advice yet):
+  - N2's frames are advice v0's outputs, step, request and index, on every advice v0 accepts (11);
   - a response handed before its request's anchor plus the window's δ and ⌊λ/ρ⌋ is refused, and with δ = 0 the
-    anchor's own bucket is admitted (written);
+    anchor's own bucket is admitted;
   - egress counts one frame off in any bucket, a queued frame released early, and ingress over RIN, past or short of
-    the window's `received` or after the response, are refused (11, written);
+    the window's `received` or after the response, are refused (11);
   - a response with one frame more than its `output_len` plus the framer's constant overhead is refused.
 - **The I/O tie:**
   - a frame with the right token id and any other byte changed is refused: another stream, frame kind or payload

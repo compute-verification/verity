@@ -470,7 +470,7 @@ def test_the_cublas_and_ll_bf16_conformance_cite_the_one_h200_capture_record() -
     from verity_vllm.program.frontend.conformance import status_of
     from verity.ml.definitions.numerics.batched_gemm_rows import PROVENANCE
 
-    cite = (PROVENANCE["run"], PROVENANCE["record"][:16], PROVENANCE["art"]["record"])
+    cite = (PROVENANCE["record"][:16], PROVENANCE["art"]["record"])
     for d in (CB.GemmF32OutWord, CB.CublasSplitKGemmWord, CB.BatchedGemm, LL.LlBf16DotprodGemmWord, LL.LlBf16SplitKGemmWord):
         assert status_of(d.conformance) == "exact-model-tested" and all(c in d.conformance for c in cite), d.id
     assert f"FMA {C.DEFAULT_LL_BF16_FMA} as the words decide it" in LL.CONFORMANCE

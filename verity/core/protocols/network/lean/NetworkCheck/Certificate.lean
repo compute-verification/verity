@@ -8,7 +8,7 @@ import Identity.Tagged
 
 Executable forms of `verity/core/protocols/certifier/certificate.py`, whose module docstring is the spec: the
 frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `verifyFrame`) over a window's real frames
-(`realFrames`), the parameters digest (`parametersDigest`, canonical JSON through `Flock.canon`), the record head's
+(`realFrames`), the parameters digest (`parametersDigest`, the manifest's identity bytes through `Flock.canonUtf8`), the record head's
 encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), the digest a certificate signs, the record
 digest under the certifier's salt (`certificateDigest`), and the message it signs over it (`certificateMessage`,
 `verity.ml.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
@@ -176,7 +176,7 @@ def parametersManifest (p : Params) (ss : Option SyncSet) : Lean.Json :=
 
 /-- `parameters_digest`: `tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(manifest))`. -/
 def parametersDigest (p : Params) (ss : Option SyncSet) : E ByteArray := do
-  Identity.taggedSha512 parametersTag (← canon (parametersManifest p ss)).toUTF8
+  Identity.taggedSha512 parametersTag (← Flock.canonUtf8 (parametersManifest p ss)).toUTF8
 
 /-- `Direction`, by its value; its code is 0 for egress and 1 for ingress. -/
 inductive Direction where

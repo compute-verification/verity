@@ -23,8 +23,7 @@ labeled run, `served.py` the served arm's runs).
   summarized by `nsys_summary.py`, and with `PIN_BUILD` under a Build of record's compile artifact (`served-pin` seeds one
   fresh Inductor dir for every arm and checks it after); `gather_bench.py` times the
   gather kernel alone; `rows_floor.py` (`rows_floor.sh`) the rows-sha512 kernels alone and beside a busy stream;
-  `d2h_bw.py` (`d2h_bw.sh`) the copy engines' device-to-host bandwidth, and `cpu_sha512.c` (`cpu_sha512.sh`) the host's
-  SHA-512 rate, the two sides of hashing on the host; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node;
+  `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node;
   `granularity.py` lists, from a Build's request Programs, the Call boundaries a per-block or per-layer proof block would
   keep, with their bytes and hashing time, and `layout_bytes.py` a run's committed bytes by buffer category (estimates; no
   scheme).

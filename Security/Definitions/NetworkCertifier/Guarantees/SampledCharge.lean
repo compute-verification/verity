@@ -5,7 +5,7 @@ import Definitions.NetworkCertifier.Guarantees.SampledAudit
 /-!
 # The sampled audit's charge: the leak bound when step units are sampled
 
-The leak bounds on `constantRate` (`Guarantees.AdviceString`) count runs that the Program accepts exactly. A sampled
+Theorem 3's bounds on `constantRate` (`Guarantees`) count runs that the Program accepts exactly. A sampled
 audit gives that only at `δ ≥ miss(1)`, where no unit may be faulty. At a smaller `δ` it gives `Accepted` by the
 circuit's Program (`circuitProgram`) with advice also held at the faulty units' committed gates
 (`SampledAuditAccepted`, `Guarantees/SampledAudit`). `EncardAccSeqsSampledLe` counts those runs: the charge adds the
@@ -31,9 +31,7 @@ finds (`NetTiming.sampledLeak_registered`).
 **What `As` and `c` are.** `As` is what the circuit's inputs other than the ingress may be. Its count is a premise of the
 run, not an assumption. Under the decided composition the registered inputs are fixed by the registration, and the
 advice is advice v1. Its charge, the coded length counted by the in-circuit encoder, is at most the declared public `c`,
-and there are at most `2^c` advice values charged `c` or less (Kraft, proved for advice v1's charge:
-`Guarantees.EncardChargedLe`). Advice charged per window with `BitsCount` (the advice string's form, which advice v1's charge meets)
-gives `c = Σ_w b w`.
+and at most `2^c` advice values are charged `c` or less (`hAs`), as for any prefix-free code (Kraft).
 -/
 
 namespace NetTiming.Guarantees

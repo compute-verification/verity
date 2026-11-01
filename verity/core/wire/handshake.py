@@ -22,14 +22,14 @@ import hashlib
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from . import NAME, WIRE_VERSION, Body, Hex, Int, Message, Phase, Refused, Registry, Schema, Str
+from . import NAME, WIRE_VERSION, Body, Hex, Int, Message, MessageTypes, Phase, Refused, Schema, Str
 
 HELLO = Schema("Hello", 1, "structure", {"wire": Int(1, (1 << 16) - 1), "party": Str(64, NAME.pattern),
                                          "peer": Str(64, NAME.pattern), "protocol": Str(128),
                                          "protocol_version": Int(1, (1 << 31) - 1), "configuration": Hex(64),
                                          "nonce": Hex(32), "key": Hex(max=1 << 10)})
 SIGNATURE = Schema("Signature", 1, "structure", body=Body(max=1 << 17))
-REGISTRY = Registry([HELLO, SIGNATURE])
+REGISTRY = MessageTypes([HELLO, SIGNATURE])
 TAG = b"verity/wire/handshake/v1\0"
 NONCE_BYTES = 32
 REFUSALS = ("handshake-version", "handshake-party", "handshake-protocol", "handshake-configuration", "handshake-key",

@@ -55,7 +55,7 @@ theorem fv3LeafWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes 
 theorem fv3RootWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
     (hh : S.Hashes hs hs') (dom : ByteArray) (leaves : Array ByteArray) :
     S.R (FV3.rootWith hs dom leaves) (FV3.rootWith hs' dom leaves) := by
-  unfold FV3.rootWith
+  unfold FV3.rootWith FV3.rootM
   sim_walk [fv3HashWith_sim S hh]
 
 theorem typeDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
@@ -300,10 +300,10 @@ theorem hmInDrawnWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Th
   drawnWith_sim S tM tN hh _ pub draw
 
 theorem hmLinksCheckWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
-    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pop : Public) (program : ByteArray) :
-    S.R (HmLinks.checkWith hs c pop program) (HmLinks.checkWith hs' c pop program) := by
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pop : Public)
+    (readers : Option (Array Nat)) (program : ByteArray) :
+    S.R (HmLinks.checkWith hs c pop readers program) (HmLinks.checkWith hs' c pop readers program) := by
   unfold HmLinks.checkWith
-  simp -zeta only [tM.bind, tN.bind]
   sim_walk [programDecodeWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [programDecodeWith_sim S tM tN hh])
 

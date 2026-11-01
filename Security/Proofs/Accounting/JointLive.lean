@@ -1,5 +1,6 @@
 import Definitions.Accounting.Guarantees.JointLive
 import Proofs.Core.Game.Prob
+import Proofs.Core.Blocks
 import Proofs.Core.Circuit
 import Proofs.Pouw.PearlC.WholeCircuit
 
@@ -12,6 +13,16 @@ sums the errors (`prob_exists_le`, `Verity.Game.prob_or_le`). Nothing here reads
 each subprotocol's own guarantee. With `ecr/sha-512` at each finder, each loss is read at the finder's expected calls
 (`JointPeriodLiveECR`). A subprotocol whose own guarantee holds outside a break event gets its `Sound` with the break
 charged at its finder (`Live.sound_of_break`), not folded into its acceptance.
+
+A wipe's survivor bound (`Verity.Wipe.SurvivorBound`) is a bound in its own game. On a run whose coins at the
+boundary are the wipe's (`Verity.Wipe.OfRun.Preserves`), the run's event that the wipe accepts while foreign content
+past the survivor threshold survives is the preimage of the wipe's game's, so the survivor bound bounds it
+(`Verity.Wipe.OfRun.prob_kept_le`), and the horizon's union bound sums it (`JointHorizonBlocksLive`). Read with the bits
+a strategy gives back as what it keeps (`Live.kept`: all of the foreign content when it reads it back, none otherwise),
+the survivor bound at `foreignBits` is the survivor bound at a fraction `f` (at most `f · fill + 2λ` bits plus the
+unfilled state, `λ = 128`) whenever `foreignBits ≤ f · fill + 2λ` (`Live.survives_of_survivorBound`, and on the run
+`Live.prob_survives_of_survivorBound`), and follows from it whenever `f · fill + 2λ < foreignBits`
+(`Live.survivorBound_of_survives`).
 
 The honest prover's extractor reads an evaluation, in which every unit is correct (`correct_eval`), and the commitment
 opens every gate to it, so no unit is unbound and the integrity claim holds at every nonnegative share
@@ -210,15 +221,123 @@ theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
 /-- **The joint guarantee over a horizon of server-time blocks and their wipes, played as one causal game**
 (`Accounting.Guarantees.JointHorizonBlocksLive`). -/
 theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive := by
-  intro ι α _ _ d B C O G S c fw σ err εWipe δPous h hW hM s
+  intro ι α _ _ d B C O G S c σ err δPous D sched Ω Ch _ _ _ _ W foreignBits εWipe R h hW hR hM s
   have hA := JointHorizonLive ι α d B C O G S.block c err h s
-  have hW' : prob (fun o => ∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ ∑ b, εWipe b s :=
-    (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hW b s)
+  have hW' : prob (fun o => ∃ b, (R b s).accepts o ∧ (R b s).Kept (foreignBits b) o) G s ≤
+      ∑ b, εWipe b (R b s).S_φ (R b s).hold (R b s).keep :=
+    (Live.prob_exists_univ_le _ G s).trans
+      (Finset.sum_le_sum fun b _ => Verity.Wipe.OfRun.prob_kept_le (hW b) (R b s) s (hR b s))
   have hM' : prob (fun o => ∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) s b o) G s ≤ ∑ b, δPous b s :=
     (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hM b s)
   calc _ ≤ _ := prob_or_le _ _ G s
     _ ≤ _ := add_le_add le_rfl (prob_or_le _ _ G s)
     _ ≤ _ := add_le_add hA (add_le_add hW' hM')
     _ = _ := (add_assoc _ _ _).symm
+
+/-! ## A wipe's survivor bound and the survivor bound at a fraction -/
+
+/-- **The bits of foreign content a block keeps** on the draw `x = (z, ω, c)` of the wipe's game (foreign content, seed
+and spot reads), when the device's state at the boundary holds `z` by `hold` and the block reads it back by `keep`: all
+`S_φ` bits when `keep` gives back `z`, none otherwise. -/
+def Live.kept {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ} {sched : Verity.Blocks D B} {b : Fin B}
+    {Ω Ch : Type} (w : Verity.Wipe d sched b Ω Ch) {S_φ : ℕ} (hold : (Fin S_φ → Bool) → Verity.Device.State d)
+    (keep : Verity.Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) (x : (Fin S_φ → Bool) × Ω × Ch) :
+    ℕ :=
+  if keep (w.filled (hold x.1) x.2.1).1 (w.filled (hold x.1) x.2.1).2 x.2.2 = x.1 then S_φ else 0
+
+/-- **The survivor bound at a fraction follows from the wipe's survivor bound.** If the wipe `w` meets its survivor
+bound at `foreignBits` and `ε`, and `foreignBits ≤ f · fill + 2λ` (`λ = 128`), then for every way `hold` of holding
+foreign content of `S_φ` bits at the boundary and `keep` of reading it back, the probability over a uniform foreign
+content, seed and spot reads that the wipe accepts while the block keeps more than `f · fill + 2λ` bits plus the
+unfilled state (`Live.kept`) is at most `ε S_φ hold keep`: the survivor bound at fraction `f`, in the wipe's own game. -/
+theorem Live.survives_of_survivorBound {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ}
+    {sched : Verity.Blocks D B} {b : Fin B} {Ω Ch : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch]
+    (w : Verity.Wipe d sched b Ω Ch) (foreignBits : ℕ)
+    (ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Verity.Device.State d) →
+      (Verity.Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) → ℝ≥0∞) (f : ℝ)
+    (hf : (foreignBits : ℝ) ≤ f * w.fill + 2 * 128) (hw : w.SurvivorBound foreignBits ε) (S_φ : ℕ)
+    (hold : (Fin S_φ → Bool) → Verity.Device.State d)
+    (keep : Verity.Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) :
+    Game.value
+        (fun x : (Fin S_φ → Bool) × Ω × Ch =>
+          w.accepts (hold x.1) x.2.1 x.2.2 ∧ ¬ (Live.kept w hold keep x : ℝ) ≤ f * w.fill + 2 * 128 + w.unfilled)
+        (Game.draw _) ≤ ε S_φ hold keep := by
+  have hF : (0 : ℝ) ≤ foreignBits := Nat.cast_nonneg _
+  have hU : (0 : ℝ) ≤ w.unfilled := Nat.cast_nonneg _
+  by_cases hS : foreignBits + w.unfilled ≤ S_φ
+  · refine (Game.value_mono ?_ _).trans (hw S_φ hS hold keep)
+    rintro x ⟨ha, hk⟩
+    refine ⟨ha, ?_⟩
+    by_contra hne
+    have h0 : Live.kept w hold keep x = 0 := by simp [Live.kept, hne]
+    rw [h0, Nat.cast_zero] at hk
+    exact hk (by linarith)
+  · have hlt : (S_φ : ℝ) < foreignBits + w.unfilled := by exact_mod_cast Nat.lt_of_not_le hS
+    calc _ ≤ Game.value (fun _ => False) (Game.draw ((Fin S_φ → Bool) × Ω × Ch)) := by
+          refine Game.value_mono ?_ _
+          rintro x ⟨-, hk⟩
+          have hle : (Live.kept w hold keep x : ℝ) ≤ S_φ := by
+            unfold Live.kept
+            split_ifs <;> simp
+          exact hk (by linarith)
+      _ = 0 := Game.value_false _
+      _ ≤ _ := zero_le
+
+/-- **The wipe's survivor bound follows from the survivor bound at a fraction.** If, for every way `hold` of holding
+foreign content of `S_φ` bits at the boundary and `keep` of reading it back, the wipe `w` accepts while the block keeps
+more than `f · fill + 2λ` bits plus the unfilled state (`Live.kept`, `λ = 128`) with probability at most
+`ε S_φ hold keep`, and `f · fill + 2λ < foreignBits`, then `w` meets its survivor bound at `foreignBits` and `ε`. -/
+theorem Live.survivorBound_of_survives {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ}
+    {sched : Verity.Blocks D B} {b : Fin B} {Ω Ch : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch]
+    (w : Verity.Wipe d sched b Ω Ch) (foreignBits : ℕ)
+    (ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Verity.Device.State d) →
+      (Verity.Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) → ℝ≥0∞) (f : ℝ)
+    (hf : f * w.fill + 2 * 128 < foreignBits)
+    (h : ∀ (S_φ : ℕ) (hold : (Fin S_φ → Bool) → Verity.Device.State d)
+      (keep : Verity.Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool),
+      Game.value
+          (fun x : (Fin S_φ → Bool) × Ω × Ch =>
+            w.accepts (hold x.1) x.2.1 x.2.2 ∧ ¬ (Live.kept w hold keep x : ℝ) ≤ f * w.fill + 2 * 128 + w.unfilled)
+          (Game.draw _) ≤ ε S_φ hold keep) :
+    w.SurvivorBound foreignBits ε := by
+  intro S_φ hS hold keep
+  refine (Game.value_mono ?_ _).trans (h S_φ hold keep)
+  rintro x ⟨ha, hk⟩
+  refine ⟨ha, ?_⟩
+  have hS' : ((foreignBits + w.unfilled : ℕ) : ℝ) ≤ S_φ := by exact_mod_cast hS
+  have h1 : Live.kept w hold keep x = S_φ := by simp [Live.kept, hk]
+  rw [h1, not_le]
+  push_cast at hS'
+  have hU : (0 : ℝ) ≤ w.unfilled := Nat.cast_nonneg _
+  linarith
+
+/-- **The survivor bound at a fraction on the run.** If the wipe `w` meets its survivor bound at `foreignBits` and `ε`,
+`foreignBits ≤ f · fill + 2λ` (`λ = 128`), and the run's coins at the boundary are the wipe's at the strategy `t`
+(`Verity.Wipe.OfRun.Preserves`), then on the run the probability that the wipe accepts while the block keeps more than
+`f · fill + 2λ` bits plus the unfilled state (`Live.kept` at the run's view) is at most `ε` at the run's moves: the
+wipe's event at a fraction `f` is inside the run's event that foreign content past the survivor threshold survives. -/
+theorem Live.prob_survives_of_survivorBound {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ}
+    {sched : Verity.Blocks D B} {b : Fin B} {Ω Ch : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch]
+    {w : Verity.Wipe d sched b Ω Ch} {foreignBits : ℕ}
+    {ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Verity.Device.State d) →
+      (Verity.Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) → ℝ≥0∞} (f : ℝ)
+    (hf : (foreignBits : ℝ) ≤ f * w.fill + 2 * 128) (hw : w.SurvivorBound foreignBits ε) {O : Type} {G : Game O}
+    (R : w.OfRun G) (t : Strategy G) (hR : R.Preserves t) :
+    prob (fun o => R.accepts o ∧ ¬ (Live.kept w R.hold R.keep (R.view o) : ℝ) ≤ f * w.fill + 2 * 128 + w.unfilled)
+      G t ≤ ε R.S_φ R.hold R.keep := by
+  refine (prob_mono ?_ G t).trans (Verity.Wipe.OfRun.prob_kept_le hw R t hR)
+  rintro o ⟨ha, hk⟩
+  refine ⟨ha, ?_⟩
+  have hF : (0 : ℝ) ≤ foreignBits := Nat.cast_nonneg _
+  have hU : (0 : ℝ) ≤ w.unfilled := Nat.cast_nonneg _
+  by_cases hr : R.keep (w.filled (R.hold (R.view o).1) (R.view o).2.1).1
+      (w.filled (R.hold (R.view o).1) (R.view o).2.1).2 (R.view o).2.2 = (R.view o).1
+  · have h1 : Live.kept w R.hold R.keep (R.view o) = R.S_φ := by simp [Live.kept, hr]
+    rw [h1, not_le] at hk
+    have hlt : ((foreignBits + w.unfilled : ℕ) : ℝ) < R.S_φ := by push_cast; linarith
+    exact ⟨by exact_mod_cast hlt.le, hr⟩
+  · have h0 : Live.kept w R.hold R.keep (R.view o) = 0 := by simp [Live.kept, hr]
+    rw [h0, Nat.cast_zero] at hk
+    exact (hk (by linarith)).elim
 
 end Accounting.SecurityProofs
