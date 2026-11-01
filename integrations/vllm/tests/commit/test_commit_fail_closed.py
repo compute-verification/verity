@@ -143,30 +143,14 @@ def test_x05_missing_declaration_fails_when_required():
 
 
 @pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")
-def test_e2e_tiny_arena_forces_commit_fail(tmp_path: Path):
-    wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
-    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "0", "--arena-mb", "1", "--arena-unchecked",
-           "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
-    if os.environ.get("VERITY_E2E_HIDDEN_SO"):
-        cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
-    p = subprocess.run(cmd, capture_output=True, text=True)
-    assert p.returncode == 3, f"expected exit 3 (Commit FAIL), got {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
-    v = json.loads((tmp_path / "out" / "verdict.json").read_text())
-    assert v["commit_pass"] is False and v["runs_failed"] >= 1
-    assert "arena block too small" in (v["first_fail_reason"] or "") or "!= committed_tensors" in (v["first_fail_reason"] or "")
-    assert "COMMIT FAIL" in p.stdout
-
-
-@pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")
 def test_e2e_windowed_stall_forces_commit_fail(tmp_path: Path):
     """The default path (windowed ring, retain host) never DROPS an acquisition: a stalled worker (VERITY_CONSUMER_DELAY_MS)
     with a 3 x 16 MiB ring makes the serving thread block on the ring; with the slot wait cut to 2 s (VERITY_WIN_WAIT_TIMEOUT_S) the wait times
     out, the acquisition fails NAMED and the collector is dead for the run -> the verdict must turn it into exit 3 / COMMIT FAIL, never PASS."""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_WIN_WAIT_TIMEOUT_S="2", VERITY_CONSUMER_DELAY_MS="5000")
-    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b",
+           "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -188,8 +172,8 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
     windowed path too, so the negative cannot pass as a positive."""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_FAULT="release_before_keep")
-    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b",
+           "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--open-after-release", "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]   # row_pod.sh's P0 defaults
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -259,8 +243,8 @@ def test_e2e_collector_dead_hang_exits_rc3_within_grace(tmp_path: Path):
     out/COLLECTOR_DEAD_HUNG.json; row_pod reads rc 3 as COMMIT FAIL.  (verdict.json is NOT written: the hang happened before closure.)"""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_WIN_WAIT_TIMEOUT_S="2", VERITY_CONSUMER_DELAY_MS="5000", VERITY_FAULT="hang_after_dead", VERITY_COLLECT_DEAD_GRACE_S="20")
-    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b",
+           "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]

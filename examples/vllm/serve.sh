@@ -109,7 +109,7 @@ echo "PREDICT-COMPARE $(tail -1 "$OUT/predict_compare.log")" | tee -a "$OUT/step
 # finishes the pending seals
 "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision pin \
   --run-id "${RESEARCH_RUN_ID:-local}" \
-  --scheme rows-sha512 --seal --gpu-tree --window-steps 256 --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" \
+  --scheme rows-sha512 --seal --window-steps 256 --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" \
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" \
   --window-gb "${WINDOW_GB:-32}" --disk-floor-gb "$DISK_FLOOR_GB" \
   --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \
