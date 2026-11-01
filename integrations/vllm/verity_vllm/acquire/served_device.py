@@ -10,7 +10,10 @@ A Build vouches for its own device only.  What the served Program binds is the d
     FA2 (`engine.args`, with its `engine.reasons`), whose mma.sync m16n8k16 there is the same pipeline (`sm100.mma.m16n8k16.bf16`);
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
-A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.
+A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.  A served
+target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.hardware`): a device whose compute
+capability or SM count is not its card's is refused, naming each field, both values and the card file.  Only a target
+`engine.profiles.devices.NO_CARD` lists is held to none, and any other is refused.
 
 FA2 (vllm-flash-attn 506341a1 `mha_varlen_fwd`, at the `num_splits = 0` vLLM's FA2 metadata passes) runs a launch whose every
 sequence has one query row as a non-causal swapped decode (a GQA model's query heads as rows), its split count `fa2_num_splits` at the
@@ -21,6 +24,7 @@ kernel's tile unsplit (`Attention_v5`, kBlockN `fa2_split_kblock_n`, FA2's causa
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,8 +32,10 @@ import numpy as np
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget, gemm_target_for
+from verity.hardware import load
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics import fa3_model as FA3
 from verity.ml.definitions.registry import attention_vocab
@@ -63,11 +69,15 @@ class Device:
                 "attention": self.attention, "max_model_len": self.max_model_len}
 
 
-def device_of(cc: Any, sms: int, *, attention: list[dict[str, Any]] | None = None, max_model_len: int | None = None) -> Device:
-    """The Device of compute capability `cc`; `attention` the attention kernels the serving engine selected (`served_match.facts_of`:
-    [{"backend", "fa_version"}]), held to the device's when a process reports them.  Raises `Unmodelled` naming every binding the
-    device lacks."""
+def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dict[str, Any]] | None = None,
+              max_model_len: int | None = None) -> Device:
+    """The Device of compute capability `cc`; `card` the SKU of the card the served target is registered on (`card_of`), whose
+    compute capability and SM count the device must have; `attention` the attention kernels
+    the serving engine selected (`served_match.facts_of`: [{"backend", "fa_version"}]), held to the device's when a process reports
+    them.  Raises `Unmodelled` naming each field that is not the card's, else every binding the device lacks."""
     cc = (int(cc[0]), int(cc[1]))
+    if card is not None:
+        check_card(cc, int(sms), card)
     missing, dot, fam = [], None, None
     try:
         gt = gemm_target_for(cc, batch_invariant=False)
@@ -86,6 +96,30 @@ def device_of(cc: Any, sms: int, *, attention: list[dict[str, Any]] | None = Non
     if missing:
         raise Unmodelled(f"cc {cc[0]}.{cc[1]}: no binding for " + "; ".join(missing))
     return Device(cc, int(sms), dot, f"FA{want}", max_model_len)
+
+
+def card_of(name: str) -> str | None:
+    """The SKU of the card the served target `name` (the name its device reports) is registered on; None for a target `NO_CARD`
+    lists.  Any other name is refused."""
+    if name in CARD:
+        return CARD[name]
+    if name in NO_CARD:
+        return None
+    raise Unmodelled(f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD ({sorted(NO_CARD)}): "
+                     "add its card under verity/hardware/cards/ and map it in CARD")
+
+
+def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
+    """Refuse a device whose compute capability or SM count is not that of card `sku` (its `arch` and `sm.count`)."""
+    c = load(sku)
+    arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
+    if arch is None:
+        raise Unmodelled(f"verity/hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
+    fields = (("compute capability", f"{cc[0]}.{cc[1]}", f"{arch[1]}.{arch[2]}"),
+              ("SM count", str(sms), str(c["sm"]["count"]["value"])))
+    off = [f"{name} {got}, the card's {want}" for name, got, want in fields if got != want]
+    if off:
+        raise Unmodelled(f"the device is not its registered card verity/hardware/cards/{sku}.toml: " + "; ".join(off))
 
 
 # ------------------------------------------------------------------------------------------------------------- FA3 (cc 9.0)
