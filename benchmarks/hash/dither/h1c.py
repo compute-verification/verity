@@ -29,7 +29,6 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pouw" / "served_h1"))
 
 import commit as CM  # noqa: E402
 from verity.ml.commitments import identity as ID  # noqa: E402
-from verity.ml.commitments import merkle as MK  # noqa: E402
 from verity.ml.commitments import rowleaf as RL  # noqa: E402
 from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.merkle import merkle_depth  # noqa: E402
@@ -41,9 +40,9 @@ A_FORM_ENV = "DITHER_A_FORM"
 
 
 class _Const(C.Structure):
-    _fields_ = [("salt_prefix", U64_16), ("leaf_prefix", U64_16), ("head", C.c_uint8 * 128), ("frame", C.c_uint8 * 64),
-                ("schema", C.c_uint8 * 32), ("qtag", C.c_uint8 * 48), ("stag", C.c_uint8 * 48), ("head_len", C.c_int),
-                ("frame_len", C.c_int), ("schema_len", C.c_int), ("qtag_len", C.c_int), ("stag_len", C.c_int)]
+    _fields_ = [("salt_prefix", U64_16), ("leaf_prefix", U64_16), ("head", C.c_uint8 * 128), ("schema", C.c_uint8 * 32),
+                ("qtag", C.c_uint8 * 48), ("stag", C.c_uint8 * 48), ("head_len", C.c_int), ("schema_len", C.c_int),
+                ("qtag_len", C.c_int), ("stag_len", C.c_int)]
 
 
 class _Dom(C.Structure):
@@ -309,7 +308,7 @@ class H1C:
         for j, w in enumerate(np.frombuffer(inst.leaf_prefix(CM.KEY), ">u8")):
             k.leaf_prefix[j] = int(w)
         head = CM.SALT_TAG + bytes(key)
-        for name, b in (("head", head), ("frame", MK._FRAME), ("schema", CM.SCHEMA.encode()),
+        for name, b in (("head", head), ("schema", CM.SCHEMA.encode()),
                         ("qtag", RL.SHA512_ROW_SEG_TAG), ("stag", RL.SHA512_ROW_SEG_SEGMENT_TAG)):
             _bytes_into(getattr(k, name), b)
             setattr(k, f"{name}_len", len(b))

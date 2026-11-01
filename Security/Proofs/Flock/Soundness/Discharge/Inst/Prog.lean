@@ -181,7 +181,7 @@ noncomputable def Sites.progPlaces_instProg : ProgPlaces (instProg c n) outs pla
   inst := Const.Prog.instC (instProg c n) outs
   o := si.o
   col := Sites.instCol hparse
-  placed S R u h := placement_rows (Sites.rows_instProg hparse S R u h)
+  placed S R u h := Placement.sat <| placement_rows (Sites.rows_instProg hparse S R u h)
     (Accepted.placement_cast (si.acc S R u h).hT
       (placement_inst (si.acc S R u h).layout (Aliased.setupH_unitFacts (si.acc S R u h).ht (si.acc S R u h).h)
         (si.acc S R u h).regs (si.hvu S R u h)))

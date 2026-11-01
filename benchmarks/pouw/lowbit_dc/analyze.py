@@ -1,4 +1,4 @@
-"""fpx's records into the exactness tables (note:20261017T0643Z-draft-lowbit-dc).
+"""fpx's records into the exactness tables.
 
   python analyze.py OUT [--json FILE]       # OUT holds fpx's records.jsonl, windows.jsonl, summary.json; markdown to stdout
   python analyze.py gemm DIR [--json FILE]  # DIR holds egemm's gate.jsonl, bench.jsonl and dgemm-bench.jsonl

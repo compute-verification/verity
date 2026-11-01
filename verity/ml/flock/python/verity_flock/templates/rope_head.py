@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``rope-head`` (RoPEHead_v1): D/2 identical units read off the IR graph, each the pair
+"""Flock lowering of ``rope-head`` (RoPEHead_v1): D/2 identical units read off the IR graph, each the pair
 ``RopeOut`` + ``RopeOutAdd`` over (x[i], x[i + D/2], cos[i], sin[i]), lowered piece by piece (``verity_flock.ir_lower``).
 
 The unit's rows do not depend on D; its ``flock-ir-unit/v2`` netlist, whose LEAVES line places the D/2 units on the head's

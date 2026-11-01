@@ -28,7 +28,7 @@ open _root_.Flock
 open Claims (Msg)
 
 /-- **A dense statement's inner shape has no sparse phase**: the form's `sparse` is the verifier's own inner shape's. -/
-theorem sparse_none_of_dense {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st)
+theorem sparse_none_of_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) : ∃ r, readX x = some r ∧ r.shape.sparse = none := by
   obtain ⟨r, hr, -, rfl⟩ := parse_read hx
   refine ⟨r, hr, ?_⟩
@@ -39,7 +39,7 @@ theorem sparse_none_of_dense {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse 
 
 /-- **Every part of a dense statement is a level, an algebra part or a cap**: candidate 3's list is empty without a
 sparse phase, so V\*'s list is its levels, its algebra parts and its caps. -/
-theorem partAt_dense {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st)
+theorem partAt_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit}
     (hp : partAt x s = some (sv, c)) :
     (∃ l L H n, sv = .recOpen l L H n) ∨ (∃ j nm p, sv = .inner j nm p) ∨ ∃ l N, sv = .cap l N := by
@@ -60,7 +60,7 @@ theorem partAt_dense {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some
 /-- **The stager accepts at every part of a dense statement** where it accepts at each of its kinds: a level's checks
 hold (`LevelInFits`), an algebra part's (`AlgInFits`), and `capIn` accepts at a cap. -/
 theorem hok_dense {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)}
-    {st : Claims.Recursion.Stmt} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
+    {st : Claims.Recursion.CompiledStatement} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hL : ∀ l L H n c src, partAt x s = some (.recOpen l L H n, c) → srcOf I x w ρ hist = some src →
       LevelInFits src l L H n)
     (hA : ∀ (j : ℕ) (nm : String) (p : _root_.VStar.Part) c src, partAt x s = some (.inner j nm p, c) → srcOf I x w ρ hist = some src →
@@ -136,7 +136,7 @@ theorem algFits_of_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
 (`IrShaped`), each level's tops are read (`topsAt`), each algebra part's port is `acc0`, `acc1` or a schedule's `m<i>`,
 and each cap's `capIn` accepts. -/
 theorem hok_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
-    {st : Claims.Recursion.Stmt} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
+    {st : Claims.Recursion.CompiledStatement} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hI : IrShaped Ir x w ρ hist)
     (hT : ∀ l L H n c src, partAt x s = some (.recOpen l L H n, c) → srcOf (Ir.fit x) x w ρ hist = some src →
       ∃ T, _root_.VStar.In.topsAt src l = .ok T)
