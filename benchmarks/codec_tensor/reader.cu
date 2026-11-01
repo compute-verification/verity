@@ -1,4 +1,4 @@
-// The remote bandwidth driver's receipts and receipt tree on the device: a device reader of the vLLM store
+// The PoUB driver's receipts and receipt tree on the device: a device reader of the vLLM store
 // (integrations/vllm/verity_vllm/protocols/remote_bandwidth/), `reader.py` its wrapper and gate, and the driver's
 // verity/core/protocols/remote_bandwidth/receipts.py the reference. A reader receipts a segment of 4 KiB blocks,
 // commits its leaves, builds its subtree and keeps all three for the openings; end_pass takes the subtree's root.

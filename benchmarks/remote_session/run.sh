@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remote bandwidth sessions (cwd = the source tree): the verifier's process on cores of its own, the prover's on GPUS
+# PoUB sessions (cwd = the source tree): the verifier's process on cores of its own, the prover's on GPUS
 # GPUs (default 1) whose HBM holds one store, a contiguous shard each, over TCP. Everything runs under one
 # gpu-lease $GPUS --wait (with TIMED=1, --timed: the fill queue pauses, for a whole-node session): build session.cu and
 # kv.cu (p1024, masked), start the verifier, then the prover, which gates its devices against the driver before

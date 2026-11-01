@@ -83,8 +83,6 @@ BUDGET_SHARE = 0.01
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
 TILE = "PouwH1LaneZy_v2"
-#: Flock's largest statement (it refuses k_log 28)
-K_LOG_MAX = 27
 #: M3's live sample: a uniform subset of this many of one block's units
 M3_UNITS = 8
 #: PoUW's proof block: J10-R's per-call lane unit `PouwH1LaneZy_v2` over

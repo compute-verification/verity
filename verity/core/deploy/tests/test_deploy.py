@@ -344,6 +344,18 @@ def test_the_manifest_renders_as_toml():
     assert doc["message"]["Answer"] == {"version": 1, "kind": "private"}
 
 
+def test_a_channels_after_names_the_manifests_messages():
+    challenge, answer = X.MANIFEST.channels
+
+    def with_after(*after):
+        return M.Manifest("verity/example/after", 1, "p", X.MANIFEST.parties,
+                          (challenge, M.Channel(answer.sender, answer.receiver, answer.messages, after=after)),
+                          X.MANIFEST.messages)
+    assert tomllib.loads(M.render(with_after("Challenge")))["channel"][1]["after"] == ["Challenge"]
+    with pytest.raises(ValueError, match=r"\['Nonce'\] on responder -> challenger are not its messages"):
+        with_after("Nonce")
+
+
 def test_a_restart_refuses_the_run_that_never_ended(tmp_path):
     assert simulated(tmp_path).run == 1
     with open(tmp_path / "runs.jsonl", "a") as f:

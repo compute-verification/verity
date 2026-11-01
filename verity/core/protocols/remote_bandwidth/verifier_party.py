@@ -1,4 +1,4 @@
-"""The remote bandwidth session's verifier and challenger as a party of their own, so they run on a host the prover
+"""The PoUB session's verifier and challenger as a party of their own, so they run on a host the prover
 doesn't control (the challenger host, `trusted-host`) while the prover stays on its node.
 
 The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its

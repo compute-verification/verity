@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
+"""PoUB's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
 record: γ against both R, per window and over the session, and the memory line, a session total in three forms, each
 with its ε and δ.  They are computed here, the memory line's charges and paced forms by `line`'s arithmetic in floats,
 and nowhere else: the benchmark and every other consumer reads them from `declared`.

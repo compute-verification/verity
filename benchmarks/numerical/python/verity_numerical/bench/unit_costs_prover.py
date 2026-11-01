@@ -66,7 +66,7 @@ import math
 from collections import defaultdict
 from typing import Any, Mapping, Sequence
 
-from verity.ml.windows.interface import K_MAX
+from verity.ml.windows.interface import K_MAX, PACK_LOG
 
 from . import unit_costs_padding as P
 
@@ -81,7 +81,6 @@ BYTES_PER_NNZ = 6.04
 #: the circuit text that is not a unit's netlist (SHA-512 compressions, hm96 rows, META): the smallest recorded circuit's,
 #: Pc4RowATail_v1{K=256,KS=64} of 5,280 ANDs
 GLUE_BYTES = 55_911_585
-K_MIN_LOG = 22
 POW2 = tuple(range(16, 33))
 CAP_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
@@ -299,7 +298,7 @@ def session(Z: float, rho: float, coef: Mapping[str, Sequence[float]], slots: in
     (:data:`SLOT_SUMCHECK`; None: no slot sumcheck), adding its entries, seconds and GiB, and the session's total seconds
     and peak GiB."""
     rows = Z / rho
-    k_log = max(K_MIN_LOG, math.ceil(math.log2(rows + 1)) + 2)
+    k_log = max(PACK_LOG, math.ceil(math.log2(rows + 1)) + 2)
     D = slots * 2.0 ** k_log
     full = bytes_per_nnz * Z
     held = [full] * slots if nets is None else sorted(nets, reverse=True)[:slots]

@@ -1,4 +1,4 @@
-"""The device reader (`reader.cu`): the remote bandwidth driver's receipts, leaves and receipt tree on the GPU, gated
+"""The device reader (`reader.cu`): the PoUB driver's receipts, leaves and receipt tree on the GPU, gated
 byte for byte against the driver (`verity/core/protocols/remote_bandwidth/receipts.py`) and timed against a read of
 the same bytes.
 
