@@ -108,6 +108,8 @@ SETTINGS: dict[str, Setting] = _declare(
       "and inputs (a local recorded run's launcher sets it)", "each is found by its sha256 in the pin"),
     S("PYTHONPATH", str, "", VALUE, "where Python imports from: check hands its steps the entries inside this tree"),
     S("PATH", str, "", WHERE, "where programs are", "which tools a suite finds is keyed (`suites.TOOLS`), their versions pinned"),
+    S("CUDA_VISIBLE_DEVICES", str, None, VALUE, "the GPUs a step may use: set and empty, none (`research run` hides gpu-lease's), "
+      "so the GPU tests skip; check passes it to its steps and `suites.gpus` keys on it"),
     S("UV", str, None, WHERE, "the uv that `uv run` runs under, which the preflight's `uv lock --check` uses",
       "pod_setup.sh pins its version, which the preflight checks"),
     S("VIRTUAL_ENV", str, None, WHERE, "the virtualenv `uv run` put first on the PATH, which a planning process drops",
