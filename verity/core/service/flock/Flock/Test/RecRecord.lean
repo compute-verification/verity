@@ -8,6 +8,7 @@ coins, commit strings and tops, and `recordW` writes those rounds back to the sa
 module
 
 public import Flock.RecRecord
+meta import Flock.RecRecord
 
 @[expose] public section
 

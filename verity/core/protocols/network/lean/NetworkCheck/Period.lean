@@ -6,6 +6,12 @@ public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
 public import NciCheck.Desc
+meta import NetworkCheck.Check
+meta import CoreProtocol.Profile
+meta import Flock.Program
+meta import Flock.Public
+meta import Flock.WindowRecord
+meta import NciCheck.Desc
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`

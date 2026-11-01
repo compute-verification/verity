@@ -25,6 +25,12 @@ public import SampledProofs.PyJson
 public import Flock.WindowRecord
 public import CoreProtocol.Profile
 public import Std.Data.HashMap
+meta import SampledProofs.Bound
+meta import SampledProofs.Draw
+meta import SampledProofs.PyJson
+meta import Flock.WindowRecord
+meta import CoreProtocol.Profile
+meta import Std.Data.HashMap
 
 @[expose] public section
 

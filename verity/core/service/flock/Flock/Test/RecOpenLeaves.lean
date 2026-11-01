@@ -17,6 +17,8 @@ module
 
 public import Flock.RecOpen
 public import Flock.RecVStar
+meta import Flock.RecOpen
+meta import Flock.RecVStar
 
 @[expose] public section
 

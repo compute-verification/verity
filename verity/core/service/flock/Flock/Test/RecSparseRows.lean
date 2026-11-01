@@ -7,6 +7,7 @@ composes them, pass both checks, at one copy or two.
 module
 
 public import Flock.RecSparse
+meta import Flock.RecSparse
 
 @[expose] public section
 

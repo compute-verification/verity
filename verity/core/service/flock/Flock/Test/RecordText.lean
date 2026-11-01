@@ -7,6 +7,7 @@ form, a duplicate key and a text that isn't JSON are each refused.
 module
 
 public import Flock.RecordText
+meta import Flock.RecordText
 
 @[expose] public section
 

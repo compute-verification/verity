@@ -9,6 +9,8 @@ module
 
 public import CoreProtocol.Cli
 public import CoreProtocol.Profile
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Profile
 
 @[expose] public section
 

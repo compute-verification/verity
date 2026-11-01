@@ -9,6 +9,7 @@ With hidden outputs those circuits are in scope (`scopeOkI`), with public output
 module
 
 public import Flock.ProvedScope
+meta import Flock.ProvedScope
 
 @[expose] public section
 

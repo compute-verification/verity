@@ -7,6 +7,8 @@ module
 
 public import CoreComposition.Cases
 public import CoreComposition.Stubs
+meta import CoreComposition.Cases
+meta import CoreComposition.Stubs
 
 @[expose] public section
 

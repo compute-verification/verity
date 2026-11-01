@@ -6,6 +6,7 @@ file states, committed afresh (no registered read), passes `Registered.check` on
 module
 
 public import Flock.Test.RegFormats
+meta import Flock.Test.RegFormats
 
 @[expose] public section
 

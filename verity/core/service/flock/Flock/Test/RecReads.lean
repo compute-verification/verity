@@ -9,6 +9,7 @@ repeats the key `"rounds"` with other coins, which `Json.parse` reads and `readF
 module
 
 public import Flock.RecSetup
+meta import Flock.RecSetup
 
 @[expose] public section
 

@@ -6,6 +6,7 @@ each reads back to its value.
 module
 
 public import Flock.Canon
+meta import Flock.Canon
 
 @[expose] public section
 

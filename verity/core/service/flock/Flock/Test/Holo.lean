@@ -6,6 +6,7 @@ without it, any level with it and a `holo` that is not a boolean are refused.
 module
 
 public import Flock.RecVStar
+meta import Flock.RecVStar
 
 @[expose] public section
 

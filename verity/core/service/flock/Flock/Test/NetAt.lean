@@ -7,6 +7,8 @@ module
 
 public import Flock.TmplAt
 public import Flock.Test.Tmpl
+meta import Flock.TmplAt
+meta import Flock.Test.Tmpl
 
 @[expose] public section
 

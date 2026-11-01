@@ -7,6 +7,7 @@ over leaves framed under that schema.
 module
 
 public import Flock.Registered
+meta import Flock.Registered
 
 @[expose] public section
 

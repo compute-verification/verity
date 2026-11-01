@@ -9,6 +9,7 @@ takes minutes to evaluate interpreted, so the comparison itself is held to V*'s 
 module
 
 public import Flock.RecVStar
+meta import Flock.RecVStar
 
 @[expose] public section
 

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.NetworkCertifier.RecordRows
+meta import Definitions.NetworkCertifier.RecordRows
 
 /-!
 # The network certifier's rows read back its lanes

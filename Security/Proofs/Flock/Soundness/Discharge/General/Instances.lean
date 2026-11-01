@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 public import Flock.Test.Wires
+meta import Proofs.Flock.Soundness.Discharge.Layout.Scope
+meta import Flock.Test.Wires
 
 /-!
 # The general form at the tails' shapes

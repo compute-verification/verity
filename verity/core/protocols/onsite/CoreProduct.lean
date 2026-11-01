@@ -12,6 +12,7 @@ The command after `IDS` is the core CLI's (`CoreProtocol.Cli`).
 module
 
 public import CoreOnsite
+meta import CoreOnsite
 
 @[expose] public section
 

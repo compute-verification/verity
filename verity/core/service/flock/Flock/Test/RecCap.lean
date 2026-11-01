@@ -11,6 +11,7 @@ read. The unit is the cap row's words past its node, then zeros, and lays out as
 module
 
 public import Flock.RecCoins
+meta import Flock.RecCoins
 
 @[expose] public section
 

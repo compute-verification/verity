@@ -12,6 +12,10 @@ public import Flock.TmplSplit
 public import Flock.NetAt
 public import Flock.Statement
 public import Flock.Test.TmplLayout
+meta import Flock.TmplSplit
+meta import Flock.NetAt
+meta import Flock.Statement
+meta import Flock.Test.TmplLayout
 
 @[expose] public section
 

@@ -2,6 +2,8 @@ module
 
 public import Mathlib.Data.Fintype.Card
 public import Proofs.Flock.Sampled.Statements
+meta import Mathlib.Data.Fintype.Card
+meta import Proofs.Flock.Sampled.Statements
 
 /-!
 # F2's statements' hypotheses hold together

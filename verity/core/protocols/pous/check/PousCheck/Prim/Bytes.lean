@@ -1,6 +1,7 @@
 module
 
 public import Flock.Bytes
+meta import Flock.Bytes
 
 /-!
 Byte-level encodings P2 shares with core: fixed-width unsigned big-endian integers (`int.to_bytes(n, "big")` and

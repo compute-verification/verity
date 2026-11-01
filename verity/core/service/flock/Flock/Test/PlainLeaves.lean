@@ -6,6 +6,7 @@ outputs and plain leaves is refused either way.
 module
 
 public import Flock.ProvedScope
+meta import Flock.ProvedScope
 
 @[expose] public section
 

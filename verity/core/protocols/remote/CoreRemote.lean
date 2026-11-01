@@ -9,6 +9,9 @@ module
 public import CoreComposition.Cases
 public import PouwCheck.Protocol
 public import SampledProofs.OneStage
+meta import CoreComposition.Cases
+meta import PouwCheck.Protocol
+meta import SampledProofs.OneStage
 
 @[expose] public section
 

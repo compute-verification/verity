@@ -2,6 +2,8 @@ module
 
 public import Flock.Bytes
 public import Flock.Hash
+meta import Flock.Bytes
+meta import Flock.Hash
 
 /-!
 Streaming SHA-512 over Flock's compression (`Flock.Sha512.compress`, the only one): absorb bytes in any pieces, then

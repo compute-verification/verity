@@ -6,6 +6,8 @@ module
 
 public import Flock.Bytes
 public import Flock.Hash
+meta import Flock.Bytes
+meta import Flock.Hash
 
 @[expose] public section
 

@@ -3,6 +3,9 @@ module
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import RemoteAudit.Difftest
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import RemoteAudit.Difftest
 
 /-!
 # A remote bandwidth session as a core protocol

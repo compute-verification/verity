@@ -8,6 +8,7 @@ V\*'s list of `MAX_STATEMENTS` statements passes and one more is refused (`count
 module
 
 public import Flock.RecBudget
+meta import Flock.RecBudget
 
 @[expose] public section
 

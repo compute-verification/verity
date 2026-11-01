@@ -28,6 +28,9 @@ module
 public import CoreProtocol.Blobs
 public import SampledProofs.OneStage
 public import Flock
+meta import CoreProtocol.Blobs
+meta import SampledProofs.OneStage
+meta import Flock
 
 @[expose] public section
 

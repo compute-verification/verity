@@ -18,6 +18,7 @@ keys none. `roundNames` names each round holding a key, `RecOpening.rsName` clai
 module
 
 public import Flock.RecOpening
+meta import Flock.RecOpening
 
 @[expose] public section
 

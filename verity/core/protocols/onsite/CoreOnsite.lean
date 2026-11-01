@@ -15,6 +15,12 @@ public import PousCheck.RunProtocol
 public import PouwCheck.Protocol
 public import RemoteAudit.Protocol
 public import SampledProofs.OneStage
+meta import CoreComposition.Cases
+meta import NetworkCheck.Period
+meta import PousCheck.RunProtocol
+meta import PouwCheck.Protocol
+meta import RemoteAudit.Protocol
+meta import SampledProofs.OneStage
 
 @[expose] public section
 

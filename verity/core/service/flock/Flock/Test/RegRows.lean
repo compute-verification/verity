@@ -10,6 +10,8 @@ module
 
 public import Flock.Registered
 public import Flock.JsonKeys
+meta import Flock.Registered
+meta import Flock.JsonKeys
 
 @[expose] public section
 

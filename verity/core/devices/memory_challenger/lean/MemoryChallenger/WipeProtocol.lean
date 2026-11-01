@@ -4,6 +4,10 @@ public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import MemoryChallenger.Protocol
 public import MemoryChallenger.WipeJudge
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import MemoryChallenger.Protocol
+meta import MemoryChallenger.WipeJudge
 
 /-!
 # The wipe as a core protocol

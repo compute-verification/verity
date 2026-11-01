@@ -7,6 +7,7 @@ a level under its neighbour's `H`, however consistently the bindings carry the l
 module
 
 public import Flock.RecVStar
+meta import Flock.RecVStar
 
 @[expose] public section
 
