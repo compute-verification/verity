@@ -8,7 +8,9 @@ would check (`routes.stats`, top-r spectral energy), under `absmax` and `mad`.
 `--plants` also projects every matrix onto each named family post hoc (`lr{r}res{k}`, `vq{f}res{k}` as in `starts`) and
 records the same statistics, the planted route's own price (the cheap part's share plus its residual's route) and the
 relative weight error ‖W₀ − W‖/‖W‖: what the gates would see of that structure at this scale, with no claim the
-projected model is useful.
+projected model is useful. The residual is clipped at W's own served scale, and each row's absmax entry is kept so the
+scale stays W's (one ALU entry a row): re-deriving the scale after the clip, as `starts.clip_around` does for the toy's
+trained starts, collapses a real matrix's rows, since clipping its outliers shrinks the scale that sets the clip.
 """
 
 import argparse
@@ -59,9 +61,12 @@ def planted(path, name, quant, family):
     else:
         c, assign = routes.kmeans(w, max(2, n // x))
         base, share = c[assign].astype(np.float64), max(2, n // x) / n
-    w0 = starts.clip_around(w, base, a, quant)
-    q, s = toy.codes(w0, quant)
-    S = np.rint(q - base / s[:, None]).astype(np.int64)
+    s = toy.scale(w, quant)[:, None]
+    w0 = base + np.clip(w - base, -a * s, a * s)
+    rows, pin = np.arange(n), np.abs(w).argmax(axis=1)
+    w0[rows, pin] = w[rows, pin]
+    q = np.clip(np.rint(w0 / s), -127, 127).astype(np.int32)
+    S = np.rint(q - base / s).astype(np.int64)
     r = routes.search(q, vq=False)
     return {"name": name, "quant": quant, "plant": family, "shape": [n, k], "stats": routes.stats(q),
             "energy_top": r["energy_top"], "best": {chip: r[chip]["cost"] for chip in routes.CHIPS},
