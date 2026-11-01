@@ -219,6 +219,9 @@ def test_in_process_certifier_releases_once_after_the_root():
 
     cert = F.InProcessCertifier(rand)
     assert cert.source == F.IN_PROCESS == "in-process"
+    for p in (3, 4):
+        cert.open(p, b"\x07" * 64, b"\x06" * 64, 4)
+    asked.clear()
     call = F.Call(3, 0, 5, 9, 2048, 3072)
     with pytest.raises(F.FeedError, match="root of 32 bytes"):
         cert.release(call, bytes(32))
@@ -232,9 +235,36 @@ def test_in_process_certifier_releases_once_after_the_root():
     assert cert.release(F.Call(4, 0, 5, 9, 2048, 3072), b"\x02" * 64).call.pass_index == 4
 
 
+def test_in_process_certifier_samples_a_windows_salt_after_its_key_leaf_weights_root_and_call_count():
+    """C3's order: a window's salt is sampled once, from the certifier's source, after it holds the window's key leaf,
+    weights' root and call count. No coins are released before the salt, and none past the call count."""
+    cert = F.InProcessCertifier(rand_of(5))
+    call = F.Call(2, 0, 0, 4, 64, 8)
+    with pytest.raises(F.FeedError, match="pass 2 call 0: before its window's salt"):
+        cert.release(call, bytes(64))
+    with pytest.raises(F.FeedError, match="a key leaf of 32 bytes and a weights' root of 64"):
+        cert.open(2, bytes(32), bytes(64), 2)
+    with pytest.raises(F.FeedError, match="a key leaf of 64 bytes and a weights' root of 32"):
+        cert.open(2, bytes(64), bytes(32), 2)
+    with pytest.raises(F.FeedError, match="a window of 0 calls"):
+        cert.open(2, bytes(64), bytes(64), 0)
+    assert not cert.windows
+    salt = cert.open(2, b"\x07" * 64, b"\x06" * 64, 2)
+    assert len(salt) == 64 and cert.windows[2] == F.WindowSalt(b"\x07" * 64, b"\x06" * 64, 2, salt)
+    assert salt == bytes(rand_of(5)(64))
+    with pytest.raises(F.FeedError, match="its window is open already; a window's salt is sampled once"):
+        cert.open(2, b"\x07" * 64, b"\x06" * 64, 2)
+    cert.release(call, bytes(64))
+    cert.release(F.Call(2, 1, 0, 4, 64, 8), bytes(64))
+    with pytest.raises(F.FeedError, match="pass 2 call 2: past the window's 2 calls"):
+        cert.release(F.Call(2, 2, 0, 4, 64, 8), bytes(64))
+
+
 def test_feed_is_a_function_of_the_coin_bytes():
-    a = F.InProcessCertifier(rand_of(11)).release(F.Call(0, 0, 0, 33, 200, 40), bytes(64))
-    b = F.InProcessCertifier(rand_of(11)).release(F.Call(0, 0, 0, 33, 200, 40), bytes(64))
-    c = F.InProcessCertifier(rand_of(12)).release(F.Call(0, 0, 0, 33, 200, 40), bytes(64))
+    def release(seed: int) -> F.Feed:
+        cert = F.InProcessCertifier(rand_of(seed))
+        cert.open(0, bytes(64), bytes(64), 1)
+        return cert.release(F.Call(0, 0, 0, 33, 200, 40), bytes(64))
+    a, b, c = release(11), release(11), release(12)
     assert all((x == y).all() for x, y in zip((a.rows, a.g, a.lanes_c, a.sigma), (b.rows, b.g, b.lanes_c, b.sigma)))
     assert not (a.lanes_c == c.lanes_c).all()
