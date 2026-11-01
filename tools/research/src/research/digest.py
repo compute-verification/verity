@@ -11,7 +11,7 @@ regular sync. It shows:
 - a TRIGGER line for each watched PR that landed or changed its queue state (not merely its head), with the step the
   lane wrote for that moment;
 - Health: this VM's memory, load, disk (/, the notes, the workspace) and OOM kills; /workspace's branch (a WARNING
-  when it's on one: the shell hook and the inbox run from that checkout), dirt and lag behind origin/main; each
+  when it's on one: research runs from that checkout), dirt and lag behind origin/main; each
   --roster worker's branch age and pending inbox deliveries (a WARNING past 30 min); the lane's open PRs that aren't in
   the queue at all; the largest .lake directories of finished worktrees (tip pushed, over 6 h old; listed, never
   deleted); and the live runs launched from this VM. A failing check prints its error in its place.
@@ -53,8 +53,10 @@ REVERT_SUBJECT = re.compile(r'^Revert "Queue: #(\d+)')
 RESULT_HEADING = re.compile(r"#{2,4}\s+result so far", re.IGNORECASE)
 HEADING = re.compile(r"#{1,6}\s")
 RESULT_LINES = 3
-#: The checkout the shell hook and the inbox run from.
+#: The checkout research runs from.
 WORKSPACE = Path("/workspace")
+#: The agent guard's inbox tool, which every VM's boot installs.
+INBOX = Path("/opt/agent-guard/inbox.py")
 #: An inbox delivery pending longer than this is flagged: its agent has run no shell command since.
 INBOX_STALE_S = 30 * 60
 #: A worktree whose branch tip is on origin and older than this is a finished worker's.
@@ -294,7 +296,7 @@ def _workspace(w: dict) -> list[str]:
     where = f"on branch {w['branch']}" if w["branch"] else f"detached at {w['head']}"
     dirt = f"dirty ({w['dirty']} paths)" if w["dirty"] else "clean"
     line = f"{WORKSPACE} {where}, {dirt}, {w['behind']} behind origin/main"
-    return [f"- WARNING {line}: the shell hook and the inbox run from this checkout" if w["branch"] else f"- {line}"]
+    return [f"- WARNING {line}: research runs from this checkout" if w["branch"] else f"- {line}"]
 
 
 def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: list[dict] | None,
@@ -321,7 +323,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
     try:
         got = src.inbox()
         if got is None:
-            lines.append(f"- inbox: no tools/agent-guard/inbox.py in {WORKSPACE}")
+            lines.append(f"- inbox: no {INBOX}")
         else:
             pending = {d["agent"]: d for d in got}
     except Exception as e:
@@ -505,10 +507,9 @@ def real_sources(lane: str, repo: Path, notes_root: Path) -> Sources:
         return _git(repo, "log", "-1", "--format=%cr %h", f"origin/{branch}").strip()
 
     def inbox() -> list[dict] | None:
-        tool = WORKSPACE / "tools/agent-guard/inbox.py"
-        if not tool.is_file():
+        if not INBOX.is_file():
             return None
-        r = subprocess.run([sys.executable, str(tool), "list"], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, str(INBOX), "list"], capture_output=True, text=True)
         if r.returncode:
             raise RuntimeError(f"`inbox.py list` exited {r.returncode}: {r.stderr.strip()[-300:]}")
         return parse_inbox(r.stdout)
