@@ -179,18 +179,17 @@ def import_arts(lib: Path, own: Path) -> dict[str, list[list[str]]]:
 
 
 def errors(work: Path, since: int, n: int = 5) -> list[str]:
-    """The first ``n`` error messages `lean --json` logged after offset ``since`` of the task's log."""
+    """The first ``n`` errors of the `lean --json` run whose log starts at offset ``since`` of the task's log (with `call`'s
+    line): each error message, and each line `lean` printed that isn't a message (an uncaught exception, a panic)."""
     out = []
     with open(work / LOG, "rb") as f:
         f.seek(since)
-        for line in f.read().decode(errors="replace").splitlines():
-            try:
-                m = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(m, dict) and m.get("severity") == "error" and len(out) < n:
+        for line in f.read().decode(errors="replace").splitlines()[1:]:
+            if not line.startswith("{"):
+                out += [line[:500]] if line.strip() else []
+            elif (m := json.loads(line)).get("severity") == "error":
                 out.append(f"{m.get('fileName', '')}:{(m.get('pos') or {}).get('line')}: {str(m.get('data'))[:500]}")
-    return out
+    return out[:n]
 
 
 def killed(rc: int) -> bool:

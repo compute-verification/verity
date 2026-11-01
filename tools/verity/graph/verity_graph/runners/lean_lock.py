@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 from .. import ROOT
-from ..families.lean_module import la
+from ..families.lean_module import la, mk
 from . import call
 from .lean_module import EnvError, packages
 
@@ -37,11 +37,10 @@ def run(task: dict, work: Path) -> dict:
     lib, tree, out = work / "out" / "lean", work / "tree", work / "audit"
     lib.mkdir(parents=True, exist_ok=True)
     la.scratch_tree(tree, task["inputs"])
-    try:
-        roots = json.loads((tree / pkg / POLICY).read_text()).get("roots", [])
-    except (OSError, ValueError, AttributeError):
-        roots = []  # the audit fails the policy
-    if missing := [r for r in roots if isinstance(r, str) and not (lib / (r.replace(".", "/") + ".olean")).is_file()]:
+    policy = json.loads((tree / pkg / POLICY).read_text())  # the listing refuses a lock that isn't JSON
+    roots = policy.get("roots") if isinstance(policy, dict) else None
+    named = [r for r in roots if isinstance(r, str) and r] if isinstance(roots, list) else []  # the audit fails other shapes
+    if missing := [r for r in named if not (lib / mk.path_of(r, ".olean")).is_file()]:
         return {"status": "fail", "detail": {"error": f"{pkg}/{POLICY}'s `roots` names modules no task builds, which "
                                                       f"`lake build +ROOT` fails on: {', '.join(missing[:20])}"}}
     pkgs = [p.rpartition("/")[0] or "." for p in task["inputs"] if p.rpartition("/")[2] in ("lakefile.toml", "lakefile.lean")]
