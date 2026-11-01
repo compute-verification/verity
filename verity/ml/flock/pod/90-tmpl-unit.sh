@@ -10,15 +10,20 @@
 # verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt, template.json, tmpl.txt, stage.json,
 # statement-<mode>.txt, serve-<mode>.log, prove-<mode>.txt and .err, challenger-<mode>/ (its record, releases.jsonl and
 # audit.json), lean-<mode>.log (its VERDICT line), verdicts.json.
+# Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
 # env: CPUS=16  LAYOUT=iv  MODES="m0 zk"  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget where /workspace isn't
 #      writable (the prover build and its venv, shared as 76-read-gadget.sh's)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${TU_PINNED:-}" ]; then
-  . verity/ml/flock/pod/cpu-slices.sh
-  hold_slices "" "${CPUS:-16}" || exit 1
-  export TU_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
-  exec taskset -c $SLICE_CPUS bash "$0" "$@"
+  if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
+    . verity/ml/flock/pod/cpu-slices.sh
+    hold_slices "" "${CPUS:-16}" || exit 1
+    export TU_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
+    exec taskset -c $SLICE_CPUS bash "$0" "$@"
+  fi
+  # no slice locks here (a vy-cpu pod): the check slot (research run --pool) has pinned the job to its own cores
+  export TU_PINNED=slot RAYON_NUM_THREADS=$(nproc)
 fi
 export FC_COINS=tree
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/tmpl-unit}/out; mkdir -p $O

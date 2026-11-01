@@ -33,7 +33,8 @@ challenger_build() {
 }
 
 challenger_built() {
-  [ -n "${CHALLENGER_BUILD:-}" ] && wait "$CHALLENGER_BUILD"
+  # a bare `wait` in the pod (hidden_zk's setup) may have reaped it already; its status is in build.rc either way
+  [ -n "${CHALLENGER_BUILD:-}" ] && wait "$CHALLENGER_BUILD" 2>/dev/null
   [ "$(cat "$CHALLENGER_WORK/build.rc" 2>/dev/null)" = 0 ] && return 0
   echo "challenger: the sampled-proofs build failed: $(tail -5 "$CHALLENGER_WORK/build.log" 2>/dev/null)" >&2
   return 1
