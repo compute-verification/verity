@@ -53,7 +53,8 @@
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #  4. PoUW (H1 credit), PoUS, the bandwidth audit and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
-#     from the moment the window is picked, beside step 3, its lines said after the others'), each within <COMPONENT>_TIMEOUT
+#     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
+#     6's period check wrote, V3c having run before this step), each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
 #     for a piece that didn't run or refused to; one that ran and wrote no answer errs. A piece that needs a GPU takes its
 #     own `gpu-lease`, the serve's being over. POUS_CMD defaults to 'bash benchmarks/pous/served_piece.sh "$@"' where the
@@ -84,9 +85,21 @@
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
-#     registration's members (V3C_LAW, default subset:1) and proves them. `served_verdicts.sh v3c` runs only that step on an
+#     registration's members (V3C_LAW, default subset:1) and proves them; then `records_audit.py period` writes the audit
+#     as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json, and a copy in $OUT/v3c-audit: the
+#     registration, the Program, its answer and its free inputs), and V3c fails where it writes none.
+#     `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m. V3C_CLASS set empty leaves
 #     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
+#     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
+#     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), V3c runs before step 4, since the certifier's
+#     answer reads its period.json: the chain after the window commit, beside V3c's audit and period.json, within
+#     CERTIFIER_TIMEOUT (default 4h), and the period check once both are done and V3c wrote period.json, within
+#     CERTIFIER_PERIOD_TIMEOUT (default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
+#     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit,
+#     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
+#     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
+#     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
 # Coins: sampled proofs' draw is Lean's IO.getRandomBytes in the verifier's process on the served node unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
@@ -251,6 +264,35 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$OUT/v3c-audit/audit.err" | tr '\n' ' ' | cut -c1-800)"
   return $rc
 }
+v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
+  (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
+    --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json") > "$OUT/v3c-audit/period.log" 2>&1
+  local rc=$?
+  [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/"
+  say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$OUT/v3c-audit/period.log" | cut -c1-800)"
+  return $rc
+}
+certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 6), if its command is set
+  local cmd lim dir=$OUT/pieces/certifier rc
+  if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-4h}
+  else cmd=${CERTIFIER_PERIOD_CMD:-} lim=${CERTIFIER_PERIOD_TIMEOUT:-60m}; fi
+  [ -n "$cmd" ] || return 0
+  mkdir -p "$dir"
+  (cd "$TREE" && timeout -k 1m "$lim" bash -c "$cmd" _ "$D" "$K" "$dir" "$VW") > "$dir/$1.log" 2>&1
+  rc=$?
+  say "CERTIFIER-${1^^} (exit $rc): $(tail -1 "$dir/$1.log" | cut -c1-600)"
+  return $rc
+}
+v3c_proved() {  # V3c's window committed, the build done: the certifier's chain beside V3c's audit, then its period check
+  local rc prc chain
+  certifier_step chain & chain=$!
+  v3c_audit; rc=$?
+  v3c_period; prc=$?
+  wait "$chain"
+  if [ "$prc" = 0 ]; then certifier_step period
+  elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
+  return $((rc ? rc : prc))
+}
 
 serve() {  # under the lease: the endpoint, the requests, every closed window sealed, the endpoint stopped
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
@@ -395,8 +437,9 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
   done
 }
 # the certifier's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 warden's
-# counts, its report and the piece's log); once the record has read them they move to the serve dir's private/
-CERTIFIER_PRIVATE="chain/certs.json chain/report chain/tie/summary.json chain/n2/summary.json piece.log"
+# counts, its report and the piece's log, or the split's two logs); once the record has read them, or
+# `served_verdicts.sh v3c` is done, they move to the serve dir's private/
+CERTIFIER_PRIVATE="chain/certs.json chain/report chain/tie/summary.json chain/n2/summary.json piece.log chain.log period.log"
 private_pieces() {
   local f
   for f in $CERTIFIER_PRIVATE; do
@@ -417,6 +460,12 @@ stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
 command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
 front_ok || exit 3
+SPLIT=
+if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
+  [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
+  [ -n "$V3C" ] || { say "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
+  SPLIT=1
+fi
 mkdir -p "$D" "$ROOT/cache" "$FW"
 KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
 { "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
@@ -452,7 +501,9 @@ if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its 
   wait "$BUILD"; rc=$?
   [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
   [ "$v3c_ok" = 1 ] || exit 16
-  v3c_audit; exit $?
+  v3c_proved; rc=$?
+  private_pieces
+  exit "$rc"
 fi
 
 H1_COINS="PoUW H1: not served (H1_GATE empty)"
@@ -613,6 +664,12 @@ say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/serve
   --partition "${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json}" 2>&1 | cut -c1-3000)$(
   grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
 
+# 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
+if [ -n "$SPLIT" ]; then
+  v3c_commit && v3c_proved
+  export CERTIFIER_CMD=true
+fi
+
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
 TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" ${CERT:+--skip certifier} \
@@ -628,7 +685,8 @@ comp=0
 [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
 # V3c after the record, each step within its limit: it gates nothing
-if [ -n "$V3C" ]; then v3c_commit && v3c_audit
+if [ -n "$SPLIT" ]; then :
+elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
 [ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
