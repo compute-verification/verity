@@ -100,7 +100,7 @@ def inner(N: int, K: int, b: Mapping[str, Any], B: int, rho: Mapping[str, float]
 def excluded(o: Mapping[str, Any], gib: float = U.NODE_GIB) -> str | None:
     """Why option ``o`` (``inner``'s, with its outer row's ``outer_rss_gib`` when there is one) cannot run, or None."""
     if not o["in_range"]:
-        return f"k_log {o['k_log']} > {U.K_LOG_MAX}"
+        return f"k_log {o['k_log']} > {U.K_MAX}"
     if o["peak_gib"] > gib:
         return f"inner {o['peak_gib']:.0f} GiB > {gib:.0f}"
     if o["inner_m"] > D_FIT_LOG:
@@ -334,7 +334,7 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
         tot["refused_entries"] = sum(bool(e["outer_refused"]) and e["sessions_public"] > 0 for e in entries)
         models.append({"workload": W["workload"], "N": W["N"], "cap": W["cap"], "entries": entries, "totals": tot})
     return {"format": "verity/f6-menu/v1", "K": K, "b_menu": list(B_MENU), "node_gib": U.NODE_GIB,
-            "k_log_max": U.K_LOG_MAX, "d_fit_log": D_FIT_LOG,
+            "k_log_max": U.K_MAX, "d_fit_log": D_FIT_LOG,
             "chosen_on": ("public inner + outer hours (outer per (bucket, B) from the input)" if outer is not None else
                           "public inner hours alone: no outer input, so the outer proof's cost and memory are not counted"),
             "outer_sha512": outer_sha512, "openings_batched": False,
