@@ -676,6 +676,17 @@ def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
     IO.println s!"{hex}  {path}"
   return 0
 
+/-- A plain session's coins from `--coins`: `seed` (the default), `os`, or `tree`, the challenger's keyed coin tree over the
+session's tables (`Zk.coinSpec`, the one `--zk` takes); `none` for any other value. -/
+def plainCoinsArg (arg : Option String) (tables : Array String) : Option Coins :=
+  match arg with
+  | none | some "seed" => some .seed
+  | some "os" => some .os
+  | some "tree" => some (.tree (Zk.coinSpec tables))
+  | some _ => none
+
+def COINS_USAGE : String := "--coins is seed (the default), os or tree"
+
 /-- `coin-tree-check FILE`: R7 and the record's `coin_tree` for the keyed coin tree (`Flock.CoinTree`), on `{"hello": the
 verifier's Hello object (its coins.nonce empty), "sessions": [{"hello": the prover's Hello, "coin_tree": ...}, ...]}`, in
 order, each key fresh. One `COINTREE` line per session: the nonce and the canonical `coins` it checked, or the refusal. -/
@@ -703,16 +714,7 @@ def coinTreeCmd (path : String) : IO UInt32 := do
     IO.println s!"COINTREE {line.compress}"
   return (if all then 0 else 1)
 
-/-- A plain session's coins from `--coins`: `seed` (the default), `os`, or `tree`, the challenger's keyed coin tree over the
-session's tables (`Zk.coinSpec`, the one `--zk` takes); `none` for any other value. -/
-def plainCoinsArg (arg : Option String) (tables : Array String) : Option Coins :=
-  match arg with
-  | none | some "seed" => some .seed
-  | some "os" => some .os
-  | some "tree" => some (.tree (Zk.coinSpec tables))
-  | some _ => none
-
-/-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os|tree] [--session-tables J] --session DIR...`: `ID`
+/-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (§16.12), which split one draw of fixed count, a
 subset or a stratified one, into `J` equal parts (`Draw.tablesWhy`). A session with a work draw needs the
@@ -794,7 +796,7 @@ verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.p
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
 public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os|tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let some tags := Tags.byName? stmtName
@@ -820,7 +822,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     return 2
   let some coins := if zk then some (Coins.tree (Zk.coinSpec (tags.tableNames count)))
       else plainCoinsArg (argOf args "--coins") (tags.tableNames count)
-    | IO.eprintln usage; return 2
+    | IO.eprintln s!"verify: {COINS_USAGE}"; return 2
   let tags := tags.withCoins coins
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
@@ -1045,14 +1047,15 @@ the inner transcript alone (`RecCoins.checkCap`, `RecCoins.checkLink`). At candi
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
 def statementCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os|tree]"
-  let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
+  let (some _, some _) := (argOf args "--circuit", argOf args "--public")
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
-  let some coins := plainCoinsArg (argOf args "--coins") (tags.tableNames 1) | IO.eprintln usage; return 2
+  let some coins := plainCoinsArg (argOf args "--coins") (tags.tableNames 1)
+    | IO.eprintln s!"statement: {COINS_USAGE}"; return 2
   let tags := tags.withCoins coins
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x

@@ -41,7 +41,7 @@ verifier.
 
 ~~~text
 cd verity/core/service/flock && lake build          # .lake/build/bin/flock-verify
-flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins seed|os|tree] [--zk] \
+flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins seed|os] [--zk] \
     [--program F] [--partition F] [--registered F] [--upstream-plain] --session DIR...
 flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
 ~~~
@@ -53,8 +53,7 @@ flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables D
   cannot know what it verifies.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
 - `--coins os` binds the identity of a proving build's session on per-round OS coins (`FC_COINS=os`); `seed`, the
-  default, a seeded one; `tree`, a session on the challenger's keyed coin tree (`FC_COINS=tree`, §7.4). A `--zk`
-  session's coins are its coin tree.
+  default, a seeded one (§7). A `--zk` session's coins are its coin tree.
 - Each plain proof file is taken in one form (§8.1): by default the deployed prover's, which writes a `zk_level0 = None`
   byte after the pair; `--upstream-plain` takes upstream's builds' form, as the agreement job's sessions from upstream's
   binaries are.
