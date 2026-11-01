@@ -1,10 +1,10 @@
-"""The proof's identifier v1 (``PROTOCOL.md``, "The proof's identifier (v1)"): the JSON object in a C-Flock proof's header
+"""The proof's identifier v1 (``PROTOCOL.md``, "The proof's identifier (v1)"): the JSON object in a Flock proof's header
 that names the oracle, the salt and the workload the proof is for.
 
 ``{"format": "verity/pouw/identifier/v1", "scheme": <the scheme's registered name>, "salt": <the epoch's salt, lowercase
 hex>, "workload": <lowercase hex SHA-512 of the declared workload's canonical bytes>}``.  The scheme names the oracle H, so
 there is no seed digest.  The proof binds the object through ``pub.sha``, which seeds its Fiat-Shamir transcript.  The
-verifier recomputes the bytes from the epoch it audits (`identifier_bytes`), and C-Flock's verifier compares the proof's
+verifier recomputes the bytes from the epoch it audits (`identifier_bytes`), and Flock's verifier compares the proof's
 object with them byte for byte (``--identifier F``).
 
 Canonical bytes are RFC 8785 (`verity.ml.circuits.codec.canonical_json`), on the domain where that function is RFC 8785: ASCII
@@ -70,7 +70,7 @@ def identifier_v1(scheme: PoUWScheme | str, epoch: Epoch) -> dict[str, str]:
 
 
 def identifier_bytes(scheme: PoUWScheme | str, epoch: Epoch) -> bytes:
-    """The identifier's canonical bytes: what the verifier hands C-Flock's verifier as ``--identifier F``."""
+    """The identifier's canonical bytes: what the verifier hands Flock's verifier as ``--identifier F``."""
     return _canonical(identifier_v1(scheme, epoch))
 
 

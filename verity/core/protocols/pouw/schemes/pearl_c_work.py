@@ -1,4 +1,4 @@
-"""Pearl-C's records: what the prover declares for each matmul before the draws, and the root that binds them (statement
+"""Pearl-C's records: what the prover declares for each matmul before the samples, and the root that binds them (statement
 review item 5).  vLLM's Pearl-C prover writes them (`verity_vllm.protocols.pouw.pearl_c`).  The work law
 that credits, draws and checks by them, with its clear audit, is a reference tool, not a verifier:
 ``benchmarks/pouw/clear/clear_work.py``.
@@ -8,7 +8,7 @@ that credits, draws and checks by them, with its clear audit, is a reference too
   - The unit reads the |K| = k − |S| kept channels in order, zero-padded to `k_unit`, a multiple of 128.
   - `calibration` names the data S was computed from. The pinned rule that computes S (`split_channels`, with its
     tie-break and budget) lives with the model integration.
-* **`UnitRecord`**: what the prover declares for each matmul before the draws.
+* **`UnitRecord`**: what the prover declares for each matmul before the samples.
   - Its real rows. The rest are filler, which must be zero words.
   - Its kept width |K|.
   - Its excluded rows: A rows of the matmul and B rows of its weight that fail the scheme's per-row rules.
@@ -59,14 +59,14 @@ class Split:
 
 @dataclass(frozen=True)
 class UnitRecord:
-    """One matmul as its prover declares it before the draws."""
+    """One matmul as its prover declares it before the samples."""
 
     matmul: Matmul                  # index, (m, k_unit, n), weight
     real_rows: int                  # rows 0 … real_rows − 1 are the call's; the rest are zero filler
     k_kept: int                     # entries 0 … k_kept − 1 of every row are the kept channels; the rest are zero
     excluded_a: tuple[int, ...] = ()  # A rows (< real_rows) that fail the per-row rules
     excluded_b: tuple[int, ...] = ()  # B rows of the weight that fail them
-    voluntary_a: tuple[int, ...] = ()  # A rows (< real_rows) given up before the draws (V-EX)
+    voluntary_a: tuple[int, ...] = ()  # A rows (< real_rows) given up before the samples (V-EX)
     voluntary_b: tuple[int, ...] = ()  # B rows of the weight given up (V-EX)
 
     def __post_init__(self) -> None:
@@ -100,7 +100,7 @@ def pad_weight(rows: Sequence[bytes], tile_n: int) -> tuple[list[bytes], tuple[i
     """(the rows, the padded tile's rows): a weight's rows (FP32 words along k) with all-zero rows appended up to a whole
     number of `tile_n`-column tiles, and the rows of the last tile when it holds any of them, its real columns with the
     zero rows.  The glue drops the padded rows' outputs.  The prover declares the padded tile's rows voluntary
-    (`voluntary_b`, through `declare`'s `padded_b`), so that tile has no credited cell: no draw lands on it and it opens
+    (`voluntary_b`, through `declare`'s `padded_b`), so that tile has no credited cell: no sample lands on it and it opens
     no exclusion tile, so no tile check sees a zero row, and the credit is the full tiles' real columns at the padded
     n's cell credit, under an unpadded n's honest credit."""
     if not rows or len({len(r) for r in rows}) != 1:

@@ -379,7 +379,7 @@ _committed: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 def committed(program: Program) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
     """The rows a run commits: the census values' elements (`rows`), what the Program's nodes pass each other, each once
-    in value order. A Call's own wires are witness of its proof blocks, whose commitments are the proof service's."""
+    in value order. A Call's own wires are witness of its proof blocks, whose commitments are the proof system's."""
     if program not in _committed:
         seen: dict[tuple[int, ...], tuple[int, ...]] = {}
         for v in values(program):

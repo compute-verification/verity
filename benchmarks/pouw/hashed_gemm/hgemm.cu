@@ -1,5 +1,5 @@
 // EGEMM's edited GEMM with its commitments hashed inside its own CTAs: the windowed receipts (segment.PouwSegCheck_v2{S
-// = 16, FOLD}, E2E's w_ kernels on cursor/e2e-slice-ea24@3341b0f46, ported to egemm.cu's EL) and X's tile leaves (R = 64
+// = 16, FOLD}, E2E's w_ kernels, ported to egemm.cu's EL) and X's tile leaves (R = 64
 // rows x 32 values) committed as hm96-sha512/row/v2 rows in frame-v3-sha512 trees, byte for byte verity.ml.commitments'
 // (commit_gpu.cuh's constants and parts; hgref.py checks every level against the reference).
 //

@@ -80,7 +80,7 @@ the public file's population), the
 sampled-proofs run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
 give the game's `n` units in order), and the claims relation fails. It has none of V2's hypotheses `RowsOk`,
 `dupName = none`, `rootsColl = none` and `PopMatches`; the game's `n` is the public file's population (`pub.n = n`).
-`SampledKSLiveV2` implies it (`sampledKSLiveV3_of`). -/
+Its knowledge finders' budgets are V2's, `2(t' + v)` and `t' + v`. `SampledKSLiveV2` implies it (`sampledKSLiveV3_of`). -/
 def SampledKSLiveV3 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -106,7 +106,8 @@ def SampledKSLiveV3 : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (qF qS : ℝ)
+    -- one opening's verification, in SHA-512 evaluations
+    (v : ℝ)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
@@ -131,17 +132,19 @@ def SampledKSLiveV3 : Prop :=
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
     -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
-    -- cr/sha-512 for the knowledge finders of each table the prover's session runs
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
-      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
+    -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
+    -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
+    (∀ ω j, FlockSoundness.Assumptions.TableCRZAt execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
+      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) (2 * (t' + v)) (t' + v)) →
     -- ecr/sha-512 for the prover's link finders
-    LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+    FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
+      k Rw M t' →
     prob (fun o => (Bridge.LiveAcceptsKS I o ∧ Bridge.RunPopOk desc qr n) ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
           (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
-        ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
+        ksAvgStrictZ (planZHJ dj y₀) L k (2 * (t' + v)) (t' + v) (reg σ) +
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
@@ -152,7 +155,7 @@ def SampledKSLiveV3 : Prop :=
 and V3's event is inside V2's; at files that fail, V3's event is empty. -/
 theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hn desc qr kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
-    hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS q L P vb σ Xr δ Cc rows roots Cd κ hT hL
+    hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v q L P vb σ Xr δ Cc rows roots Cd κ hT hL
   by_cases hc : Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
       Bridge.RunPopOk desc qr n
   · obtain ⟨hck, p, hp, hpo⟩ := hc
@@ -163,7 +166,7 @@ theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
     exact (prob_mono (fun o ho => ⟨ho.1.1.1, ho.2⟩) _ τ).trans
       (h n Reg I ht D hD hU pub hpub hpt hscope (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr
         (Bridge.popMatches_of_popOk hp hpo) kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM
-        ρ hρ hr t' ht' K₀ hK₀ τ qF qS q hT hL)
+        ρ hρ hr t' ht' K₀ hK₀ τ v q hT hL)
   · exact (prob_mono (q := fun _ => False) (fun o ho => hc ⟨ho.1.1.2, ho.1.2⟩) _ τ).trans
       ((prob_false _ τ).le.trans zero_le)
 

@@ -77,7 +77,7 @@ A_CAP = (1 << 32) - 1
 #: against V' in [-128, 127] keeps every product in [-16256, 16129], so 4,128 steps stay in s32 where 2^17 does not
 PV_KEY_LIMIT = 132_096
 
-_CONF = ("exact-model-tested; tests/program/test_int8_exact_defs.py: every Definition here against verity_vllm.engine.int8_exact / "
+_CONF = ("exact-model-tested; every Definition here against the torch of int8_exact and "
          "int8_attention (the torch the profile serves) on random inputs on the CPU, all words equal; that torch is bit-equal on the "
          f"RTX PRO 6000 to its CPU run and to fattn_ref.py (run {EVIDENCE['int8_fattn_ref_check']['run']}: 5,087,232 linear words, "
          "884,736 attention words)")

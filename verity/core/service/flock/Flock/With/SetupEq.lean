@@ -38,9 +38,8 @@ theorem readWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String ×
   simp only [classOfWith_std, templateOfWith_std]
   try rfl
 
-set_option maxRecDepth 20000 in
 theorem descParseWith_std (bytes : ByteArray) :
-    TemplateQuery.Desc.parseWith std bytes = TemplateQuery.Desc.parse bytes := rfl
+    TemplateQuery.Desc.parseWith std.sha512 bytes = TemplateQuery.Desc.parse bytes := rfl
 
 set_option maxRecDepth 20000 in
 theorem programDecodeWith_std (bytes : ByteArray) : Program.decodeWith std.sha512 bytes = Program.decode bytes := rfl
@@ -174,6 +173,18 @@ theorem outParseWith_std (tags : Tags) (bytes : ByteArray) (tables : List (Strin
   try rfl
 
 set_option maxRecDepth 20000 in
+theorem outParseTmplWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) :
+    HmOut.parseTmplWith std tags bytes tables = HmOut.parseTmpl tags bytes tables := by
+  unfold HmOut.parseTmplWith HmOut.parseTmpl
+  simp -zeta only [parseWith_std, monadLift_self]
+  try rfl
+
+theorem outParseCommitWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) :
+    HmOut.parseCommitWith std tags bytes tables = HmOut.parseCommit tags bytes tables := by
+  unfold HmOut.parseCommitWith HmOut.parseCommit
+  rw [outParseTmplWith_std, outParseWith_std]
+
+set_option maxRecDepth 20000 in
 theorem inLoadPublicWith_std (tags : Tags) (c : Circuit) (pi : HmIn.Ports) (file : ByteArray) :
     HmIn.loadPublicWith std tags c pi file = HmIn.loadPublic tags c pi file := by
   unfold HmIn.loadPublicWith HmIn.loadPublic
@@ -186,8 +197,8 @@ theorem inDrawnWith_std (c : Circuit) (pi : HmIn.Ports) (pub : Public) (draw : J
   exact drawnWith_std _ _ _
 
 set_option maxRecDepth 20000 in
-theorem linksCheckWith_std (c : Circuit) (pop : Public) (program : ByteArray) :
-    HmLinks.checkWith std c pop program = HmLinks.check c pop program := by
+theorem linksCheckWith_std (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
+    HmLinks.checkWith std c pop readers program = HmLinks.check c pop readers program := by
   unfold HmLinks.checkWith HmLinks.check
   simp -zeta only [programDecodeWith_std]
   try rfl
@@ -199,8 +210,9 @@ theorem setupHiddenWith_std (tags : Tags) (circuitFile publicFile : ByteArray) (
     Stmt.setupHiddenWith std tags circuitFile publicFile coins tables draw partition program publicInputs
       = Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs := by
   unfold Stmt.setupHiddenWith Stmt.setupHidden
-  simp -zeta only [outParseWith_std, checkPartitionWith_std, inLoadPublicWith_std, inDrawnWith_std, stratifiedLawWith_std,
-    outCheckPublicWith_std, deriveTemplateUnitsWith_std, linksCheckWith_std, qwordFindingWith_std, std_sha512, pure_bind]
+  simp -zeta only [outParseCommitWith_std, checkPartitionWith_std, inLoadPublicWith_std, inDrawnWith_std,
+    stratifiedLawWith_std, outCheckPublicWith_std, deriveTemplateUnitsWith_std, linksCheckWith_std, qwordFindingWith_std,
+    std_sha512, pure_bind]
   try rfl
 
 set_option maxRecDepth 20000 in

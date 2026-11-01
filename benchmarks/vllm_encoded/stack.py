@@ -1,4 +1,4 @@
-"""The encoded stack inside vLLM (Llama-3.1-8B, FP8, one GPU): the remote bandwidth audit's own kernels in place of the
+"""The encoded stack inside vLLM (Llama-3.1-8B, FP8, one GPU): PoUB's own kernels in place of the
 model's linears, its lm_head, its attention and its KV cache's append, so a decode step reads every weight and KV byte as
 codec words, and the plain stack, the same engine over the same kernels' plain forms (its denominator, bit for bit).
 

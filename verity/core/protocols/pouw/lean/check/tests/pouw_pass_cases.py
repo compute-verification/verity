@@ -7,11 +7,11 @@ verifier's `core_check.LIVE` inputs or null), `core_check.live_salt`'s, ``{"key"
 A pass case is an honest pass (a small workload, its weights' roots, an epoch's coins committed under one of
 `core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, a recorded pass salted by a beacon, a
 certified pass under a stream and a prover, salted by the network certifier's reveal for the PoUW window its context
-names, over the weights' root the certifier recorded with the stream and the prover before it drew that salt, or a live
+names, over the weights' root the certifier recorded with the stream and the prover before it sampled that salt, or a live
 Pearl-C pass of salt epoch k over its weights' root W, salted by a salt-only challenger session the auditor's ledger
 reserves, opens on the epoch's root `salt.epoch_open_root(W, k)` and ends complete), then one mutation (`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A live-salt case is a live
 Pearl-C pass's manifest and its verifier's inputs, then one mutation (`LIVE_SALT_NAMES`) aimed at one refusal of
-`live_salt`.  A draw case is an honest draw (the draw coin of seeded coins, or of a live epoch's as a certified
+`live_salt`.  A sample case is an honest draw (the sampling coin of seeded coins, or of a live epoch's as a certified
 window's, opened after a registration's digest, the units `stream_subset` of its key's stream), then one mutation
 (`DRAW_NAMES`).
 `tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
@@ -784,7 +784,7 @@ DRAW_NAMES = ["verifier-coins", "recorded-scheme", "registration", "stream", "re
 
 def draw_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `draw` case: an honest draw (under seeded coins, or live ones a third of the time), then mutation `name` (a
-    live one's on a live draw)."""
+    live one's on a live sample)."""
     if name in LIVE_DRAW_NAMES or (name == "honest" and rng.random() < 1 / 3):
         d, live = honest_live_draw(rng, name == "live-units")
         if name != "honest":

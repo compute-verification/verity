@@ -55,18 +55,10 @@ def units(tp: Template, statics: dict[str, Any]) -> int:
     return int(statics["NH"]) * (1 if combine(tp) else len(positions(tp, statics)))
 
 
-def unit_rows(tp: Template) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
-    """Template ``tp``'s rows as `UnitStager` stages them: a part's ``in<g>``, one v2 row per parameter, a combine's ``in<g>.<s>``,
-    one v2 row per split s of parameter g (its row s, which the window wires to a part's output row); then one v2 output row
-    ``o<j>`` per return field (with hidden outputs the proved scope takes output rows of one port each)."""
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-
-    params, ret = tp.fn.signature()
-    if combine(tp):
-        ins = [(f"in{g}.{s}", V2, sum(ty.elem.leaf_widths()), [f"{nm}[{s}]"]) for g, (nm, ty) in enumerate(params) for s in range(ty.n)]
-    else:
-        ins = [(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)]
-    return ins, [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
+def cuts(tp: Template) -> dict[str, int] | None:
+    """Template ``tp``'s cuts (`interface.Layout.cut`): a combine's every parameter one row per split s (its row s, which the
+    window wires to a part's output row), a part's none."""
+    return {nm: ty.n for nm, ty in tp.fn.signature()[0]} if combine(tp) else None
 
 
 def _twins(statics: dict[str, Any], what: str) -> tuple[Callable, Callable, float]:

@@ -1,7 +1,7 @@
 """Demo A's frontier (`demo_a.py`): the Definition map's subcircuits at their per-token counts and staged k_log, each unit's work
 its own ANDs and every unit its output bits, statements shared, core's risk wherever core computes it, the certificate
 `certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under the
-exchange rate no worse than either half's best alone, within the budget, the least sampling block the first whose share of its
+exchange rate no worse than either half's best alone, within the budget, the least execution phase the first whose share of its
 GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform draw and the
 tile strata's epsilon as core and PoUW state them."""
 
@@ -18,6 +18,7 @@ from verity.core.protocols.pouw.window import k_prime
 from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import location_bits
 from verity.core.protocols.sampled_proofs.optimize import Objective, certify
+from verity.ml.windows.interface import K_MAX
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)
 
@@ -58,7 +59,7 @@ def test_the_partition_is_families_table_within_the_cap():
         assert t.chunks * D.TILE_CHUNK_MACS == D.TILE_OUTPUTS * k_of(t)
         assert t.cap * t.chunks <= 2 ** (35 - t.k_log) * t.groups and (t.cap + 1) * t.chunks > 2 ** (35 - t.k_log)
     assert [(t.cap, t.groups) for t in tiles] == [(2, 1), (1, 2)]
-    assert max(t.k_log for t in fs) <= D.K_LOG_MAX
+    assert max(t.k_log for t in fs) <= K_MAX
     assert all(t.cap == min(2 ** (35 - t.k_log), 2 ** 20) for t in fs if not t.chunks)
     one, week = D.candidates(), D.candidates(blocks=7)
     by_c = {t.id: t for t in fs}

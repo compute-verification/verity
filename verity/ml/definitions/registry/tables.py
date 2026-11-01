@@ -13,12 +13,12 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
                            -> Value<16 EW>: the entry at the index's low IB bits, its words joined low first; total;
                            the signature the Lean evaluator decodes (`Evaluate.Prims.lazyFamily?`)
     TableRead{IB}x{EW}_v2  its Boolean form, made with it up to `BT.MAX_WORDS` table words (`verity.ml.circuits.boolean.table`):
-                           the multiplexer tree over the 2^IB entries, (2^IB - 1) 16 EW ANDs, by which C-Flock lowers the
+                           the multiplexer tree over the 2^IB entries, (2^IB - 1) 16 EW ANDs, by which Flock lowers the
                            read; `gelu_tanh_bf16` and `tanh_rn` are past it, so a read of either stays a NoPiece
 
 `GeluTanhMulBf16_v3` is `GeluTanhMulBf16_v1` with the activation read from the registered `gelu_tanh_bf16` rather than computed
 by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in [LO, HI) read from the registered `tanh_rn`, as
-C-Flock's piece computes it (`verity_flock.tail_pieces.tanh_rn`); its 2^28 words are read lazily
+Flock's piece computes it (`verity_flock.tail_pieces.tanh_rn`); its 2^28 words are read lazily
 (`verity.ml.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.  No rule binds either: the Boolean versions
 of `TanhF32Rn_v1` and `GeluTanhMul_v1` compute both tables' entries by arithmetic (`registry.boolean_tanh`: `TanhF32Rn_v3`,
 `GeluTanhMul_v4`), so a Program on bits reads neither.  They stay as the Lean evaluator's examples of a table named in the

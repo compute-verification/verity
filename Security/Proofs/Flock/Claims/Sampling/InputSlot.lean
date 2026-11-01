@@ -4,7 +4,9 @@ import Proofs.Flock.SamplingBoundary
 # Input slots
 
 The deployed verifier lays an input class after the population (`Slots.layout`): one stratum of a one-gate replay unit
-per input gate, in gate order, and it checks every input slot on every run (`Slots.checked`).
+per input gate, in gate order, which `Slots.checked` lists on every draw. No run opens an input row on its own: the
+session proves the drawn units (`HmRow.drawn`), and registration opens no row, so an input row is opened only through
+a drawn unit that reads it.
 
 * `faulty_input_iff`: at a slot whose replay unit is the one proof unit `[p]` of an input gate `p`, the slot is faulty
   exactly when the witness opens no value at `p`. An input's computed value is its committed value, so an opened input

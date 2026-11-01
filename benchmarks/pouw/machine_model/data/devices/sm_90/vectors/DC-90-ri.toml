@@ -7,7 +7,7 @@
 name = "DC-90-ri"
 epoch = "DC-90-ri"
 summary = "the H200 (sm_90) census as DC-90, with UNI,JI90_0 refit to the uniform instruction's measured cost beside the saturated async wgmma (0.0001862 vs DC-90's 0.965): the async-joint issue price silicon charges, not the scalar-saturated-stream estimate"
-note = "note:20261017T1834Z-draft-rt-isa Round 2 (the uniform chain beside the saturated wgmma r20261017-204843-4803: 0.00019 SMSP-cycles an instruction, less 2%); on DC-90 (note:20261017T0452Z-draft-eps1-dc)"
+note = "the uniform chain beside the saturated wgmma: 0.00019 SMSP-cycles an instruction, less 2%; on DC-90"
 rows = ["issue", "M", "A", "I", "SHFL", "JI90_0", "JI90_1", "JI90_2", "JPI90_0", "JPI90_1", "JPA90_0", "JPA90_1",
         "JPSHFL90_0", "UP", "AT90"]
 credits = []

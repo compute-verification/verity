@@ -1,12 +1,12 @@
 """Pinned vectors for the tile checks' public input regions (`anchors.TileAnchors.regions`), the `--public-inputs` content a
-verifier derives for one unit, against which C-Flock's file is mapped: ``uv run python
+verifier derives for one unit, against which Flock's file is mapped: ``uv run python
 verity/core/protocols/pouw/tests/pouw_regions_vectors.py`` rewrites ``tests/vectors/pouw_regions.json``.  A change to that file is a
 change to a region's layout or derivation and needs a reason in the PR.
 
 Inputs are derived, not stored: a case's salt, root_A and root_B are SHA-256("verity/pouw/regions-vectors/v1", case, part),
 its matmul index 3 and weight id 9, and the scheme's `noise` gives the seeds.  Each region is pinned by the SHA-256 of its
 bytes (`anchors.region_bytes`: its u16 words little-endian), and an E region by its bytes too; each `--public-inputs` file
-(`TileAnchors.public_inputs`, C-Flock's ``verity/flock-public-inputs/v1``) by its header line and its body's SHA-256.
+(`TileAnchors.public_inputs`, Flock's ``verity/flock-public-inputs/v1``) by its header line and its body's SHA-256.
 ``row_k_cases`` pins the cut's shapes (`rowk`, ``Shape.row_k``): each piece's regions, a form's its segment of F_A and F_B
 under the slice rule."""
 

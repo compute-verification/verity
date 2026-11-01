@@ -483,7 +483,7 @@ def evaluate(st: dict, cases: Sequence[Case]) -> list[int]:
 
 
 def _build_route(C, S, xs: list, sw: list) -> list:
-    """`IoTieRoute{W, D}` on C's wires as C-Flock lowers it, each `IoTieSwitch` activation by its builder, the switch bits
+    """`IoTieRoute{W, D}` on C's wires as Flock lowers it, each `IoTieSwitch` activation by its builder, the switch bits
     in `IT.benes`' order: the input column, the upper half's, the lower half's, the output column."""
     it = iter(sw)
 
@@ -510,7 +510,7 @@ def _count(build, params) -> int:
 
 @lru_cache(maxsize=None)
 def _step_ands(key: tuple) -> int:
-    """The step's parts counted as C-Flock lowers them, each activation by its builder on its own wires: the slots, the
+    """The step's parts counted as Flock lowers them, each activation by its builder on its own wires: the slots, the
     routing with its M − R zero records constant, the scan."""
     S = SimpleNamespace(**dict(zip(STEP, key)))
     Z = _step_widths(S)

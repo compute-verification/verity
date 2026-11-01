@@ -59,14 +59,18 @@ BF16 = "bfloat16"
 @dataclass(frozen=True)
 class Named:
     """A request Program's names: each Call's by node index (`names`), the parameters' (`params`: [name, type] each, as an
-    instances head lists them), the runtime correspondence document, the cached prefix's layout (None without one) and the
-    request's shape (`shape`: wrapper, LP, T, C and sampling, as a Build's `result.json` states them)."""
+    instances head lists them), the runtime correspondence document, the cached prefix's layout (None without one), the
+    request's shape (`shape`: wrapper, LP, T, C and sampling, as a Build's `result.json` states them), the declared target
+    (`target`, `TargetProfile.to_json`) and each attention layer by vLLM's layer name with its statics (`attention`, the
+    fields of a trace's `attention_impls_observed` the audit reads)."""
 
     names: dict[int, str]
     params: list[list[str]]
     correspondence: dict
     prefix: dict | None
     shape: dict
+    target: dict
+    attention: dict
 
 
 def _view(shape: tuple[int, ...], dtype: str) -> dict:
@@ -231,7 +235,9 @@ def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, 
     prefix = {"input": names_of.index("prefix"), "C": C, "row_leaves": Cm.KVH * Cm.D,
               "layers": [f"model.layers.{L}.self_attn.attn" for L in range(Cm.NL)]} if C else None
     shape = {"wrapper": "request", "LP": LP, "T": T, "C": C, "sampling": dict(sampling)}
-    return body, Named(names, [[n, str(t)] for n, t in user] + [[wname, str(weights)]], doc, prefix, shape)
+    attention = {f"model.layers.{L}.self_attn.attn": {"num_heads": Cm.NH, "num_kv_heads": Cm.KVH, "head_size": Cm.D, "sliding_window": None}
+                 for L in range(Cm.NL)}
+    return body, Named(names, [[n, str(t)] for n, t in user] + [[wname, str(weights)]], doc, prefix, shape, S.tp.to_json(), attention)
 
 
 def named_program(phi: Phi, LP: int, T: int, C: int = 0) -> BuildResult:
@@ -244,10 +250,11 @@ def named_program(phi: Phi, LP: int, T: int, C: int = 0) -> BuildResult:
 
 
 def write_build(out: str, program: Any, named: Named) -> str:
-    """`program`'s Build dir at `out`, as a trace's reads to the audit (`prove_path.build_of`, `ProgramIndex`): its descriptor
-    under `named`'s `node_hints` and correspondence, its instances under `named`'s Call and parameter names, its `result.json`
-    (the Program's function, digest and correspondence digest, the request's shape) and its `prefix_cache.json` with a cached
-    prefix -> the Program's digest."""
+    """`program`'s Build dir at `out`, as a trace's reads to the audit (`prove_path.build_of`, `ProgramIndex`) and to the
+    manifest (`pipeline.manifest.build`): its descriptor under `named`'s `node_hints` and correspondence, its instances under
+    `named`'s Call and parameter names, its `result.json` (the Program's function, digest and correspondence digest, the
+    request's shape, the declared target and `attention_impls_declared`) and its `prefix_cache.json` with a cached prefix ->
+    the Program's digest."""
     from verity.ml.circuits.codec import encode_program, program_digest
     from verity_vllm.correspondence.runtime import NAMESPACE, correspondence_digest
     from verity_vllm.pipeline.build_instances import write_instances
@@ -263,6 +270,7 @@ def write_build(out: str, program: Any, named: Named) -> str:
         with open(os.path.join(out, "prefix_cache.json"), "w") as f:
             json.dump(named.prefix, f, indent=1)
     res = {"ok": True, **named.shape, "tp": {"world": 1, "rank": 0}, "built_by": BUILT_BY,
+           "target": {"declared": named.target, "declared_source": "declared"}, "attention_impls_declared": named.attention,
            "program": {"function": program.fn.id, "digest": digest, "n_root_nodes": len(program.fn.body.nodes), "correspondence_digest": cd},
            **({"prefix": named.prefix} if named.prefix is not None else {})}
     with open(os.path.join(out, "result.json"), "w") as f:
