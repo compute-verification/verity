@@ -437,3 +437,27 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
   - The heuristic step fails as stated (the cheaters do cancel their low-rank part), but its conclusion held.
   - **The coordinator's reading for design U:** credit q and k at δ 0.10, or exclude them from credit (they're a small
     share of MACs). The MLP and v/o matrices were not attacked here.
+- **HT-PUBLIC-v2, the split search on design U's honest hardened codes**
+  (note:compute-research/20261101T1122Z-report-hardness-public-v2; priced on HT-PREMISE's executor, and every split
+  under 1.05 checked bit-exact at full size):
+  - **1B:** all 112 matrices are above 1.05 (the minimum is 1.071).
+  - **8B:** only layer-0 q and k fall under the line, and a 6% clip restores it.
+  - **70B:** early attention fails. 24 of 160 k and v matrices are under at 0.84 (11–13 at 1.78), and q in layers 0–3
+    is under at every price. A 20% clip clears most of them. Four nearly low-rank matrices (0.13% of MACs) stay under at
+    every clip, so they must be credited at their split's price or not at all.
+  - HT-PROV's ±31 route doesn't apply to honest 1B or 8B codes.
+
+## Design U, consolidated status (coordinator, 11:50Z Sun 1 Nov)
+
+- **Quality:** about +1% perplexity under the served 2-bit noise (1B trained, 8B untrained), with a Hadamard rotation and
+  a 2% clip.
+- **Honest hardness:**
+  - 1B is ≥ 7–13% over stock on every matrix.
+  - 8B is fine except layer-0 q and k, which a higher clip fixes.
+  - 70B needs per-matrix clip targets on early attention, a K ≤ 8,192 cap for down_proj, and four matrices excluded
+    from credit.
+- **Adversarial provenance:** a cheater trained against both gates passes on q and k at about 0.94 of dense (+3–4%
+  perplexity). So credit q and k at δ 0.10, or exclude them. MLP, v and o weren't attacked.
+- **Protocol** (HT-PROTO-U): h of about 0.6–1.1 against the lead's 127.5, and a 1.1–1.9× slowdown, both estimates.
+- **Still open:** per-segment live keys on x, U's own outsourcing price, an adversarial attack on the MLP matrices, and
+  building the ZK gates (233 GPU-h for 1B).
