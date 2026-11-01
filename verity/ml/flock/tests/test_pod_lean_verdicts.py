@@ -237,7 +237,7 @@ logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.v
 inner = open(flags["--rec-inner"], "rb").read()
 ok, why = RC.check(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
                    open(flags["--rec-run"]).read(), [(f, open(f).read()) for f in logs])
-print("REC-COMPOSE " + json.dumps({"accepted": ok, "parts": len(logs)}))
+print("REC-COMPOSE " + json.dumps({"accepted": ok, "why": why, "parts": len(logs)}))
 sys.exit(0 if ok else 1)
 '''
 
@@ -282,16 +282,17 @@ def _shared(d: Path, inner: str | None, session: str, transcript: str) -> dict:
 
 
 def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None,
-           session: str = "s", transcript: str = "t") -> None:
+           session: str = "s", transcript: str = "t", key: str | None = None) -> None:
     """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked, the
     inputs every part shares (at DIR's ``rec-inner.json`` unless ``inner`` is another inner shape file's bytes, and at
-    the inner session record ``session`` and transcript ``transcript``), ``--zk`` and its coin key."""
+    the inner session record ``session`` and transcript ``transcript``), ``--zk`` and its coin key (``key``'s, else its
+    own name's)."""
     v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j,
          "rec_rows_sha512": digest, "rec_shared": _shared(d, inner, session, transcript), "zk": True,
-         "coin_key": _key(name)}
+         "coin_key": _key(key or name)}
     (d / f"{name}.log").write_text(f"VERDICT {json.dumps(v)}\n")
     (d / f"time-{name}.txt").write_text(f"\tExit status: {rc}\n")
-    (d / f"own-{name}.txt").write_text("--rec-rows rows.json")
+    (d / f"own-{name}.txt").write_text(f"--rec-rows rows.json --rec-part {j}")
 
 
 def test_honest_parts_compose(tmp_path, capsys):
@@ -302,7 +303,7 @@ def test_honest_parts_compose(tmp_path, capsys):
     _record(tmp_path, h, [("L0", 0), ("alg-p0", 1), ("cap", 2)])
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
     out = capsys.readouterr().out.splitlines()
-    assert rc == 0 and out[-2] == 'lean compose: REC-COMPOSE {"accepted": true, "parts": 3}'
+    assert rc == 0 and out[-2] == 'lean compose: REC-COMPOSE {"accepted": true, "why": "", "parts": 3}'
 
 
 def test_a_retried_part_does_not_compose(tmp_path, capsys):
@@ -325,7 +326,156 @@ def test_a_run_without_its_record_is_not_composed(tmp_path, capsys):
         _vpart(tmp_path, p, j, h)
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "cap"])
     out = capsys.readouterr().out.splitlines()
-    assert rc == 0 and out[-2].startswith("lean compose: no interactive-run record (rec-run.json)")
+    assert rc == 0 and out[-2].startswith("lean compose: no interactive-run record (rec-run.json, or a firewalled oprove")
+
+
+def _challenger(d: Path, opens: list[tuple[str, int]], session: str = "s", close: bool = True,
+                name: str = "rec-run.jsonl") -> list[dict]:
+    """The record 85's firewalled oprove keeps, one event a line (``rec-run.jsonl``): its staging of the rows file and
+    the shared set the parts were given (`_shared`'s, at the inner session record ``session``), then one open per
+    (key name, part) of ``opens`` as ``flock-circuit serve --rec-run`` logs it at each Hello, then (``close``) the close;
+    under another ``name`` (a forgery's), its opens alone. Its events."""
+    stage = {"event": "stage", "rec_rows_sha512": RC.digest((d / "rows.json").read_bytes()),
+             "rec_shared": _shared(d, None, session, "t")}
+    evs = [*([stage] if name == "rec-run.jsonl" else []),
+           *({"event": "open", "session": f"l{i:04}-{k}", "rec_part": j, "coin_key": _key(k)} for i, (k, j) in enumerate(opens)),
+           *([{"event": "close"}] if close and name == "rec-run.jsonl" else [])]
+    (d / name).write_text("".join(json.dumps(e, separators=(",", ":")) + "\n" for e in evs))
+    return evs
+
+
+def test_a_firewalled_oprove_composes_over_the_record_its_coin_servers_logged(tmp_path, capsys):
+    """The run's record is the challenger's ``rec-run.jsonl``, event for event: oprove's staging, each part's open as its
+    coin server logged it at the Hello, the close; the parts compose over it."""
+    binary, h = _composer(tmp_path, 3)
+    parts = {"L0": 0, "alg-p0": 1, "cap": 2}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    evs = _challenger(tmp_path, list(parts.items()))
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0 and out[-2] == 'lean compose: REC-COMPOSE {"accepted": true, "why": "", "parts": 3}', out
+    assert json.loads((tmp_path / "rec-run.json").read_text()) == {"events": evs, "kind": C.RUN_KIND}
+
+
+def test_a_second_session_logged_for_a_part_does_not_compose(tmp_path, capsys):
+    """A part's coin server that answered two Hellos logged both, and the composition refuses the retry."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _challenger(tmp_path, [("L0", 0), ("L0-again", 0), ("cap", 1)])
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].endswith("<- FAILS") and "part 0: 2 sessions opened in the run record" in out[-2]
+
+
+@pytest.mark.parametrize("retried, opens, passes", [
+    ("L0", [("L0", 0), ("L0-retry", 0), ("cap", 1)], True),
+    ("L0", [("L0", 0), ("cap", 1)], False),
+    ("cap", [("L0", 0), ("L0-retry", 0), ("cap", 1)], False),
+])
+def test_a_forced_retry_passes_only_when_its_composition_is_refused_as_retried(tmp_path, capsys, retried, opens, passes):
+    """85's RETRY gives a statement a second session, logged as any other: the step passes only when the composition is
+    refused for that statement's part being retried, and fails when it composes (the retry not logged) or is refused for
+    another part."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _challenger(tmp_path, opens)
+    (tmp_path / "retried.txt").write_text(retried + "\n")
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert out[-2].startswith(f"lean compose (RETRY={retried}, part {parts[retried]}: refused as retried")
+    assert (rc, out[-2].endswith("<- FAILS")) == ((0, False) if passes else (1, True)), out
+
+
+@pytest.mark.parametrize("close, torn, why", [
+    (False, False, "not closed"),
+    (True, True, "no interactive-run record from rec-run.jsonl (rec-run.jsonl: its line 2 is not JSON)"),
+])
+def test_an_unclosed_or_torn_record_does_not_compose(tmp_path, capsys, close, torn, why):
+    """An oprove that never closed its record (it stopped before the last session ended), or a line not written whole, is
+    no run's record: the composition refuses."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _challenger(tmp_path, list(parts.items()), close=close)
+    if torn:
+        lines = (tmp_path / "rec-run.jsonl").read_text().splitlines(keepends=True)
+        (tmp_path / "rec-run.jsonl").write_text(lines[0] + lines[1][:40] + "\n" + "".join(lines[2:]))
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and why in out[-2] and out[-2].endswith("<- FAILS"), out
+
+
+def test_a_part_given_other_shared_files_than_the_staged_ones_does_not_compose(tmp_path, capsys):
+    """oprove stages the shared set of the files it gives every part, so parts whose VERDICTs name another inner
+    session's record are refused, though they agree with each other."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h, session="other")
+    _challenger(tmp_path, list(parts.items()))
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    assert rc == 1 and capsys.readouterr().out.splitlines()[-2].endswith("<- FAILS")
+
+
+def test_a_forgery_is_composed_over_its_own_coin_servers_opens_in_its_parts_place(tmp_path, capsys):
+    """A forgery's coin server logs into a record of its own, so the honest run's stays one session a part; its
+    composition is over the run's record with its part's opens replaced by the forgery's, so it is refused by the
+    forgery's own verdict, not by a session the record lacks."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _vpart(tmp_path, "forged-sum-L0", 0, h, rc=1, accepted=False)
+    stage, _, cap, close = _challenger(tmp_path, list(parts.items()))
+    (forged,) = _challenger(tmp_path, [("forged-sum-L0", 0)], name="rec-run-forged-sum-L0.jsonl")
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts, "forged-sum-L0"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert json.loads((tmp_path / "rec-run-forged-sum-L0.json").read_text())["events"] == [stage, cap, forged, close]
+    assert "lean compose: REC-COMPOSE {\"accepted\": true" in out
+    forged_line = next(ln for ln in out.splitlines() if ln.startswith("lean compose forged-sum-L0: REC-COMPOSE "))
+    assert "forged-sum-L0.log: a session is not accepted" in LV.why_of(forged_line.split(": ", 1)[1])
+
+
+def test_a_forged_inner_keeps_its_parts_honest_opens(tmp_path, capsys):
+    """A forged inner (85's NEG_INNER) is verified over each part's honest session, with no coin server of its own: its
+    composition is over the challenger's record as logged, and Lean refuses it for the part that reads the coin."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "alg-p0": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _vpart(tmp_path, "forged-inner-challenge-L0", 0, h, key="L0")
+    _vpart(tmp_path, "forged-inner-challenge-alg-p0", 1, h, rc=1, accepted=False, key="alg-p0")
+    for p in parts:
+        (tmp_path / f"own-forged-inner-challenge-{p}.txt").unlink()
+    evs = _challenger(tmp_path, list(parts.items()))
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts, *(f"forged-inner-challenge-{p}" for p in parts)])
+    out = capsys.readouterr().out.splitlines()
+    line = next(ln for ln in out if ln.startswith("lean compose forged-inner-challenge (2 parts): REC-COMPOSE "))
+    assert rc == 0 and not line.endswith("<- FAILS"), out
+    assert "forged-inner-challenge-alg-p0.log: a session is not accepted" in LV.why_of(line.split(": ", 1)[1])
+    assert json.loads((tmp_path / "rec-run.json").read_text())["events"] == evs
+
+
+def test_a_staged_forgery_without_its_own_record_fails(tmp_path, capsys):
+    """A staged forgery proved on its own coin server must have that server's record: without it there is nothing to
+    compose it over, which is no refusal by Lean, and the step fails."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "cap": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _vpart(tmp_path, "forged-sum-L0", 0, h, rc=1, accepted=False)
+    _challenger(tmp_path, list(parts.items()))
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts, "forged-sum-L0"])
+    out = capsys.readouterr().out.splitlines()
+    line = next(ln for ln in out if ln.startswith("lean compose forged-sum-L0: "))
+    assert rc == 1 and "no interactive-run record from rec-run.jsonl" in line and line.endswith("<- FAILS"), out
 
 
 def test_a_part_checked_against_other_rows_is_refused(tmp_path, capsys):
@@ -391,6 +541,51 @@ def test_a_forgery_in_its_parts_place_must_not_compose(tmp_path, capsys):
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "cap", "forged-sum-L0"])
     out = capsys.readouterr().out.splitlines()
     assert rc == 0 and any(ln.startswith("lean compose forged-sum-L0: REC-COMPOSE") and "FAILS" not in ln for ln in out)
+
+
+def test_a_forged_inner_composes_as_one_forgery(tmp_path, capsys):
+    """A forged inner coin (85's NEG_INNER) is every V* part verified against it: the parts that read the coin refuse it,
+    the others accept, as they should. Its parts are put in place together and that composition is refused, so the step
+    passes; putting in only a part that doesn't read the coin would compose and fail it."""
+    binary, h = _composer(tmp_path, 3)
+    for j, p in enumerate(("L0", "alg-p0", "cap")):
+        _vpart(tmp_path, p, j, h)
+    _vpart(tmp_path, "forged-inner-challenge-L0", 0, h)
+    _vpart(tmp_path, "forged-inner-challenge-alg-p0", 1, h, rc=1, accepted=False)
+    _vpart(tmp_path, "forged-inner-challenge-cap", 2, h)
+    parts = ["L0", "alg-p0", "cap", *(f"forged-inner-challenge-{p}" for p in ("L0", "alg-p0", "cap"))]
+    _run_of_logs(tmp_path, ["L0", "alg-p0", "cap"])
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert any(ln.startswith('lean compose forged-inner-challenge (3 parts): REC-COMPOSE {"accepted": false, "why": ')
+               and ln.endswith('"parts": 3}') for ln in out), out
+    assert rc == 0 and out[-1] == "lean: 3/3 accepted, 1/1 forgeries refused"
+
+
+def _run_of_logs(d: Path, names: list[str]) -> None:
+    """``rec-run.json`` (`challenger.RunRecord`'s form) opening the sessions the logs of ``names`` name: staged at the first
+    one's rows and shared set, each its VERDICT's part and coin key, closed. A composition reads it where the challenger's
+    record of the run is required; one that requires none never reads it."""
+    vs = [json.loads((d / f"{n}.log").read_text().splitlines()[0][8:]) for n in names]
+    events = [{"event": "stage", "rec_rows_sha512": vs[0]["rec_rows_sha512"], "rec_shared": vs[0].get("rec_shared")},
+              *({"event": "open", "session": n, "rec_part": v["rec_part"], "coin_key": v.get("coin_key")}
+                for n, v in zip(names, vs)), {"event": "close"}]
+    (d / "rec-run.json").write_text(json.dumps({"events": events, "kind": "verity/rec-run/v1"}))
+
+
+def test_a_forgery_the_composition_accepts_fails(tmp_path, capsys):
+    """A forgery whose every part Lean accepts composes, and the step fails on it."""
+    binary, h = _composer(tmp_path, 2)
+    for j, p in enumerate(("L0", "alg-p0")):
+        _vpart(tmp_path, p, j, h)
+        _vpart(tmp_path, f"forged-inner-challenge-{p}", j, h)
+    # the record opens the forgery's sessions, so only the forgery's composition can be one run
+    _run_of_logs(tmp_path, ["forged-inner-challenge-L0", "forged-inner-challenge-alg-p0"])
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "forged-inner-challenge-L0",
+                  "forged-inner-challenge-alg-p0"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and any(ln.startswith("lean compose forged-inner-challenge (2 parts)") and ln.endswith("<- FAILS")
+                           for ln in out)
 
 
 def test_a_run_of_some_parts_is_not_composed(tmp_path, capsys):

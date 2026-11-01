@@ -2,7 +2,7 @@
 ``verity/flock-pure-block/v2`` layouts.
 
 K = 1536 is the frozen sets' K (``Chunk(3)`` for BF16, ``Fp8`` for E4M3). Any other K lowers when a row is whole BLAKE3
-chunks, at least two (``Chunk(n)``, n = K x word bytes / 1024: K = 2048 and 8192 today); ``stage`` writes an input set's
+chunks, at least two (``Chunk(n)``, n = K x word bytes / 1024: K = 2048 and 8192 so far); ``stage`` writes an input set's
 range as the instance file (``instances.write_set``, rows per template instance). A proof holds at most 32,768 / n
 template instances (CN2); larger batches are sub-batches."""
 from pathlib import Path

@@ -41,10 +41,12 @@ except:
 from __future__ import annotations
 
 import functools
+import io
 import json
 import re
 import subprocess
 import sys
+import tokenize
 import tomllib
 from collections import defaultdict
 from dataclasses import dataclass
@@ -85,7 +87,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
     "CoinTree": (),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
-    "Collision": ("Security/Definitions/Hash/Basic.lean::Hash.Collision",),
+    "Collision": ("Security/Definitions/Core/Hash.lean::Hash.Collision",),
     "Commitment": ("verity/ml/commitments/merkle.py::Commitment",),
     "Dag": (),
     "Device": (),
@@ -127,6 +129,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
+CANONICAL["Record"] = ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
@@ -280,11 +283,33 @@ def lean_definitions(text: str) -> tuple[list[tuple[str, Hit]], list[tuple[str, 
     return out, fields
 
 
+def _python_code(text: str) -> str:
+    """`text` with its string literals and comments blanked to spaces, newlines and offsets kept, so prose that wraps to
+    begin a line with `class X` isn't read as a header; `text` itself when it doesn't tokenize."""
+    lines = text.splitlines(keepends=True)
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, SyntaxError):
+        return text
+    prose = {tokenize.STRING, tokenize.COMMENT, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
+    chars = [list(line) for line in lines]
+    for t in tokens:
+        if t.type in prose:
+            (r0, c0), (r1, c1) = t.start, t.end
+            for r in range(r0, r1 + 1):
+                row = chars[r - 1]
+                for c in range(c0 if r == r0 else 0, c1 if r == r1 else len(row)):
+                    if row[c] != "\n":
+                        row[c] = " "
+    return "".join("".join(row) for row in chars)
+
+
 def python_definitions(text: str) -> list[tuple[str, Hit]]:
     """The Python source `text`'s ``(concept, Hit)`` pairs: classes at module or class level (not local to a function),
-    keyed by their qualified name (`Outer.Inner`)."""
+    keyed by their qualified name (`Outer.Inner`). Strings and comments are not code (`_python_code`)."""
     if not _PY_CANDIDATE.search(text):
         return []
+    text = _python_code(text)
     out, stack = [], []  # stack: (indent, keyword, name) of the enclosing `class` and `def` headers
     for m in _PY_HEADER.finditer(text):
         indent, keyword, name = len(m.group(1).expandtabs()), m.group(2), m.group(3)
@@ -620,7 +645,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes its device entry (network-accounting)",
     "benchmarks/datacenter/datacenter/physical.py::Link":
         "duplicate of the Site (`Verity.Site`): becomes its link (network-accounting)",
-    "benchmarks/harness/verity_bench/settings.py::Registry": "homonym, one distribution's settings: rename (benchmarks)",
     "benchmarks/hash/dither/dither_fused.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
     "benchmarks/hash/dither/dither_one.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
     "benchmarks/hash/lib/vclib.py::Opening": "homonym, one vc_open_launch record: rename (kernels)",
@@ -638,8 +662,6 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
     "benchmarks/network_sim/workload/placement.py::Placement":
         "duplicate of `CircuitRequirement.Placement`: becomes a client of it (network-accounting)",
-    "benchmarks/network_traces/n2_advised_zk.py::Challenger":
-        "duplicate of `parties.Challenger`: becomes a client of it (network-accounting)",
     "benchmarks/network_traces/transfer_zk.py::Block":
         "homonym, a server block's one template: rename (network-accounting)",
     "benchmarks/numerical/python/verity_numerical/bench/lowerings.py::Registry":
@@ -829,8 +851,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (vllm)",
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Registration":
         "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a view of its head (vllm)",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/registry.py::Store":
-        "duplicate of `CircuitRequirement.Store`: becomes a reading of it (vllm)",
     "integrations/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
     # tools/
     "integrations/vllm/verity_vllm/records/inference_blocks.py::Statement":
@@ -1294,6 +1314,21 @@ class CoinsFor: ...
 """
     assert [(c, h.key, h.line) for c, h in python_definitions(src)] == [
         ("Coins", "Coins", 1), ("Draw", "Coins.Draw", 2), ("Window", "Window", 13)]
+
+
+def test_the_scan_reads_no_class_in_a_string_or_comment():
+    """Prose that wraps to begin a line with `class X` (a docstring, a comment, a string) declares nothing."""
+    src = '''"""The census. ``key_blocks`` is the
+class Coins's attention cut, which the cost reads."""
+# class Window: a comment, not a header
+NOTE = """
+class Draw
+"""
+
+class Witness:
+    pass
+'''
+    assert [(c, h.key, h.line) for c, h in python_definitions(src)] == [("Witness", "Witness", 8)]
 
 
 def test_readings_and_slots_are_exempt():
