@@ -3,8 +3,9 @@ its tests) on the built modules its task reads, and the package's committed `lea
 audit computes.
 
 A task gives (`families/lean_lock.py`): `vars` `package`; inputs every file of the packages the audit reads (the package,
-those it requires by path, those its `proved_in` names) and the auditor's; reads the `.olean` of each of their modules, in
-one directory of the work directory (`out/lean/<A>/<B>.olean` for `A.B`); and output `records`. The runner copies the
+those it requires by path, those its `proved_in` names) and the auditor's; reads what an importer reads of each of their
+modules (its `.olean`, and a `module` file's parts), in one directory of the work directory (`out/lean/<A>/<B>.olean` for
+`A.B`); and output `records`. The runner copies the
 inputs into a scratch tree (`lean_audit.scratch_tree`), gives each of its packages that directory as its build and its
 fetched packages from the worker's `lean` env (`lean_module.packages`), and runs `check.py` there. It passes when the audit
 passes, `records` then the committed lock; a lock whose every failure is a record difference is stale, a fail naming the
