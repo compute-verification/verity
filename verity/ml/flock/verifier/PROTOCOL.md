@@ -72,8 +72,8 @@ enters the verifier (§6.3).
 
 Profile `fast100` (§15); two reps on one committed root; the `rs` flavour (univariate skip over the AES subfield);
 `PcsParams(m)` computed from the statement; a link of two points with `y = 0`; `require_link = true`; no prime half; the
-coin source a plain session's identity names (`--coins seed`, the default, or `--coins os`, §7; a `--zk` session's coins
-are its coin tree, §7.4); no grinding: every proof-of-work nonce must be `0` (R4).
+coin source a plain session's identity and `Hello` name (`--coins seed`, the default, `--coins os`, or `--coins tree`,
+§7; a `--zk` session's coins are its coin tree, §7.4); no grinding: every proof-of-work nonce must be `0` (R4).
 
 ## 5. The session record
 
@@ -85,7 +85,7 @@ are its coin tree, §7.4); no grinding: every proof-of-work nonce must be `0` (R
 `verity_flock.record_text` also write (held to Lean's output by `live/src/record_text_vectors.json`). The verifier reads
 `kind`, `aborted`, `hello`, `config.require_link`, `link_mode`, the `link` exchange (Σ, root_F, each table's root_B and
 public words, the points, `y`, each with its digest), the `streams` with their rounds (`k`, `n`, the framed bytes' length
-and digest, the coins, and the retained bytes `msg`), `proof_sha512`, `unit_draw` and, under `--zk`, `coin_tree`. It
+and digest, the coins, and the retained bytes `msg`), `proof_sha512`, `unit_draw` and, on the coin tree, `coin_tree`. It
 ignores every other field, the live server's own verdict included.
 
 ### 5.2 Streams and rounds
@@ -178,10 +178,11 @@ The draw is the public header's `unit_draw` (so under the public digest and Σ),
 
 ### 7.4 The keyed coin tree
 
-`Flock.CoinTree`. A `--zk` session's coins are committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree whose every hash
-is prefixed by the prover's fresh nonce; the server answers with the root and a fresh hm96 key. The verifier checks
-`Hello`'s nonce and canonical form (R7), the record's `coin_tree` (`key`, `nonce`, `root`, `spec`) and that no earlier
-session of the run used the key.
+`Flock.CoinTree`. A `--zk` session's coins, and a plain session's under `--coins tree` (`FC_COINS=tree`), are committed
+at `Hello` in a `coin-tree/hm96-sha512/v2` tree whose every hash is prefixed by the prover's fresh nonce; the server
+answers with the root and a fresh hm96 key. The tree's streams are the session's (the link points), then each table's two
+reps (`Zk.coinSpec`). The verifier checks `Hello`'s nonce and canonical form (R7), the record's `coin_tree` (`key`,
+`nonce`, `root`, `spec`) and that no earlier session of the run used the key.
 
 ## 8. The proof container
 
