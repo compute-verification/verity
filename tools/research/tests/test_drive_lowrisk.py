@@ -187,6 +187,53 @@ def test_a_running_lean_check_moves_across_a_low_risk_landing_and_lands_there(wo
     assert _checked(world) == new and len(h.launched) == 1
 
 
+def _moved_regenerating(world: World, monkeypatch, tmp_path) -> tuple[Review, str, str, str]:
+    """#1's running Lean check moved across #2's low-risk landing, then passed by regenerating #1's lock: (the harness, its run,
+    the commit it ran on, the commit it holds)."""
+    from test_queue_drive import _live_run
+
+    h = _lane(world, monkeypatch)
+    h.d.regenerate_locks = True
+    world.gh.put(1, world.change({"pkg/T.lean": "theorem T : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
+    h.review(1)
+    h.tick()
+    one, (rid,) = _tip(world), h.lean_ids()
+    world.gh.put(2, world.change({"x.txt": "2\n"}))
+    assert h.tick().endswith("landed #2 on the low-risk lane"), world.logs
+    new = _tip(world)
+    assert _lean(h)[new]["rekeyed_from"] == one and len(_carried(world)) == 1, world.logs
+    h.d.fetch = _live_run(tmp_path, rid, one, {"pkg": '{"records": 2}\n'})[1]
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    return h, rid, one, new
+
+
+def test_a_moved_lean_check_that_passes_by_regenerating_records_lands_them_on_the_moved_commit(world, monkeypatch, tmp_path):
+    """What the Lean check reads is the same in the tree it ran on and in the moved commit's, which differ by #2's file alone:
+    its regenerated records land on the moved commit, which the lock gate vouches for (`merge.regenerated_parent` with
+    `rekeyed_from`), and nothing is checked again."""
+    h, rid, one, new = _moved_regenerating(world, monkeypatch, tmp_path)
+    assert h.tick().startswith("landed #1"), world.logs
+    tip = _checked(world)
+    assert _git(world.origin, "rev-parse", f"{tip}^") == new and len(h.launched) == 1 and h.cancelled == [], world.logs
+    assert _git(world.origin, "diff", "--name-only", new, tip) == "pkg/lean-audit.json"
+    assert _git(world.origin, "show", f"{tip}:pkg/lean-audit.json") == '{"records": 2}'
+    assert f"Checked: {rid} (the Lean check of {one[:12]}, passed" in _git(world.origin, "log", "-1", "--format=%B", tip)
+
+
+def test_a_moved_lean_check_whose_trees_differ_in_an_excluded_file_is_checked_again(world, monkeypatch, tmp_path):
+    """`lowrisk_excludes` came to name #2's file after the move: the records its check regenerated no longer hold on the moved
+    commit by the rule the lock gate applies, so it isn't landed (the gate would refuse it at every tick) but checked again."""
+    h, rid, one, new = _moved_regenerating(world, monkeypatch, tmp_path)
+    checked = _checked(world)
+    h.d.lowrisk_excludes = (*EXCLUDES, "x.txt")
+    assert not h.tick().startswith("landed"), world.logs
+    assert _checked(world) == checked and len(h.launched) == 2 and h.launched[1][0] == new, h.launched
+    assert any(f"the Lean check {rid} moved to {new[:12]} regenerated lock records, which don't hold there (the trees of "
+               f"{one[:12]} and {new[:12]} differ in x.txt, which a Lean check reads or `lowrisk_excludes` names)" in x
+               for x in world.logs), world.logs
+
+
 def test_a_passed_lean_check_awaiting_its_verdict_moves_too_and_the_lane_doesnt_wait(world, monkeypatch):
     h = _lane(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
@@ -231,6 +278,29 @@ def test_a_lean_check_isnt_moved_across_a_change_lowrisk_excludes_names_and_the_
     assert line.startswith(f"research queue drive: low-risk lane waits: a landing off `next` rebuilds it, and (b) can't be "
                            f"shown for the Lean check {h.lean_ids()[0]} of {one[:12]}: its tree and that of "), line
     assert line.endswith("differ in verity/core/v.py, which `lowrisk_excludes` names"), line
+
+
+def test_the_lanes_merge_rebuilds_conflicted_pins_as_the_sync_does(world, monkeypatch):
+    """The lane merges each member again (onto `checked`'s tip, and above a Lean check it moves) as the sync merges it: a merge
+    whose only conflicts are in pins keeps each pin rebuilt from the merged tree.  Refusing it stopped every landing of a tick
+    on one member's PoUS pin, which the sync had merged."""
+    from test_queue import EXFIL, POUS, TRUSTED, UP, _pin_main, _pinned, _trusted
+
+    tree = _pin_main(world)
+    h = _lane(world, monkeypatch)
+    one = {**tree, f"{POUS}/lakefile.toml": "l1\n"}
+    two = {**tree, f"{POUS}/lean-toolchain": "t1\n"}
+    paths = ["lean-toolchain", "lakefile.toml", "Old.lean", UP]
+    exfil = ["Security/Proofs/lakefile.toml", "x.lean"]
+    a, b = _pinned(world, one, paths, exfil), _pinned(world, two, paths, exfil)
+    _git(h.d.repo, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    merged, why = h.d._clean_merge(a, b)
+    assert merged and why == "", why
+    assert _git(h.d.repo, "show", f"{merged}:{TRUSTED}") + "\n" == _trusted(paths, {**one, f"{POUS}/lean-toolchain": "t1\n"})
+    assert _git(h.d.repo, "show", f"{merged}:{EXFIL}")
+    d, e = world.change({"q.txt": "1\n"}), world.change({"q.txt": "2\n"})
+    _git(h.d.repo, "fetch", "-q", "origin", f"refs/dev/{d}", f"refs/dev/{e}")
+    assert h.d._clean_merge(d, e) == (None, "conflict in q.txt")
 
 
 def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkeypatch):

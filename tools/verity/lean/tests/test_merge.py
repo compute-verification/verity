@@ -409,25 +409,30 @@ def test_two_sides_restating_one_guarantee_s_inline_premises_merge_premise_by_pr
     5e3e9ea235 (theirs) and their merge base fc4958a86b, where all three list the guarantee with one record: both sides add
     the two premises restated over `sessionLayout`, ours keeping the two texts they restate and theirs dropping them.
     Compared whole, the guarantee's map refused; premise by premise the added ones stay, and so do the two texts ours has as
-    the base had them (`held`), each named.  The sides gave each added premise a different reason, and those two still
-    refuse, each named; with ours' reasons as theirs', the guarantee merges to ours' map with theirs' reasons."""
+    the base had them (`held`), each named.  The sides gave each added premise a different reason: each keeps ours', named;
+    with ours' reasons as theirs', the guarantee merges to ours' map with theirs' reasons."""
     sides = json.loads((FIXTURES / "inline-scheduled-requirement.json").read_text())
     g = "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"
     assert sides["base"]["guarantees"] == sides["ours"]["guarantees"] == sides["theirs"]["guarantees"] and g in sides["base"]["guarantees"]
     base, ours, theirs = (sides[n]["shape"]["inline"][g] for n in ("base", "ours", "theirs"))
     added, dropped = [p for p in theirs if p not in base], [p for p in base if p not in theirs]
     assert len(added) == len(dropped) == 2 and all(p in ours for p in added) and all(ours[p] == base[p] for p in dropped)
-    _, why = M.merge(sides["base"], sides["ours"], sides["theirs"])
-    assert why == [f"shape[inline][{g}][{p}]: added on both sides, differently" for p in ours if p in added]
+    assert all(ours[p] != theirs[p] for p in added)
+    merged, why = M.merge(sides["base"], sides["ours"], sides["theirs"], candidate := [])
+    assert why == [] and merged["shape"]["inline"][g] == theirs | {p: ours[p] for p in added} | {p: base[p] for p in dropped}
+    assert candidate == ([f"shape[inline][{g}][{p}] (ours' reason)" for p in ours if p in added]
+                         + [f"shape[inline][{g}][{p}] (kept)" for p in dropped])
     agreed = sides["ours"] | {"shape": {"inline": {g: ours | {p: theirs[p] for p in added}}}}
     merged, why = M.merge(sides["base"], agreed, sides["theirs"], candidate := [])
     assert why == [] and merged["shape"]["inline"][g] == theirs | {p: base[p] for p in dropped}
     assert candidate == [f"shape[inline][{g}][{p}] (kept)" for p in dropped]
 
 
-def test_an_inline_premise_both_sides_add_differently_refuses_and_the_other_shape_sections_still_refuse_whole():
-    """`shape.inline` merges premise by premise (`DEEPER`); `frozen`, `properties` and `conjectures` entries still merge whole,
-    so two sides that change one entry differently refuse even where they changed different fields of it."""
+def test_an_inline_premise_both_sides_give_different_reasons_keeps_ours_and_the_other_shape_sections_still_refuse_whole():
+    """`shape.inline` merges premise by premise (`DEEPER`), and a premise both sides give different reasons, added or
+    changed, keeps ours' reason, named (the check asks only that one be given); `frozen`, `properties` and `conjectures`
+    entries still merge whole, so two sides that change one entry differently refuse even where they changed different
+    fields of it."""
     prop = {"function": "P.f", "outcome": "accept"}
     base = {"shape": {"inline": {"P.t": {"a": "why a", "b": "why b"}}, "properties": {"P.p": prop}, "frozen": {"P.z": "lemma"}}}
 
@@ -443,8 +448,12 @@ def test_an_inline_premise_both_sides_add_differently_refuses_and_the_other_shap
     merged, why = M.merge(base, inline(a="why a", b="why b", c="why c"), inline(b="why b", d="why d"))
     assert why == [] and merged["shape"]["inline"] == {"P.t": {"b": "why b", "c": "why c", "d": "why d"}}
     assert M.merge(base, inline(a="why a", b="why b", c="one"), inline(a="why a", b="why b", c="one"))[1] == []
-    _, why = M.merge(base, inline(a="why a", b="why b", c="one"), inline(a="why a", b="why b", c="another"))
-    assert why == ["shape[inline][P.t][c]: added on both sides, differently"]
+    merged, why = M.merge(base, inline(a="why a", b="why b", c="one"), inline(a="why a", b="why b", c="another"),
+                          candidate := [])
+    assert why == [] and merged["shape"]["inline"] == {"P.t": {"a": "why a", "b": "why b", "c": "one"}}
+    assert candidate == ["shape[inline][P.t][c] (ours' reason)"]
+    merged, why = M.merge(base, inline(a="ours", b="why b"), inline(a="theirs", b="why b"), candidate := [])
+    assert why == [] and merged["shape"]["inline"]["P.t"]["a"] == "ours" and candidate == ["shape[inline][P.t][a] (ours' reason)"]
     _, why = M.merge(base, inline(b="why b"), inline(a="changed", b="why b"))
     assert why == ["shape[inline][P.t][a]: removed on one side and changed on the other"]
     merged, why = M.merge(base, inline(b="why b"), inline(a="why a"))

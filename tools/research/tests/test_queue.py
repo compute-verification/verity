@@ -20,10 +20,11 @@ from typing import Callable
 
 import pytest
 
+import research.queue as Q
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
-from research.queue import (DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files, credential_args,
-                            label_target)
+from research.queue import (DRIVE_FLAGS, PR, PREFLIGHT_BUDGET_S, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files,
+                            credential_args, label_target)
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
@@ -439,10 +440,20 @@ def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_b
         heads[n] = world.change(files, base=heads[3] if n == 29 else "origin/main")
         world.gh.put(n, heads[n])
     new = world.queue()
-    monkeypatch.setattr(new, "_merge_in_worktree", lambda *a: pytest.fail("merged in the worktree"))
     old = Queue(world.tmp / "q-old" / "verity", remote=str(world.origin), github=world.gh, store=world.store,
                 log=world.logs.append, ready=lambda n, h: (n, h) in world.gh.ready, shadow=True)
-    old._attr_source = False
+
+    def in_worktree(tip, pr, members):
+        _git(old.workdir, "checkout", "-q", "--detach", tip)
+        r = Q._git(old.workdir, "merge", "--no-ff", "--no-edit", "-m", Q._message(pr), pr.head, check=False, env=Q.IDENTITY)
+        if r.returncode == 0:
+            return _git(old.workdir, "rev-parse", "HEAD"), ""
+        files = _git(old.workdir, "diff", "--name-only", "--diff-filter=U").split()
+        Q._git(old.workdir, "merge", "--abort", check=False)
+        _git(old.workdir, "reset", "-q", "--hard", tip)
+        return None, old._unmerged(r, files, members)
+
+    monkeypatch.setattr(old, "_merge", in_worktree)
 
     def same() -> list:
         (got, ge), (want, we) = new.sync(), old.sync()
@@ -462,6 +473,23 @@ def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_b
     world.gh.put(31, world.change({"f31.txt": "31\n"}))
     again, _ = same()
     assert [m.commit for m in again[:-1]] == [m.commit for m in first] and again[-1].pr == 31
+
+
+def test_a_sync_on_a_git_without_attr_source_raises_rather_than_merging_without_the_pin_merge(world, monkeypatch):
+    """A git before 2.40 refuses `--attr-source` (exit 129); merging without it left out every PR whose only conflict is a pin,
+    silently.  The sync raises, naming the fix, and pushes no `next`."""
+    real = Q._git
+
+    def old_git(repo, *args, **kw):
+        if args[0].startswith("--attr-source"):
+            return subprocess.CompletedProcess(args, 129, "", f"unknown option: {args[0]}\nusage: git [--version] [--help]")
+        return real(repo, *args, **kw)
+
+    monkeypatch.setattr(Q, "_git", old_git)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    with pytest.raises(QueueError, match=r"has no `--attr-source`, which merging `next` needs: install git >= 2\.40"):
+        world.queue().sync()
+    assert not _git(world.origin, "for-each-ref", "refs/heads/next")
 
 
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
@@ -544,6 +572,92 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
     assert _git(world.origin, "log", "-1", "--format=%B", tip) == f"Queue: #2 change 2\n\nPR: #2\nHead: {world.gh.prs[2].head}\nOwner: lane-2"
 
 
+def _sync_preflight(refuse: dict[int, str]) -> tuple[Callable, list[tuple[int, str]]]:
+    """A stand-in for drive's `Preflight.onto`, refusing each PR of ``refuse`` with its text, and the (PR, base) of each call."""
+    calls: list[tuple[int, str]] = []
+
+    def run(pr, base, commit, members):
+        calls.append((pr.number, base))
+        return refuse.get(pr.number)
+    return run, calls
+
+
+def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_above_it_merge(world):
+    """Each merge a sync makes is preflighted onto the member below it, so a refusal leaves out that PR alone, told as a
+    conflict is (the state's `conflicts`, which drive posts to its owner)."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({2: "the preflight of its head merged onto next refused it: a.py: SyntaxError"})
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3], world.logs
+    one = members[0].commit
+    assert calls == [(1, _git(world.origin, "rev-parse", "main")), (2, one), (3, one)]
+    assert entries[2].state == "refused" and entries[2].why.endswith("a.py: SyntaxError")
+    assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why and world.on_next(q) == [1, 3]
+
+
+def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base_is(world):
+    """A PR's preflight is recorded per (head, base): a sync that tries a refused PR again onto the same tree reads its refusal
+    back, and so does one onto another commit of that tree (a rebuilt `next`'s merges carry the time they're made).  A new
+    base runs it again."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    refuse, calls = _sync_preflight({2: "refused: x"})
+    q = world.queue()
+    q.preflight = refuse
+    q.sync()
+    assert [n for n, _ in calls] == [1, 2]
+    again = world.queue()                                                   # a later tick's queue reads the records back
+    again.preflight = refuse
+    members, entries = again.sync()
+    assert [m.pr for m in members] == [1] and entries[2].why == "refused: x" and [n for n, _ in calls] == [1, 2], world.logs
+    first = members[0].commit
+    remade = subprocess.run(["git", "commit-tree", f"{first}^{{tree}}", "-p", f"{first}^1", "-p", f"{first}^2", "-m",
+                             _git(world.origin, "log", "-1", "--format=%B", first)], cwd=world.origin, check=True, text=True,
+                            capture_output=True, env={**os.environ, **{k: v for d in ("AUTHOR", "COMMITTER") for k, v in (
+                                (f"GIT_{d}_NAME", "q"), (f"GIT_{d}_EMAIL", "q@q"), (f"GIT_{d}_DATE", "2000-01-01T00:00:00Z"))}}
+                            ).stdout.strip()
+    _git(world.origin, "update-ref", "refs/heads/next", remade)
+    rebuilt = world.queue()
+    rebuilt.preflight = refuse
+    members, entries = rebuilt.sync()
+    assert [m.commit for m in members] == [remade] and remade != first and entries[2].state == "refused"
+    assert [n for n, _ in calls] == [1, 2], world.logs
+    _move_main(world, {"c.txt": "moved\n"})
+    moved = world.queue()
+    moved.preflight = refuse
+    moved.sync()
+    assert [n for n, _ in calls] == [1, 2, 1, 2], world.logs
+
+
+def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_preflighted_waits_off_next_untold(world):
+    """A sync's preflights start only while they've taken under `PREFLIGHT_BUDGET_S` together: past it a PR waits off `next`,
+    with the PRs that contain it, told nothing, and a later sync preflights it."""
+    now = [0.0]
+    calls: list[int] = []
+
+    def slow(pr, base, commit, members):
+        calls.append(pr.number)
+        now[0] += PREFLIGHT_BUDGET_S
+        return None
+
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, two := world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}, base=two))
+    q = world.queue()
+    q.preflight, q.clock = slow, lambda: now[0]
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1] and calls == [1], world.logs
+    assert entries[2].state == entries[3].state == "waiting" and "hasn't run" in entries[2].why
+    assert entries[3].why.endswith("which waits for its preflight"), entries[3].why
+    state = q.load_state()
+    assert state["conflicts"] == {} and state["waiting"] == {} and "waiting off it for their preflight (#2 #3)" in world.logs[-1]
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and calls == [1, 2]
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and calls == [1, 2, 3]
+
+
 def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
     tree = _pin_main(world)
     paths = ["lean-toolchain", "lakefile.toml", "Old.lean", UP]
@@ -586,7 +700,7 @@ def _gate_says(main: str, what: str, merged: bool = False) -> str:
 
 def test_a_landing_gate_left_in_its_directory_still_judges(tmp_path, monkeypatch):
     """On drive's NFS TMPDIR the gate script just run is often left as a .nfsXXXX file, so removing its directory fails with
-    ENOTEMPTY; every tick crashed on that (1 Nov).  The gate's verdict stands and the directory is left for the sweep."""
+    ENOTEMPTY, and every tick crashed on it.  The gate's verdict stands and the directory is left for the sweep."""
     import errno
     import tempfile
 
@@ -1752,6 +1866,7 @@ PREFLIGHT_FILES = {
     "tests/test_no_wall_clock.py": _invariant("WALL_CLOCK", 1),
     "integrations/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 4),
     "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
+    "tools/verity/check/settings.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "settings.py").read_text(),
     "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
                                    "    print('pkg/pins.json is stale (pkg/Main.lean): run `python3 regen.py`', file=sys.stderr)\n"
                                    "    sys.exit(1)\n"),
@@ -1963,6 +2078,75 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
 
 
+def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pin_rebuilt_as_the_sync_rebuilds_it(world, capsys):
+    """A PR that regenerated a pin for its own input conflicts with one on `next` that did the same, only in the pin, which drive's
+    sync rebuilds from the merged tree (as PoUS's TRUSTED.sha256): the preflight merges it the same way and checks that tree,
+    so a check failing there refuses the mark, rather than the checks being skipped while the mark goes through."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    pin = "pkg/PIN.sha256"
+    listing = lambda a, b: "".join(f"{hashlib.sha256(t.encode()).hexdigest()}  {n}\n"            # noqa: E731
+                                   for n, t in (("a.txt", a), ("b.txt", b)))
+    world.with_store_remote()
+    _move_main(world, {**PREFLIGHT_FILES, "ci/pins.py": f'PINS = (Pin("{pin}", None, "pkg"),)\n', "pkg/a.txt": "a0\n",
+                       "pkg/b.txt": "b0\n", pin: listing("a0\n", "b0\n")})
+    world.gh.put(1, world.change({"pkg/a.txt": "a1\n", pin: listing("a1\n", "b0\n")}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1]
+    next_ = _git(world.origin, "rev-parse", "refs/heads/next")
+    for n, broken in ((2, {"BROKEN_MODULE_STRING": ""}), (3, {})):
+        world.gh.put(n, h := world.change({"pkg/b.txt": f"b{n}\n", pin: listing("a0\n", f"b{n}\n"), **broken}), ready=False)
+        raw = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", next_, h], cwd=world.dev,
+                             capture_output=True, text=True)
+        assert raw.returncode == 1 and raw.stdout.splitlines()[1:] == [pin], raw.stdout
+        world.logs.clear()
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world)) == (1 if broken else 0)
+        err = capsys.readouterr().err
+        if broken:
+            [found] = [ln for ln in err.splitlines() if ln.startswith("  - ")]
+            assert found.startswith("  - the invariant tests in . fail on the merged tree: FAILED "
+                                    "tests/test_module_strings.py::test_broken_module_string_absent"), err
+            assert f"conflicts only in pins: {pin}, rebuilt from the merged tree" in err and "checks skipped" not in err, err
+        else:
+            said = next(s for s in world.logs if f"preflight: #{n} at" in s)
+            assert "nothing refused" in said and f"conflicts only in pins: {pin}, rebuilt from the merged tree" in said, said
+            assert "collected 2 suite(s) (pkg, .)" in said and "checks skipped" not in said, said
+        assert StoreLabels(world.store, log=world.logs.append).ready(n, h) is (not broken) and _no_worktree_left(world)
+
+
+def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_checkout_it_runs_in(world, capsys):
+    """A branch from before `merge.py --caps`, marked from its own checkout, merged onto `next` with that checkout's `merge.py`
+    as the `lean-caps` driver: it errored on `--caps`, and git reported a conflict in `tests/test_lean_packages.py` that the
+    sync, with `next`'s driver, merges as counters.  The preflight runs `next`'s drivers, so the head merges cleanly."""
+    from research.queue import MarkOnly, StoreLabels, base_drivers, merged_tree, ready
+
+    caps = "tests/test_lean_packages.py"
+
+    def counts(sec: int, props: int) -> str:
+        return f'UNWITNESSED = {{"Security": {sec}, "Security/Properties": {props}}}\n'
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    world.with_store_remote()
+    old = _move_main(world, {**PREFLIGHT_FILES, caps: counts(354, 184), "tools/verity/lean/merge.py":
+                             "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
+    _move_main(world, {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
+                       ".gitattributes": f"{caps} merge=lean-caps\n"})
+    world.gh.put(1, world.change({caps: counts(355, 184)}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1]
+    world.gh.put(2, h2 := world.change({caps: counts(354, 185)}, base=old), ready=False)    # the checkout stays at #2's head
+    _git(world.dev, "config", "merge.lean-caps.driver", "python3 tools/verity/lean/merge.py --caps %O %A %B %P")
+    next_ = _git(world.origin, "rev-parse", "refs/heads/next")
+    raw = subprocess.run(["git", f"--attr-source={next_}", "merge-tree", "--write-tree", "--name-only", "--no-messages", next_, h2],
+                         cwd=world.dev, capture_output=True, text=True)
+    assert raw.returncode == 1 and raw.stdout.splitlines()[1:] == [caps], raw.stdout + raw.stderr
+    with base_drivers(world.dev, next_) as config:
+        tree, files, _ = merged_tree(world.dev, next_, h2, config=config)
+    assert tree and files == [] and _git(world.dev, "show", f"{tree}:{caps}") == counts(355, 185).strip()
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight: #2 at" in s)
+    assert "nothing refused" in said and "checks skipped" not in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
 #: what the head writes -> what the refusal says: each a way a train breaks that the merged tree shows at mark time
 PREFLIGHT_REFUSALS = {
     "stale pin": ({"STALE.txt": "x\n"}, "`pins.py --stale` on the merged tree: pkg/pins.json is stale (pkg/Main.lean)"),
@@ -2019,7 +2203,8 @@ def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_
     world.gh.put(3, h3 := world.change({"crash.txt": "3\n"}), ready=False)
     assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
     said = next(s for s in world.logs if f"preflight: #3 at {h3[:12]}" in s)
-    assert "nothing refused" in said and f"the landing gate gates/g.py can't judge {h3[:12]}" in said and "exit 2" in said
+    assert f"checks skipped: the landing gate gates/g.py can't judge {h3[:12]}" in said and "exit 2" in said, said
+    assert "nothing refused" not in said, said
 
 
 def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):
@@ -2255,38 +2440,164 @@ def test_the_preflight_refuses_a_head_that_breaks_a_lean_module_a_pr_on_next_own
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
 
 
-def test_the_lean_step_notes_why_it_built_nothing_and_refuses_nothing(world, monkeypatch, capsys):
-    """An agent VM keeps no warm Lean tree and builds nothing; a change more modules import than the preflight builds, a node
-    without Mathlib for the package, and a spent budget each leave the break to drive's Lean check: noted, never refused."""
-    from research.queue import LakeBuild, MarkOnly, ready
+def test_the_lean_step_skips_past_its_bounds_and_refuses_what_it_cannot_build(world, monkeypatch, capsys):
+    """A change more modules import than the preflight builds, and a spent budget, leave the break to drive's Lean check: said
+    as a skipped check, never as nothing refused, and never refused.  A head whose few modules nothing builds (no warm tree and
+    no node to build on, a node without Mathlib for the package) is refused with the fix: an unbuilt module is how a head that
+    breaks `next`'s Lean got marked."""
+    from research.queue import LakeBuild, MarkOnly, StoreLabels, ready
 
     seen, slots = _lean_world(world, monkeypatch)
     cases = [
-        (LakeBuild(slots=world.tmp / "absent"), {}, "this machine keeps no warm Lean tree", False),
-        (LakeBuild(slots=slots), {"lean_modules": 5}, "6 modules are or import what it changes, over the 5", False),
-        (LakeBuild(slots=slots), {"lean_s": 0}, "budget was spent before it started", False),
-        (LakeBuild(slots=slots), {}, "lean/a not built: no Mathlib here", True),
+        (LakeBuild(slots=slots), {"lean_modules": 5}, "6 modules are or import what it changes, over the 5", False, False),
+        (LakeBuild(slots=slots), {"lean_s": 0}, "lean build timed out (6 module(s) not built: the Lean step's budget was spent",
+         False, False),
+        (LakeBuild(slots=world.tmp / "absent"), {}, "this machine keeps no warm Lean tree (no `build` pool in "
+         f"{world.tmp / 'absent'}; an agent VM builds nothing) and was given no node to build on: `ready --on MACHINE` builds "
+         "them on vy-nebius-cpu-3", False, True),
+        (LakeBuild(slots=slots), {}, "lean/a not built: no Mathlib here: mark again once this node builds them", True, True),
     ]
-    for n, (lean, kw, says, built) in enumerate(cases, start=2):
+    for n, (lean, kw, says, built, refused) in enumerate(cases, start=2):
         if built:
             monkeypatch.setenv("FAKE_LEAN_SKIP", "no Mathlib here")
         seen.unlink(missing_ok=True)
-        world.gh.put(n, world.change({"lean/a/A/Base.lean": "def bar := 1\n", f"n{n}.txt": "x\n"}), ready=False)
+        world.gh.put(n, h := world.change({"lean/a/A/Base.lean": "def bar := 1\n", f"n{n}.txt": "x\n"}), ready=False)
         world.logs.clear()
-        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world, lean=lean, **kw)) == 0, \
-            capsys.readouterr().err
+        rc = ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world, lean=lean, **kw))
+        err = capsys.readouterr().err
+        assert seen.exists() is built and StoreLabels(world.store, log=world.logs.append).ready(n, h) is (not refused)
+        if refused:
+            found = [ln for ln in err.splitlines() if ln.startswith("  - ")]
+            assert rc == 1 and len(found) == 1, err
+            assert found[0].startswith(f"  - Lean: 6 module(s) that are or import what it changes couldn't be built: {says}"), err
+            continue
+        assert rc == 0, err
         said = next(s for s in world.logs if f"preflight: #{n} at" in s)
-        assert "nothing refused" in said and says in said, said
-        assert seen.exists() is built
+        assert "checks skipped: " in said and "nothing refused" not in said and says in said, said
+        assert said.index("checks skipped: ") < said.index(says), said
+
+
+def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuses_what_none_can_and_skips_a_timeout(
+        world, monkeypatch, capsys):
+    """`ready --mark` from a VM without a warm Lean tree used to skip the Lean step, so a head whose merge onto `next` broke 5
+    modules was marked.  The step ships the merged tree to `PREFLIGHT_LEAN_ON` whatever the tier (a stand-in for `research
+    run` runs the stand-in builder in the shipped tree) and refuses the break; when no node starts the run, it refuses with
+    each node's reason and the fix; one that hasn't ended by the deadline marks, said as 'checks skipped: lean build timed
+    out'."""
+    from research.queue import PREFLIGHT_LEAN_ON, LakeBuild, MarkOnly, StoreLabels, ready
+
+    seen, _ = _lean_world(world, monkeypatch)
+    rid, slow, runs, launched, mode = "r20261030-120000-abcd", "r20261030-120000-beef", world.tmp / "runs", [], {}
+    first, second = PREFLIGHT_LEAN_ON
+
+    def run(argv, cwd, left):
+        if argv[3] == "fetch":
+            return 0, ""
+        launched.append(argv[3:])
+        node = argv[argv.index("--on") + 1]
+        if mode["now"] == "unreachable":
+            return 1, f"research run: {node}: ssh: connect to host: Connection refused\n"
+        if mode["now"] == "slow":
+            return None, f"research: run {slow} launched on {node} (pod) pid=1 -> /r\n"
+        source, tail = Path(argv[argv.index("--source") + 1]), argv[argv.index("--") + 2:]
+        p = subprocess.run([sys.executable, *tail], cwd=source, capture_output=True, text=True)
+        (runs / rid).mkdir(parents=True, exist_ok=True)
+        (runs / rid / "stdout.log").write_text(p.stdout)
+        return p.returncode, f"research: run {rid} launched on {node} (pod) pid=1 -> /r\n"
+
+    lean = LakeBuild(on=PREFLIGHT_LEAN_ON, by="lane-2", slots=world.tmp / "absent", run=run, runs=lambda: runs,
+                     clock=lambda: 0.0)
+    mode["now"] = "builds"
+    world.gh.put(2, h2 := world.change({"lean/a/A/Base.lean": "def bar := 1\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, lean=lean)) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
+        "  - Lean: `B.Use` (lean/b/B/Use.lean), of #1 on `next`, fails to build with this head merged: error: lean/b/B/Use.lean:2:0: "
+        "unknown identifier 'foo': merge or stack on that PR, never merge `next` (it carries unlanded PRs)"], err
+    assert [a[:3] for a in launched] == [["run", "--on", first]] * 2, "the merge, then what failed, on `next`"
+    assert [json.loads(ln) for ln in seen.read_text().splitlines()][1] == ["lean/b/B/Use.lean"]
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False
+
+    mode["now"], launched[:] = "unreachable", []
+    world.gh.put(3, h3 := world.change({"lean/a/A/Base.lean": "def baz := 1\n"}), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world, lean=lean)) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
+        "  - Lean: 6 module(s) that are or import what it changes couldn't be built: "
+        + "; ".join(f"its build on {n} exited 1 without a result line: research run: {n}: ssh: connect to host: Connection "
+                    "refused" for n in PREFLIGHT_LEAN_ON)
+        + f": mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says "
+          "why not)"], err
+    assert [a[2] for a in launched] == [first, second]
+    assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
+
+    mode["now"], launched[:] = "slow", []
+    world.gh.put(4, h4 := world.change({"lean/a/A/Base.lean": "def qux := 1\n"}), ready=False)
+    world.logs.clear()
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=_preflight(world, lean=lean)) == 0, \
+        capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight: #4 at" in s)
+    assert "checks skipped: lean build timed out (6 module(s) not built: its build on " \
+           f"{first} (run {slow}) hadn't ended after" in said and "nothing refused" not in said, said
+    assert [a[2] for a in launched] == [first], "time spent is spent: no second node"
+    assert StoreLabels(world.store, log=world.logs.append).ready(4, h4) is True and _no_worktree_left(world)
+
+
+def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_build_and_refuses_when_none_can(tmp_path):
+    """One node (cpu-3) that can't start a run (its `build` slots full, drained, unreachable) would refuse every Lean mark: each
+    node but the last takes its slot with `--no-wait`, and a node that can't start passes the build to the next, within the
+    one deadline; only when none builds is the mark refused, naming each node's reason and the fix."""
+    from research.queue import LEAN_BUILDER, PREFLIGHT_LEAN_ON, LakeBuild
+
+    assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == (("vy-nebius-cpu-3", "vy-nebius-cpu-8"), None)
+    first, second = PREFLIGHT_LEAN_ON
+    (tmp_path / "wt" / LEAN_BUILDER).parent.mkdir(parents=True)
+    (tmp_path / "wt" / LEAN_BUILDER).write_text("")
+    full = "lean-build: " + json.dumps({"built": {}, "failed": {}, "skipped": {
+        "*": "no `build` Lean slot here (all 8 Lean audit slot(s) of pool build are taken, and this request doesn't wait in line)"}})
+    built = "lean-build: " + json.dumps({"built": {"lean/b": 0}, "failed": {}, "skipped": {}})
+    drained = f"research: run {{rid}} refused on {second}: the node is drained\n"
+    for k, says in enumerate(({first: (2, full), second: (0, built)}, {first: (255, None), second: (1, drained)})):
+        argvs, now, runs = [], [0.0], tmp_path / f"runs-{k}"
+
+        def run(argv, cwd, left, argvs=argvs, says=says, now=now, runs=runs):
+            if argv[3] == "fetch":
+                return 0, ""
+            node = argv[argv.index("--on") + 1]
+            argvs.append((node, argv[argv.index("--") + 3:], left))
+            now[0] += 30                                               # each launch spends 30 s of the budget
+            rc, out = says[node]
+            if out is None:
+                return rc, f"ssh: connect to host {node} port 22: Connection timed out\n"
+            rid = f"r20261030-1900{len(argvs):02d}-abcd"
+            if out.startswith("lean-build: "):
+                (runs / rid).mkdir(parents=True, exist_ok=True)
+                (runs / rid / "stdout.log").write_text(out + "\n")
+                return rc, f"research: run {rid} launched on {node} (pod) pid=1 -> /r\n"
+            return rc, out.format(rid=rid)
+
+        got = LakeBuild(on=PREFLIGHT_LEAN_ON, by="ci", slots=tmp_path / "absent", run=run, runs=lambda runs=runs: runs,
+                        clock=lambda now=now: now[0])(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
+        assert [(n, tail[:2], left) for n, tail, left in argvs] == [(first, ["--no-wait", "--build"], 100),
+                                                                     (second, ["--build", "lean/b/B/Use.lean"], 70)]
+        if says[second][0] == 0:
+            assert got.failed == {} and got.notes == [] and got.where == f"on {second} (run r20261030-190002-abcd)"
+            assert got.passed == [f"* not built on {first} (run r20261030-190001-abcd): no `build` Lean slot here (all 8 Lean "
+                                  "audit slot(s) of pool build are taken, and this request doesn't wait in line)"]
+            continue
+        assert isinstance(got, str) and got == (
+            f"its build on {first} exited 255 without a result line: ssh: connect to host {first} port 22: Connection timed "
+            f"out; its build on {second} (run r20261030-190002-abcd) exited 1 without a result line: research: run "
+            f"r20261030-190002-abcd refused on {second}: the node is drained: mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says why not)"), got
 
 
 def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
-    """Off a node, `ready --on` builds as `verity lean try --on vy-nebius-cpu-3` does: a `research run` of the tree on
+    """Off a node, the Lean step builds as `verity lean try --on vy-nebius-cpu-3` does: a `research run` of the tree on a node of
     `PREFLIGHT_LEAN_ON`, whose `build` Lean slot is the gate (a pool only when given), bounded by the step's budget, whose stdout
-    carries the result line."""
+    carries the result line; the last node waits in its slot's line (no `--no-wait`)."""
     from research.queue import LEAN_BUILDER, PREFLIGHT_LEAN_ON, LakeBuild
 
-    assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == ("vy-nebius-cpu-3", None), "infra's placement, 26 Oct 14:44Z"
+    node = PREFLIGHT_LEAN_ON[0]
     (tmp_path / "wt" / LEAN_BUILDER).parent.mkdir(parents=True)
     (tmp_path / "wt" / LEAN_BUILDER).write_text("")
     rid = "r20261026-120000-abcd"
@@ -2302,14 +2613,14 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
             if argv[3] == "fetch":
                 (tmp_path / "runs" / rid).mkdir(parents=True, exist_ok=True)
                 (tmp_path / "runs" / rid / "stdout.log").write_text(f"lean-build: lean/b ...\n{line}\n")
-            return 1, f"research: run {rid} launched on {PREFLIGHT_LEAN_ON} (pod) pid=1 -> /r\n"
+            return 1, f"research: run {rid} launched on {node} (pod) pid=1 -> /r\n"
 
-        got = LakeBuild(on=PREFLIGHT_LEAN_ON, pool=pool, by="ci", slots=tmp_path / "absent", run=run,
-                        runs=lambda: tmp_path / "runs")(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
+        got = LakeBuild(on=(node,), pool=pool, by="ci", slots=tmp_path / "absent", run=run, runs=lambda: tmp_path / "runs",
+                        clock=lambda: 0.0)(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
         assert got.failed == {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"} and got.notes == []
         (launch, left), (fetch, _) = argvs
-        assert left == 100 and fetch == ["fetch", rid, "--on", PREFLIGHT_LEAN_ON, "--all"]
-        assert launch == ["run", "--on", PREFLIGHT_LEAN_ON, *flags, *tail]
+        assert left == 100 and fetch == ["fetch", rid, "--on", node, "--all"]
+        assert launch == ["run", "--on", node, *flags, *tail]
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
@@ -2320,9 +2631,11 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     monkeypatch.chdir(world.dev)
     base = ["queue", "ready", "3", "--mark", "--by", "lane-3", "--remote", str(world.origin), "--repo", "o/r"]
     assert research_main(base) == 0 and research_main([*base, "--no-preflight"]) == 0
+    assert research_main([*base[:3], "--local", *base[4:]]) == 0
     assert isinstance(seen[0], Q.Preflight) and seen[1] is None
-    assert isinstance(seen[0].lean, Q.LakeBuild) and seen[0].lean.on is None, "only `ready --on` ships the Lean step to a node"
-    assert all(isinstance(g, Q.RecordsGate) for g in gates) and len(gates) == 2        # the records gate isn't the preflight's
+    assert [(p.lean.on, p.lean.by) for p in (seen[0], seen[2])] == [(Q.PREFLIGHT_LEAN_ON, "lane-3")] * 2, \
+        "--mark and --local ship the Lean step to a node too"
+    assert all(isinstance(g, Q.RecordsGate) for g in gates) and len(gates) == 3        # the records gate isn't the preflight's
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
     assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
@@ -2423,6 +2736,27 @@ def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_p
 
     plain = world.change({"a.txt": "no lock\n"})                     # no lock changed: nothing is read, not even the store
     assert _mark(world, 2, plain, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) == 0
+
+
+def test_under_land_into_checked_a_head_is_judged_against_checked_not_main(world, capsys):
+    """Under `land_into = "checked"` a lock change lands on `checked` well before `main` follows it, and a PR that merges
+    `checked` (to resolve a conflict with one landed there) carries it: against `main` the gate blamed that PR for every lock
+    the landings changed.  Against `checked` it judges the PR's own change, so a lock change of its own is still
+    refused, naming `checked`."""
+    world.with_store_remote()
+    _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
+    landed = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    _git(world.dev, "push", "-q", "origin", f"{landed}:refs/heads/checked")
+    pr = world.change({"x.txt": "x\n"})
+    _git(world.dev, "checkout", "-q", "--detach", pr)
+    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", landed)
+    merged = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{merged}:refs/heads/pr-1")
+    capsys.readouterr()
+    assert _mark(world, 1, merged) == 0, capsys.readouterr().err
+    own = world.change({LOCK: _lock(A="2", B="3")}, base=landed)
+    assert _mark(world, 2, own) == 1
+    assert f"#2 is not marked ready at {own[:12]}: it changes the Lean lock of pkg against `checked`" in capsys.readouterr().err
 
 
 def test_a_run_whose_indexed_manifest_cant_be_read_vouches_for_nothing_and_the_refusal_says_so(world, capsys):
@@ -3520,3 +3854,133 @@ def test_a_lane_line_names_its_handle_without_a_trailing_period():
     for body, lane in (("Lane proofs.", "proofs"), ("Lane `lane-2`.", "lane-2"), ("Lane a.", "a"), ("Lane ci-x_", "ci-x"),
                        ("Lane: vllm\n\nmore", "vllm")):
         assert PR(1, "h", "t", body).owner == lane, body
+
+
+#: a lock as `check.py --update` writes one: F, G and H listed, F frozen, G's two inline premises and H's one, G and H reading M
+PREMISE_LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "type_hash": "g"}, "H": {"type_hash": "h"}},
+        "shape": {"frozen": {"F": "frozen: a game's bound"},
+                  "inline": {"G": {"p1": "a membership", "p2": "a bound"}, "H": {"q": "a bound"}}},
+        "reads": {"M": {"definitions": {"Guarantees.G": "1", "Guarantees.H": "2"}, "guarantees": ["G", "H"]}}}
+
+
+def _lock_text(edit: Callable[[dict], object] = lambda d: None) -> str:
+    """`PREMISE_LOCK` as a lock's text, after ``edit`` changed it in place."""
+    doc = json.loads(json.dumps(PREMISE_LOCK))
+    edit(doc)
+    return json.dumps(doc, indent=1, sort_keys=True) + "\n"
+
+
+def _lock_files() -> dict[str, str]:
+    """The record merge driver, named for every lock, and `PREMISE_LOCK`."""
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    return {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
+            ".gitattributes": "lean-audit.json merge=lean-audit\n", "pkg/lean-audit.json": _lock_text()}
+
+
+def _renamed(d: dict) -> None:
+    d["guarantees"]["G2"] = d["guarantees"].pop("G")
+    d["shape"]["inline"]["G2"] = d["shape"]["inline"].pop("G")
+    d["reads"]["M"]["guarantees"] = ["G2", "H"]
+
+
+def _removed(d: dict) -> None:
+    del d["guarantees"]["G"], d["shape"]["inline"]["G"]
+    d["reads"]["M"]["guarantees"] = ["H"]
+
+
+def _rekeyed(d: dict) -> None:
+    d["shape"]["inline"]["G"] = {"p1 at its new statement": "a membership", "p2": "a bound"}
+
+
+def _restated(d: dict) -> None:
+    d["reads"]["M"]["definitions"]["Guarantees.G"] = "3"
+    del d["shape"]["inline"]["G"]["p1"]
+
+
+#: the head's lock -> what its merge onto `next` drops that `next` needs; None: the head leaves the lock alone
+LOCK_DROPS = {
+    # the record driver keeps a premise one side dropped while the merged record lists its guarantee
+    "a dropped premise": (lambda d: d["shape"]["inline"]["G"].pop("p1"), []),
+    "a dropped frozen key": (lambda d: d["shape"]["frozen"].pop("F"), ["pkg/lean-audit.json: shape.frozen[F]"]),
+    "a renamed guarantee": (_renamed, []),
+    "a removed guarantee": (_removed, []),
+    "a premise re-keyed at its restated statement": (_rekeyed, []),
+    "a restated guarantee": (_restated, []),
+    "a new guarantee": (lambda d: d["guarantees"].update(N={"type_hash": "n"}), []),
+    "an unchanged lock": (None, []),
+}
+
+
+def _lock_world(world: World) -> None:
+    """`main` with `_lock_files`, and #1 on `next`, which adds guarantee K and its premise to the lock: the driver merges every
+    head that changes it."""
+    _move_main(world, _lock_files())
+
+    def k(d: dict) -> None:
+        d["guarantees"]["K"] = {"type_hash": "k"}
+        d["shape"]["inline"]["K"] = {"r": "a bound"}
+
+    world.gh.put(1, world.change({"pkg/lean-audit.json": _lock_text(k)}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1]
+
+
+@pytest.mark.parametrize("case", list(LOCK_DROPS))
+def test_a_lock_merge_onto_next_names_each_premise_and_frozen_key_it_drops_that_next_still_needs(world, case):
+    """A head's regenerated lock, merged onto `next` by the record driver as the sync merges it, dropped `shape.inline` premises
+    of guarantees `next` still states unchanged, and the train's Lean check failed on each.  What it may drop: a removed or
+    restated guarantee's, one renamed, or re-keyed at a restated statement."""
+    from research.queue import lock_drops
+
+    _lock_world(world)
+    edit, drops = LOCK_DROPS[case]
+    head = world.change({"a.txt": "a2\n"} if edit is None else {"pkg/lean-audit.json": _lock_text(edit)})
+    _git(world.dev, "fetch", "-q", "origin")
+    assert lock_drops(world.dev, _git(world.dev, "rev-parse", "origin/next"), head) == drops
+
+
+def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():
+    """A premise `next` lists under G that the merged lock lists under a key it adds is renamed, and a guarantee whose record
+    (its owner aside) differs was restated; a new owner alone restates nothing."""
+    from research.queue import dropped_entries
+
+    def lock(edit: Callable[[dict], object]) -> dict:
+        return json.loads(_lock_text(edit))
+
+    base = lock(lambda d: None)
+    assert dropped_entries(base, lock(lambda d: d["shape"]["inline"].update(G2=d["shape"]["inline"].pop("G")))) == []
+    assert dropped_entries(base, lock(lambda d: (d["guarantees"]["G"].update(type_hash="g2"),
+                                                 d["shape"]["inline"]["G"].pop("p1")))) == []
+    assert dropped_entries(base, lock(lambda d: (d["guarantees"]["G"].update(owner="@proofs"),
+                                                 d["shape"]["inline"]["G"].pop("p1")))) == ["shape.inline[G]: p1"]
+    long = "∀ (i : Fin n), " + "x" * 80
+    assert dropped_entries(lock(lambda d: d["shape"]["inline"]["G"].update({long: "a bound"})), base) == [
+        f"shape.inline[G]: {long[:60]}…"]
+
+
+def test_the_preflight_refuses_a_head_whose_lock_merge_drops_a_premise_next_needs_naming_it_and_the_fix(world, capsys):
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, _lock_files())
+    world.gh.put(2, h2 := world.change({"pkg/lean-audit.json": _lock_text(lambda d: d["shape"]["inline"]["G"].pop("p1"))}),
+                 ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
+        "  - its lock merge onto `next` drops 1 entry `next`'s statements still need: pkg/lean-audit.json: shape.inline[G]: p1: "
+        "restore it verbatim from `next` in a lock-only commit (`git show origin/next:PATH`) and mark that head"], err
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+
+def test_the_sync_leaves_off_next_a_head_whose_lock_merge_drops_what_next_needs_and_keeps_the_refusal_for_its_owner(world):
+    """Drive posts each refusal the sync records to the PR's owner, once per head; a rename beside it merges."""
+    _lock_world(world)
+    world.gh.put(2, world.change({"pkg/lean-audit.json": _lock_text(lambda d: d["shape"]["frozen"].pop("F"))}))
+    world.gh.put(3, world.change({"pkg/lean-audit.json": _lock_text(_renamed)}))
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3]
+    why = ("its lock merge onto `next` drops 1 entry `next`'s statements still need: pkg/lean-audit.json: shape.frozen[F]: "
+           "restore it verbatim from `next` in a lock-only commit (`git show origin/next:PATH`) and mark that head")
+    assert entries[2].state == "refused" and entries[2].why == why
+    assert q.load_state()["conflicts"]["2"]["why"] == why
+    assert set(json.loads(_git(world.origin, "show", "refs/heads/next:pkg/lean-audit.json"))["guarantees"]) == {"F", "G2", "H", "K"}

@@ -403,7 +403,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "or skipped) or fail; a key with any fail is failed (`research.executor.fold`)", TASK_VERDICTS),
     _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
        "the after-landing run's verdicts with the executor's ({check, run, units, agree, disagree: [{unit, old, executor}], "
-       "pending, error}); `research queue shadow-report` reads it"),
+       "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
