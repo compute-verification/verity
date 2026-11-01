@@ -47,6 +47,8 @@ public import SampledProofs.Supplied
 public import Std.Data.HashMap
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Registration
 

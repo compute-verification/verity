@@ -31,6 +31,8 @@ unit's four blocks, on the registered vk root.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.P2Session
 

@@ -31,6 +31,8 @@ and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); an
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Difftest
 

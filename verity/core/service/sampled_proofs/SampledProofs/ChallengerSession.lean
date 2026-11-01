@@ -61,6 +61,8 @@ public import SampledProofs.ChallengerRecord
 public import SampledProofs.PyJson
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

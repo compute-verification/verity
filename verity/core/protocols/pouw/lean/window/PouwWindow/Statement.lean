@@ -14,6 +14,8 @@ refusal (`.error`) is where Python raises `ValueError`, or would raise another e
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow
 

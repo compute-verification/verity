@@ -15,6 +15,8 @@ public import SampledProofs.Draw
 public import SampledProofs.Rate
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Select
 

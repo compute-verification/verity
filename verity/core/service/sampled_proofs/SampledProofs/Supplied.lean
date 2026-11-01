@@ -26,6 +26,8 @@ public import Flock.Registered
 public import SampledProofs.Registered
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Supplied
 

@@ -32,6 +32,8 @@ public import Flock.Norm
 public import Flock.LinkUnits
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

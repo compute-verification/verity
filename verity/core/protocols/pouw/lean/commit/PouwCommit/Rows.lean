@@ -20,6 +20,8 @@ the key, with a 64-bit counter and the tree's 64-bit nonce (`hm96_salt`).
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCommit
 

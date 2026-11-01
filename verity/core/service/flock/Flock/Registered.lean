@@ -10,6 +10,8 @@ public import Flock.Canon
 public import Flock.HmRow
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 namespace Registered

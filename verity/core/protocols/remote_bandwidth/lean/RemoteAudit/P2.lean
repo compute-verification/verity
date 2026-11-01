@@ -27,6 +27,8 @@ blocks on the registration's vk root, by PoUS's own leaf and RFC 9162 path check
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.P2
 

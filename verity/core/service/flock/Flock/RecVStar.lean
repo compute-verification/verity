@@ -31,6 +31,8 @@ public import VStar.Compose
 public import VStar.Stage
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 namespace RecVStar

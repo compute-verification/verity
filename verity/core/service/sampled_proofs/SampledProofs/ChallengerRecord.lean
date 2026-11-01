@@ -25,6 +25,8 @@ public import Lms.Verify
 public import SampledProofs.Challenger
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

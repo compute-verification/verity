@@ -20,6 +20,8 @@ public import Mathlib.Tactic.Ring
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Pouw.H1Zy
 

@@ -19,6 +19,8 @@ commit the row as an `hm96-sha512/row/v2` row.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow
 
