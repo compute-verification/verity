@@ -550,6 +550,11 @@
   "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": "20b121f14824d1029a3dda7edffb355516c7727a2651f170588d223d00d4cbda",
   "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": "32a6cfa260175465b1ad119e860ffe1e306e48961323f799452fea46a038c397",
   "NciCheck.Properties.SecurityProofs.DescWitnesses": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
+   "missing": "honest",
+   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov"
+  },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
   "NciCheck.Properties.SecurityProofs.Reports": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8",
   "NciCheck.Properties.SecurityProofs.Throttles": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13",
@@ -665,6 +670,16 @@
   "Properties.Pouw.Window.padRefuses": "2c2d22f4c1189a576da9882358b50af1699c2d28f7dee2443267d52fe37f67ca",
   "Properties.Pouw.Window.pointRefuses": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75",
   "Properties.Pouw.Window.workAtRefuses": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
+  "Properties.Remote.SecurityProofs.acceptComplies": {
+   "type_hash": "ef95cc7750100d943f75d3094ed74952a8c0428b1777f2562a2075e8f326e9d0",
+   "missing": "honest",
+   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record"
+  },
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+   "type_hash": "cb787233027c149c9cf3d23cbc2485781bdead41db68164723913059c512cde4",
+   "missing": "honest",
+   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record"
+  },
   "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": "6fb8373a02a810bf600b6c591918363ed77972bd908601d917d4ff66bd582156",
   "Properties.RemoteAudit.Component.acceptIsVerified": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959",
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
@@ -711,22 +726,7 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
-   "missing": "honest",
-   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov"
-  },
-  "Properties.Remote.SecurityProofs.acceptComplies": {
-   "type_hash": "ef95cc7750100d943f75d3094ed74952a8c0428b1777f2562a2075e8f326e9d0",
-   "missing": "honest",
-   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record"
-  },
-  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
-   "type_hash": "cb787233027c149c9cf3d23cbc2485781bdead41db68164723913059c512cde4",
-   "missing": "honest",
-   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record"
-  }
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Pouw": {
@@ -5166,6 +5166,9 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": {
     "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Pous.Period.SecurityProofs.periodHeldHonest": {
+    "Eq P.sid.size 32": "an equation, inline on next when the rule came (#5101, above #6037 there, under this PR): name it or state it as a guarantee's conclusion"
+   },
    "Pous.Period.SecurityProofs.periodHeldNontrivial": {
     "∀ (x : Prod (Pous.ringRO (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065)).Ω (Prod Pous.EndToEnd.HmCoins Pous.EndToEnd.Streams)), Not (P.Break { fst := o.fst, snd := { fst := o.snd, snd := x } })": "a negation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -5335,9 +5338,6 @@
     "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pous.Period.SecurityProofs.periodHeldHonest": {
-    "Eq P.sid.size 32": "an equation, inline on next when the rule came (#5101, above #6037 there, under this PR): name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -20027,15 +20027,15 @@
    ]
   },
   "Properties.Remote": {
-   "digest": "d271b68ad7ff45c9cf38c583bb011cab130a15932a5916728ff544f6f9c4b788",
+   "digest": "7658bfe9d339cf930d3b7a352c24b3a66936a1dd8817f0aa790e2dab1449587f",
    "definitions": {
     "Properties.Remote.AcceptComplies": "8418fbde305dfd71e33cd3077d6b347d5d3ee11b551019de4780ce12b16d056e",
     "Properties.Remote.AcceptInferenceOnly": "fb2c35fa3ad927f7a1736524b0ff284924bfd554590feb57e3e1bf59a44f589c",
     "Properties.Remote.CaseHeld": "bfb55cb88e033585e27ded5ac0d5c4ba626cf50913c6378c1a6e52d9caf94f64",
-    "Properties.Remote.CompliesHeld": "111a8bdc9d8ee5ed3c50cefee2cdfa5455ee683291433710f46426fbbda3ea5b",
+    "Properties.Remote.CompliesHeld": "ae826b7cfd3c1a62d9948a7f73f5af371415ec0a3217fb2f31f13293c3de3b9b",
     "Properties.Remote.InferenceOnlyHeld": "fcee170080575f8f1ae05adf4c925f46ac4afb5d9df3880c50f08aeff7968dc4",
     "Properties.Remote.PolicyHeld": "6c6e9433cd79cf9727ae13a8e8aec08a1d82911fd7f799f560fa771e0fa376aa",
-    "Properties.Remote.PolicyMet": "cf6ba69f5de52c2f31a8cb207e5c9f73c91e1313a6e62bad0b16621197c88749",
+    "Properties.Remote.PolicyMet": "9ef72f00002d46556c03d56f3a42e505b276132baf1cd100b875cbdd736c2f4c",
     "Properties.Remote.StageHeld": "cd5ed6dadd195bf315d0c646c369ed537a04377d12e475824880ffc51e2b6271",
     "Properties.Remote.VerifierOwn": "b8047d52e6c51899acde32a61fd3db1ea1cc80fff100c26bf680a0a3afa34729"
    },
@@ -20392,7 +20392,7 @@
    ]
   },
   "Properties.Verity.Game": {
-   "digest": "9cba5671ea71fafcee286783043c2d3d5a2179507164459c7a52e858c27e2420",
+   "digest": "8dfb32336f7d47bbf1ea33e30e26bfca2be223c667f69cb6053f7dc06238b2de",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -20442,7 +20442,7 @@
     "Verity.Vocab": "499eded17aa8c2f1b0d59da3839979328652b5a29fb787b70246f30e93670675",
     "Verity.Vocab.BandwidthAuditSound": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
     "Verity.Vocab.FinderCR": "ac9a385f70101635417ebdbe596771e472e1860e4bd509cdea565732da998e91",
-    "Verity.Vocab.Holds": "c37878063e81a42221adcfa36eaf800a7c4a9d62d21a8ac28be825daf9a49f44",
+    "Verity.Vocab.Holds": "081cd72cd4689ec789981042be9496c2238e792da7971c17fd62d0683fe23a71",
     "Verity.Vocab.InferenceOnlySound": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
     "Verity.Vocab.NetworkCertifierSound": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
     "Verity.Vocab.Opens": "af809b91b5fa76f7fce7f4afcc4b6874daf7f5333e8df946a6e2d3671000c838",
