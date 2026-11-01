@@ -175,9 +175,9 @@ def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, le
     reg = store.registration
     q, n = reg.params, reg.params.blocks_per_segment
     encoded = [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]
-    held = pous.Store(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt), store.blocks,
-                      b"".join(mc.block_digest(b) for b in store.blocks),
-                      pous.setup_case(q, reg.commitment, reg.salt, encoded))
+    held = pous.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
+                             store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
+                             pous.setup_case(q, reg.commitment, reg.salt, encoded))
     space = pous.audit("n0", held, COINS, signer=S.TestSigner(b"the memory challenger", directory=tmp_path),
                        log=S.session_log(tmp_path), schemes=S.SCHEMES, protocol=mc.TEST_PREFIX + pous.PROTOCOL,
                        clock=lambda: 10 ** 9)
