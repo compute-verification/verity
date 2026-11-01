@@ -15,6 +15,14 @@ Two ways to check a step:
 - **full**: every MAC of the forward and backward over the step's B tokens, and every parameter's update;
 - **split**: every parameter's update in full (a corrupted update writes W freely), and the forward and backward
   sampled (`DRAWS` units a step), since a corrupted gradient moves an entry by at most the optimizer's normalised step.
+
+Two one-time checks on the served matrices, priced the same way:
+
+- **end box** (`endbox`): one live dither Z of the committed start, and |q·s − W₀ − Z| ≤ (Δ + ½)·s checked per entry:
+  W₀ (int16) and q (int8) opened, `BOX_ARITH` ANDs of fixed-point arithmetic and `BOX_NOISE_BITS` of SHA-512 noise;
+- **spectral gate** (`spectral`): the energy a randomized block Krylov subspace of q captures, seeded by the verifier's
+  live coins (k = r + `OVERSAMPLE` probes, one power iteration), which can only underestimate the top-r energy: one
+  product with the public probes at `PUBLIC_MAC` ANDs a MAC and three private x private products at `INT8_MAC`.
 """
 
 import argparse
@@ -63,6 +71,24 @@ def update_ands(opt, noise=True):
     return OPEN * (2 * o["state"] + o["grad"]) + o["arith"] + (SHA_BLOCK * o["noise_bits"] / 1024 if noise else 0)
 
 
+BOX_ARITH = 300
+BOX_NOISE_BITS = 16
+PUBLIC_MAC = 32
+OVERSAMPLE = 10
+
+
+def endbox(name):
+    sh = shape(name)
+    per = OPEN * 3 + BOX_ARITH + SHA_BLOCK * BOX_NOISE_BITS / 1024
+    return {"ands_per_param": per, "gpu_h": per * sh["params"] * S_PER_AND / 3600}
+
+
+def spectral(name, r):
+    sh = shape(name)
+    ands = sh["linear_params"] * (r + OVERSAMPLE) * (PUBLIC_MAC + 3 * INT8_MAC)
+    return {"r": r, "ands": ands, "gpu_h": ands * S_PER_AND / 3600}
+
+
 def step(name, opt, tokens, ctx, mac):
     sh = shape(name)
     macs = 3 * tokens * (sh["macs_token_fwd"] + sh["attn_macs_token_fwd"](ctx))
@@ -96,9 +122,13 @@ def main():
             for r in rows if r["tokens"] == 4096 and r["mac"] == "int8"}
     for k, v in tail.items():
         print(f"split tail {k}: " + ", ".join(f"τ {t}: {h:,.0f} GPU-h" for t, h in v.items()))
+    once = {name: {"endbox": endbox(name), "spectral": [spectral(name, r) for r in (4, 8, 32)]} for name in SHAPES}
+    for name, v in once.items():
+        print(f"{name}: end box {v['endbox']['gpu_h']:.1f} GPU-h ({v['endbox']['ands_per_param']:.0f} ANDs a parameter); "
+              "spectral gate " + ", ".join(f"r {s['r']}: {s['gpu_h']:.0f} GPU-h" for s in v["spectral"]))
     if args.out:
         Path(args.out).mkdir(parents=True, exist_ok=True)
-        (Path(args.out) / "audit.json").write_text(json.dumps({"rows": rows, "tail": tail}, default=str))
+        (Path(args.out) / "audit.json").write_text(json.dumps({"rows": rows, "tail": tail, "once": once}, default=str))
 
 
 if __name__ == "__main__":
