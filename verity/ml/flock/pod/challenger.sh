@@ -23,8 +23,11 @@ CHALLENGER_SP=$CHALLENGER_REPO/verity/core/service/sampled_proofs
 
 challenger_build() {
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  mkdir -p "$CHALLENGER_WORK"
-  ( cd "$CHALLENGER_SP" && lake build sampled-proofs-verifier sampled-proofs-difftest > "$CHALLENGER_WORK/build.log" 2>&1
+  local lock=$CHALLENGER_REPO/verity/core/difftest/lean/.lake/harness-build.lock
+  mkdir -p "$CHALLENGER_WORK" "$(dirname "$lock")"
+  # under one_stage.verifier's own build lock: in a tree other runs share (--cwd source), they build here too
+  ( cd "$CHALLENGER_SP" && flock "$lock" lake build sampled-proofs-verifier sampled-proofs-difftest \
+      > "$CHALLENGER_WORK/build.log" 2>&1
     echo $? > "$CHALLENGER_WORK/build.rc" ) &
   CHALLENGER_BUILD=$!
 }
