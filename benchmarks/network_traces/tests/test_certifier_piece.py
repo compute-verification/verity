@@ -554,7 +554,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
         "warden-rehearse --peer vy-dc-h200 --port 18190 --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --window-per-group")
+        "--tokens 4 --scan-class w63k4 --window-per-group")
     prompts = json.loads((tmp_path / "prompts.json").read_text())
     assert [len(p) for p in prompts] == [CP.PROMPT_IDS] * CP.PROMPTS and all(t < 128000 for p in prompts for t in p)
     kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
@@ -566,6 +566,11 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["gate"] == CP.SS.GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+    assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
+    assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
+    assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
+                    str(tmp_path / "key"), "--scan-class", "w63"]) == 0
+    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
@@ -598,11 +603,12 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     relay, warden = ran
     assert relay[-5:] == ["relay", "--listen", "1", "--to", "18190"]
     at = warden.index("--ids")
-    assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000)]
+    assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000, CP.V3C_SCAN_CLASS)]
     assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
     doc = json.loads((out / "session.json").read_text())
     assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200 --port 18190 --minutes {minutes} --requests 4 "
-                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --window-per-group")
+                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --scan-class w63k4 "
+                              "--window-per-group")
     assert (doc["rc"], doc["verdict"]["accepted"]) == (0, True)
 
 
@@ -700,7 +706,7 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
     assert len(set(users)) == 2 and all(u.startswith("warmup-") for u in users)
     assert (tmp_path / "request").read_text() == (
         f"warden-rehearse --peer vy-dc-h200 --port {port} --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --window-per-group")
+        "--tokens 4 --scan-class w63k4 --window-per-group")
     warm = json.loads((out / "warmup.json").read_text())["requests"]
     assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
     assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json",

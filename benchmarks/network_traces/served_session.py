@@ -17,10 +17,11 @@ answered greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS
         [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
 
 FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
-       [--prompt-ids 256] [--tokens 64] [--vocab 128000]
+       [--prompt-ids 256] [--tokens 64] [--vocab 128000] [--scan-class w63|w63k4]
 
 ``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by the endpoint's sizing; ``--tokens`` is each
-request's max_tokens, at most KO.
+request's max_tokens, at most KO. ``--scan-class`` asks the gate for another class's schedule (`auditor.SCAN_CLASSES`:
+w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bound ``--prompt-ids`` and ``--tokens``.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
@@ -70,7 +71,7 @@ request's max_tokens, at most KO.
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
   by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period drawn
   on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
-  at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every unit, or ``--draw K`` of them, on the
+  at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
   refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
   way out, whatever the exit.
@@ -152,8 +153,8 @@ TREE = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "live_challenger"))
 import auditor as A  # noqa: E402
 
-#: the scan's class (`scan_zk.W63`): at most KI prompt ids in, at most KO ids out a request
-KI, KO = 1024, 64
+#: the scan's class (`scan_zk.W63`, the gate's class of record): at most KI prompt ids in, at most KO ids out a request
+(_, KI), (_, KO) = A.scan_bounds()
 #: the session's prompt ids a request, which reach the warden in time (KI's don't)
 PROMPT_IDS = 256
 #: the session's requests: what `PEER`'s free disk seals, within 72 GB even if every request runs all KO ids
@@ -227,6 +228,7 @@ def words(a: argparse.Namespace) -> list[str]:
     return ["warden-rehearse", "--peer", a.peer, "--port", str(a.port), "--minutes", str(a.minutes),
             "--requests", str(a.requests), "--height", str(a.height), "--scan",
             *(["--bucket-ms", str(tick)] if tick is not None else []), "--prompts", "--tokens", str(a.tokens),
+            *(["--scan-class", a.scan_class] if getattr(a, "scan_class", None) else []),
             *(["--window-per-group"] if getattr(a, "window_per_group", False) else [])]
 
 
@@ -238,10 +240,11 @@ def scratch_host(d: Path, peer: str) -> A.Host:
 
 def check(a: argparse.Namespace, data: bytes) -> dict:
     """The request as this tree's gate records it, or Refused with the gate's reason or the scan class's."""
-    if not 1 <= a.prompt_ids <= KI:
-        raise Refused(f"--prompt-ids {a.prompt_ids}: the scan's class takes 1 to KI = {KI} prompt ids a request")
-    if not 1 <= a.tokens <= KO:
-        raise Refused(f"--tokens {a.tokens}: the scan's class answers 1 to KO = {KO} ids a request")
+    (_, ki), (_, ko) = A.scan_bounds(getattr(a, "scan_class", None))
+    if not 1 <= a.prompt_ids <= ki:
+        raise Refused(f"--prompt-ids {a.prompt_ids}: the scan's class takes 1 to KI = {ki} prompt ids a request")
+    if not 1 <= a.tokens <= ko:
+        raise Refused(f"--tokens {a.tokens}: the scan's class answers 1 to KO = {ko} ids a request")
     if not 2 <= a.vocab <= 1 << A.WARDEN_PROMPT_ID_BITS:
         raise Refused(f"--vocab {a.vocab}: 2 to 2^{A.WARDEN_PROMPT_ID_BITS}, the scan's ids")
     with tempfile.TemporaryDirectory() as d:
@@ -257,7 +260,8 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
     req = check(a, data)
     session = (f"python3 benchmarks/network_traces/served_session.py session --out \"$OUT\" --peer {a.peer} "
                f"--port {a.port} --prompts {a.prompts} --requests {a.requests} --height {a.height} "
-               f"--minutes {a.minutes}" + (f" --at {a.at}" if a.at else ""))
+               f"--minutes {a.minutes} --prompt-ids {a.prompt_ids} --tokens {a.tokens} --vocab {a.vocab}"
+               + (f" --at {a.at}" if a.at else "") + (f" --scan-class {a.scan_class}" if a.scan_class else ""))
     ctx = a.prompt_ids + a.tokens
     return {"request": shlex.join(words(a)), "minutes": a.minutes,
             "least_minutes": A.warden_minutes(a.requests, a.height),
@@ -506,7 +510,7 @@ def input_file(path: Path, what: str) -> Path:
 
 
 def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
-    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
+    """The scan's sample arguments: none (every proof block), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
     the auditor's side (`--coin-peer`)."""
     if a.coins == "verifier":
         return [] if a.draw is None else ["--draw", str(a.draw)]
@@ -725,6 +729,8 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
         q.add_argument("--tokens", type=int, default=KO)
         q.add_argument("--vocab", type=int, default=VOCAB)
+        q.add_argument("--scan-class", choices=sorted(A.SCAN_CLASSES),
+                       help="the gate's scan class (its class of record, w63, by default)")
         q.add_argument("--at")
     q = sub.choices["session"]
     q.add_argument("--out", type=Path, required=True)
@@ -748,7 +754,7 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--keep", type=Path, default=KEEP)
     q.add_argument("--endpoint", help="endpoint's art (its report.json), or a dry rehearsal's endpoint records")
     q.add_argument("--eos-ids")
-    q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every unit by default)")
+    q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every proof block by default)")
     q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
     q.add_argument("--coin-peer", default=AUDITOR, help="with --coins gate: this node, as the gate's peers file names it")
     q.add_argument("--challenger-key", type=Path)
