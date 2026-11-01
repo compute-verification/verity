@@ -3132,11 +3132,11 @@ class Driver:
         return [m for m, _ in landed]
 
     def _keep_lean(self, drive: dict, chain: list[Member], gone: set[int], tip: str, running: set[str],
-                   reviewed: set[str] = frozenset()) -> tuple[str, dict[str, tuple[str, list[list], bool]]] | tuple[None, None]:
+                   reviewed: set[str] = frozenset()) -> tuple[str, dict[str, tuple[str, list[list]]]] | tuple[None, None]:
         """For the low-risk lane's landing of ``gone`` onto ``tip``: (the tip of `next` rebuilt on ``tip``, its other members
         merged again in its order as a sync merges them; {the commit of each Lean check of `next` that runs or passed: (the
-        commit there of its highest member left, the members up to it, whether its trees differ in ``reviewed``)}), ("", {})
-        when there is no such check (the next sync
+        commit there of its highest member left, the members up to it)}, those whose trees differ in ``reviewed`` also in
+        `_across_reviewed`, for `_move_lean`'s log), ("", {}) when there is no such check (the next sync
         rebuilds `next`), or (None, None), told to the log, when the lane waits for one that can't move: a check drive didn't
         launch runs (`_running_lean`: its run is of its commit), a passed one regenerated lock records or they can't be read
         (they land at its commit before the lane moves it: `_lean_gate`), or (a) the members up to the commit it moves to aren't its
@@ -3147,6 +3147,7 @@ class Driver:
         from .queue import lowrisk
 
         q, lean = self.q, drive.get("lean") or {}
+        self._across_reviewed: set[str] = set()
         keep = {c: rec for c, rec in lean.items() if rec.get("state") in (None, "passed")}
         pos = {m.commit: i for i, m in enumerate(chain)}
         why = None
@@ -3182,14 +3183,16 @@ class Driver:
                       "it isn't moved")
             elif (new := images.get(left[-1].commit)) is None:
                 why = f"(a) can't be shown for the Lean check {_ids(rec)} of {c[:12]}: {broke} onto `{q.into}` {tip[:12]}"
-            elif any(new == x[0] for x in moves.values()):
+            elif any(new == x for x, _ in moves.values()):
                 q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} isn't moved: another one holds {new[:12]}")
             elif bad := sorted(f for f in changed(self.repo, c, new) if not lowrisk([f], self.lowrisk_excludes)
                                and (f not in reviewed or lean_reads([f]))):
                 why = (f"(b) can't be shown for the Lean check {_ids(rec)} of {c[:12]}: its tree and that of {new[:12]} on "
                        f"`{q.into}` {tip[:12]} differ in {', '.join(bad[:3])}, which `lowrisk_excludes` names")
             else:
-                moves[c] = (new, [[m.pr, m.head] for m in left], bool(reviewed & changed(self.repo, c, new)))
+                moves[c] = (new, [[m.pr, m.head] for m in left])
+                if reviewed & changed(self.repo, c, new):
+                    self._across_reviewed.add(c)
             if why:
                 break
         if why:
@@ -3197,7 +3200,7 @@ class Driver:
             return None, None
         return (top, moves) if moves else ("", {})
 
-    def _move_lean(self, drive: dict, gone: set[int], tip: str, top: str, moves: dict[str, tuple[str, list[list], bool]]) -> None:
+    def _move_lean(self, drive: dict, gone: set[int], tip: str, top: str, moves: dict[str, tuple[str, list[list]]]) -> None:
         """Push `next` rebuilt on the low-risk lane's landing ``tip`` (`_keep_lean`), and move each Lean check in ``moves`` to its
         new commit, one log line each: its Lean inputs are the ones it checked.  A refused push leaves them, and the next
         sync rebuilds `next` without them."""
@@ -3212,7 +3215,9 @@ class Driver:
             return
         _git(self.repo, "update-ref", f"refs/remotes/origin/{q.branch}", top)
         prs = " ".join(f"#{n}" for n in sorted(gone))
-        for c, (new, members, reviewed) in moves.items():
+        across = getattr(self, "_across_reviewed", set())
+        for c, (new, members) in moves.items():
+            reviewed = c in across
             rec = lean.pop(c)
             lean[new] = {**rec, "members": members, "tree": self._tree(new), "rekeyed_from": rec.get("rekeyed_from", c)}
             q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} ({rec.get('state') or 'running'}) holds "
