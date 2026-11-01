@@ -211,7 +211,7 @@ theorem kernel_use (n : ℕ) (r : Res) : ((kernel n).map fun a => card.use a.1 r
   simp [mma, store, copyN, List.map_const', List.sum_replicate, nsmul_eq_mul]
 
 theorem rho_pos (r : Res) : 0 < card.ρ r := by
-  cases r <;> norm_num [card, clock]
+  cases r <;> norm_num [card, clock, tensorClock]
 
 theorem le_rho_mul {ρ q T : ℚ≥0} (hρ : 0 < ρ) (h : q / ρ ≤ T) : q ≤ ρ * T := by
   rw [mul_comm]; exact (div_le_iff₀ hρ).mp h
