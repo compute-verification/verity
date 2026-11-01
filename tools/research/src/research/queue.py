@@ -194,6 +194,19 @@ that contains one left out waits, recorded (the state's `waiting`) and named in 
 names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
 'admitted' for hours while one it contains conflicts with `main`).
 
+Moves.  A layout move lands from `next` with no pause in landing.  A PR whose body has a `Move: tools/move/NAME.toml` line
+(`PR.move`) is a move PR: its marked head is only the request.  Where the sync puts it, it is regenerated on the commit below it
+(`checked`'s tip once the members below it land): that tree's own `tools/move/rename.py --map NAME.toml` at the root of a worktree
+of it, one commit on it with the PR's trailers and `Move: NAME.toml` (`_regenerate`), which that tree's own
+`tools/verity/check/move_check.py` must certify, else the PR is left out with why (a map the tip lacks too).  It needs a ready
+mark and a land verdict like any PR, and is a Lean change when it moves Lean, so the Lean check of `next`'s prefix covers it; it
+lands as that one commit, under the after-landing run.  Each PR merged above a move, on `next` or among `checked`'s last
+`LANDED_WINDOW` first-parent commits, whose head lacks it is merged across it (`_merge_through`): restacked onto it by the move's
+base's own `tools/move/restack.py` when its change names a word of the move's map or its plain merge conflicts, so only its own
+conflicts refuse it.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
+landed (`queue_log`), and drive closes it once `main` reaches it (`Driver._close_carried`).  The low-risk lane stops at a
+move on `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
+
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 once its Lean check passed, by a fast-forward of `checked` (no new merge commit), and checks `checked` after each landing,
 reverting on `checked` what that check fails, and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
@@ -279,6 +292,15 @@ LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
+#: a move PR's declaration in its body (`PR.move`): the word map, under `tools/move/`, that `rename.py --map` runs
+MOVE_RE = re.compile(r"^[ \t>*_]*Move[:\s]+`?(tools/move/[\w.-]+\.toml)`?[ \t.]*$", re.M)
+#: the trailer of a move drive regenerated (`Queue._regenerate`), naming its map
+MOVE_TRAILER_RE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
+#: the scripts a move runs, each from the tree it runs on: the move, its certificate, and carrying a branch across it
+RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/verity/check/move_check.py", "tools/move/restack.py"
+#: how many first-parent commits of the landing branch a sync reads for the queue's landings (`queue_log`): the heads it
+#: landed, and the moves a PR based before them is restacked through
+LANDED_WINDOW = 2000
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
 AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
@@ -347,6 +369,13 @@ class PR:
         if m := AGENT_RE.search(self.body):
             return m.group(0)
         return None
+
+    @property
+    def move(self) -> str | None:
+        """The word map a `Move: tools/move/NAME.toml` line of its body names: a move PR, whose head is only the request, which
+        the sync regenerates on the tip below it (`Queue._regenerate`)."""
+        m = MOVE_RE.search(self.body)
+        return m.group(1) if m else None
 
 
 class GitHub:
@@ -1096,6 +1125,12 @@ def _message(pr: PR) -> str:
     return f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\n"
 
 
+def _move_message(pr: PR, tip: str) -> str:
+    return (f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\n`python3 {RENAME} --map {pr.move}` at the root of {tip}, regenerated "
+            f"by drive for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`.\n\nPR: #{pr.number}\nHead: {pr.head}\n"
+            f"Owner: {pr.owner}\nMove: {pr.move}\n")
+
+
 class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, ready: Callable[[int, str], bool],
                  store=None, shadow: bool = False, rules: Rules | None = None, log: Callable[[str], None] = print,
@@ -1153,6 +1188,15 @@ class Queue:
         self._touched: dict[str, set[str]] = {}
         #: main's registry as `handle` reads it (its handles, {agent id: handle}), until the next `fetch`
         self._registry: tuple[set, dict[str, str]] | None = None
+        #: a sync's moves below the member it merges (`queue_log`'s, then each it regenerates), the heads it merges after it
+        #: (`_restack` batches them), and its regenerated moves and restacks by key (the state's `moves_made` and `restacks`,
+        #: kept while a sync uses them: `_used`)
+        self._moves: list[Move] = []
+        self._upcoming: list[str] = []
+        self._made: dict[str, dict] = {}
+        self._restacks: dict[str, dict] = {}
+        self._used: set[str] = set()
+        self._words_of: dict[str, set[str]] = {}
 
     # -- the clone and its state
 
@@ -1566,24 +1610,157 @@ class Queue:
 
     # -- building `next`
 
-    def _merge(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
+    def _merge(self, tip: str, pr: PR, members: list[Member], head: str | None = None) -> tuple[str | None, str]:
         """(``pr``'s head merged onto ``tip``, "") or (None, why not), as `git merge --no-ff` in a checkout of ``tip`` gives them,
         without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`merged_tree`), and `git commit-tree`
         makes the merge commit, so a candidate that conflicts costs one call (merging each candidate in the worktree, with
         many of them conflicting, takes tens of minutes).  A merge whose every conflict is in a pin is kept, each pin rebuilt
         from the merged tree (`repinned`).  A git without `--attr-source` (before 2.40) raises: merging without it would leave
-        out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`)."""
-        tree, files, r = merged_tree(self.workdir, tip, pr.head, plain=False)
+        out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).  ``head``: the commit
+        merged in its place, its head restacked through a move (`_merge_through`), under the same message."""
+        head = head or pr.head
+        tree, files, r = merged_tree(self.workdir, tip, head, plain=False)
         if r.returncode == 129 and "attr-source" in r.stderr:
             raise QueueError(f"this git has no `--attr-source`, which merging `{self.branch}` needs: install git >= 2.40")
         if tree is None:
             return None, self._unmerged(r, files, members)
         if files:
             self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(files)} rebuilt from the merged tree")
-        elif not _git(self.workdir, "merge-base", "--is-ancestor", pr.head, tip, check=False).returncode:
+        elif not _git(self.workdir, "merge-base", "--is-ancestor", head, tip, check=False).returncode:
             return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
-        commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", pr.head, "-m", _message(pr), env=IDENTITY).stdout.strip()
+        commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", head, "-m", _message(pr), env=IDENTITY).stdout.strip()
         return commit, ""
+
+    # -- moves (the module's `Moves`)
+
+    def _regenerate(self, tip: str, pr: PR) -> tuple[str | None, str]:
+        """(move PR ``pr``'s move regenerated on ``tip`` and certified, "") or (None, why not), once per tip and head
+        (`_regenerated`; the state's `moves_made`)."""
+        key = f"{tip}:{pr.move}:{pr.number}:{pr.head}"
+        self._used.add(key)
+        got = self._made.get(key) or {}
+        if not got.get("why") and not (got.get("commit") and self._has(got["commit"])):
+            commit, why = self._regenerated(tip, pr)
+            got = self._made[key] = {"commit": commit} if commit else {"why": why}
+        return got.get("commit"), got.get("why", "")
+
+    def _regenerated(self, tip: str, pr: PR) -> tuple[str | None, str]:
+        """``tip``'s own `rename.py --map MAP` (``pr``'s `Move:` line) run at the root of a worktree of ``tip``, committed as one
+        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by ``tip``'s own `move_check.py
+        TIP COMMIT`; the PR's head is only the request.  A map or script ``tip`` lacks, a script that fails, a map that renames
+        nothing there, or a move `move_check.py` refuses is the reason."""
+        if missing := [p for p in (pr.move, RENAME, MOVE_CHECK)
+                       if _git(self.workdir, "cat-file", "-e", f"{tip}:{p}", check=False).returncode]:
+            return None, (f"its move can't be regenerated on {tip[:12]}, which lacks {', '.join(missing)}: land the map first, "
+                          f"then mark the move again")
+        with tempfile.TemporaryDirectory(prefix="queue-move-") as tmp:
+            wt = Path(tmp, "wt")
+            _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
+            try:
+                r = subprocess.run([sys.executable, RENAME, "--map", pr.move], cwd=wt, capture_output=True, text=True,
+                                   env=_script_env())
+                if r.returncode:
+                    return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}"
+                _git(wt, "add", "-A")
+                tree = _out(wt, "write-tree")
+                if tree == _out(self.workdir, "rev-parse", f"{tip}^{{tree}}"):
+                    return None, (f"`{RENAME} --map {pr.move}` changes nothing on {tip[:12]}: the move is in it already, or "
+                                  "its map moves nothing there")
+                commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip), env=IDENTITY).stdout.strip()
+                c = subprocess.run([sys.executable, MOVE_CHECK, tip, commit], cwd=wt, capture_output=True, text=True,
+                                   env=_script_env())
+                if c.returncode:
+                    return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified (`{MOVE_CHECK} "
+                                  f"{tip[:12]} {commit[:12]}` exit {c.returncode}): {_tail(c, 4)}")
+                self.log(f"research queue: #{pr.number}'s move ({pr.move}) regenerated on {tip[:12]} as {commit[:12]}: "
+                         f"{_tail(c, 1)}")
+                return commit, ""
+            finally:
+                _git(self.workdir, "worktree", "remove", "--force", str(wt), check=False)
+                _git(self.workdir, "worktree", "prune", check=False)
+
+    def _merge_through(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
+        """`_merge` of ``pr`` onto ``tip``, carried across each move below it (`_moves`) that its head lacks: restacked through
+        them (`_restack`) when its own change names a word of a move's map (`_sensitive`: a plain merge would leave a file it
+        adds or a name it writes where the move no longer has it) or its plain merge conflicts, so a conflict that remains is
+        its own."""
+        if not (pending := [mv for mv in self._moves if not self._contains(mv.commit, pr.head)]):
+            return self._merge(tip, pr, members)
+        if not any(self._sensitive(pr.head, mv) for mv in pending):
+            commit, why = self._merge(tip, pr, members)
+            if commit is not None:
+                return commit, why
+        head, names = pr.head, ", ".join(f"{mv.commit[:12]} ({mv.map})" for mv in pending)
+        for mv in pending:
+            head, why = self._restack(head, mv)
+            if head is None:
+                return None, f"it doesn't cross the move {mv.commit[:12]} ({mv.map}): {why}"
+        commit, why = self._merge(tip, pr, members, head)
+        if commit is None:
+            return None, f"{why}, restacked through the move {names} as {head[:12]}"
+        self.log(f"research queue: #{pr.number} at {pr.head[:8]} restacked through the move {names} as {head[:12]}")
+        return commit, why
+
+    def _sensitive(self, head: str, mv: Move) -> bool:
+        """Whether ``head``'s own change (from its merge base with the move's base) names a word of ``mv``'s map, in a path or a
+        line, as text in any case: a superset of what `rename.py` rewrites in it."""
+        if mv.map not in self._words_of:
+            r = _git(self.workdir, "show", f"{mv.commit}^1:{mv.map}", check=False)
+            data = tomllib.loads(r.stdout) if not r.returncode else {}      # it parsed: its rename.py made the move from it
+            words = {*data.get("words", {}), *(w for s in data.get("words_in", []) for w in s.get("words", {}))}
+            self._words_of[mv.map] = {w.lower() for w in words if w}
+        r = _git(self.workdir, "diff", "-U0", "--no-color", "--no-ext-diff", f"{mv.commit}^1...{head}", check=False)
+        low = r.stdout.lower()
+        return bool(r.returncode) or any(w in low for w in self._words_of[mv.map])
+
+    def _restack(self, head: str, mv: Move) -> tuple[str | None, str]:
+        """(``head`` carried across ``mv`` by its base's `restack.py` onto the move, "") or (None, why not), once per head and
+        move (the state's `restacks`).  One run takes every head merged after it this sync that lacks ``mv`` (and every move
+        below it), whose change names a word of its map: the script checks the move against its base once a run."""
+        key = f"{head}:{mv.commit}"
+        if key not in self._restacks or (self._restacks[key].get("result") and not self._has(self._restacks[key]["result"])):
+            before = self._moves[:self._moves.index(mv)] if mv in self._moves else []
+            batch = [head] + [h for h in dict.fromkeys(self._upcoming) if h != head and f"{h}:{mv.commit}" not in self._restacks
+                              and all(self._contains(b.commit, h) for b in before) and not self._contains(mv.commit, h)
+                              and self._sensitive(h, mv)]
+            self._restacks.update(self._run_restack(batch, mv))
+        self._used.add(key)
+        got = self._restacks[key]
+        return got.get("result"), got.get("why", "")
+
+    def _run_restack(self, heads: list[str], mv: Move) -> dict[str, dict]:
+        """`restack.py HEAD... --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the move's base's
+        own copy run in the clone: {f"{head}:{move}": {"result": the restacked commit} or {"why": what it says}}."""
+        keys = [f"{h}:{mv.commit}" for h in heads]
+        base = _out(self.workdir, "rev-parse", f"{mv.commit}^1")
+        script = _git(self.workdir, "show", f"{base}:{RESTACK}", check=False)
+        if script.returncode:
+            return dict.fromkeys(keys, {"why": f"the move's base {base[:12]} has no {RESTACK}"})
+        with tempfile.TemporaryDirectory(prefix="queue-restack-") as tmp:
+            path = Path(tmp, "restack.py")
+            path.write_text(script.stdout)
+            r = subprocess.run([sys.executable, str(path), *heads, "--move-commit", mv.commit, "--script", RENAME,
+                                "--script-arg=--map", f"--script-arg={mv.map}", "--main", "refs/remotes/origin/main", "--json"],
+                               cwd=self.workdir, capture_output=True, text=True, env=_script_env())
+        try:
+            results = json.loads(r.stdout)
+        except ValueError:
+            return dict.fromkeys(keys, {"why": f"{RESTACK} failed (exit {r.returncode}): {_tail(r)}"})
+        out = {}
+        for key, x in zip(keys, results, strict=True):
+            if x.get("status") in ("clean", "up-to-date"):
+                out[key] = {"result": x["result"]}
+            elif x.get("status") == "conflicted":
+                out[key] = {"why": f"{RESTACK} conflicts at its {x.get('step')} merge in {', '.join(x.get('files') or [])}"}
+            else:
+                out[key] = {"why": f"{RESTACK}: {x.get('status')}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"}
+        return out
+
+    def _has(self, commit: str) -> bool:
+        return not _git(self.workdir, "cat-file", "-e", f"{commit}^{{commit}}", check=False).returncode
+
+    def _contains(self, ancestor: str, commit: str) -> bool:
+        return not _git(self.workdir, "merge-base", "--is-ancestor", ancestor, commit, check=False).returncode
 
     def _gated(self, main: str, gates: tuple[str, ...], tip: str, commit: str, pr: PR, before: dict[str, list[str]],
                verdicts: dict[str, list[str]]) -> tuple[list[str], list[str]]:
@@ -1673,8 +1850,12 @@ class Queue:
         state = self.load_state()
         open_prs = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
-        # a PR landed on `checked` stays open until `main` reaches it
-        prs = [p for p in prs if _git(self.workdir, "merge-base", "--is-ancestor", p.head, self.base, check=False).returncode]
+        # a PR landed on `checked` stays open until `main` reaches it; a move or a head restacked through one lands at a commit
+        # that isn't its head, which the queue's trailers name
+        landed, self._moves = queue_log(self.workdir, self.base)
+        prs = [p for p in prs if p.head not in landed
+               and _git(self.workdir, "merge-base", "--is-ancestor", p.head, self.base, check=False).returncode]
+        self._made, self._restacks, self._used = state.get("moves_made") or {}, state.get("restacks") or {}, set()
         self._seen(state, prs, {p.number for p in open_prs})
         chain = self.chain()
         entries = self.entries(prs, state)
@@ -1742,6 +1923,9 @@ class Queue:
         self._preflight_s = 0.0
         unrun: set[int] = set()
         merged = False
+        if tip != main:                                         # the moves among the members `next` keeps
+            self._moves = queue_log(self.workdir, tip)[1]
+        self._upcoming = [heads[n] for n in order[k:]]
         for n in order[k:]:
             e = entries[n]
             if blocked := [a for a in e.after if a in dropped]:
@@ -1755,8 +1939,12 @@ class Queue:
                 if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
                     self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
                 continue
-            (commit, why), merged = self._merge(tip, e.pr, members), True
-            if commit not in (None, tip) and (drops := lock_drops(self.workdir, tip, e.pr.head, commit)):
+            if e.pr.move:
+                commit, why = self._regenerate(tip, e.pr)
+            else:
+                commit, why = self._merge_through(tip, e.pr, members)
+            merged = True
+            if commit not in (None, tip) and (drops := lock_drops(self.workdir, tip, commit if e.pr.move else e.pr.head, commit)):
                 commit, why = None, lock_drop_refusal(drops, self.branch)
             if commit is not None and gates:
                 refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
@@ -1778,6 +1966,8 @@ class Queue:
                 continue
             tip = commit
             members.append(Member(n, e.pr.head, e.pr.owner or "", commit))
+            if e.pr.move:
+                self._moves.append(Move(commit, e.pr.move))
         if merged:                  # drive runs train.sh and check.py from the worktree: `next`'s tip after a sync
             _git(self.workdir, "checkout", "-q", "--detach", tip)
         for i, m in enumerate(members, 1):
@@ -1793,6 +1983,9 @@ class Queue:
                  + (" (dry run: not pushed)" if dry_run else ""))
         if not dry_run:
             state["conflicts"], state["waiting"] = conflicts, waits
+            state["moves_made"] = {k: v for k, v in self._made.items() if k in self._used}
+            moves = {mv.commit for mv in self._moves}
+            state["restacks"] = {k: v for k, v in self._restacks.items() if k in self._used or k.rpartition(":")[2] in moves}
             if self.preflight is not None:
                 heads = {p.head for p in prs}
                 kept = {key: rec for key, rec in {**flights["before"], **flights["now"]}.items() if rec.get("head") in heads}
@@ -1919,14 +2112,15 @@ class Queue:
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
         if self.into != "main":
+            landed = queue_log(self.workdir, self.base)[0]
             reach = above(self.workdir, self.base, (e.pr.head for e in entries.values() if e.state == "ready"))
             for e in entries.values():
-                if e.state == "ready" and not reach[e.pr.head][0]:
+                if e.state == "ready" and (e.pr.head in landed or not reach[e.pr.head][0]):
                     e.state, e.why = "queued", (f"landed on `{self.into}`: it reaches `main` when drive's full check of a "
                                                 f"`{self.into}` commit at or above it passes every step on the merge gate")
         conflicts, waits = state.get("conflicts", {}), state.get("waiting", {})
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
-        files_of = self.conflicts_with(main, [e.pr.head for n, e in entries.items() if e.state == "ready"
+        files_of = self.conflicts_with(main, [e.pr.head for n, e in entries.items() if e.state == "ready" and not e.pr.move
                                               and conflicts.get(str(n), {}).get("head") != e.pr.head
                                               and waits.get(str(n), {}).get("head") != e.pr.head])
         for n in contained_first(entries):
@@ -1937,7 +2131,7 @@ class Queue:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready" and (w := waits.get(str(n))) and w["head"] == e.pr.head:
                 e.state, e.why = "waiting", f"{w['why']} (at the last sync)"
-            elif e.state == "ready" and (files := files_of[e.pr.head]):
+            elif e.state == "ready" and not e.pr.move and (files := files_of[e.pr.head]):
                 e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
                                              f"re-mark it")
             elif e.state == "ready":
@@ -2182,6 +2376,48 @@ def chain_of(repo: Path, base: str, ref: str) -> list[Member]:
             return []                                   # a commit the queue didn't make: rebuild from `main`
         out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
     return out
+
+
+@dataclass(frozen=True)
+class Move:
+    """A move drive regenerated (`Queue._regenerate`), on `next` or landed: its commit, one on its base, and its word map."""
+    commit: str
+    map: str
+
+
+def queue_log(repo: Path, ref: str, n: int = LANDED_WINDOW) -> tuple[set[str], list[Move]]:
+    """(the heads the queue merged, the moves drive regenerated, oldest first) on ``ref``'s last ``n`` first-parent commits, by
+    their trailers: a PR landed at a head ``ref`` doesn't contain (a regenerated move's, or one restacked through a move) is
+    landed all the same."""
+    heads, moves = set(), []
+    log = _git(repo, "log", "--first-parent", f"-n{n}", "--format=%H%x00%B%x1e", ref, check=False).stdout
+    for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
+        commit, body = rec.split("\x00", 1)
+        t = dict(TRAILER_RE.findall(body))
+        if {"PR", "Head"} <= set(t):
+            heads.add(t["Head"].strip())
+            if m := MOVE_TRAILER_RE.search(body):
+                moves.append(Move(commit, m.group(1)))
+    return heads, moves[::-1]
+
+
+def move_of(repo: Path, commit: str) -> str | None:
+    """The word map of ``commit`` when it is a move drive regenerated (its `Move:` trailer), else None."""
+    m = MOVE_TRAILER_RE.search(_git(repo, "log", "-1", "--format=%B", commit, check=False).stdout)
+    return m.group(1) if m else None
+
+
+def _script_env() -> dict[str, str]:
+    """The environment a move's script runs in: the queue's identity for the commits it makes, and no bytecode written into the
+    tree it runs on (`rename.py` refuses a dirty one)."""
+    env = git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1", **IDENTITY)
+    for k in DATES:
+        env.pop(k, None)
+    return env
+
+
+def _tail(r: subprocess.CompletedProcess, n: int = 6) -> str:
+    return " | ".join(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-n:])
 
 
 def changed(repo: Path, base: str, commit: str) -> set[str]:
@@ -3197,9 +3433,18 @@ class Preflight:
             return None
         notes: list[str] = []
         found = self._contained(pr, prs) + self._gates(pr, notes)
-        with base_drivers(self.repo, base) as config:
-            tree, files, r = merged_tree(self.repo, base, pr.head, config=config)
-        if tree is None and files:
+        tree, files, r = None, [], None
+        if not pr.move:
+            with base_drivers(self.repo, base) as config:
+                tree, files, r = merged_tree(self.repo, base, pr.head, config=config)
+        if pr.move:
+            notes.append(f"the merged tree's checks: a move ({pr.move}), which drive's sync regenerates on the tip below it and "
+                         f"refuses there unless {MOVE_CHECK} certifies it")
+        elif tree is None and files and (moves := self._only_moved(base, files)):
+            notes.append(f"the merged tree's checks: it conflicts with {onto} in {', '.join(files)}, files only the move "
+                         f"{', '.join(moves)} changed, so drive's sync restacks it through the move and refuses it there if a "
+                         "conflict remains")
+        elif tree is None and files:
             by = touched_by(self.repo, members, files)
             found.insert(0, f"it conflicts with {onto} in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
                          + ": merge `main` once those land, or settle it with their owners; never merge `next` into the branch "
@@ -3225,6 +3470,13 @@ class Preflight:
         said = f"checks skipped: {'; '.join(skipped)}; the checks that ran passed" if skipped else "nothing refused"
         self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto {onto}: {said} ({took})")
         return None
+
+    def _only_moved(self, base: str, files: list[str]) -> list[str]:
+        """The moves drive regenerated below ``base`` (`queue_log`) that ``files``, a merge's conflicts, are all files of, when
+        they are; else none."""
+        moves = queue_log(self.repo, base)[1]
+        moved = set().union(*(changed(self.repo, f"{mv.commit}^1", mv.commit) for mv in moves))
+        return [f"{mv.commit[:12]} ({mv.map})" for mv in moves] if moves and set(files) <= moved else []
 
     def _fetch(self, pr: PR) -> tuple[str, str, list[Member]]:
         """The commit to merge the head onto (`next`, below the PR's own member when it has one; `main` when there's no `next`),
