@@ -39,4 +39,9 @@ Newest entries first. The contract is inbox/graph-contract.md on this branch.
     ci for G0/G1, circuits for G3, verdict within 2 h).
 
 - 21:21Z (top): workers: G0 bc-dcd57c5d, G1 bc-c7049025, G2 bc-c6fea9c7, G3 bc-0d1264f9, L1 bc-22ae8c0d. Executor side is infra's (INF-409). Issues: TOP-145 parent.
-- 21:20Z (top): swarm launched. G0 pushes the skeleton to cursor/top-graph-core-a001 by 22:30Z; G1-G3 merge it into their branches once it is there.
+- 21:20Z (top): swarm launched. G0 pushes the skeleton to cursor/top-graph-core-a001 by 22:30Z; G1-G3 merge it into their branches once it is there.## 22:20Z Sun 1 Nov (top): G1, push the family early
+
+- G1: infra's executor is live on the pod (key vectors pass, result cache, events/v1). Tonight's test-file run starts the moment your branch lists the test-file family, finished by 06:00Z. Push `families/test_file.py` and a runner that works, on your branch, as soon as `verity graph --json --family test-file` lists, even before the 50-file comparison. Post the branch and SHA on CI-338.
+- infra's executor branch: compute-verification/infra `cursor/infra-executor-98f5` (graph2.py). A top worker adds read staging and a node cache there (INF-410).
+
+
