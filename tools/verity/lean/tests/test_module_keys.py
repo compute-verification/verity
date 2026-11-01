@@ -34,7 +34,7 @@ def _workspace(tmp: Path, more: dict[str, str] | None = None) -> Path:
             {"type": "path", "name": "d", "dir": "../d"}, {"type": "git", "name": "mathlib", "rev": "abc"}]}),
         "r/lean-toolchain": TOOLCHAIN,
         "r/R.lean": "import R.A\nimport D.X\nimport Mathlib.Logic.Basic\n",
-        "r/R/A.lean": "/-! A. -/\nimport D.X\n\ntheorem a : True := trivial\n",
+        "r/R/A.lean": "/- A. -/\nimport D.X\n\ntheorem a : True := trivial\n",
         "r/R/B.lean": "import R.A\n",
         "d/lakefile.toml": 'name = "d"\n\n[[lean_lib]]\nname = "D"\n',
         "d/D/X.lean": "theorem x : True := trivial\n",
@@ -43,16 +43,17 @@ def _workspace(tmp: Path, more: dict[str, str] | None = None) -> Path:
     return tmp / "r"
 
 
-def test_a_header_is_read_as_lean_reads_it():
-    assert MK.imports("import A\nimport B.C\n\ndef x := 1\nimport Z\n") == ["A", "B.C"]
-    assert MK.imports("\ufeff/-! doc /- nested -/ -/\n-- note\nimport A /- x -/ import «B».C\n") == ["A", "B.C"]
-    assert MK.imports("module\n\npublic import A\nmeta import B\npublic meta import C\nimport all D\n") == ["A", "B", "C", "D"]
-    assert MK.imports("prelude\nimport Init.Core\n") == ["Init.Core"]
-    assert MK.imports("module\nprelude\nimport Init\npublic section\n") == ["Init"]
-    assert MK.imports("public def x := 1\n") == [] and MK.imports("") == []
-    assert MK.imports("/- never closed\nimport A\n") is None
-    assert MK.imports("import A\nimport") is None and MK.imports("import all") is None
-    assert MK.imports("import import\n") is None
+def test_a_module_system_header_s_imports_are_in_its_key(tmp_path):
+    """Every import form of Lean's module system (`headers.py`) puts the imported module's key in the importer's: a key that
+    skipped `public import` would restore a module built against another version of what it imports."""
+    root = _workspace(tmp_path, {"r/R.lean": "module\n\npublic import R.A\nmeta import D.X\nimport Mathlib.Logic.Basic\n",
+                                 "r/R/A.lean": "/- A. -/\nmodule\n\npublic meta import D.X\n\npublic section\n",
+                                 "r/R/B.lean": "module\nimport all R.A\n", "d/D/X.lean": "module\n"})
+    k = MK.keys(root, ["R.B"])
+    assert k["R"].imports == ("D.X", "R.A") and k["R.A"].imports == ("D.X",) and k["R.B"].imports == ("R.A",)
+    was = {m: v.key for m, v in k.items()}
+    (root.parent / "d" / "D" / "X.lean").write_text("module\n\npublic def x := 1\n")
+    assert {m for m, v in MK.keys(root, ["R.B"]).items() if v.key != was[m]} == {"D.X", "R.A", "R", "R.B"}
 
 
 def test_a_key_changes_with_what_the_module_s_compilation_reads_and_not_with_where_it_is(tmp_path):

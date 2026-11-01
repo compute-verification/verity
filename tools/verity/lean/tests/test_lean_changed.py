@@ -346,6 +346,37 @@ def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_pa
     assert LC.damaged(tmp_path / "none") == []
 
 
+def test_damaged_reads_each_output_a_module_system_trace_names_beside_it(tmp_path):
+    """A `module` file's trace names three oleans (`o`), `.ir` (`r`) and `.ir.sig` (`rs`) beside its `.ilean`, as Lean 4.34's
+    Lake writes them, all but the `.ilean` in the olean format; each is checked as the `.olean` is."""
+    lib = tmp_path / "lib"
+    outs = {"o": ["a1.olean", "a2.olean.server", "a3.olean.private"], "i": "b1.ilean", "r": "c1.ir", "rs": "c2.ir.sig",
+            "c": "d1.c", "m": True}
+
+    def ported(name: str) -> Path:
+        base = lib / name
+        base.parent.mkdir(parents=True, exist_ok=True)
+        for n in [*outs["o"], outs["i"], outs["r"], outs["rs"]]:
+            digest, _, ext = n.partition(".")
+            f = base.with_name(f"{base.name}.{ext}")
+            f.write_bytes(b"x" if ext == "ilean" else b"olean\x02rest")
+            f.with_name(f"{f.name}.hash").write_text(digest)
+            os.utime(f, ns=(10**18, 10**18))
+        t = base.with_suffix(".trace")
+        t.write_text(json.dumps({"outputs": outs}))
+        return t
+
+    ported("P/Good")
+    bad = [ported("P/NoPrivate"), ported("P/NotServer"), ported("P/NotIr"), ported("P/StaleIr"), ported("P/NoSig")]
+    (lib / "P" / "NoPrivate.olean.private").unlink()
+    for f in (lib / "P" / "NotServer.olean.server", lib / "P" / "NotIr.ir"):
+        f.write_bytes(b"\0\0\0")
+        os.utime(f, ns=(10**18, 10**18))
+    (lib / "P" / "StaleIr.ir.hash").write_text("zz")
+    (lib / "P" / "NoSig.ir.sig").unlink()
+    assert LC.damaged(lib) == sorted(bad)
+
+
 def torn(lib: Path, name: str) -> Path:
     """A module whose `.olean` was written after its `.hash`, the trace and the `.hash` still agreeing: what a build killed
     after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash` (TOP-90 row 54)."""

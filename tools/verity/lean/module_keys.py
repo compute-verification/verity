@@ -7,15 +7,15 @@ the lakefile of the package that defines it, which sets its options, and every f
 targets name, which a module may read as it compiles (`include_str`); its source; and the keys of the workspace modules it
 imports. Before a package's build, `stage` fills a Lake cache directory of that build's own with each module whose key the
 cache indexes, every artifact checked against the sha256 the index holds. Lake reads only that directory and never writes
-it, and restores a module from it only where its own input hash agrees as well. A module without a key (a header this parser
-doesn't read, an import that no package or two packages claim, a `lakefile.lean` or a target this reading doesn't follow),
+it, and restores a module from it only where its own input hash agrees as well. A module without a key (a header `headers.py`
+can't read, an import that no package or two packages claim, a `lakefile.lean` or a target this reading doesn't follow),
 or whose key isn't indexed, or with an artifact that differs, is built from source. Lake looks a module up by its package
 and input hash alone, so two staged modules with one input hash are both left out, and after the build `misrestored` names
 any module whose input hash is another staged module's, which fails the build.
 
 A module enters the index (`LakeArtifacts.put`) only from a passing run that compiled it, and only where Lake read its
-header as this parser does (`indexable`): the workspace modules its `ir/<module>.setup.json` lists (`importArts`, every
-module it imports, transitively) are the closure of those parsed here, each built in the package `keys` found it in, and its
+header as `headers.py` does (`indexable`): the workspace modules its `ir/<module>.setup.json` lists (`importArts`, every
+module it imports, transitively) are the closure of those read here, each built in the package `keys` found it in, and its
 own package is the one `keys` names. Every module it imports from the workspace is indexed before it. An indexed key is thus
 computed from a parse Lake agreed with, and the same sources give the same key wherever they are checked out. Stdlib only,
 loaded by path (`check.sibling`)."""
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -32,6 +33,16 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NamedTuple
 
+
+def _sibling(name: str):
+    spec = importlib.util.spec_from_file_location(f"lean_{name}_for_module_keys", Path(__file__).resolve().parent / f"{name}.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+H = _sibling("headers")
+parts, name, imports = H.parts, H.name, H.imports
 SCHEMA = "lean-module/v2"
 #: a Lake artifact's name in its cache: its 64-bit content hash and its extension
 ARTIFACT = re.compile(r"[0-9a-f]{16}\.[a-z.]+")
@@ -55,98 +66,10 @@ def _sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def parts(mod: str) -> list[str]:
-    """A module name's components, each without the `«»` that quotes it."""
-    return [p.strip("«»") for p in re.findall(r"«[^»]*»|[^.«»]+", mod)]
-
-
-def name(mod: str) -> str:
-    return ".".join(parts(mod))
-
-
 def path_of(mod: str, ext: str) -> Path:
     """``mod``'s file under a source or build directory: `A/B.ext` for `A.B`."""
     ps = parts(mod)
     return Path(*ps[:-1], ps[-1] + ext)
-
-
-def imports(src: str) -> list[str] | None:
-    """The modules ``src``'s header imports, as Lean's header reads them: `module`, then `prelude`, then each
-    `[public] [meta] import [all] M`, with comments anywhere between; the header ends at the first other token. None when
-    an import is cut off."""
-    out: list[str] = []
-    i, n = (1 if src.startswith("\ufeff") else 0), len(src)
-
-    def skip(i: int) -> int:
-        while i < n:
-            if src[i].isspace():
-                i += 1
-            elif src.startswith("--", i):
-                j = src.find("\n", i)
-                i = n if j < 0 else j + 1
-            elif src.startswith("/-", i):
-                depth, i = 1, i + 2
-                while i < n and depth:
-                    if src.startswith("/-", i):
-                        depth, i = depth + 1, i + 2
-                    elif src.startswith("-/", i):
-                        depth, i = depth - 1, i + 2
-                    else:
-                        i += 1
-                if depth:
-                    return -1
-            else:
-                break
-        return i
-
-    def token(i: int) -> tuple[str, int]:
-        j = i
-        while j < n and not src[j].isspace() and not src.startswith("--", j) and not src.startswith("/-", j):
-            if src[j] == "«":
-                k = src.find("»", j)
-                j = n if k < 0 else k + 1
-            else:
-                j += 1
-        return src[i:j], j
-
-    toks: list[str] = []
-    while (i := skip(i)) >= 0 and i < n and len(toks) < 2:
-        t, j = token(i)
-        if t not in ("module", "prelude") or t in toks:
-            break
-        toks.append(t)
-        i = j
-    if i < 0:
-        return None
-    while True:
-        k, words = i, []
-        while (k := skip(k)) >= 0 and k < n:
-            t, j = token(k)
-            if t in ("public", "meta") and t not in words and "import" not in words:
-                words.append(t)
-                k = j
-                continue
-            if t == "import":
-                words.append(t)
-                k = j
-            break
-        if k < 0:
-            return None
-        if "import" not in words:
-            return out
-        k = skip(k)
-        if k < 0 or k >= n:
-            return None
-        t, j = token(k)
-        if t == "all":
-            k = skip(j)
-            if k < 0 or k >= n:
-                return None
-            t, j = token(k)
-        if not t or t in ("import", "public", "meta", "all", "module", "prelude"):
-            return None
-        out.append(name(t))
-        i = j
 
 
 def _prefix(root: str, mod: str) -> bool:
@@ -324,7 +247,7 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
                     continue
                 # Lean refuses a source that isn't UTF-8, so no passing build indexes a key read through a replaced byte
                 data = p.file(m).read_bytes()
-                if (got := imports(data.decode(errors="replace"))) is None:
+                if (got := H.imports(data.decode(errors="replace"))) is None:
                     memo[m] = None
                     continue
                 seen[m], memo[m] = (p, data, got), pending

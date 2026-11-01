@@ -5,17 +5,20 @@ reaches has none: its lock exempts it, or the lock check fails it as an orphan.
 
 A task's fields, which its runner reads: `vars` `module` (its name), `package` (its Lake package's name) and `options`
 (the package's `leanOptions`, as JSON), which Lake puts in a module's setup file; `inputs` its source (the id after
-`lean-module:`), its package's lakefile and every file the package's `[[input_file]]` and `[[input_dir]]` targets name (a
-module may `include_str` one); `reads` the `olean` of every module of the tree it imports, transitively, since `lean`
-opens each of them, each at `out/lean/<module path>.olean`; `outputs` its own `olean` and `ilean` there and its `axioms`
-summary at `out/axioms/<module path>.json`.
+`lean-module:`), its package's lakefile, every file the package's `[[input_file]]` and `[[input_dir]]` targets name (a
+module may `include_str` one) and the Lean tool's files the runner runs (`runners.lean_module.TOOLS`); `outputs` its
+`olean` and `ilean` at `out/lean/<module path>`, its `axioms` summary at `out/axioms/<module path>.json` and, for a
+`module` file, the module system's parts `lean` writes beside its `olean` (`PARTS`); `reads` the `olean` of every module
+of the tree it imports, transitively, since `lean` opens each of them, and every part of each `module` file among them:
+Lake gives a legacy importer every part, and the replay reads the private one.
 
-Packages, input files and import headers are read by `tools/verity/lean/module_keys.py`, as the Lean build cache reads
-them, so a task and the cache see one module the same way. An import is resolved in the workspace of the module's package
-(it and the packages it requires by path) as `module_keys.keys` resolves it: a module of the toolchain or of a fetched
-package (Mathlib and the rest) is the `lean` env's, and one the workspace can't resolve (no package or two claim it, or no
-file holds it) is left out, so the compile fails on it. The auditor's fixture packages (`lean_audit.packages` leaves them
-out) have no tasks."""
+Packages, input files and lock roots are read by `tools/verity/lean/module_keys.py`, and import headers by
+`tools/verity/lean/headers.py`, as the Lean build cache reads them, so a task and the cache see one module the same way. An
+import is resolved in the workspace of the module's package (it and the packages it requires by path) as `module_keys.keys`
+resolves it: a module of the toolchain or of a fetched package (Mathlib and the rest) is the `lean` env's, and one the
+workspace can't resolve (no package or two claim it, or no file holds it) is left out, so the compile fails on it. A
+header Lean refuses gives the imports read before the refusal (none, when it is cut off), and the compile fails on it too.
+The auditor's fixture packages (`lean_audit.packages` leaves them out) have no tasks."""
 from __future__ import annotations
 
 import importlib.util
@@ -33,6 +36,8 @@ LEAN = Path(__file__).resolve().parents[3] / "lean"
 UNREAD = ("buildType", "moreLeanArgs", "weakLeanArgs", "dynlibs", "plugins", "backend", "precompileModules")
 #: each task's outputs: (name, directory under `out/`, extension of the module's path there)
 OUTPUTS = (("olean", "lean", ".olean"), ("ilean", "lean", ".ilean"), ("axioms", "axioms", ".json"))
+#: what `lean` writes beside a `module` file's `olean`, each an output of its task at the extension it is named for
+PARTS = ("olean.server", "olean.private", "ir.sig", "ir")
 
 
 def _load(name: str):
@@ -44,6 +49,7 @@ def _load(name: str):
 
 mk = _load("module_keys")
 la = _load("lean_audit")
+hd = _load("headers")
 
 
 class Package(NamedTuple):
@@ -66,8 +72,14 @@ def task_id(path: str) -> str:
 
 
 def out_path(mod: str, output: str) -> str:
-    _, sub, ext = next(o for o in OUTPUTS if o[0] == output)
+    sub, ext = ("lean", f".{output}") if output in PARTS else next((s, e) for n, s, e in OUTPUTS if n == output)
     return f"out/{sub}/{mk.path_of(mod, ext).as_posix()}"
+
+
+def reads(f: str, system: set[str]) -> list[dict]:
+    """What a task that imports the module in ``f`` reads of its build: its `olean`, and every part of a `module` file (one
+    of ``system``)."""
+    return [{"task": task_id(f), "output": o} for o in ("olean", *(PARTS if f in system else ()))]
 
 
 def rel(root: Path, p: Path) -> str:
@@ -118,9 +130,10 @@ def modules(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
     return pkgs, owner
 
 
-def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str, tuple[str, str]], dict[str, list[str]]]:
-    """(the packages, and for each module the check builds `modules`' entry and {source file: the source files of the
-    tree's modules its header imports})."""
+def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str, tuple[str, str]], dict[str, list[str]],
+                                                   set[str]]:
+    """(the packages, and of the modules the check builds `modules`' entry for each, {source file: the source files of the
+    tree's modules its header imports} and the `module` files)."""
     pkgs, owner = modules(root, files)
     have = set(files)
 
@@ -136,13 +149,16 @@ def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
             return []  # the lock check fails the lock
 
     direct: dict[str, list[str]] = {}
+    system: set[str] = set()
     todo = [r for d, p in pkgs.items() for m in (*p.lake.default, *roots(d)) if (r := resolve(d, m)) is not None]
     while todo:
         if (f := todo.pop()) not in direct:
-            got = mk.imports((root / f).read_bytes().decode(errors="replace")) or []
-            direct[f] = sorted({r for i in got if (r := resolve(owner[f][0], i)) is not None})
+            h = hd.header((root / f).read_bytes().decode(errors="replace"))
+            if h is not None and h.module:
+                system.add(f)
+            direct[f] = sorted({r for i in (h.imports if h else ()) if (r := resolve(owner[f][0], i.module)) is not None})
             todo += direct[f]
-    return pkgs, {f: owner[f] for f in direct}, direct
+    return pkgs, {f: owner[f] for f in direct}, direct, system
 
 
 def closures(direct: dict[str, list[str]]) -> dict[str, frozenset[str]]:
@@ -169,7 +185,9 @@ def closures(direct: dict[str, list[str]]) -> dict[str, frozenset[str]]:
 
 
 def tasks(root: Path, files: list[str]) -> list[dict]:
-    pkgs, owner, direct = imports(root, files)
+    from ..runners.lean_module import TOOLS  # not at the top: the runner imports this module
+
+    pkgs, owner, direct, system = imports(root, files)
     closure = closures(direct)
     out = []
     for f in sorted(owner):
@@ -178,7 +196,8 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
         out.append({"id": task_id(f),
                     "vars": {"module": mod, "package": p.lake.name,
                              "options": json.dumps(p.options, sort_keys=True, separators=(",", ":"))},
-                    "inputs": sorted({f, p.lakefile, *p.inputs}),
-                    "reads": [{"task": task_id(g), "output": "olean"} for g in sorted(closure[f])],
-                    "outputs": [{"name": n, "path": out_path(mod, n)} for n, _, _ in OUTPUTS]})
+                    "inputs": sorted({f, p.lakefile, *p.inputs, *TOOLS}),
+                    "reads": [r for g in sorted(closure[f]) for r in reads(g, system)],
+                    "outputs": [{"name": n, "path": out_path(mod, n)}
+                                for n in (*(o[0] for o in OUTPUTS), *(PARTS if f in system else ()))]})
     return out

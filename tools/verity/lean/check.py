@@ -879,12 +879,13 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
         needs.setdefault(beside, set()).update({into, m} - {beside})
         needs.setdefault(into, set()).update(reads)
         moves[old] = proof
+    headers = sibling("headers")
     for m, src in original.items():
-        imports = list(re.finditer(r"(?m)^import\s+(\S+)[ \t]*$", strip_comments(src)))
-        if more := sorted(needs.get(m, set()) - {i.group(1) for i in imports}):
-            cut = imports[-1].end() if imports else 0
-            lines = "\n".join(f"import {i}" for i in more)
-            src = src[:cut] + ("\n" + lines if imports else lines + "\n") + src[cut:]
+        if (h := headers.header(src)) is None:
+            raise ValueError(f"lift: {m}'s import header can't be read (a comment left open, or an import without a module)")
+        if more := sorted(needs.get(m, set()) - {i.module for i in h.imports}):
+            lines = "\n".join(f"{'public import' if h.module else 'import'} {i}" for i in more)
+            src = src[:h.end] + ("\n" + lines if h.end else lines + "\n") + src[h.end:]
         files[m].write_text("\n\n".join([src.rstrip("\n"), *added.get(m, [])]) + "\n")
     return moves
 
