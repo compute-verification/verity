@@ -28,7 +28,8 @@ from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.partition import Level
-from verity.core.protocols.profile import Bernoulli, Draw, IntegrityProfile, Stratified, Stratum, Subset, Work, WorkStratum
+from verity.core.protocols.profile import (Bernoulli, IntegrityProfile, SamplingDesign, Stratified, Stratum, Subset, Work,
+                                          WorkStratum)
 
 from .draw import check_draw, check_proved, law_of
 from .registration import digest as registration_digest
@@ -69,9 +70,9 @@ def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
     return None
 
 
-def design(law: Mapping[str, Any]) -> Draw:
+def design(law: Mapping[str, Any]) -> SamplingDesign:
     """The sampling design of a well-formed law or draw (`check_draw`'s), as the profile writes it (Lean
-    `Core.Draw.ofFlock`): each stratum named by its template, its size its ranges' total, and a work sampling design's
+    `Core.SamplingDesign.ofFlock`): each stratum named by its template, its size its ranges' total, and a work sampling design's
     `Work` with its works and floors."""
     if law["law"] == "subset":
         return Subset(law["k"])
