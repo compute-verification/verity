@@ -51,6 +51,49 @@ def erasure(doc, erased, split, chips=("h200", "sm120")):
     print()
 
 
+GATE = ("sigma_q", "entropy_bits", "frac_abs_le15", "frac_abs_gt63", "frac_zero", "p_odd")
+
+
+def gate(doc):
+    """The public code statistics a gate could check, at τ 0 (one row per start and quantizer) and at τ max (per
+    setting), with the top-r share of the codes' spectral energy, mean over planted matrices and beacons."""
+    taus = doc["taus"]
+    rs0 = doc["runs"][0]["records"][0]
+    ranks = sorted(rs0.get("energy_top", {}), key=int)
+    print(f"### Code statistics, d = {doc['d']} ({doc['pre']})\n")
+    print("| start | setting | τ | " + " | ".join(GATE) + " | " + " | ".join(f"energy top {r}" for r in ranks)
+          + " | best route sm120 | val served |")
+    print("|---|---|---:|" + "---:|" * (len(GATE) + len(ranks) + 2))
+    groups = defaultdict(list)
+    for r in doc["runs"]:
+        groups[(r["start"], r["tag"])].append(r)
+    seen = set()
+    for (start, tag), rs in sorted(groups.items()):
+        quant = rs[0]["cfg"]["quant"]
+        for i in ([0] if (start, quant) not in seen else []) + [len(taus) - 1]:
+            recs = [r["records"][i] for r in rs]
+            st = [float(np.mean([x.get("stats", {}).get(k, np.nan) for x in recs])) for k in GATE]
+            en = [float(np.mean([x["energy_top"][k] for x in recs])) for k in ranks]
+            cost = float(np.mean([x["cost"]["sm120"]["best"] for x in recs]))
+            val = float(np.mean([x["val_served"] for x in recs]))
+            setting = quant if i == 0 else tag
+            print(f"| {start} | {setting} | {taus[i]} | " + " | ".join(f"{v:.3f}" for v in st) + " | "
+                  + " | ".join(f"{v:.3f}" for v in en) + f" | {cost:.3f} | {val:.3f} |")
+        seen.add((start, quant))
+    print()
+
+
+def constrained(doc):
+    if not doc.get("constrained"):
+        return
+    print(f"### Constrained starts, d = {doc['d']}\n")
+    print("| start | quant | val | val served |")
+    print("|---|---|---:|---:|")
+    for r in doc["constrained"]:
+        print(f"| {r['family']}@{r['steps']} | {r['quant']} | {r['val']:.4f} | {r['val_served']:.4f} |")
+    print()
+
+
 def planner(doc):
     print(f"### Planner, d = {doc['d']}, M = {doc['m']} own beacons, {doc['iters']} iterations ({doc['pre']})\n")
     print("| target | setting | L | unplanned h200/sm120 | planned h200/sm120 | known-coin h200/sm120 | "
@@ -73,11 +116,15 @@ def main():
     ap.add_argument("files", nargs="+")
     ap.add_argument("--erased", type=float, default=0.99)
     ap.add_argument("--split", action="store_true")
+    ap.add_argument("--gate", action="store_true", help="also the code statistics (records with `stats`)")
     args = ap.parse_args()
     for f in args.files:
         doc = json.loads(open(f).read())
         if "spread" in doc:
+            constrained(doc)
             erasure(doc, args.erased, args.split)
+            if args.gate:
+                gate(doc)
         else:
             planner(doc)
 
