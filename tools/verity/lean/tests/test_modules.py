@@ -48,10 +48,22 @@ def test_a_port_reads_back_as_a_module_and_a_rerun_changes_nothing(src, want):
     assert h.module and all("public" in i.words or "all" in i.words for i in h.imports)
 
 
+def test_a_file_that_runs_code_while_it_compiles_also_meta_imports_what_it_imports():
+    src = "import A\nimport all B\nmeta import C\n\n#guard a = 1\n"
+    want = "module\n\npublic import A\nimport all B\npublic meta import C\nmeta import A\nmeta import B\n\n" \
+           f"{M.SECTION}\n\n#guard a = 1\n"
+    assert M.port(src) == want and M.port(want) == want
+    for run in ("#eval a", "  #eval! a", "run_cmd pure ()", "#guard_msgs in #eval a"):
+        assert "meta import A" in M.port(f"import A\n\n{run}\n"), run
+    for quiet in ("#guard_msgs in\nexample : a = 1 := rfl", "#guard_expr a = 1", "def evalA := 1"):
+        assert "meta" not in M.port(f"import A\n\n{quiet}\n"), quiet
+
+
 def test_with_option_adds_a_transition_option_after_the_section_once():
     ported = M.port("import A\n\ndef x := 1\n")
     once = M.with_option(ported, "backward.privateInPublic")
-    assert once == ported.replace(M.SECTION, M.SECTION + "\nset_option backward.privateInPublic true")
+    assert once == ported.replace(M.SECTION, M.SECTION + "\nset_option backward.privateInPublic true"
+                                                         "\nset_option backward.privateInPublic.warn false")
     assert M.with_option(once, "backward.privateInPublic") == once
     with pytest.raises(ValueError, match="not ported"):
         M.with_option("import A\n", "backward.proofsInPublic")

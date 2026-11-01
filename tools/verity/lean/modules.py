@@ -2,7 +2,7 @@
 
     python3 tools/verity/lean/modules.py [PATH...]                  port every module of each package under PATH (default: all)
     python3 tools/verity/lean/modules.py --check [PATH...]          name the files not yet ported; exit 1 when there is one
-    python3 tools/verity/lean/modules.py --option NAME FILE...      add `set_option NAME true` to each ported FILE
+    python3 tools/verity/lean/modules.py --option NAME FILE...      add transition option NAME to each ported FILE
 
 A package's modules are the `.lean` files of its `[[lean_lib]]`s and `[[lean_exe]]` roots; a script beside them (run with
 `lean --run`) is not one and is left alone. A file whose header already starts with `module` is left as it is, so a rerun
@@ -13,11 +13,14 @@ changes nothing and a branch made before the port takes it by running this on it
   importer sees what it saw before;
 - opens `@[expose] public section` after the header (after the module docstring when one follows it), never closed, so every
   declaration is public and every definition's value is exposed, as without the module system; `private` still means
-  private, and a theorem's proof is never exposed.
+  private, and a theorem's proof is never exposed;
+- in a file that runs code while it compiles (`#eval`, `#guard`, `run_cmd`, ...), adds `meta import M` for each `M` it
+  imports: a module runs that code at the `meta` phase, which reads only what it meta-imports.
 
 What the module system refuses beyond that is fixed by hand in the file, which this then leaves alone: a tactic's helper
-gets `meta`, a private declaration a public statement reads becomes public. `--option` adds one of the transition options
-(`backward.privateInPublic`, `backward.proofsInPublic`) to a file that needs it instead.
+gets `meta`, a proof that unfolds a core definition the toolchain doesn't expose gets `import all` of that definition's
+module. `--option` adds one of the transition options to a file that needs it: `backward.privateInPublic` (a public
+definition reads a private one, which keeps its name; its warning is turned off) or `backward.proofsInPublic`.
 
 `header` reads a header as Lean does (`module`, then `prelude`, then each `[public] [meta] import [all] M`, with comments
 anywhere between; the header ends at the first other token). Stdlib only."""
@@ -33,7 +36,11 @@ from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[3]
 SECTION = "@[expose] public section"
-OPTIONS = ("backward.privateInPublic", "backward.proofsInPublic")
+#: each transition option `--option` takes, and the `set_option` lines it adds
+OPTIONS = {"backward.privateInPublic": ("backward.privateInPublic true", "backward.privateInPublic.warn false"),
+           "backward.proofsInPublic": ("backward.proofsInPublic true",)}
+#: a command that runs code while its file compiles
+EVALUATES = re.compile(r"(?m)(?:^[ \t]*|\bin[ \t]+)(?:#eval!?|#guard|run_cmd|run_meta|run_elab)(?![\w!?'])")
 FIX = "python3 tools/verity/lean/modules.py"
 FIXTURES = "tools/verity/lean/tests/fixtures/"
 
@@ -156,19 +163,30 @@ def port(src: str) -> str:
     if not (g.module and [m.module for m in g.imports] == [m.module for m in h.imports]
             and all("public" in m.words or "all" in m.words for m in g.imports) and new.startswith(SECTION, body)):
         raise ValueError("its header doesn't read back as ported: port it by hand")
-    return new
+    return with_meta_imports(new)
+
+
+def with_meta_imports(src: str) -> str:
+    """The module ``src`` with `meta import M` after its imports for each `M` it doesn't meta-import yet, when it runs
+    code while it compiles (`EVALUATES`); ``src`` itself otherwise."""
+    h = header(src)
+    if not EVALUATES.search(src, h.body):
+        return src
+    meta = {m.module for m in h.imports if "meta" in m.words}
+    more = list(dict.fromkeys(m.module for m in h.imports if m.module not in meta))
+    return src[:h.end] + "".join(f"\nmeta import {m}" for m in more) + src[h.end:]
 
 
 def with_option(src: str, name: str) -> str:
-    """The ported ``src`` with `set_option NAME true` after its `@[expose] public section`, once."""
-    line = f"set_option {name} true"
-    if re.search(rf"^{re.escape(line)}[ \t]*$", src, re.M):
-        return src
+    """The ported ``src`` with option ``name``'s `set_option` lines (`OPTIONS`) after its `@[expose] public section`, each
+    once."""
     if not header(src).module or (at := src.find(SECTION)) < 0:
         raise ValueError(f"not ported: run `{FIX}` on it first")
     eol = src.find("\n", at)
     eol = len(src) if eol < 0 else eol
-    return src[:eol] + "\n" + line + src[eol:]
+    lines = [f"set_option {o}" for o in OPTIONS[name]]
+    lines = [s for s in lines if not re.search(rf"^{re.escape(s)}[ \t]*$", src, re.M)]
+    return src[:eol] + "".join("\n" + s for s in lines) + src[eol:]
 
 
 def _lakefile(d: Path) -> dict | None:
