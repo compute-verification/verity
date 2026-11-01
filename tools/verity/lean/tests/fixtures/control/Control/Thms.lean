@@ -1,9 +1,5 @@
-module
-
-public import Control.Assumptions
-public import Control.Defs
-
-@[expose] public section
+import Control.Assumptions
+import Control.Defs
 
 namespace Control
 

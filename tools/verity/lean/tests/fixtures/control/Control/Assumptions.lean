@@ -1,8 +1,4 @@
-module
-
 /-! The controls' named assumption: a closed `Prop`, taken as a hypothesis. -/
-
-@[expose] public section
 
 namespace Control
 

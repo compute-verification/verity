@@ -206,8 +206,8 @@ def tracked() -> list[str]:
 
 
 def packages(files: list[str]) -> list[str]:
-    """Every in-tree Lake package: a directory with a tracked `lakefile.toml`, the controls' fixtures aside (their modules
-    are ported by hand, and their root stays a plain file, which the tests extend with plain modules)."""
+    """Every in-tree Lake package: a directory with a tracked `lakefile.toml`, the Lean check's test fixtures aside (each
+    control writes the form it tests, a plain file or a module)."""
     return sorted(f.rsplit("/", 1)[0] for f in files if f.endswith("/lakefile.toml") and not f.startswith(FIXTURES))
 
 
