@@ -7514,23 +7514,6 @@
     "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial"
    ]
   },
-  "Definitions.Claims": {
-   "digest": "07a079084084773d5e51f71e45806269580dc38ef5e1ed5dc5332bdd094a77d2",
-   "definitions": {
-    "Claims.Finder.cost": "3709d9c142ff897e5191f984a7c9374a403c5228717ca59db0c4fe4cc7085519"
-   },
-   "guarantees": [
-    "Verity.remote_soundness_of_subprotocols",
-    "Verity.remote_soundness_of_subprotocols_honest",
-    "Verity.remote_soundness_of_subprotocols_nontrivial",
-    "Verity.soundness_at_of_targets",
-    "Verity.soundness_at_of_targets_honest",
-    "Verity.soundness_at_of_targets_nontrivial",
-    "Verity.soundness_of_subprotocols",
-    "Verity.soundness_of_subprotocols_honest",
-    "Verity.soundness_of_subprotocols_nontrivial"
-   ]
-  },
   "Definitions.Claims.Sampling": {
    "digest": "585d2fc05263e27c18a0627cd795d2d624a5cb95f2af3a008ad46a196344abea",
    "definitions": {
@@ -7938,16 +7921,26 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Verity.remote_soundness_of_subprotocols",
+    "Verity.remote_soundness_of_subprotocols_honest",
+    "Verity.remote_soundness_of_subprotocols_nontrivial",
+    "Verity.soundness_at_of_targets",
+    "Verity.soundness_at_of_targets_honest",
+    "Verity.soundness_at_of_targets_nontrivial",
+    "Verity.soundness_of_subprotocols",
+    "Verity.soundness_of_subprotocols_honest",
+    "Verity.soundness_of_subprotocols_nontrivial"
    ]
   },
   "Definitions.Core.Interaction": {
-   "digest": "0903263801475397ba8c3fb587805be429812007c55bf2cbd0958b53b5ecc907",
+   "digest": "733c38e527b96695ed8a5af8ea41fc057a22771d8a7a39fbbb414a3bd51c2268",
    "definitions": {
     "Claims.Collision": "c9aa38dcdefc9acdf1e2b55b91bd771bda4cbf43d796761cda34074058a3c4da",
     "Claims.Finder": "2c5c863ab2f4038487d9df359f7002207b9f7e4c49ed437cfe2437a71f7cbe32",
     "Claims.Finder.Pr": "dd2f1f6763dbbdfbcda827509bf2c4748a5dc264d47bce6f0137c160acfc4f9c",
     "Claims.Finder.S": "504b05057f5366f634351cdff7ea218ad75f23f52c3151b5e5d6bfd6aa89143c",
+    "Claims.Finder.cost": "3709d9c142ff897e5191f984a7c9374a403c5228717ca59db0c4fe4cc7085519",
     "Claims.Finder.fin": "1b06b4fe8a3ad95a1a707b4e6b8cd1621884d7da8a367f1a224894e00fec2675",
     "Claims.Finder.out": "1f2e96ba2d94703b13797de2b60b1089e0014df7842a3a3beef4d8d4d62558e2",
     "Claims.Msg": "9bc9b800b5bce281e5b98074a8e91abfc5cfac65815c16ebed337e3c22c81f1e",
@@ -7956,7 +7949,16 @@
    },
    "guarantees": [
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
-    "Properties.SampledProofs.SecurityProofs.drawMisses"
+    "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Verity.remote_soundness_of_subprotocols",
+    "Verity.remote_soundness_of_subprotocols_honest",
+    "Verity.remote_soundness_of_subprotocols_nontrivial",
+    "Verity.soundness_at_of_targets",
+    "Verity.soundness_at_of_targets_honest",
+    "Verity.soundness_at_of_targets_nontrivial",
+    "Verity.soundness_of_subprotocols",
+    "Verity.soundness_of_subprotocols_honest",
+    "Verity.soundness_of_subprotocols_nontrivial"
    ]
   },
   "Definitions.Core.Partition": {
