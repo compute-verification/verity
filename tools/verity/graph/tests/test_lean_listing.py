@@ -119,9 +119,9 @@ def test_a_lock_reads_every_package_its_records_read(tmp_path):
 
 
 def test_a_lock_the_audit_refuses_is_listed_for_its_own_task_to_fail(tmp_path):
-    ts = listed(tmp_path, **{"Sec/lean-audit.json": "[", "Sec/Proofs/lean-audit.json": json.dumps({"proved_in": ["../../.."]})})
+    ts = listed(tmp_path, **{"Sec/lean-audit.json": "[]", "Sec/Proofs/lean-audit.json": json.dumps({"proved_in": ["../../.."]})})
     assert ts["lean-lock:Sec"]["reads"] == built("Sec/Definitions.lean", "Sec/Definitions/A.lean"), \
-        "a lock that isn't JSON names no proved_in, as lean_audit.provers reads it"
+        "a lock that isn't an object names no proved_in, as lean_audit.provers reads it"
     assert len({r["task"] for r in ts["lean-lock:Sec/Proofs"]["reads"]}) == 7, "a proved_in outside the tree adds no package"
 
 
@@ -159,6 +159,8 @@ def test_this_tree_s_locks_read_every_file_their_audit_can():
      "moreLeanArgs changes how Lake compiles"),
     ({"Sec/lakefile.toml": 'name = "sec"\n\n[[lean_lib]]\nname = "Definitions"\nglobs = ["Definitions.+"]\n'},
      "globs of its own"),
+    ({"Sec/lean-audit.json": "["}, "Sec/lean-audit.json isn't JSON .*`roots`"),
+    ({"Sec/Notes/lean-audit.json": "{"}, "Sec/Notes/lean-audit.json isn't JSON .*`proved_in`"),
 ])
 def test_trees_that_make_no_graph(tmp_path, changes, refusal):
     with pytest.raises(graph.GraphError, match=refusal):

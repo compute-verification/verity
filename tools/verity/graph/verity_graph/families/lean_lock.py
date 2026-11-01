@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 
+from ..graph import GraphError
 from . import lean_module as lm
 
 KIND = "lean-lock"
@@ -28,10 +29,12 @@ def closure(root: Path, pkg: str, pkgs: dict[str, lm.Package]) -> list[str]:
     def deps(q: str) -> tuple[str, ...]:
         return pkgs[q].workspace[1:] if q in pkgs else ()
     try:
-        named = json.loads((root / pkg / "lean-audit.json").read_text()).get("proved_in", [])
-    except (OSError, ValueError, AttributeError):
-        named = []  # the audit fails the policy
-    provers = sorted({os.path.relpath(os.path.normpath(root / pkg / q), root) for q in named if isinstance(q, str)})
+        doc = json.loads((root / pkg / "lean-audit.json").read_text())
+    except ValueError as e:
+        raise GraphError(f"{pkg}/lean-audit.json isn't JSON ({e}): its `proved_in` names packages its lock reads") from e
+    named = doc.get("proved_in", []) if isinstance(doc, dict) else []  # the audit fails a lock that isn't an object
+    provers = sorted({os.path.relpath(os.path.normpath(root / pkg / q), root)
+                      for q in (named if isinstance(named, list) else []) if isinstance(q, str)})
     return list(dict.fromkeys([pkg, *deps(pkg), *(d for q in provers for d in (q, *deps(q)))]))
 
 

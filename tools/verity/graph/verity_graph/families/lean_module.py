@@ -145,8 +145,8 @@ def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
     def roots(d: str) -> list[str]:
         try:
             return mk.policy_roots(root / d)
-        except (OSError, ValueError):
-            return []  # the lock check fails the lock
+        except ValueError as e:
+            raise GraphError(f"{d}/lean-audit.json isn't JSON ({e}): its `roots` name modules the check builds") from e
 
     direct: dict[str, list[str]] = {}
     system: set[str] = set()
