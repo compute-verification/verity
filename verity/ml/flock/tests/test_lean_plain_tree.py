@@ -1,4 +1,4 @@
-"""A plain session on the keyed coin tree (`--coins tree`, verifier PROTOCOL.md §7.4): the compiled Lean verifier accepts
+"""A plain session on the keyed coin tree (`--coins tree`, `Flock.CoinTree`): the compiled Lean verifier accepts
 a plain (non-zk) session whose coins the coin server committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree
 (`flock-circuit serve` and `prove` under `FC_COINS=tree`, the prover checking each opening), and refuses it on any other
 coins at S2/R7, and a second time in one run for its reused session key.
@@ -19,7 +19,7 @@ import pytest
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: ``stage/`` (circuit.txt, pub-32.bin, program.json, partition.json, tables/), ``session/`` (the drawn plain session's
+#: ``stage/`` (circuit.txt, pub-32.bin, program.json, partition.json), ``session/`` (the drawn plain session's
 #: record and proofs) and ``live.json`` (the prover's LIVE record)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "plain-tree"
 SPEC = {"block": 512, "rounds_log": 9, "scheme": "coin-tree/hm96-sha512/v2", "streams": ["session", "circuit/rep0", "circuit/rep1"]}
