@@ -25,8 +25,6 @@ ROOT = Path(__file__).resolve().parents[1]
 #: (file, path as written): never tracked, each with why
 EXEMPT = {
     ("tools/verity/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
-    ("tools/verity/circuit_check/src/circuit_check/known.py", "tools/verity/circuit_check/src/circuit_check/known/pieces"):
-        "KNOWN_PIECES' entry files, none while no lowering piece differs from its primitive; git keeps no empty directory",
 }
 #: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
 TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")
