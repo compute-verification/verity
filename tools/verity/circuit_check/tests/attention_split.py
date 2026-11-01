@@ -62,10 +62,6 @@ def family() -> dict[str, str]:
     return out
 
 
-def of_family(fn, fam: dict[str, str]) -> bool:
-    return (getattr(fn, "base_id", None) or fn.id) in fam
-
-
 def pinned(fam: dict[str, str]) -> dict[str, dict]:
     """circuit-check's ``definitions`` pins of the family's Definitions, by key."""
     return {key: pin for key, pin in PINS.get("definitions", {}).items() if key.split("{")[0] in fam}
