@@ -11,7 +11,7 @@ none, each on the connection's ordinal q. A connection's ingress is one warden-f
 (`active.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
-**Fixed slots a timestep** (ASK-122, Daniel, 26 Oct: "fixed slots per network timestep"). A timestep is EVERY buckets,
+**Fixed slots a timestep.** A timestep is EVERY buckets,
 its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window is whole timesteps (EVERY divides T,
 `Class.serves`), so every link-window has its boundaries at the same buckets and one window circuit serves them all.
 A request admitted at bucket s is anchored at A(s), the first boundary at or after s + WITHIN (`Class.anchor`), WITHIN
@@ -51,7 +51,7 @@ offset t0 − 1, with row −1, the first link-window's, the empty state's, sinc
 
 **The Programs' row** (`prog_encode`) at bucket t is NR entries, entry j its own port `prog<j>`, one row of
 `entry_bits`: `read` (1 bit), n (u32) and KO output ids of IDB bits (`entry_layout`), then zeros to a whole 16-bit word
-(71 words at w63's class), the row `SlotEntry_v1` writes once it carries the read bit. Entry j is the outputs of the
+(71 words at w63's class), the row `SlotEntry_v1` writes. Entry j is the outputs of the
 Program in slot j of the boundary at or before t, its `read` 1. The unit reads entry j only where slot j is due and
 occupied (anchored at t, `occ` 1 in S_{t−1}); every other entry, and every entry's padding, is ignored, so a
 link-window's buckets of one timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n and
@@ -64,8 +64,10 @@ row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `
 ⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1` template's entries,
 its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no Program reads passes
 these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So the refusal of an
-absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`); with it
-wired, it refuses every rows-form period until a slot's Program's `SCAN_STATE` is tied to the scan's state (`untied`).
+absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), and one
+whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's state tree is the
+window state (`window_state`), each row but the empty state's the S_t one unit computes (its o1) and the next reads (its
+sin), both registered reads, so each row a Program reads is the one the scan's step computed from the row before.
 
 **The egress view** (`view`) of S_t is `egress.EgressBucket`'s state at b = t: b, then each slot's live, q, admitted,
 n and its KO output ids at `egress`'s offsets (`egress.Shape(B, lanes·r, r, NR, KO, IDB, D)`): egress bucket t reads
@@ -190,7 +192,7 @@ class Class:
                              f"not {self.KI}")
 
     @cached_property
-    def lay(self) -> Q.Layout:
+    def lay(self) -> Q.FirstCell:
         return Q.layout(self.B)
 
     @cached_property
@@ -447,7 +449,7 @@ def held(cls: Class, st: State) -> list[bool]:
     return [s.live == 1 and st.now <= s.admitted + cls.D + s.n // cls.r for s in st.slots]
 
 
-def _head_values(lay: Q.Layout, payload: bytes) -> dict[str, int]:
+def _head_values(lay: Q.FirstCell, payload: bytes) -> dict[str, int]:
     """A first frame's max_tokens, temperature, top_p and seed (`io_request.FIELDS`' first four spans)."""
     (o0, w0, _), (o1, w1, _), (o2, w2, _), (o3, w3, _) = lay.spans[1:5]
     ratio = lambda f: int(f[:1] + f[2:])  # noqa: E731

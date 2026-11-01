@@ -5,13 +5,13 @@ import Definitions.Claims
 /-!
 # A period as a causal game, its claims on a fixed extractor's values, its break a fixed finder's (trusted)
 
-Soundness's rulings on the one theorem's form (26 Oct, LEAN-62 and LEAN-64):
+The one theorem's form:
 
-* **R5, a causal game.** A period is one `Verity.Game` (`Definitions.Core.Game`) played after its parameters and its
+* **A causal game.** A period is one `Verity.Game` (`Definitions.Core.Game`) played after its parameters and its
   commitment: each device release is a `coin` drawn after the bytes it answers (a `send`), in the device's order, and
   the evidence is the last `send`. The game ends in the run `O`, what the verifier of record reads. A prover's strategy
   (`Verity.Game.Strategy`) sees each coin only once it is drawn.
-* **R4′, Daniel's form.** For every prover `τ`,
+* **One adversary form.** For every prover `τ`,
   $$\Pr[\text{accept} \wedge \text{the claim fails on } E^\tau\text{'s values}] \le
     \delta + f(\Pr[B^\tau \text{ finds a SHA-512 collision}]),$$
   with the extractor `E` and the finder `B` fixed constructions. The sampled-proofs claim reads the transcript the
@@ -140,30 +140,14 @@ noncomputable def condError {O : Type} {G : Verity.Game O} (P : Verity.Game.Stra
     (δ : Verity.Game.Strategy G → ℝ≥0∞) (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
   if P s then δ s else ⊤
 
-/-- The wipe that opens a server-time block, read off the run: the bits of device memory its fill covers, the memory
-challenger's verdict, and `kept`, the bits of foreign content beyond the committed carried state that the block can
-read back from what the wipe leaves (`Accounting.BlockWipe`'s fields, on the run rather than on a product of coins). -/
-structure WipeLive {ι : Type} (d : Device ι) (O : Type) where
-  /-- the bits of device memory the fill covers -/
-  fill : ℕ
-  fill_le : fill ≤ d.mem
-  /-- the memory challenger's verdict on the wipe -/
-  accepts : O → Prop
-  /-- the bits of foreign content beyond the committed carried state that survive the wipe into the block -/
-  kept : O → ℕ
-
-/-- **The wipe's survivor bound** at fraction `f`, on the run `o`: `BlockWipe.Survives`' bound. -/
-def WipeLive.Survives {ι : Type} {d : Device ι} {O : Type} (w : WipeLive d O) (f : ℝ) (o : O) : Prop :=
-  (w.kept o : ℝ) ≤ f * w.fill + 2 * 128 + (d.chip + (d.mem - w.fill))
-
 /-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
-the wipe that opens it, its PoUS challenge times on the run, and the read deadline. -/
+its PoUS challenge times on the run, and the read deadline. The wipe that opens each block is core's `Verity.Wipe`,
+read on the run through a map of the run into the wipe's game at its boundary (`Verity.Wipe.OfRun`), which the joint
+guarantee takes beside the horizon (`Accounting.Guarantees.JointHorizonBlocksLive`). -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
     {O : Type} (G : Verity.Game O) where
   /-- block `b`'s period -/
   block : (b : Fin B) → PeriodLive d α (C b) G
-  /-- the wipe that opens block `b` -/
-  wipe : Fin B → WipeLive d O
   /-- block `b`'s PoUS challenge times on the run -/
   chal : Fin B → O → Finset ℕ
   /-- the read deadline, in ticks (T_read) -/

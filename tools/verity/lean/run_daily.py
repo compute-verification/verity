@@ -39,7 +39,7 @@ CACHE = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CACHE)
 
 MAX_SEC = 2 * 3600
-#: a package queues behind the night's Lean line (5 ahead on 19 Oct) rather than being left out; the unit's TimeoutStartSec
+#: a package queues behind the night's Lean line rather than being left out; the unit's TimeoutStartSec
 #: bounds the whole run, below the timer's day
 SLOT_WAIT_S = 4 * 3600
 MAIN = "refs/heads/main"

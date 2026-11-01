@@ -12,7 +12,8 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
   three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
   ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
-  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries.
+  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries and its ``scan/state``
+  that audit's.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
@@ -23,7 +24,8 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
   `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`slotEntryPins`: the scan's
   `prog` must be `io_shell.SlotEntry_v1`'s own entries), so the honest case passes every check before the wiring and
-  is refused there. ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  is refused there; its registration names the scan's state tree as ``scan/state``, the state the stand-in's
+  `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -93,14 +96,17 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
-def lean_check(exe: str, case: dict, d: Path) -> dict:
-    """``network-period check`` on the case's three files in ``d``: its answer (its last line)."""
+def lean_check(exe: str, case: dict, d: Path,
+               run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
+    """``network-period check`` on the case's three files in ``d``: its answer (its last line). ``run`` runs it with its
+    output captured as text (`subprocess.run`'s ``capture_output=True, text=True`` by default)."""
     d.mkdir(parents=True, exist_ok=True)
     files = [d / "params.json", d / "commitment.bin", d / "evidence.json"]
     files[0].write_bytes(canonical_json(case["params"]))
     files[1].write_bytes(bytes.fromhex(case["commitment"]))
     files[2].write_bytes(bytes.fromhex(case["evidence"]))
-    p = subprocess.run([exe, "check", *map(str, files)], capture_output=True, text=True)
+    argv = [exe, "check", *map(str, files)]
+    p = run(argv) if run else subprocess.run(argv, capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
         raise SystemExit(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])

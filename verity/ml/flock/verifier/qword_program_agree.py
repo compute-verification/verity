@@ -260,7 +260,7 @@ def check_vector_cuts(a, v, out, bad):
 
 def check_program(a, path, out, bad):
     from verity.ml.circuits import partition_object as po
-    from verity.ml.circuits.codec import _spec_id, decode_program, program_digest
+    from verity.ml.circuits.codec import descriptor_id, decode_program, program_digest
     from verity.ml.circuits.cut import CallGraph
     from verity.ml.circuits.defs import REGISTRY
     raw = gzip.open(path).read() if str(path).endswith(".gz") else Path(path).read_bytes()
@@ -272,12 +272,12 @@ def check_program(a, path, out, bad):
     part = po.evaluate(P, po.query(16, 32))
     if got["program_sha512"] != program_digest(json.loads(raw)) or got["population"] != part.population:
         bad.append(("program", str(path), "program_digest or population"))
-    want_calls = [[k, _spec_id(c.fn), c.units] for k, c in part.calls]
+    want_calls = [[k, descriptor_id(c.fn), c.units] for k, c in part.calls]
     if got["calls"] != want_calls:
         bad.append(("program", str(path), "calls"))
     defs = {}
     for _k, c in part.calls:
-        key = _spec_id(c.fn)
+        key = descriptor_id(c.fn)
         if key in defs:
             continue
         e = {"units": c.units, "owner_sha512": sha512(c.owner())}
@@ -296,12 +296,12 @@ def check_program_cuts(a, P, part, out, bad):
     against core's `cut.check_cut` on `Partition.graph` and `owner`, as `verify` runs it: the codes, the too-wide units, and
     the graph's computing gates, recomputed pairs, derived committed set, widest boundary and boundary gates. Definitions
     named by `--core-skip` (too large for core here) are checked by Lean only, and listed."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.cut import boundary_widths, check_cut, derived_committed
     lean_runs = {W: lean(a, out / "program.json", "16", str(W), "--digests", "--cuts") for W in (32, 16)}
     compared, lean_only, done = [], [], set()
     for p, (_k, c) in enumerate(part.calls):
-        key = _spec_id(c.fn)
+        key = descriptor_id(c.fn)
         if key in done:
             continue
         done.add(key)
@@ -321,7 +321,7 @@ def check_program_cuts(a, P, part, out, bad):
         part._graphs.clear()
         gc.collect()
     for W, r in lean_runs.items():
-        want = [[k, cc["codes"]] for k, cc in ((k, r["cuts"][_spec_id(c.fn)]) for k, c in part.calls) if cc["codes"]]
+        want = [[k, cc["codes"]] for k, cc in ((k, r["cuts"][descriptor_id(c.fn)]) for k, c in part.calls) if cc["codes"]]
         if r["cut"] != want:
             bad.append(("program cut", W, r["cut"][:8], want[:8]))
     return {"compared": compared, "lean_only": lean_only,

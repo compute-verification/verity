@@ -63,14 +63,14 @@ positions a session opens (`reads`) and the Flock witness that encodes what it r
 statement. -/
 structure Code where
   V : Verifier FlockDeploy.Coin
-  parse : Msg → Option Stmt
+  parse : Msg → Option AuditStatement
   scopeCheck : Msg → Bool
-  partition : Stmt → Option Partition
+  partition : AuditStatement → Option Partition
   stage2 : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → FlockDeploy.Coin) → List (ℕ × ℕ)
   rounds : (x : Msg) → ℕ × ℕ → Finset (Fin (V.k x))
   session : Msg → ℕ × ℕ → Seen → Option (Msg × Seen)
-  reveal : Stmt → ℕ × ℕ → Seen → Claims.Flock.Wit → List (List Msg × Opening Bool)
+  reveal : AuditStatement → ℕ × ℕ → Seen → Claims.Flock.Wit → List (List Msg × Opening Bool)
   own : Array _root_.Flock.Registered.Port
   at_ : List Msg → ℕ → Option (Msg × ℕ)
   layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg
@@ -83,8 +83,8 @@ structure Code where
   reveals : Msg → ℕ
   sessions : Msg → ℕ
   step : Msg → List (Msg × Msg) → Reference.Step
-  reads : Stmt → Msg → List ℕ
-  wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit
+  reads : AuditStatement → Msg → List ℕ
+  wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit
 
 /-! ## The trace commitment -/
 
@@ -113,7 +113,7 @@ theorem row_places (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → 
   simpa using congrFun (List.ofFn_inj.1 hb) (place p).2
 
 /-- **The deployed trace commitment**: hm96 leaves of the rows under the verifier's own registered path check. -/
-def commit (c : Code) : Commitment Bool :=
+def commit (c : Code) : CommitmentScheme Bool :=
   pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath c.own) c.layer
 
 /-- The deepest registered port's levels. -/

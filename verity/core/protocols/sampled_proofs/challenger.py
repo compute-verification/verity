@@ -89,7 +89,9 @@ more entries, its `period-open` and `period-close`:
               null for a reserve never opened
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each line as the auditor writes it (`ledger_text`).  The window is `{root}`, the served Commit's root, its prover the
+each entry a record entry (`verity.core.protocols.record`, `Core.Record`), each line as the auditor writes it
+(`ledger_text`, every character past ASCII escaped), and each signature over the entry's canonical JSON in UTF-8
+(`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
@@ -135,9 +137,26 @@ its open names is the auditor-trusted host's word (`trusted-host`).  Every path 
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
+**A ``--zk`` session's coins** are the challenger's too: C-Flock's keyed coin tree (``coin-tree/hm96-sha512/v2``,
+`verity.ml.commitments.coin_tree`), sampled in the window's session from the challenger's entropy under the prover's
+``Hello`` nonce (`LiveChallenger.sample_tree`), each round opened by the challenger once it has received what the round
+follows (`open_tree`).  The release log holds a line per tree and per round it opened, each written before what it
+records leaves the host, so the signed close covers them:
+
+    tree    = {event: coin-tree, key, nonce, root, spec}
+    round   = {after, coins, event: tree-open, n, round, stream, tree}     tree: its root; coins: `coins_digest`
+
+`after` is the round's message's SHA-512 (the record's ``msg_sha512``), and for the link points (stream ``session``,
+round 0) the SHA-512 of the link's ``root_F`` and each table's ``root_B`` (`link_after`).  `released_roots_of` reads past
+these lines (`tree_line`), `coin_trees_of` reads them, and `session_tree_reason` holds a session's record to them: its
+``coin_tree`` a tree the log shows sampled, its link points and every round's coins that tree's logged openings.
+`sessions_tree_reason` holds an audit's sessions to them, one tree a session and every tree a session's, so no statement's
+coins are flipped twice.  The tree's root and key leave at ``Hello``, as C-Flock's coin server releases them, so its
+unopened coins rest on the tree's hm96 hiding.
+
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.ml.commitments` and `verity.core.claims`, so any client calls it as it is.
+`verity.ml.commitments`, `verity.core.claims` and `verity.core.protocols.record`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -156,10 +175,12 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.core import claims
+from verity.core.protocols import record as core_record
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
+from verity.ml.commitments import coin_tree as CT
 from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512
+from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
 
 BINDING = "verity/challenger/coins/v1"
 COIN_BYTES = 64
@@ -189,10 +210,25 @@ NO_RECORD = "no challenger record: the verifier holds no coin commitment its cha
 CLOSE_ROLE = "verity/challenger-close/v1"
 LOG_TAG = "verity/challenger/release-log/v1"
 MAX_SESSION_ID = 128
-#: a release log's most lines: its head, then a root and its release per coin
-MAX_LOG_LINES = 2 * MAX_COINS + 1
+#: a release log's most coin-tree lines (`coin_trees_of`): each tree the challenger sampled and each round it opened
+MAX_TREE_LINES = 1 << 20
+#: a release log's most lines: its head, then a root and its release per coin, and its coin-tree lines
+MAX_LOG_LINES = 2 * MAX_COINS + 1 + MAX_TREE_LINES
 #: a release log line's most characters
 MAX_LOG_LINE = 4096
+TREE_EVENT, OPEN_EVENT = "coin-tree", "tree-open"
+#: a coin tree's spec (`coin_tree.Spec`): its most rounds a stream, as ``rounds_log``, and coins a round, ``block``
+MAX_ROUNDS_LOG, MAX_BLOCK = 16, 1 << 16
+#: the most coins a tree the challenger samples holds, every stream's every round: a 64-table session's whole schedule
+#: (129 streams of 2^9 rounds of 512 coins) fits
+MAX_TREE_COINS = 1 << 26
+_STREAM = frozenset(string.ascii_letters + string.digits + "-._/")
+TREE_SPEC_FORM = (f"a coin tree's spec is {{block, rounds_log, scheme, streams}}: {CT.SCHEME}, 1 to {MAX_BLOCK} coins a "
+                  f"round, 2^0 to 2^{MAX_ROUNDS_LOG} rounds a stream, and its streams distinct names of 1 to "
+                  f"{MAX_SESSION_ID} ASCII letters, digits, '-', '.', '_' and '/'")
+NO_TREE = "its coin tree is none the challenger's release log shows it sampled"
+SHARED_TREE = "its coin tree is another session's"
+UNUSED_TREE = "a tree no session records is a second sample, and each session's coins are flipped once"
 CLOSE_FORM = ("a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in "
               "lowercase hex, how the session ended (null when its client closed it), the release log's line count, "
               f"1 to {MAX_LOG_LINES}, and a session id of at most {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
@@ -218,7 +254,7 @@ RECORD_FILE, CLOSE_FILE, HELLOS_FILE = "record.json", "challenger.json", "hellos
 SEALED_FILES = (RECORD_FILE, CLOSE_FILE, LOG_FILE, HELLOS_FILE)
 #: an auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits
 MAX_LEDGER_LINE = 1 << 18
-_ZERO = "0" * 128
+_ZERO = core_record.ZERO
 _LEDGER_ROOT = re.compile(r"[0-9a-f]{128}")
 _LEDGER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _LEDGER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
@@ -654,16 +690,27 @@ def _time(t: Any) -> bool:
     return type(t) is int and t >= 0
 
 
+def tree_line(line: str) -> bool:
+    """Whether release log line `line` is a coin tree's (`coin_trees_of`): its event is `TREE_EVENT` or `OPEN_EVENT`."""
+    try:
+        doc = _event(line)
+    except CoinError:
+        return False
+    return isinstance(doc, dict) and doc.get("event") in (TREE_EVENT, OPEN_EVENT)
+
+
 def released_roots_of(commitment: LiveCommitment, log: Sequence[str]) -> dict[str, tuple[bytes, ...]]:
     """The roots the challenger received, by family in order: its release log's lines `log`, whose head names
-    `commitment`, each root followed by its coin's release.  A malformed log, or another commitment's, raises `CoinError`."""
+    `commitment`, each root followed by its coin's release, its coin trees' lines aside (`tree_line`).  A malformed log,
+    or another commitment's, raises `CoinError`."""
     if not log or log[0] != canonical_json_text({"event": "commitment", "root": commitment.root.hex()}):
         raise CoinError(f"the challenger's release log is not coin commitment {commitment.root.hex()[:16]}'s")
     roots: dict[str, list[bytes]] = {label: [] for label, _ in commitment.families}
-    if len(log) % 2 == 0:
+    pairs = [line for line in log[1:] if not tree_line(line)]
+    if len(pairs) % 2:
         raise CoinError("the challenger's release log ends on a root without its release")
-    for i in range(1, len(log), 2):
-        root, release = _event(log[i]), _event(log[i + 1])
+    for i in range(0, len(pairs), 2):
+        root, release = _event(pairs[i]), _event(pairs[i + 1])
         if (not isinstance(root, dict) or not isinstance(release, dict) or sorted(root) != _ROOT_EVENT
                 or sorted(release) != _RELEASE_EVENT or root["event"] != "root" or release["event"] != "release"
                 or type(root["label"]) is not str or root["label"] not in roots or type(root["index"]) is not int
@@ -715,6 +762,177 @@ def _digest_hex(s: Any, n: int = 128) -> bool:
     return type(s) is str and len(s) == n and _HEX.fullmatch(s) is not None
 
 
+def _stream(s: Any) -> bool:
+    return type(s) is str and 0 < len(s) <= MAX_SESSION_ID and all(c in _STREAM for c in s)
+
+
+def tree_spec_reason(spec: Any) -> str | None:
+    """Why `spec` is not a coin tree's spec as the challenger samples one and its release log names it
+    (`TREE_SPEC_FORM`); None when it is."""
+    if not isinstance(spec, dict) or sorted(spec) != ["block", "rounds_log", "scheme", "streams"]:
+        return TREE_SPEC_FORM
+    s = spec["streams"]
+    if (spec["scheme"] != CT.SCHEME or not _nat(spec["block"]) or not 1 <= spec["block"] <= MAX_BLOCK
+            or not _nat(spec["rounds_log"]) or spec["rounds_log"] > MAX_ROUNDS_LOG or type(s) is not list or not s
+            or not all(_stream(x) for x in s) or len(set(s)) != len(s)):
+        return TREE_SPEC_FORM
+    return None
+
+
+@dataclass(frozen=True)
+class TreeOpening:
+    """A round of a coin tree the challenger's release log shows it opened (`OPEN_EVENT`): stream `stream`'s round
+    `round`, its first `n` coins, after `after` (the round's message's SHA-512) and whose SHA-512 is `coins`
+    (`coins_digest`), each lowercase hex."""
+
+    stream: str
+    round: int
+    n: int
+    after: str
+    coins: str
+
+    def to_json(self) -> dict:
+        return {"after": self.after, "coins": self.coins, "n": self.n, "round": self.round, "stream": self.stream}
+
+
+@dataclass
+class LoggedTree:
+    """A coin tree the challenger's release log shows it sampled (`TREE_EVENT`: its key, nonce and root in lowercase hex
+    and its spec), and the rounds it shows it opened of it, in order."""
+
+    key: str
+    nonce: str
+    root: str
+    spec: dict
+    opened: list[TreeOpening]
+
+    def record(self) -> dict:
+        """The ``coin_tree`` of a session record on this tree (`Flock.CoinTree.checkRecord`)."""
+        return {"key": self.key, "nonce": self.nonce, "root": self.root, "spec": self.spec}
+
+    def opening(self, stream: str, rnd: int) -> TreeOpening | None:
+        return next((o for o in self.opened if (o.stream, o.round) == (stream, rnd)), None)
+
+    def to_json(self) -> dict:
+        return {**self.record(), "opened": [o.to_json() for o in self.opened]}
+
+
+def coin_trees_of(log: Sequence[str]) -> dict[str, LoggedTree]:
+    """The coin trees the challenger's release log `log` shows it sampled, by root in the order sampled, each with the
+    rounds it shows it opened: its `TREE_EVENT` lines, ``{event, key, nonce, root, spec}``, a key of
+    `coin_tree.KEY_BYTES`, a nonce of `coin_tree.NONCE_BYTES` and a root of 64 bytes in lowercase hex and a spec
+    `tree_spec_reason` takes, no root or key twice; and its `OPEN_EVENT` lines, ``{after, coins, event, n, round,
+    stream, tree}``, each a round of a tree sampled on an earlier line (`tree` its root), of one of its streams, that
+    stream's next round, below ``2^rounds_log``, of at most ``block`` coins, `after` and `coins` 64 bytes in lowercase
+    hex.  Every other line is a root's or a release's (`released_roots_of`).  Raises `CoinError` (`LOG_MALFORMED`)
+    otherwise."""
+    trees: dict[str, LoggedTree] = {}
+    keys: set[str] = set()
+    for line in log:
+        if not tree_line(line):
+            continue
+        doc = _event(line)
+        if doc["event"] == TREE_EVENT:
+            if (sorted(doc) != ["event", "key", "nonce", "root", "spec"] or not _digest_hex(doc["key"], 2 * CT.KEY_BYTES)
+                    or not _digest_hex(doc["nonce"], 2 * CT.NONCE_BYTES) or not _digest_hex(doc["root"])
+                    or tree_spec_reason(doc["spec"]) is not None or doc["root"] in trees or doc["key"] in keys):
+                raise CoinError(LOG_MALFORMED)
+            keys.add(doc["key"])
+            trees[doc["root"]] = LoggedTree(doc["key"], doc["nonce"], doc["root"], doc["spec"], [])
+            continue
+        if sorted(doc) != ["after", "coins", "event", "n", "round", "stream", "tree"]:
+            raise CoinError(LOG_MALFORMED)
+        t = trees.get(doc["tree"]) if type(doc["tree"]) is str else None
+        s, k, n = doc["stream"], doc["round"], doc["n"]
+        if (t is None or type(s) is not str or s not in t.spec["streams"] or not _nat(k)
+                or k != sum(o.stream == s for o in t.opened) or k >> t.spec["rounds_log"] or not _nat(n)
+                or n > t.spec["block"] or not _digest_hex(doc["after"]) or not _digest_hex(doc["coins"])):
+            raise CoinError(LOG_MALFORMED)
+        t.opened.append(TreeOpening(s, k, n, doc["after"], doc["coins"]))
+    return trees
+
+
+def coins_digest(coins: Sequence[int]) -> str:
+    """The SHA-512 of a round's coins as a session record writes them: each GF(2^128) word ``lo | hi << 64`` its 16 bytes
+    big-endian (the record's 32 hex digits, ``hi`` first), in order; lowercase hex."""
+    return hashlib.sha512(b"".join(c.to_bytes(16, "big") for c in coins)).hexdigest()
+
+
+def link_after(root_f: bytes, root_b: dict[str, bytes]) -> bytes:
+    """What a session's link points are opened after: the SHA-512 of its ``root_F`` and each table's ``root_B``, in table
+    name order, the roots its ``Commit`` sent."""
+    return hashlib.sha512(root_f + b"".join(root_b[t] for t in sorted(root_b))).digest()
+
+
+TREE_RECORD_FORM = ("its record names no coin_tree, link {points, root_b, root_f} and streams [{stream, rounds: [{coins, "
+                    "msg_sha512, n}]}] in lowercase hex, as a --zk session's record does")
+
+
+def _record_coins(cs: Any) -> bytes | None:
+    if type(cs) is not list or not all(type(c) is str and len(c) == 32 and _HEX.fullmatch(c) for c in cs):
+        return None
+    return b"".join(bytes.fromhex(c) for c in cs)
+
+
+def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None:
+    """Why `record`, a ``--zk`` session's record (its ``session.json``), doesn't show its coins to be ones the
+    challenger's release log shows it released (`trees`, `coin_trees_of`'s); None when it does.  Its ``coin_tree`` must
+    be one the log shows sampled, its key, nonce, root and spec; its link points (``link.points``, in order) that tree's
+    ``session`` round 0, opened after the roots its link commits (`link_after` of ``link.root_f`` and ``link.root_b``);
+    and each round ``k`` of each of its ``streams`` that tree's round ``k`` of the stream, its ``n`` coins opened after
+    its message (``msg_sha512``) and whose SHA-512 is its ``coins``' (`coins_digest`)."""
+    ct = record.get("coin_tree") if isinstance(record, dict) else None
+    t = trees.get(ct["root"]) if isinstance(ct, dict) and type(ct.get("root")) is str else None
+    if t is None:
+        return NO_TREE
+    if not _same(ct, t.record()):
+        return "its coin tree is not the one the challenger's release log shows it sampled under that root"
+    link, streams = record.get("link"), record.get("streams")
+    if not isinstance(link, dict) or not isinstance(link.get("root_b"), dict) or type(link.get("points")) is not list:
+        return TREE_RECORD_FORM
+    root_f, root_b = _hex(link.get("root_f")), {k: _hex(v) for k, v in link["root_b"].items()}
+    points = _record_coins([c for p in link["points"] for c in (p if type(p) is list else [None])])
+    if root_f is None or None in root_b.values() or points is None or type(streams) is not list:
+        return TREE_RECORD_FORM
+    o = t.opening(CT.SESSION, 0)
+    if o is None or (o.n, o.after, o.coins) != (len(points) // 16, link_after(root_f, root_b).hex(),
+                                                 hashlib.sha512(points).hexdigest()):
+        return "its link points are not the coins the challenger opened as its tree's session round 0 after its link's roots"
+    for s in streams:
+        name, rounds = (s.get("stream"), s.get("rounds")) if isinstance(s, dict) else (None, None)
+        if type(name) is not str or type(rounds) is not list:
+            return TREE_RECORD_FORM
+        for k, r in enumerate(rounds):
+            coins = _record_coins(r.get("coins")) if isinstance(r, dict) else None
+            if coins is None or not _digest_hex(r.get("msg_sha512")) or not _nat(r.get("n")):
+                return TREE_RECORD_FORM
+            o = t.opening(name, k)
+            if o is None or (o.n, o.after, o.coins) != (r["n"], r["msg_sha512"], hashlib.sha512(coins).hexdigest()):
+                return f"its {name} round {k} is not coins the challenger opened under its tree after that round's message"
+    return None
+
+
+def sessions_tree_reason(trees: dict[str, LoggedTree], records: Sequence[tuple[str, Any]]) -> str | None:
+    """Why the ``--zk`` sessions `records`, each its name and its record, don't show their coins to be the ones the
+    challenger's release log shows it sampled and opened (`trees`, `coin_trees_of`'s), one tree a session; None when
+    they do.  In order, each session's coins must be its tree's (`session_tree_reason`), a tree no earlier session's
+    (`SHARED_TREE`); and every tree the log shows must be a session's (`UNUSED_TREE`), so no statement's coins are
+    flipped twice."""
+    used: list[str] = []
+    for name, record in records:
+        why = session_tree_reason(trees, record)
+        root = record["coin_tree"]["root"] if why is None else None
+        if why is None and root in used:
+            why = SHARED_TREE
+        if why is not None:
+            return f"session {name}'s coins are not the challenger's: {why}"
+        used.append(root)
+    if len(used) != len(trees):
+        return (f"the challenger's release log shows {len(trees)} coin trees and the sessions use {len(used)}: "
+                f"{UNUSED_TREE}")
+    return None
+
+
 def _period(s: Any) -> bool:
     return type(s) is str and _LEDGER_NAME.fullmatch(s) is not None
 
@@ -728,17 +946,30 @@ def _window(doc: Any) -> bool:
     return isinstance(doc, dict) and sorted(doc) == ["root"] and _digest_hex(doc["root"])
 
 
+def _hexed(v: Any) -> Any:
+    """`v` with every string, keys included, as its UTF-8 in hex: what `canonical_json_text` takes to check `v`'s numbers
+    and keys alone, since a string past ASCII is canonical as the ledger writes it, escaped."""
+    if isinstance(v, str):
+        return v.encode().hex()
+    if isinstance(v, dict):
+        return {_hexed(k): _hexed(x) for k, x in v.items()}
+    return [_hexed(x) for x in v] if isinstance(v, (list, tuple)) else v
+
+
 def ledger_message(I: bytes, entry: dict) -> bytes:
     """What an entry's `sig` signs: SHA-512([ROLE] || I || [identity_digest_sha512(TAG, entry without sig)]), each [x] x
     prefixed with its length (u64), as `challenger.record_message` frames the challenger's record under its own role; TAG is
-    the entry's schema's (`TAGS`)."""
+    the entry's schema's (`TAGS`). The digest is over the entry's canonical JSON in UTF-8, a string past ASCII as its own
+    characters, as the challenger signs it, not over its line, where `ledger_text` escapes them."""
     if len(I) != 16:
         raise ValueError(f"an LMS identifier is 16 bytes, not {len(I)}")
     tag = LEDGER_TAGS.get(entry.get("schema"))
     if tag is None:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
-    body = {k: v for k, v in entry.items() if k != "sig"}
-    return hashlib.sha512(_field(LEDGER_ROLE.encode()) + I + _field(identity_digest_sha512(tag, body))).digest()
+    unsigned = core_record.unsigned(entry)
+    canonical_json_text(_hexed(unsigned))
+    text = json.dumps(unsigned, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+    return core_record.message(LEDGER_ROLE, I, tagged_sha512(tag, text.encode()))
 
 
 def leaf_of(sig: Any) -> int:
@@ -952,7 +1183,7 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
         else:
             raise ValueError(f"entry {i}: kind {kind!r}")
         leaves.add(q)
-        prev, last = hashlib.sha512(ln).hexdigest(), q
+        prev, last = core_record.prev_of(ln), q
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
     return ({root: {"reserve": (reserves.get(w["open"]["session"]) or {}).get("entry"), "open": w["open"], "end": w["end"]}
@@ -961,15 +1192,16 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
 
 
 def ledger_text(entry: dict) -> str:
-    """An entry's line as the auditor writes it: sorted keys, no whitespace, every character past ASCII escaped."""
-    return json.dumps(entry, sort_keys=True, separators=(",", ":"))
+    """An entry's line as the auditor writes it (`core_record.line`): sorted keys, no whitespace, every character past ASCII
+    escaped."""
+    return core_record.line(entry)
 
 
 def ledger_line(lines: Sequence[str], kind: str, session: str | None, body: dict, I: bytes,
                 sign: Callable[[bytes], bytes], schema: str = LEDGER_SCHEMA) -> str:
     """The auditor's next ledger line after `lines`: entry `kind` for session `session` (None for a period's) with body
     `body`, signed with `sign` under the key whose identifier is `I`."""
-    entry = {"body": body, "kind": kind, "prev": hashlib.sha512(lines[-1].encode()).hexdigest() if lines else _ZERO,
+    entry = {"body": body, "kind": kind, "prev": core_record.prev_of(lines[-1]) if lines else _ZERO,
              "schema": schema, "seq": len(lines), "session": session}
     return ledger_text({**entry, "sig": bytes(sign(ledger_message(I, entry))).hex()})
 
@@ -985,17 +1217,17 @@ def _outcome(w: Any) -> bool:
 
 
 def _ledger_entry(line: Any) -> dict | None:
-    """A ledger line's entry when it is its own `ledger_text` of the ledger's form, else None."""
+    """A ledger line's entry when it is its own `ledger_text`, a record entry (`core_record.of_json`) and of the
+    ledger's form, else None."""
     try:
         e = json.loads(line) if type(line) is str and len(line) <= MAX_LEDGER_LINE else None
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
-        canonical_json_text(e).encode()
+        canonical_json_text(_hexed(e))
+        core_record.of_json(e)
     except (ValueError, TypeError, RecursionError):
         return None
-    if not (isinstance(e, dict) and sorted(e) == ["body", "kind", "prev", "schema", "seq", "session", "sig"]
-            and type(e["schema"]) is str and e["schema"] in LEDGER_TAGS and _nat(e["seq"]) and _digest_hex(e["prev"]) and type(e["sig"]) is str
-            and len(e["sig"]) >= 8 and _HEX.fullmatch(e["sig"]) is not None and isinstance(e["body"], dict)):
+    if e["schema"] not in LEDGER_TAGS or len(e["sig"]) < 8:
         return None
     b, kind, v2 = e["body"], e["kind"], e["schema"] == LEDGER_SCHEMA
     if kind in SESSION_KINDS:
@@ -1322,7 +1554,7 @@ def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main
     session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no
     older than its period's open (the freshness floor and the period pin), which this function doesn't check.  Every path
     that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and memory-accounting's
-    remote bandwidth audit (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
+    PoUB (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
     nothing.  Only the open's pin is held: a repin of the host after the open neither helps nor harms the session, which
     is credited by the commit its open sealed, the pins log only growing past it."""
     audited, opened = _audited(ledger, window, key, verify)
@@ -1361,6 +1593,9 @@ class LiveChallenger:
         self.families = families
         self._opened: set[tuple[str, int]] = set()
         self.record: ChallengerRecord | None = None
+        self._entropy = draw
+        self._trees: dict[str, tuple[CT.CoinTree, dict[str, int]]] = {}
+        self._tree_lines = 0
 
     def sign_record(self, host: str, public: bytes, sign: Callable[[bytes], bytes]) -> ChallengerRecord:
         """The challenger's record of its commitment, signed once and before any coin opens: `sign(message)` signs with
@@ -1388,6 +1623,61 @@ class LiveChallenger:
         """`open` of each (label, index, after) of `requests`, in order: the in-process twin of
         `remote.RemoteChallenger.open_many`, so a caller asks either challenger for several coins at once."""
         return [self.open(label, index, after) for label, index, after in requests]
+
+    def _tree_line(self, doc: dict) -> str:
+        if self._tree_lines >= MAX_TREE_LINES:
+            raise CoinError(f"a challenger's release log holds at most {MAX_TREE_LINES} coin-tree lines")
+        line = canonical_json_text(doc)
+        if len(line) > MAX_LOG_LINE:
+            raise CoinError(f"a coin tree's release log line is at most {MAX_LOG_LINE} characters, not {len(line)}")
+        return line
+
+    def sample_tree(self, spec: Any, nonce: bytes | None = None) -> tuple[CT.CoinTree, str]:
+        """A ``--zk`` session's coin tree of spec `spec` (its JSON, `tree_spec_reason`, at most `MAX_TREE_COINS` coins),
+        sampled from this challenger's entropy under `nonce` (the prover's ``Hello`` nonce; None: sampled here too), and
+        its release log line (`TREE_EVENT`), which the caller writes before the tree's root leaves the host."""
+        why = tree_spec_reason(spec)
+        if why is not None:
+            raise CoinError(why)
+        s = CT.Spec.of_json(spec)
+        if (len(s.streams) << s.rounds_log) * s.block > MAX_TREE_COINS:
+            raise CoinError(f"a coin tree the challenger samples holds at most {MAX_TREE_COINS} coins")
+        nonce = self._entropy(CT.NONCE_BYTES) if nonce is None else nonce
+        if type(nonce) is not bytes or len(nonce) != CT.NONCE_BYTES:
+            raise CoinError(f"a coin tree's nonce is {CT.NONCE_BYTES} bytes")
+        tree = CT.CoinTree.sample(s, nonce, self._entropy)
+        root = tree.root().hex()
+        if root in self._trees or any(t.key == tree.key for t, _ in self._trees.values()):
+            raise CoinError("the challenger sampled a coin tree's root or key twice")
+        line = self._tree_line({"event": TREE_EVENT, **tree.record()})
+        self._trees[root] = (tree, {})
+        self._tree_lines += 1
+        return tree, line
+
+    def open_tree(self, root: str, stream: str, rnd: int, n: int, after: bytes) -> tuple[list[int], list[int], str]:
+        """Round `rnd` of stream `stream` of the coin tree this challenger sampled under `root` (lowercase hex), its
+        first `n` coins, opened once and after `after` (64 bytes: the round's message's SHA-512, or `link_after` for the
+        session's link points), each stream's rounds in order: the coins, their opening words (`coin_tree.CoinTree.open`)
+        and the release log line (`OPEN_EVENT`), which the caller writes before the coins leave the host."""
+        tree, opened = self._trees.get(root, (None, None)) if type(root) is str else (None, None)
+        if tree is None:
+            raise CoinError("the challenger sampled no coin tree under that root")
+        streams = tree.spec.streams
+        if type(stream) is not str or stream not in streams:
+            raise CoinError(f"the coin tree has no stream {stream!r}")
+        if type(rnd) is not int or rnd != opened.get(stream, 0) or rnd >> tree.spec.rounds_log:
+            raise CoinError(f"the next round of the coin tree's {stream} stream is {opened.get(stream, 0)}, not {rnd!r}: "
+                            "a retry never resamples")
+        if type(n) is not int or not 0 <= n <= tree.spec.block:
+            raise CoinError(f"a round of the coin tree opens 0 to {tree.spec.block} coins, not {n!r}")
+        if type(after) is not bytes or len(after) != 64:
+            raise CoinError("a coin tree's round is opened after 64 bytes")
+        coins, ws = tree.open(streams.index(stream), rnd, n)
+        line = self._tree_line({"after": after.hex(), "coins": coins_digest(coins), "event": OPEN_EVENT, "n": n,
+                                "round": rnd, "stream": stream, "tree": root})
+        opened[stream] = rnd + 1
+        self._tree_lines += 1
+        return coins, ws, line
 
 
 def _count(challenger: Any, label: str) -> int | None:
@@ -1481,4 +1771,8 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
-           "verify_periods", "withheld_on", "write_record"]
+           "verify_periods", "withheld_on", "write_record",
+           "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT", "SHARED_TREE",
+           "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening",
+           "coin_trees_of", "coins_digest", "link_after", "session_tree_reason", "sessions_tree_reason", "tree_line",
+           "tree_spec_reason"]

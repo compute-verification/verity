@@ -51,7 +51,7 @@ form of the two-lemma rule's `_nontrivial`): at any deployment, a statement that
 to a descriptor decoding to the empty Program, with the empty circuit, is not in `ScopeAcc` at that Program's
 schedule, though a scan check and a scope check accepting everything would pass it. -/
 theorem scanScopeAcc_nontrivial_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] [Zero Col] {D : Claims.Sampling.Deploy Coin Col T} {x : Claims.Msg} {st : Claims.Sampling.Stmt}
+    [DecidableEq Col] [Zero Col] {D : Claims.Sampling.Deploy Coin Col T} {x : Claims.Msg} {st : Claims.Sampling.AuditStatement}
     (hx : D.parse x = some st)
     (hP : Flock.Program.decode ⟨st.desc.toArray⟩ = .ok default) (hC : st.prog = ⟨[], []⟩) :
     ¬ NetTiming.ScopeAcc D (layOf ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩) (fun _ => 1) x := by

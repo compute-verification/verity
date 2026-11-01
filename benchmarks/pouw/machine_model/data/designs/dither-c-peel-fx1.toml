@@ -1,6 +1,6 @@
-# H1 + fx1 (decision 83): Dither-C's peel design, H1's noise (co32c linears and lm_head, cohalf QKᵀ, the peel on P·V
+# H1 + fx1: Dither-C's peel design, H1's noise (co32c linears and lm_head, cohalf QKᵀ, the peel on P·V
 # with vfold's sums), with fx1 chained in front of duo on every absorbed word: one IMAD a word keyed by the tile
-# position, so the fold is fx1's 2 ALU and 2 IMAD a word. Honest is BC-KERNEL r5's measured c_fx1
+# position, so the fold is fx1's 2 ALU and 2 IMAD a word. Honest is the measured c_fx1
 # (data/honest/c-fx1.toml). The RTX PRO 6000's headline design (`machine-model headline`).
 base = "dither-c-peel"
 name = "dither-c-peel-fx1"

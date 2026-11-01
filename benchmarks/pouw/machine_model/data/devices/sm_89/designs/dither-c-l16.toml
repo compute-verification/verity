@@ -33,7 +33,7 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.333333
-source = "EPS1 ADA (50 s a kernel): f_max = 2,520 MHz (light and zero-operand IMMA, no throttle reason), honest at L = 16 1680 MHz at thermal steady state under the node's enforced 325 W cap (SW power cap), 1 − 1680/2520"
+source = "EPS1 ADA (50 s a kernel): f_max = 2,520 MHz (light and zero-operand IMMA, no throttle reason), honest at L = 16 1680 MHz at thermal steady state, 1 − 1680/2520"
 
 [luck]
 delta = 4.547473508864641e-13

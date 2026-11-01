@@ -1,4 +1,4 @@
-import MemoryChallenger.Attest
+import Attest.Period
 import Properties.Pous.MemoryChallenger
 import Definitions.Claims
 import Definitions.Accounting.Assumptions.Parties
@@ -8,21 +8,23 @@ import Definitions.Accounting.Assumptions.Parties
 
 An auditor party (the memory challenger; a network certifier) holds a lower HSS key its device's identity certified for
 it, commits each certification period's records as the leaves of one frame-v3-sha512 tree and signs the root once, and
-signs one liveness record per sampling block (`MemoryChallenger.Attest`, `verity.core.attest`). The records, the root
-and its signature go to the prover only, as witness; a period's proof runs `Attest.check` on them; the liveness records
-are public, checked in the clear (`Attest.checkLiveness`).
+signs one liveness record per sampling block (`Attest.Period`, `verity.core.attest`). The records, the root
+and its signature go to the prover only, as witness; a period's proof runs `Attest.check` on them under the lower key.
+The lower key and its certificate (`Attest.PartyKey`) are public, as every liveness record shows them, and the verifier
+checks the certificate in the clear (`Attest.checkKey`); `Attest.accepts` is both. The liveness records are public,
+checked in the clear (`Attest.checkLiveness`).
 
-**Soundness.** `PeriodSigned`: when `check` accepts, the records it reads are the ones the device committed, at their
+**Soundness.** `PeriodSigned`: when `accepts` accepts, the records it reads are the ones the device committed, at their
 positions, in a period its party's key closed, with the period's attachment, link, index and count, under a key its
 identity certified for that party in that deployment (`OfDevice`); or the run's own data carries a break (`Break`): two
 distinct strings of `runStrings` with one SHA-512 digest (`cr/sha-512`), or a signature that verifies over a message the
 device never signed under that key (`euf-cma/lms-sha512-n64`): the certificate under the identity, or the root's under
 the lower key. No assumption: what the device signed is the model `Device`. `PeriodSound` is the same at every prover
 strategy as probabilities, with the collision finder `collisionFinder` (`B'_τ`) and the forger `forger` (`B_τ`) built
-from the run: `Pr[check accepts ∧ ¬OfDevice] ≤ Pr[B'_τ outputs a collision] + Pr[B_τ outputs a forgery]`. The run is
-`τ ω`, at coins `ω`: what the devices signed and the values the extractor `E` reads off the accepted proof, so that with
-the period circuit's knowledge soundness (`Claims.KS`: `Pr[proof accepted ∧ E's values fail check] ≤ κ`) this bounds
-`Pr[proof accepted ∧ a record E reads is not the device's]` by `κ` plus the two. Collision resistance is applied to
+from the run: `Pr[accepts ∧ ¬OfDevice] ≤ Pr[B'_τ outputs a collision] + Pr[B_τ outputs a forgery]`. The run is `τ ω`, at
+coins `ω`: what the devices signed, the public key the verifier checked, and the values the extractor `E` reads off the
+accepted proof, so that with the period circuit's knowledge soundness (`Claims.KS`: `Pr[proof accepted ∧ E's values
+fail check] ≤ κ`) this bounds `Pr[proof accepted ∧ a record E reads is not the device's]` by `κ` plus the two. Collision resistance is applied to
 `B'_τ` outside the theorem (`Claims.StrictBirthday`), and EUF-CMA to `B_τ`: under `Faithful`, `Secret` and `Confined`
 of the party, all `B_τ` gets of the party is its code's messages on its true inputs (`ProverSeesMessages`), and its key
 signs each LMS leaf once, so `B_τ` is an EUF-CMA adversary against the party's keys with their signing oracle.
@@ -32,9 +34,10 @@ sends on its inputs' skeleton, the records' bytes dropped. `AuditorSeesSkeleton`
 `WitnessPathPrivate`, what the auditor sees of the party is that, on the party's coins and the skeleton of its true
 inputs, so it learns nothing of the records from the party.
 What it learns from the prover is the period's proofs, whose statement `x` is public (the identity, the deployment, the
-party, the attachment, the link, the period's index, the positions read, and outputs of at most 16 bits) and whose
-witness is `(lower, certificate, signature, count, root, records read, their paths)`: their zero knowledge is C-Flock's
-(`Claims.ZKmalR` at the period's circuit, `Claims.Flock.ZK`), which these statements don't restate.
+party, the lower key and its certificate, which the party's liveness records already show, the attachment, the link,
+the period's index, the positions read, and outputs of at most 16 bits) and whose witness is `(signature, count, root,
+records read, their paths)`: their zero knowledge is C-Flock's (`Claims.ZKmalR` at the period's circuit,
+`Claims.Flock.ZK`), which these statements don't restate.
 -/
 
 namespace MemoryChallenger.Attest.Properties
@@ -137,11 +140,11 @@ def keyStrings (dev : Device) (pk : ByteArray) : List ByteArray :=
     (dev.live pk).flatMap fun l => roleStrings Lms.LIVENESS_TAG I
       (Lms.livenessContext l.deployment l.party l.attachment l.link l.period l.block) ByteArray.empty
 
-/-- The strings a period's check and the devices hash: the check's two messages' inputs (the lower key's certificate,
+/-- The strings a period's acceptance and the devices hash: its two messages' inputs (the lower key's certificate,
 the root's) and each read's climb, and what the devices hash under the identity and under the lower key. -/
-def runStrings (dev : Device) (identity deployment : ByteArray) (party : String) (s : Attest.SignedRoot)
-    (reads : Array Attest.Read) : List ByteArray :=
-  let lower := s.signature.lower
+def runStrings (dev : Device) (identity deployment : ByteArray) (party : String) (k : Attest.PartyKey)
+    (s : Attest.SignedRoot) (reads : Array Attest.Read) : List ByteArray :=
+  let lower := k.lower
   roleStrings Lms.PARTY_KEY_TAG (identity.extract 0 16) (Lms.partyContext deployment party) lower ++
     roleStrings Lms.PERIOD_ROOT_TAG (lower.extract 0 16)
       (Lms.periodRootContext deployment party s.attachment s.link s.period s.count) s.root ++
@@ -150,13 +153,13 @@ def runStrings (dev : Device) (identity deployment : ByteArray) (party : String)
 
 /-! ## A period's proof is the device's -/
 
-/-- The period `s` and the records `reads` read are the device's: its identity certified `s`'s lower key for the party
+/-- The period `s` and the records `reads` read are the device's: its identity certified `k`'s lower key for the party
 in the deployment, and that key closed a period with `s`'s attachment, link, index and count whose record at each read's
 position is the read's record. -/
-def OfDevice (dev : Device) (identity deployment : ByteArray) (party : String) (s : Attest.SignedRoot) (reads : Array Attest.Read) :
-    Prop :=
-  (∃ i ∈ dev.issued identity, i.deployment = deployment ∧ i.party = party ∧ i.lower = s.signature.lower) ∧
-    ∃ c ∈ dev.closed s.signature.lower, c.deployment = deployment ∧ c.party = party ∧ c.attachment = s.attachment ∧
+def OfDevice (dev : Device) (identity deployment : ByteArray) (party : String) (k : Attest.PartyKey)
+    (s : Attest.SignedRoot) (reads : Array Attest.Read) : Prop :=
+  (∃ i ∈ dev.issued identity, i.deployment = deployment ∧ i.party = party ∧ i.lower = k.lower) ∧
+    ∃ c ∈ dev.closed k.lower, c.deployment = deployment ∧ c.party = party ∧ c.attachment = s.attachment ∧
       c.link = s.link ∧ c.period = s.period ∧ c.records.size = s.count ∧
       ∀ r ∈ reads, c.records[r.position]? = some r.record
 
@@ -167,32 +170,34 @@ def Forges (p : Lms.Params) (dev : Device) (pk m : ByteArray) (σ : Lms.Signatur
 /-- The run's break: two distinct strings of the run with one SHA-512 digest; or the certificate verifies under the
 identity over the lower key's party-key message, which the identity never signed; or the root's signature verifies
 under the lower key over its message, which the lower key never signed. -/
-def Break (p : Lms.Params) (dev : Device) (identity deployment : ByteArray) (party : String) (s : Attest.SignedRoot)
-    (reads : Array Attest.Read) : Prop :=
-  (∃ x ∈ runStrings dev identity deployment party s reads, ∃ y ∈ runStrings dev identity deployment party s reads,
+def Break (p : Lms.Params) (dev : Device) (identity deployment : ByteArray) (party : String) (k : Attest.PartyKey)
+    (s : Attest.SignedRoot) (reads : Array Attest.Read) : Prop :=
+  (∃ x ∈ runStrings dev identity deployment party k s reads, ∃ y ∈ runStrings dev identity deployment party k s reads,
       x ≠ y ∧ Sha512.hash x = Sha512.hash y) ∨
-    (∃ m, Lms.partyKeyMessage (identity.extract 0 16) deployment party s.signature.lower = .ok m ∧
-      Forges p dev identity m s.signature.certificate) ∨
-    ∃ m, s.message deployment party = .ok m ∧ Forges p dev s.signature.lower m s.signature.signature
+    (∃ m, Lms.partyKeyMessage (identity.extract 0 16) deployment party k.lower = .ok m ∧
+      Forges p dev identity m k.certificate) ∨
+    ∃ m, s.message k.lower deployment party = .ok m ∧ Forges p dev k.lower m s.signature
 
-/-- **A period's proof reads the device's records.** For every device, when the period check accepts, the period and
-the records it reads are the device's (`OfDevice`), or the run carries a break (`Break`). -/
+/-- **A period's proof reads the device's records.** For every device, when the verifier accepts a period (the party's
+public key's certificate in the clear, the period check under its lower key), the period and the records it reads are
+the device's (`OfDevice`), or the run carries a break (`Break`). -/
 def PeriodSigned : Prop :=
-  ∀ (p : Lms.Params) (identity deployment : ByteArray) (party : String) (s : Attest.SignedRoot) (reads : Array Attest.Read)
-    (dev : Device),
-    Attest.check p identity deployment party s reads = .ok true →
-      OfDevice dev identity deployment party s reads ∨ Break p dev identity deployment party s reads
+  ∀ (p : Lms.Params) (identity deployment : ByteArray) (party : String) (k : Attest.PartyKey) (s : Attest.SignedRoot)
+    (reads : Array Attest.Read) (dev : Device),
+    Attest.accepts p identity deployment party k s reads = .ok true →
+      OfDevice dev identity deployment party k s reads ∨ Break p dev identity deployment party k s reads
 
 /-! ## At every prover strategy -/
 
-/-- One run of a period's audit: what the devices signed, and the values the period's proof is checked on as the
-extractor reads them off the accepted proof (the identity and deployment it names, the party, the signed root, the
-reads). -/
+/-- One run of a period's audit: what the devices signed, the party's public key the verifier checks, and the values
+the period's proof is checked on as the extractor reads them off the accepted proof (the identity and deployment it
+names, the party, the signed root, the reads). -/
 structure PeriodRun where
   dev : Device
   identity : ByteArray
   deployment : ByteArray
   party : String
+  key : Attest.PartyKey
   root : Attest.SignedRoot
   reads : Array Attest.Read
 
@@ -204,10 +209,10 @@ is the number of strings. -/
 def collisionFinder (Ω : Type) [Fintype Ω] [Nonempty Ω] (τ : Ω → PeriodRun) : Claims.Finder where
   S := Ω
   out ω := let r := τ ω
-    Claims.findColl ((runStrings r.dev r.identity r.deployment r.party r.root r.reads).map fun x =>
+    Claims.findColl ((runStrings r.dev r.identity r.deployment r.party r.key r.root r.reads).map fun x =>
       (x.data.toList, (Sha512.hash x).data.toList))
   cost ω := let r := τ ω
-    (runStrings r.dev r.identity r.deployment r.party r.root r.reads).length
+    (runStrings r.dev r.identity r.deployment r.party r.key r.root r.reads).length
 
 open Classical in
 /-- **`B_τ`**: on coins `ω`, the signature the run `τ ω` holds that the devices never signed, with its key and message:
@@ -215,12 +220,12 @@ the certificate where the identity never signed the lower key's party-key messag
 lower key never signed its message, else none. -/
 noncomputable def forger {Ω : Type} (τ : Ω → PeriodRun) (ω : Ω) : Option (ByteArray × ByteArray × Lms.Signature) :=
   let r := τ ω
-  let lower := r.root.signature.lower
+  let lower := r.key.lower
   let certificate := match Lms.partyKeyMessage (r.identity.extract 0 16) r.deployment r.party lower with
-    | .ok m => if Signed r.dev r.identity m then none else some (r.identity, m, r.root.signature.certificate)
+    | .ok m => if Signed r.dev r.identity m then none else some (r.identity, m, r.key.certificate)
     | .error _ => none
-  let rootSignature := match r.root.message r.deployment r.party with
-    | .ok m => if Signed r.dev lower m then none else some (lower, m, r.root.signature.signature)
+  let rootSignature := match r.root.message lower r.deployment r.party with
+    | .ok m => if Signed r.dev lower m then none else some (lower, m, r.root.signature)
     | .error _ => none
   match certificate with
   | some f => some f
@@ -233,14 +238,14 @@ noncomputable def forgeryPr (p : Lms.Params) {Ω : Type} [Fintype Ω] (τ : Ω �
 
 /-- **A period's proof reads the device's records, at every prover strategy.** For coins `ω` uniform over any finite
 `Ω` (the prover's tape, the devices' coins, the verifier's and the extractor's) and the run `τ ω` of any prover
-strategy against the devices, read through the extractor: the probability that the check accepts the run's values and
-they are not the device's is at most the probability that `B'_τ` outputs a SHA-512 collision plus the probability that
+strategy against the devices, read through the extractor: the probability that the verifier accepts the run's values
+and they are not the device's is at most the probability that `B'_τ` outputs a SHA-512 collision plus the probability that
 `B_τ` outputs a forgery against the devices' keys (`forgeryPr`). -/
 def PeriodSound : Prop :=
   ∀ (p : Lms.Params) (Ω : Type) [Fintype Ω] [Inhabited Ω] (τ : Ω → PeriodRun),
     Claims.Pr (fun ω =>
-      Attest.check p (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads = .ok true ∧
-        ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads) ≤
+      Attest.accepts p (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads = .ok true ∧
+        ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads) ≤
       (collisionFinder Ω τ).Pr sha512 + forgeryPr p τ
 
 /-! ## What the auditor and the prover see of the party -/
