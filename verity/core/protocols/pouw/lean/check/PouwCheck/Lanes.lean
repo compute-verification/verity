@@ -482,7 +482,9 @@ def leafAsks (lanes : Option Json) (leafs : Array (Nat × Nat × St)) (files : J
     | .ok o => pure (Flock.hexOf o.coin)
     | .error e => return (#[], some ("registration", s!"the window's draw coin, the produced record's draw, is not a " ++
         s!"live opening: {e}"))
-  let produced ← lanesRecord (get ev "produced") layout shape program registration coin drawn
+  let produced ← match lanesRecord (get ev "produced") layout shape program registration coin drawn with
+    | .ok p => pure p
+    | .error why => return (#[], some why)
   let mut out : Array LeafAsk := #[]
   let mut seen : List (Nat × St) := []
   for (i, u, st) in leafs do
