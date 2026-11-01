@@ -34,7 +34,7 @@ theorem setupHidden_c {tags : Tags} {cf pf pf' : ByteArray} {coins coins' : Coin
 
 /-- **`OutputsBinding` from `OutputsCommitted`**. -/
 theorem outputs_binding_of (hC : OutputsCommitted) : OutputsBinding := by
-  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hs hs' pop hpop hpt D D' hD
+  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop hpt D D' hD
     hDp hD' hDp' ho hv1 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne
   have hcc : st.c = st'.c := setupHidden_c hs hs'
   have hpop' : HmOut.loadPublic tags st'.c pf = .ok pop := by rw [← hcc]; exact hpop
@@ -42,8 +42,8 @@ theorem outputs_binding_of (hC : OutputsCommitted) : OutputsBinding := by
   have hv1' : ∀ p ∈ st'.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks := by
     rw [← hcc]; exact hv1
   have hj' : j < st'.c.outPorts.size := by rw [← hcc]; exact hj
-  have e1 := hC ht hs hpop hpt hD hDp ho hv1 L regs hregs hz o hg hg2 hj hr
-  have e2 := hC ht hs' hpop' hpt hD' hDp' ho' hv1' L' regs' hregs' hz' o' hg' hg2' hj' hr'
+  have e1 := hC ht hi hs hpop hpt hD hDp ho hv1 L regs hregs hz o hg hg2 hj hr
+  have e2 := hC ht hi hs' hpop' hpt hD' hDp' ho' hv1' L' regs' hregs' hz' o' hg' hg2' hj' hr'
   have hp : HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words =
       HmRow.rowPrefix (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words := by rw [hcc]
   refine commitPair_spec' _ _ _ _ (fun e => ?_) (e1.symm.trans (Eq.trans ?_ e2))

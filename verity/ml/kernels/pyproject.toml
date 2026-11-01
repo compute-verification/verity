@@ -4,4 +4,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = ["verity/__init__.py", "verity/ml/__init__.py"]
+# Test-only: test_row_commit holds row_commit.cuh to verity.ml.commitments' frame-v3 and hm96 references, vectors and gates,
+# which import verity.ml.circuits, verity.ml.crypto and verity.errors.
+inputs = ["verity/__init__.py", "verity/ml/__init__.py", "verity/errors.py", "verity/ml/commitments", "verity/ml/circuits",
+          "verity/ml/crypto"]

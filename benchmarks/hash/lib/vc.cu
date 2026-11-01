@@ -1,13 +1,13 @@
-// libvc (vc.h, README.md): the served path's SHA-512 commitments, one code base. SHA-512's compression is commit_gpu's
-// (benchmarks/pouw/commit_gpu/sha512.cuh, included by path); the rest is vendored from three seeds, each piece re-pointed
-// from __constant__ memory to kernel parameters (__grid_constant__) so that plans of many domains run back to back on one
-// stream with no symbol copy:
-//   * native_rows.cu (934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
-//     hash_after_block, salt_prf, salt_digest, the nibble-table mask, the leaf, the level kernels and the host builder;
-//   * sharaw.cu (4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
-//     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
-//     the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact /
-//     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
+// libvc (vc.h, README.md): the served path's SHA-512 commitments, one code base. SHA-512's compression is
+// verity/ml/kernels/sha512.cuh's, and frame-v3-sha512's leaf, pad and node, the hm96-sha512 leaf and their builders are
+// verity/ml/kernels/row_commit.cuh's (both included by path, through vc_device.cuh); the rest is vendored from three seeds,
+// each piece re-pointed from __constant__ memory to kernel parameters (__grid_constant__) so that plans of many domains run
+// back to back on one stream with no symbol copy:
+//   * native_rows.cu (934d0bcbd): LeafK, hash_after_block, salt_prf, the level kernels and the host builder;
+//   * sharaw.cu (4369ae62): the salt / data split (sr_salt8 over the byte-table mask, sr_data), with commit_gpu's tree
+//     schedule (a level a launch while a level is wider than 512 nodes, then one block for the rest); sr_data's fold and
+//     climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact / node_rt; sr_leaf4 (k_leaf_spec)
+//     with the rolled nibble-table mask;
 //   * hash_fast.cuh (benchmarks/pouw/pearl_c_sm120): row-seg's segments a thread from their header's state, then a fold a unit;
 //     rows take one launch with their digests in shared memory, as hash_h3.cuh's s512_rows (benchmarks/pouw/pearl_c) does.
 // The device functions and the plan's builders are vc_device.cuh's, header only, for kernels of other libraries to call.
@@ -310,8 +310,7 @@ __global__ void __launch_bounds__(256, 2) k_salt8(const __grid_constant__ LeafK 
   const uint4* Tn = reinterpret_cast<const uint4*>(tab);
   for (int k = threadIdx.x; k < 256 * 16; k += blockDim.x) {
     const int b = k >> 4, c = k & 15;
-    const uint4 lo = Tn[16 * c + (b & 15)], hi = Tn[256 + 16 * c + (b >> 4)];
-    T8[17 * b + c] = make_uint4(lo.x ^ hi.x, lo.y ^ hi.y, lo.z ^ hi.z, lo.w ^ hi.w);
+    T8[17 * b + c] = byte_chunk(Tn, b, c);
   }
   __syncthreads();
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
@@ -761,7 +760,7 @@ const Plan* plan_of(const void* p) {
 }
 unsigned blocks(u64 n, u64 t) { return (unsigned)((n + t - 1) / t); }
 int depth_of(u64 n) { int d = 0; while ((1ull << d) < n) ++d; return d; }
-int rc() { return (int)cudaGetLastError(); }
+int launch_rc() { return (int)cudaGetLastError(); }
 
 }  // namespace
 
@@ -895,7 +894,7 @@ int vc_tables_launch(const void* plan, void* tables, cudaStream_t st) {
   if (!p || !tables) return -1;
   const u64 n = 512 + p->tab.s[0] + p->tab.s[1];
   k_tables<<<blocks(n, 128), 128, 0, st>>>(p->tab, static_cast<uint8_t*>(tables));
-  return rc();
+  return launch_rc();
 }
 
 int vc_empty_root(const void* plan, uint8_t* out64) {
@@ -914,13 +913,13 @@ int vc_init(void) {
 int vc_sha512_launch(const uint8_t* msgs, uint64_t stride, uint64_t len, uint64_t n, uint8_t* out, cudaStream_t st) {
   if (!n) return 0;
   k_sha512<<<blocks(n, THREADS), THREADS, 0, st>>>(msgs, stride, len, n, out);
-  return rc();
+  return launch_rc();
 }
 
 int vc_compress_launch(const uint8_t* states, const uint8_t* blks, uint64_t n, uint8_t* out, cudaStream_t st) {
   if (!n) return 0;
   k_compress<<<blocks(n, THREADS), THREADS, 0, st>>>(states, blks, n, out);
-  return rc();
+  return launch_rc();
 }
 
 int vc_chunk_rows_launch(const uint8_t* codes, uint64_t codes_stride, const uint8_t* scales, uint64_t n_rows, uint32_t k,
@@ -934,7 +933,7 @@ int vc_chunk_rows_launch(const uint8_t* codes, uint64_t codes_stride, const uint
   k_chunk_rows<<<blocks(n * os16, THREADS), THREADS, 0, st>>>(reinterpret_cast<const uint4*>(codes), codes_stride / 16,
                                                              reinterpret_cast<const u32*>(scales), n, chunks, k / chunks / 16,
                                                              reinterpret_cast<uint4*>(out), os16);
-  return rc();
+  return launch_rc();
 }
 
 uint64_t vc_rows_scratch_bytes(const void* plan, uint64_t n_rows) {
@@ -950,20 +949,20 @@ int vc_rows_launch(const void* plan, const void* tables, const uint8_t* rows, ui
   if (!n_rows) return 0;
   if (p->row.scheme == VC_ROW_V2) {
     k_row_v2<<<blocks(n_rows, THREADS), THREADS, 0, st>>>(p->row, rows, stride, n_rows, out);
-    return rc();
+    return launch_rc();
   }
   if (p->row.scheme != VC_ROW_SEG || !tables || !scratch) return -1;
   const u32 s = p->row.s[0];
   if (s <= ROWS_SEG_MAX_S) {
     const u32 threads = s < 128 ? (s + 31) / 32 * 32 : 128, g = s < threads ? threads / s : 1;
     k_rows_seg<<<blocks(n_rows, g), threads, 64ull * g * s, st>>>(p->row, static_cast<const uint8_t*>(tables), rows, stride, n_rows, out);
-    return rc();
+    return launch_rc();
   }
   u64* dig = static_cast<u64*>(scratch);
   k_row_segs<<<blocks(n_rows * p->row.s[0], 128), 128, 0, st>>>(p->row, static_cast<const uint8_t*>(tables), rows, stride, n_rows, dig);
-  if (int e = rc()) return e;
+  if (int e = launch_rc()) return e;
   k_folds<<<blocks(n_rows, 32), 32, 0, st>>>(p->row, dig, n_rows, n_rows, out);
-  return rc();
+  return launch_rc();
 }
 
 uint64_t vc_tiles_count(const void* plan) {
@@ -987,10 +986,10 @@ int vc_tiles_launch(const void* plan, const void* tables, const uint8_t* c, cons
   if (!segs) return 0;
   u64* dig = static_cast<u64*>(scratch);
   k_tile_segs<<<blocks(segs, 128), 128, 0, st>>>(p->row, static_cast<const uint8_t*>(tables), c, u, dig);
-  if (int e = rc()) return e;
+  if (int e = launch_rc()) return e;
   const u64 units = vc_tiles_count(plan);
   k_folds<<<blocks(units, 32), 32, 0, st>>>(p->row, dig, units, n_full, out);
-  return rc();
+  return launch_rc();
 }
 
 int vc_row_seeds_launch(const void* plan, const uint8_t* digests, uint64_t n, const uint8_t* salt32, const uint8_t* root_b64,
@@ -999,7 +998,7 @@ int vc_row_seeds_launch(const void* plan, const uint8_t* digests, uint64_t n, co
   if (!p || !p->has_seed || n > (1ull << 32)) return -1;
   if (!n) return 0;
   k_row_seeds<<<blocks(n, THREADS), THREADS, 0, st>>>(p->seed, digests, n, salt32, root_b64, unit, out32);
-  return rc();
+  return launch_rc();
 }
 
 uint64_t vc_tree_width(uint64_t n_leaves) { return n_leaves ? 1ull << depth_of(n_leaves) : 0; }
@@ -1015,7 +1014,7 @@ int vc_salts_launch(const void* plan, const void* tables, const uint8_t* salts, 
   u64* r = static_cast<u64*>(scratch);
   if (p->leaf.sx) k_salt8<4><<<blocks(m, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0, nullptr, 0);
   else k_salt8<0><<<blocks(m, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0, nullptr, 0);
-  return rc();
+  return launch_rc();
 }
 
 int vc_leaves_x_launch(const void* plan, const uint8_t* x, uint64_t first, uint64_t m, uint64_t n_total, const void* scratch,
@@ -1026,7 +1025,7 @@ int vc_leaves_x_launch(const void* plan, const uint8_t* x, uint64_t first, uint6
   const u64* r = static_cast<const u64*>(scratch);
   if (p->leaf.sx) k_leaf_data<4, false><<<blocks(m, THREADS), THREADS, 0, st>>>(p->leaf, x, 64, first, m, n_total, r, lv0, bc, hs);
   else k_leaf_data<0, false><<<blocks(m, THREADS), THREADS, 0, st>>>(p->leaf, x, 64, first, m, n_total, r, lv0, bc, hs);
-  return rc();
+  return launch_rc();
 }
 
 int vc_leaves_rows_launch(const void* plan, const uint8_t* rows, uint64_t stride, uint64_t first, uint64_t m, uint64_t n_total,
@@ -1037,7 +1036,7 @@ int vc_leaves_rows_launch(const void* plan, const uint8_t* rows, uint64_t stride
   const u64* r = static_cast<const u64*>(scratch);
   if (p->leaf.sx) k_leaf_data<4, true><<<blocks(m, THREADS), THREADS, 0, st>>>(p->leaf, rows, stride, first, m, n_total, r, lv0, bc, hs);
   else k_leaf_data<0, true><<<blocks(m, THREADS), THREADS, 0, st>>>(p->leaf, rows, stride, first, m, n_total, r, lv0, bc, hs);
-  return rc();
+  return launch_rc();
 }
 
 int vc_leaves_fused_launch(const void* plan, const void* tables, const uint8_t* rows, uint64_t stride, const uint8_t* x,
@@ -1055,7 +1054,7 @@ int vc_leaves_fused_launch(const void* plan, const void* tables, const uint8_t* 
     if (p->leaf.sx) k_leaf_fused<4, false><<<g, THREADS, 0, st>>>(p->leaf, t, x, 64, salts, first, m, n_total, lv0, bc, hs);
     else k_leaf_fused<0, false><<<g, THREADS, 0, st>>>(p->leaf, t, x, 64, salts, first, m, n_total, lv0, bc, hs);
   }
-  return rc();
+  return launch_rc();
 }
 
 int vc_frame_leaves_launch(const void* plan, const uint8_t* values, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out,
@@ -1065,7 +1064,7 @@ int vc_frame_leaves_launch(const void* plan, const uint8_t* values, uint64_t fir
   if (!m) return 0;
   if (p->leaf.sx) k_frame_leaves<4><<<blocks(m, THREADS), THREADS, 0, st>>>(p->leaf, values, first, m, n_total, out);
   else k_frame_leaves<0><<<blocks(m, THREADS), THREADS, 0, st>>>(p->leaf, values, first, m, n_total, out);
-  return rc();
+  return launch_rc();
 }
 
 int vc_nodes_launch(const void* plan, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
@@ -1074,7 +1073,7 @@ int vc_nodes_launch(const void* plan, const uint8_t* in, uint8_t* out, uint64_t 
   if (!p || level < 0 || level + 1 >= LEVELS || first_index + n_out > (1ull << 32)) return -1;
   if (!n_out) return 0;
   k_level<<<blocks(n_out, NODE_THREADS), NODE_THREADS, 0, st>>>(p->node, in, out, n_out, level, first_index);
-  return rc();
+  return launch_rc();
 }
 
 // commit_gpu's schedule: a level a launch while the level is wider than 512 nodes, then one block for the rest
@@ -1088,7 +1087,7 @@ int vc_tree_launch(const void* plan, uint8_t* levels, uint64_t n_leaves, cudaStr
       for (int k = 0; k < 8; ++k) w[i] |= (u64)p->empty_root[8 * i + k] << (8 * k);
     }
     k_put64<<<1, 32, 0, st>>>(levels, make_ulonglong4(w[0], w[1], w[2], w[3]), make_ulonglong4(w[4], w[5], w[6], w[7]));
-    return rc();
+    return launch_rc();
   }
   const int depth = depth_of(n_leaves);
   const u64 width = 1ull << depth;
@@ -1098,13 +1097,13 @@ int vc_tree_launch(const void* plan, uint8_t* levels, uint64_t n_leaves, cudaStr
     const u64 n_in = width >> d, n_out = n_in / 2;
     const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
     k_level<<<blocks(n_out, t), t, 0, st>>>(p->node, levels + 64 * off, levels + 64 * (off + n_in), n_out, d, 0);
-    if (int e = rc()) return e;
+    if (int e = launch_rc()) return e;
     off += n_in;
   }
   if (d < depth) {
     const u64 n_in = width >> d;
     k_levels<<<1, NODE_THREADS, 0, st>>>(p->node, levels + 64 * off, levels + 64 * (off + n_in), n_in, d, depth - d);
-    return rc();
+    return launch_rc();
   }
   return 0;
 }
@@ -1133,7 +1132,7 @@ int vc_tree_arity_launch(const void* plan, uint8_t* levels, uint64_t n_leaves, i
   for (int level = 0; w > 1; ++level) {
     const u64 n_out = w / (u64)arity;
     k_level_arity<<<blocks(n_out, 128), 128, 0, st>>>(p->ar, levels + 64 * off, levels + 64 * (off + w), n_out, level, arity);
-    if (int e = rc()) return e;
+    if (int e = launch_rc()) return e;
     off += w;
     w = n_out;
   }
@@ -1162,7 +1161,7 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
       k_leaf_spec<4><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(p->leaf, p->node, t, salts, rows, stride, n, width, depth, levels, bc, ctr);
     else
       k_leaf_spec<0><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(p->leaf, p->node, t, salts, rows, stride, n, width, depth, levels, bc, ctr);
-    return rc();
+    return launch_rc();
   }
   if (form == VC_FORM_FOLD) {
     if (!tables || !scratch) return -1;
@@ -1177,14 +1176,14 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
     } else {
       k_salt8<0><<<blocks(width, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, 0, width, n, r, levels, ctr, nc);
     }
-    if (int e = rc()) return e;
+    if (int e = launch_rc()) return e;
     // the compact node on sm_100 only: at 34,737 rows sharaw's v1 (by length) against v1n (compact) is 0.563 vs 0.555 ms on
     // B200, 0.502 vs 0.520 on RTX PRO 6000 and 0.877 vs 0.973 on H200
     const bool compact = device_major() == 10;
     const auto fold = p->leaf.sx ? (compact ? k_leaf_fold<4, true> : k_leaf_fold<4, false>)
                                  : (compact ? k_leaf_fold<0, true> : k_leaf_fold<0, false>);
     fold<<<(unsigned)(width / cnt), cnt, 0, st>>>(p->leaf, p->node, rows, stride, n, width, depth, r, levels, bc, ctr);
-    return rc();
+    return launch_rc();
   }
   int e;
   if (form == VC_FORM_FUSED) {
@@ -1210,7 +1209,7 @@ int vc_open_launch(const void* plan, const void* tables, const uint8_t* x, const
   const int depth = n_leaves ? depth_of(n_leaves) : 0;
   k_open<<<blocks(m, 64), 64, 0, st>>>(p->leaf, p->has_hm96, static_cast<const uint8_t*>(tables), x, bc, salts, levels, n_leaves,
                                        depth, positions, m, out);
-  return rc();
+  return launch_rc();
 }
 
 }  // extern "C"

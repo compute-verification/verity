@@ -10,7 +10,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "theory" / "fold_routes.py"
 
 
 def test_fold_routes(tmp_path):
-    """RT-FOLD's battery: the brief's fold routes on sm_120 (fx1), the H200 (li) and the B200 (li heavy), each bit-exact
+    """The battery: the brief's fold routes on sm_120 (fx1), the H200 (li) and the B200 (li heavy), each bit-exact
     against `segment`'s reference fold or refuted, priced at its device's certificate, with the superoptimizer's
     single- and two-instruction searches. The claims are computed, so only running the script checks them; about 1 s."""
     verdict = tmp_path / "verdict.json"

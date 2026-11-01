@@ -145,7 +145,7 @@ theorem part_partS {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen
 /-- **A decision of the opened messages**: at a dense compiled statement whose last message reads (`ReadOkR`, which
 `ReadsAt` gives at a joint acceptance), where the base checks hold, the record decodes (`decode_at`), so a `DecAt`
 exists. -/
-theorem decAt_of {rd : Msg → Option FinalP} (hBs : BasesHold rd) {xo : Msg} {sto : Claims.Recursion.Stmt}
+theorem decAt_of {rd : Msg → Option FinalP} (hBs : BasesHold rd) {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {ms : List Msg} {cs : List Coin}
     (hr : FlockDeploy.ReadOkR rd (xIOf xo) ms cs) (hlen : ms.length = cs.length) :
     Nonempty (Rows.DecAt rd (xIOf xo) ms cs) := by
@@ -164,7 +164,7 @@ theorem decAt_of {rd : Msg → Option FinalP} (hBs : BasesHold rd) {xo : Msg} {s
 /-- **The shape tie**: at a dense decision, `shI` at the setup is table 0's coin-free shape (`shapeNoCoin`) in every
 field the algebra reads: the decode shape is `shapeNoCoin` (`DecAt.sh_eq`) and `shI` there (`algSh_tie`). -/
 theorem shI_alg {rd : Msg → Option FinalP} {xi : Msg} {ms : List Msg} {cs : List Coin} (D : Rows.DecAt rd xi ms cs)
-    {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+    {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : xi = xIOf xo)
     {v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt} (hv : setupOf false xi = some v) :
     DecompBR.shI v.2.1 v.2.2 = Rows.algShape (Rows.shapeNoCoin v.2.1 v.2.2) := by

@@ -57,7 +57,7 @@
   under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
 * **Output values**: a registered value that is an output of an earlier run (`outputs`: `{value: {"record": D, "port":
-  P}}`; never NCI's baseline θ, which holds registered public data only) reuses that output's commitment instead of
+  P}}`; never the inference-only check's θ, which holds registered public data only) reuses that output's commitment instead of
   committing it afresh: its entry takes port P's domain and root from the `roots` of the log's record with digest D, and
   P's leaf count must be the value's rows (`R7-output` when the log holds no such record or port, or the counts differ).
   Its rows stay under the earlier run's hiding leaves, so nothing about the value is opened, and the reads open against

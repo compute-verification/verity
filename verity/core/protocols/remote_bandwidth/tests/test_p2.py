@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2.py`): the registration from PoUS's setup of a 9-block C*
+"""PoUB over PoUS's P2 store (`p2.py`): the registration from PoUS's setup of a 9-block C*
 (`fixtures/p2-c-star.bin`, the prover's bytes), the unit sketch and its per-block partials, an honest session
 accepted and recorded, and each way an opening goes wrong rejected."""
 
