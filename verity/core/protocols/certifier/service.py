@@ -219,6 +219,7 @@ from verity.core.protocols.certifier.certificate import Certificate, CertifiedRe
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins
 from verity.core.protocols.sampled_proofs.one_stage import audit as OA, partition as P, proofs as PF, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
@@ -1173,7 +1174,8 @@ class LinkWindows:
         """The period's draw over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
         salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes). Every
         window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n, on `coins` (a callable of a byte
-        count, as a stream's); a coin source with a `commit` method is first committed to the period's digest
+        count: the auditor's challenger's, `ChallengerCoins`, since the verifier has no coins of its own, and any other
+        source is refused), first committed to the period's digest
         (`commitment`), so the coins come after every commitment of the period. Call it before the stream's first
         registration. The object is `{format, stream, law, k, population, units, roots, commitment, read}`,
         `read` the coin bytes the draw read, in order (hex), from which the network verdict's Lean draws its own
@@ -1189,7 +1191,10 @@ class LinkWindows:
             raise ValueError(f"a period draw takes 1 <= K <= {n} of the link-windows, not {k!r}")
         commitment = self._committed(stream, roots)
         rule = S.All() if k is None else S.Law(f"subset:{k}")
-        if k is not None and callable(getattr(coins, "commit", None)):
+        if k is not None and not isinstance(coins, ChallengerCoins):
+            raise ValueError("a period draw of K windows reads the auditor's challenger's coins (ChallengerCoins); the "
+                             "verifier has no coins of its own")
+        if k is not None:
             coins.commit(bytes.fromhex(commitment))
         read = bytearray()
 
