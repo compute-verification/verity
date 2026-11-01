@@ -1,6 +1,7 @@
 import Flock
 import Flock.CircuitType
 import Flock.Layout
+import Flock.JsonParse
 
 open Flock
 
@@ -275,7 +276,7 @@ def partitionInput (args : List String) : IO (Except String (Option Lean.Json)) 
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error "partition: not UTF-8"
-    | some t => match Lean.Json.parse t with
+    | some t => match Flock.JsonParse.parse t with
       | .ok j => return .ok (some j)
       | .error e => return .error s!"partition: not JSON: {e}"
 
@@ -290,7 +291,7 @@ def workTableInput (args : List String) : IO (Except String (Option (Array (Stri
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error "work table: not UTF-8"
-    | some t => match Lean.Json.parse t with
+    | some t => match Flock.JsonParse.parse t with
       | .ok j => return (Draw.workTableOfJson j).map some
       | .error e => return .error s!"work table: not JSON: {e}"
 
@@ -305,7 +306,7 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error "closure map: not UTF-8"
-    | some t => match Lean.Json.parse t with
+    | some t => match Flock.JsonParse.parse t with
       | .ok j => return (Draw.closureMapOfJson j).map some
       | .error e => return .error s!"closure map: not JSON: {e}"
 
@@ -330,7 +331,7 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error s!"{ctx}: not UTF-8"
-    | some t => match Lean.Json.parse t, JsonKeys.dupKey t with
+    | some t => match Flock.JsonParse.parse t, JsonKeys.dupKey t with
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
@@ -415,7 +416,7 @@ def identifierInput (args : List String) : IO (Except String (Option (Lean.Json 
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error "identifier: not UTF-8"
-    | some t => match Lean.Json.parse t with
+    | some t => match Flock.JsonParse.parse t with
       | .ok j@(.obj _) =>
         if let some e := Program.domainError j "identifier" then
           return .error s!"identifier: --identifier F is outside canonical JSON's RFC 8785 domain: {e}"
@@ -434,7 +435,7 @@ def recInnerInput (args : List String) : IO (Except String (Option RecVStar.Inne
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error "rec-inner: not UTF-8"
-    | some t => match Lean.Json.parse t with
+    | some t => match Flock.JsonParse.parse t with
       | .ok j => return (RecVStar.Inner.ofJson j).map some
       | .error e => return .error s!"rec-inner: not JSON: {e}"
 
@@ -461,7 +462,7 @@ def recBindingsInput (args : List String) : IO (Except String (Option VStar.Bind
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error "rec-bindings: not UTF-8"
-    | some t => match Lean.Json.parse t with
+    | some t => match Flock.JsonParse.parse t with
       | .ok j => return (RecVStar.ownBindingsOfJson j).map some
       | .error e => return .error s!"rec-bindings: not JSON: {e}"
 
@@ -475,7 +476,7 @@ def innerMeta (f : String) : IO (Except String Lean.Json) := do
       line ← h.getLine
       n := n + 1
     if !line.startsWith "META " then return .error "rec inner circuit: no META line"
-    match Lean.Json.parse (line.drop 5).toString with
+    match Flock.JsonParse.parse (line.drop 5).toString with
     | .error e => return .error s!"rec inner circuit: META is not JSON: {e}"
     | .ok m => return .ok m
   catch e => return .error s!"rec inner circuit: {e}"
@@ -520,7 +521,7 @@ other). -/
 def recLinkInput (args : List String) (record : Option String) : IO (Except String (Option RecVStar.InnerLink)) := do
   let (some f, some record) := (argOf args "--rec-inner-transcript", record) | return .ok none
   let t ← try pure (← IO.FS.readFile f) catch e => return .error s!"rec inner transcript: {e}"
-  match Lean.Json.parse t with
+  match Flock.JsonParse.parse t with
   | .ok j => return some <$> RecVStar.innerLink j record
   | .error e => return .error s!"rec inner transcript: not JSON: {e}"
 
@@ -637,7 +638,7 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
     let session := argOf args "--rec-inner-session"
     if let (some i, some f, some dir) := (inner, argOf args "--rec-inner-transcript", session) then
       let tt ← IO.FS.readFile f
-      match Lean.Json.parse tt with
+      match Flock.JsonParse.parse tt with
       | .ok j =>
         if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
         if let .error e := RecSetup.checkReads i tt j (← IO.FS.readFile (dir ++ "/session.json")) ic then
@@ -698,7 +699,7 @@ def recStatementsCmd (args : List String) : IO UInt32 := do
 
 /-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`). -/
 def recordDraw (record : String) : Option Lean.Json :=
-  match Lean.Json.parse record with
+  match Flock.JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Lean.Json.null => none
     | .ok d => some (Flock.norm d)
@@ -719,7 +720,7 @@ def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
 verifier's Hello object (its coins.nonce empty), "sessions": [{"hello": the prover's Hello, "coin_tree": ...}, ...]}`, in
 order, each key fresh. One `COINTREE` line per session: the nonce and the canonical `coins` it checked, or the refusal. -/
 def coinTreeCmd (path : String) : IO UInt32 := do
-  let j ← match Lean.Json.parse (← IO.FS.readFile path) with
+  let j ← match Flock.JsonParse.parse (← IO.FS.readFile path) with
     | .ok j => pure j
     | .error e => IO.eprintln s!"coin-tree-check: {e}"; return 2
   let own := (j.getObjVal? "hello").toOption.getD Lean.Json.null
@@ -1011,7 +1012,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     let coinKey : Option String := match st, record with
       | .ok (spec, _, _), .ok r =>
         if spec.coinTree.isNone then none
-        else (Lean.Json.parse r).toOption.bind fun j =>
+        else (Flock.JsonParse.parse r).toOption.bind fun j =>
           (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
       | _, _ => none
     let verdict := do
@@ -1257,7 +1258,7 @@ def merkleTest (path : String) : IO UInt32 := do
 /-- `hm96-test VECTORS [sha512]`: `hm96/vectors.json` against `Hm96.sha256` (`vectors_sha512.json` against
 `Hm96.sha512`): the pinned key, the leaf prefix, every mask and every leaf. -/
 def hm96Test (path : String) (h : Hm96 := Hm96.sha256) : IO UInt32 := do
-  let some v := (Lean.Json.parse (← IO.FS.readFile path)).toOption | IO.println "hm96-test: not JSON"; return 1
+  let some v := (Flock.JsonParse.parse (← IO.FS.readFile path)).toOption | IO.println "hm96-test: not JSON"; return 1
   let str := fun (j : Lean.Json) (k : String) => (j.getObjValAs? String k).toOption.getD ""
   let key := h.keyFromLabel
   let other := bytesOfHex (str v "other_key")
@@ -1297,7 +1298,7 @@ def netCheckCmd (paths : List String) : IO UInt32 := do
 def unitCutCmd (paths : List String) : IO UInt32 := do
   let mut all := true
   for path in paths do
-    let line ← match (Lean.Json.parse (← IO.FS.readFile path)) with
+    let line ← match (Flock.JsonParse.parse (← IO.FS.readFile path)) with
       | .error e => pure (Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false),
           ("error", Lean.Json.str s!"not JSON: {e}")])
       | .ok j => match Partition.Cut.ofJson j with
@@ -1391,7 +1392,7 @@ and `population` were fixed before any coin: `(law object, population)`; none wi
 def registeredLaw (args : List String) : IO (Except String (Option (Lean.Json × Nat))) := do
   let some f := argOf args "--registration" | return .ok none
   let t ← try pure (← IO.FS.readFile f) catch e => return .error s!"registration: {e}"
-  let .ok j := Lean.Json.parse t | return .error "registration: not JSON"
+  let .ok j := Flock.JsonParse.parse t | return .error "registration: not JSON"
   let .ok law := j.getObjVal? "law" | return .error "registration: no law"
   let .ok pop := j.getObjValAs? Nat "population" | return .error "registration: no population"
   return .ok (some (law, pop))
@@ -1491,7 +1492,7 @@ def drawCmd (args : List String) : IO UInt32 := do
 With a law's flags, the statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law`
 and `population`), and with `--registration F` to the registered ones. -/
 def drawTest (path : String) (args : List String) : IO UInt32 := do
-  let .ok (.arr cases) := Lean.Json.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
+  let .ok (.arr cases) := Flock.JsonParse.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
   let own ← match ← ownLaw args with
     | .ok o => pure o
     | .error e => IO.eprintln s!"draw-test: {e}"; return 2
@@ -1532,7 +1533,7 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
     let res : V Lean.Json := do
-      let j ← match Lean.Json.parse text with | .ok j => pure j | .error e => throw s!"not JSON: {e}"
+      let j ← match Flock.JsonParse.parse text with | .ok j => pure j | .error e => throw s!"not JSON: {e}"
       let q := (j.getObjVal? "query").toOption.getD Lean.Json.null
       let name := (q.getObjValAs? String "name").toOption.getD ""
       let version := (q.getObjValAs? Nat "version").toOption.getD 0
@@ -1559,7 +1560,7 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
 def cutCheckCmd (paths : List String) : IO UInt32 := do
   let mut all := true
   for path in paths do
-    let res := match Lean.Json.parse (← IO.FS.readFile path) with
+    let res := match Flock.JsonParse.parse (← IO.FS.readFile path) with
       | .error e => Except.error s!"not JSON: {e}"
       | .ok j => do return (← Partition.checkCutOfJson j, ← Partition.reportOfJson j)
     let line := match res with
@@ -1582,7 +1583,7 @@ def evaluateCmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
     let res : V Lean.Json := do
-      let j ← match Lean.Json.parse text with
+      let j ← match Flock.JsonParse.parse text with
         | .ok j => pure j
         | .error e => throw s!"not JSON: {e}"
       let X ← match j.getObjValAs? Nat "X" with | .ok x => pure x | .error _ => throw "evaluate: X"
