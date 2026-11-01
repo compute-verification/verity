@@ -40,7 +40,7 @@ theorem roundOk_of_refusesCoins {W R : Type} (L : LeanRelease W R) (x : Msg) (w 
     unfold takes step
     cases ha : L.answered x ρ g with
     | ok m => rw [ha] at hr; cases hr
-    | error e => rw [ha]; rfl
+    | error e => rfl
   unfold roundOk
   rw [ht, Bool.and_false]
 
