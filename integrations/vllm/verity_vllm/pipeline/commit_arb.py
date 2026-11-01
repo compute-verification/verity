@@ -47,6 +47,7 @@ from typing import Any
 
 from verity_vllm.commit.challenge import stream
 from verity_vllm.config import UsageError, option
+from verity_vllm.pipeline import serve_release as SL
 from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 
@@ -118,7 +119,7 @@ class Options:
 def committer_opts(opts: Options) -> SimpleNamespace:
     """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row."""
     return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, commit=True, seal=False,
-                           retention=SS.RetentionOptions())
+                           retention=SL.RetentionOptions())
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
