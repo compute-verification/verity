@@ -14,9 +14,10 @@ file's rows (`Bridge.rootsOf`), and at the deployed commitment `Bridge.commitDep
 off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots or its hash is a free parameter. Its
 named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
 
-**Inputs are outside this bound.** `Bridge.partOf` lays the input class after the population, as the deployed
-verifier does, but `Bridge.designOf` draws it at rate `0`: the deployed verifier checks every input slot on every run,
-and C-Flock's game, whose bound this is, checks no input unit.
+**Input slots.** `Bridge.partOf` lays the input class after the population, as `Slots.layout` does, and
+`Bridge.designOf` draws it at rate `0`. That is what the deployed verifier does: its session (`HmRow.drawn`) opens only
+the rows its drawn units read, and registration opens none, so an input row is opened only through a drawn unit that
+reads it, in the deployed verifier as in C-Flock's game.
 
 `SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
 `SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at

@@ -1,4 +1,4 @@
-"""The drawn-unit replay bundle: everything the prover behind the firewall reads to prove the drawn units
+"""The drawn-unit replay bundle: everything the prover behind the ZK server reads to prove the sampled proof blocks
 of one window, one JSON document (``verity/drawn-unit-bundle/v2``) and one binary payload of the private bytes.
 
 The bundle is the prover's: its payload holds values and salts, so it is written mode 0600, never published and never put in
@@ -14,26 +14,26 @@ in the payload and holds only public structure, hiding commitments and paths bes
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
   on bits, which the Boolean-profile templates bind). Every unit's template binds that dot, as circuits resolves the binding.
-* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof system's draw of record, with
-  ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand). The law is
-  the window's registered one, fixed before any coin, and a live draw's ``record`` (the verifier's draw object, when it
-  carries one) is a draw under it over the registered population, of exactly the bundle's units (`check` against the
+* ``draw``: the sampled proof blocks (global indices), the law, and ``source``: ``live`` (the proof system's sample of record, with
+  ``receipt``, the challenger's live-coin receipt, which a live sample must carry) or ``fixture`` (chosen by hand). The law is
+  the window's registered one, fixed before any coin, and a live sample's ``record`` (the verifier's sample object, when it
+  carries one) is a sample under it over the registered population, of exactly the bundle's units (`check` against the
   registration).
 * ``weights``: the registered values the units read (core's ``one_stage.registered``, as `e2e_h200.served_weights`
   registers the seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in
   ``hm96-sha512/row/v2``): ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
 * ``commitment``: the serving steps' commitment (kernels' commit call, `commit_slots`: step tree over
   slot trees over unit trees over rows, only each unit's outputs committed, one row ``hm96-sha512/row/v2`` under the step's
-  salt key, C-Flock's ``hm96_salt`` with the slot as nonce). ``{format, reference, context, layout, layout_digest, slots,
+  salt key, Flock's ``hm96_salt`` with the slot as nonce). ``{format, reference, context, layout, layout_digest, slots,
   blocks: [{block, root, domain, steps: [{step, root, domain}]}]}``: the run's 64-byte context, the step layout (groups of
   units of rows of byte ranges, `layout_json`), and per server-time block every step's root (what went to the challenger
   before the step's live coin) under this bundle's block tree over them (`block_domain`).
-* ``members``: per member with a drawn unit, what C-Flock's ``--zk`` session reads today (`benchmarks/one_stage/a5.py`): its
-  key, template, base and count, the drawn units' local indices and the session's subset draw over them, its header's
+* ``members``: per member with a sampled proof block, what Flock's ``--zk`` session reads today (`benchmarks/one_stage/a5.py`): its
+  key, template, base and count, the sampled proof blocks' local indices and the session's subset sample over them, its header's
   ``frame_v3`` entry, its public body's SHA-512 and row schemas. The prover's input file is
   ``flock_inputs.flock_input_files(window, k, circuit, out, write=("inst",))`` under the circuit the verifier composed for
   the template (``compose_circuit.py``, bound to ``circuit.partition`` and ``circuit.program``).
-* ``units``: per drawn unit ``{unit, coords, template, member, rows}``. ``coords`` is ``{block, step, slot, layer, op,
+* ``units``: per sampled proof block ``{unit, coords, template, member, rows}``. ``coords`` is ``{block, step, slot, layer, op,
   unit}`` (``unit``: the coordinate within its op at that slot and step). ``template`` is ``{id, definition, binding,
   rows, outs}``: the descriptor id, the Definition's name, its binding statics as JSON (`interface._bindings`) and its bit
   rows. ``rows`` is each port's row in the member's port order, inputs then outputs: ``{port, kind: in|out, schema, words,
@@ -46,7 +46,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
     tree and ``step_path`` the slot root's in the step tree (`row_table.RootOpening` JSON). An output row opens in the
     unit's own commitment unit (``producer`` null); an input row opens where its producer committed it as an output, and
     ``producer`` names that unit's coordinates ``{block, step, slot, layer, op, unit}`` (``unit`` its index in the layout).
-    Every opening is in the unit's own slot and step: one request's replay opens a drawn unit.
+    Every opening is in the unit's own slot and step: one request's replay opens a sampled proof block.
   - ``registered``: a registered read (the weights), committed under the registered row's salt, opening against the
     value's root: ``{value, position, path}``. It is in no step commitment.
   - ``reads``: a row made of pieces of committed rows (`Read`; `WindowLocate` takes the H200 window writer's), each from
@@ -64,12 +64,12 @@ in the payload and holds only public structure, hiding commitments and paths bes
 
   An output row (``kind: out``) is the unit's committed output: a value, in the payload only.
 
-**The payload** is every drawn unit's rows in bundle order, each row's words (u16 little-endian) then its 192-byte salt,
+**The payload** is every sampled proof block's rows in bundle order, each row's words (u16 little-endian) then its 192-byte salt,
 then each of its step reads' committed row and salt.
 
 `check` is the consumer's check of a bundle from its bytes alone: the payload's digest, every string recomputed from its row
 and salt, every path to its root, every root's domain recomputed from public data (the window's from the registration's
-fields, a registered value's from its entry, the commitment's from its context, layout and coordinates), the draw's receipt
+fields, a registered value's from its entry, the commitment's from its context, layout and coordinates), the sample's receipt
 when live, the target's dot in every template, and each unit's Definition replayed on its input rows against its output rows.
 `build` writes a bundle from a window ``Window.write`` wrote and the prover's step records (`Commitment`).
 """
@@ -442,8 +442,8 @@ class _Steps:
 def steps_provenance(commitment: Commitment) -> dict[str, Any]:
     """What a window's registration names of the run's step commitments, under its ``window`` provenance (``Window.write``'s
     ``provenance``): ``{"commitment": {format, context, layout_digest, slots, blocks}}``, every block's root and every step's
-    root and domain, as a bundle's ``commitment`` has them. So the registration's digest fixes every step root a drawn
-    unit can read (attention's K and V rows at every earlier step) before the coin, and `check` holds a bundle's openings
+    root and domain, as a bundle's ``commitment`` has them. So the registration's digest fixes every step root a sampled
+    proof block can read (attention's K and V rows at every earlier step) before the coin, and `check` holds a bundle's openings
     to them."""
     com = commitment
     return {"commitment": {"format": COMMITMENT, "context": com.context.hex(), "layout_digest": S.layout_digest(com.layout).hex(),
@@ -691,15 +691,15 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
     files included): ``(document, payload)``.
 
     ``commitment``: the run's step commitments, the prover's records (each step's every slot root, and the rows of the slots
-    the drawn units read). ``locate(coords, template, port)``: where a unit's port's row is in the step commitment (`Locate`):
+    the sampled proof blocks read). ``locate(coords, template, port)``: where a unit's port's row is in the step commitment (`Locate`):
     ``(layout unit, rank, producer)`` for one whole row at the unit's own step and slot (``producer`` the producing unit's
     coordinates for an input, None for the unit's own output), or the `Read`s (rows at the unit's step or an earlier one, its
     own slot) and `Position`s the row is made of, or None for a registered read. ``binding``: the card's dot binding
     (`BINDINGS`), which every template must bind. ``coords(label, offset)``: a unit's coordinates from its label and its
     offset in its labelled run. ``reads(coords, template, port)``: the ``(value, position)`` a unit's port reads of a
     registered value; ``weights``: those values, the prover's side (``program``, ``schema``, ``entry()``, ``path(position)``
-    and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the draw's ``law``,
-    ``source`` and ``receipt`` (default ``{"source": "fixture"}``; a live draw without its receipt is refused). ``workers``:
+    and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the sample's ``law``,
+    ``source`` and ``receipt`` (default ``{"source": "fixture"}``; a live sample without its receipt is refused). ``workers``:
     processes rebuilding the opened (step, slot) subtrees, one each.
 
     Refused (ValueError) when a row is neither in the step commitment nor a registered read, when a window string is not
@@ -1106,9 +1106,9 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
     return bad
 
 
-#: a step's commit-slots roots registered before a coin draws its proof blocks (M3): the draw's population is
-#: every (slot, layout unit) of the step, and each drawn block is proved from a one-member window of its own. ``steps``
-#: (optional, `STEPS_KEY`) names the root of every step of the block a drawn block can read (attention's K and V rows at
+#: a step's commit-slots roots registered before a coin selects its proof blocks (M3): the sample's population is
+#: every (slot, layout unit) of the step, and each sampled proof block is proved from a one-member window of its own. ``steps``
+#: (optional, `STEPS_KEY`) names the root of every step of the block a sampled proof block can read (attention's K and V rows at
 #: steps 0 .. the drawn step), ``[{step, root}]``; a registration without it holds every read to the drawn step
 STEP_FORMAT = "verity/commit-slots-step-registration/v1"
 STEP_KEYS = {"format", "run", "program", "block", "step", "step_root", "slot_roots", "slots", "layout_digest", "context",
@@ -1138,13 +1138,13 @@ def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], la
 
 
 def block_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
-    """A drawn proof block's ``(slot, layout unit)``: index ``slot * units_per_slot + unit``."""
+    """A sampled proof block's ``(slot, layout unit)``: index ``slot * units_per_slot + unit``."""
     return divmod(int(index), int(reg["units_per_slot"]))
 
 
 def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], index: int, *,
                registration: Mapping[str, Any] | None = None) -> dict[str, str]:
-    """`check` of a drawn block's bundle, then the bundle held to the step registration ``reg`` at drawn ``index``:
+    """`check` of a sampled proof block's bundle, then the bundle held to the step registration ``reg`` at drawn ``index``:
     ``{key: why}``, empty when it holds. Its commitment is the registered step (root, slot roots, layout, context), it is
     one proof block whose outputs open in the layout unit ``index`` names, every row opens against the registered step
     or a registered value whose root ``reg`` names, and each step row's slot root is the registered one. A row made of

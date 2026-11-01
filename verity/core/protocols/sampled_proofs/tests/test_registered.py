@@ -115,7 +115,7 @@ def test_a_16_bit_value_keeps_the_bytes_it_had_before_word_bits():
 
 
 def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
-    """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and C-Flock's `values` row): its
+    """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and Flock's `values` row): its
     domain names `word_bits`, so a 32-bit registration is never a 16-bit one's, and the entry carries it."""
     prog = P.program_digest(_program(w=32))
     assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
@@ -984,7 +984,7 @@ def test_r7_holds_a_pinned_value_to_its_pin():
 
 
 def test_r7_reuses_an_earlier_outputs_commitment():
-    """A value that is an output of an earlier run (`outputs`; never NCI's baseline θ) takes that run's port: its entry
+    """A value that is an output of an earlier run (`outputs`; never the inference-only check's θ) takes that run's port: its entry
     has the port's domain and root, and the port's leaf count is the value's rows, so its rows stay under the earlier
     run's hiding leaves. The output overrides what the log or nothing would hold it to; a record or port the log doesn't
     hold, or a port of other leaves, is `R7-output`, and a malformed `outputs` is refused before the record is read."""

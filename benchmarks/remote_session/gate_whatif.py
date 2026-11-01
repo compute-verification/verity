@@ -98,7 +98,7 @@ class Record:
     P: list[int]
     """The challenger's own time in that exchange."""
     step: list[int]
-    """b_(g+1) − D_g: window g + 1's boundary (σ_(g+2), or the close after the last) after window g's draws."""
+    """b_(g+1) − D_g: window g + 1's boundary (σ_(g+2), or the close after the last) after window g's samples."""
     to_aa: list[int]
     """Aa_g − Q_g."""
     from_ra: list[int]

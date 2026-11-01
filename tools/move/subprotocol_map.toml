@@ -1,0 +1,24 @@
+# The remote audit's component becomes its subprotocol: what `tools/move/rename.py --map
+# tools/move/subprotocol_map.toml` renames ("components" and `product` are older names for subprotocols and their
+# composition). `Properties.RemoteAudit.Component` is the property of one subprotocol's run, and its modules move with
+# it. Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that `check.py
+# --update --moved` takes.
+[words]
+"RemoteAudit.Component" = "RemoteAudit.Subprotocol"
+"RemoteAudit/Component" = "RemoteAudit/Subprotocol"
+"RemoteHeld.Component" = "RemoteHeld.Subprotocol"
+"RemoteHeld/Component" = "RemoteHeld/Subprotocol"
+"LineHeldAtComponent" = "LineHeldAtSubprotocol"
+"lineHeldAtComponent" = "lineHeldAtSubprotocol"
+
+[rewrite]
+# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]

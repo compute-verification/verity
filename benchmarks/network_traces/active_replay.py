@@ -216,7 +216,7 @@ _WORKLOADS: dict[str, dict[int, dict]] = {}
 
 
 def live_body(session: str | None, model: str) -> dict:
-    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token drawn from the
+    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token sampled from the
     session's name; one token of a one-token prompt for a request no session names. Without `return_token_ids`, with
     which vLLM puts the prompt's token ids in the first event, past a frame."""
     import record
@@ -584,7 +584,7 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     with other bytes (`other_token`), so the frame counts are honest's and only a check of the frames' tokens against
     the committed sampled ids (the I/O tie) refuses it. The tie draws positions in each window, so a window whose every
     token is wrong is refused at any number of draws, where one wrong frame among N would be refused only at the share
-    1/N a draw."""
+    1/N a sample."""
     if strategy == "token":
         T = setup.egress_params.buckets
         window0 = [q["session"] for q in plan.get("requests", ()) if "enqueue" in q and q["enqueue"] // T == 0]

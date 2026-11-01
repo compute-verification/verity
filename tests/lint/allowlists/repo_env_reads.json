@@ -66,7 +66,6 @@
     {"file": "benchmarks/pous/band_gpu/harness.py", "count": 3},
     {"file": "benchmarks/pous/band_gpu/native.py", "count": 1},
     {"file": "benchmarks/pous/bench.py", "count": 4},
-    {"file": "benchmarks/pous/erase_calib/driver.py", "count": 10},
     {"file": "benchmarks/pous/fast_decode/bench.py", "count": 3},
     {"file": "benchmarks/pous/hbm_audit/driver.py", "count": 1},
     {"file": "benchmarks/pous/lateness/irqpin.py", "count": 1},

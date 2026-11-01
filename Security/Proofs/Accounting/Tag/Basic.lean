@@ -8,8 +8,7 @@ import Definitions.Accounting.Tag.PolyHash
 # Shared lemmas for the tag proofs
 
 `p = 2^31 − 1` is prime (Lucas–Lehmer, Mathlib's `norm_num` extension), so `ZMod P` is a field; probabilities under a
-uniform draw are counts; and a nonzero sparse polynomial of degree at most `d` vanishes at at most `d` points (the root
-count `PousDigest.card_zeros_le` makes for PoUS's digest, restated here so this area doesn't import PoUS's proofs).
+uniform draw are counts; and a nonzero sparse polynomial of degree at most `d` vanishes at at most `d` points.
 -/
 
 namespace Accounting.TagProofs

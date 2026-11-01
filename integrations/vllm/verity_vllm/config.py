@@ -527,7 +527,7 @@ class RowConfig:
 
     @property
     def row(self) -> str | None:
-        """The row id the requests were drawn for (``sweep.row_id``); a variant file (``olmoe-1b-7b-padded__…``) keeps its base row's."""
+        """The row id the requests were sampled for (``sweep.row_id``); a variant file (``olmoe-1b-7b-padded__…``) keeps its base row's."""
         sw = self.workload.get("sweep")
         return sw.get("row_id") if isinstance(sw, Mapping) else None
 
@@ -651,7 +651,7 @@ class CommitConfig:
                                   help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
                                        "the record's extraction slowdown")
     replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
-                              help="config run: the k units drawn uniformly from every unit (k/k equal bounds the wrong fraction) or "
+                              help="config run: the k units sampled uniformly from every unit (k/k equal bounds the wrong fraction) or "
                                    "stratified by family (each family at least once, the rest split evenly)")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")

@@ -6,7 +6,10 @@ under a committer's key and a scan state whose row at bucket 0 carries the two s
 """
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -21,6 +24,7 @@ from verity_vllm.program.predict import window_weights as WW
 
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
+from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -38,6 +42,9 @@ LANES = [(1, 4, 2, [17, 3, 250, 9]), (1, 3, 2, [5, 77, 42, 0])]
 SLOTS = tuple([occ, lp, *ids] for occ, lp, _m, ids in LANES)
 #: the window's scan state rows, a bucket each: bucket 0's the slots' lanes, every later one's another request in each lane
 STATE = [state_row(CLASS.scan, LANES)] + [state_row(CLASS.scan, [(1, 1, 1, [99, 0, 0, 0])] * 2)] * (CLASS.buckets - 1)
+#: the same window at another occupancy and other lengths: slot 0 empty, slot 1 a prompt of 2 keeping 1 output
+OTHER_LANES = [(0, 0, 0, [0, 0, 0, 0]), (1, 2, 1, [5, 77, 0, 0])]
+OTHER = tuple([occ, lp, *ids] for occ, lp, _m, ids in OTHER_LANES)
 #: the nodes prefill computes at its last prompt position only: the final norm, the LM head and the token select
 PRUNED = 3
 #: the class Program's nodes a position
@@ -428,7 +435,10 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
         ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
-    assert len({bytes(v.salts[0]) for v in got.values()}) == len(got)
+    assert WR.index_salt(KEY, 3) == hm96_salt(KEY, WR.INDEX_NONCE + 3, 0) and WR.INDEX_NONCE >= WR.STATE_NONCE + (1 << 32)
+    assert len({bytes(v.salts[0]) for v in got.values()} | {WR.index_salt(KEY, 0)}) == len(got) + 1
+    with pytest.raises(ValueError, match="a window's index is a u32"):
+        WR.index_salt(KEY, 1 << 32)
     down = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 1024)].rows[:]
     assert down.shape == (8, 1024) and np.array_equal(down.reshape(-1), fields["model.layers.0.mlp.down_proj.weight"])
     with pytest.raises(ValueError, match="'weights/x@3/rows' is no weight parameter"):
@@ -515,3 +525,116 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     seen = {lab["form"] for m in labels["members"] for *_, lab in m["labels"]}
     assert seen == set(WR.FORMS) and all(m["labels"] for m in labels["members"])
     assert {int(x) for v in rows.source.values() for x in v} == {WR.SERVED, WR.COMPUTED, WR.EVALUATED}
+
+
+class _Runs:
+    """A window's `record` as `Rows.record` calls it, keeping each run's template, unit count and label."""
+
+    def __init__(self) -> None:
+        self.runs: list[tuple[str, int, Any]] = []
+
+    def record(self, fn, ins, outs, label) -> None:
+        self.runs.append((descriptor_id(fn), len(outs[0]), label))
+
+
+def _runs(rows) -> list[tuple[str, int, Any]]:
+    got = _Runs()
+    rows.record(got)
+    return got.runs
+
+
+def _two(window) -> dict[str, tuple[Any, list[WR.Slot]]]:
+    """The window at two occupancies, each its stand-in scan state (`standin_state`, window 0's under `KEY`) and slots:
+    `LANES` with slot 0 served (its request's values), and `OTHER_LANES`, every node computed."""
+    low, _f, _v, weights, slots = window
+    rows_, store = _served(low, slots[0], T=1)
+    s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
+    state = {k: WR.standin_state(PROGRAM, CLASS, [([occ, lp, *ids], m) for occ, lp, m, ids in lanes], KEY, 0, window=RUN)
+             for k, lanes in (("served", LANES), ("other", OTHER_LANES))}
+    return {"served": (state["served"], [s0, slots[1]]),
+            "other": (state["other"], [WR.Slot(low.fn, CLASS, r, weights) for r in OTHER])}
+
+
+def test_a_windows_labels_are_its_class_structure_alone(window):
+    """`Rows.record` labels each run by its step, slot and form, all three the lowering's, so the window at two
+    occupancies (slot 0 served at a prompt of 4 and slot 1 at 3, each keeping 2 outputs, or slot 0 empty and slot 1 at 2
+    keeping 1) records the same runs under byte-identical labels, though its rows and its units' sources differ. Every
+    unit is in one run, and both forms and both slots are there."""
+    low, _f, values, *_ = window
+    rows = {k: WR.Rows(low, ss, {**values, SS.SCAN_STATE: st}) for k, (st, ss) in _two(window).items()}
+    a, b = rows["served"], rows["other"]
+    assert any(not np.array_equal(a.source[t], b.source[t]) for t in a.source)
+    assert any(not np.array_equal(x, y) for t in a.outs for x, y in zip(a.outs[t], b.outs[t]))
+    runs = _runs(a)
+    assert json.dumps(runs) == json.dumps(_runs(b))
+    assert all(set(lab) == {"step", "slot", "form"} for *_, lab in runs)
+    assert {lab["form"] for *_, lab in runs} == set(WR.FORMS) and {lab["slot"] for *_, lab in runs} >= {0, 1}
+    assert {t: sum(n for u, n, _ in runs if u == t) for t in a.n} == a.n
+
+
+#: the keys of `Window.write`'s public JSON whose values are hiding commitments or digests over them, and the commit's seconds
+HIDING = {"root", "roots", "registered_roots", "paths", "registered_paths", "public_sha512", "leaf_layer",
+          "registration_digest", "seconds"}
+PRIVATE = re.compile(r"[mtv]\d+-private\.bin|index\.json|index-salt\.bin")
+
+
+def _hide(x: Any, role: str) -> Any:
+    if isinstance(x, dict):
+        return {k: _hide(v, role) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_mask(v) if isinstance(v, dict) else _hide(v, role) for v in x]
+    return f"<{role}>"
+
+
+def _mask(x: Any) -> Any:
+    if isinstance(x, dict):
+        return {k: _hide(v, k) if k in HIDING else _mask(v) for k, v in x.items()}
+    return [_mask(v) for v in x] if isinstance(x, list) else x
+
+
+def _public(c, d: Path) -> dict[str, Any]:
+    """Window dir ``d``'s public files, each hiding commitment and digest over one replaced by its role (`HIDING`; a public
+    body's ``b || c`` strings by their length, its table refs kept), each prover-only file by its name once it is its
+    owner's alone."""
+    out: dict[str, Any] = {}
+    for f in sorted(d.iterdir()):
+        if PRIVATE.fullmatch(f.name):
+            assert f.stat().st_mode & 0o077 == 0, f"{f.name} is readable by others"
+            out[f.name] = "private"
+        elif f.name in ("registration.json", "window.json"):
+            out[f.name] = _mask(json.loads(f.read_text()))
+        elif f.suffix == ".bin":
+            k = int(f.name[1:].split("-")[0])
+            ports = ([c.window.row_tables[k].port] if f.name[0] == "t"
+                     else [c.window.members[k].port(p) for p, _ in c.window.members[k].all_rows])
+            body, bc = f.read_bytes(), sum(len(c.bc[p]) for p in ports)
+            out[f.name] = (len(body), body[bc:])
+        else:
+            out[f.name] = f.read_bytes()
+    return out
+
+
+@pytest.mark.slow
+def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(window, tmp_path):
+    """The window at two occupancies (`_two`), each closed and written by `Window.write` as `prove_path`'s window commit
+    writes it (its stand-in scan state a value of the window's, its class and index public, its index salt window 0's
+    under `KEY`), has one public record: every public file is byte for byte the other's once each hiding commitment (a
+    root, a row's ``b || c``, a registered read's path) and each digest over one (a public body's, the leaf layer, the
+    registration's) is replaced by its role. The labels, the index's hiding leaf, the unit files, the table refs, the
+    domains and the registration's provenance all agree, and the index and its salt are prover only. What the labels test
+    can't reach: everything else `Window.write` makes public. Slow (minutes) for the two windows' closes, as the test
+    above."""
+    low, _f, values, *_ = window
+    pub = {}
+    for name, (state, slots) in _two(window).items():
+        vals = {**values, SS.SCAN_STATE: state}
+        win = IF.Window(low.circuit, RUN, LAW, 64, registered=vals, forms=WR.FORMS)
+        win.supply(CR)
+        WR.Rows(low, slots, vals).record(win)
+        c = win.close()
+        prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
+                "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: state.entry()}}}
+        win.write(c, tmp_path / name, prov, registrar=REG, index_salt=WR.index_salt(KEY, 0))
+        pub[name] = _public(c, tmp_path / name)
+    assert pub["served"] == pub["other"]
+    assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub["served"])

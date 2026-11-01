@@ -62,20 +62,14 @@ theorem extras_shape {s : Stmt} {pts : Array (Array F128)} {e : Array Claim} (h 
   · show ((s.regionPoint reg pt).extract 6 (s.regionPoint reg pt).size).size = s.m - 6
     rw [Array.size_extract, FlockSoundness.Refine.regionPoint_size, Nat.min_self]
 
-/-- **A hidden-output table's ranges fold**: at untyped tags its circuit is `HmRow.parse`'s, which `HmRow.check`
-passed. -/
+/-- **A hidden-output table's ranges fold**: at untyped tags its circuit is the committed one, which `HmRow.check`
+passed (`parseCommit_check`). -/
 theorem slotOk_of_hidden {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     ∀ r ∈ st.c.ranges.toList, FlockComplete.JsonRT.SlotOk st.c r := by
-  have hp := (FlockSoundness.Discharge.Hidden.setupHidden_spec' h).parse
-  unfold HmOut.parse at hp
-  simp only [ht, Bool.not_false, ↓reduceIte] at hp
-  obtain ⟨c', hc', hp⟩ := FlockSoundness.Refine.ebind_ok hp
-  obtain ⟨_, -, hp⟩ := FlockSoundness.Refine.ebind_ok hp
-  simp only [pure, Except.pure, Except.ok.injEq] at hp
-  subst hp
-  obtain ⟨ls, hl⟩ := FlockSoundness.Refine.hm_parse_check hc'
+  obtain ⟨ls, hl⟩ := FlockSoundness.Discharge.Hidden.parseCommit_check ht
+    (FlockSoundness.Discharge.Hidden.setupHidden_parseCommit h)
   exact FlockComplete.JsonRT.hm_check_kinds hl
 
 /-- **The circuit fold returns 64 entries at the lincheck's point**: wherever `residualLins` runs at a shape of the
@@ -86,7 +80,7 @@ theorem folds_ofCircuit {S : Setup} {s : Stmt} (hS : S = Setup.ofCircuit s) (hwf
     (hs : ∀ r ∈ s.c.ranges.toList, FlockComplete.JsonRT.SlotOk s.c r) (h14 : 14 ≤ s.m) {sh : Shape}
     (hm : sh.m = s.m) (hk : sh.kLog = s.c.kLog) {rounds : Array (Array F128)} {extras : Array Claim}
     {lins : Array RecAlgebra.Lin} {info : RecAlgebra.Info RecAlgebra.Lin}
-    (h : RecAlgebra.residualLins sh (RecAlgebra.Coins.ofRounds rounds) extras = .ok (lins, info)) :
+    (h : RecAlgebra.residualLins sh (RecAlgebra.CoinSource.ofRounds rounds) extras = .ok (lins, info)) :
     ∃ c, S.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
       .ok c ∧ c.size = 64 := by
   subst hS
@@ -311,7 +305,7 @@ theorem rowG (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursio
     exact extras_shape he (by omega)
   · intro r v info kappa h
     obtain ⟨lins, hl⟩ := FlockVBridge.Family.residualLins_of_verifierRows h
-    have hl' : RecAlgebra.residualLins (D.sh cls i) (RecAlgebra.Coins.ofRounds (FlockVBridge.Family.roundsOf
+    have hl' : RecAlgebra.residualLins (D.sh cls i) (RecAlgebra.CoinSource.ofRounds (FlockVBridge.Family.roundsOf
         (D.files cls i) r)) (D.files cls i).extras = .ok (lins, info) := hl
     obtain ⟨c, hcf, hcs⟩ := folds_ofCircuit (S := (D.files cls i).st) (D.tab_eq hi) hwf hslot (by omega) hshm hshk hl'
     show (D.files cls i).st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn

@@ -1,4 +1,4 @@
-"""stage.py ROLE K N OUT: one Pearl-C4 unit class over N instances, staged for C-Flock by `class_statement.stage_unit` with
+"""stage.py ROLE K N OUT: one Pearl-C4 unit class over N instances, staged for Flock by `class_statement.stage_unit` with
 PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public input ports (`anchors.public_ports`).
 
     row_a  Pc4RowA_v1{K}: x (bf16, row-seg) -> A'_i's codes, scales, P_A,i (nvfp4-p, v2) and ok; public e, fa, fb
@@ -16,7 +16,7 @@ public file's tail, an anchor the prover chose).
 `HZ_STAGE` (``fast``, the default, or ``library``): whether `fast_stage` patches the library first, for the same bytes in
 less time and memory; stage.json records which.
 
-DEVELOPMENT BINDING: core's BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1 have no C-Flock piece on this branch, so the row
+DEVELOPMENT BINDING: core's BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1 have no Flock piece on this branch, so the row
 units lower them through `core3_scratch`'s pieces; every result of a row unit staged here is labelled 'core3 scratch'. The
 PoUW word primitives Keccak-f is written in have none either, so the hiding tile lowers them through `hash_scratch`'s
 pieces, checked against their primitives first; its results are labelled 'hash scratch'."""

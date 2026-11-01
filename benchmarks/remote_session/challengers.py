@@ -1,10 +1,10 @@
 """Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof system's one challenger
 (`coins.Coins`, `sampled_proofs.challenger`):
 
-- `Local`: a `LiveChallenger` in the verifier's process, drawing from `secrets.token_bytes`.
+- `Local`: a `LiveChallenger` in the verifier's process, sampling from `secrets.token_bytes`.
 - `Serve`: the challenger's own process, `benchmarks/live_challenger/serve.py`, started for the session on the
   verifier's machine with its LMS key (`--challenger-key`), reached over its 127.0.0.1 by `sampled_proofs.remote`'s
-  client. It draws its coins in the Lean (`one_stage.verifier.coins`), signs its record before it listens and its
+  client. It flips its coins in the Lean (`one_stage.verifier.coins`), signs its record before it listens and its
   release log when the client closes the session. Not the auditor host: the verifier's machine is the audit's (never
   the prover's), but no ledger opens the session for its window, so the read is `challenger.session_of`'s, under the
   key the run wrote.
