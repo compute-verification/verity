@@ -158,8 +158,8 @@ noncomputable def freshOf (x : Msg) (cs : List FlockDeploy.Coin) : Except String
 for levels ≥ 1 (`real k` for rep stream `k`, as `Frames.placeOf` computes them from the session's level 0 and its finish's
 salts): rep stream `k`'s scheduled round `i` (`schedSoFar`), `k` and `i` as `progOf` locates them. The empty round where
 the rep's table or its schedule is refused: the loop has no round there (`Frames.placeOf` refuses it, and the session
-stops), and the frame's check refuses the empty round. None past the rep's schedule (the inner proof's rounds, whose round
-the firewall sends itself), or where `x` sets up no session. -/
+stops), and the frame's check refuses the empty round. None past the rep's schedule (the inner proof's rounds, the frame's
+own: `Loop.innerOf`), or where `x` sets up no session. -/
 noncomputable def schedOf (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List FlockDeploy.Coin) :
     Option ByteArray :=
   match FlockDeploy.setupOf true x, cs.length with
@@ -195,7 +195,7 @@ namespace LeanRelease
 /-- `L₀` with the loop's own frames: its transport's states are `Loop.progOf` and `Loop.freshOf` of the decoded coins, each round's rep is
 its rep stream, started as the loop starts it, and the round in a scheduled round's place is the loop's own
 (`Loop.schedOf`), on each rep's table and salts for levels ≥ 1 at `x`, the witness and the tape (`real`); at the inner
-proof's rounds, `L₀`'s. At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
+proof's rounds, `L₀`'s (the loop's own at `LeanRelease.withInner`). At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
 empty round, which the frame's check refuses. Each round's coin count is the one the loop hands `Frames.round`, its
 request's (`Loop.loopNr`): the round after `h` takes opening `h.length - 1`'s coins. -/
 noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)

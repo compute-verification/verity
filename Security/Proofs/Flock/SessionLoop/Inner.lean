@@ -119,7 +119,7 @@ theorem step_sched_self (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (n : 
       Bool.false_eq_true, ↓reduceIte]
   rw [hown]
   cases hs : st.m.stopped
-  · rw [_root_.Flock.Firewall.Frame.step_sched ho (_root_.Claims.ZKServer.check_self hs hr)]
+  · simp only [_root_.Flock.Firewall.Frame.step, ho, _root_.Claims.ZKServer.check_self hs hr]
   · have he : ∀ m : Masker, m.stopped = true → { m with stopped := true } = m := by
       intro m hm
       cases m
@@ -129,7 +129,7 @@ theorem step_sched_self (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (n : 
     have hc : _root_.Flock.Firewall.Frame.check c st.m r r n = .ok (out, s', some "the rep is stopped") := by
       unfold _root_.Flock.Firewall.Frame.check _root_.Flock.Firewall.Frame.standIn
       simp only [hs, he st.m hs, hr, ↓reduceIte, bind, Except.bind, pure, Except.pure]
-    rw [_root_.Flock.Firewall.Frame.step_sched ho hc]
+    simp only [_root_.Flock.Firewall.Frame.step, ho, hc]
 
 theorem wordBytes_size (v : Array F128) : (wordBytes v).size = 16 * v.size := by
   rw [← ByteArray.size_data, ← Array.length_toList, wordBytes_data, FlockSoundness.Refine.Frame.colBytes_length,
