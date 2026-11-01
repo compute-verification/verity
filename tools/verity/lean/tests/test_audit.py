@@ -2618,6 +2618,38 @@ def test_a_checked_declaration_waits_for_what_an_unchecked_one_it_unfolds_needs(
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_replay_reads_a_modules_private_part_and_a_plain_files_olean_alone(tmp_path):
+    """A `module`'s proofs are only in its `.olean.private`: without it the replay refuses the module, where the `.olean`
+    its importers read would replay each theorem as an axiom. A file outside the module system is its `.olean` alone: the
+    parts a build of it as a `module` left beside it are that build's, read against another `.olean`."""
+    pkg = tmp_path / "pkg"
+    shutil.copytree(A.FIXTURES / "modules", pkg)
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+
+    def replay() -> subprocess.CompletedProcess:
+        return subprocess.run(["lake", "env", "lean", "--run", str(A.TOOL / "Replay.lean"), str(tmp_path / "replay.json"),
+                               *sorted(A.lean_modules(pkg))], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
+
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    r = replay()
+    assert r.returncode == 0, r.stderr + r.stdout
+    axioms = json.loads((tmp_path / "replay.json").read_text())["axioms"]
+    parts = {p: p.read_bytes() for p in lib.rglob("*.olean.*") if p.suffix in (".server", ".private")}
+    (lib / "Modular" / "Hidden.olean.private").unlink()
+    r = replay()
+    assert r.returncode != 0 and "Modular.Hidden is a `module` and " in r.stderr and "Hidden.olean.private is missing" \
+        in r.stderr, r.stderr + r.stdout
+    for rel, text in json.loads((A.FIXTURES / "module-violations.json").read_text())["plain"]["write"].items():
+        (pkg / rel).write_text(text)
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    for p, b in parts.items():
+        p.write_bytes(b)
+    r = replay()
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert json.loads((tmp_path / "replay.json").read_text())["axioms"] == axioms
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_controls(tmp_path):
     toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
     assert A.controls(toolchain, tmp_path, log=lambda *_: None) == []
