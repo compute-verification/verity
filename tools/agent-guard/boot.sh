@@ -1,23 +1,25 @@
 #!/usr/bin/env bash
-# `tools/agent-guard/boot.sh [WORKSPACE]`: put the agent guard on this VM whatever branch WORKSPACE (default /workspace) has
-# checked out. The Cloud Agent environment's `start` runs it on every boot, from origin/main, so a branch older than the
-# guard still gets it:
+# `tools/agent-guard/boot.sh [WORKSPACE]`: put the agent guard, which lives in compute-verification/infra, on this VM whatever
+# branch WORKSPACE (default /workspace) has checked out. The Cloud Agent environment's `start` runs it on every boot, from
+# origin/main, so a branch older than it still gets it:
 #
 #   git -C /workspace fetch -q origin main && git -C /workspace show origin/main:tools/agent-guard/boot.sh | bash -s -- /workspace
 #
-# Cloud agents run project hooks only (`WORKSPACE/.cursor/hooks.json`; `~/.cursor/hooks.json` is not read), so a branch
-# without that file runs no shell hook. When the branch doesn't track `.cursor/hooks.json` it first writes one that runs DEST's hook, fail-closed, and excludes it in
-# `.git/info/exclude` (git overwrites an excluded file when a branch that tracks it is checked out): Cursor reads hooks once,
-# early in the session, so the file comes before the fetch, and until DEST's copy is there every command is refused. Then it
-# copies origin/main's `tools/agent-guard` to DEST (default /opt/agent-guard), or keeps an earlier copy when origin/main can't
-# be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
-# /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
-# and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once, and sets WORKSPACE's merge drivers (`.gitattributes`
-# names them; git keeps them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, as every run clone
-# has them: without them `git merge-tree` here merges a lean-audit.json line by line and calls clean what the queue refuses.
+# When the branch doesn't track `.cursor/hooks.json` it first writes one that runs DEST's hook (default /opt/agent-guard),
+# fail-closed, and excludes it in `.git/info/exclude`: Cursor reads hooks once, early in the session, so the file comes before
+# any fetch, and until DEST's copy is there every command is refused. Then it brings INFRA (default /opt/infra) to infra's
+# main, cloning it the first time, with WORKSPACE's GitHub helper, and runs INFRA's `tools/agent-guard/boot.sh`, which copies
+# the guard to DEST and does the rest of the VM's setup (its header says what). When infra can't be fetched it runs the
+# checkout INFRA already has. Without one, or when that boot.sh fails, Verity's last guard runs this boot: DEST's copy is
+# kept if its hook refuses `env`, else the guard origin/main had before it moved to infra goes there, and that tree's
+# boot.sh runs. If DEST's hook still doesn't refuse `env`, it is removed, so that the fail-closed hook refuses every command.
 set -euo pipefail
+# Verity's last boot.sh runs with AGENT_GUARD_FALLBACK set: a tree whose boot.sh is this file would run it forever
+[ -z "${AGENT_GUARD_FALLBACK:-}" ] || { echo "agent-guard: Verity's last guard is this boot.sh; stopping" >&2; exit 1; }
 ws=${1:-/workspace}
 dest=${AGENT_GUARD_DEST:-/opt/agent-guard}
+infra=${AGENT_GUARD_INFRA:-/opt/infra}
+url=${AGENT_GUARD_INFRA_URL:-https://verity-agent@github.com/compute-verification/infra.git}
 sudo=sudo
 mkdir -p "$dest" 2>/dev/null && [ -w "$dest" ] && sudo=
 if git -C "$ws" ls-files --error-unmatch .cursor/hooks.json >/dev/null 2>&1; then
@@ -45,50 +47,49 @@ EOF
   grep -qxF /.cursor/hooks.json "$exclude" 2>/dev/null || echo /.cursor/hooks.json >> "$exclude"
   echo "agent-guard: wrote $ws/.cursor/hooks.json (excluded), running $dest/shell_hook.py"
 fi
+refuses_env() {
+  printf '{"hook_event_name":"beforeShellExecution","command":"env | cut -d= -f1","cwd":"/"}' \
+    | python3 "$dest/shell_hook.py" 2>/dev/null | grep -q '"deny"'
+}
+# git as this user, never root: the helper caches its token in WORKSPACE's git dir
+pull() {
+  local auth=(-c credential.helper= -c "credential.helper=!python3 '$ws/.git/verity-auth/verity-github.py' credential"
+              -c credential.useHttpPath=true)
+  if [ ! -w "$infra" ] && [ ! -w "$(dirname "$infra")" ]; then
+    sudo -n mkdir -p "$infra" && sudo -n chown "$(id -u):$(id -g)" "$infra" || return 1
+  fi
+  if [ -e "$infra/.git" ]; then
+    GIT_TERMINAL_PROMPT=0 git "${auth[@]}" -C "$infra" fetch -q "$url" main && git -C "$infra" checkout -qf -B main FETCH_HEAD
+  else
+    GIT_TERMINAL_PROMPT=0 git "${auth[@]}" clone -q "$url" "$infra"
+  fi
+}
+if pull; then
+  echo "agent-guard: $infra is infra's main ($(git -C "$infra" log -1 --format='%h %cs'))"
+elif [ -f "$infra/tools/agent-guard/boot.sh" ]; then
+  echo "agent-guard: infra's main can't be fetched; running $infra's checkout ($(git -C "$infra" log -1 --format='%h %cs'))" >&2
+fi
+if [ -f "$infra/tools/agent-guard/boot.sh" ] && bash "$infra/tools/agent-guard/boot.sh" "$ws" < /dev/null && refuses_env; then
+  exit 0
+fi
+echo "agent-guard: no guard from infra (above); Verity's last guard runs this boot" >&2
+last=$(git -C "$ws" rev-list -1 origin/main -- tools/agent-guard/shell_hook.py 2>/dev/null || true)
+[ -z "$last" ] || git -C "$ws" cat-file -e "$last:tools/agent-guard/shell_hook.py" 2>/dev/null || last=$last^
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-if git -C "$ws" fetch -q origin main && git -C "$ws" archive origin/main tools/agent-guard | tar -x -C "$tmp"; then
-  $sudo mkdir -p "$dest"
-  $sudo cp "$tmp"/tools/agent-guard/* "$dest"/
-  $sudo chmod 755 "$dest"/*
-elif [ -f "$dest/shell_hook.py" ]; then
-  echo "agent-guard: origin/main unreadable; using the copy already in $dest" >&2
-else
-  echo "agent-guard: origin/main unreadable and no copy in $dest: no guard on this VM" >&2
-  exit 1
-fi
-verdict=$(printf '{"hook_event_name":"beforeShellExecution","command":"env | cut -d= -f1","cwd":"/"}' | python3 "$dest/shell_hook.py")
-case $verdict in
-  *'"deny"'*) ;;
-  *) echo "agent-guard: $dest/shell_hook.py let \`env | cut -d= -f1\` through: $verdict" >&2; exit 1 ;;
-esac
-# research (the workspace's venv) and the GitHub helper on every later shell's PATH (INF-71: a fresh VM had neither)
-line='export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH'
-rc=${AGENT_GUARD_BASHRC:-$HOME/.bashrc}
-grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"
-if git -C "$ws" show origin/main:tools/research/src/research/clone.py > "$tmp/clone.py" 2>/dev/null; then
-  python3 - "$ws" "$tmp/clone.py" <<'PY' || echo "agent-guard: merge drivers not set in $ws (above)" >&2
-import importlib.util, subprocess, sys
-spec = importlib.util.spec_from_file_location("clone", sys.argv[2])
-clone = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(clone)
-for k, v in clone.RECORD_DRIVER.items():
-    subprocess.run(["git", "-C", sys.argv[1], "config", k, v], check=True)
-print(f"agent-guard: {len(clone.RECORD_DRIVER)} merge driver settings in {sys.argv[1]}'s git config")
-PY
-fi
-if [ -z "${AGENT_GUARD_SKIP_INSTALL:-}" ]; then
-  bash "$dest/install.sh" || echo "agent-guard: install.sh failed or refused (above); the shell hook is in place" >&2
-  # a snapshot older than USN-8944-1 still trusts the roots that cross-signed the compromised eMudhra intermediates
-  if ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root'; then
-    { sudo -n apt-get update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l \
-        apt-get install -y -qq --only-upgrade ca-certificates 'libnss3*'; } > /tmp/agent-trust-upgrade.log 2>&1 \
-      && echo "agent-guard: ca-certificates $(dpkg-query -W -f='${Version}' ca-certificates)" \
-      || echo "agent-guard: the ca-certificates upgrade failed (/tmp/agent-trust-upgrade.log)" >&2
+if [ -n "$last" ] && git -C "$ws" archive "$last" tools/agent-guard 2>/dev/null | tar -x -C "$tmp" 2>/dev/null; then
+  if refuses_env; then
+    echo "agent-guard: keeping the guard in $dest" >&2
+  else
+    $sudo mkdir -p "$dest"
+    $sudo cp "$tmp"/tools/agent-guard/* "$dest"/
+    $sudo chmod 755 "$dest"/*
+    echo "agent-guard: put Verity's last guard ($(git -C "$ws" rev-parse --short "$last")) in $dest" >&2
   fi
-  line='export UV_SYSTEM_CERTS=1'          # uv reads the system trust store, not the roots it ships
-  grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"
-  # the VM's OOM recorder: one per VM (it holds its lock; a second exits), so a reboot or a second boot.sh is harmless
-  setsid nohup python3 "$dest/oom_watch.py" loop >> /tmp/agent-oom-watch.log 2>&1 < /dev/null &
-  echo "agent-guard: OOM recorder started ($dest/oom_watch.py, records in ~/.research/agent-oom.jsonl)"
+  AGENT_GUARD_FALLBACK=1 bash "$tmp/tools/agent-guard/boot.sh" "$ws" < /dev/null \
+    || echo "agent-guard: Verity's last boot.sh failed (above)" >&2
 fi
+refuses_env && exit 0
+[ ! -e "$dest/shell_hook.py" ] || $sudo rm -f "$dest/shell_hook.py"
+echo "agent-guard: no hook in $dest refuses \`env\`: no guard on this VM, so the fail-closed hook refuses every command" >&2
+exit 1
