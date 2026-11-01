@@ -55,4 +55,43 @@ def SampledDetection {Ω β ι : Type} [Fintype Ω] (μ : PMF Ω) (bad detected 
   ∀ b, prob μ (fun ω => b ∈ bad ω ∧ b ∉ detected ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b) ≤
     (1 - q) * prob μ (fun ω => b ∈ bad ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b)
 
+/-! Over a monitoring period of `T` windows, window `t` with its own uniform coins `Ω t` and a run of the period
+`ξ : (t : Fin T) → Ω t`, each protocol's leg is a bound per window at any value of the other windows' coins, over its own
+(`ξ[t ↦ a]`, `a` uniform on `Ω t`), as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound. -/
+
+/-- **PoUW's per-window bound** (in place of `PouwSound`): window `t`'s certificate is wrong (`wrong t`) with
+probability at most `p` over its own coins, `CircuitCredit`'s conclusion at window `t`'s play. That the deployment's
+window is such a play is not stated. -/
+def PouwPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
+    (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p : ℝ) : Prop :=
+  ∀ t (ξ : (t : Fin T) → Ω t), prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p
+
+/-- **Sampled proofs' per-window bounds** (in place of `SampledDetection`): a window's faulty blocks `bad` (block `b` in
+window `win b`) are fixed before its coins, and the units it draws (`drawn`) and the faulty blocks it detects
+(`detected`) read only its coins and the earlier windows'; its draw misses its `m` faulty blocks with probability at most
+`(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`, under A3), and it detects none of them while drawing one with
+probability at most `ks t` (`HiddenWindow.accepted_drawnWrong_le`). That the deployment's windows are such windows is not
+stated. -/
+def SampledPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)] {β : Type}
+    (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T) (q : ℝ) (ks : Fin T → ℝ) : Prop :=
+  (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) ∧
+    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, win b = t →
+      (b ∈ drawn ξ ↔ b ∈ drawn ξ') ∧ (b ∈ detected ξ ↔ b ∈ detected ξ')) ∧
+    (∀ t (ξ : (t : Fin T) → Ω t),
+      prob (PMF.uniformOfFintype (Ω t)) (fun a => ∀ b ∈ bad ξ, win b = t → b ∉ drawn (Function.update ξ t a)) ≤
+        (1 - q) ^ ((bad ξ).filter fun b => win b = t).card) ∧
+    ∀ t (ξ : (t : Fin T) → Ω t),
+      prob (PMF.uniformOfFintype (Ω t)) (fun a => (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn (Function.update ξ t a)) ∧
+          ∀ b ∈ bad ξ, win b = t → b ∉ detected (Function.update ξ t a)) ≤ ks t
+
+/-- **The developer's identities over the period**: window `t` is run by identity `idW t` at time `τw t`, each identity's
+windows in their order; every faulty block (`bad`, block `b` in window `win b`) is run by one of the identities `I`;
+the hardware's rate `Φ` over the period's length `H` is within the monitored compute `C`; one identity's faulty blocks
+within any span of `Δ` skip at most `Φ Δ` of declared work (`w`); and each skips at most `B`. -/
+def IdentitySchedule {T : ℕ} {Ξ β ι : Type} [DecidableEq ι] (bad : Ξ → Finset β) (win : β → Fin T) (I : Finset ι)
+    (idW : Fin T → ι) (τw : Fin T → ℝ) (w : β → ℝ) (Φ Δ H C B : ℝ) : Prop :=
+  (∀ t t', idW t = idW t' → t < t' → τw t < τw t') ∧ (∀ ξ, ∀ b ∈ bad ξ, idW (win b) ∈ I) ∧ Φ * H ≤ C ∧
+    (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) ∧
+    ∀ ξ, ∀ b ∈ bad ξ, w b ≤ B
+
 end Nci.Assumptions

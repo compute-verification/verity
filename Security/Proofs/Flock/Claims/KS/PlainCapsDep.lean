@@ -44,7 +44,7 @@ theorem plain_liveRow {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false
     (hacc : (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out = .acc)
     (hA : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSim P x spec st) x (ω, u) r')))
-    {sch : Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
+    {sch : FlockSoundness.Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
     (hL : LaterEntriesAt sch ins.read.I d (wrPD ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSim P x spec st) x (ω, u) r')) out k) :
     ∀ ℓ, 1 ≤ ℓ → ∀ q v, (q, v) ∈ (slotOpensL out k ℓ (lvOf sch ℓ).queries).map (fun x => (x.1, x.2.1)) →

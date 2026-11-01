@@ -73,7 +73,7 @@ end Lemmas
 
 /-- **Products off the books are in dark gates, at most `k` to a gate**: the chain's products number at most those
 whose gates are in `S` plus `k` for each dark gate. This is where `prod_mult` is read. -/
-theorem card_products_le_dark_packed {c d : Declaration} {k : ℕ} (M : PartialContainment c d) (ch : PackedChain c.D k) :
+theorem card_products_le_dark_packed {c d : RegisteredCircuit} {k : ℕ} (M : PartialContainment c d) (ch : PackedChain c.D k) :
     ch.G ≤ (univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
       ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card + k * M.dark.card := by
   have huniv : (univ : Finset ((ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ))).card = ch.G := by
@@ -90,7 +90,7 @@ theorem card_products_le_dark_packed {c d : Declaration} {k : ℕ} (M : PartialC
 
 open Classical in
 /-- **The partial sums, counted over the pieces**, on a packed chain. -/
-theorem partialSums_count_packed {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
+theorem partialSums_count_packed {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     {k : ℕ} {ch : PackedChain c.D k} {b_w b_a : ℝ} (ha : 0 ≤ b_a)
     {s : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark})) → ℕ}
     (hsum : ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread (withDark M P) x.1 x.2.1 x.2.2 - 1) ≤ ∑ i, s i)
@@ -125,7 +125,7 @@ theorem partialSums_count_packed {c d : Declaration} {M : PartialContainment c d
 open Classical in
 /-- **Training's incompressibility gives the activations'**, on a packed chain: a small IU is a division of `c` into
 it and the rest. -/
-theorem activationsIncompressible_of_training_packed {c : Declaration} {k : ℕ} {ch : PackedChain c.D k}
+theorem activationsIncompressible_of_training_packed {c : RegisteredCircuit} {k : ℕ} {ch : PackedChain c.D k}
     {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ} (hba : 0 ≤ b_a)
     (h : Assumptions.PackedTrainingIncompressible c ch T Γ K b_w b_a) :
     Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a := by
@@ -138,7 +138,18 @@ theorem activationsIncompressible_of_training_packed {c : Declaration} {k : ℕ}
 open Classical in
 /-- **The partial-sum law with dark gates, in reads, at most `k` products to a gate**: each dark gate is a small IU of
 its own, whose partial sums are within its reads. -/
-theorem PackedIncompressibleContainedMatMulOn : Guarantees.PackedIncompressibleContainedMatMulOn := by
+theorem PackedIncompressibleContainedMatMulOn_rate :
+    ∀ (k Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (ch : PackedChain c.D k) (T : Threading c) (dd emax : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
+      Assumptions.PackedTrainingIncompressible c ch T Γ K b_w b_a →
+        max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
+            (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
+          (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
+            ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
+        α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := by
   intro k Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hB hX h
   obtain ⟨s, hsum, hs⟩ := h _ (withDark M P)
   have hcap := withDark_caps hα hαK hΓ hP hB hX
@@ -167,14 +178,35 @@ theorem PackedIncompressibleContainedMatMulOn : Guarantees.PackedIncompressibleC
 
 /-- **Training is slowed, with dark gates, at most `k` products to a gate**: the chain's products off the books are in
 dark gates, at most `k` to a gate (`card_products_le_dark_packed`). -/
-theorem PackedIncompressibleContainedTrainingOn : Guarantees.PackedIncompressibleContainedTrainingOn := by
+theorem PackedIncompressibleContainedTrainingOn_rate :
+    ∀ (k Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : RegisteredCircuit) (ch : PackedChain c.D k) (T : Threading c) (dd emax : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
+      Assumptions.PackedTrainingIncompressible c ch T Γ K b_w b_a →
+      κ * c.D.size c.D.computed ≤ 2 * ch.G →
+        max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
+            (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
+          (κ * c.D.size c.D.computed - 2 * (k * M.dark.card)) ≤
+        2 * (α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads c {v} : ℝ)) := by
   intro k Γ α K b_w b_a μ κ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX h hκ
   exact training_of_counts (le_max_of_le_right (by positivity))
-    (PackedIncompressibleContainedMatMulOn k Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he
-      hP hB hX h) hκ (by exact_mod_cast card_products_le_dark_packed M ch)
+    (PackedIncompressibleContainedMatMulOn_rate k Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd
+      he hP hB hX h) hκ (by exact_mod_cast card_products_le_dark_packed M ch)
+
+theorem PackedIncompressibleContainedMatMulOn : Guarantees.PackedIncompressibleContainedMatMulOn := by
+  intro p c k K b_w b_a μ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h
+  exact PackedIncompressibleContainedMatMulOn_rate p c (k / c) K b_w b_a μ r d ch T dd emax M (by positivity) hK hw ha
+    hdd (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h
+
+theorem PackedIncompressibleContainedTrainingOn : Guarantees.PackedIncompressibleContainedTrainingOn := by
+  intro p c k K b_w b_a μ κ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h hκ
+  exact PackedIncompressibleContainedTrainingOn_rate p c (k / c) K b_w b_a μ κ r d ch T dd emax M (by positivity) hK
+    hw ha hdd (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h hκ
 
 /-- At `k = 1` the packed training assumption is the per-product one. -/
-theorem packedTrainingIncompressible_toPacked {c : Declaration} {ch : Chain c.D} {T : Threading c} {Γ : ℕ}
+theorem packedTrainingIncompressible_toPacked {c : RegisteredCircuit} {ch : Chain c.D} {T : Threading c} {Γ : ℕ}
     {K b_w b_a : ℝ} :
     Assumptions.PackedTrainingIncompressible c ch.toPacked T Γ K b_w b_a ↔
       Assumptions.TrainingIncompressible c ch T Γ K b_w b_a := by
@@ -193,15 +225,15 @@ theorem packedTrainingIncompressible_toPacked {c : Declaration} {ch : Chain c.D}
 /-- **The per-product partial-sum law with dark gates is the case `k = 1`.** -/
 theorem incompressibleContainedMatMulOn_of_packed (h : Guarantees.PackedIncompressibleContainedMatMulOn) :
     Guarantees.IncompressibleContainedMatMulOn :=
-  fun Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hT =>
-    h 1 Γ α K b_w b_a μ c d ch.toPacked T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX
+  fun c k K b_w b_a μ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hT =>
+    h 1 c k K b_w b_a μ r d ch.toPacked T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX
       (packedTrainingIncompressible_toPacked.2 hT)
 
 /-- **The per-product training form with dark gates is the case `k = 1`**, where `2 k #dark` is `2 #dark`. -/
 theorem incompressibleContainedTrainingOn_of_packed (h : Guarantees.PackedIncompressibleContainedTrainingOn) :
     Guarantees.IncompressibleContainedTrainingOn := by
-  intro Γ α K b_w b_a μ κ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hT hκ
-  have h₁ := h 1 Γ α K b_w b_a μ κ c d ch.toPacked T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX
+  intro c k K b_w b_a μ κ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hT hκ
+  have h₁ := h 1 c k K b_w b_a μ κ r d ch.toPacked T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX
     (packedTrainingIncompressible_toPacked.2 hT) hκ
   simpa only [Nat.cast_one, one_mul] using h₁
 

@@ -258,7 +258,7 @@ theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) (hi : I.
   dsimp only at hy
   subst hy
   have hs := Option.some.inj (yhsch.symm.trans hsch)
-  simp only [Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
+  simp only [FlockSoundness.Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
   obtain ⟨rfl, rfl, ⟨rfl, rfl, rfl⟩, rfl⟩ := hs
   have hS' : L.model (Refine.regionsOf yst) = Refine.stmtOf yst ywf.1 (Refine.regionsOf yst) :=
     Integrate.model_eq (parse_facts (Hidden.parse_untyped ht (HiddenExec.setupHidden_parseC hi yh)).1) L

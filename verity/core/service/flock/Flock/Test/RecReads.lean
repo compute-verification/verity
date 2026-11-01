@@ -4,9 +4,10 @@ its JSON readers took of it. At the plain session's inner shape (m 27, k_log 22,
 that `recordFullW` writes passes. The same record as compact JSON is refused as not in its own format, and bytes that
 differ from what the JSON readers read in a `c_k`, a salted top, a node of `root_B`, a link point, a round's coin count
 or Hello's tables are refused at that field. So are bytes whose coins differ from the JSON's, among them a tail that
-repeats the key `"rounds"` with other coins, which `Json.parse` reads and `readFull` doesn't.
+repeats the key `"rounds"` with other coins, which `JsonParse.parse` reads and `readFull` doesn't.
 -/
 import Flock.RecSetup
+import Flock.JsonParse
 
 namespace Flock.Test.RecReads
 
@@ -41,7 +42,7 @@ def rest : List UInt8 :=
 
 def text (r : Record) : String := (String.fromUTF8? ⟨(recordFullW r rest).toArray⟩).getD ""
 
-def tr : Json := (Json.parse (text honest)).toOption.getD Json.null
+def tr : Json := (JsonParse.parse (text honest)).toOption.getD Json.null
 
 /-- The inner session's record, holding the coin server's link points. -/
 def record : String :=
@@ -93,7 +94,7 @@ def coined : Record :=
   { honest with rounds := honest.rounds.mapIdx fun i x =>
       { x with coins := x.coins.mapIdx fun j _ => ⟨UInt64.ofNat (2 ^ 40 * j + 7), UInt64.ofNat (i + 1)⟩ } }
 
-/-- `rest`, then the tail repeating the key `"rounds"` with the rounds of `r`: `Json.parse` keeps the last, `readFull`
+/-- `rest`, then the tail repeating the key `"rounds"` with the rounds of `r`: `JsonParse.parse` keeps the last, `readFull`
 reads the first. -/
 def restRepeat (r : Record) : List UInt8 :=
   fld 2 "y" ++ bs "null" ++ [10] ++ sp 1 ++ [125] ++ fld 1 "rounds" ++ listW 1 roundW r.rounds ++ fld 1 "end" ++
@@ -105,7 +106,7 @@ def whyAt (t : String) (j : Json) : String := match checkReads inner t j record 
   | .ok () => ""
   | .error e => e
 
-def parsed (t : String) : Json := (Json.parse t).toOption.getD Json.null
+def parsed (t : String) : Json := (JsonParse.parse t).toOption.getD Json.null
 
 /-- `coined` with its first coin of rep 0's round 1 changed. -/
 def recoined : Record :=

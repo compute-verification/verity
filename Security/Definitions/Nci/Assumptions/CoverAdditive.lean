@@ -30,7 +30,7 @@ reads those; the forward activations of a token carry what the weights did to th
 wherever `ParameterHardAt` does, and also when the gates a block reads inside the token computations tell it about an
 updated weight that it would otherwise have to read: a `T_j` drawn to include the backward pass's per-token gradients
 would, since an updated weight is a sum of them. -/
-def ConditionalParameterHardAt (d : Declaration) (B : Nci.Covering.MulBlocks d) (s : ℕ) (cw : ℝ) : Prop :=
+def ConditionalParameterHardAt (d : RegisteredCircuit) (B : Nci.Covering.MulBlocks d) (s : ℕ) (cw : ℝ) : Prop :=
   ∀ S : Nci.Covering.Subcircuit d.D, S.gates.card ≤ s →
     cw * (B.weightsCompleted S).card ≤ (S.ins \ (d.θ ∪ Finset.univ.biUnion B.T)).card
 

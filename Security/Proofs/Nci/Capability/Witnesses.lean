@@ -17,32 +17,37 @@ namespace Nci.Capability.Toy
 open Verity Finset Nci.Capability
 open scoped ENNReal
 
-theorem isCK : R1.P.IsCK R1.d 2 1 where
+theorem isCK : R1.d.𝓘.IsCK R1.d 2 1 where
   boolean := ⟨fun _ => rfl, by decide⟩
   card := by decide
   reads := by decide
 
-theorem unregistered_R1 (u : Fin 1) : D.unregistered (P1.gates u) = {1} := by
+theorem unregistered_R1 (u : Fin 1) : R1.d.unregistered (P1.gates u) = {1} := by
   revert u
   decide
 
+theorem unregistered_R1' (u : Fin 1) : R1.d.unregistered (R1.d.𝓘.gates u) = {1} := unregistered_R1 u
+
 theorem blockProgram_R1 (e : List Bool) (X : C.Transcript) (u : Fin 1) :
     blockProgram R1 e X u = e ++ [(X 1).getLsbD 0] := by
-  simp [blockProgram, indexCode, unregistered_R1, Circuit.bits]
+  obtain rfl : u = 0 := Subsingleton.elim _ _
+  show e ++ indexCode (0 : Fin 1) ++ C.bits X ((R1.d.unregistered (P1.gates 0)).sort (· ≤ ·)) = _
+  rw [unregistered_R1]
+  simp [indexCode, Circuit.bits]
 
-theorem recompute_zero (X : C.Transcript) : R1.recompute X 0 0 = 1 := C.run_fixed (by simp)
+theorem recompute_zero (X : C.Transcript) : R1.recompute X 0 0 = 1 := C.run_fixed rfl
 
-theorem recompute_one (X : C.Transcript) : R1.recompute X 0 1 = X 1 := C.run_fixed (by simp [P1])
+theorem recompute_one (X : C.Transcript) : R1.recompute X 0 1 = X 1 := C.run_fixed rfl
 
 theorem recompute_two (X : C.Transcript) : ((R1.recompute X 0) 2).getLsbD 0 = (X 1).getLsbD 0 := by
-  have h : R1.recompute X 0 2 = C.op 2 (R1.recompute X 0) := C.run_free (by simp [P1])
+  have h : R1.recompute X 0 2 = C.op 2 (R1.recompute X 0) := C.run_free rfl
   rw [h]
   show (BitVec.ofBool ((R1.recompute X 0 0).getLsbD 0 && (R1.recompute X 0 1).getLsbD 0)).getLsbD 0 = _
   rw [recompute_zero, recompute_one]
   simp
 
 theorem recompute_three (X : C.Transcript) : ((R1.recompute X 0) 3).getLsbD 0 = (X 1).getLsbD 0 := by
-  have h : R1.recompute X 0 3 = C.op 3 (R1.recompute X 0) := C.run_free (by simp [P1])
+  have h : R1.recompute X 0 3 = C.op 3 (R1.recompute X 0) := C.run_free rfl
   rw [h]
   show (BitVec.ofBool ((R1.recompute X 0 0).getLsbD 0 && (R1.recompute X 0 1).getLsbD 0)).getLsbD 0 = _
   rw [recompute_zero, recompute_one]
@@ -85,6 +90,11 @@ theorem ldl_pos (t : ℕ) (y : List Bool) : (1 : ℕ∞) ≤ LDL M t () y := by
 theorem ldl_eleven (t : ℕ) : LDL M t () [true, true] ≤ 1 :=
   iInf₂_le_of_le [false] rfl (by simp)
 
+/-- Source hardness at deficiency `1` for the value of gates `2` and `3`: every description is at least one bit. -/
+theorem sourceHard : Assumptions.SourceHard R1 M () 0 z 2 1 := fun _ _ =>
+  calc ENNReal.ofReal (2 - 1) ≤ ((1 : ℕ∞) : ℝ≥0∞) := by norm_num
+    _ ≤ _ := ENat.toENNReal_le.2 (ldl_pos _ _)
+
 /-- No description is shorter than two bits at deficit `0` once it is one bit: `11`'s refutes a price of two. -/
 theorem not_two_le_ldl_eleven (t : ℕ) : ¬ ENNReal.ofReal 2 ≤ (LDL M t () [true, true] : ℝ≥0∞) := by
   intro h
@@ -106,6 +116,16 @@ theorem held_O : HeldPriceAtMost R1 O 1 := fun _ U _ _ _ =>
 theorem held_WO : HeldPriceAtMost R1 (W.sum O) 2 := fun _ U _ _ _ =>
   (sum_price_le (W.sum O) (fun i => by cases i <;> rfl) U).trans (by norm_num)
 
+theorem held_W2_R1 : HeldPriceAtMost R1 W2 2 := fun _ U _ _ _ =>
+  (sum_price_le W2 (fun _ => rfl) U).trans (by norm_num)
+
+/-- `W2` is priced two bits in all, so no consumer needs state above `2`. -/
+theorem not_requires_K2 : ¬ K2.RequiresState W2 2 := by
+  intro h
+  obtain ⟨U, σ, -, -, hlt⟩ := h 0
+  have hle : ∑ i ∈ U, W2.price i ≤ 2 := (sum_price_le W2 (fun _ => rfl) U).trans (by norm_num)
+  linarith
+
 theorem slotsRead : SlotsRead B W := fun _ _ =>
   ⟨{0}, mem_singleton_self _, show ({0} : Finset (Fin 4)) ⊆ holds C {2} by decide⟩
 
@@ -120,7 +140,7 @@ theorem operand_le : ∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1
   have : ∀ o : Fin 1, (B.P.filter fun q => I.occ q = o).card ≤ 1 := by decide
   exact fun o => by exact_mod_cast this o
 
-theorem completed_R1 : completedIn B (R1.P.gates 0) = {(0, 0)} := by decide
+theorem completed_R1 : completedIn B (R1.d.𝓘.gates 0) = {(0, 0)} := by decide
 
 theorem upstream : K.Upstream := by
   intro c F hF g hg
@@ -133,7 +153,12 @@ theorem overlapWeights : K.OverlapWeights fun _ => 1 := by
   rw [sum_const, nsmul_one]
   exact_mod_cast (card_le_univ _).trans (by simp)
 
-theorem servedIn_R1 : K.servedIn (R1.P.gates 0) = univ := by
+/-- Weight `2` is over what gate `1`'s one region allows. -/
+theorem not_overlapWeights_two : ¬ K.OverlapWeights fun _ => 2 := fun h => by
+  have := h.2 (1 : Fin 4)
+  norm_num [K, Consumers.ofUses] at this
+
+theorem servedIn_R1 : K.servedIn (R1.d.𝓘.gates 0) = univ := by
   refine eq_univ_of_forall fun c => ?_
   obtain rfl : c = 0 := Subsingleton.elim c 0
   rw [Consumers.servedIn, mem_filter]
@@ -246,9 +271,7 @@ theorem StatHeldBudgetNontrivial : Guarantees.StatHeldBudgetNontrivial := by
   norm_num [Y] at this
 
 theorem RecoveredBudgetHonest : Guarantees.RecoveredBudgetHonest := by
-  refine ⟨isCK, le_rfl, fun a _ => ?_, fun a ha u => ⟨[true], by norm_num, ?_⟩, fun h => ?_, fun h => ?_⟩
-  · calc ENNReal.ofReal (2 - 1) ≤ ((1 : ℕ∞) : ℝ≥0∞) := by norm_num
-      _ ≤ _ := ENat.toENNReal_le.2 (ldl_pos _ _)
+  refine ⟨isCK, le_rfl, sourceHard, fun a ha u => ⟨[true], by norm_num, ?_⟩, fun h => ?_, fun h => ?_⟩
   · obtain rfl : u = 0 := Subsingleton.elim u 0
     have h0 : (a 0).getLsbD 0 = true := by rw [ha 0 (by decide)]; rfl
     have h2 := eval_two a
@@ -266,60 +289,80 @@ theorem RecoveredBudgetHonest : Guarantees.RecoveredBudgetHonest := by
     simp [M, decode] at hrun
 
 theorem RecoveredBudgetNontrivial : Guarantees.RecoveredBudgetNontrivial := by
-  show ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 1 + 3 : ℕ) : ℝ) + 1 + 1)
-  rw [Nat.clog_one_right]
-  norm_num
+  refine ⟨isCK, le_rfl, sourceHard, fun h => ?_, ?_⟩
+  · obtain ⟨s, hs, -⟩ := h _ honest_ones 0
+    have h0 : (0 : ℝ) ≤ s.length := Nat.cast_nonneg _
+    norm_num at hs <;> linarith
+  · show ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 1 + 3 : ℕ) : ℝ) + 1 + 1)
+    rw [Nat.clog_one_right]
+    norm_num
 
 theorem IncidenceCapHonest : Guarantees.IncidenceCapHonest :=
   ⟨slotsRead, operandsRead, pairs_le, operand_le⟩
 
 theorem IncidenceCapNontrivial : Guarantees.IncidenceCapNontrivial := by
-  unfold Guarantees.IncidenceCapNontrivial
-  rw [show completedIn B ({2} : Finset (Fin 4)) = {(0, 0)} by decide]
-  simp
+  refine ⟨operand_le, fun h => ?_, ?_⟩
+  · have key : ¬ ∀ i o : Fin 1, (B.P.filter fun q => q.1 = i ∧ I.occ q = o).card ≤ 0 := by decide
+    exact key fun i o => by exact_mod_cast h i o
+  · rw [show completedIn B ({2} : Finset (Fin 4)) = {(0, 0)} by decide]
+    norm_num [le_min_iff]
 
 theorem OperandCapSeparateHonest : Guarantees.OperandCapSeparateHonest :=
   ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_W, held_O,
     fun x y _ _ _ hy => (min_le_right _ _).trans (by linarith)⟩
 
+theorem OperandCapSeparateNontrivial : Guarantees.OperandCapSeparateNontrivial := by
+  refine ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_W, held_O, fun h => ?_, ?_⟩
+  · have := h 1 1 zero_le_one zero_le_one (by norm_num) (by norm_num)
+    norm_num at this
+  · rw [completed_R1]
+    simp
+
 theorem OperandCapJointHonest : Guarantees.OperandCapJointHonest :=
   ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_WO,
     fun x y hx _ hxy => (min_le_right _ _).trans (by linarith)⟩
 
-theorem OperandCapNontrivial : Guarantees.OperandCapNontrivial := by
-  unfold Guarantees.OperandCapNontrivial
-  rw [completed_R1]
-  simp
+theorem OperandCapJointNontrivial : Guarantees.OperandCapJointNontrivial := by
+  refine ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_WO, fun h => ?_, ?_⟩
+  · have := h 1 1 zero_le_one zero_le_one (by norm_num)
+    norm_num at this
+  · rw [completed_R1]
+    simp
 
 theorem ImportOrRecomputeHonest : Guarantees.ImportOrRecomputeHonest :=
   ⟨upstream, overlapWeights⟩
 
 theorem ImportOrRecomputeNontrivial : Guarantees.ImportOrRecomputeNontrivial := by
-  unfold Guarantees.ImportOrRecomputeNontrivial
-  rw [servedIn_R1, unregistered_R1,
-    show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ R1.P.gates 0) = ∅ by decide]
+  refine ⟨upstream, not_overlapWeights_two, ?_⟩
+  rw [servedIn_R1, unregistered_R1',
+    show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ R1.d.𝓘.gates 0) = ∅ by decide]
   norm_num
 
 theorem RecomputeByGatesHonest : Guarantees.RecomputeByGatesHonest :=
   ⟨overlapWeights, fun _ => by simp [K, Consumers.ofUses]⟩
 
 theorem RecomputeByGatesNontrivial : Guarantees.RecomputeByGatesNontrivial := by
-  unfold Guarantees.RecomputeByGatesNontrivial
-  rw [show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ ({1} : Finset (Fin 4))) = univ by decide]
-  norm_num
+  refine ⟨overlapWeights, fun h => ?_, ?_⟩
+  · have := h 0
+    norm_num [K, Consumers.ofUses] at this
+  · rw [show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ ({1} : Finset (Fin 4))) = univ by decide]
+    norm_num
 
 theorem RecomputeByStateHonest : Guarantees.RecomputeByStateHonest :=
   ⟨held_W2, requires_K2⟩
 
 theorem RecomputeByStateNontrivial : Guarantees.RecomputeByStateNontrivial :=
-  fun h => h 0 0 (by decide)
+  ⟨held_W2_R1, not_requires_K2, fun h => h 0 0 (by decide)⟩
 
 theorem WeightedProductCapHonest : Guarantees.WeightedProductCapHonest :=
   ⟨slotsRead, fun _ => zero_le_one, held_W⟩
 
 theorem WeightedProductCapNontrivial : Guarantees.WeightedProductCapNontrivial := by
-  unfold Guarantees.WeightedProductCapNontrivial
-  rw [completed_R1]
-  simp [W]
+  refine ⟨slotsRead, fun _ => zero_le_one, fun h => ?_, ?_⟩
+  · have := h 0 {0} (fun _ => {0}) (fun _ _ => mem_singleton_self _)
+      (fun _ _ => show ({0} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
+    norm_num [W] at this
+  · rw [completed_R1]
+    simp [W]
 
 end Nci.SecurityProofs

@@ -18,8 +18,8 @@ a period: the numbers below are the proved word credit's (`CircuitCreditPeriod` 
 line, where quoted, is labeled unstated.
 
 On a masked tile Definition a dead tile has the canonical empty receipt at every coin, so its whole skip always passes
-and no guess bound holds of it. So each window names its live tiles (`Period`), the per-tile claims are asked of live
-tiles only (`PerLiveTile`), and a dead tile's words count for nothing (`liveCone`, `periodMode`, `creditedLive`).
+and no guess bound holds of it. So each window names its live tiles (`WindowPlay`), the per-tile claims are asked of
+live tiles only (`PerLiveTile`), and a dead tile's words count for nothing (`liveCone`, `periodMode`, `creditedLive`).
 
 An honest period of 82,403 windows completes with probability `(1 − f)^n`, 44% at a per-window failure rate
 `f = 10^-5`, and dropping failed windows instead hides about `0.26` of the live words per dropped share. So a period
@@ -51,14 +51,14 @@ namespace Accounting.Guarantees.ComposePeriod
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The period's budget from its windows'.** For a period of `n` windows of one circuit of `M` rounds over `N` tiles,
-any play (`Period`: each window's live tiles and split stages chosen after the earlier windows' coins), share weights
-`w live` at each window's live tiles `live`, costs `a, b` and `K` draws a window: if every window's one round
+any play (`WindowPlay`: each window's live tiles and split stages chosen after the earlier windows' coins), share
+weights `w live` at each window's live tiles `live`, costs `a, b` and `K` draws a window: if every window's one round
 (`serviceGame`) has its saving per unit of detection bounded by `Λ` (`RoundGame.BudgetAt`), whatever the past, then so
 has the period's game (`periodGame`). With `budget_tail` at `n` rounds, an accepted period's total share is below
 `Λ·ln(1/δ_s)` except with probability `δ_s`. -/
 def PeriodBudget : Prop :=
   ∀ {C Ξ : Type} [Fintype C] [Fintype Ξ] {N M n : ℕ} (stg : Fin N → ℕ) (w : (Fin N → Bool) → Fin N → ℝ) (a b : ℝ)
-    (K : ℕ) (Λ : ℝ) (Wp : Period C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n),
+    (K : ℕ) (Λ : ℝ) (Wp : WindowPlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n),
     Wp.EveryWindow (fun live W => RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W (w live) a b K)) →
     RoundGame.BudgetAt Λ (periodGame stg w a b K Wp)
 
@@ -78,7 +78,7 @@ declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` wind
 committed, then the service's draw of `K_d` of the `N_p ≥ Cd.units` tiles (`drawOf`, uniform over every tile, dead ones
 included) with the proofs' coins `Ξ`, all fresh; window `w + 1`'s first coin is released after window `w`'s draw. The
 cheater's play in each window, its live tiles included, may be any function of every earlier window's coins
-(`Period`). The period is credited up to its first window with a refused proof (`Outcomes.Credited`): its accepted
+(`WindowPlay`). The period is credited up to its first window with a refused proof (`Outcomes.Credited`): its accepted
 prefix, of `j = Outcomes.prefixLen` windows. Under:
 * `CircuitWork`'s premises on the circuit, unchanged: `Scope`, `ρ`, `w_max`, the lucks `p, p0`, `a, b ≥ 0`, `Λ > 0` and
   `SplitRate` at them. They read the static `shareCone`, which bounds every window's live weights, so none reads the
@@ -92,7 +92,7 @@ prefix, of `j = Outcomes.prefixLen` windows. Under:
   soundness jointly over each window's draws at `δ_ks` (`JointSound`) and `Pins`. Binding is per window, so the period
   composes the windows' binding;
 * the four claims: (H-μ), B′ and the guess bound per live credited tile of every window, whatever the past
-  (`Period.EveryWindow` of `PerLiveTile`), and `UnitFixed` on the period's proofs at the run's modes with each dead
+  (`WindowPlay.EveryWindow` of `PerLiveTile`), and `UnitFixed` on the period's proofs at the run's modes with each dead
   tile and every window past the accepted prefix skipped whole (`periodMode`) and the tiles' words. `UnitFixed` at
   `periodMode` follows from `UnitFixed` at the windows' own modes, since reading a tile as skipped whole only shrinks
   both its sums;
@@ -129,13 +129,13 @@ admit bits are the tiles live in-circuit, so `live` may be the admit bits under 
 tile dead only loses its words. When the tally credits only rows in live tiles (under v4
 every admitted row is in one), as a share of its credit the deficit is at most `(d_F + d₀)·N_w/N_adm`, with
 `N_adm/(j·N_w) = u`: `N_adm` the prefix's admitted rows and `j·N_w` its declared rows. `live` is fixed before the
-window's first coin (`Period.window`), so the statement covers a window whose gate admits every slot before that
+window's first coin (`WindowPlay.window`), so the statement covers a window whose gate admits every slot before that
 coin. The served H1 window can admit round by round, each step's slots under its round's root after the earlier
 rounds' coins (the pouw setting `admission`: `round-0` refuses an entry after round 0, `per-round` admits in every
 round), and a window that admits after round 0 is not one this statement speaks of. Covering it would take `live` per
 round, each round's set fixed before its coin.
 
-*The period's order and its record.* `Period` makes the order the model's. The statement needs a period record from
+*The period's order and its record.* `WindowPlay` makes the order the model's. The statement needs a period record from
 which the credit is read: two signed entries in the auditor's ledger, a `period-open` and a `period-close`, cited by
 their `seq` within a published ledger head (the record is the proof service's). A period is never a label a requester
 names (one Commit could then open sessions under two labels and keep the one whose coins it likes), nor a range
@@ -163,7 +163,7 @@ refused window, is dropping failed windows (*Liveness*, below). The challenger's
 holding every window's round coins and draw in order, with `n` and the circuit in the epoch's commitment, it is the
 period's check.
 
-*One stream.* `Period` is a sequence: each window's first coin is opened after the previous window's draw. Windows
+*One stream.* `WindowPlay` is a sequence: each window's first coin is opened after the previous window's draw. Windows
 run at once on several GPUs are not one period, so a period's windows are one serving stream's, and a fleet runs one
 period per stream: adding GPUs doesn't shorten a period.
 
@@ -234,7 +234,7 @@ def CircuitWorkPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
@@ -279,7 +279,7 @@ def CircuitCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),

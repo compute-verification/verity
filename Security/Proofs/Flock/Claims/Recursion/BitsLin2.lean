@@ -23,15 +23,22 @@ proof reads `KSLin2` at `M = 2^256` and `R = 2^257` and bounds its six terms:
 * `B` costs at most `2t` (`B_cost_le`), so under `StrictBirthday` its term is `t·√γ·2^{-255.5}`
   (`Claims.Sampling.sqrt_birthday`);
 * the tails `1/(M+1)` and `(k_I + 1)/(R+1)` are below the collision terms at `t·c_Be ≥ 1`;
-* each term is at most `t·2^{-L_i}` at `λ₂`'s `i`-th entry, and six of them at most `t·2^{-(min L_i - log₂ 6)}`
-  (`sum_six_le`).
+* each term after `κ` is at most `t·2^{-L_i}` at `λ₂`'s `i`-th entry (`lin2_calls_le`), and `κ ≤ t·2^{-log₂(1/κ)}` at
+  `t ≥ 1`, so the six are at most `t·2^{-(min L_i - log₂ 6)}` (`sum_six_le`, `lin2_bound_le`).
 
-This is a bound on a number under named premises, not a proved security level. `BitsLin2` reads `StrictBirthday` at
-`B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512 collision assumptions. At the deployed records
-`λ₂ ≥ 100` (`RecDeploy.lamLin2_deployed_ge_dep`), so at the deployment's dense statements `Pr[acc ∧ ¬R] ≤ t·2^{-100}`
-holds once `KSLin2On` at `RecDeploy.DenseAt` does, which only follows from premises still open:
-`PartChecksBV`, `PartOpensB` and `DecompB` (`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads
-back). Holo statements are candidate 3's own model.
+`κ` is a session's, not a call's: the five terms after it sum to at most `t·ε` (`epsLin2`), so `KSLin2`'s right side is
+at most `κ + t·ε` (`lin2_bound_split_le`), and `bitsLin2KOn_of_ksLin2On` gives `Pr[acc ∧ ¬R] ≤ κ + t·ε` (`BitsLin2KOn`)
+wherever `bitsLin2On_of_ksLin2On` gives `t·2^{−λ₂}`. Where `κ` binds `λ₂`, as at the deployment, the split form is the
+smaller.
+
+`BitsLin2` reads `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512
+collision assumptions. At the deployed records `λ₂ ≥ 135.7` (`RecDeploy.lamLin2_deployed_ge_dep_tight`; `λ₂ ≥ 100`,
+`RecDeploy.lamLin2_deployed_ge_dep`), and at the deployment's sizes `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
+(`RecDeploy.kappa_eps_deployed`). `KSLin2On` at `RecDeploy.DenseAt` at the deployed reader is
+`Flock.Guarantees.RecursiveKS`, proved with no hypothesis (`Flock.SecurityProofs.RecursiveKS`), so there
+`Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}` and `Pr[acc ∧ ¬R] ≤ κ + t·ε` follow under those assumptions (`bitsLin2On_of_ksLin2On`,
+`bitsLin2KOn_of_ksLin2On`, with `RecDeploy.sessionAccepts`; `RecDeploy.recursiveBitsK`). Holo statements are candidate
+3's own model.
 -/
 
 namespace Claims.Recursion
@@ -417,14 +424,26 @@ theorem Ex_FdevV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (
         (drawCost H D I DO decO P x t.1 t.2 : ℝ)) :=
   Ex_Fdev_cost_le H D I DO decO x P M hk
 
-/-- **`KSLin2`'s right side at `M = 2^256` and `R = 2^257` is at most `t·2^{-λ₂}`**, at a compiled record where an
-accepted run shows each V* session accepting, under `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and
-`F0I`, each searching the inner verifier's own calls at each draw's coins (`Deploy.callsAt`) and charged their
-evaluations (`Finder.charge`): `|S(x_I)|` once (`setupLen`) and `n + v` per draw it reads, for a prover making at most
-`t ≥ 1` calls per run. Each finder's expected cost is its draws' cost (`B_I` and `Fdev` over the draws' evaluations,
-`BinnerV` and `FdevV`, differ from `Binner` and `Fdev` only in their output) plus its charge, at most
-`t·(c_Be + |S(x_I)| + 2(n + v))` times its draws' count. -/
-theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
+/-- **Route 2C's per-call error** `ε`: `lamLin2`'s five terms after `κ`'s, each as `2^{-T}`, summed. `KSLin2`'s
+right side is at most `κ + t·ε` (`lin2_bound_split_le`): `κ` once a session, `ε` once per SHA-512 call of the prover's
+run. -/
+noncomputable def epsLin2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) (x : Msg) (n v : ℕ) : ℝ :=
+  (2 : ℝ) ^ (-(255.5 - Real.logb 2 (γ D I x) / 2)) +
+    (2 : ℝ) ^ (-(256 - Real.logb 2 ((4 * I.V.k (xI D x) + 1) *
+      (cBe D x + setupLen D x + 2 * ((n + v : ℕ) : ℝ))))) +
+    (2 : ℝ) ^ (-(255 - Real.logb 2 (4 * Cp.width (xI D x) * (cBe D x + setupLen D x + 2 * ((n + v : ℕ) : ℝ))))) +
+    (2 : ℝ) ^ (-(256 - Real.logb 2 (4 * ((I.k (xI D x) : ℝ) + 1) *
+      (cBe D x + setupLen D x + 2 * ((n + v : ℕ) : ℝ))))) +
+    (2 : ℝ) ^ (-(255 - Real.logb 2 (βdev2 D I Cp x * (cBe D x + setupLen D x + 2 * ((n + v : ℕ) : ℝ)))))
+
+/-- **`KSLin2`'s five terms after `κ`, at `M = 2^256` and `R = 2^257`, are each at most `t·2^{-T}`**, `T` the term's
+bits in `lamLin2`, at a compiled record where an accepted run shows each V* session accepting, under `StrictBirthday` at
+`B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, each searching the inner verifier's own calls at each draw's
+coins (`Deploy.callsAt`) and charged their evaluations (`Finder.charge`): `|S(x_I)|` once (`setupLen`) and `n + v` per
+draw it reads, for a prover making at most `t ≥ 1` calls per run. Each finder's expected cost is its draws' cost (`B_I`
+and `Fdev` over the draws' evaluations, `BinnerV` and `FdevV`, differ from `Binner` and `Fdev` only in their output)
+plus its charge, at most `t·(c_Be + |S(x_I)| + 2(n + v))` times its draws' count. -/
+theorem lin2_calls_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (hS : SessionAccepts D)
     (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ) (ht1 : 1 ≤ t)
     (hrun : ∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) (n₀ v : ℕ)
@@ -438,15 +457,19 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
     (hF0I : ∀ R : ℕ,
       ExpectedCR H ((F0I H D I DO decO P x R).charge
         (setupLen D x + (I.k (xI D x) + 1) * (n₀ + v)))) :
-    κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) +
-        (4 * I.V.k (xI D x) + 1) * PrBinnerV H D I DO decO P x +
-        4 * Cp.width (xI D x) *
-          (PrFCI H D I DO decO Cp P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) +
-        4 * (PrF0I H D I DO decO P x (2 ^ 257) +
-          ((I.k (xI D x) : ℝ) + 1) / (((2 ^ 257 : ℕ) : ℝ) + 1)) +
-        βdev2 D I Cp x * (PrFdevV H D I DO decO P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) ≤
-      t * (2 : ℝ) ^ (-lamLin2 D I Cp x n₀ v) := by
-  unfold lamLin2
+    Real.sqrt (γ D I x * PrB H D.V P x) ≤ t * (2 : ℝ) ^ (-(255.5 - Real.logb 2 (γ D I x) / 2)) ∧
+    (4 * I.V.k (xI D x) + 1) * PrBinnerV H D I DO decO P x ≤
+      t * (2 : ℝ) ^ (-(256 - Real.logb 2 ((4 * I.V.k (xI D x) + 1) *
+        (cBe D x + setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ))))) ∧
+    4 * Cp.width (xI D x) * (PrFCI H D I DO decO Cp P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) ≤
+      t * (2 : ℝ) ^ (-(255 - Real.logb 2 (4 * Cp.width (xI D x) *
+        (cBe D x + setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ))))) ∧
+    4 * (PrF0I H D I DO decO P x (2 ^ 257) + ((I.k (xI D x) : ℝ) + 1) / (((2 ^ 257 : ℕ) : ℝ) + 1)) ≤
+      t * (2 : ℝ) ^ (-(256 - Real.logb 2 (4 * ((I.k (xI D x) : ℝ) + 1) *
+        (cBe D x + setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ))))) ∧
+    βdev2 D I Cp x * (PrFdevV H D I DO decO P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) ≤
+      t * (2 : ℝ) ^ (-(255 - Real.logb 2 (βdev2 D I Cp x *
+        (cBe D x + setupLen D x + 2 * ((n₀ + v : ℕ) : ℝ))))) := by
   generalize n₀ + v = n at hBI hFdev hFCI hF0I ⊢
   have ht1' : (1 : ℝ) ≤ t := by exact_mod_cast ht1
   have ht0 : (0 : ℝ) ≤ t := by linarith
@@ -487,7 +510,7 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
     · positivity
   have hγ0 : 0 ≤ γ D I x := by unfold γ; positivity
   have hβ0 : 0 ≤ βdev2 D I Cp x := by unfold βdev2; positivity
-  refine sum_six_le ht0 (le_two_rpow_logb_inv ht1') ?_ ?_ ?_ ?_ ?_
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · calc Real.sqrt (γ D I x * PrB H D.V P x)
         ≤ Real.sqrt (γ D I x * ((2 * (t : ℝ)) ^ 2 / 2 ^ (513 : ℝ))) :=
           Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hB hγ0)
@@ -574,6 +597,65 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
       _ = t * (βdev2 D I Cp x * (cBe D x + setupLen D x + 2 * n)) / 2 ^ (255 : ℝ) := by rw [h256]; ring
       _ ≤ _ := le_two_rpow_of_div ht0 (mul_nonneg hβ0 hc0)
 
+/-- **`KSLin2`'s right side at `M = 2^256` and `R = 2^257` is at most `t·2^{-λ₂}`**, at `lin2_calls_le`'s
+hypotheses: its five terms after `κ` (`lin2_calls_le`) and `κ ≤ t·2^{-log₂(1/κ)}` at `t ≥ 1`, six terms within
+`t·2^{-min T}` each. -/
+theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (hS : SessionAccepts D)
+    (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ) (ht1 : 1 ≤ t)
+    (hrun : ∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) (n₀ v : ℕ)
+    (hSB : ∀ hk : 0 < D.V.k x, StrictBirthday H (B H D.V P x hk))
+    (hBI : ∀ hk : 0 < I.V.k (xI D x),
+      ExpectedCR H ((BinnerV H D I DO decO P x hk).charge (setupLen D x + 2 * (n₀ + v))))
+    (hFdev : ∀ (M : ℕ) (hk : 0 < I.V.k (xI D x)),
+      ExpectedCR H ((FdevV H D I DO decO P x M hk).charge (setupLen D x + 2 * (n₀ + v))))
+    (hFCI : ∀ (M : ℕ) (hW : 0 < Cp.width (xI D x)),
+      ExpectedCR H ((FCI H D I DO decO Cp P x M hW).charge (setupLen D x + 2 * (n₀ + v))))
+    (hF0I : ∀ R : ℕ,
+      ExpectedCR H ((F0I H D I DO decO P x R).charge
+        (setupLen D x + (I.k (xI D x) + 1) * (n₀ + v)))) :
+    κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) +
+        (4 * I.V.k (xI D x) + 1) * PrBinnerV H D I DO decO P x +
+        4 * Cp.width (xI D x) *
+          (PrFCI H D I DO decO Cp P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) +
+        4 * (PrF0I H D I DO decO P x (2 ^ 257) +
+          ((I.k (xI D x) : ℝ) + 1) / (((2 ^ 257 : ℕ) : ℝ) + 1)) +
+        βdev2 D I Cp x * (PrFdevV H D I DO decO P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) ≤
+      t * (2 : ℝ) ^ (-lamLin2 D I Cp x n₀ v) := by
+  obtain ⟨h₁, h₂, h₃, h₄, h₅⟩ := lin2_calls_le H D I DO decO Cp hS x P t ht1 hrun n₀ v hSB hBI hFdev hFCI hF0I
+  have ht1' : (1 : ℝ) ≤ t := by exact_mod_cast ht1
+  unfold lamLin2
+  exact sum_six_le (Nat.cast_nonneg t) (le_two_rpow_logb_inv ht1') h₁ h₂ h₃ h₄ h₅
+
+/-- **`KSLin2`'s right side at `M = 2^256` and `R = 2^257` is at most `κ + t·ε`** (`epsLin2`), at `lin2_calls_le`'s
+hypotheses: `κ` is charged once, and only the five terms after it grow with the prover's calls. For `t ≥ 1` it is at
+most `lin2_bound_le`'s `t·2^{-λ₂}`, and below it wherever `κ` binds `λ₂`. -/
+theorem lin2_bound_split_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (hS : SessionAccepts D)
+    (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ) (ht1 : 1 ≤ t)
+    (hrun : ∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) (n₀ v : ℕ)
+    (hSB : ∀ hk : 0 < D.V.k x, StrictBirthday H (B H D.V P x hk))
+    (hBI : ∀ hk : 0 < I.V.k (xI D x),
+      ExpectedCR H ((BinnerV H D I DO decO P x hk).charge (setupLen D x + 2 * (n₀ + v))))
+    (hFdev : ∀ (M : ℕ) (hk : 0 < I.V.k (xI D x)),
+      ExpectedCR H ((FdevV H D I DO decO P x M hk).charge (setupLen D x + 2 * (n₀ + v))))
+    (hFCI : ∀ (M : ℕ) (hW : 0 < Cp.width (xI D x)),
+      ExpectedCR H ((FCI H D I DO decO Cp P x M hW).charge (setupLen D x + 2 * (n₀ + v))))
+    (hF0I : ∀ R : ℕ,
+      ExpectedCR H ((F0I H D I DO decO P x R).charge
+        (setupLen D x + (I.k (xI D x) + 1) * (n₀ + v)))) :
+    κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) +
+        (4 * I.V.k (xI D x) + 1) * PrBinnerV H D I DO decO P x +
+        4 * Cp.width (xI D x) *
+          (PrFCI H D I DO decO Cp P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) +
+        4 * (PrF0I H D I DO decO P x (2 ^ 257) +
+          ((I.k (xI D x) : ℝ) + 1) / (((2 ^ 257 : ℕ) : ℝ) + 1)) +
+        βdev2 D I Cp x * (PrFdevV H D I DO decO P x (2 ^ 256) + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) ≤
+      κ D I x + t * epsLin2 D I Cp x n₀ v := by
+  obtain ⟨h₁, h₂, h₃, h₄, h₅⟩ := lin2_calls_le H D I DO decO Cp hS x P t ht1 hrun n₀ v hSB hBI hFdev hFCI hF0I
+  unfold epsLin2
+  linarith
+
 end Bits
 
 section Route
@@ -584,11 +666,10 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
 /-- **Route 2C: `BitsLin2` from `KSLin2`**, at a compiled record where an accepted run shows each V* session accepting:
 `KSLin2` at `M = 2^256` and `R = 2^257`, and `lin2_bound_le`. `BitsLin2` takes `StrictBirthday` at `B` and `ExpectedCR`
 at `B_I`, `Fdev`, `FCI` and `F0I` as premises, the named SHA-512 collision assumptions. At the deployed records, where
-`λ₂ ≥ 100` (`RecDeploy.lamLin2_deployed_ge_dep`) and `SessionAccepts` holds (`RecDeploy.sessionAccepts`), this makes
-`Pr[acc ∧ ¬R] ≤ t·2^{-100}` follow from `KSLin2` there. At the deployment `KSLin2` is shown only at the dense
-statements, from premises still open (`RecDeploy.ksLin2_deployed_open`), so the deployed form is
-`bitsLin2On_of_ksLin2On` (`RecDeploy.bitsLin2_deployed_open`): a bound on a number under named premises, not a proved
-security level. -/
+`λ₂ ≥ 135.7` (`RecDeploy.lamLin2_deployed_ge_dep_tight`) and `SessionAccepts` holds (`RecDeploy.sessionAccepts`), this
+makes `Pr[acc ∧ ¬R] ≤ t·2^{−135.7}` follow from `KSLin2` there. At the deployment `KSLin2` is shown at the dense
+statements (`Flock.Guarantees.RecursiveKS`, `KSLin2On` at `RecDeploy.DenseAt`, proved with no hypothesis), so the
+deployed form is `bitsLin2On_of_ksLin2On`. -/
 theorem bitsLin2_of_ksLin2 [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} (hS : SessionAccepts (D.record Bd.IVStar))
     (h : KSLin2 H D Bd DO Cp) : BitsLin2 H D Bd DO Cp := by
@@ -631,6 +712,83 @@ theorem bitsLin2On_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : Rec
   intro decI hdecI decO hdecO x hx Ω _ _ P t ht1 hrun n _ v _ hSB hBI hFdev hFCI hF0I
   exact (h decI hdecI decO hdecO x hx Ω P (2 ^ 256) (2 ^ 257)).trans
     (lin2_bound_le H _ _ DO decO Cp hS x P t ht1 hrun n v hSB hBI hFdev hFCI hF0I)
+
+/-- **`BitsLin2On` with `κ` charged once a session**: at every statement `G` admits, under `BitsLin2On`'s hypotheses,
+`Pr[acc ∧ ¬R] ≤ κ(x) + t·ε(x)` (`epsLin2`) in place of `t·2^{−λ₂(x)}`. -/
+def BitsLin2KOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
+  ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (t : ℕ), 1 ≤ t →
+    (∀ ω r, (run H P (D.record Bd.IVStar).V x ω r).pLog.length +
+      (run H P (D.record Bd.IVStar).V x ω r).vLog.length ≤ t) →
+    ∀ n : ℕ, (∀ cs ws, ((D.record Bd.IVStar).innerCalls H x cs ws).length ≤ n) →
+    ∀ v : ℕ, (∀ ps, (setupCalls H (D.record Bd.IVStar) ((D.record Bd.IVStar).vstar x ps)).length ≤ v) →
+    (∀ hk : 0 < (D.record Bd.IVStar).V.k x, StrictBirthday H (B H (D.record Bd.IVStar).V P x hk)) →
+    (∀ hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x),
+      ExpectedCR H ((BinnerV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x
+        hk).charge (setupLen (D.record Bd.IVStar) x + 2 * (n + v)))) →
+    (∀ (M : ℕ) (hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x)),
+      ExpectedCR H ((FdevV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M
+        hk).charge (setupLen (D.record Bd.IVStar) x + 2 * (n + v)))) →
+    (∀ (M : ℕ) (hW : 0 < Cp.width (xI (D.record Bd.IVStar) x)),
+      ExpectedCR H ((FCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M
+        hW).charge (setupLen (D.record Bd.IVStar) x + 2 * (n + v)))) →
+    (∀ R : ℕ, ExpectedCR H ((F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x
+      R).charge (setupLen (D.record Bd.IVStar) x +
+        ((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) + 1) * (n + v)))) →
+    PrBad H (D.record Bd.IVStar).V (Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
+        (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤
+      κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x +
+        t * epsLin2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x n v
+
+/-- **Route 2C, `κ` once a session: `BitsLin2KOn` from `KSLin2On`**, at the same statements: `KSLin2` at `M = 2^256`
+and `R = 2^257`, and `lin2_bound_split_le`. -/
+theorem bitsLin2KOn_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
+    {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hS : SessionAccepts (D.record Bd.IVStar))
+    (h : KSLin2On H D Bd DO Cp G) : BitsLin2KOn H D Bd DO Cp G := by
+  intro decI hdecI decO hdecO x hx Ω _ _ P t ht1 hrun n _ v _ hSB hBI hFdev hFCI hF0I
+  exact (h decI hdecI decO hdecO x hx Ω P (2 ^ 256) (2 ^ 257)).trans
+    (lin2_bound_split_le H _ _ DO decO Cp hS x P t ht1 hrun n v hSB hBI hFdev hFCI hF0I)
+
+/-- **`BitsLin2KOn` at numbers**: at every statement `G` admits and call bounds `n ≤ N` and `v ≤ V`, under
+`BitsLin2On`'s hypotheses, `Pr[acc ∧ ¬R] ≤ a + t·e`. -/
+def BitsKAt [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (N V : ℕ) (a e : ℝ) : Prop :=
+  ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (t : ℕ), 1 ≤ t →
+    (∀ ω r, (run H P (D.record Bd.IVStar).V x ω r).pLog.length +
+      (run H P (D.record Bd.IVStar).V x ω r).vLog.length ≤ t) →
+    ∀ n : ℕ, n ≤ N → (∀ cs ws, ((D.record Bd.IVStar).innerCalls H x cs ws).length ≤ n) →
+    ∀ v : ℕ, v ≤ V → (∀ ps, (setupCalls H (D.record Bd.IVStar) ((D.record Bd.IVStar).vstar x ps)).length ≤ v) →
+    (∀ hk : 0 < (D.record Bd.IVStar).V.k x, StrictBirthday H (B H (D.record Bd.IVStar).V P x hk)) →
+    (∀ hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x),
+      ExpectedCR H ((BinnerV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x
+        hk).charge (setupLen (D.record Bd.IVStar) x + 2 * (n + v)))) →
+    (∀ (M : ℕ) (hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x)),
+      ExpectedCR H ((FdevV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M
+        hk).charge (setupLen (D.record Bd.IVStar) x + 2 * (n + v)))) →
+    (∀ (M : ℕ) (hW : 0 < Cp.width (xI (D.record Bd.IVStar) x)),
+      ExpectedCR H ((FCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M
+        hW).charge (setupLen (D.record Bd.IVStar) x + 2 * (n + v)))) →
+    (∀ R : ℕ, ExpectedCR H ((F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x
+      R).charge (setupLen (D.record Bd.IVStar) x +
+        ((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) + 1) * (n + v)))) →
+    PrBad H (D.record Bd.IVStar).V (Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
+        (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤ a + t * e
+
+/-- **`BitsKAt` from `BitsLin2KOn`** at the statements `G'` admits, wherever `κ ≤ a` and `ε ≤ e` there at
+`n ≤ N` and `v ≤ V`. -/
+theorem bitsKAt_of [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
+    {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G G' : Msg → Prop} {N V : ℕ} {a e : ℝ}
+    (h : BitsLin2KOn H D Bd DO Cp G) (hG : ∀ x, G' x → G x)
+    (hb : ∀ decI x n v, G' x → n ≤ N → v ≤ V →
+      κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x ≤ a ∧
+        epsLin2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x n v ≤ e) :
+    BitsKAt H D Bd DO Cp G' N V a e := by
+  intro decI hdecI decO hdecO x hx Ω _ _ P t ht1 hrun n hnN hn v hvV hv hSB hBI hFdev hFCI hF0I
+  obtain ⟨hκ, hε⟩ := hb decI x n v hx hnN hvV
+  exact (h decI hdecI decO hdecO x (hG x hx) Ω P t ht1 hrun n hn v hv hSB hBI hFdev hFCI hF0I).trans
+    (add_le_add hκ (mul_le_mul_of_nonneg_left hε (Nat.cast_nonneg t)))
 
 end Route
 
