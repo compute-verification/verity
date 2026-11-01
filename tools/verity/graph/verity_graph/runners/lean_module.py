@@ -26,6 +26,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -114,8 +115,8 @@ def _prepare(pkg: Path, k: str, home: Path, work: Path) -> None:
         if rc or not (pkg / ".lake" / "packages").is_dir():
             raise EnvError(f"setup.sh {pkg.relative_to(ROOT)} failed (exit {rc})")
         shutil.move(pkg / ".lake" / "packages", tmp)
-    if missing := [n for n in fetched(pkg) if not any((tmp / n / ".lake" / "build" / "lib" / "lean").glob("*"))]:
-        raise EnvError(f"the dependencies made for {pkg.relative_to(ROOT)} lack a build of {', '.join(missing)}")
+    if missing := [n for n in fetched(pkg) if not (tmp / n).is_dir()]:
+        raise EnvError(f"the dependencies made for {pkg.relative_to(ROOT)} lack {', '.join(missing)}")
     os.replace(tmp, home)
     (home / READY).write_text(k + "\n")
 
@@ -193,6 +194,18 @@ def killed(rc: int) -> bool:
     return rc < 0 or rc >= 128
 
 
+def unbuilt(errs: list[str], deps: Path | None, names: list[str]) -> bool:
+    """Whether ``errs`` say an import is a fetched package's (at ``deps``) that the env holds unbuilt: its `.olean` missing,
+    or its module prefix on no search path while the package holds its source."""
+    for e in errs if deps is not None else []:
+        if "object file" in e and str(deps) in e:
+            return True
+        if (m := re.search(r"unknown module prefix '([^']+)'", e)) and any(
+                (deps / n / m[1]).is_dir() or (deps / n / f"{m[1]}.lean").is_file() for n in names):
+            return True
+    return False
+
+
 def run(task: dict, work: Path) -> dict:
     v = task["vars"]
     mod, src = v["module"], task["id"].partition(":")[2]
@@ -233,7 +246,7 @@ def run(task: dict, work: Path) -> dict:
     if rc:
         errs = errors(work, since)
         detail |= {"error": f"lean exited {rc}", "messages": errs}
-        if killed(rc) or (deps is not None and any("object file" in e and str(deps) in e for e in errs)):
+        if killed(rc) or unbuilt(errs, deps, fetched(pkg)):
             return {"status": "error", "detail": detail}
         return {"status": "fail", "detail": detail}
 
