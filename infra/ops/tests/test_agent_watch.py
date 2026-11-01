@@ -1666,6 +1666,29 @@ def test_a_note_naming_an_agent_by_its_short_id_is_its_activity(tmp_path):
     assert [r["window"] for r in silent(tmp_path)] == [1, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
 
 
+def test_a_push_to_the_branch_a_worker_moved_its_task_to_is_its_activity(tmp_path):
+    """A worker that moved from its first branch to a successor no note or record names was rung as pushing nothing. A head
+    keeping its branch's stem and suffix is its push; a lane-only stem, or another task's branch, is not."""
+    notes = tmp_path / "notes"
+    note(notes, "lean", "a.md", f"lean worker ONE18 ({W1_}); code `cursor/lean-one18-fc8d`", age_s=2 * 3600)
+    first, moved = "cursor/lean-one18-fc8d", "cursor/lean-one18-v2-fc8d"
+    sh = FakeSh({first: "a" * 40, moved: "b" * 40, "cursor/lean-other-fc8d": "c" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+    w.sweep(lambda r: None)
+    for _ in range(6):
+        sweeps(w, clock, 60)
+        sh.heads[moved] = f"{clock.t:040.0f}"
+    assert silent(tmp_path) == [], "a push to its moved branch every hour is activity"
+    for _ in range(2):
+        sweeps(w, clock, 60)
+        sh.heads["cursor/lean-other-fc8d"] = f"{clock.t:040.0f}"
+    (rec,) = silent(tmp_path)
+    assert rec["branches"] == [first, moved], "another task's branch is not its push"
+    assert W.same_task(moved, first) and not W.same_task("cursor/lean-fc8d-x-fc8d", "cursor/lean-fc8d") \
+        and not W.same_task("cursor/lean-one18-fc8d", "cursor/lean-one18-9f2a")
+
+
 def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
     """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
     notes = tmp_path / "notes"
@@ -1893,6 +1916,24 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
                         notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=sh)
     restarted.sweep(lambda r: None)
     assert len(ended(tmp_path)) == 4, "each run rings once, across restarts"
+
+
+def test_a_run_a_worker_sent_is_its_activity(tmp_path):
+    """A worker whose only sign of life was the runs it sent (no note, no push) was rung silent and then no_step while its runs
+    ended every hour. A run counts from when it was sent (its end less its wall time), learned when it ends."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})", age_s=2 * 3600)
+    api, clock, w, sh, roots = nodes_setup(tmp_path, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, git_remote=REMOTE)
+    sh.heads["main"] = "m" * 40
+    w.sweep(lambda r: None)
+    for i in range(6):
+        sweeps(w, clock, 60)
+        node_run(roots["vy-nebius-1"], f"r20261018-2{i}0000-000{i}", clock.t, by=f"https://cursor.com/agents/{W1_}", wall_s=600)
+    sent = clock.t - 600
+    assert silent(tmp_path) == [], "a run sent every hour is activity"
+    sweeps(w, clock, 120)
+    (rec,) = silent(tmp_path)
+    assert rec["agent"] == W1_ and rec["since"] == W.iso(sent), "silence counts from its newest run's sending"
 
 
 def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_one_record_for_infra(tmp_path):
