@@ -17,7 +17,7 @@ import pytest
 
 import research.queue as Q
 from research import merge
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
 from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_queue import World, _git
@@ -154,6 +154,89 @@ def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(
     h.tick()
     pl = h.postland()
     assert pl["verified"] == main and pl["run"] is None, world.logs
+
+
+@pytest.mark.parametrize("on, n, want", [
+    ("m1,m2,m3,m4,m5", 3, ["m1,m4", "m2,m5", "m3"]),
+    ("m1,m2,m3", 3, ["m1", "m2", "m3"]),
+    ("m1,m2", 3, ["m1", "m2", "m1"]),
+    ("auto", 2, ["auto", "auto"]),
+])
+def test_each_shard_of_the_after_landing_run_gets_machines_no_other_shard_has(world, monkeypatch, on, n, want):
+    """train.sh twins only when no slot is free, so shards launched with one machine list all took its one free slot and
+    waited one behind another.  Shard K gets every Nth machine of `on` from the Kth, in `on`'s order; with fewer machines than
+    shards they share, and drive says so once."""
+    h = Review(world, monkeypatch)
+    h.d.on, h.d.after_landing_shards, machines = on, n, []
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or h.launch_post(repo, commit, machine,
+                                                                                                             steps, **kw)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert machines == want and [kw["shard"] for _, _, kw in h.posted] == [f"{k}/{n}" for k in range(1, n + 1)]
+    shared = [line for line in world.logs if "fewer machines than shards" in line]
+    if len(on.split(",")) >= n:
+        assert not shared and len({m for ms in machines for m in ms.split(",")}) == sum(len(ms.split(",")) for ms in machines)
+    else:
+        assert len(shared) == 1, world.logs
+
+
+def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
+    """A shard whose twin waits behind another shard: ci launches its run elsewhere and `drive-shard-add TIP K RUN_ID` makes it
+    one of that shard's twins, so its pass passes the shard.  Refused for another tip, a shard out of range, a run already
+    counted, a run still launching, off the control pod, and for a run whose own record isn't that shard of that commit (another
+    commit, shard or steps, no check.py, or no readable record), so a passing run of a mistyped id verifies nothing."""
+    from research.merge import DRIVE_ENV
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _main(world)
+    check = ["uv", "run", "python", "tools/verity/check/check.py", "--keep-going"]
+    steps = ["--deferred", ",".join(AFTER_LANDING)]
+    records = {"r-hand": (main, [*check, *steps, "--shard", "2/2"]),
+               "r-other-commit": (_git(world.origin, "rev-parse", "main^1"), [*check, *steps, "--shard", "2/2"]),
+               "r-other-shard": (main, [*check, *steps, "--shard", "1/2"]),
+               "r-unsharded": (main, [*check, *steps]),
+               "r-other-steps": (main, [*check, "--deferred", "lean-audit", "--shard", "2/2"]),
+               "r-no-check": (main, ["bash", "-lc", "true"])}
+    monkeypatch.setattr(merge, "fetch_run", lambda rid, names, cwd=None, refresh=False: (
+        (world.tmp, {"tree_sha": records[rid][0], "command": records[rid][1]}) if rid in records else None))
+    argv = ["drive-shard-add", main[:12], "2", "r-hand", "--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo",
+            "o/r", "--store", str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml")]
+    with pytest.raises(QueueError, match="still launching"):
+        Q.drive_shard_add(h.q, main, 2, "r-hand")
+    h.run_state.update({"r-post-0": ("done", 0, None), "r-post-1": ("waiting", None, None), "r-hand": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-hand", {s: "passed" for s in AFTER_LANDING})]
+    h.tick()
+    assert h.postland()["verified"] != main, "shard 2's only twin waits"
+    monkeypatch.delenv(DRIVE_ENV, raising=False)
+    assert Q.main(argv) == 1 and h.postland()["run"]["groups"] == [["r-post-0"], ["r-post-1"]]
+    monkeypatch.setenv(DRIVE_ENV, "1")
+    for tip, k, rid, why in ((_git(world.origin, "rev-parse", "main^1"), 2, "r-hand", "is not the tip"),
+                             (main[:6], 2, "r-hand", "is not the tip"), (main, 3, "r-hand", "shard 3 is not one of the run's 2"),
+                             (main, 0, "r-hand", "shard 0 is not one"), (main, 2, "r-post-0", "already a run"),
+                             (main, 2, "r-other-commit", f"r-other-commit checked {records['r-other-commit'][0][:12]}, not"),
+                             (main, 2, "r-other-shard", "r-other-shard is shard 1/2, not shard 2/2"),
+                             (main, 2, "r-unsharded", "r-unsharded is no shard, not shard 2/2"),
+                             (main, 2, "r-other-steps", "ran --deferred lean-audit, not"),
+                             (main, 2, "r-no-check", "is no check.py run"), (main, 2, "r-typo", "can't be read")):
+        with pytest.raises(QueueError, match=why):
+            Q.drive_shard_add(h.q, tip, k, rid)
+    with pytest.raises(SystemExit):
+        Q.main([*argv[:3], *argv[4:]])
+    assert Q.main(argv) == 0
+    run = h.postland()["run"]
+    assert run["groups"] == [["r-post-0"], ["r-post-1", "r-hand"]] and run["ids"] == ["r-post-0", "r-post-1", "r-hand"]
+    h.tick()
+    assert h.postland()["verified"] != main, "drive waits while a twin it replaced still waits: ci cancels it"
+    h.run_state["r-post-1"] = ("done", SIGTERM_RC, None)
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == main and pl["run"] is None, world.logs
+    assert h.cancelled == [] and len(h.posted) == 2
 
 
 def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_the_landings_above_it(world, monkeypatch):
@@ -850,8 +933,8 @@ def test_a_member_whose_labels_cant_be_read_stops_the_lift_not_the_tick(world, m
     assert any("the lift stops below #3: STALE" in x for x in world.logs), world.logs
 
 
-def test_reviewed_first_off_keeps_an_unreviewed_member_where_it_is(world, monkeypatch):
-    h = Review(world, monkeypatch, reviewed_first=False)
+def test_reviewed_first_and_verdict_first_off_keep_an_unreviewed_member_where_it_is(world, monkeypatch):
+    h = Review(world, monkeypatch, reviewed_first=False, verdict_first=False)
     for n, f in ((1, "a.txt"), (2, "b.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     h.tick()
@@ -1753,9 +1836,10 @@ def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_sho
     assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new) == 0
 
 
-def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pair_of_heads(world, monkeypatch):
-    """A marked PR can wait on another's unmarked commits, and that one's owner is told, the marked one's beside it.  They hear once per
-    (head of the waiting PR, head of the unmarked one), and nothing once it's admitted or when the waiting PR isn't marked."""
+def test_the_owner_of_an_unmarked_pr_marked_ones_wait_for_is_told_once_with_theirs_until_its_head_changes(world, monkeypatch):
+    """A marked PR can wait on another's unmarked commits, and that one's owner is told, in one post with every marked PR it takes
+    out and their owners.  It is told again when its head moves, not when a PR it takes out moves, and not at all for a waiting PR
+    that isn't marked; nothing once it's admitted."""
     _registry(world, "lane-5", "lane-7", "lane-8", "lane-9")
     h = Review(world, monkeypatch)
     old = world.change({"x.txt": "x = 1\n"})
@@ -1768,55 +1852,78 @@ def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pai
     world.store.add_label(label_target(7, world.gh.prs[7].head), vocab.READY, "true", "marker7")
 
     def told() -> list[str]:
-        return [p for p in h.posts if "waits for your mark" in p]
+        return [p for p in h.posts if "isn't marked ready" in p]
 
     h.tick()
     five = world.gh.prs[5].head
     assert told() == [
-        f"@ci @lane-5 @lane-7 queue: #7 (marked by marker7) waits for your mark of #5, which it contains (at {old[:12]}): mark #5 ready at "
-        f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #7 carries it",
-        f"@ci @lane-5 @lane-9 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]}): mark #5 ready at "
-        f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #9 carries it"], told()
+        f"@ci @lane-5 @lane-7 @lane-9 queue: #5 at {five[:8]} isn't marked ready. It takes out #7 (marked by marker7; at #5's "
+        f"older head {old[:12]}), #9 (marked by lane-9), which contain it. Fix: mark #5 ready at {five[:8]}, or withdraw it (`research queue "
+        f"eject 5 --reason ...`) and they carry it"], told()
     h.tick()
-    assert len(told()) == 2                                     # once per pair of heads
+    assert len(told()) == 1
     world.gh.put(7, world.change({"k.txt": "kernels 2\n"}, base=world.gh.prs[7].head))
     h.tick()
-    assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 @lane-7 queue: #7 (marked by lane-7) waits for your mark of #5")
+    assert len(told()) == 1                                     # the same root, PRs and reason
     world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=five), ready=False)
     h.tick()
     # #9 holds #5's older head now; it only shares `old` with #8, which waits for nothing of #9's or #7's (`Queue.entries`)
-    assert [p.split(": mark")[0] for p in told()[3:]] == [
-        f"@ci @lane-5 @lane-7 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
-        f"@ci @lane-5 @lane-9 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})"], told()
-    world.gh.ready.add((5, world.gh.prs[5].head))
+    new = world.gh.prs[5].head
+    assert told()[1:] == [
+        f"@ci @lane-5 @lane-7 @lane-9 queue: #5 at {new[:8]} isn't marked ready. It takes out #7 (marked by lane-7; at #5's "
+        f"older head {old[:12]}), #9 (marked by lane-9; at #5's older head {five[:12]}), which contain it. Fix: mark #5 ready at {new[:8]}, or "
+        f"withdraw it (`research queue eject 5 --reason ...`) and they carry it"], told()
+    world.gh.ready.add((5, new))
     h.tick()
-    assert len(told()) == 5 and h.q.status()[7].state != "waiting"
+    assert len(told()) == 2 and h.q.status()[7].state != "waiting"
 
 
 def test_a_marked_pr_left_out_for_an_ejected_pr_it_holds_an_older_head_of_is_told_once_with_the_fix(world, monkeypatch):
     """#7 branched from #6, which moved on and was ejected at its new head: #7 holds #6's commits at an older head, so the sync
-    leaves it off `next`.  Both owners hear once per pair of heads, with the fix, and nothing at the same heads after."""
+    leaves it off `next`.  Both owners hear once, in #6's post with the fix, and nothing while that stays."""
     _registry(world, "lane-6", "lane-7")
     h = Review(world, monkeypatch)
     old = world.change({"x.txt": "x = 1\n"})
     world.gh.put(6, old, ready=False)
     h.tick()                                                                    # drive sees #6 at `old`
     world.gh.put(6, new := world.change({"x.txt": "x = 2\n"}, base=old))
-    world.gh.put(7, seven := world.change({"k.txt": "kernels\n"}, base=old))
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))
     h.q.eject(6, "breaks circuits", "ci")
     world.gh.ready.discard((6, new))
 
     def told() -> list[str]:
-        return [p for p in h.posts if "is out of `next`" in p]
+        return [p for p in h.posts if "isn't admitted" in p]
 
     h.tick()
     assert told() == [
-        f"@ci @lane-7 @lane-6 queue: #7 at {seven[:8]} is out of `next`: it contains #6's commits (at an older head), and #6 at "
-        f"{new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready mark re-admits it)). Fix: mark #6 "
-        f"ready at {new[:8]}, drop #6's commits from #7, or ask @top to close #6"], told()
+        f"@ci @lane-6 @lane-7 queue: #6 at {new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready "
+        f"mark re-admits it)). It takes out #7 (at #6's older head {old[:12]}), which contains it. Fix: mark #6 ready at {new[:8]}, "
+        f"drop #6's commits from #7, or ask @top to close #6"], told()
     assert h.q.status()[7].state == "waiting"
     h.tick()
     assert len(told()) == 1
+
+
+def test_the_notice_names_the_older_head_a_pr_carries_never_a_merge_base_on_main(world, monkeypatch):
+    """#7 merged #5's branch at `q1`, then both merged `main` once it moved: their merge bases are `q1` and `main`'s commit, and
+    `git merge-base` may name either.  #5 hasn't landed, so #7 still waits for it, and the notice names `q1`, the head of #5's
+    whose commits #7 carries, never the commit of `main`."""
+    from test_queue import _merge
+
+    _registry(world, "lane-5", "lane-7")
+    q1 = world.change({"x.txt": "x = 1\n"})
+    seven = _merge(world, world.change({"k.txt": "kernels\n"}), q1)
+    _move_main(world, {"m.txt": "landed\n"})
+    main = _main(world)
+    five, seven = _merge(world, q1, main), _merge(world, seven, main)
+    assert main in _git(world.dev, "merge-base", "--all", seven, five).split()
+    h = Review(world, monkeypatch)
+    world.gh.put(5, five, ready=False)
+    world.gh.put(7, seven)
+    h.tick()
+    (told,) = [p for p in h.posts if "isn't marked ready" in p]
+    assert f"#5 at {five[:8]} isn't marked ready. It takes out #7 (marked by lane-7; at #5's older head {q1[:12]})" in told, told
+    assert main[:12] not in told and h.q.status()[7].state == "waiting"
 
 
 def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> list[str]:

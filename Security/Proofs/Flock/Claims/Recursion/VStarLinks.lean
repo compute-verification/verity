@@ -1630,7 +1630,7 @@ theorem agrees_layoutOf_of_ownPorts_nil {x : Msg} {r : XR} (hr : readX x = some 
 file. -/
 theorem rawIns_fields {w : FlockDeploy.Raw} {i : FlockDeploy.Ins} (h : w.ins = .ok i) :
     i.read.zk = w.zk ∧ i.read.I.circuitFile = w.circuit ∧ i.read.I.tables = w.tables ∧ i.read.I.count = w.count ∧
-      ∃ tags, Flock.Tags.find? w.statement = some tags ∧ i.read.I.tags = tags.withCoins
+      ∃ tags, Flock.Tags.byName? w.statement = some tags ∧ i.read.I.tags = tags.withCoins
         (if w.zk then .tree (Flock.Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed) := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h

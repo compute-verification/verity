@@ -101,7 +101,8 @@ owner = "vllm"
 part = "tests"
 group = 7
 # Off the merge gate and out of the plans: it reports and blocks no merge. It runs in drive's after-landing run on `main`'s
-# tip (`--deferred`, every job, its base the last verified `main`), where a red reverts the landing whose merge it names.
+# tip (`--deferred`, every job, its base the last verified `main`; sharded, in its last shard), where a red reverts the
+# landing whose merge it names.
 gate = false
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
