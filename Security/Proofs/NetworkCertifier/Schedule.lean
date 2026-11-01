@@ -1,12 +1,12 @@
 import Proofs.NetworkCertifier.Advice
 
 /-!
-# Theorem 3 for the shipped schedule: the constant-rate Program
+# Theorem 3 for the reference schedule: the constant-rate Program
 
 `docs/network-transparency/timing-channel.md` §2.4, for `constantRate` (`Definitions.NetworkCertifier.Schedule`). Its
 advice is one value per execution block, so `encard_accSeqs_le_advice` applies as it stands. Causality
-(`constantRate_rows_causal`: a step's rows read only its block's advice) sharpens it to the blocks the horizon reaches.
-Each count is stated for any finite advice per block and for strings of `k` bits (`_bits`), the protocol's.
+(`constantRate_rows_causal`: a step's rows read only its block's advice) sharpens it to the blocks the counted steps
+reach. Each count is stated for any finite advice per block and for strings of `k` bits (`_bits`), the protocol's.
 
 The witness at the end shows that the blocks bound is met exactly by a covert sender.
 -/
@@ -168,7 +168,7 @@ instance instDecidableAcceptedOneFrame (k : ℕ) (op : ℕ → List (Obs 1 1 1) 
 /-- **The blocks bound is met by a covert sender.** One execution block of two buckets (`g = 1`, `T = 2`),
 `oneFrame`, and one advice bit. The sender's secret bit delays its frame by one bucket, and each run is accepted with
 the matching bit. Every hypothesis of `EncardDecodableLeConstantRate` holds (W2, J with `D = 1`, acceptance, a wire
-decoder, a horizon of `n = 2` within `m = 1` block), and both secrets are decoded, which is the bound
+decoder, the monitoring period's `n = 2` steps within `m = 1` block), and both secrets are decoded, which is the bound
 `2^(min(E, m)·k) · D^n = 2^1 · 1^2`. -/
 theorem constantRate_joint_witness :
     Regenerates delayInteraction.certifier (fun _ o => o) ∧ JitterBounded delayInteraction.certifier 1 ∧
