@@ -25,6 +25,7 @@ import Proofs.Flock.Claims.ZK.RepCutFw
 import Proofs.Flock.Claims.ZK.FinishSwMkAny
 import Proofs.Flock.Claims.ZK.FinishFwL0
 import Proofs.Flock.SessionLoop.FinishIsLoop
+import Proofs.Flock.SessionLoop.PiopState
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
