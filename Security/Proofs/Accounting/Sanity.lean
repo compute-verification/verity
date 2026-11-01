@@ -89,7 +89,7 @@ def rateRun (N b h ρ s : ℕ) : Run (rateDevice N b ρ) Bool Unit (RateCoins N 
     fun a _ => if a then ρ else 0, fun _ => 0, fun _ => 0⟩
   fits _ _ := ⟨fun o => by cases o <;> simp [rateDevice], by simp [rateDevice], fun _ => by simp [rateDevice],
     by simp [rateDevice], by simp [rateDevice]⟩
-  accepts _ ω := (Rate.Completeness.honest N b h ρ).Accepts ω.2.1.1 ω.2.1.2.1 ω.2.1.2.2.1 ω.2.1.2.2.2
+  accepts _ ω := (Rate.Completeness.honest N b h ρ).Accepts ω.2.1.1 ω.2.1.2.1.1 ω.2.1.2.1.2 ω.2.1.2.2
 
 theorem rateRun_realizesRate (N b h ρ s cTag cEnc : ℕ) :
     Nonempty (RealizesRate (tagPrice cTag) cTag cEnc (rateRun N b h ρ s)) :=
@@ -99,10 +99,10 @@ theorem rateRun_realizesRate (N b h ρ s cTag cEnc : ℕ) :
           exact ⟨by simpa [rateRun, rateDevice] using h1, by simpa [rateRun, rateDevice] using h2⟩ }
      accepts_iff := fun _ _ _ => Iff.rfl
      ingress_le := fun _ y _ => by
-      refine le_of_eq ((Rate.Completeness.honest_accepts cTag cEnc y.1 y.2.1 y.2.2.1 y.2.2.2).2.2.1.trans ?_)
+      refine le_of_eq ((Rate.Completeness.honest_accepts cTag cEnc y.1 y.2.1.1 y.2.1.2 y.2.2).2.2.1.trans ?_)
       simp [Run.read, Schedule.read, Window.ticks, rateRun]
      compute_le := fun _ y _ => by
-      refine le_of_eq ((Rate.Completeness.honest_accepts cTag cEnc y.1 y.2.1 y.2.2.1 y.2.2.2).2.2.2.trans ?_)
+      refine le_of_eq ((Rate.Completeness.honest_accepts cTag cEnc y.1 y.2.1.1 y.2.1.2 y.2.2).2.2.2.trans ?_)
       have he : ({true, false} : Finset Bool).erase false = {true} := by decide
       simp [Run.othersWork, Schedule.work, Schedule.ops, Window.ticks, rateRun, tagPrice, he, mul_comm] }⟩
 
