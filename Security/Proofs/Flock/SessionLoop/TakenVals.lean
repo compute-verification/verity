@@ -37,6 +37,8 @@ its own and where it doesn't:
   a statement that sets up a session (`0 < refK x`) and a history past the link, `schedOf` is none exactly there.
 * `LeanRelease.LiveSched`, `LeanRelease.LiveInner`: `LiveRoundEq`'s equation at the rounds the loop schedules and at
   the inner proof's. `LeanRelease.liveRoundEq_ofLoopLink`: the two give `LiveRoundEq`.
+* `LeanRelease.outer_ne_one_ofLoopLink`: on a live history whose last coins the frame takes, the coins the openings
+  open meet `RowsOK`'s outer-coin condition, so `RowsOK` gives the rows there.
 -/
 
 namespace FlockSoundness.ZK.Table
@@ -347,6 +349,45 @@ theorem liveRoundEq_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
   · exact hI ν t κ m₀ ρ₀ ops v hpos hlt hl hok href hv
       ((Loop.schedOf_eq_none_iff (by omega) (by simpa using hpos)).mp hsc)
   · exact hS ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hv hsc
+
+/-- **The opened coins meet `RowsOK`'s outer-coin condition**: at a statement the loop serves, on a live history of at
+most `refK x` openings whose last coins the frame takes, no zerocheck outer coin of a table at the coins the openings
+open is `1`. One whose slot is among the openings the frame refused at `1` (`outer_unrefused`); one past them is the
+default coin's `0`. -/
+theorem outer_ne_one_ofLoopLink
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (wk : (ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hSv : Loop.Serves x)
+    (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
+    (κ : (ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
+    (hlive : (ofLoopLink L₀ src real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hr : (ofLoopLink L₀ src real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false) (j : Fin (Masked.jOf x)) :
+    ∀ (r : Fin 2), ∀ y ∈ (Masked.tabC Masked.PE x j).rOuter (Masked.czExe Masked.PE x
+      ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) j) r, y ≠ 1 := by
+  intro r y hy
+  obtain ⟨e, he, rfl⟩ := Masked.outerReads_czExe Masked.PE x _ j r y hy
+  have hj := Masked.lt_of_jOf j
+  rcases Nat.lt_or_ge (Masked.outerSlot x j.val r.val) ops.length with hb | hb
+  · exact outer_unrefused Masked.dataE (withFiles (withLink L₀ src) src) real wk x w (Masked.live_of_lt j) hSv ρ κ
+      m₀ ρ₀ ops hl hlive hr hj r.isLt hb (by rw [getElem!_pos (Masked.stsOf x) j.val hj]; exact he)
+  · unfold Masked.outerAt
+    split
+    · show ((ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2).getD
+        (Masked.outerSlot x j.val r.val) default).at e ≠ 1
+      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by rw [List.length_map]; exact hb), Option.getD_none]
+      unfold FlockDeploy.Coin.at
+      split
+      · show (0 : F128) ≠ 1
+        decide
+      · decide
+    · decide
 
 end LeanRelease
 
