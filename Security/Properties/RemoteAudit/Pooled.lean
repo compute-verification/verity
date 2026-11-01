@@ -4,7 +4,7 @@ import RemoteAudit.Line
 /-!
 # The verifier's pooled bound covers the draw's (`RemoteAudit.Pooled`)
 
-`RemoteAudit.Pooled.pooled` (`verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Pooled.lean`, which `pooled.py`
+`RemoteAudit.Pooled.pooled` (`verity/core/protocols/poub/lean/RemoteAudit/Pooled.lean`, which `pooled.py`
 is held to by the difftest, and whose W the memory line reads: `RemoteAudit.Line.line`) computes a session's pooled
 bound from its windows' receipts `U_t` and draws `s_t` at `δ`, in exact rationals: the budget from above by a certified
 rational root, and W by the fractional knapsack's greedy. The draw's model reads the bound as a supremum

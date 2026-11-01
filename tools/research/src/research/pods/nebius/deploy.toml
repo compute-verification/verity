@@ -304,7 +304,7 @@ owner = "infra"
 # through vy-verifier-gate (benchmarks/live_verifier/host.py): once installed, `sudo vy-verifier-setup GATE_KEYS TUNNEL_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, LANE `-` for a key that reads only; TUNNEL_KEYS: `prover|challenger ADDRESS TYPE
 # BASE64 [COMMENT]`, the audited node's tunnel key and vy-challenger-1's; setup.sh), `sudo systemctl reload ssh`, then
-# `git archive COMMIT verity benchmarks/remote_session benchmarks/live_verifier tools/research/src/research
+# `git archive COMMIT verity benchmarks/poub_session benchmarks/live_verifier tools/research/src/research
 # tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT`. /etc/vy/verifier.json is the host's challenger
 # and each audited node's capacities; the store's credential is infra's, in /etc/vy/verifier-store.env (root's, 0600).
 

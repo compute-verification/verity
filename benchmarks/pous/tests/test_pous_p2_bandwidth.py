@@ -26,7 +26,7 @@ from p2_v1 import bandwidth as B
 
 from verity.core.protocols.pous import verifier as V
 from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.remote_bandwidth import p2, p2_party, receipts
+from verity.core.protocols.poub import p2, p2_party, receipts
 
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
 
@@ -129,7 +129,7 @@ def test_the_tracked_registrations_plan_is_the_real_layouts_tensors_units() -> N
 def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_layer_rejected(tmp_path) -> None:
     reg = B.toy(tmp_path / "toy")
     assert B.registration_of_store(tmp_path / "toy" / "store", reg.node) == reg
-    verifier = (f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party "
+    verifier = (f"{sys.executable} -m verity.core.protocols.poub.p2_party "
                 f"--registration {tmp_path / 'toy' / 'registration.json'} --stdio")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--registration", str(tmp_path / "toy" / "registration.json"),
@@ -156,7 +156,7 @@ def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_pa
     assert doc["plan"] == [[0, reg.blocks]]
     path = tmp_path / "fewer.json"
     path.write_text(json.dumps(doc | {"plan": [[0, 2], [4, 3]]}))
-    verifier = f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party --registration {path} --stdio"
+    verifier = f"{sys.executable} -m verity.core.protocols.poub.p2_party --registration {path} --stdio"
     assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
                    "--node", reg.node.decode(), "--registration", str(path), "--verifier", verifier, "--device", "cpu",
                    "--ref-decode", "--samples", "64", "--window-s", "0.001", "--deadline-s", "0.001", "--workers", "2",
@@ -171,7 +171,7 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
     """The gate's shape: `p2_party --listen --sessions 2` on the auditor, the honest prover and then the cheat at
     `--connect`, each answer a line of `--answer`."""
     reg = B.toy(tmp_path / "toy")
-    verifier = subprocess.Popen([sys.executable, "-m", "verity.core.protocols.remote_bandwidth.p2_party",
+    verifier = subprocess.Popen([sys.executable, "-m", "verity.core.protocols.poub.p2_party",
                                  "--registration", str(tmp_path / "toy" / "registration.json"), "--listen",
                                  "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl")],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=ROOT)
@@ -195,7 +195,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
     to the session's, and which the device's answers.jsonl keeps."""
     reg = B.toy(tmp_path / "toy")
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.poub.p2_party "
              f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
              f"--registration {tmp_path / 'toy' / 'registration.json'}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),

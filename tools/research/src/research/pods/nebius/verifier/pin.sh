@@ -9,7 +9,7 @@
 # /opt/vy-verifier/current -> COMMIT. A run runs from the tree it was requested at: host.py refuses one whose pin moved. Rerunning
 # it for an installed COMMIT skips the unpack and reads no TAR, and logs the pin again.
 #
-#   git archive COMMIT verity benchmarks/remote_session benchmarks/live_verifier tools/research/src/research \
+#   git archive COMMIT verity benchmarks/poub_session benchmarks/live_verifier tools/research/src/research \
 #     tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT
 set -euo pipefail
 die() { echo "vy-verifier-pin: $*" >&2; exit "${2:-1}"; }
@@ -24,14 +24,14 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in benchmarks/live_verifier/host.py benchmarks/remote_session/verifier.py tools/research/src/research/store/cli.py; do
+  for f in benchmarks/live_verifier/host.py benchmarks/poub_session/verifier.py tools/research/src/research/store/cli.py; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-pkg=$T/verity/core/protocols/remote_bandwidth/lean
+pkg=$T/verity/core/protocols/poub/lean
 tc=$(tr -d '[:space:]' < "$pkg/lean-toolchain")
 [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$pkg/lean-toolchain: $tc"
 if [ ! -x "$ELAN_HOME/bin/elan" ]; then

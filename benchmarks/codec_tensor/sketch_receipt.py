@@ -23,7 +23,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.core.protocols.remote_bandwidth import receipts as rb
+from verity.core.protocols.poub import receipts as rb
 
 ROWS, ROWS64 = rb.ROWS                    # k_s: the 16-row kernels' and the 64-row ones'
 BLOCK = rb.BLOCK_BYTES

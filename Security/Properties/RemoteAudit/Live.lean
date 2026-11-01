@@ -20,7 +20,7 @@ settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
   `Shared.run g` on the events its transcript records, from `State.init` on any coins that agree with the ones the
   challenger sent (every coin the session holds, of a coin's size, and every append coin): every result the same,
   and the same session but for its coins. So its outcome and record (`State.outcome`, `State.summary`, which read no
-  coin) are `Shared.run g`'s, and a transcript that pads the coins never sent (`benchmarks/remote_session/
+  coin) are `Shared.run g`'s, and a transcript that pads the coins never sent (`benchmarks/poub_session/
   lean_verifier.py`) replays to the process's verdict. At `g = 1` that is `Session.run` (`RemoteAudit.Shared.run_one`).
 
 It needs `1 ≤ g` and `1 ≤ min_passes` (`Properties.RemoteAudit.Coins`: with none, an empty window drawn at its deadline

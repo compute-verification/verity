@@ -79,7 +79,7 @@ Each `--from` source is one of these, or a gzipped tar of one:
   `vy-challenger-gate fetch RUN` returns the run as a gzipped tar (`request.json`, `out/`, `end.json`). One gate run is one
   strategy, so fetch the honest run and one run per tamper, and pass them all:
   `--from honest.tgz late.tgz extra.tgz`. Reach the gate with your own gate key, as
-  `benchmarks/remote_session/auditor.sh` does, or with the shared key, which reads only (`status`, `fetch`):
+  `benchmarks/poub_session/auditor.sh` does, or with the shared key, which reads only (`status`, `fetch`):
   `ssh -o IdentitiesOnly=yes -i KEY research@HOST fetch RUN > RUN.tgz`. `status RUN` gives its `end.json`, whose SHA-512
   of each file of `out/` the tarball must match. The report's source line names the gate's host, each gate run and the
   main commit the gate was pinned to.

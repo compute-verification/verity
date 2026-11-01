@@ -1,12 +1,12 @@
 """The device reader (`reader.cu`): the PoUB driver's receipts, leaves and receipt tree on the GPU, gated
-byte for byte against the driver (`verity/core/protocols/remote_bandwidth/receipts.py`) and timed against a read of
+byte for byte against the driver (`verity/core/protocols/poub/receipts.py`) and timed against a read of
 the same bytes.
 
 ~~~text
 segment     a device reader's part of a pass: count = 16 · 2^h chunks of one region, read in order from position
-            p = a multiple of count (`verity_vllm.protocols.remote_bandwidth.registry.aligned`); its root is the node (h + 4 levels above
+            p = a multiple of count (`verity_vllm.protocols.poub.registry.aligned`); its root is the node (h + 4 levels above
             the chunks) end_pass takes by segment number, and `open` serves an opening's leaf receipts and leaf path
-salts       the store's PRF, `remote_bandwidth.store.store_salt(key, seed, leaf)` (`NodeMemory.salt`), so none is kept
+salts       the store's PRF, `poub.store.store_salt(key, seed, leaf)` (`NodeMemory.salt`), so none is kept
 ~~~
 
 sketch-sha512 receipts (`receipts.SketchReceipter`) run at k_s = 16 rows (dp4a) and at k_s = 64, a chunk's 2^−64 (int8 tensor
@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
 from benchmarks.word_codec import cuda_lib  # noqa: E402  (after the root's path entry, which it needs)
-from verity.core.protocols.remote_bandwidth import receipts as rb, store
+from verity.core.protocols.poub import receipts as rb, store
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message

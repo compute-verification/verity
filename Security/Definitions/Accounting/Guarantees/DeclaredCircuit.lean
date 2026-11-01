@@ -138,7 +138,7 @@ moved, what the step reads from appended blocks. The shortfall is a share of the
 `W` (the requirement's wiring) are one circuit (requirement.py and census/v1 read one IR), that the memory map and the
 plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`: `core_requirement`'s one-sided check, and the
 memory-map and plan units), that the payloads at `addr` are the store's blocks, each at its own append (the appends'
-digests, by `remote_bandwidth`'s Replay), that each pass's plan is its step's, and that the pass ran in its
+digests, by `poub`'s Replay), that each pass's plan is its step's, and that the pass ran in its
 ticks (a certifier stamping step records and pass roots on one clock). A credit across circuits needs their credited blocks
 disjoint, and a device tick credited to a pass here and to another window elsewhere is joint accounting's. Which of the
 node's devices held the tiles, and that the bits taken from outside the store are every bit crossing the node's
@@ -149,7 +149,7 @@ node that registers `R` times pays `δ_G` once a registration.
 threshold is then negative. The carrier term grows with the carrier's life, `128·L·P·c/E` of the store with `P·N·4096`
 bytes certified a window and `c = caps.total`, so `G` is useful only when the life `L·T_w` is short: at caps
 (c = 0.442 for 8B, 0.0918 for 70B TP8, 61 ms passes) `ε` a session is 10% at a life of 35 s for 8B and 171 s for 70B.
-At remote_bandwidth's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B at 1 s windows (`L = 30`, the same
+At poub's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B at 1 s windows (`L = 30`, the same
 492 passes as a paced session of 12 groups of `k = 82` a 60 s stretch at `L = 6`). At the stated 60 s window
 `⌊D/T_w⌋ = 0`, so `L = L_min`: 16.25% and 4.16% at `L = 1`, and 31.52% and 7.33% at `L = 2` for a prover that defers
 residency, as the vLLM serving store does (the earlier
