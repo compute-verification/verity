@@ -10,8 +10,9 @@ failed rep's place (`scheduled`). This file says which round that is and splits 
   (`real`), and `L₀`'s where the loop schedules none.
 * `Loop.InnerAt`: where it schedules none at a session's history: the round is rep stream `k`'s round `i`
   (`CoinLayer.locate`) at or past the end of the rounds `Loop.schedSoFar` schedules on the stream's table at the coins
-  it answered, the inner proof's (`Frame.INNER_ROUNDS` of them, round `i - sched.size`). `Loop.schedOf_eq_none_iff`: at
-  a statement that sets up a session (`0 < refK x`) and a history past the link, `schedOf` is none exactly there.
+  it answered, the inner proof's (`Frame.INNER_ROUNDS` of them, round `i - sched.size`: `Loop.InnerRound`,
+  `Loop.innerAt_iff`). `Loop.schedOf_eq_none_iff`: at a statement that sets up a session (`0 < refK x`) and a history
+  past the link, `schedOf` is none exactly there.
   `LeanRelease.scheduled_inner0`: at its first round `LoopInnerRound0` gives `L₀`'s round.
 * `LeanRelease.FillSched`, `LeanRelease.FillInner`: `FillRoundEq`'s equation at the rounds the loop schedules
   (`schedOf`'s round, released as a stopped rep's) and at the inner proof's (`L₀`'s round, where `InnerAt` holds).
@@ -51,6 +52,28 @@ def InnerAt (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List Flo
         (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
       hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) = .ok sched ∧
     sched.size ≤ i
+
+/-- **The inner proof's round `n`** after the decoded coins `cs` at `x`: `InnerAt` at rep stream `k`'s round `i`, `n`
+rounds past the `sched.size` rounds `schedSoFar` schedules there. -/
+def InnerRound (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List FlockDeploy.Coin) (n : ℕ) : Prop :=
+  ∃ (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) (q k i : ℕ) (t : Tab) (hi : Array ByteArray)
+    (sched : Array (ByteArray × ℕ)),
+    FlockDeploy.setupOf true x = some (s0, spec, sts) ∧ cs.length = q + 1 ∧
+    CoinLayer.locate (roundsOf spec sts) 0 q = (k, i) ∧ real k = .ok (t, hi) ∧
+    schedSoFar t (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
+      (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
+        (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
+      hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) = .ok sched ∧
+    i = sched.size + n
+
+/-- `InnerAt` is the inner proof's round `n` for some `n`. -/
+theorem innerAt_iff {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : List FlockDeploy.Coin} :
+    InnerAt real x cs ↔ ∃ n, InnerRound real x cs n := by
+  constructor
+  · rintro ⟨s0, spec, sts, q, k, i, t, hi, sched, hs, hq, hl, hr, hss, hle⟩
+    exact ⟨i - sched.size, s0, spec, sts, q, k, i, t, hi, sched, hs, hq, hl, hr, hss, by omega⟩
+  · rintro ⟨n, s0, spec, sts, q, k, i, t, hi, sched, hs, hq, hl, hr, hss, hn⟩
+    exact ⟨s0, spec, sts, q, k, i, t, hi, sched, hs, hq, hl, hr, hss, by omega⟩
 
 /-- `schedOf` at a session's history past the link, rep stream `k`'s round `i`: the stream's scheduled round `i` on its
 table, the empty round where its table or schedule is refused. -/
