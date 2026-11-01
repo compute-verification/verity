@@ -11,8 +11,9 @@
 # statement-<mode>.txt, serve-<mode>.log, prove-<mode>.txt and .err, challenger-<mode>/ (its record, releases.jsonl and
 # audit.json), lean-<mode>.log (its VERDICT line), verdicts.json.
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
-# env: CPUS=16  LAYOUT=iv  MODES="m0 zk"  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget where /workspace isn't
-#      writable (the prover build and its venv, shared as 76-read-gadget.sh's)
+# env: CPUS=16  LAYOUT=iv  MODES="m0 zk"  FLOCK_WORK=/workspace, or where /workspace isn't writable
+#      /workspace/jobs/pc-read-gadget (node 1, shared as 76-read-gadget.sh's) else /workspace/cache/tmpl-unit (the prover
+#      build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${TU_PINNED:-}" ]; then
@@ -27,7 +28,9 @@ if [ -z "${TU_PINNED:-}" ]; then
 fi
 export FC_COINS=tree
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/tmpl-unit}/out; mkdir -p $O
-[ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/jobs/pc-read-gadget
+if [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ]; then
+  if [ -d /workspace/jobs ]; then export FLOCK_WORK=/workspace/jobs/pc-read-gadget; else export FLOCK_WORK=/workspace/cache/tmpl-unit; fi
+fi
 FW=${FLOCK_WORK:-/workspace}; W=$FW/flock-circuit; mkdir -p $W || exit 1
 [ -w "$HOME" ] || { export HOME=$FW/home; mkdir -p $HOME; }
 S=$FW/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S || exit 1
