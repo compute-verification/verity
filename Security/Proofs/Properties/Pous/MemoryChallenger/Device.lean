@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Pous.MemoryChallenger.Header
 public import Proofs.Properties.Pous.MemoryChallenger.Inputs
+import all Init.Data.String.Defs
 
 /-!
 # A verifying signature is the device's, or the run carries a break

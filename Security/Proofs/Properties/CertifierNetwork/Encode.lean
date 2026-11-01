@@ -4,6 +4,7 @@ public import Proofs.Properties.CertifierNetwork.Defs
 public import Proofs.Properties.CertifierDevice.Issuer
 public import Proofs.Properties.CertifierDevice.Basic
 public import Proofs.Properties.NetworkCertifier.Grid
+import all Init.Data.String.Defs
 
 /-!
 # A device's record has an encoding

@@ -4,6 +4,9 @@ public import Batteries.Tactic.OpenPrivate
 public import Properties.Pouw.LiveSalt
 public import Std.Data.String.ToNat
 import all Init.Data.Array.QSort.Basic
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Int.Repr
 
 /-!
 # The coins' binding has one canonical form per layout
@@ -16,6 +19,8 @@ import all Init.Data.Array.QSort.Basic
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open private hex4 from Flock.Canon
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic

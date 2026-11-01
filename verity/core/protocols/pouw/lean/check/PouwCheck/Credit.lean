@@ -115,6 +115,8 @@ Every refusal is (code, why), the first rule the input breaks, with Python's wor
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCheck.Credit
 
