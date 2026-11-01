@@ -1190,9 +1190,8 @@ class Driver:
     def follow_postland(self, drive: dict) -> None:
         """The post-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
         exited 75, or was stopped), the next `start_postland` launches it again.  One already failing under `--keep-going` is
-        named red at once (`_red`), and cancelled once only its `TAIL` is left.  A run that failed only on failures an
-        allowance of its tip's policy covers (`_only_allowed`) is a pass.  A pass verifies its tip only when every step it ran
-        passed in it, or failed only on allowed failures (`_unrun`).  One still launching (`_resolve`) runs; one whose train.sh registered no run is told to
+        named red at once (`_red`), and cancelled once only its `TAIL` is left.  A pass verifies its tip only when every step it
+        ran passed in it (`_unrun`).  One still launching (`_resolve`) runs; one whose train.sh registered no run is told to
         `CI`, and launched again."""
         if not (pl := drive.get("postland")) or not (run := pl.get("run")):
             return
