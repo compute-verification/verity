@@ -67,7 +67,7 @@ from . import ir_lower as IL
 
 FORMAT = "flock-circuit"
 STATEMENT = "verity/flock-circuit"
-#: The templated statement (PRF-133, the Lean verifier's ``Tags.circuitTmpl``): `compose`'s ``layout``
+#: The templated statement (the Lean verifier's ``Tags.circuitTmpl``): `compose`'s ``layout``
 TMPL_FORMAT = "flock-circuit/tmpl"
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -80,8 +80,8 @@ OWNER = -1
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
 #: identity and swappable: ``hm96-sha512/v1`` (``verity.ml.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
 #: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
-#: Salts are the OS's own bytes, every leaf's 192 read a tree at a time in bulk (``zk_hooks::LeafSalts``; Daniel, 9 Oct, decision
-#: 4(a)), never reused or stored, as ``salt_source`` says. The Lean verifier pins this object (``Flock/Tags.lean``'s
+#: Salts are the OS's own bytes, every leaf's 192 read a tree at a time in bulk (``zk_hooks::LeafSalts``),
+#: never reused or stored, as ``salt_source`` says. The Lean verifier pins this object (``Flock/Tags.lean``'s
 #: ``leafSchemeHm96Os``; statements composed up to verity ``b3727bd9`` name a per-proof ChaCha20 key, ``@b3727bd9``), and
 #: ``live/src/circuit.rs``'s ``leaf_scheme`` is the same object. The level-0 salts are shared by
 #: both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
@@ -102,8 +102,8 @@ SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
 SHA_LOG = HM_LOG = 18
 MASK_LOG = 14
 K_MAX = 27
-#: The partition is a named query of the program, P = Q(C) (Daniel, 2026-09-27): its digest is SHA-512 over the tag and
-#: canon({program, query, version, params}). Until core's verity/partition/v1 lands (#111), the query here is this lowering's
+#: The partition is a named query of the program, P = Q(C): its digest is SHA-512 over the tag and
+#: canon({program, query, version, params}). Without a verity/partition/v1 object, the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
 PARTITION_RULE = "flock-circuit/unit-cover/v0"
 SALT_BYTES, BC_BYTES = 192, 128
@@ -161,11 +161,11 @@ def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
     """META ``program_digests``: core's ``program_digest`` of the subcircuit's Definition at the instance statics, keyed by its
     descriptor id (``verity.ml.circuits.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
     reference no core Definition wraps keeps its own key."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
 
     digests = sub.program_digests([statics or {}])
     try:
-        key = _spec_id(sub.definition(**(statics or {})))
+        key = descriptor_id(sub.definition(**(statics or {})))
     except (AssertionError, AttributeError, TypeError, ValueError):
         return digests
     (value,) = digests.values()
@@ -549,13 +549,13 @@ def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> lis
 
 
 def _type_bits(t) -> int:
-    from verity.ml.circuits.types import Array, Record, Value
+    from verity.ml.circuits.types import Array, RecordType, Value
 
     if isinstance(t, Value):
         return t.w
     if isinstance(t, Array):
         return t.n * _type_bits(t.elem)
-    return sum(_type_bits(f[1] if isinstance(t, Record) else f) for f in t.fields)
+    return sum(_type_bits(f[1] if isinstance(t, RecordType) else f) for f in t.fields)
 
 
 def unit_witness(definition) -> dict:
@@ -628,7 +628,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     are ``out_net_ports`` of ``[slot, port]``.
 
     ``layout`` (a layout mode, `tmpl.mode_of`; TMPL1's is ``iv/hybrid/4``): the templated statement
-    (:data:`TMPL_STATEMENT`, PRF-133, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
+    (:data:`TMPL_STATEMENT`, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
     the unit's ``flock-ir-tmpl/v2`` template (`tmpl.emit` of the flat unit, or a structural lowering's own template,
     `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
     META ``template`` its lines and ``layout`` the mode, in place of the ``CIRCUIT unit`` section and the flat META

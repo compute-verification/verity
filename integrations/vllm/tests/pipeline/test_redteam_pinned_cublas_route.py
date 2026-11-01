@@ -107,7 +107,7 @@ def test_the_switched_rank_is_refused_naming_every_departure():
     ok, why = _gates(SWITCHED)
     assert ok is False
     assert why.startswith("cuBLAS route pin (rank 0): CublasSplitKGemmF32Out_v1 x153600, CublasSplitKGemm_v1 x48216 bound at the routes of "
-                          "r20261017-191356-49a9, served otherwise: ")
+                          f"{BC.CUBLAS_ROUTES['run_record']}, served otherwise: ")
     assert why.split("served otherwise: ")[1].split("; ") == [
         "allow_fp16_reduced_precision_reduction '(False, False)' (pin: 'True')",
         "allow_bf16_reduced_precision_reduction '(False, False)' (pin: 'True')",
@@ -150,4 +150,4 @@ def test_the_gate_reads_the_deferred_replays_facts_too():
     cblock: dict = {}
     ok, why = replay_gates(cblock, sr, {"result": True}, True, None, rank=3, replay_on=True, required=False, xrank_families=None)
     assert ok is False and why.startswith("cuBLAS route pin (rank 3): CublasSplitKGemmF32Out_v1 x9")
-    assert cblock["cublas_route_pin"]["departures"] and cblock["cublas_route_pin"]["pin"] == BC.CUBLAS_ROUTES["run"]
+    assert cblock["cublas_route_pin"]["departures"] and cblock["cublas_route_pin"]["pin"] == BC.CUBLAS_ROUTES["run_record"]

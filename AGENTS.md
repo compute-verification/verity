@@ -157,7 +157,8 @@ unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, runs the full check on its tip itself,
+only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
+soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
 and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
 reverted on `checked` (how a PR lands: the team skill).
 

@@ -3,9 +3,10 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 /-!
 # The facts read off `Spec`
 
-What `Discharge/HiddenExec` reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags, its leaf scheme
-(`setupHidden_hm96`), its well-formedness (`setupHidden_wf`: `StmtWF`, `RegionsWF`) and the drawn public file; and of
-`HmOut.parse`, that an untyped one is `HmRow.parse`'s circuit then `HmOut.checkRows` (`parse_untyped`).
+What `Discharge/HiddenExec` reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags and the drawn public file (its
+leaf scheme and well-formedness, `setupHidden_hm96` and `setupHidden_wf`, are `Hidden.Commit`'s, on the committed
+circuit); and of `HmOut.parse`, that an untyped one is `HmRow.parse`'s circuit then `HmOut.checkRows`
+(`parse_untyped`).
 -/
 
 open Flock FlockLevel3
@@ -28,7 +29,9 @@ theorem parse_cases {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) :
         (∃ k b tm c₀, HmRow.parse tags cf tables (tmpl := some tm) = .ok c₀ ∧
           c = { c₀ with typed := some b, cls := some k }) ∨
         ∃ k unit c₀, HmRow.parse tags cf tables (pre := #[("unit", unit)]) = .ok c₀ ∧ c = { c₀ with cls := some k }) := by
+  have hi := HmOut.parse_isTmpl h
   unfold HmOut.parse at h
+  rw [if_neg (by simp [hi])] at h
   dsimp only at h
   cases ht : tags.typed
   · simp only [ht, Bool.not_false, ↓reduceIte] at h
@@ -59,7 +62,9 @@ theorem parse_cases {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) :
 /-- **`parse_untyped`**: an untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows`. -/
 theorem parse_untyped {c : Circuit} (ht : tags.typed = false) (h : HmOut.parse tags cf tables = .ok c) :
     HmRow.parse tags cf tables = .ok c ∧ HmOut.checkRows c = .ok () := by
+  have hi := HmOut.parse_isTmpl h
   unfold HmOut.parse at h
+  rw [if_neg (by simp [hi])] at h
   simp only [ht, Bool.not_false, ↓reduceIte] at h
   obtain ⟨c₀, hc₀, h⟩ := ebind_ok h
   obtain ⟨u, hu, h⟩ := ebind_ok h
@@ -102,32 +107,6 @@ theorem regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : HmOut
 theorem setupHidden_tags (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     st.tags = tags :=
   (setupHidden_spec' h).tagsEq
-
-/-- **The leaf scheme**: under `hm96-sha512/v1` tags, a statement `Stmt.setupHidden` accepts commits its rows with
-`hm96Sha512`. -/
-theorem setupHidden_hm96 (hl : tags.merkleLeaf = "hm96-sha512/v1")
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    st.merkle = MerkleScheme.hm96Sha512 := by
-  have s := setupHidden_spec' h
-  have hf := s.merkle
-  rw [parse_leafScheme s.parse, hl, Exec.find_hm96] at hf
-  exact (Option.some.inj hf).symm
-
-/-- **The leaf scheme, plain**: under tags with plain SHA-512 leaves, a statement `Stmt.setupHidden` accepts commits its
-rows with `MerkleScheme.sha512 "flock-leaf/sha512-unsalted"`. -/
-theorem setupHidden_plain (hl : tags.merkleLeaf = "flock-leaf/sha512-unsalted")
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
-  have s := setupHidden_spec' h
-  have hf := s.merkle
-  rw [parse_leafScheme s.parse, hl, Exec.find_plain] at hf
-  exact (Option.some.inj hf).symm
-
-/-- **The statement is well formed** (`StmtWF`, `RegionsWF`), as `setupH_wf` for `Stmt.setupH`. -/
-theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    StmtWF st ∧ RegionsWF st := by
-  have s := setupHidden_spec' h
-  exact ⟨wf_of_facts (parse_slots s.parse) (hm_pin_ok s.pin) s.m, s.m, s.mPts, regions_wf s.regions⟩
 
 /-- `Spec.pub`, at a draw. -/
 theorem setupHidden_drawn {d : Json}

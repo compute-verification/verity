@@ -133,7 +133,8 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     rec = json.loads((tmp_path / "registration.json").read_text())
     assert (rec["format"], rec["population"], rec["partition"], rec["window"]["kind"], rec["window"]["run"]) == (
         R.FORMAT, 13, w.partition_digest, "served", RUN)
-    assert rec["window"]["index"] == hashlib.sha512((tmp_path / "index.json").read_bytes()).hexdigest() == win["index_sha512"]
+    ib, salt = (tmp_path / "index.json").read_bytes(), (tmp_path / SR.INDEX_SALT).read_bytes()
+    assert rec["window"]["index_leaf"] == SR.index_leaf(ib, salt).hex() == win["index_leaf"] and "index" not in rec["window"]
     assert win["registration_digest"] == R.digest(rec) and rec["program"] == P.program_digest(w.program)
     leaves = {r["port"]: r["leaves"] for r in rec["roots"]}
     assert leaves == {f"{TEMPLATES[0]}/{p}": 9 for p in ("x", "cs", "out")} | {f"{TEMPLATES[1]}/{p}": 4 for p in ("in0", "in1", "out.0", "out.1")}
@@ -160,6 +161,35 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     assert (stand["window"]["kind"], stand["window"]["run"], stand["roots"]) == ("stand-in", RUN, rec["roots"])
     with pytest.raises(ValueError, match="window kind 'replayed'"):
         SR.registration(c, {}, kind="replayed", registrar=R)
+
+
+def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp_path):
+    """``index.json`` names what was served (a request, its engine step, its token row), so the registration binds its
+    salted leaf and never a digest of it: the leaf opens under ``index-salt.bin``, a given salt fixes it, a fresh one or
+    another index moves it, no public file holds the index's SHA-512, and the index and its salt are the owner's alone,
+    a rewrite over a world-readable index included."""
+    w = window(9, 4)
+    c = SR.commit(w, data(w), salt_key=bytes(32))
+    idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
+    ib, salt = SR.index_bytes(idx), bytes(range(SR.SALT_BYTES))
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "index.json").write_text("{}")
+    (tmp_path / "d" / "index.json").chmod(0o644)
+    wins = {d: SR.write(c, tmp_path / d, {"row": 101}, idx, registrar=R, index_salt=salt if d < "c" else None) for d in "abcd"}
+    leaves = {d: win["index_leaf"] for d, win in wins.items()}
+    assert leaves["a"] == leaves["b"] == SR.index_leaf(ib, salt).hex() and len(set(leaves.values())) == 3
+    other = IX.index_doc(w.members, [[[0, 9, "r1", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
+    assert SR.index_leaf(SR.index_bytes(other), salt) != SR.index_leaf(ib, salt)
+    for d, leaf in leaves.items():
+        out = tmp_path / d
+        assert (out / "index.json").read_bytes() == ib
+        assert SR.index_leaf(ib, (out / SR.INDEX_SALT).read_bytes()).hex() == leaf
+        assert json.loads((out / "registration.json").read_text())["window"]["index_leaf"] == leaf
+        assert {f: (out / f).stat().st_mode & 0o777 for f in ("index.json", SR.INDEX_SALT)} == {"index.json": 0o600, SR.INDEX_SALT: 0o600}
+        public = "".join((out / f).read_text() for f in ("registration.json", "window.json"))
+        assert hashlib.sha512(ib).hexdigest() not in public and hashlib.sha512(SR.INDEX_TAG + ib).hexdigest() not in public
+    with pytest.raises(ValueError, match="an index's salt is 192 bytes"):
+        SR.write(c, tmp_path / "e", {"row": 101}, idx, registrar=R, index_salt=salt[:-1])
 
 
 def test_flock_input_files_wrap_each_members_bodies(tmp_path):

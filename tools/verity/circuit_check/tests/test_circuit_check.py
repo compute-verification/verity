@@ -58,9 +58,10 @@ def test_every_registered_definition_is_checked(suite):
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
 
-def test_the_registries_import_every_module_with_a_sidecar_and_key_every_target_on_them():
-    """A Definition module is registered by having a sidecar, not by a line in `targets.py`, so the set of them is in every
-    target's key (`cache.registries`): a new one reruns every target, as a new import line did."""
+def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list_on_them():
+    """A Definition module is registered by having a sidecar, not by a line in `targets.py`, so the set of them is in the task
+    list's key (`cache.registries`), and a target's holds none of them: it holds whether a module whose import registered what
+    its check read has a sidecar (``registrars``)."""
     import hashlib
     import sys
 
@@ -69,7 +70,8 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_every_target_
 
     assert len(SC.discover()) > 50 and not sorted(set(SC.discover()) - set(sys.modules))
     want = hashlib.sha256("\n".join(sorted(SC.discover())).encode()).hexdigest()
-    assert CC.key({})["registries"] == want
+    assert CC.key({"target": ["task-list", "--all"]})["registries"] == want
+    assert "registries" not in CC.key({"target": ["definition", "F32Mul_v1"]})
 
 
 @pytest.mark.slow
@@ -1260,6 +1262,24 @@ def test_the_cache_key_is_the_same_on_hosts_that_differ_only_in_their_kernel(mon
     assert CC.key({"target": "F32Mul_v1"}) == here
     monkeypatch.setattr(platform, "machine", lambda: "aarch64")
     assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
+
+
+def test_the_cache_key_is_the_same_under_two_builds_of_one_python_release(monkeypatch):
+    """Two machines' builds of one Python release differ in `sys.version` by their build's date; a report one stored must
+    count on the other, while another release is another key."""
+    import re
+    import sys
+
+    from circuit_check import cache as CC
+
+    here = CC.key({"target": "F32Mul_v1"})
+    built = re.sub(r"\(([^,]*), [^)]*\)", r"(\1, Jan  1 2000, 00:00:00)", sys.version, count=1)
+    assert built != sys.version
+    monkeypatch.setattr(sys, "version", built)
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    v = sys.version_info
+    monkeypatch.setattr(sys, "version", built.replace(f"{v.major}.{v.minor}.{v.micro}", f"{v.major}.{v.minor}.{v.micro + 1}", 1))
+    assert CC.key({"target": "F32Mul_v1"}) != here
 
 
 def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):

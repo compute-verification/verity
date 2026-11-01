@@ -149,7 +149,7 @@ def layout(t: T.Type) -> list[tuple[int, ...]]:
         return ([(1,) * t.n] if t.n else []) if t.elem == BL.BIT else layout(t.elem) * t.n
     if isinstance(t, T.Tuple):
         return [e for f in t.fields for e in layout(f)]
-    if isinstance(t, T.Record):
+    if isinstance(t, T.RecordType):
         return [e for _, f in t.fields for e in layout(f)]
     raise TypeError(t)
 
