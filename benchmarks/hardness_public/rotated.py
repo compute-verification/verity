@@ -151,7 +151,8 @@ def integer_split(q: np.ndarray, s: np.ndarray, Vt: np.ndarray, r: int) -> tuple
 
 
 def lrx(r, n, K, d):
-    return r / n + d * r / K + 32 * d / K
+    """E·B and its d digits' products with Aᵀ in s8, T's r·d digit writes and the d accumulators' writes."""
+    return r / n + d * r / K + 32 * d * r / (n * K) + 32 * d / K
 
 
 def crop_exact_split(S: np.ndarray, A: np.ndarray, B: np.ndarray, alus: dict) -> bool:
