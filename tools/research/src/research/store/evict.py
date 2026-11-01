@@ -402,7 +402,10 @@ GIT_TIMEOUT_S = 300
 ASIDE = ".evicting-"         # <src>/.evicting-<sha>-<nonce>: a tree on its way out, never executable by name
 READY_FILE = "READY.json"    # remote.READY_FILE: the marker that makes <src>/<sha> executable
 LOCK = ".evict.lock"         # <src>/.evict.lock: one pass at a time
-ENDED = TERMINAL_STATES + ("refused",)
+#: a run marked running whose runner (status.json's last pid, at its start time) is gone: a node restart or a killed runner
+#: leaves it so, and such records, some weeks old, kept half of a node's trees
+LOST = "lost"
+ENDED = TERMINAL_STATES + ("refused", LOST)
 PF_KTHREAD = 0x00200000      # /proc/<pid>/stat flags: a kernel thread, which opens no file of ours
 NGINX_CONF = Path("/etc/nginx/nginx.conf")  # a bare `/usr/sbin/nginx` master's configuration (Debian/Ubuntu build)
 _SHA = re.compile(r"[0-9a-f]{40}")
@@ -577,13 +580,30 @@ def _doc(text: str | None) -> dict[str, Any] | None:
     return d if isinstance(d, dict) else {}
 
 
-def _run_state(rd: Path) -> str:
+def _run_state(rd: Path, proc: Path = Path("/proc")) -> str:
     status = _doc(_text(rd / "status.json"))
     if status is None:
         return "refused" if (rd / "refused.json").exists() else "without a status (not known to have ended)"
-    tr = status.get("transitions") or []
-    last = tr[-1] if tr and isinstance(tr[-1], dict) else {}
-    return str(status.get("state") or last.get("state") or "unknown")
+    tr = [t for t in status.get("transitions") or [] if isinstance(t, dict)]
+    last = tr[-1] if tr else {}
+    state = str(status.get("state") or last.get("state") or "unknown")
+    if state == "running":
+        runner = next((t for t in reversed(tr) if t.get("pid") is not None), status)
+        if _gone(runner.get("pid"), runner.get("starttime_ticks"), proc):
+            return LOST
+    return state
+
+
+def _gone(pid: Any, ticks: Any, proc: Path) -> bool:
+    """Whether a recorded runner is known not to run: its pid has no /proc entry, or one started at another time (reused). No
+    pid, or a stat without a start time, is not known gone."""
+    if not isinstance(pid, int) or isinstance(pid, bool):
+        return False
+    text = _quiet(lambda: (proc / str(pid) / "stat").read_text())
+    if text is None:
+        return True
+    fields = text.rsplit(")", 1)[-1].split()
+    return isinstance(ticks, int) and len(fields) > 19 and fields[19].isdigit() and int(fields[19]) != ticks
 
 
 def _get(d: Any, *keys: str) -> Any:
@@ -605,11 +625,11 @@ def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool
 
 
 def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: Path, *, now: float,
-                keep_s: float = SRC_KEEP_S) -> dict[str, set[str]]:
+                keep_s: float = SRC_KEEP_S, proc: Path = Path("/proc")) -> dict[str, set[str]]:
     """{sha: reasons} from the run records that name a tree (job.json, launch.json, remote.json) and the requests: a run that has
     not ended, or was recorded within `keep_s`, or whose source is not the tree's own clean commit (condition 3; a refused run ran
     nothing, so it is no run's source and keeps a tree only while recent), and a request
-    with no run dir yet or whose run has not ended."""
+    with no run dir yet or whose run has not ended. A run marked running whose runner is gone (`LOST`) has ended."""
     uses: dict[str, set[str]] = {}
 
     def add(shas: set[str], why: str) -> None:
@@ -623,7 +643,7 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
             named = {m.group(1) for t in texts.values() if t for m in pattern.finditer(t)}
             if not named:
                 continue
-            if (state := _run_state(rd)) not in ENDED:
+            if (state := _run_state(rd, proc)) not in ENDED:
                 add(named, f"2: run {name} is {state}")
             mtime = _quiet(lambda: os.stat(rd / "job.json").st_mtime)
             if mtime is not None and now - mtime < keep_s:
@@ -654,7 +674,7 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
         rd = next((r / name for r in runs_dirs if (r / name).is_dir()), None)
         if rd is None:
             add(named, f"2: request {name} has no run dir yet (queued)")
-        elif (state := _run_state(rd)) not in ENDED:
+        elif (state := _run_state(rd, proc)) not in ENDED:
             add(named, f"2: request {name}'s run is {state}")
     return uses
 
@@ -899,7 +919,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     def live(shas: set[str]) -> dict[str, set[str]]:
         """Condition 2 and the run records' part of 3, read afresh."""
         why: dict[str, set[str]] = {}
-        for found in (proc_uses(pattern, proc, inside, src_root, nginx_conf), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s),
+        for found in (proc_uses(pattern, proc, inside, src_root, nginx_conf), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s, proc=proc),
                       slot_uses(pattern, locks_dir, proc)):
             for s, rs in found.items():
                 if s in shas:
