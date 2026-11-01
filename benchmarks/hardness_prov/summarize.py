@@ -51,7 +51,7 @@ def erasure(doc, erased, split, chips=("h200", "sm120")):
     print()
 
 
-GATE = ("sigma_q", "entropy_bits", "frac_abs_le15", "frac_abs_gt63", "frac_zero", "p_odd")
+GATE = ("sigma_q", "entropy_bits", "frac_abs_le15", "frac_abs_gt31", "frac_abs_gt63", "tail31", "frac_zero", "p_odd")
 
 
 def gate(doc):
