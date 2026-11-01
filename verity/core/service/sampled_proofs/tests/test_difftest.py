@@ -3210,6 +3210,87 @@ HIDDEN_LOCATE = D.Port(PIECES, "hidden_locate", hidden_locate, st.one_of(*[hidde
 HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hidden_cases("hidden_witness")] * 4, JSON),
                         package=PACKAGE)
 
+#: The verifier's pieces that read a program (`Pieces.At.verifier` at a store), with their ports.
+VERIFIER_AT = {"registration": (registration, REGISTRATION), "select": (select, SELECT), "run": (run, RUN)}
+
+
+def _holder(fn: str, case):
+    """Where `fn`'s input carries its program: the input itself (`select`), else its parameters; None where it has none."""
+    holder = case if fn == "select" else case.get("params") if isinstance(case, dict) else None
+    return holder if isinstance(holder, dict) and "program" in holder else None
+
+
+def _named(desc: dict, annotations=None) -> dict:
+    """The reference naming `desc`'s program, under its own annotations or `annotations`."""
+    return {"annotations": desc.get("annotations") if annotations is None else annotations, "loaded": PO.program_sha512(desc)}
+
+
+def _resolved(x, store: dict):
+    """`Loaded.Programs.parse`'s argument as the program it reads: a reference to a program `store` holds (under the
+    same canonical annotations) is that program's descriptor under the reference's annotations; a reference to none of
+    them is read as the descriptor it isn't, and refused; anything else is itself."""
+    if not (isinstance(x, dict) and sorted(x) == ["annotations", "loaded"]):
+        return x
+    bare = store.get((x["loaded"], D.canonical(x["annotations"]))) if isinstance(x["loaded"], str) else None
+    if bare is None:
+        raise D.Reject("a reference to a program not loaded")
+    return {**bare, "annotations": x["annotations"]}
+
+
+def loaded(j):
+    """`Pieces.loaded`: the descriptors `programs` loaded in order (each an object `Program.parse` reads, refused
+    otherwise), their digests, and the verifier's piece `fn` on `input`, its program read through what they loaded
+    (`_resolved`)."""
+    j = _json(j)
+    ds = j.get("programs") if isinstance(j, dict) else None
+    if not isinstance(ds, list):
+        raise D.Reject("programs is not a list")
+    store, digests = {}, []
+    for d in ds:
+        if not isinstance(d, dict) or not d:
+            raise D.Reject("not a program descriptor")
+        sha = PO.program_sha512(d)
+        if sha not in PROGRAMS:
+            raise RuntimeError(f"the strategy loaded a descriptor this file has no program for: {sha[:16]}")
+        store.setdefault((sha, D.canonical(d.get("annotations"))), {k: v for k, v in d.items() if k != "annotations"})
+        digests.append(sha)
+    fn = j.get("fn")
+    if not (isinstance(fn, str) and fn in VERIFIER_AT):
+        raise D.Reject(f"{fn!r} is not the verifier's")
+    case = copy.deepcopy(j.get("input"))
+    holder = _holder(fn, case)
+    if holder is not None:
+        holder["program"] = _resolved(holder["program"], store)
+    return {"loaded": digests, "output": VERIFIER_AT[fn][0](case)}
+
+
+@st.composite
+def loaded_cases(draw) -> dict:
+    """A verifier's piece at the programs it loads: a registration's, a sample's or a run's input (its port's, changes and
+    all), its own program loaded, another, both or none, and named by reference (under its own annotations, or others) or
+    carried whole; now and then a program loaded that isn't one, programs that aren't a list, or a piece not the
+    verifier's."""
+    fn = draw(st.sampled_from(sorted(VERIFIER_AT)))
+    case = copy.deepcopy(draw(VERIFIER_AT[fn][1].inputs))
+    holder = _holder(fn, case)
+    desc = holder["program"] if holder is not None else None
+    own = isinstance(desc, dict) and bool(desc) and PO.program_sha512(desc) in PROGRAMS
+    other = draw(st.sampled_from(SETUPS)).desc
+    programs = draw(st.sampled_from([[desc], [desc], [desc, other], [other, desc], [other], []] if own else [[other], []]))
+    if own and draw(st.integers(0, 3)) < 3:
+        holder["program"] = _named(desc, {"other": 1} if draw(st.integers(0, 4)) == 4 else None)
+    roll = draw(st.integers(0, 19))
+    if roll == 17:
+        programs = [*programs, draw(st.sampled_from([5, {}, "program", [other]]))]
+    elif roll == 18:
+        fn = draw(st.sampled_from(["nope", 5, "decode", "loaded"]))
+    elif roll == 19:
+        programs = draw(st.sampled_from([None, {}, "programs"]))
+    return {"fn": fn, "input": case, "programs": programs}
+
+
+LOADED = D.Port(PIECES, "loaded", loaded, st.one_of(loaded_cases(), loaded_cases(), loaded_cases(), JSON), package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
@@ -3218,13 +3299,59 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300)]
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (LOADED, 400)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+def test_a_reference_reads_the_program_its_descriptor_does(pieces):
+    """A registration, a sample and a run naming their program by reference at the program the verifier loaded decide as
+    the same call carrying its descriptor does, Lean against Lean (and each the Python's): an accepted audit, and each of
+    the parameters' and the record's changes, refused for its own reason (R2 another program, R3 the ports, R4 the leaf
+    layer among them). The same reference with nothing loaded, another program loaded, or other annotations is refused."""
+    source = hashlib.shake_256(b"loaded").hexdigest(600)
+    base = _v1_audit("subset")
+    audits = [base]
+    for change in PARAMS + RECORD:
+        for x in range(3):
+            a = copy.deepcopy(base)
+            change(a, x)
+            audits.append(_json(a))
+    other = SETUPS[1].desc
+    codes, outputs = set(), 0
+    for a in audits:
+        sel = {"closure": None, "program": a["params"].get("program"), "query": a["params"].get("query"),
+               "rule": {"law": "subset:2", "rule": "law"}, "source": source, "work_table": None}
+        for fn, case in (("registration", _REGISTRATION_OF(a)), ("select", sel), ("run", _run_case(a, source, 2, []))):
+            holder = _holder(fn, case)
+            desc = holder["program"] if holder is not None else None
+            if not (isinstance(desc, dict) and desc):
+                continue
+            port, named = VERIFIER_AT[fn][1], copy.deepcopy(case)
+            _holder(fn, named)["program"] = _named(desc)
+            whole = D.replay(port, case, pieces)
+            got = D.replay(LOADED, {"programs": [desc], "fn": fn, "input": named}, pieces)
+            if whole[0] == "output":
+                outputs += 1
+                assert got == ("output", D.canonical({"loaded": [PO.program_sha512(desc)], "output": json.loads(whole[1])}))
+                codes |= set(json.loads(whole[1]).get("codes") or ()) if fn == "registration" else set()
+            else:
+                assert got[0] == whole[0] == "reject", (fn, whole, got)
+            for programs, ref in (([], named), ([other], named), ([desc], _with_program(fn, named, _named(desc, {"x": 1})))):
+                if programs == [other] and PO.program_sha512(other) == PO.program_sha512(desc):
+                    continue
+                assert D.replay(LOADED, {"programs": programs, "fn": fn, "input": ref}, pieces)[0] == "reject"
+    assert {"R2-program", "R3-ports", "R4-leaf-layer"} <= codes and outputs > len(audits), (sorted(codes), outputs)
+
+
+def _with_program(fn: str, case: dict, program) -> dict:
+    case = copy.deepcopy(case)
+    _holder(fn, case)["program"] = program
+    return case
 
 
 @pytest.mark.parametrize("name, change, code", [

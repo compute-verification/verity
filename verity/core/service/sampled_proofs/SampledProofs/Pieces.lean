@@ -58,11 +58,17 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
+* `loaded`: a verifier's function at the programs it loads first (`At.verifier`, `Loaded.Programs.load`), with their
+  digests: what `sampled-proofs-verifier` answers once it has loaded them, where a piece may name a program by its
+  digest and annotations rather than carry its descriptor.
 
-`sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
-`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
-`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
-`stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
+`sampled-proofs-verifier` (`VerifierMain`) serves those the verifier of record runs (`At.verifier`, at the programs the
+process has loaded; `verifier` at none): `registration`, `matches_public`, `select` (the draw of record: `Stream.select`
+hands it the bytes of the challenger's coins), `check_draw`, `check_proved`, `record`, `check_public`, `check_verdicts`,
+`run` (`Stream.outcome` holds its outcome to it), `hello`, `stream` (each of `service.Stream`'s ops) and `fleet` (each of
+`service.Fleet`'s). Of those, `registration`, `select` and `run` read a program: `At.registration S`, `At.select S` and
+`At.run S` read it through `S` (`Loaded.Programs.parse`), each piece its `At` at the empty store, which reads it from
+its descriptor as the piece always has (`Loaded.parse_empty`).
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
@@ -85,8 +91,10 @@ namespace SampledProofs.Pieces
 open Lean (Json)
 open Flock (V)
 
-private def params (j : Json) : V OneStage.Params := do
-  OneStage.paramsOfJson (← Core.canonicalJson (← Flock.canon j).toUTF8)
+private def paramsAt (S : Loaded.Programs) (j : Json) : V OneStage.Params := do
+  OneStage.paramsOfJson (← Core.canonicalJson (← Flock.canon j).toUTF8) S
+
+private def params (j : Json) : V OneStage.Params := paramsAt #[] j
 
 private def orNull {α} (f : α → Json) : V α → Json
   | .ok a => f a
@@ -138,9 +146,18 @@ def committedBits (j : Json) : V Json := do
       Lean.toJson (← Partition.committedBitsRef p.prog c.d units)])
   return Json.arr out
 
+namespace At
+
+variable (S : Loaded.Programs)
+
 /-- `{"params", "record"}` to R1–R7's codes. -/
 def registration (j : Json) : V Json := do
-  return codes (Registration.check (getD j "record") (← params (getD j "params")).verifier)
+  return codes (Registration.check (getD j "record") (← paramsAt S (getD j "params")).verifier)
+
+end At
+
+/-- `At.registration` at the empty store. -/
+def registration : Json → V Json := At.registration #[]
 
 /-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
 `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
@@ -233,6 +250,10 @@ def draw (j : Json) : V Json := do
   let some n := nat? (getD j "population") | throw "population is not a natural number"
   Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
 
+namespace At
+
+variable (S : Loaded.Programs)
+
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's draw
 (`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
 law's `subset:k`), from the source's bytes,
@@ -242,7 +263,7 @@ def select (j : Json) : V Json := do
   let rule ← Select.Rule.ofJson (getD j "rule")
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
-  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let p ← S.parse (getD j "program")
   let table := match getD j "work_table" with
     | .null => none
     | t => some t
@@ -252,6 +273,10 @@ def select (j : Json) : V Json := do
   let rule ← Select.resolve rule p (getD j "query")
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
+end At
+
+/-- `At.select` at the empty store. -/
+def select : Json → V Json := At.select #[]
 
 /-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of C-Flock's law of the challenger's
 draw, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
@@ -540,6 +565,10 @@ private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
     | .str name, .bool registered => pure ({ name, registered } : Service.Value)
     | _, _ => throw "a value is not a string name with a boolean"
 
+namespace At
+
+variable (S : Loaded.Programs)
+
 /-- `{"params", "record", "rule", "values", "public", "challenger", "received", "source", "closure", "sessions",
 "verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots", "coins"}` to the
 stream's run of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and
@@ -549,7 +578,7 @@ with the proved units and instances null for the draw's own, and the coins' evid
 that read coins must carry). The verifier draws no coins of its own: an input whose `coin_source` is not the
 challenger's is refused. -/
 def run (j : Json) : V Json := do
-  let p ← params (getD j "params")
+  let p ← paramsAt S (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
   let values ← valuesOf (getD j "values") "values"
   let .arr ps := getD j "public" | throw "public is not a list"
@@ -587,6 +616,29 @@ def run (j : Json) : V Json := do
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins" }
 
+/-- The verifier's pieces, reading the programs `S` has loaded. -/
+def verifier : List (String × (Json → V Json)) :=
+  [("registration", registration S), ("matches_public", matchesPublic), ("select", select S),
+   ("check_draw", checkDraw), ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
+   ("check_verdicts", checkVerdicts), ("run", run S), ("hello", Hello.check), ("stream", stream), ("fleet", fleet)]
+
+end At
+
+/-- `At.run` at the empty store. -/
+def run : Json → V Json := At.run #[]
+
+/-- `{"programs", "fn", "input"}` to `{"loaded", "output"}`: the descriptors `programs` loaded in order into a store of
+their own (`Loaded.Programs.load`, refused as it refuses), with their digests, and the verifier's piece `fn` on `input`
+at that store (`At.verifier`), refused where it refuses. -/
+def loaded (j : Json) : V Json := do
+  let .arr ds := getD j "programs" | throw "programs is not a list"
+  let (S, hs) ← ds.foldlM (init := ((#[] : Loaded.Programs), (#[] : Array Json))) fun (S, hs) d => do
+    let (S, h) ← Loaded.Programs.load S d
+    pure (S, hs.push (Json.str h))
+  let .str name := getD j "fn" | throw "fn is not a string"
+  let some f := (At.verifier S).lookup name | throw s!"{name} is not the verifier's"
+  return Json.mkObj [("loaded", Json.arr hs), ("output", ← f (getD j "input"))]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
@@ -609,11 +661,9 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
-   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
+   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
+   ("loaded", loaded)]
 
-def verifier : List (String × (Json → V Json)) :=
-  [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
-   ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check), ("stream", stream), ("fleet", fleet)]
+def verifier : List (String × (Json → V Json)) := At.verifier #[]
 
 end SampledProofs.Pieces

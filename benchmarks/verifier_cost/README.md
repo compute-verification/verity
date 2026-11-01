@@ -133,6 +133,22 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd
   bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
 ~~~
 
+`calls.sh N K [C]` times one verifier call (`one_stage.verifier.check`) on that population at N units, its descriptor
+grown by K pad Definitions each node (`population.py --pad`, about 127 bytes a pad node), step by step: `calls.py` builds
+a valid v1 registration of it and times the Python reference (`registration.check`), the program's digest and encoding,
+the request line carrying the descriptor, C calls through one `sampled-proofs-verifier` process (the first loads the
+program, `{"fn": "program"}`; the rest name it by digest and annotations), one call carrying the descriptor whole, and C
+whole `check`s. `calls/Main.lean`, built in a scratch Lake package against the checkout's verifier, times what the server
+does with the whole request line (its parse, the parameters' canonical round trip, the program's two decodings,
+`OneStage.paramsOfJson`, `Registration.check`, `Difftest.respond`), then the load (`Loaded.Programs.load`) and a request
+naming the loaded program (`Pieces.At.verifier`), and fails where the two answers differ. `$OUT` gets calls.jsonl and
+lean.jsonl, one row per step (seconds or milliseconds, peak RSS, and the Lean server's current RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone --mem-gb 90 -- \
+  bash benchmarks/verifier_cost/calls.sh 6963296 290 3
+~~~
+
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
 builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
