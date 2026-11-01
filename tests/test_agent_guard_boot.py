@@ -24,8 +24,8 @@ def git(env, cwd, *a) -> str:
     return subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, text=True, env=env).stdout.strip()
 
 
-def commit(env, repo, files: dict, message: str) -> str:
-    """Write `files` (None deletes one), commit them and push to origin's main."""
+def commit(env, repo, files: dict, message: str, branch: str = "main") -> str:
+    """Write `files` (None deletes one), commit them and push to origin's `branch`."""
     for name, text in files.items():
         if text is None:
             (repo / name).unlink()
@@ -34,7 +34,7 @@ def commit(env, repo, files: dict, message: str) -> str:
             (repo / name).write_text(text)
     git(env, repo, "add", "-A")
     git(env, repo, "commit", "-q", "-m", message)
-    git(env, repo, "push", "-q", "origin", "HEAD:main")
+    git(env, repo, "push", "-q", "origin", f"HEAD:{branch}")
     return git(env, repo, "rev-parse", "HEAD")
 
 
@@ -44,9 +44,9 @@ def infra_guard(version: str, hook: str = DENY) -> dict:
 
 
 def vm(tmp_path, infra_hook: str | None = DENY):
-    """A VM: WORKSPACE, a Verity clone on a branch older than the guard, whose origin/main had Verity's last guard and then
-    moved it to infra; infra's repository with a stub guard whose hook is `infra_hook` (none when None); DEST and INFRA
-    empty."""
+    """A VM: WORKSPACE, a Verity clone on a branch older than the guard, whose origin/main changed the guard after the branch
+    that moves it to infra started, then merged that branch, first parent main, as the queue lands a PR; infra's repository
+    with a stub guard whose hook is `infra_hook` (none when None); DEST and INFRA empty."""
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_INFRA": str(tmp_path / "infra"),
            "AGENT_GUARD_INFRA_URL": str(tmp_path / "infra.git"), "AGENT_GUARD_SKIP_INSTALL": "1",
            "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc")}
@@ -55,10 +55,17 @@ def vm(tmp_path, infra_hook: str | None = DENY):
     git(env, tmp_path, "clone", "-q", "origin.git", "ws")
     commit(env, ws, {"a": "old\n"}, "old")
     git(env, ws, "branch", "old")
-    commit(env, ws, {"tools/agent-guard/boot.sh": LAST_BOOT, "tools/agent-guard/shell_hook.py": DENY + "# Verity's last\n"},
-           "Verity's last guard")
+    commit(env, ws, {"tools/agent-guard/boot.sh": LAST_BOOT, "tools/agent-guard/shell_hook.py": DENY + "# Verity's earlier\n"},
+           "an earlier guard")
+    git(env, ws, "checkout", "-q", "-b", "move")
     commit(env, ws, {"tools/agent-guard/boot.sh": BOOT.read_text(), "tools/agent-guard/shell_hook.py": None,
-                     ".cursor/hooks.json": (ROOT / ".cursor/hooks.json").read_text()}, "the guard moves to infra")
+                     ".cursor/hooks.json": (ROOT / ".cursor/hooks.json").read_text()}, "the guard moves to infra", "move")
+    git(env, ws, "checkout", "-q", "main")
+    commit(env, ws, {"tools/agent-guard/shell_hook.py": DENY + "# Verity's last\n"}, "Verity's last guard")
+    assert subprocess.run(["git", "merge", "-q", "--no-ff", "move"], cwd=ws, env=env, capture_output=True).returncode
+    git(env, ws, "rm", "-q", "tools/agent-guard/shell_hook.py")
+    git(env, ws, "commit", "-q", "--no-edit")
+    git(env, ws, "push", "-q", "origin", "HEAD:main")
     git(env, ws, "checkout", "-q", "old")
     if infra_hook is not None:
         git(env, tmp_path, "init", "-q", "--bare", "-b", "main", "infra.git")

@@ -73,7 +73,7 @@ if [ -f "$infra/tools/agent-guard/boot.sh" ] && bash "$infra/tools/agent-guard/b
   exit 0
 fi
 echo "agent-guard: no guard from infra (above); Verity's last guard runs this boot" >&2
-last=$(git -C "$ws" rev-list -1 origin/main -- tools/agent-guard/shell_hook.py 2>/dev/null || true)
+last=$(git -C "$ws" rev-list -1 --first-parent origin/main -- tools/agent-guard/shell_hook.py 2>/dev/null || true)
 [ -z "$last" ] || git -C "$ws" cat-file -e "$last:tools/agent-guard/shell_hook.py" 2>/dev/null || last=$last^
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
