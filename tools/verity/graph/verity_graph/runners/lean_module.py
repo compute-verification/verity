@@ -120,6 +120,10 @@ def _prepare(pkg: Path, k: str, home: Path, work: Path) -> None:
         shutil.move(pkg / ".lake" / "packages", tmp)
     if missing := [n for n in fetched(pkg) if not (tmp / n).is_dir()]:
         raise EnvError(f"the dependencies made for {pkg.relative_to(ROOT)} lack {', '.join(missing)}")
+    # A copied checkout's git index is stale, and Lake's `git` calls in a lock's audit would rewrite it in the shared env.
+    for n in fetched(pkg):
+        if (tmp / n / ".git").exists():
+            call(["git", "-C", str(tmp / n), "update-index", "-q", "--refresh"], work, tmp)
     os.replace(tmp, home)
     (home / READY).write_text(k + "\n")
 
