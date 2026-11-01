@@ -20,6 +20,7 @@ Two one-time checks on the served matrices, priced the same way:
 
 - **end box** (`endbox`): one live dither Z of the committed start, and |q·s − W₀ − Z| ≤ (Δ + ½)·s checked per entry:
   W₀ (int16) and q (int8) opened, `BOX_ARITH` ANDs of fixed-point arithmetic and `BOX_NOISE_BITS` of SHA-512 noise;
+  the code-law gate's range counts on the already opened codes at `GATE_ANDS` an entry;
 - **spectral gate** (`spectral`): the energy a randomized block Krylov subspace of q captures, seeded by the verifier's
   live coins (k = r + `OVERSAMPLE` probes, one power iteration), which can only underestimate the top-r energy: one
   product with the public probes at `PUBLIC_MAC` ANDs a MAC and three private x private products at `INT8_MAC`.
@@ -73,6 +74,7 @@ def update_ands(opt, noise=True):
 
 BOX_ARITH = 300
 BOX_NOISE_BITS = 16
+GATE_ANDS = 60
 PUBLIC_MAC = 32
 OVERSAMPLE = 10
 
@@ -80,7 +82,8 @@ OVERSAMPLE = 10
 def endbox(name):
     sh = shape(name)
     per = OPEN * 3 + BOX_ARITH + SHA_BLOCK * BOX_NOISE_BITS / 1024
-    return {"ands_per_param": per, "gpu_h": per * sh["params"] * S_PER_AND / 3600}
+    return {"ands_per_param": per, "gpu_h": per * sh["params"] * S_PER_AND / 3600,
+            "code_law_gpu_h": GATE_ANDS * sh["linear_params"] * S_PER_AND / 3600}
 
 
 def spectral(name, r):
@@ -125,6 +128,7 @@ def main():
     once = {name: {"endbox": endbox(name), "spectral": [spectral(name, r) for r in (4, 8, 32)]} for name in SHAPES}
     for name, v in once.items():
         print(f"{name}: end box {v['endbox']['gpu_h']:.1f} GPU-h ({v['endbox']['ands_per_param']:.0f} ANDs a parameter); "
+              f"code-law gate {v['endbox']['code_law_gpu_h']:.2f} GPU-h; "
               "spectral gate " + ", ".join(f"r {s['r']}: {s['gpu_h']:.0f} GPU-h" for s in v["spectral"]))
     if args.out:
         Path(args.out).mkdir(parents=True, exist_ok=True)
