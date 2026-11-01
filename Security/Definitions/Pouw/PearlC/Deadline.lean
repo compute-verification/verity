@@ -5,7 +5,8 @@ import Definitions.Pouw.PearlC.Game
 # The deadline in Pearl-C's game (trusted)
 
 `Definitions.Pouw.Game.Deadline`'s timed run and verifier's rule are the game's; Pearl-C's adversaries are its own type, so
-their budget by the deadline is restated here. The named assumption is `Pouw.PearlC.Assumptions.HonestClock`.
+their budget by the deadline and what the deadline reads of them are restated here. The named assumption is
+`Pouw.Assumptions.HonestClock`, the one both games read, at `CostModel.adversaries`.
 -/
 
 namespace Pouw.PearlC
@@ -18,5 +19,12 @@ def Adversary.BoundedBy {CM : CostModel Q R S} (A : Adversary CM) (U : Workload)
     (q : ℕ) : Prop :=
   ∀ (H : Q → R) (s : S), run.spentIn H s run.ts td ≤ T ∧
     A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
+
+/-- The adversaries of Pearl-C's cost model `CM` on the workload `U`, as the deadline reads them. -/
+def CostModel.adversaries (CM : CostModel Q R S) (U : Workload) : Adversaries Q R S (Adversary CM) Transcript where
+  pre A := A.pre
+  transcript A := A.transcript U
+  cost A H s := CM.cost A.online H U A.act (A.pre.eval H) s
+  calls A H s := CM.calls A.online H U A.act (A.pre.eval H) s
 
 end Pouw.PearlC
