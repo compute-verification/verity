@@ -1793,7 +1793,8 @@ def _other_reads(r: dict, x: int) -> dict:
     return [{**r, p: {**r[p], "root": "12" * 64}}, {k: e for k, e in r.items() if e["value"] != v}, {},
             {**r, "extra.0": {"root": "ab" * 64, "value": "extra"}}, {**r, "x.0": {"root": ROOTS["x"], "value": "x"}},
             {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]},
-            every(domain="cd" * 64), every(leaves=(r[p].get("leaves") or 0) + 1), every(words=None), every(word_bits=32),
+            every(domain="cd" * 64), every(leaves=(r[p].get("leaves") or 0) + 1), every(words=None),
+            every(word_bits=32 if r[p].get("word_bits") == 16 else 16),
             every(leaves=True), {k: {"value": e["value"], "root": e["root"]} for k, e in r.items()}][x % 13]
 
 
@@ -3561,7 +3562,8 @@ def test_a_v2_audit_reads_the_sessions_registered_roots(server):
         for got, want in ((opened, "accept"), ({**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}}, "accept"),
                           ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"), (every(root="12" * 64), "reject"),
                           (every(domain="cd" * 64), "reject"), (every(leaves=opened[p]["leaves"] + 1), "reject"),
-                          (every(words=None), "reject"), (every(word_bits=32), "reject"),
+                          (every(words=None), "reject"),
+                          (every(word_bits=32 if opened[p]["word_bits"] == 16 else 16), "reject"),
                           ({k: {"value": e["value"], "root": e["root"]} for k, e in opened.items()}, "reject"),
                           ({k: e for k, e in opened.items() if e["value"] != v}, "reject"),
                           ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
