@@ -42,7 +42,7 @@ def mib(bits: float) -> float:
 
 def test_exfiltration_is_the_output_bit_weighted_bound_plus_the_location_term():
     """A4's sampling designs: the output bits in faulty proof blocks reach 9.40 MiB under the uniform subset:1024, 8.81 MiB with one proof block per
-    template and 1.50 MiB drawing in proportion to output bits, each exactly core's `harm_bound` over the sampling design.  Which proof blocks
+    template and 1.50 MiB sampling in proportion to output bits, each exactly core's `harm_bound` over the sampling design.  Which proof blocks
     are wrong adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the bounds are 9.48, 8.89 and 1.91 MiB."""
     segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
     uniform = Stratified.uniform(sum(A4_SIZES.values()), 1024)

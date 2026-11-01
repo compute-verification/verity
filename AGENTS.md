@@ -18,8 +18,8 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
-    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof system,
-    with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
+    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof
+    system's prover, with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
     Python verifier reads are on the soundness path: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`,
     `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
     can't affect soundness.
@@ -62,29 +62,29 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
-  reason: protocol structure, the protocol's outputs, the verifier's coins and draws, and hiding commitments. Partitions
+  reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
   from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
   16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
   refuses a plain session past what the plain theorem covers (one table today).
-- **One proof service** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the
+- **One proof system** for PoUW, PoUS and network accounting: the workers behind the ZK server, the challenger and the
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
-  does with the outcome; the service owns commitments, live coins, the record, the selection, proving, verifying and the
-  integrity profile. A protocol carries no policy parameter: it surfaces what its draw established (ε at δ), and the
+  does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
+  integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
   model's size is public.
-- **One hash: SHA-512 with its whole output, everywhere.** Commitments are hm96 rows in frame-v3-sha512 trees, and signatures
+- **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
   named premise H-μ⁺, not yet in a lock.
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
   inside a window, from the window's live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the window's
-  live salt (`pouw.salt`) and the operands' committed roots, which a drawn unit's proof derives. Grinding is a term
+  live salt (`pouw.salt`) and the operands' committed roots, which a sampled proof block's proof derives. Grinding is a term
   of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
-  retries: a failed proof is a visible failure, and nothing redraws. Outer proofs go through the firewall as independent
-  sessions: each staged statement is fixed before any session draws coins and gets exactly one session, with its own live
-  coins in its own firewall pass; no statement reads another session's transcript or coins; every session is recorded and
+  retries: a failed proof is a visible failure, and nothing resamples. Outer proofs go through the ZK server as independent
+  sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
+  coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
@@ -97,7 +97,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   Nothing the prover runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
-  and later from a separate physical calibration.
+  and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
+  capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
+  plan.
 - **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
   speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
   Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
@@ -114,7 +116,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
-  before any coin; and on a draw, the drawn units' openings, to the prover behind the firewall.
+  before any coin; and on a sample, the sampled proof blocks' openings, to the prover behind the ZK server.
 - **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
   period (Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message, is presented for monitoring periods of one week, one month and one year, and over
@@ -145,14 +147,20 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, C-Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
-`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes.
+`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. `circuit-check` is off the
+merge gate (`gate = false` in `tools/verity/check/ci.toml`) until `circuit-check --all` fits inside the rest of the check: a
+recorded check, `research merge` and the move of `main` leave it out, and it runs after landing on `checked`'s tip, where a red
+reverts its culprit at once and holds the PRs touching its inputs until it passes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. PRs land
-on review, and the full check runs after landing (how a PR lands: the team skill).
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
+only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
+soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
+and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
+reverted on `checked` (how a PR lands: the team skill).
 
 ## Lean
 
@@ -165,9 +173,10 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   one run's verifier for sampling, sampling's for an audit, an audit's for an accounting bound. Each configuration
   (zero-knowledge, plain, recursive) and each protocol instantiates those theorems, and a proof that redoes a layer is
   refactored onto the shared one.
-- **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and draws,
+- **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and samples,
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
-  area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
+  area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
+  (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
   `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
@@ -178,7 +187,7 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   statements a reader checks), properties (`Properties/`, `security_properties`: statements about the code's Lean
   functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
   `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee). No statement or module of the definitions
-  or properties trees reads the proofs tree (`trees` in `Security/lean-audit.json`, whose `except` is the cleanup's to-do). A component's Lean goes in its own area of each tree (`Core`, `Nci`,
+  or properties trees reads the proofs tree (`trees` in `Security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `Nci`,
   `Pouw`, `Pous`, `NetworkCertifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
   bumped together in a PR of their own.
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:

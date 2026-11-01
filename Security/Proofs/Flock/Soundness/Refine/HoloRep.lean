@@ -13,7 +13,7 @@ elements) and squeezes `r'`. The rounds end at `dot (comb + h) z_partial` (`RecA
 `holoLincheck`'s check (`RecAlgebra.fOf_dot_holo`).
 
 * `closeEmpty`: a squeeze of no coins that closes its round. `Transcript.squeeze 2 0` only frames its header; the record
-  keeps the round, so the program consumes it, as `RecAlgebra.Coins.ofRounds` skips it.
+  keeps the round, so the program consumes it, as `RecAlgebra.CoinSource.ofRounds` skips it.
 * `holoLincheckT`: `Flock.lincheck` with `z_partial`'s round closed, `h` absorbed and the check at `comb + h`.
 * `holoRepProg`: the zerocheck, `holoLincheckT`, ring switching and Ligerito.
 * `holoLcMsgs`, `holoRepMsgs`: the model's messages, `lcMsgs` and `repMsgs` with `h` after `z_partial`.

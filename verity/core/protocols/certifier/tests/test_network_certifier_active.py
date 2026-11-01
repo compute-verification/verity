@@ -1244,15 +1244,15 @@ def test_a_requests_frames_and_signed_records_are_its_token_counts_whatever_its_
 
 
 def registration(window: int, provenance: dict | None = None) -> Registration:
-    """A stand-in for the proof service's registration of PoUW window `window` (`Stream.register`'s): a record whose
+    """A stand-in for the proof system's registration of PoUW window `window` (`Stream.register`'s): a record whose
     provenance names the window, with its receipt and digest."""
     record = {"window": {"kind": "served", "window": window} if provenance is None else provenance}
     return Registration(record, R.receipt(record, "test", received=str(window)), R.digest(record), window)
 
 
 def salted_run(seed: int, **salting):
-    """The honest run with the salt on, each salt drawn from `random.Random(seed)`. Returns the proxy, the wire, the
-    salts drawn by PoUW window, the server, and at each tick, for each of PoUW windows 0 … WINDOWS − 1, whether `reveal`
+    """The honest run with the salt on, each salt sampled from `random.Random(seed)`. Returns the proxy, the wire, the
+    salts sampled by PoUW window, the server, and at each tick, for each of PoUW windows 0 … WINDOWS − 1, whether `reveal`
     gave its salt on its registration (True) or refused (None), so each window's True is the one tick it is revealed."""
     rng, drawn, revealable = random.Random(seed), {}, []
 
@@ -1360,7 +1360,7 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
 
 
 def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
-    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof service returned for p.
+    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof system returned for p.
     It refuses none, another window's, a receipt or digest that isn't the record's, a receipt of another format, a
     provenance the reader (`registered`) doesn't read as p, and anything that isn't a `Registration`; a window whose
     last ingress record is unpublished; and one whose salt a proxy back from maintenance never drew. A reader the
@@ -1416,7 +1416,7 @@ def prover_signer(seed: bytes = b"prover"):
 
 def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_conditions():
     """`commit_weights(p, root, signature)` records PoUW window p's 64-byte weights' root once, while p's first ingress
-    tick, the salt's draw, is still ahead, and only the registered prover's: the signature verifies under `prover_key`
+    tick, the salt's sample, is still ahead, and only the registered prover's: the signature verifies under `prover_key`
     over `weights_message`, which binds the ingress link, p, the root and the prover's context. It refuses a root after
     that tick, a second root, a root of another length or type, a window the proxy doesn't serve, a proxy without the
     salt or without a prover key, a signature by anyone else, and one over another window, root or context; a proxy back

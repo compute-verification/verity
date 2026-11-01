@@ -17,7 +17,7 @@ the identifier and the message are SHA-512 words as `merkle` lays them out (byte
 P (2^W - 1) chain hashes whatever the digits. The tree level puts the current node on the side q's bit names
 (`LmsNode_v1`, a conditional swap).
 
-**The parts,** each its own traced Definition (`trace.part`, which C-Flock lowers by its builder), so a unit of a proof is at
+**The parts,** each its own traced Definition (`trace.part`, which Flock lowers by its builder), so a unit of a proof is at
 most one level of the tree's two compressions:
 
     Sha512Compress_v1                 (cv: Array<8, Word>, block: Array<16, Word>) -> Array<8, Word>, one compression

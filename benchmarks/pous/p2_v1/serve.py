@@ -14,7 +14,7 @@ which holds no tensor) is in no unit.
 
 **The windows.** On the verifier's clock (one injected clock here) a window's boundary leaves once its stated window
 has passed, the next step's root goes to the next window, and that root makes the window before final: the verifier
-draws its openings, and the prover answers them before its next step, while serving goes on. The session's last
+samples its openings, and the prover answers them before its next step, while serving goes on. The session's last
 window closes at its deadline.
 
 **The fixture** (`fixture`): two chained passes over the toy's `C*` at 16 sign rows under a fixed challenge and fixed
@@ -94,7 +94,7 @@ def blocks_of(store: S.Store, c_star: bytes) -> list[bytes]:
 
 def registration(store: S.Store, doc: dict, c_star: bytes, node: bytes = NODE) -> p2.Registration:
     """The verifier's registration of the toy's store: PoUS's setup decoding `C*` to the committed `W` under the salt
-    it drew from its source after the commitment, then `p2.register`."""
+    it sampled from its source after the commitment, then `p2.register`."""
     params, n = store.params, store.params.blocks_per_segment
     commitment, salt, source = (bytes.fromhex(doc[k]) for k in ("commitment", "salt", "source"))
     blocks = blocks_of(store, c_star)

@@ -115,7 +115,7 @@ def _member(name: str, windows: int, bad: int | None, held: bool = True) -> dict
 
 
 def _cost(windows: int) -> dict:
-    """n2_zk's cost pass as `a8.cost` records it: per end, one session whose verifier draws one of the staged units."""
+    """n2_zk's cost pass as `a8.cost` records it: per end, one session whose verifier samples one of the staged units."""
     return {end: [{"arm": "fw", "k": 1, "rep": 0, "units": 1, "staged": windows, "accepted": True, "prove_total_s": 3.0,
                    "max_child_rss_gb": 3.6, "lean": {"accepted": True, "verify_s": 2.5, "why": ""}}]
             for end in ("egress", "ingress")}

@@ -247,7 +247,7 @@ def RowsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → �
               q.rep q.level q.query + 1) = #[elemsOf bo.data.toList 2 0, elemsOf bo.data.toList 2 1]
 
 /-- **`StepsW` under a side condition `Φ`** on the joint acceptance: `StepsW` is `Φ := True` (`stepsW_of_G`), the
-22:25Z ruling's shape (`xs`, every part's acceptance there, no collision with its setups) is `Φ := XsW A`. -/
+shape with part statements (`xs`, every part's acceptance there, no collision with its setups) is `Φ := XsW A`. -/
 def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -271,7 +271,7 @@ def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → 
         ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
           (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) (chainW x ws)
 
-/-- **The 22:25Z ruling's side condition** at the per-part acceptance `A` (`AccV`): part statements `xs`, each part
+/-- **The part statements' side condition** at the per-part acceptance `A` (`AccV`): part statements `xs`, each part
 accepted at its own (`xs.getD s []`), no collision among the layout's calls and the parts' setups, and `xs` staged at
 one prefix of messages (`XsStaged`). -/
 def XsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
@@ -500,7 +500,7 @@ theorem accOutPort_recOpen {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} 
 /-- **Hypothesis: two slots of one row of the chain carry one commit string**, at a joint acceptance of a statement of
 the shape: where part `s`'s unit `u` holds `acc` at row `p`, its `nm` port (`acc`, or `acc_out` for the next row `p + 1`)
 and any holding `h'` of row `p + d` at part `s'` read one commit string at the parts' own witnesses. Owners: two level
-parts, `accCommit_eq` (hej-9976); a level part and an algebra part's `acc0`/`acc1`, `innerAccCommit_eq` (RECE). -/
+parts, `accCommit_eq`; a level part and an algebra part's `acc0`/`acc1`, `innerAccCommit_eq`. -/
 def AccCommitW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
@@ -536,7 +536,7 @@ def AccCommitWG (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg →
 
 /-- **Hypothesis: the row after a level unit's has an owner**: at a statement of the shape, where a level part's unit
 holds `acc` at row `p`, some part holds row `p + 1` (the next unit's `acc`, or an algebra part's `acc1` at its rep's
-end). Owner: STEPSW. -/
+end). -/
 def NextHeldW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) : Prop :=

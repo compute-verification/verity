@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# C-Flock's zero-knowledge session cost on a CPU node (zk_cost.py --cpu): zk_cost.sh's sweep of W8A8 coordinates in statements
-# of c units, each session proving k drawn by Lean, by `flock-circuit prove --zk` on the node's CPUs with the firewall's send
-# check, then Lean `verify --zk` on every session; what one drawn statement costs a CPU node, for sizing a block's draw.
+# Flock's zero-knowledge session cost on a CPU node (zk_cost.py --cpu): zk_cost.sh's sweep of W8A8 coordinates in statements
+# of c units, each session proving k sampled by Lean, by `flock-circuit prove --zk` on the node's CPUs with the ZK server's send
+# check, then Lean `verify --zk` on every session; what one drawn statement costs a CPU node, for sizing a block's sample.
 # The prover is built as prove_path/run.sh builds it (60-circuit.sh GPU=0), Lean's flock-verify and flock-firewall in the tree.
 # Run from the verity tree in a proofs slot (one point at a time, so a session's peak is its own):
-#   research run --on vy-nebius-cpu-3 --pool proofs --project verity --source . --cwd clone \
-#     -- bash benchmarks/one_stage/zk_cost_cpu.sh ZK_KS=4096,16384 ZK_SIZES=1,8 ZK_DRAWS=1,c
+#   bash benchmarks/one_stage/zk_cost_cpu.sh ZK_KS=4096,16384 ZK_SIZES=1,8 ZK_DRAWS=1,c
+#   (a job run from a clone of the tree)
 # env: ZK_KS=4096,16384  ZK_SIZES=1,8  ZK_DRAWS=1,c  ZK_ARMS=fw  ZK_COLD=1  ZK_RUNS=0 (no warm process)
 # Kept in $OUT: the records (stage, prove and verify .jsonl; each prove record's peak_rss_kb is the session's summed peak), the
 # fit and the logs; never a circuit, a prover's file or a proof.

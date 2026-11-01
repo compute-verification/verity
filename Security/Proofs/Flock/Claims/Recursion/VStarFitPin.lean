@@ -72,6 +72,7 @@ theorem traceOk_fitPin {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
   cases hsv'
   have hpc := partCircuit_staged hS hx ht hpi hr hc h0
   obtain ⟨tags, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   have hsc := (staged_scope hS hx h0).1
   have hcp := (htab 0 h0).2.2
   have hk : p.sts[0].c.kLog ≤ 27 := by

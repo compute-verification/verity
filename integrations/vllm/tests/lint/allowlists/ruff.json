@@ -343,7 +343,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 15},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "F541", "symbol": "main", "detail": "f-string without any placeholders"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "F841", "symbol": "binding_record", "detail": "Local variable `max_new` is assigned to but never used"},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `F401`)"},
     {"file": "verity_vllm/pipeline/commit_attach.py", "kind": "F401", "symbol": "attach_of_record", "detail": "`verity_vllm.acquire.sources.hidden_source.HiddenM1Source` imported but unused"},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "F541", "symbol": "main", "detail": "f-string without any placeholders"},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "F821", "symbol": "main", "detail": "Undefined name `Any`"},

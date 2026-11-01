@@ -1,11 +1,10 @@
 # Dither-C (decision 79; was Bc, CHECKED-STRIP's CO-Dither): co32c on the linears and lm_head (every limb a checked
 # word), cohalf on QKᵀ, and P·V on committed digit limbs (`pv`, CHECKED-STRIP Result 3): P served round(P / s) + c with
 # a fresh bit c and c's mean taken off in the epilogue, V served, Ycum's digits committed, so no product is unchecked;
-# what the cheater gets free is vector work, the TS-time ε_skip below (note:20261017T0340Z-draft-skip Result 3, 06:19Z;
-# note:20261017T0030Z-draft-checked-strip). Perplexity +2.20% (8B WT-2 2K), +3.32% (70B C4 2K) with P in one block;
-# +1.65% (8B) in blocks of 256 keys, whose TS ε_skip grows as keys/256 (eps_budget.py's `pv_block_table`: at the
-# measured costs 3.4% (8B) / 1.9% (70B) of the whole at 32K, served output free), on SKIP's `co32c-pv` arms
-# (`co32c-pv256` and up for blocks of keys).
+# what the cheater gets free is vector work, the TS-time ε_skip below. Perplexity +2.20% (8B WT-2 2K), +3.32% (70B C4
+# 2K) with P in one block; +1.65% (8B) in blocks of 256 keys, whose TS ε_skip grows as keys/256 (eps_budget.py's
+# `pv_block_table`: at the measured costs 3.4% (8B) / 1.9% (70B) of the whole at 32K, served output free), on SKIP's
+# `co32c-pv` arms (`co32c-pv256` and up for blocks of keys).
 name = "dither-c"
 title = "Dither-C"
 aliases = ["co-dither-pv", "Bc-pv", "co32c-pv"]
@@ -20,8 +19,8 @@ pv = "pv"
 
 [operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
 floor = { LDSM_X4 = 0.025641 }
-source = "SPEC §3.4: CO-Dither's U is resident (B̃ a data-independent map of a resident matrix), so Dither's one-operand floor, least 1/39 at (a, b) = (1, 39); co32c's words are subset sums of wide U values, as fresh as Dither's (SKIP) (note:20261017T0324Z-draft-eps1-spec)"
+source = "SPEC §3.4: CO-Dither's U is resident (B̃ a data-independent map of a resident matrix), so Dither's one-operand floor, least 1/39 at (a, b) = (1, 39); co32c's words are subset sums of wide U values, as fresh as Dither's (SKIP)"
 
 [skip.served]
 eps = 0.00341
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 17.158 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.0760%; lm_head's co32c recombination 4.48e-08%; QKᵀ's cohalf sums 0.0258%; P·V's pv digits, epilogue and scaling 0.239%. With P·V's served output checked it is 0.341% (8B) / 0.165% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts) (note:20261017T0320Z-draft-eps1-calc Round 9)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 17.158 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.0760%; lm_head's co32c recombination 4.48e-08%; QKᵀ's cohalf sums 0.0258%; P·V's pv digits, epilogue and scaling 0.239%. With P·V's served output checked it is 0.341% (8B) / 0.165% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts)"

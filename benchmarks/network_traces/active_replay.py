@@ -29,7 +29,7 @@ proxy saw, that its hand times are the rule's, and that the peer's digest of eac
 ingress record holds the salt frame, which carries the placeholder and never the salt, and the server receives the salt
 on a connection of its own, logging each window's SHA-512 of it (`fingerprint`), never the salt. Once the run's
 records are published the proxy answers the verifier's "reveal" call with every window's salt (`salts.json`), each
-revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof service),
+revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof system),
 and the audit's `salt` section reads the salt frames against them (`active.check_salts`, on the raw ingress records),
 counts the salt frames in each ingress record and in the egress records, and checks that no egress frame holds a salt
 and that the server received each salt.
@@ -216,7 +216,7 @@ _WORKLOADS: dict[str, dict[int, dict]] = {}
 
 
 def live_body(session: str | None, model: str) -> dict:
-    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token drawn from the
+    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token sampled from the
     session's name; one token of a one-token prompt for a request no session names. Without `return_token_ids`, with
     which vLLM puts the prompt's token ids in the first event, past a frame."""
     import record
@@ -584,7 +584,7 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     with other bytes (`other_token`), so the frame counts are honest's and only a check of the frames' tokens against
     the committed sampled ids (the I/O tie) refuses it. The tie draws positions in each window, so a window whose every
     token is wrong is refused at any number of draws, where one wrong frame among N would be refused only at the share
-    1/N a draw."""
+    1/N a sample."""
     if strategy == "token":
         T = setup.egress_params.buckets
         window0 = [q["session"] for q in plan.get("requests", ()) if "enqueue" in q and q["enqueue"] // T == 0]
@@ -1253,7 +1253,7 @@ def proxy_log(proxies: Sequence[Proxy]) -> dict:
 
 
 def stand_in(window: int) -> Registration:
-    """A stand-in for the proof service's registration of `window`, which the replay has none of: a record whose
+    """A stand-in for the proof system's registration of `window`, which the replay has none of: a record whose
     provenance names the window (`active.served_window`), with its receipt."""
     record = {"window": {"kind": "served", "window": window}}
     return Registration(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record), window)

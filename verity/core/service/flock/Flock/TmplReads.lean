@@ -1,5 +1,5 @@
 /-
-A templated unit's input columns that a computed row surely reads, from its description (PRF-133). `RecResiduals.readIns`
+A templated unit's input columns that a computed row surely reads, from its description. `RecResiduals.readIns`
 marks the input columns the unit's computed rows read by walking every row of the unrolled net; `Tmpl.readsSure` marks a
 subset of them per Definition, so `KnownRead.readsOk` can check a templated unit's known bits without building its rows.
 

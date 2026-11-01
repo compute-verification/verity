@@ -6,7 +6,6 @@ while the device broke it; RB-D1's pass since
 store-order/v0, RB-D2's since form 13."""
 from __future__ import annotations
 
-import hashlib
 import sys
 from pathlib import Path
 
@@ -51,12 +50,11 @@ def test_rbd1_every_gemm_block_holds_stored_bytes() -> None:
     nbs, nchunks, groups = 17, 1, 2
     rng = np.random.default_rng(1)
     stores = [rng.integers(0, 256, nbs * nchunks * SB, dtype=np.uint8) for _ in range(2)]
-    signs = SR.signs(SEED)
     m = vectors_of_store_bytes(nbs, nchunks, groups)
-    ys = [SR.receipts_of(SEED, SR.sketches(signs, np.where(m >= 0, s[np.maximum(m, 0)], 0).astype(np.uint8)), 0)
+    ys = [SR.receipts_of(SEED, SR.sketches(SEED, np.where(m >= 0, s[np.maximum(m, 0)], 0).astype(np.uint8)), 0)
           for s in stores]
-    free = [v for v in range(len(ys[0])) if ys[0][v] == ys[1][v] == SR.receipt_of(hashlib.sha512(SR.prefix(SEED)), v,
-                                                                                   bytes(64))]
+    receipter = SR.rb.SketchReceipter(SEED)
+    free = [v for v in range(len(ys[0])) if ys[0][v] == ys[1][v] == receipter.receipt(v, bytes(64))]
     assert not free, f"blocks {free} have receipts that read no stored byte"
 
 
@@ -95,6 +93,6 @@ def test_rbd2_a_kv_receipt_is_a_driver_receipt_of_one_registered_block() -> None
     m = SR.kv_vectors(slots, layers, nvec * SR.BLOCK)
     assert SR.rb.plan_of(m, blocks) == SR.rb.Plan.of(range(nvec, blocks), blocks)
     sk = SR.kv_fragment_sketch(store[m], SR.kv_sign_frags(SR.sign_bits(SEED)))
-    receipter = SR.SketchReceipter(SEED)
+    receipter = SR.rb.SketchReceipter(SEED)
     assert SR.receipts_of(SEED, sk, nvec) == [receipter(j, store[j * SR.BLOCK:(j + 1) * SR.BLOCK].tobytes(), b"\0")
                                               for j in range(nvec, blocks)]

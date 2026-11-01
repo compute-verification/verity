@@ -18,7 +18,7 @@ its S·B/2 little-endian u16 words (`words`), which the unit's port carries.
 **The wiring** (`Wiring`, read off the record by `wiring`) says which connection holds which slots. Connection q, live
 in `cells`/r rows from row `first`, holds slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live
 connections; its cell k of the link-window (k = 0 … cells − 1) is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r)
-(`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it draws for the link-window:
+(`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it samples for the link-window:
 
     wiring = tagged_sha512(WIRING_TAG, salt ‖ u32be count ‖ (u32be q ‖ u32be first ‖ u32be cells) by q)
 
@@ -333,7 +333,7 @@ class Cells:
     @classmethod
     def commit(cls, link: str, direction: Direction, window: int, rows: Sequence[bytes], wiring: Wiring,
                params: WardenParams, session: bytes, salts: Sequence[bytes] | None = None) -> Cells:
-        """`rows` and `wiring` as the link-window's (`of` reads both off a record). `salts`: one a row, drawn once
+        """`rows` and `wiring` as the link-window's (`of` reads both off a record). `salts`: one a row, sampled once
         (default: fresh from the operating system) and never for another row."""
         rows = tuple(bytes(r) for r in rows)
         if len(rows) != rows_of(params) or any(len(r) != row_bytes(params) for r in rows):

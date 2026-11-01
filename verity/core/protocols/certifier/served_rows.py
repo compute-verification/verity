@@ -1,4 +1,4 @@
-"""The served rows: the step rows a served window ran, committed on the Commit side before the draw, which the compile
+"""The served rows: the step rows a served window ran, committed on the Commit side before the sample, which the compile
 slice's ``rows`` bit holds the replay to through its ``srv`` row. Were that row the prover's own word, a prover who served
 user-1's admission at the sixth ask could put six passes there, and the slice accepts it at 0x3F with a 5-bit code against
 the honest 8. With the row registered here in ``srv``, ``rows`` refuses it; with any other
@@ -16,7 +16,7 @@ is the slice's P steps in turn, each packed as `rows_bits` packs it (an idle ste
 ``srv`` row (`compile_slice.srv_row`).
 
 **The commitment** (`register`), made when the window closes and published with its run root before the advice check and
-the draw: each block of G steps of window w (j = 0 … P / G − 1, `block_bits`) as row w·(P / G) + j of one
+the sample: each block of G steps of window w (j = 0 … P / G − 1, `block_bits`) as row w·(P / G) + j of one
 hm96-sha512/row/v2 registration in a frame-v3-sha512 tree (`verity.ml.commitments.advice`'s construction), its row the
 block's bits as u16 words, as a proof commits a row, under `binding` of the run root. G is P unless given, so a window is
 one row, the slice's ``srv``; at G < P block j is the slice's ``srv{j}`` (`compile_slice.srv_rows`). `Served.record` is
