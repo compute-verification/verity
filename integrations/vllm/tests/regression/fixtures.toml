@@ -71,7 +71,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 101027, program_digest 9ce48951..., identity_rows_sha256 7433f6a3... (the identity set) unchanged; manifest_digest 9a3dfe49... (SHA-256) becomes 88879cc2... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 101027, program_digest 9ce48951..., identity_rows_sha256 7433f6a3... (the identity set) unchanged; manifest_digest 9a3dfe49... (SHA-256) becomes 88879cc2... (SHA-512)."
 expected = { identities = 101027, program_digest = "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590", added_n = 49152, removed_n = 57344, complete = true, manifest_digest = "88879cc259fccb74cc8298f0e70bb657cb0eaa178f4c5a574b8891565e3363658341753c7870157ea1e9570f08569a8571a42f0d8e046529023868462ff1edd0", identity_rows_sha256 = "7433f6a3ee7d70b392ecec95e18cf29ab47eade7785803128c001ce63586c183" }
 
 [rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".local]
@@ -119,7 +119,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 503695, program_digest 4bc2937c..., identity_rows_sha256 df2c3495... (the identity set) unchanged; manifest_digest f6ab4c4c... (SHA-256) becomes 52c7c78a... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 503695, program_digest 4bc2937c..., identity_rows_sha256 df2c3495... (the identity set) unchanged; manifest_digest f6ab4c4c... (SHA-256) becomes 52c7c78a... (SHA-512)."
 expected = { identities = 503695, program_digest = "4bc2937c31fb22a511fce7a827788bf16b6478f2f48b5a2327b8503c72b3e313", added_n = 245376, removed_n = 246112, complete = true, manifest_digest = "52c7c78ab8e3499f54f6fc19d8c6d47e872b3756b4d5026320b1fc02ffa336616626bfc45f44b9fc24129f8fac09b6cf23e808a3f04df339df47f52d5dcf78f0", identity_rows_sha256 = "df2c34953d32071514e17d80fbcfa0eab4da93c5257fb35231788b0531ab13ea" }
 
 [rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager".local]
@@ -175,7 +175,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 189239, program_digest fdb622a6..., identity_rows_sha256 0650909e... (the identity set) unchanged; manifest_digest 108f3650... (SHA-256) becomes b92e2541... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 189239, program_digest fdb622a6..., identity_rows_sha256 0650909e... (the identity set) unchanged; manifest_digest 108f3650... (SHA-256) becomes b92e2541... (SHA-512)."
 expected = { identities = 189239, program_digest = "fdb622a62644af5569b29096730aa26ddcb1b367de449d432b695ee7dd7eb443", added_n = 100352, removed_n = 100352, complete = true, manifest_digest = "b92e2541eca56fbc0be247d663fcb22cfcafac1639a2f3442aec4af7aed517f4a3f4f98992e15b93c3b89d4205ea4a7f10502b1be98b19ee1b8055c2f5429a9f", identity_rows_sha256 = "0650909ec3c951c57993810a1b3a28c47c0799e16d742402fcf1642197d6577d" }
 
 [rows."qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".local]
@@ -263,7 +263,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 501436, program_digest 44801d07..., identity_rows_sha256 95224f07... (the identity set) unchanged; manifest_digest ffc0805f... (SHA-256) becomes faaa11d8... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 501436, program_digest 44801d07..., identity_rows_sha256 95224f07... (the identity set) unchanged; manifest_digest ffc0805f... (SHA-256) becomes faaa11d8... (SHA-512)."
 expected = { identities = 501436, program_digest = "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53", added_n = 409104, removed_n = 67678, complete = true, manifest_digest = "faaa11d8a41a8206d607e4c31fe3d9acb1ada81251e7a9a74a1d87c6252664e5d80aaa584dcb5c7fd6e9fda460023341223d0b7631d6f514ea59106b17441375", identity_rows_sha256 = "95224f0751d0bf73b1216931e4dcc31282a35a41c87f8b1786e746010dae641c" }
 
 [rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
@@ -309,7 +309,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 201048, program_digest fc911941..., identity_rows_sha256 5dfd77e3... (the identity set) unchanged; manifest_digest 2a1c0f8f... (SHA-256) becomes 33261ce8... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 201048, program_digest fc911941..., identity_rows_sha256 5dfd77e3... (the identity set) unchanged; manifest_digest 2a1c0f8f... (SHA-256) becomes 33261ce8... (SHA-512)."
 expected = { identities = 201048, program_digest = "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501", added_n = 99072, removed_n = 99424, complete = true, manifest_digest = "33261ce8a4c1d0e6ddef578ad538ab0a9eb9e3e0979d52b1db291b3d84241b3492d9cb044ec453ddaf716024740022ced6361c535cdfba4c39453b38e7278a1c", identity_rows_sha256 = "5dfd77e3de415f334462370378f3d2fdeb61e519522d74ffa97efc904b7f2469" }
 
 [rows."mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
@@ -377,7 +377,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 404384, program_digest fdd998d4..., identity_rows_sha256 24f1d2ab... (the identity set) unchanged; manifest_digest b7fe3967... (SHA-256) becomes 4d1a89c4... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 404384, program_digest fdd998d4..., identity_rows_sha256 24f1d2ab... (the identity set) unchanged; manifest_digest b7fe3967... (SHA-256) becomes 4d1a89c4... (SHA-512)."
 expected = { identities = 404384, program_digest = "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72", added_n = 125568, removed_n = 105152, complete = true, manifest_digest = "4d1a89c45fc63d183a652097dc9ab5cc50a4e80cfd68b4e1ef2231f0b4f9989b16aa90c08d625becfd0d1aec4ee36e1e0057fa86630d4e76e7ea2f15abd10508", identity_rows_sha256 = "24f1d2abc5218cd629de9b9a1dfb7e650b6696973dbb9d138eae627dd9785de1" }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".local]
@@ -445,7 +445,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 400058, program_digest 6de1e6af..., identity_rows_sha256 b38dcbc1... (the identity set) unchanged; manifest_digest 27ca5892... (SHA-256) becomes b64764c5... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 400058, program_digest 6de1e6af..., identity_rows_sha256 b38dcbc1... (the identity set) unchanged; manifest_digest 27ca5892... (SHA-256) becomes b64764c5... (SHA-512)."
 expected = { identities = 400058, program_digest = "6de1e6afdeffc1a8772201a8491aca7fdeeebae10c6b20fa65db2f84fb349ddf", added_n = 124224, removed_n = 104416, complete = true, manifest_digest = "b64764c5106e08736b66ff24ff0f6f050315675b9606464544d615f630238d4614fa47af6474b961fc76619cbe6eb77e283d7d654ddf4ac9da33f55bc512eda8", identity_rows_sha256 = "b38dcbc17386a860917960bee85ebb637e7087dc2c7d0ddc76ee420fe646bc83" }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".local]
@@ -517,7 +517,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 311739, program_digest 357b965d..., identity_rows_sha256 0ada6efa... (the identity set) unchanged; manifest_digest 251d2e6c... (SHA-256) becomes 5be1cabb... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 311739, program_digest 357b965d..., identity_rows_sha256 0ada6efa... (the identity set) unchanged; manifest_digest 251d2e6c... (SHA-256) becomes 5be1cabb... (SHA-512)."
 expected = { identities = 311739, program_digest = "357b965dca2497df1cc97c6b45b5d0f773e4aba40ee8ae0bc630469d45d10262", added_n = 102816, removed_n = 103212, complete = true, manifest_digest = "5be1cabbad644464c1b5e333b2ee045729392273f6c25faac37eeb91325ebdd4a084adf15eb1d509f7b3885e88e7d1a93e64bb5a806be0b6addc786398e55987", identity_rows_sha256 = "0ada6efa206b3a4dd2f15a097e3ed4031869dd36ec21f1cfba0a8ba05ae18e7d" }
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
@@ -595,7 +595,7 @@ since = "16b47db267"
 since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
 finding = "SHA-512 manifest digests (16b47db267)"
 status = "pending_review"
-reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 6531, program_digest 079ee0a8..., identity_rows_sha256 ca1008f4... (the identity set) unchanged; manifest_digest 21d237b7... (SHA-256) becomes 4dcc8667... (SHA-512)."
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on a head that also holds the FlashAttention M1 stream decision (e09f3f818c), every value of that decision reproduces but manifest_digest: identities 6531, program_digest 079ee0a8..., identity_rows_sha256 ca1008f4... (the identity set) unchanged; manifest_digest 21d237b7... (SHA-256) becomes 4dcc8667... (SHA-512)."
 expected = { identities = 6531, program_digest = "079ee0a8e3e0355b2600b8576588edb4d5df56bb21f3ff707e9117a8e843c1de", added_n = 3072, removed_n = 3584, complete = true, manifest_digest = "4dcc8667c65ce8644e07fd6f85d268ac0ac53e15964657bb7af2572bcaf64172b23f8ead91afe0101383c12d491fbf7ea6e4e1fc5094da355d7f23bf2f58ecc5", identity_rows_sha256 = "ca1008f4acabbc1cc84a5d167f6a2a797a10fff2317d73eeb2c232d4d2eb1bbe" }
 
 [rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".local]
