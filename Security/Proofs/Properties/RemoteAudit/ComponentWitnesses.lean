@@ -97,7 +97,7 @@ theorem sketch_zero {Ω : Type} [Fintype Ω] (T : Trace Ω) (O : Outside T)
   exact ⟨t, h1, h2, mem_union_left _ (h3 ▸ mem_univ j)⟩
 
 theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
-    (T : Trace (Coins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
+    (T : Trace (DrawCoins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
   have hw : T.wrong ω = 0 := by
     unfold Trace.wrong
     exact Finset.sum_eq_zero fun p _ => by rw [Finset.sdiff_eq_empty_iff_subset.2 (h ω p), card_empty]
@@ -124,7 +124,7 @@ theorem offsets_zero_lt {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) (hkm : k ≤
 hold all of them nothing is refused. -/
 theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Session n m s κ X)
     (hc : ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) : Refused D prf (fun _ _ _ => 0) T R := by
+    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) : Refused D prf (fun _ _ _ => 0) T R := by
   intro ω _ t p hp
   left
   apply hc t ω
@@ -144,9 +144,9 @@ every receipt a draw can have and the sampler's fallbacks 0, every premise holds
 and `Counted`; and the bound's terms the prover could raise are 0: each draw's distinguisher has no advantage on its
 coin function and each hiding term is 0. -/
 theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
-    (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax) (recs : Cm → Coins node.draws κ X → Record)
-    (com : Coins node.draws κ X → Cm) (R : Receipts node.draws κ X) (passes : ℕ)
-    (tick : Coins node.draws κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
+    (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.draws κ X → Record)
+    (com : DrawCoins node.draws κ X → Cm) (R : Receipts node.draws κ X) (passes : ℕ)
+    (tick : DrawCoins node.draws κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
     Paced (ofRecord (honestTrace node passes tick) node (played recs com)) (recordPace node (played recs com)) ∧
     Covers (ofRecord (honestTrace node passes tick) node (played recs com)) ∧
     SketchBoundAt (ofRecord (honestTrace node passes tick) node (played recs com))
@@ -564,7 +564,7 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
     (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
   simp [Receipts.binding, Pous.pr]
 
 theorem toy_delta : (Toy.node.delta : ℝ) = 1 / 2 := by

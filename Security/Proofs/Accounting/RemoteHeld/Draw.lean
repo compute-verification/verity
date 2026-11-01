@@ -832,31 +832,31 @@ section Session
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
 
-theorem draws_le (t : Fin n) (ω : Coins n κ X) : D.draws t ω ≤ m :=
+theorem draws_le (t : Fin n) (ω : DrawCoins n κ X) : D.draws t ω ≤ m :=
   (min_le_right _ _).trans (Nat.lt_succ_iff.1 (D.size t ω).isLt)
 
-theorem good_le (t : Fin n) (ω : Coins n κ X) : D.good t ω ≤ D.size t ω :=
+theorem good_le (t : Fin n) (ω : DrawCoins n κ X) : D.good t ω ≤ D.size t ω :=
   (card_le_card (filter_subset _ _)).trans_eq (card_range _)
 
-theorem bound_nonneg (t : Fin n) (ω : Coins n κ X) : 0 ≤ D.bound t ω := by
+theorem bound_nonneg (t : Fin n) (ω : DrawCoins n κ X) : 0 ≤ D.bound t ω := by
   unfold Session.bound
   split_ifs
   · positivity
   · exact le_rfl
 
-theorem bound_le_one (t : Fin n) (ω : Coins n κ X) : D.bound t ω ≤ 1 := by
+theorem bound_le_one (t : Fin n) (ω : DrawCoins n κ X) : D.bound t ω ≤ 1 := by
   unfold Session.bound
   split_ifs
   · exact pow_le_one₀ (by positivity) (div_le_one_of_le₀ (by exact_mod_cast good_le D t ω) (by positivity))
   · exact zero_le_one
 
-theorem lands_eq {t : Fin n} {ω ω' : Coins n κ X} (e1 : D.size t ω = D.size t ω')
+theorem lands_eq {t : Fin n} {ω ω' : DrawCoins n κ X} (e1 : D.size t ω = D.size t ω')
     (e2 : D.correct t ω = D.correct t ω') : D.lands t ω = D.lands t ω' := by
   funext b
   simp only [Session.lands, Session.draws]
   rw [e1, e2]
 
-theorem bound_eq {t : Fin n} {ω ω' : Coins n κ X} (e1 : D.size t ω = D.size t ω')
+theorem bound_eq {t : Fin n} {ω ω' : DrawCoins n κ X} (e1 : D.size t ω = D.size t ω')
     (e2 : D.correct t ω = D.correct t ω') : D.bound t ω = D.bound t ω' := by
   have e3 : D.draws t ω = D.draws t ω' := by simp only [Session.draws, e1]
   have e4 : D.good t ω = D.good t ω' := by
@@ -873,7 +873,7 @@ def SwapFree (t : Fin n) : Prop :=
       D.correct j (x, Function.update c t K) = D.correct j (x, c)
 
 /-- Window `t`'s coin traded for the key: `((x, c), u), K ↦ ((x, c[t ↦ K]), u), c_t`. -/
-def swapCoin (t : Fin n) : (Coins n κ X × Pous.Bits 512) × Pous.Bits κ ≃ (Coins n κ X × Pous.Bits 512) × Pous.Bits κ where
+def swapCoin (t : Fin n) : (DrawCoins n κ X × Pous.Bits 512) × Pous.Bits κ ≃ (DrawCoins n κ X × Pous.Bits 512) × Pous.Bits κ where
   toFun z := (((z.1.1.1, Function.update z.1.1.2 t z.2), z.1.2), z.1.1.2 t)
   invFun z := (((z.1.1.1, Function.update z.1.1.2 t z.2), z.1.2), z.1.1.2 t)
   left_inv z := by
@@ -884,7 +884,7 @@ def swapCoin (t : Fin n) : (Coins n κ X × Pous.Bits 512) × Pous.Bits κ ≃ (
     simp
 
 theorem distinguisher_swap_iff (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) (hS : SwapFree D t)
-    (x : (Coins n κ X × Pous.Bits 512) × Pous.Bits κ) :
+    (x : (DrawCoins n κ X × Pous.Bits 512) × Pous.Bits κ) :
     D.distinguisher prf δ t (x.1, prf t x.2) ↔ D.potential prf δ ((t : ℕ) + 1) (swapCoin t x).1 := by
   obtain ⟨⟨⟨y, c⟩, u⟩, K⟩ := x
   have hl : ∀ j : Fin n, j ≤ t → D.lands j (y, Function.update c t K) = D.lands j (y, c) := fun j hj =>
@@ -916,12 +916,12 @@ theorem distinguisher_swap_iff (prf : Fin n → Pous.Bits κ → Blocks m) (δ :
 windows, its key read as window `t`'s coin, in a session whose windows `j ≤ t` read nothing of that coin. -/
 theorem pr_potential_succ [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n)
     (hS : SwapFree D t) :
-    pr (D.potential prf δ ((t : ℕ) + 1)) = pr (fun x : (Coins n κ X × Pous.Bits 512) × Pous.Bits κ =>
+    pr (D.potential prf δ ((t : ℕ) + 1)) = pr (fun x : (DrawCoins n κ X × Pous.Bits 512) × Pous.Bits κ =>
       D.distinguisher prf δ t (x.1, prf t x.2)) := by
   calc pr (D.potential prf δ ((t : ℕ) + 1))
-      = pr (fun z : (Coins n κ X × Pous.Bits 512) × Pous.Bits κ => D.potential prf δ ((t : ℕ) + 1) z.1) :=
+      = pr (fun z : (DrawCoins n κ X × Pous.Bits 512) × Pous.Bits κ => D.potential prf δ ((t : ℕ) + 1) z.1) :=
         (pr_fst_eq _).symm
-    _ = pr (fun x => (fun z : (Coins n κ X × Pous.Bits 512) × Pous.Bits κ =>
+    _ = pr (fun x => (fun z : (DrawCoins n κ X × Pous.Bits 512) × Pous.Bits κ =>
           D.potential prf δ ((t : ℕ) + 1) z.1) (swapCoin t x)) :=
         (Actual.pr_comp_equiv (swapCoin t) _).symm
     _ = _ := by
@@ -934,7 +934,7 @@ potential after `t` windows plus `s_t/2^64`. -/
 theorem pr_distinguisher_le [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ}
     (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (t : Fin n) :
     pr (D.distinguisher prf δ t) ≤ pr (D.potential prf δ t) + ENNReal.ofReal (s t / 2 ^ 64) := by
-  rw [pr_equiv (Equiv.prodAssoc (Coins n κ X) (Pous.Bits 512) (Blocks m))]
+  rw [pr_equiv (Equiv.prodAssoc (DrawCoins n κ X) (Pous.Bits 512) (Blocks m))]
   refine pr_le_add_of_fiber _ _ _ (fun ω => ?_)
   show pr (fun y : Pous.Bits 512 × Blocks m => D.distinguisher prf δ t ((ω, y.1), y.2)) ≤
     pr (fun u => D.potential prf δ t (ω, u)) + _
@@ -978,7 +978,7 @@ theorem pr_distinguisher_le [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks
 
 /-- **Window `t`'s distinguisher reads at most `s_t` first blocks.** -/
 theorem distinguisher_congr (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n)
-    (y : Coins n κ X × Pous.Bits 512) {b b' : Blocks m} (h : ∀ i : Fin m, (i : ℕ) < s t → b i = b' i) :
+    (y : DrawCoins n κ X × Pous.Bits 512) {b b' : Blocks m} (h : ∀ i : Fin m, (i : ℕ) < s t → b i = b' i) :
     D.distinguisher prf δ t (y, b) ↔ D.distinguisher prf δ t (y, b') := by
   have e : D.lands t y.1 b ↔ D.lands t y.1 b' :=
     test_congr _ fun i hi => h i (lt_of_lt_of_le hi (min_le_left _ _))
@@ -990,10 +990,10 @@ theorem prfAdvantage_honest [Fintype X] (hc : ∀ t ω, range (D.size t ω : ℕ
     Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t) = 0 := by
   have hl : ∀ j ω b, D.lands j ω b := fun j ω b ha =>
     (openings_subset _ (min_le_right _ _) (draws_le D j ω) ha).trans (hc j ω)
-  let E : Coins n κ X × Pous.Bits 512 → Prop := fun y => below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1) y.2
+  let E : DrawCoins n κ X × Pous.Bits 512 → Prop := fun y => below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1) y.2
   have e : ∀ y b, D.distinguisher prf δ t (y, b) ↔ E y :=
     fun y b => ⟨fun h => h.2.2, fun h => ⟨fun j _ => hl _ _ _, hl _ _ _, h⟩⟩
-  have h1 : pr (fun x : (Coins n κ X × Pous.Bits 512) × Pous.Bits κ => D.distinguisher prf δ t (x.1, prf t x.2)) =
+  have h1 : pr (fun x : (DrawCoins n κ X × Pous.Bits 512) × Pous.Bits κ => D.distinguisher prf δ t (x.1, prf t x.2)) =
       pr E := by
     rw [← pr_fst_eq (β := Pous.Bits κ) E]
     congr 1
@@ -1027,15 +1027,15 @@ section Committed
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} (F : Committed n m s κ X Cm)
 
-theorem play_size (com : Coins n κ X → Cm) (t : Fin n) (ω : Coins n κ X) :
+theorem play_size (com : DrawCoins n κ X → Cm) (t : Fin n) (ω : DrawCoins n κ X) :
     (F.play com).size t ω = (F.view (com ω)).size t ω := rfl
 
-theorem play_correct (com : Coins n κ X → Cm) (t : Fin n) (ω : Coins n κ X) :
+theorem play_correct (com : DrawCoins n κ X → Cm) (t : Fin n) (ω : DrawCoins n κ X) :
     (F.play com).correct t ω = (F.view (com ω)).correct t ω := rfl
 
 /-- **The junk session's windows `j ≤ t` read nothing of window `t`'s coin**: its commitment reads none of coin `t`,
 and at each fixed commitment windows `j ≤ t` read only the other coins and the earlier openings coins. -/
-theorem swapFree_junk (hL : ∀ c, Live (F.view c)) (com : Coins n κ X → Cm) (t : Fin n) :
+theorem swapFree_junk (hL : ∀ c, Live (F.view c)) (com : DrawCoins n κ X → Cm) (t : Fin n) :
     SwapFree (F.play (Committed.junk com t)) t := by
   intro j hj x c K
   have hc : Committed.junk com t (x, Function.update c t K) = Committed.junk com t (x, c) := by
@@ -1045,14 +1045,14 @@ theorem swapFree_junk (hL : ∀ c, Live (F.view c)) (com : Coins n κ X → Cm) 
   rw [play_size, play_size, play_correct, play_correct, hc]
   exact hL (Committed.junk com t (x, c)) j (x, Function.update c t K) (x, c) rfl hω
 
-theorem hide_le [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
+theorem hide_le [Fintype X] (com : DrawCoins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
     F.hide com prf δ t ≤ 1 + 1 := by
   unfold Committed.hide
   exact add_le_add (tsub_le_self.trans (pr_le_one _)) (tsub_le_self.trans (pr_le_one _))
 
 /-- One window of the hybrid: the potential gains at most `s_t/2^64`, window `t`'s distinguisher's advantage at the
 junk commitment, and window `t`'s hiding term. -/
-theorem pr_potential_succ_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Coins n κ X → Cm)
+theorem pr_potential_succ_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : DrawCoins n κ X → Cm)
     (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (t : Fin n) {β : ℝ≥0∞}
     (h : pr ((F.play com).potential prf δ t) ≤ β) :
     pr ((F.play com).potential prf δ ((t : ℕ) + 1)) ≤ β + (ENNReal.ofReal (s t / 2 ^ 64) +
@@ -1067,7 +1067,7 @@ theorem pr_potential_succ_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Co
   exact hybrid_step hJ h
 
 /-- **The hybrid**: the potential after `t` windows is at most `δ` plus the first `t` windows' errors. -/
-theorem pr_potential_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Coins n κ X → Cm)
+theorem pr_potential_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : DrawCoins n κ X → Cm)
     (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) :
     ∀ t, t ≤ n → pr ((F.play com).potential prf δ t) ≤ ENNReal.ofReal δ +
       ∑ j ∈ univ.filter (fun j : Fin n => (j : ℕ) < t),
@@ -1076,7 +1076,7 @@ theorem pr_potential_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Coins n
   | 0, _ => by
     have h0 : univ.filter (fun j : Fin n => (j : ℕ) < 0) = ∅ := filter_false_of_mem fun j _ => Nat.not_lt_zero _
     rw [h0, sum_empty, add_zero]
-    calc pr ((F.play com).potential prf δ 0) ≤ pr (fun z : Coins n κ X × Pous.Bits 512 => below δ 1 z.2) :=
+    calc pr ((F.play com).potential prf δ 0) ≤ pr (fun z : DrawCoins n κ X × Pous.Bits 512 => below δ 1 z.2) :=
           Bandwidth.pr_mono fun z hz => by
             have := hz.2
             rwa [h0, prod_empty] at this
@@ -1096,8 +1096,8 @@ theorem pr_potential_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Coins n
 
 /-- Every window landing on `prf` while the bounds multiply to at most `δ` has probability at most `δ` plus the
 windows' errors. -/
-theorem pr_landed_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : Coins n κ X → Cm)
-    (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (E : Coins n κ X → Prop)
+theorem pr_landed_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : DrawCoins n κ X → Cm)
+    (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (E : DrawCoins n κ X → Prop)
     (hE : ∀ ω, E ω → (∀ t, (F.play com).lands t ω (prf t (ω.2 t))) ∧ ∏ t, (F.play com).bound t ω ≤ δ) :
     pr E ≤ ENNReal.ofReal δ + ∑ t, (ENNReal.ofReal (s t / 2 ^ 64) + (Pous.StreamedWipe.prfAdvantage (prf t)
       ((F.play (Committed.junk com t)).distinguisher prf δ t) + F.hide com prf δ t)) := by
@@ -1143,16 +1143,16 @@ theorem error_toReal {n : ℕ} (s : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (
 /-- An opened receipt that `Refused` lets through on an accepting outcome off the binding event is correct: a moved one
 is in the event. -/
 theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] {D : Session n m s κ X}
-    {prf : Fin n → Pous.Bits κ → Blocks m} {rest : Coins n κ X → Fin n → ℕ → ℕ} {T : Trace (Coins n κ X)}
-    {R : Receipts n κ X} (hR : Refused D prf rest T R) {ω : Coins n κ X} (ha : T.accepts ω)
+    {prf : Fin n → Pous.Bits κ → Blocks m} {rest : DrawCoins n κ X → Fin n → ℕ → ℕ} {T : Trace (DrawCoins n κ X)}
+    {R : Receipts n κ X} (hR : Refused D prf rest T R) {ω : DrawCoins n κ X} (ha : T.accepts ω)
     (hb : ¬ ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) (t : Fin n) :
     D.opened prf rest t ω ⊆ D.correct t ω :=
   fun p hp => (hR ω ha t p hp).resolve_right fun hmv => hb ⟨t, p, hp, hmv⟩
 
 /-- `PooledDraw` at one committed session. -/
 theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (F : Committed n m s κ X Cm)
-    (com : Coins n κ X → Cm) (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (F : Committed n m s κ X Cm)
+    (com : DrawCoins n κ X → Cm) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448)
     (hL : ∀ c, Live (F.view c)) (hR : Refused (F.play com) prf rest T R) (hC : Counted (F.play com) T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t)).toReal +
@@ -1197,7 +1197,7 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
 
 /-- A session that reads no commitment has no hiding term. -/
 theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X] (D : Session n m s κ X)
-    (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
+    (com : DrawCoins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
     (⟨fun _ => D⟩ : Committed n m s κ X Cm).hide com prf δ t = 0 := by
   change (pr (D.potential prf δ ((t : ℕ) + 1)) - pr (D.potential prf δ ((t : ℕ) + 1))) +
       (pr (D.potential prf δ t) - pr (D.potential prf δ t)) = 0
@@ -1206,8 +1206,8 @@ theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
 /-- `PooledDraw` at one session: the committed bound at a view that reads no commitment, whose hiding terms vanish
 (`hide_const`). -/
 theorem pooledDrawLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m s κ X)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (hL : Live D)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Session n m s κ X)
+    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (hL : Live D)
     (hR : Refused D prf rest T R) (hC : Counted D T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
