@@ -350,7 +350,7 @@ FAST_POOL = "build"
 #: the kind of `--records`' result: an audit without the kernel replay or the tests, which no merge check accepts
 FAST_KIND = "lean-fast/v1"
 #: how long `--records` waits for another run's hold on its tree (a node with no SLOTS shares `local` among every run;
-#: vy-nebius-cpu-2, 19 Oct: three lanes' runs refused in 0 s behind a 53-minute one), and how often it looks
+#: without the wait, runs behind an hour-long one would be refused at once), and how often it looks
 TREE_WAIT_S, TREE_POLL_S = 3 * 3600, 20
 _sleep, _clock = time.sleep, time.monotonic
 
@@ -410,7 +410,7 @@ def damaged(lib: Path) -> list[Path]:
     `.hash` without hashing the output. Every Lake path writes the `.hash` after its output, but two leave an older one: a
     build killed after `lean` wrote its outputs, and a restore from Lake's cache that unpacks a `.ltar` over the outputs.
     A module that imports one then records the old hash for the new bytes, and a later build on the other side of the
-    change replays it beside a module built against the new ones (TOP-90 row 54: `Proofs.Pouw`'s clash on
+    change replays it beside a module built against the new ones (a clash such as `Proofs.Pouw`'s on
     `W1.Instr.exec.eq_10`). So each loses its trace and its `.hash` files (`forget`) for Lake to rebuild it."""
     out = []
     for trace in sorted(lib.rglob("*.trace")) if lib.is_dir() else []:
@@ -659,7 +659,7 @@ def merged(pkg: str, files: list[str]) -> str | None:
     """Why this checkout's records of ``pkg`` need no run although its inputs are new, or None: HEAD merges a commit of `main`
     into a commit whose records passed (`kept`), possibly through further such merges, and each merge takes every Lean input
     of ``pkg`` from one side whole, its locks aside, which are `merge.py`'s merge of the two sides. The lock is then a candidate,
-    never a verdict: the train's Lean check rebuilds every record and regenerates one that differs (CI-64)."""
+    never a verdict: the train's Lean check rebuilds every record and regenerates one that differs."""
     prefixes = sorted({*closure(pkg), LA.LEAN_TOOL.rstrip("/"), *tool_inputs(files)})
     if git("status", "--porcelain", "--untracked-files=no", "--", *prefixes) != "":
         return None

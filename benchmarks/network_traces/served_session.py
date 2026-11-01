@@ -162,7 +162,7 @@ REQUESTS = 113
 #: takes, the auditor's node, the gate key's file under ~/.ssh and the lane's gate directory there
 SITE: dict[str, str] = json.loads((HERE / "site.json").read_text())
 PEER, PORT, GATE, LANE = SITE["peer"], 18782, SITE["gate"], SITE["lane"]
-#: the auditor's side, where the chain runs and the gate's coins for its draw arrive
+#: the auditor's side, where the chain runs and the gate's coins for its sample arrive
 AUDITOR = SITE["auditor"]
 KEY = Path.home() / ".ssh" / SITE["gate_key"]
 KEEP = Path(SITE["keep"])

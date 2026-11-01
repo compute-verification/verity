@@ -7,9 +7,9 @@ reference it must equal):
 
 * ``hm96``: the certifier's own (`certifier.transfer_rows`, `one_stage.registered`): every weight row a registered
   value's row under `hm96-sha512/row/v2`, its own 192-byte salt from the operating system, a frame-v3-sha512 tree over
-  the rows. A row is what the circuit's registered reads take: an `S8AccumulatorPart_v1{K=256}` unit's weight row, 128
-  u16 words (256 int8 weights). Per row: ``x`` (3 compressions after the row prefix's midstate), the mask ``M·y`` (192
-  table rows of 64 bytes), ``c`` (2), the hm96 leaf (2), the frame leaf (2) and one tree node (3).
+  the rows. A row is what the circuit's registered reads take: an `S8AccumulatorPart_v1{K=256}` proof block's weight
+  row, 128 u16 words (256 int8 weights). Per row: ``x`` (3 compressions after the row prefix's midstate), the mask
+  ``M·y`` (192 table rows of 64 bytes), ``c`` (2), the hm96 leaf (2), the frame leaf (2) and one tree node (3).
 * ``store``: the P2 store's own root (PoUS's verification root, `pous.verifier`): each 2,056-byte block's
   `sha512/row/v2` digest (17 compressions after the prefix's midstate), its leaf (1) and one RFC 6962 node (2).
 
@@ -46,7 +46,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 INST = hm96.SHA512
 KEY = INST.default_key
 SCHEMA = G.SCHEMA_V2
-#: the load's row: 128 u16 words, one S8AccumulatorPart_v1{K=256} unit's weight row
+#: the load's row: 128 u16 words, one S8AccumulatorPart_v1{K=256} proof block's weight row
 ROW_WORDS = 128
 ROW_BYTES = 2 * ROW_WORDS
 #: P2 at its registered point (`pous.schemes.p2`): 2,056-byte blocks of 2,054 payload bytes, 2^16 blocks a segment
