@@ -594,6 +594,21 @@ def test_the_decoder_refuses(live, label, edit, why):
     assert got == dict(VECTORS["decoder_rejects"])[label] and got is not None and why in got
 
 
+def test_the_self_contained_entry_and_v0(decoded):
+    """§4.7: a v0 descriptor's definitions are the self-contained entries, which a v0 decode gives back; a v1 decode flattens
+    node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
+    program = Program(PROG)
+    v0 = codec.encode_program(program, codec.SCHEMA_V0)
+    assert sorted(v0) == ["annotations", "definitions", "program_fn", "root", "schema"]
+    assert v0["definitions"][v0["root"]] == codec.definition_entry(program.root)
+    assert codec.encode_program(codec.decode_program(v0, REG), codec.SCHEMA_V0)["definitions"] == v0["definitions"]
+    via_v1 = {**v0, "definitions": codec.encode_program(decoded, codec.SCHEMA_V0)["definitions"]}
+    assert [k for k in v0["definitions"] if via_v1["definitions"][k] != v0["definitions"][k]] == [v0["root"]]
+    nested, flat = _node(v0, 12)["args"][0]["refs"], _node(via_v1, 12)["args"][0]["refs"]
+    assert any("concat" in p for p in nested["concat"]) and not any("concat" in p for p in flat["concat"])
+    assert expand(nested) == expand(flat)
+
+
 # -- 5. programs and Input nodes ------------------------------------------------------------------------------------------------
 
 def test_input_nodes_are_recognised_by_id(live, decoded):
