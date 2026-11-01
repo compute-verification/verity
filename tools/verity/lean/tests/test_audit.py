@@ -2620,8 +2620,9 @@ def test_a_checked_declaration_waits_for_what_an_unchecked_one_it_unfolds_needs(
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_replay_reads_a_modules_private_part_and_a_plain_files_olean_alone(tmp_path):
     """A `module`'s proofs are only in its `.olean.private`: without it the replay refuses the module, where the `.olean`
-    its importers read would replay each theorem as an axiom. A file outside the module system is its `.olean` alone: the
-    parts a build of it as a `module` left beside it are that build's, read against another `.olean`."""
+    its importers read would replay each theorem as an axiom. A file outside the module system is its `.olean` alone, as
+    Lean imports it: the parts of its build as a `module`, put back beside it (Lake deletes them when it rebuilds the
+    file; a copied or restored build tree need not), are that build's, and the replay reads none of them."""
     pkg = tmp_path / "pkg"
     shutil.copytree(A.FIXTURES / "modules", pkg)
     lib = pkg / ".lake" / "build" / "lib" / "lean"

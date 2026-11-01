@@ -13,7 +13,10 @@ kept `.lake/build` follows it (`lean_audit.py`'s docstring has the key, `--expla
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
-the same way. The only package code that runs is the build's and, after the facts and the replay, the tests' under `runs`
+the same way. Both read a file of Lean's module system (`module`) from its private part, `.olean.private`: its proofs and
+unexposed bodies are only there, and the `.olean` its importers read gives each theorem as an axiom. The replay refuses a
+`module` without its private part, and reads a file outside the module system from its `.olean` alone, as Lean's import
+does. The only package code that runs is the build's and, after the facts and the replay, the tests' under `runs`
 (each deciding only its own pass), in a sandbox where the machine allows one; a test's data generator is the repository's
 code and runs outside it.
 
@@ -157,9 +160,10 @@ and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run o
 `.olean` files.
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
-when `tools/verity/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
-installs it first, so a machine without elan works), must pass clean and fail once for each violation in
-`tests/fixtures/violations.json`. Among them:
+when `tools/verity/lean/` changes): `tests/fixtures/control` and `tests/fixtures/modules`, the second written in Lean's
+module system, each built with each audited package's toolchain (`--build` installs it first, so a machine without elan
+works), must pass clean and fail once for each violation in its file (`tests/fixtures/violations.json`,
+`tests/fixtures/module-violations.json`). Among them:
 
 - a false theorem added through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass every check but
   the replay and fail the replay;
@@ -171,7 +175,12 @@ installs it first, so a machine without elan works), must pass clean and fail on
   one whose docstring and comments name it, which must pass;
 - a dependency that adds a false theorem through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass
   every check, the replay of the package's own modules included, and fail the replay of the import closure
-  (`--closure`).
+  (`--closure`);
+- a `sorry`, an axiom private to its module, `native_decide`, `implemented_by`, `extern`, `debug.skipKernelTC` and the
+  false theorem above, each where only a module's private part holds it (a public theorem's proof, a private
+  declaration), which must fail as they do in plain files, and the replay must agree with the facts on the axioms;
+- a change to a body `@[expose]` exports and to one it doesn't, each read by a guarantee, which must each fail the
+  records, and the module package rewritten as plain files, which must pass against the records of its build as modules.
 
 ## The policy: `lean-audit.json`, beside the lakefile
 

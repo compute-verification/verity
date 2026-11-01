@@ -186,8 +186,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   for m in mods do
     let olean ← findOLean m
     -- as `importModules` reads them: a `module`'s proofs and unexposed bodies are only in its private part, read on top
-    -- of its `.olean` and server part; a file outside the module system is its `.olean` alone, whatever parts an earlier
-    -- build of it as a `module` left beside it
+    -- of its `.olean` and server part; a file outside the module system is its `.olean` alone, whatever lies beside it
     let (header, region) ← CompactedRegion.read (α := ModuleData) olean #[]
     let mut data := header
     if header.isModule then
