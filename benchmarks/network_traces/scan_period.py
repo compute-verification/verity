@@ -1,5 +1,6 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's link-window and the scan's
-answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its Lean.
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's execution phase and the
+scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its
+Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
@@ -12,7 +13,8 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
   three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
   ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
-  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries.
+  more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries and its ``scan/state``
+  that audit's.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
@@ -23,7 +25,8 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
   `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`slotEntryPins`: the scan's
   `prog` must be `io_shell.SlotEntry_v1`'s own entries), so the honest case passes every check before the wiring and
-  is refused there. ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  is refused there; its registration names the scan's state tree as ``scan/state``, the state the stand-in's
+  `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
@@ -47,7 +50,7 @@ CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "windo
 
 
 def certificates(run: Path, w: int) -> list[dict]:
-    """Link-window w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
+    """Execution phase w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
     responses, fails: `warden_serve.CERTIFIED`), each the certificate's own fields."""
     docs = [json.loads(x)["certificate"] for x in SZ._found(run, "certified.jsonl").read_text().splitlines()
             if "certificate" in json.loads(x)]

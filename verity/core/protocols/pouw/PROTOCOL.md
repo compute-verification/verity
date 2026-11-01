@@ -64,7 +64,7 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    (k the certifier's `pouw_window`; any other run of windows is refused), registered under a stream (its 64-byte
    digest) and a prover (its 64-byte registered id), and its salt is `pouw_salt(reveal, p, stream, prover)`, 64 bytes,
    from the certifier's 512-bit salt for p. The verifier reads that salt with `salt.revealed`: the certifier's
-   `reveal(p, registration)`, which fails closed unless the proof service registered p (PoUW's reader, `salt.registered`,
+   `reveal(p, registration)`, which fails closed unless the proof system registered p (PoUW's reader, `salt.registered`,
    reads p off the served window's context, `<prefix>/pouw-window/<p>/<manifest SHA-512>`) and p's last ingress record is
    published. `pouw_salt` is SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), every part
    fixed-width, the tag keeping its input apart from `window_salt`'s: two registrations of p under another stream or
@@ -73,7 +73,7 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    (`Proxy(origin=…)`), each with a salt drawn once from fresh randomness, so no epoch is bound; a proxy started again,
    or a second link, counts from 0 again, so a served-zk window's stream names the certifier's run:
    `served_commit.stream_id` reads its `certifier_run`, (key id, run id, ingress link), beside the deployment and the
-   stream's name. Every signed answer of the certifier binds that run, a `Proxy` and its `RemoteCertifier` give it
+   stream's name. Every signed answer of the certifier binds that run, a `Proxy` and its `CertifierClient` give it
    alike, the run id is drawn when a proxy starts (`Proxy.run_id`) and the ingress link has no default
    (`Proxy(ingress_link=…)`). That salt binds no weights, and
    the prover holds it from p's first ingress tick, so a certified window passes only weights, a stream and a prover
@@ -113,7 +113,7 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
      No Lean statement covers the certified window's timing yet (`EndToEndWindow`'s t_d is the
      uncertified window's).
    - **The certifier–challenger link**. The certifier runs on the link and the challenger on an
-     auditor host, so the challenger asks through the certifier's client (`certifier.active.RemoteCertifier`, served by
+     auditor host, so the challenger asks through the certifier's client (`certifier.active.CertifierClient`, served by
      `serve_reveals`): each `committed` and `reveal` is a request the challenger signs for the certifier's run and an
      answer the certifier signs over its run, p, the registration's digest and the value, which the client verifies
      under the certifier's key. A `Proxy` in process has no signer, so it names no run, and a certified challenger
@@ -129,7 +129,7 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    window states it as `Check.registration_deadline`, which `served_commit.py params` writes; the challenger refuses
    parameters without it, and refuses as `late-registration` a window received after the epoch's draw coin was released
    (each root's receipt comes before the coin's release). The deadline is in seconds on the
-   challenger's clock, and the proof service refuses a later registration, or one before the salt, as
+   challenger's clock, and the proof system refuses a later registration, or one before the salt, as
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
    `registration_deadline` in its parameters).
 5. **Selection.** A served window's draw is one uniform subset of K′ of its N tiles, without replacement, drawn after
@@ -219,7 +219,7 @@ asked for, that is malformed, that does not open against the epoch's root, or wh
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
 
-**Live coins** come from the proof service's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
+**Live coins** come from the proof system's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
 record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
 uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
 family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin, 64 bytes, SHA-512's whole

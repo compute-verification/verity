@@ -78,15 +78,15 @@ WIDE = {   # wide.cu's that `WideLib` calls
     "ww_set_key": [_v, _i, _v, _v, _v, _v],
     "ww_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
     "ww_encode": [_v, _v, _q, _q, _i, _i, _v],
-    "ww_gemm": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _v, _v, _i, _v],
-    "ww_gemm_occupancy": [_i, _i, _i, _i],
+    "ww_gemm": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _v],
+    "ww_gemm_occupancy": [_i, _i, _i],
 }
 TENSOR = {   # wt.cu's that `TensorLib` calls
     "wt_constants": [_v],
     "wt_set_key": [_v, _i, _v, _v],
     "wt_encode": [_v, _v, _q, _q, _i, _i, _v],
     "wt_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
-    "wt_fused": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _i, _v, _v, _q, _v, _v],
+    "wt_fused": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _v, _v, _v],
 }
 
 
@@ -127,7 +127,7 @@ class WideLib:
         so = self.so = _cuda_lib().load(self.path, WIDE)
         cs = (ctypes.c_int * 32)()
         so.ww_constants(cs)
-        self.constants = list(cs[:21])
+        self.constants = list(cs[:14])
         self.bits, self.limbs, self.payload, self.lane_words, self.kmax = (cs[0], cs[1], cs[2], cs[3], cs[7])
         self.field = _wide().field(self.bits)
         f = self.field
@@ -166,7 +166,7 @@ class TensorLib:
     def __init__(self, path: str | Path) -> None:
         self.path = str(path)
         so = self.so = _cuda_lib().load(self.path, TENSOR)
-        cs = (ctypes.c_int * 15)()
+        cs = (ctypes.c_int * 18)()
         so.wt_constants(cs)
         self.constants = list(cs)
         (self.bits, self.limbs, self.word_bytes, self.payload_bytes, self.task_words, self.kmax, self.sb,
@@ -208,8 +208,8 @@ class TensorLib:
 
     def fused(self, k: int, w, x, y, m: int, n: int, kd: int, base: int, partials: int, cfg: Config, groups: int,
               tsteps, launched=None) -> None:
-        self.call("wt_fused", k, w, x, y, m, n, kd, base, partials, cfg.consumers, cfg.stages, groups, 0, tsteps, None,
-                  0, launched, stream())
+        self.call("wt_fused", k, w, x, y, m, n, kd, base, partials, cfg.consumers, cfg.stages, groups, tsteps, launched,
+                  stream())
 
     def steps(self, m: int, n: int, kd: int, cfg: Config) -> tuple[int, torch.Tensor]:
         """The launch's CTA groups (as many as fill the device) and its tweak steps on the device (`bench.tsteps`): a
@@ -400,14 +400,14 @@ class WideLinear(Linear):
 
     def candidates(self, m: int) -> list[Config]:
         w = self.wlib
-        occ = w.so.ww_gemm_occupancy(self.k, m, 0, 1)
+        occ = w.so.ww_gemm_occupancy(self.k, m, 1)
         return [Config(3)] + ([Config(3, ahead=occ * w.sms)] if occ > 0 else [])
 
     def _launch(self, cfg: Config, x8: torch.Tensor, part: torch.Tensor, partials: bool) -> None:
         if cfg.form != 3:
             raise ValueError(f"the wide GEMM has one form, not {cfg.name}")
         self.wlib.call("ww_gemm", self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), x8.shape[0], self.n,
-                       self.kd, self.base, int(partials), None, None, cfg.ahead, stream())
+                       self.kd, self.base, int(partials), cfg.ahead, stream())
 
     def decoded(self) -> torch.Tensor:
         if not self.k:

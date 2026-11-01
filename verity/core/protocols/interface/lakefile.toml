@@ -19,7 +19,7 @@ name = "CoreProtocol"
 name = "core-protocol-example"
 root = "CoreProtocol.ExampleMain"
 
-# The registration log's check as a core protocol (`verity/registration/v1`), the executable its difftest drives.
+# The registration log's check as a core protocol (`verity/registration/log/v1`), the executable its difftest drives.
 [[lean_exe]]
 name = "core-registration"
 root = "CoreProtocol.RegistrationMain"

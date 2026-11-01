@@ -134,7 +134,7 @@ from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks
 
@@ -148,15 +148,15 @@ S8, S32, F32, BF16 = Array(8, BIT), Array(32, BIT), Array(32, BIT), Array(16, BI
 M32 = (1 << 32) - 1
 
 
-def ROW(k: int) -> Record:
+def ROW(k: int) -> RecordType:
     """An A or B row of the unit: K s8 codes, then the row's f32 scale (8 K + 32 bits, the codes' bytes then the scale's,
     little-endian)."""
-    return Record(("codes", Array(int(k), S8)), ("scale", F32))
+    return RecordType(("codes", Array(int(k), S8)), ("scale", F32))
 
 
-def RECORD(r: int, c: int) -> Record:
+def RECORD(r: int, c: int) -> RecordType:
     """A unit's z/y record: its R C cells' s32 z, row-major, then their bf16 y (48 R C bits)."""
-    return Record(("z", Array(int(r) * int(c), S32)), ("y", Array(int(r) * int(c), BF16)))
+    return RecordType(("z", Array(int(r) * int(c), S32)), ("y", Array(int(r) * int(c), BF16)))
 
 
 # -- the dequant --------------------------------------------------------------------------------------------------------------
@@ -263,7 +263,7 @@ def _signature(S: Any) -> tuple:
     r, c, k = _tile(S)
     params, ret = S.TILE.signature()
     return ((("a", Array(r, ROW(k))), ("b", Array(c, ROW(k))), ("zy", RECORD(r, c)), *params[2:]),
-            Record(("receipt", ret.fields[1][1]), ("ok", BIT)))
+            RecordType(("receipt", ret.fields[1][1]), ("ok", BIT)))
 
 
 def _rows(a: Coll, n: int, field: str) -> Coll:
@@ -350,7 +350,7 @@ def _lane_signature(S: Any) -> tuple:
     params, _ret = S.TILE.signature()
     return ((("a", Array(4, ROW(lay.k))), ("b", Array(8, ROW(lay.k))), ("admit", Array(lay.r, BIT)),
              ("zy", RECORD(lay.r, lay.c)), ("partials", _words(lay)), *params[2:],
-             ("lane", LANE)), Record(("ok", BIT)))
+             ("lane", LANE)), RecordType(("ok", BIT)))
 
 
 def _pick(B: Any, sel: list, cands: list) -> Coll:
@@ -504,7 +504,7 @@ PouwH1LaneZy2 = CompositeDefinition(
 
 def _combine_signature(S: Any) -> tuple:
     lay = _lane_layout(S)
-    return (("partials", Array(lay.lanes, _words(lay))), ("receipt", _words(lay))), Record(("ok", BIT))
+    return (("partials", Array(lay.lanes, _words(lay))), ("receipt", _words(lay))), RecordType(("ok", BIT))
 
 
 def _combine_body(B: Any, S: Any, partials: Coll, receipt: Coll) -> Coll:
@@ -619,13 +619,13 @@ def chunk_words(rows: Sequence[bytes], k: int) -> list[list[int]]:
     return [[leaf[i] | leaf[i + 1] << 8 for i in range(0, len(leaf), 2)] for row in rows for leaf in chunk_leaves(row, k)]
 
 
-def CARRY(lay: H.Layout, n: int, c: int) -> Record:
+def CARRY(lay: H.Layout, n: int, c: int) -> RecordType:
     """What chunk c of a lane in n chunks hands chunk c + 1: after its last segment, its fx1 state (16 u32), each entry's
     prefix sum T (32 u32), each row slot's residue sums (4 × 32 u32), each cell's z (32 s32, by row slot then column slot),
     every chain word so far, unmasked (2 (c + 1) KS_c u32, KS_c = K / 32 n), and its rows' scales (4 and 8 f32):
     880 + 8 (c + 1) KS_c bytes."""
     ks = lay.k // n // 32
-    return Record(("state", Array(16, H.U32)), ("t", Array(32, H.U32)), ("res", Array(4, Array(32, H.U32))),
+    return RecordType(("state", Array(16, H.U32)), ("t", Array(32, H.U32)), ("res", Array(4, Array(32, H.U32))),
                   ("z", Array(32, S32)), ("words", Array(2 * (c + 1) * ks, H.U32)), ("sa", Array(4, F32)),
                   ("sw", Array(8, F32)))
 
@@ -641,7 +641,7 @@ def _chunk_signature(S: Any) -> tuple:
     ps = [("a", Array(4, ROW(kc))), ("b", Array(8, ROW(kc)))] + ([("carry_in", CARRY(lay, n, c - 1))] if c else [])
     ps += ([("admit", Array(lay.r, BIT)), ("zy", RECORD(lay.r, lay.c)), ("partials", _words(lay))] if c == n - 1 else
            [("carry_out", CARRY(lay, n, c))])
-    return (*ps, *params[2:], ("lane", LANE)), Record(("ok", BIT))
+    return (*ps, *params[2:], ("lane", LANE)), RecordType(("ok", BIT))
 
 
 def _refuse_chunk(b: dict, tile: str = "PouwH1Tile_v1") -> str | None:
@@ -921,7 +921,7 @@ PUBLIC_J10R = ("salt", "position", "roots", "call", "blocks", "lane")
 def _fields(path: str, t: Any, bit: int) -> list[tuple[str, int, int]]:
     """``t`` from bit ``bit`` of a row as its fields ``(path, first bit, bits)``: a record by its fields, anything else whole."""
     out = []
-    for p, ft in ([(f"{path}.{n}", ft) for n, ft in t.fields] if isinstance(t, Record) else [(path, t)]):
+    for p, ft in ([(f"{path}.{n}", ft) for n, ft in t.fields] if isinstance(t, RecordType) else [(path, t)]):
         out.append((p, bit, sum(ft.leaf_widths())))
         bit += out[-1][2]
     return out

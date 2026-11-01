@@ -1,10 +1,11 @@
 """`leak_guard`: before custody publishes a run dir, each file in it that holds a gate run's witness (under a witness/
 directory or by a declared witness name, a witness piece raw or as hex at any offset, an archive member that does, or an
-archive the guard can't read) is moved to the quarantine outside the run dir, and the report names it by path alone; the
-gate's public files, their JSON written again and a witness file equal to a public one are no finds, and a declared
-allowlist entry excuses its piece (with ``*``, any piece of its witness file) only in the records it names. chain_record.sh moves a gate sent under inputs/ to the
-quarantine once unpacked, runs the guard on every exit and is refused by it (exit 3), and withholds out/, inputs/ and
-the logs whole on a signal or when the guard can't run."""
+archive the guard can't read, and with ``--public`` a file of a path the record doesn't declare public) is moved to the
+quarantine outside the run dir, and the report names it by path alone; the gate's public files, their JSON written
+again and a witness file equal to a public one are no finds, and a declared allowlist entry excuses its piece (with
+``*``, any piece of its witness file) only in the records it names. chain_record.sh moves a gate sent under inputs/ to
+the quarantine once unpacked, runs the guard on every exit and is refused by it (exit 3), and withholds out/, inputs/
+and the logs whole on a signal or when the guard can't run."""
 from __future__ import annotations
 
 import gzip
@@ -256,6 +257,31 @@ def test_a_held_output_reaches_the_record_only_once_the_guard_passes_it(tmp_path
     assert (tmp_path / "q" / "files" / "out" / "n2" / "planted.json").is_file()
     assert not any(p.is_file() for p in hold.rglob("*"))
     assert SALTS[16:32].hex() not in (tmp_path / "report.json").read_text()
+
+
+def test_a_record_that_declares_what_is_public_holds_nothing_else(tmp_path):
+    """With ``--public``, a file whose record path no glob declares, in the run dir or held, is a find whatever it holds
+    (here a window's counts, which no witness piece shows), and a held one is never released; a declared one is still
+    read for the witness. Without it, the counts are no find."""
+    _gate(tmp_path / "G" / "g1")
+    piece, _ = _sig_piece()
+    counts = b'{"requests": 3, "steps": 9, "outputs": 12}'
+    run, out, hold = tmp_path / "run", tmp_path / "run" / "out", tmp_path / "hold"
+    _put(run, {"out/piece.log": b"started\n", "out/certs.json": counts})
+    _put(hold, {"answer.json": b'{"verdict": "accept"}', "chain/report/report.json": b'{"verdict": "accepted"}',
+                "chain/endpoint/report.json": counts, "chain/scan/answers.json": piece})
+    rc, report, _ = _guard(tmp_path, run, "--hold", str(hold), "--dry")
+    assert rc == 3 and [d["path"] for d in report["found"]] == ["out/chain/scan/answers.json"]
+    declared = ("out/answer.json", "out/piece.log", "out/chain/report/*", "out/chain/scan/answers.json")
+    rc, report, _ = _guard(tmp_path, run, "--hold", str(hold), *(x for g in declared for x in ("--public", g)))
+    assert rc == 3 and {d["path"]: d["why"] for d in report["found"]} == {
+        "out/certs.json": ["not declared public (--public)"],
+        "out/chain/endpoint/report.json": ["not declared public (--public)"],
+        "out/chain/scan/answers.json": ["1 witness pieces"]}
+    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == [
+        "answer.json", "chain/report/report.json", "piece.log"]
+    assert (tmp_path / "q" / "files" / "out" / "chain" / "endpoint" / "report.json").read_bytes() == counts
+    assert not any(p.is_file() for p in hold.rglob("*"))
 
 
 def test_the_guard_refuses_a_hold_custody_would_take(tmp_path):

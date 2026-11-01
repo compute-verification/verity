@@ -37,10 +37,15 @@ import io
 import json
 import lzma
 import os
+import importlib.util
 import sys
 import tarfile
 from pathlib import Path
 
+_spec = importlib.util.spec_from_file_location("verdicts_settings", Path(__file__).resolve().parent / "settings.py")
+#: every environment variable check reads, declared once (`settings.py`), from beside this file: `plan.py --on` sends both
+SETTINGS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(SETTINGS)
 SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records", "lean-artifacts"}, "tests": {"logs", "durations.json"}}
 SCRATCH = {"check": ("lean-audit-scratch-",), "tests": ()}
 
@@ -51,10 +56,9 @@ def _skipped(prefix: str, top: str) -> bool:
 
 def roots() -> dict[str, Path]:
     """The caches, where `check.py` (`cache_dir()`) and `suites.py` (`CACHE`) keep them; `tests/test_verdicts.py` pins the two."""
-    env = os.environ
-    home = Path.home()
-    return {"check": Path(env.get("CHECK_CACHE") or home / ".cache" / "verity-check"),
-            "tests": Path(env.get("VERITY_TEST_CACHE") or Path(env.get("XDG_CACHE_HOME") or home / ".cache") / "verity" / "tests")}
+    S, home = SETTINGS, Path.home()
+    return {"check": Path(S.CHECK_CACHE or home / ".cache" / "verity-check"),
+            "tests": Path(S.VERITY_TEST_CACHE or Path(S.XDG_CACHE_HOME or home / ".cache") / "verity" / "tests")}
 
 
 def entries() -> dict[str, Path]:

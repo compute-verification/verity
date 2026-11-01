@@ -1,6 +1,6 @@
-"""The coverage table (data/cover/, MODEL-COVER): every opcode of NVIDIA's family tables, every SASS form of the corpus and
-every census kind on the H200 and the RTX PRO 6000 has a row; every row names a real envelope op (MODEL-MIN's `Accel.Op`
-or a proposed one), pipe, format and θ key; every lane and collective reads and writes no more words than its op allows;
+"""The coverage table (data/cover/): every opcode of NVIDIA's family tables, every SASS form of the corpus and
+every census kind on the H200 and the RTX PRO 6000 has a row; every row names a real envelope op (`Accel.Op` or a
+proposed one), pipe, format and θ key; every lane and collective reads and writes no more words than its op allows;
 and every dominated row's rate, in its op's units, is at most its resource's ρ."""
 from __future__ import annotations
 

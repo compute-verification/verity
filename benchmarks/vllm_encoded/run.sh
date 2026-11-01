@@ -49,19 +49,15 @@ ARMS=${ARMS:-stock plain enc:2 enc:3 stock}
 WIDE=$(for a in $ARMS; do case $a in wide:*) a=${a#wide:}; echo "${a%%:*}" ;; esac; done | sort -u)
 for spec in $WIDE; do
   bits=${spec:0:3} suf=${spec:3} defs=""
-  while [[ $suf == *[cutwemk] ]]; do
-    [[ $suf == *k ]] && defs+=" -DWW_SKU=1"
+  while [[ $suf == *[cwm] ]]; do
     [[ $suf == *m ]] && defs+=" -DWW_MAXREG=160"
-    [[ $suf == *e ]] && defs+=" -DWW_SKEND=1"
     [[ $suf == *c ]] && defs+=" -DWW_CC=1"
-    [[ $suf == *u ]] && defs+=" -DWW_B3U=1"
-    [[ $suf == *t ]] && defs+=" -DWW_TB=2"
     [[ $suf == *w ]] && defs+=" -DWW_KW=2"
     suf=${suf%?}
   done
   [[ $suf == r* ]] && defs+=" -DWW_ROLL=1" && [ -n "${suf#r}" ] && defs+=" -DWW_OCC=${suf#r}"
   # shellcheck disable=SC2086
-  nvcc "${FLAGS[@]}" -I benchmarks/bandwidth -DWW_BITS="$bits" -DWW_SQR=1 -DWW_KMAX="${WW_KMAX:-2}" $defs \
+  nvcc "${FLAGS[@]}" -DWW_BITS="$bits" -DWW_SQR=1 -DWW_KMAX="${WW_KMAX:-2}" $defs \
     -o "$B/ww-p$spec.so" benchmarks/word_codec/wide.cu > "$O/ww-p$spec.ptxas" 2>&1 &
 done
 TENSOR=$(for a in $ARMS; do case $a in tensor:*) a=${a#tensor:}; echo "${a%%:*}" ;; esac; done | sort -u)

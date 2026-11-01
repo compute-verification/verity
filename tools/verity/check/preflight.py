@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -336,13 +335,13 @@ def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpui
 
 
 def _env_path(name: str) -> Path | None:
-    return Path(os.environ[name]) if os.environ.get(name) else None
+    return Path(p) if (p := CHECK.SETTINGS.get(name)) else None
 
 
 def main() -> int:
     runs = ROOT.parent.parent / "runs" if ROOT.parent.name == "src" else None       # a shipped tree: <root>/src/<sha>, <root>/runs
     facts, fails = run(ROOT, _env_path("RESEARCH_PREFLIGHT_INPUTS"), _env_path("RESEARCH_PREFLIGHT_CUSTODY"), CHECK.cache_dir(),
-                       sha=os.environ.get("RESEARCH_SOURCE_SHA"), runs=runs, shared=SLOT.SLOTS.exists())
+                       sha=CHECK.SETTINGS.RESEARCH_SOURCE_SHA, runs=runs, shared=SLOT.SLOTS.exists())
     for line in facts:
         print(line, flush=True)
     for line in fails:
