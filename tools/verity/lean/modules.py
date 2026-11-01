@@ -35,6 +35,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SECTION = "@[expose] public section"
 OPTIONS = ("backward.privateInPublic", "backward.proofsInPublic")
 FIX = "python3 tools/verity/lean/modules.py"
+FIXTURES = "tools/verity/lean/tests/fixtures/"
 
 
 class Import(NamedTuple):
@@ -205,8 +206,9 @@ def tracked() -> list[str]:
 
 
 def packages(files: list[str]) -> list[str]:
-    """Every in-tree Lake package: a directory with a tracked `lakefile.toml`."""
-    return sorted(f.rsplit("/", 1)[0] for f in files if f.endswith("/lakefile.toml"))
+    """Every in-tree Lake package: a directory with a tracked `lakefile.toml`, the controls' fixtures aside (their modules
+    are ported by hand, and their root stays a plain file, which the tests extend with plain modules)."""
+    return sorted(f.rsplit("/", 1)[0] for f in files if f.endswith("/lakefile.toml") and not f.startswith(FIXTURES))
 
 
 def modules(paths: list[str], files: list[str]) -> list[str]:
