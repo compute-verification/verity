@@ -275,10 +275,10 @@ def handles(registry: Path = REGISTRY) -> set[str]:
 
 def off_gate(policy: Path = POLICY) -> tuple[str, ...]:
     """The jobs drive's policy takes off the merge gate (``policy``'s `off_gate`); none when there is no such file."""
+    if not policy.exists():
+        return ()
     try:
         doc = tomllib.loads(policy.read_text())
-    except FileNotFoundError:
-        return ()
     except tomllib.TOMLDecodeError as e:
         raise DeclarationError(f"{policy}: not TOML: {e}") from None
     off = doc.get("off_gate", [])
