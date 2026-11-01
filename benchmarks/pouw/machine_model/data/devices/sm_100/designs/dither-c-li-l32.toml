@@ -30,7 +30,7 @@ source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollar
 
 [mand.fold]
 eps = 0.0
-source = "named assumptions: LI at 1 lane instruction a word is the cheapest implementation of the fold (FOLD-OPT); LI's binding rests on KLI₂₄ (decision 65), (RT), (G₃) and (HO_U) (decision 59; (HO) itself fails in serving)"
+source = "named assumptions: LI at 1 lane instruction a word is the cheapest implementation of the fold (FOLD-OPT); LI's binding rests on KLI₂₄, (RT), (G₃) and (HO_U) ((HO) itself fails in serving)"
 
 [clock]
 eps = 0.0
