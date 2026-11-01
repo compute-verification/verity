@@ -15,7 +15,7 @@ occupancy, or the published advice) and recovers the frontier the sender chose.
 
 **Acceptance.** Window u's frames are met by window u's own declared sync only if `g_u ≤ δ_declared(u)` (a frame ready
 later than its hand time is a `mismatch`, fail-closed). `δ_declared(u)` is set by earlier frontiers through the rule, so
-the sender draws each `g_u` from `[1, δ_declared(u)]`: every window then stays accepted. This is the whole lever — the
+the sender samples each `g_u` from `[1, δ_declared(u)]`: every window then stays accepted. This is the whole lever — the
 sender cannot raise a frontier above what the rule already granted without being rejected.
 
 `encode_writes` runs this closed loop against a faithful replica of the proxy's own `online.Prover` (same arrival order,
@@ -94,7 +94,7 @@ def encode_writes(keys: Sequence[tuple[int, int, int, int]], sessions: Sequence[
 class LiveSender:
     """The covert sender in a live server's shim, which can only delay what the model writes: a stream anchored in
     window w writes nothing before bucket `anchor + g_w − 1` (`hold`), so window w's frontier is `max(g_w, the model's
-    own)`, and `g_w` is drawn from `[1, δ_declared(w)]` as `encode_writes` draws it. `δ_declared(w)` comes from a
+    own)`, and `g_w` is sampled from `[1, δ_declared(w)]` as `encode_writes` samples it. `δ_declared(w)` comes from a
     replica of the proxy's prover fed every event as the shim wrote it (`wrote`), at the bucket after it was written;
     the shim takes a stream's anchor to be the bucket its request reached it in. `symbol(w)` must be called no earlier
     than bucket w·T, when every event that window's declaration reads has been written."""
@@ -241,7 +241,7 @@ def control_symbols(windows: int, seed: int) -> list[int]:
 
 def pool(summaries: Sequence[dict], sync_set: SyncSet) -> dict:
     """`measure_runs` over the runs of several `active_replay.py` summaries (one per trace, say), per strategy, with the
-    link-windows each strategy had accepted, raw and committed."""
+    execution phases each strategy had accepted, raw and committed."""
     out: dict[str, dict] = {}
     for strategy in sorted({s for doc in summaries for s in doc.get("covert", {})}):
         mine = [doc["covert"][strategy] for doc in summaries if strategy in doc.get("covert", {})]

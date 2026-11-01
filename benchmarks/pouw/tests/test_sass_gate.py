@@ -312,7 +312,7 @@ def test_a_signature_ignores_how_an_immediate_is_loaded_and_nothing_else():
 
 
 def test_a_sections_flags_line_keeps_its_function():
-    """nvdisasm writes `.sectionflags` after `.section` for a kernel that uses barriers (#449's sm_90a plainq)."""
+    """nvdisasm writes `.sectionflags` after `.section` for a kernel that uses barriers (the sm_90a plainq)."""
     flagged = "".join(ln + ('\t.sectionflags\t@"SHF_BARRIERS=1"\n' if ln.lstrip().startswith(".section\t.text.") else "")
                       for ln in listing("plain").splitlines(keepends=True))
     assert flagged.count(".sectionflags") >= 3
@@ -390,9 +390,8 @@ def test_pins_of_another_format_are_refused(tmp_path):
 
 
 # ---- sm_90a ---------------------------------------------------------------------------------------------------------------
-# `plain90` and `refused90` are 13.0.1's sm_90a builds of the probes (r20261023-101808-80bd, the ptxas of the sm_90a pin
-# attempt r20261023-083327-2d51). The shipped 13.0.1-sm_90a entry is ieee_pin.cu's, numeric run r20261026-085046-75c4 on
-# the H200.
+# `plain90` and `refused90` are 13.0.1's sm_90a builds of the probes, by the sm_90a pin's ptxas. The shipped
+# 13.0.1-sm_90a entry is ieee_pin.cu's, from its numeric run on the H200.
 
 
 @pytest.fixture
@@ -467,7 +466,7 @@ def test_an_sm90a_sequence_with_another_operand_or_constant_is_not_exempt(pins90
 @pytest.mark.parametrize("f2f,exempt", [("F2F.F32.F64 R2, R10", True), ("F2F.F64.F32 R2, R10", False),
                                         ("F2F.F64.F64 R2, R10", False)])
 def test_a_conversion_may_write_only_its_destination_types_width(pins90, f2f, exempt):
-    """sm_90a's ptxas schedules an F2F.F32.F64 inside ieee_pin.cu's cdiv_all div.rn fast path (r20261023-083327-2d51), its
+    """sm_90a's ptxas schedules an F2F.F32.F64 inside ieee_pin.cu's cdiv_all div.rn fast path, its
     destination the register before the divisor: an F32 result writes one register, an F64 result two."""
     v = verdict("plain90", text=after(listing("plain90"), "div_k", "FCHK P0, R0, R3", f2f, 0xb8), p=pins90)
     if exempt:
@@ -478,8 +477,8 @@ def test_a_conversion_may_write_only_its_destination_types_width(pins90, f2f, ex
 
 
 # ---- exceptions -----------------------------------------------------------------------------------------------------------
-# `units_softmax90` is kernels' units_softmax (benchmarks/torch_gpu/units/units.cu at 3cc8d5b6a6, #4518) as 13.0.1's ptxas
-# built it for sm_90a: the cubin H200 run r20261026-032225-3cee ran (sha256 81d539e9...), listed by r20261026-072428-54b7.
+# `units_softmax90` is units_softmax (benchmarks/torch_gpu/units/units.cu at 3cc8d5b6a6) as 13.0.1's ptxas built it for
+# sm_90a: the cubin an H200 run ran (sha256 81d539e9...).
 # Its 32 MUFU.EX2 are ex2.approx.ftz.f32, one per element of a row; the same run's units_sweep held that instruction to
 # MufuEx2Ftz on all 2^32 operands.
 
@@ -539,9 +538,9 @@ def test_the_exception_names_the_definition_and_table_its_runs_measured():
     assert [tk for tk, rec in p["toolkits"].items() if rec.get("exceptions")] == ["13.0.1-sm_90a"]
 
 
-# ---- kernels' units.cu at sm_90a ------------------------------------------------------------------------------------------
+# ---- units.cu at sm_90a ------------------------------------------------------------------------------------------
 # `units_sweep90` and `units_rmsnorm90` are the units_sweep and units_rmsnorm sections of the listing `units_softmax90` comes
-# from (r20261026-081741-cfef's, of the cubin 81d539e9...), with its tool notes. Their fast paths reload a divisor or
+# from (of the cubin 81d539e9...), with its tool notes. Their fast paths reload a divisor or
 # numerator from constant bank 0 in the call block, FCHK reads a copy of it, and units_sweep switches with BRX; rmsnorm's
 # and softmax's slow paths are the bodies ieee_pin.cu's units_rms, units_sqrt and units_soft test.
 
