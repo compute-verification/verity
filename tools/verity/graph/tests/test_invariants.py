@@ -1,5 +1,6 @@
 """The contract's invariants on this checkout's whole graph: the same bytes from two checkouts of one commit at different paths,
-nothing opened outside the tree, no `owner` field, every key the rule's, and the listing within a minute of one core. Slow:
+nothing opened outside the tree, no `owner` field, every key the rule's, a task run's graph the listing's, and the listing
+within a minute of one core. Slow:
 each lists the whole tree, which the toy checkout's tests (`test_graph.py`) can't stand in for, since every family lists here."""
 from __future__ import annotations
 
@@ -85,6 +86,16 @@ def test_every_key_is_the_rule_s(audited):
         assert t["key"] == want, t["id"]
     for name, e in doc["envs"].items():
         assert e["digest"] == contract.env_digest(e["spec"], doc["files"]), name
+
+
+def test_what_a_task_run_lists_is_the_listing_s(audited):
+    """`verity graph run`'s graph (`graph.task_graph`) for a task of each kind: the listing's tasks, digests and envs."""
+    doc, _outside, _cpu = audited
+    by = {t["id"]: t for t in doc["tasks"]}
+    for tid in sorted({t["kind"]: t["id"] for t in doc["tasks"]}.values()):
+        part = graph.task_graph(ROOT, tid)
+        assert [by[t["id"]] for t in part["tasks"]] == part["tasks"] and part["envs"] == doc["envs"], tid
+        assert part["files"] == {p: doc["files"][p] for p in part["files"]}, tid
 
 
 def test_the_listing_takes_under_a_minute_of_one_core(audited):

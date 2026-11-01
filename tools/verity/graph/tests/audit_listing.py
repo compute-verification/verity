@@ -1,5 +1,6 @@
 """`verity graph --json` of the checkout ROOT under an audit hook: the graph's bytes on stdout, and in OUT a JSON list of every
-path the listing opened or listed outside ROOT and the interpreter's own installation.
+path the listing opened to read or listed outside ROOT and the interpreter's own installation. A write-only open reads nothing
+(the suite guard's tracer, inherited by this process, appends its log that way).
 
     python audit_listing.py ROOT OUT
 """
@@ -20,6 +21,8 @@ def hook(event: str, args: tuple) -> None:
     if busy or event not in ("open", "os.listdir", "os.scandir") or not args:
         return
     if not isinstance(args[0], str | bytes | os.PathLike):
+        return
+    if event == "open" and len(args) > 2 and isinstance(args[2], int) and args[2] & os.O_ACCMODE == os.O_WRONLY:
         return
     busy.append(1)
     try:

@@ -62,6 +62,22 @@ def test_a_family_and_what_it_reads(tree):
         graph.listing(tree, {"nope"}, listers=LISTERS)
 
 
+def test_a_task_s_graph_is_the_part_of_the_listing_that_running_it_needs(tree):
+    doc = graph.listing(tree, listers=LISTERS)
+    by = {t["id"]: t for t in doc["tasks"]}
+    for tid, want in (("toy-b:b", ["toy-b:b", "toy:a"]), ("toy:a", ["toy:a"]), ("other:x", ["other:x"])):
+        part = graph.task_graph(tree, tid, listers=LISTERS)
+        assert [t["id"] for t in part["tasks"]] == want and [by[i] for i in want] == part["tasks"]
+        assert part["envs"] == doc["envs"] and part["commit"] is None
+        assert part["files"] == {p: doc["files"][p] for p in sorted({p for t in part["tasks"] for p in t["inputs"]} | {
+            p for e in doc["envs"].values() for p in e["spec"]})}
+    refused = {**LISTERS, "toy": lambda root, files: [*toy(root, files), {"id": "toy:c", "owner": "@ci"}]}
+    assert graph.task_graph(tree, "toy:a", listers=refused)["tasks"] == [by["toy:a"]], \
+        "the rest of the family is neither completed nor checked: the listing is"
+    with pytest.raises(graph.GraphError, match="no task toy:zz on this tree"):
+        graph.task_graph(tree, "toy:zz", listers=LISTERS)
+
+
 def test_covered_files_follow_the_table(tree):
     assert graph.covered(tree, "toy", graph.tracked(tree)) == ["src/a.txt", "src/b.txt"]
     assert graph.covered(tree, "other", graph.tracked(tree)) == ["lib/lean-toolchain", "lib/x.lean"]

@@ -8,12 +8,13 @@
                                   exit 0 pass, 1 fail, 3 error
     verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                   every task (or those families' and what they read) serially, in order, uncached, by the
-                                  reference executor (`local.py`); exit 0 when every one passed
+                                  reference executor (`local.py`), its events/v1 lines (purpose adhoc) appended to FILE
+                                  (default DIR/events.jsonl) and each task's last result/v1 in DIR/results.json; exit 0
+                                  when every one passed
 """
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import sys
 import tempfile
@@ -46,13 +47,9 @@ def _list(args: list[str]) -> int:
 
 
 def find(task_id: str) -> tuple[dict, dict]:
-    """(task ``task_id``, the graph of its family and what it reads) of this checkout."""
-    fams = graph.spec(ROOT)["family"]
-    doc = graph.listing(ROOT, {graph.family_of(task_id.partition(":")[0], fams)})
-    task = next((t for t in doc["tasks"] if t["id"] == task_id), None)
-    if task is None:
-        raise graph.GraphError(f"no task {task_id} on this tree: `verity graph` lists them")
-    return task, doc
+    """(task ``task_id``, the part of this checkout's graph that running it needs: `graph.task_graph`)."""
+    doc = graph.task_graph(ROOT, task_id)
+    return next(t for t in doc["tasks"] if t["id"] == task_id), doc
 
 
 def _run(args: list[str]) -> int:
@@ -72,14 +69,17 @@ def _check(args: list[str]) -> int:
     ap.add_argument("--family", action="append", metavar="F", help="only family F's tasks and every task they read")
     ap.add_argument("--work", type=Path, help="the directory for work directories and artifacts (default: a new temporary one)")
     ap.add_argument("--retries", type=int, default=1, help="how often an error is retried (default %(default)s); a fail never is")
-    ap.add_argument("--events", type=Path, metavar="FILE", help="append events/v1 lines here")
+    ap.add_argument("--events", type=Path, metavar="FILE", help="append events/v1 lines here (default: DIR/events.jsonl)")
     a = ap.parse_args(args)
-    work = a.work or Path(tempfile.mkdtemp(prefix="verity-graph-"))
-    with open(a.events, "a") if a.events else contextlib.nullcontext() as ev:
-        out = local.check(ROOT, _families(a.family), work.resolve(), retries=a.retries, events=ev)
+    work = (a.work or Path(tempfile.mkdtemp(prefix="verity-graph-"))).resolve()
+    work.mkdir(parents=True, exist_ok=True)
+    events = a.events or work / "events.jsonl"
+    with open(events, "a") as ev:
+        out = local.check(ROOT, _families(a.family), work, retries=a.retries, events=ev)
+    (work / "results.json").write_bytes(contract.canonical({**out["results"], **out["errors"]}) + b"\n")
     counts = {s: sum(r["status"] == s for r in out["results"].values()) for s in ("pass", "fail")}
     print(json.dumps({"ok": out["ok"], **counts, "error": len(out["errors"]), "cancelled": len(out["cancelled"]),
-                      "work": str(work)}), flush=True)
+                      "work": str(work), "events": str(events)}), flush=True)
     return 0 if out["ok"] else 1
 
 

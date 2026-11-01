@@ -1,9 +1,10 @@
 """The lean-module and lean-lock listings on a toy checkout of Lake packages laid out as Security's are: a package whose
-`srcDir` is its parent, a requirement by path, a `proved_in`, every import form, transitive reads, and the trees that make
-no graph."""
+`srcDir` is its parent, a requirement by path, a `proved_in`, a lock's `roots`, every import form, transitive reads, and
+the trees that make no graph."""
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 from conftest import toy_tree
@@ -34,13 +35,15 @@ FILES = {
                                 'path = ".."\n\n[[lean_lib]]\nname = "Proofs"\n',
     "Sec/Proofs/lake-manifest.json": manifest("proofs", ("sec", "..")),
     "Sec/Proofs/lean-toolchain": TOOLCHAIN,
-    "Sec/Proofs/lean-audit.json": json.dumps({"guarantees": []}),
+    "Sec/Proofs/lean-audit.json": json.dumps({"guarantees": [], "roots": ["Proofs.G"]}),
     "Sec/Proofs.lean": "import Proofs.B\nimport Proofs.E\n",
     "Sec/Proofs/B.lean": "module -- the module system\n/-! docs -/\npublic import Definitions.A\nmeta import Proofs.C\n"
                          "import all Proofs.D\npublic meta import Init.Data.List\n\ntheorem b : True := trivial\n",
     "Sec/Proofs/C.lean": "import Definitions\nimport Proofs.D\n",
     "Sec/Proofs/D.lean": "prelude\n",
     "Sec/Proofs/E.lean": "import Scratch\nimport Proofs.Missing\n",
+    "Sec/Proofs/F.lean": "theorem f : True := trivial\n",
+    "Sec/Proofs/G.lean": "import Proofs.D\n",
     "tools/verity/lean/tests/fixtures/ctl/lakefile.toml": 'name = "ctl"\n\n[[lean_lib]]\nname = "Ctl"\n',
     "tools/verity/lean/tests/fixtures/ctl/lean-audit.json": "{}",
     "tools/verity/lean/tests/fixtures/ctl/Ctl.lean": "def c := 0\n",
@@ -64,7 +67,9 @@ def test_modules_of_packages_with_a_parent_src_dir_read_their_imports_transitive
     ts = listed(tmp_path)
     assert sorted(i for i in ts if i.startswith("lean-module:")) == [f"lean-module:Sec/{f}" for f in (
         "Definitions.lean", "Definitions/A.lean", "Proofs.lean", "Proofs/B.lean", "Proofs/C.lean", "Proofs/D.lean",
-        "Proofs/E.lean")], "a file no library claims (Scratch) and the auditor's fixtures have no task"
+        "Proofs/E.lean", "Proofs/G.lean")], \
+        "the default targets and the lock's roots (Proofs.G) are built; a file no library claims (Scratch), a module " \
+        "nothing builds (Proofs.F) and the auditor's fixtures have no task"
     b = ts["lean-module:Sec/Proofs/B.lean"]
     assert b["vars"] == {"module": "Proofs.B", "package": "proofs", "options": "{}"}
     assert ts["lean-module:Sec/Definitions/A.lean"]["vars"]["options"] == '{"autoImplicit":false}'
@@ -93,6 +98,38 @@ def test_a_lock_reads_every_package_its_records_read(tmp_path):
         assert {"Sec/Proofs/B.lean", "Sec/Definitions/A.lean", "Sec/lean-audit.json", "Sec/Proofs/lean-audit.json",
                 "tools/verity/lean/check.py", "tools/verity/check/common.py"} <= set(t["inputs"])
         assert t["outputs"] == [{"name": "records", "path": f"out/{pkg}/lean-audit.json"}]
+
+
+def test_a_lock_the_audit_refuses_is_listed_for_its_own_task_to_fail(tmp_path):
+    ts = listed(tmp_path, **{"Sec/lean-audit.json": "[", "Sec/Proofs/lean-audit.json": json.dumps({"proved_in": ["../../.."]})})
+    assert ts["lean-lock:Sec"]["reads"] == olean("Sec/Definitions.lean", "Sec/Definitions/A.lean"), \
+        "a lock that isn't JSON names no proved_in, as lean_audit.provers reads it"
+    assert len(ts["lean-lock:Sec/Proofs"]["reads"]) == 7, "a proved_in outside the tree adds no package"
+
+
+@pytest.mark.slow
+def test_this_tree_s_modules_and_imports_are_those_the_lean_build_cache_keys():
+    """On this checkout, whose packages no toy stands in for: the modules listed are those `module_keys.keys` keys from each
+    package's default targets and lock roots, each importing what its key reads, so a task and the cache see one module
+    one way."""
+    pkgs, _owner, direct = lean_module.imports(ROOT, graph.tracked(ROOT))
+    keyed = {}
+    for d in pkgs:
+        ks = lean_module.mk.keys(ROOT / d, lean_module.mk.policy_roots(ROOT / d))
+        keyed |= {os.path.relpath(k.package.file(m), ROOT): sorted(os.path.relpath(ks[i].package.file(i), ROOT)
+                                                                   for i in k.imports) for m, k in ks.items()}
+    assert keyed == direct
+
+
+@pytest.mark.slow
+def test_this_tree_s_locks_read_every_file_their_audit_can():
+    """On this checkout: each lock's inputs are every file an audit of its package can read (`lean_audit.inputs`), so a
+    change to a package its records read reruns it, as a Flock change reruns Security's."""
+    files = graph.tracked(ROOT)
+    ts = lean_lock.tasks(ROOT, files)
+    assert len(ts) == len(lean_module.la.packages(files))
+    for t in ts:
+        assert t["inputs"] == lean_module.la.inputs(t["vars"]["package"], files), t["id"]
 
 
 @pytest.mark.parametrize("changes, refusal", [

@@ -50,8 +50,9 @@ timeout_s = 3600
 [family.build]
 files = ["verity/core/service/flock/**", "verity/ml/flock/check_build.sh", "verity/ml/flock/live/**",
          "verity/ml/flock/flock-*-b684b12.patch", "verity/ml/flock/verifier/**"]
-kinds = ["build"]
+kinds = ["lean-build", "flock-circuit-build", "lean-agreement"]
 env = "lean"
-about = "build {name}"
+about = "{kind} {name}"
+# a check slot's (`tools/verity/check/tasks.py`'s SLOT); the agreement needs 24 GB at least (`check.AGREEMENT_MIN_GB`)
 resources = { cores = 16, mem_gb = 64, disk_gb = 20 }
 timeout_s = 7200

@@ -2,8 +2,8 @@
 each in a fresh work directory holding the artifacts it reads at their producers' output paths, run as its argv with `--work
 DIR`, its result/v1 checked (the schema, its key against the one computed here from the reads' digests as they appear, its
 outputs' bytes against their digests).  An error (no result, a key that isn't the executor's, an undeclared read) is never a
-result and is retried; a fail is a result and is never retried; a task whose read didn't pass is cancelled.  It writes
-events/v1 lines when asked."""
+result and is retried; a fail is a result and is never retried; a task whose read didn't pass is cancelled.  It writes an
+events/v1 line for each event, purpose `adhoc` (`verity graph check --local`: to its work directory's `events.jsonl`)."""
 from __future__ import annotations
 
 import datetime

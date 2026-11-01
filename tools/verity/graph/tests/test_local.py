@@ -8,7 +8,7 @@ from pathlib import Path
 
 from conftest import LISTERS
 
-from verity_graph import contract, graph, local, runners
+from verity_graph import cli, contract, families, graph, local, runners
 
 
 def launcher(doc: dict, behave: dict, calls: list[str]):
@@ -90,6 +90,20 @@ def test_an_undeclared_read_is_refused(tree, tmp_path):
     out, _, _, _ = run(tree, tmp_path, {"other:x": lambda task, work: {"status": "pass", "undeclared_reads": ["README"]}})
     assert out["errors"]["other:x"]["undeclared_reads"] == ["README"] and not out["ok"]
     assert "other:x" not in out["results"]
+
+
+def test_check_local_writes_its_events_beside_its_work_unless_told_where(tree, tmp_path, monkeypatch, capsys):
+    doc = graph.listing(tree, listers=LISTERS)
+    monkeypatch.setattr(cli, "ROOT", tree)
+    monkeypatch.setattr(families, "listers", lambda: LISTERS)
+    monkeypatch.setattr(local, "launcher", lambda root: launcher(doc, {}, []))
+    for argv, where in (([], tmp_path / "w" / "events.jsonl"), (["--events", str(tmp_path / "e.jsonl")], tmp_path / "e.jsonl")):
+        assert cli.main(["check", "--local", "--work", str(tmp_path / "w"), *argv]) == 0
+        assert json.loads(capsys.readouterr().out)["events"] == str(where)
+        events = [json.loads(x) for x in where.read_text().splitlines()]
+        assert {e["purpose"] for e in events} == {"adhoc"} and [e["event"] for e in events].count("finished") == 3
+    results = json.loads((tmp_path / "w" / "results.json").read_text())
+    assert sorted(results) == ["other:x", "toy-b:b", "toy:a"] and {r["status"] for r in results.values()} == {"pass"}
 
 
 def test_what_the_executor_takes_from_a_launch(tree, tmp_path):

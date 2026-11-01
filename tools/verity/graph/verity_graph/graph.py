@@ -260,7 +260,39 @@ def listing(root: Path, only: set[str] | None = None, listers: dict | None = Non
             tasks[c["id"]] = c
         wanted = {family_of(r["task"].partition(":")[0], fams) for t in tasks.values() for r in t["reads"]}
         todo = sorted(set(todo) | (wanted - listed))
-    ts = sorted(tasks.values(), key=lambda t: t["id"])
+    return _document(root, s, files, sorted(tasks.values(), key=lambda t: t["id"]), commit(root))
+
+
+def task_graph(root: Path, task_id: str, listers: dict | None = None) -> dict:
+    """The part of the tree's graph/v2 that running ``task_id`` needs, as `listing` makes it: that task and every task it reads,
+    transitively, the digests of their inputs and the envs, without completing, digesting or keying the rest of their families
+    (`verity graph run`).  Its `commit` is null, since nothing that runs a task reads one."""
+    root = Path(root)
+    s = spec(root)
+    fams = s["family"]
+    listers = families.listers() if listers is None else listers
+    files = tracked(root)
+    have = set(files)
+    listed: dict[str, dict] = {}
+    tasks: dict[str, dict] = {}
+    todo = [task_id]
+    while todo:
+        tid = todo.pop()
+        if tid in tasks:
+            continue
+        name = family_of(tid.partition(":")[0], fams)
+        if name not in listed:
+            listed[name] = {t.get("id"): t for t in (listers[name](root, files) if name in listers else []) if isinstance(t, dict)}
+        if tid not in listed[name]:
+            raise GraphError(f"no task {tid} on this tree: `verity graph` lists them")
+        tasks[tid] = complete(listed[name][tid], name, fams[name], s["env"], have)
+        todo += [r["task"] for r in tasks[tid]["reads"]]
+    return _document(root, s, files, sorted(tasks.values(), key=lambda t: t["id"]), None)
+
+
+def _document(root: Path, s: dict, files: list[str], ts: list[dict], at: str | None) -> dict:
+    """graph/v2 of the completed tasks ``ts``, sorted by id, at commit ``at``: their reads checked, the digests of their inputs
+    and of every env's spec files, each env's digest, and the key of each task that reads no artifact."""
     _check_reads(ts)
     order(ts)
     envs = {name: sorted(f for f in files if any(matches(f, p) for p in e["spec"])) for name, e in sorted(s["env"].items())}
@@ -270,7 +302,7 @@ def listing(root: Path, only: set[str] | None = None, listers: dict | None = Non
     for t in ts:
         if not t["reads"]:
             t["key"] = contract.key(t, digests, None, env_docs[t["env"]]["digest"])
-    return {"schema": contract.SCHEMA_GRAPH, "commit": commit(root), "envs": env_docs, "files": digests, "tasks": ts}
+    return {"schema": contract.SCHEMA_GRAPH, "commit": at, "envs": env_docs, "files": digests, "tasks": ts}
 
 
 def closure(doc: dict, ids: set[str]) -> list[dict]:

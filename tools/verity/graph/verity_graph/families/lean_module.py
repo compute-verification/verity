@@ -1,5 +1,7 @@
-"""lean-module: one task per module of the tree's Lake packages, which compiles it and kernel-replays it
-(`runners/lean_module.py`).
+"""lean-module: one task per module the check builds, which compiles it and kernel-replays it (`runners/lean_module.py`):
+each module of the tree's Lake packages that a package's default targets or its lock's `roots` reach (`lake build`, `lake
+build +ROOT`), as the Lean build cache walks them (`module_keys.keys` from `module_keys.policy_roots`). A module nothing
+reaches has none: its lock exempts it, or the lock check fails it as an orphan.
 
 A task's fields, which its runner reads: `vars` `module` (its name), `package` (its Lake package's name) and `options`
 (the package's `leanOptions`, as JSON), which Lake puts in a module's setup file; `inputs` its source (the id after
@@ -117,7 +119,8 @@ def modules(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
 
 
 def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str, tuple[str, str]], dict[str, list[str]]]:
-    """(`modules`, {source file: the source files of the tree's modules its header imports})."""
+    """(the packages, and for each module the check builds `modules`' entry and {source file: the source files of the
+    tree's modules its header imports})."""
     pkgs, owner = modules(root, files)
     have = set(files)
 
@@ -126,11 +129,20 @@ def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
         found = [p.file(mod) for p in ws if p.lake.claims(mod) and p.file(mod) in have]
         return found[0] if len(found) == 1 and found[0] in owner else None
 
-    direct = {}
-    for f, (d, _) in owner.items():
-        got = mk.imports((root / f).read_bytes().decode(errors="replace")) or []
-        direct[f] = sorted({r for i in got if (r := resolve(d, i)) is not None})
-    return pkgs, owner, direct
+    def roots(d: str) -> list[str]:
+        try:
+            return mk.policy_roots(root / d)
+        except (OSError, ValueError):
+            return []  # the lock check fails the lock
+
+    direct: dict[str, list[str]] = {}
+    todo = [r for d, p in pkgs.items() for m in (*p.lake.default, *roots(d)) if (r := resolve(d, m)) is not None]
+    while todo:
+        if (f := todo.pop()) not in direct:
+            got = mk.imports((root / f).read_bytes().decode(errors="replace")) or []
+            direct[f] = sorted({r for i in got if (r := resolve(owner[f][0], i)) is not None})
+            todo += direct[f]
+    return pkgs, {f: owner[f] for f in direct}, direct
 
 
 def closures(direct: dict[str, list[str]]) -> dict[str, frozenset[str]]:
