@@ -1,6 +1,8 @@
 """lean-module's runner: compile one module with `lean` as Lake does (`lean FILE -o -i --setup --json`), from its imports'
 artifacts in the work directory alone, then kernel-replay its declarations (`tools/verity/lean/Replay.lean`) and write
 each one's axioms (`tools/verity/lean/Facts.lean`, every axiom reported), both compiled once per toolchain and source.
+Its files are Lake's bytes but for one thing: `FILE` is the source's path in the tree, where Lake gives an absolute one
+that a module's `.olean` keeps with its warnings, so the runner's are the same on every worker.
 
 A task gives (`families/lean_module.py`): its source (the id after `lean-module:`), its package's lakefile among its
 inputs, `vars` `module`, `package` and `options` (the module's setup file, as Lake writes it), and outputs `olean` and
@@ -186,7 +188,7 @@ def killed(rc: int) -> bool:
 
 def run(task: dict, work: Path) -> dict:
     v = task["vars"]
-    mod, src = v["module"], ROOT / task["id"].partition(":")[2]
+    mod, src = v["module"], task["id"].partition(":")[2]
     lakefile = next(p for p in task["inputs"] if p.rpartition("/")[2] in ("lakefile.toml", "lakefile.lean"))
     pkg = (ROOT / lakefile).parent
     out = {o["name"]: work / o["path"] for o in task["outputs"]}
@@ -215,7 +217,8 @@ def run(task: dict, work: Path) -> dict:
         p.parent.mkdir(parents=True, exist_ok=True)
     since = (work / LOG).stat().st_size if (work / LOG).exists() else 0
     t = time.monotonic()
-    rc = call(sandboxed(work, [str(tc / "bin" / "lean"), str(src), "-o", str(olean), "-i", str(ilean), "--setup",
+    # A module's `.olean` keeps its warnings with the source path as given: relative to the root, the same on every worker.
+    rc = call(sandboxed(work, [str(tc / "bin" / "lean"), src, "-o", str(olean), "-i", str(ilean), "--setup",
                                str(work / "setup.json"), "--json"]),
               work, ROOT, {**os.environ, "LEAN_PATH": os.pathsep.join(dep_libs), "LEAN_NUM_THREADS": threads})
     steps["compile"] = round(time.monotonic() - t, 3)
