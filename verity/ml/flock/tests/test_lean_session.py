@@ -294,14 +294,14 @@ def test_a_frame_starts_only_as_a_live_sessions_rep(loop, line, why):
 @pytest.mark.slow
 def test_each_reps_frame_draws_its_own(zk):
     """Each rep's frame the loop starts for a live session samples its own randomness at the statement's start, and starts
-    once: the two reps' draws have one size and differ, a rep started again is refused, and so is a table the session
-    doesn't have."""
+    once: each answer is the pads' root alone (the draws never leave the loop) and the two reps' roots differ, a rep started
+    again is refused, and so is a table the session doesn't have."""
     S = Sessions(_args(zk, "pub-16.bin"))
     s, name = S.session()
     a, b = TcpFrame(S.lp), TcpFrame(S.lp)
     da, db = a.ask(f"rep {name} 0 0"), b.ask(f"rep {name} 0 1")
     assert isinstance(da, tuple) and isinstance(db, tuple), (da, db)
-    assert da[0] == db[0] and da[1] != db[1]
+    assert da[0] == db[0] == "ok 64" and da[1] != db[1]
     c = TcpFrame(S.lp)
     assert c.ask(f"rep {name} 0 0") == "err table 0 rep 0's frame started already"
     c.close()

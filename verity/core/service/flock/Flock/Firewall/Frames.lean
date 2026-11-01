@@ -6,7 +6,7 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
 
 * `startRep`: a rep's frame starts at the loop's frames port (`rep NAME TABLE REP`), for a live session and one of its
   tables' reps, at the statement's start (`Drive.start`: its pads layout and mask slot), its draws from the operating
-  system, which the prover proves with.
+  system, which never leave the loop: the prover gets the pads' root alone.
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
   (`Drive.openStep`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
@@ -108,9 +108,9 @@ def Registry.put (R : Registry) (p : Rep) : Registry :=
   { R with reps := R.reps.map fun q => if q.sid == p.sid && q.table == p.table && q.rep == p.rep then p else q }
 
 /-- **Table `i`'s rep `r` of the session named `name` starts**, for the request line `line` on `ch`: `rep NAME I R` is
-answered `ok N` followed by the `N` bytes of the rep's draws and the pads' root (`Frame.Draws.toBytes`), drawn from the
-operating system at the statement's start (`Drive.start`); a rep's frame starts once. Anything else is answered
-`err WHY`. -/
+answered `ok 64` followed by the pads' root (`Frame.padsRoot`) over the rep's draws, drawn from the operating system at
+the statement's start (`Drive.start`) and kept in the rep's frame, never sent; a rep's frame starts once. Anything else is
+answered `err WHY`. -/
 def startRep (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry) (line : String) : IO Unit := do
   let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
   let err := fun (why : String) => say s!"err {why.replace "\n" " "}"
@@ -133,9 +133,8 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Regi
     let added ← reg.modifyGet fun R =>
       if (R.find sid i r).isSome then (false, R) else (true, { R with reps := R.reps.push { sid, table := i, rep := r, cfg := c, draws := d } })
     unless added do return (← err s!"table {i} rep {r}'s frame started already")
-    let b := d.toBytes c.root
-    say s!"ok {b.size}"
-    ch.write b
+    say s!"ok {c.root.size}"
+    ch.write c.root
   | _ => err s!"a request `{line.trim}`"
 
 /-- What stands in rep `p`'s next round's place, the coins it squeezes, and `p` after, at the loop's salts `salts`: the
