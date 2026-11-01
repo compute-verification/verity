@@ -1,4 +1,4 @@
-"""IoTieRequest's adversarial cases as regressions, on the unit a bucket row of the warden's own ingress: what a
+"""IoTieRequest's adversarial cases as regressions, on the proof block a bucket row of the warden's own ingress: what a
 bucket's verdict holds alone, and what rests on the verifier's lanes chaining each connection over its buckets.
 
   a. The public inputs are the lanes (each lane's ordinal and its request's carry-in and carry-out) and still no
@@ -11,7 +11,8 @@ bucket's verdict holds alone, and what rests on the verifier's lanes chaining ea
      `c00.input/ids`).
   d. Changed: the ordinal is read. Each cell's header carries its connection's ordinal, and a lane's cells must be on
      the lane's q, the warden's release order[i] + 1.
-  e. The unit reads neither the response's length nor the user: `max_tokens` is parsed as a field and not compared.
+  e. The proof block reads neither the response's length nor the user: `max_tokens` is parsed as a field and not
+  compared.
 """
 from __future__ import annotations
 
@@ -97,8 +98,8 @@ def test_a_carried_field_count_is_held_by_the_bucket_before():
 
 
 def test_prompt_id_values_are_open_here():
-    """Open in this unit: the same prompt lengths with any ids are each accepted against their own cells, since it
-    reads no Commit (the ingress-ids tie, `io_ids`, holds them to `c00.input/ids`)."""
+    """Open in this proof block: the same prompt lengths with any ids are each accepted against their own cells, since
+    it reads no Commit (the ingress-ids tie, `io_ids`, holds them to `c00.input/ids`)."""
     for idfn in (lambda i, k: 0, _ids, lambda i, k: (1 << 32) - 1):
         assert _verdicts(_link(SPAN_PL, idfn), SPAN_PL) == [1] * PARAMS.window
 
