@@ -11,8 +11,9 @@ tree's root changed, or a bit row's port with its words or width changed.
 `--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
 (`Flock.PortRoots`, `Flock.KsScope`). The rows of all three and their shared-row public files are in it, so each session
 is accepted.
-A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
-and refused with the root changed and without `--registered`.
+A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw, on the challenger's coin tree,
+its coins the ones the challenger's release log shows) is accepted on that file too, and refused with the root changed and
+without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
 a proved session, which the Python round trip (`verity/core/protocols/sampled_proofs/tests/test_served.py`) can't
 reach."""
@@ -44,8 +45,9 @@ FIXTURES = {
     G.SCHEMA_SEG: "art:914ec71e91006bef4486b89dba2f2c936f3bba90d8afbeae3d6016fb8318555c",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
-#: (stage/draw.json), and session/ a plain session (no --zk, OS coins) sampled by it; vectors/ is vectors.json's live set
-PLAIN = "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3"
+#: (stage/draw.json), session/ a plain session (no --zk) sampled by it on the challenger's coin tree, and challenger/ its
+#: record and release log; vectors/ is vectors.json's live set
+PLAIN = "art:b14444a8c5fffcda2d056698a2aa0392e272bd6c5e0843996b7eb25a03b46911"
 PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
 
@@ -168,6 +170,19 @@ def plain(built, tmp_path_factory):
         pytest.skip(f"the evidence store is not reachable: {e}")
 
 
+def test_the_plain_sessions_coins_are_the_challengers(plain):
+    """The plain session's coin tree is one the challenger's release log shows it sampled, with the rounds it opened; with
+    one of its link points changed, it is refused at them."""
+    from verity.core.protocols.sampled_proofs import challenger as C, remote as R
+
+    trees = C.coin_trees_of(R.log_lines(plain / "challenger" / R.RELEASES))
+    rec = json.loads((plain / "session" / "session.json").read_text())
+    assert len(trees) == 1 and C.sessions_tree_reason(trees, [("session", rec)]) is None
+    c = rec["link"]["points"][0][0]
+    rec["link"]["points"][0][0] = ("0" if c[0] != "0" else "1") + c[1:]
+    assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", rec)])
+
+
 def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its_reads(plain, tmp_path):
     """Without `--zk`, a shared-row public file at hidden outputs and `hm96-sha512/v1` leaves is a covered form when the
     verifier holds its own registered reads (`ProvedScope.sharedRowsOk`, `FailClosed.SoundExecHR`): the plain session sampled by
@@ -177,7 +192,7 @@ def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its
 
     program, query = SR.program()
     tree, x_tree, out_port = SR.load(plain / "stage")
-    mode = ("--stratified", str(PLAIN_K), "--coins", "os")
+    mode = ("--stratified", str(PLAIN_K), "--coins", "tree")
     ok = _verify(plain, SR.write_registered(SR.registered_file(program, query, tree, x_tree, out_port),
                                             tmp_path / "registered.json"), mode)
     assert ok["accepted"] is True, ok
