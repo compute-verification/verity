@@ -40,7 +40,8 @@ the prover's bytes:
 * `Finish` leaves only once the schedule's last opening has (`State.request`), as `FINISH`. The proof files are the
   loop's own finish's, a connection to the frames port (`Finish.serveLoop`): it reads each table's level 0 from the
   loop's `Level0` of the table's root, draws each rep's salts for levels ≥ 1 itself, only once the rep's frame took its
-  algebraic phase's last coins (`Finish.Own.algebraEnded`), which the prover's trees then take, proves each rep with its frame's draws, which never reach the prover (`Finish.drawsOf`), refuses a rep's request whose
+  algebraic phase's last coins (`Finish.Own.algebraEnded`) and once a rep on any of the session's finishes, which the
+  prover's trees then take, proves each rep with its frame's draws, which never reach the prover (`Finish.drawsOf`), refuses a rep's request whose
   passed values, extra claims or coins are not its frame's (`Frames.ownOf`, `Finish.RepIn.differs`) or whose `final_c`
   its passed values do not fix (`Finish.consWhy`), and coins answering its
   inner proof's rounds that are not the stream's (`Finish.coinsWhy`), refuses a table's level-0 data from the host
@@ -746,15 +747,18 @@ def level0 (ch : Frame.Chan) (reg : IO.Ref Frames.Registry) (l0s : IO.Ref Level0
 `Frames.startRep`, the frame then the loop's own in `reg`); a rep's next place or the values its frame took (`place …`,
 `vals …`, `Frames.ask`); one table's level 0 (`level0 …`, `level0`); or a session's
 proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
-levels ≥ 1 kept in `reg` for its opening, its inner proof's rounds for the frame to release
+levels ≥ 1 kept in `reg` for its opening, once (another finish's draw of them is refused), its inner proof's rounds for
+the frame to release
 (`Frames.Registry.innerRound`), its proof file for the session's `Proof` (`Frames.Registry.file`), its proofs on its
 frame's draws, and its requests refused unless they carry the values its frame took, the session's extra claims and the
 coins the stream answered (`Frames.ownOf`).
 Anything else is answered `err WHY`. -/
 def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : IO.Ref Frames.Registry)
     (l0s : IO.Ref Level0.Registry) : IO Unit := do
-  let keep := fun (root : ByteArray) (r : Nat) (s : Array ByteArray) =>
-    reg.modify fun R => { R with salts := R.salts.push (root, r, s) }
+  let keep := fun (root : ByteArray) (r : Nat) (s : Array ByteArray) => reg.modifyGet fun R =>
+    if R.salts.any fun (x, q, _) => x == root && q == r then
+      (some s!"rep {r}'s salts for levels ≥ 1 were drawn already, on another finish", R)
+    else (none, { R with salts := R.salts.push (root, r, s) })
   let file := fun (root : ByteArray) (r : Nat) (b : ByteArray) => reg.modifyGet fun R => match R.file root r b with
     | .ok R' => (none, R')
     | .error e => (some e, R)

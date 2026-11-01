@@ -550,8 +550,8 @@ def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
     at the table's `m`, for a session it still serves; its answer is that root. A rep's request before its salts for levels
     ≥ 1 is refused, and so are the salts of a rep whose frame has not taken its algebraic phase's last coins, here one whose
     level 0 no `Commit` carries (the selftest's firewalled sessions draw them past it, and `zk_worker_finish`'s
-    `salts-early` holds a worker asking before it to the refusal). Once the session that sampled the level 0 ends, the loop
-    has freed it, and finish refuses its root."""
+    `salts-early` and `salts-again` hold a worker asking before it, or a second time, to the refusal). Once the session
+    that sampled the level 0 ends, the loop has freed it, and finish refuses its root."""
     S = Sessions(_args(zk, "pub-16.bin"))
     s, name = S.session()
     lp = S.lp

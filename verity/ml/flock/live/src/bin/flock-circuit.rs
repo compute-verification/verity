@@ -1567,26 +1567,33 @@ impl Firewall {
         if p != Place::Salts {
             return Ok(p);
         }
-        let hi = self.finish.lock().unwrap_or_else(PoisonError::into_inner).salts(self.table, r.rep)?;
+        let rep = r.rep;
+        let hi = self.finish.lock().unwrap_or_else(PoisonError::into_inner).salts(self.table, rep)?;
         self.draws.lock().unwrap_or_else(PoisonError::into_inner).shared.lock().unwrap_or_else(PoisonError::into_inner).preset(hi)
-            .map_err(|e| refused(format!("table {} rep {}: the Lean finish's salts: {e}", self.table, r.rep)))?;
+            .map_err(|e| refused(format!("table {} rep {rep}: the Lean finish's salts: {e}", self.table)))?;
         r.hi = true;
+        if self.table == 0 && rep == 0 && finish_mode("salts-again") {
+            self.salts_beside()?;
+        }
+        let r = self.rep.as_mut().ok_or_else(|| refused("a place outside a firewalled rep"))?;
         match r.lean.place()? {
-            Place::Salts => Err(refused(format!("table {} rep {}: the Lean session loop still waits for the salts for levels ≥ 1 the Lean finish drew",
-                                                self.table, r.rep))),
+            Place::Salts => Err(refused(format!("table {} rep {rep}: the Lean session loop still waits for the salts for levels ≥ 1 the Lean finish drew",
+                                                self.table))),
             p => Ok(p),
         }
     }
 
-    /// `FC_FINISH_TAMPER=salts-early` (the selftest's `zk_worker_finish`): at table 0 rep 0's first round, before its algebraic
-    /// phase ended, a finish of the worker's own beside the session's ([`flock_live::firewall::LeanFinish::another`]) asks for
-    /// the rep's salts for levels ≥ 1. The loop's finish refuses it (`Flock.Firewall.Finish.Own.algebraEnded`) and the refusal
-    /// goes to [`FINISH_REFUSED`] (salts it answers go there as `drawn early`); the session's own finish goes on.
-    fn salts_early(&mut self) -> Result<(), String> {
+    /// `FC_FINISH_TAMPER=salts-early` and `salts-again` (the selftest's `zk_worker_finish`): a finish of the worker's own beside
+    /// the session's ([`flock_live::firewall::LeanFinish::another`]) asks for table 0 rep 0's salts for levels ≥ 1, at the rep's
+    /// first round, before its algebraic phase ended (`salts-early`), or just after the session's finish drew them
+    /// (`salts-again`). The loop's finish refuses each (`Flock.Firewall.Finish.Own.algebraEnded`; the loop keeps a rep's salts
+    /// once) and the refusal goes to [`FINISH_REFUSED`] (salts it answers go there as `drawn: N levels`); the session's own
+    /// finish goes on.
+    fn salts_beside(&mut self) -> Result<(), String> {
         let mut f = self.finish.lock().unwrap_or_else(PoisonError::into_inner).another()?;
         f.level0(self.table, &self.root)?;
         let got = match f.salts(self.table, 0) {
-            Ok(s) => format!("drawn early: {} levels", s.len()),
+            Ok(s) => format!("drawn: {} levels", s.len()),
             Err(e) => e,
         };
         *FINISH_REFUSED.lock().unwrap_or_else(PoisonError::into_inner) = Some(got);
@@ -1637,8 +1644,8 @@ impl Firewall {
             return self.scheduled();
         }
         let (first, hi, rep) = (r.rounds.is_empty(), r.hi, r.rep);
-        if first && self.table == 0 && rep == 0 && std::env::var("FC_FINISH_TAMPER").is_ok_and(|m| m == "salts-early") {
-            self.salts_early()?;
+        if first && self.table == 0 && rep == 0 && finish_mode("salts-early") {
+            self.salts_beside()?;
         }
         if !first && !hi {
             self.place()?;
@@ -2042,7 +2049,7 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
         return (Vec::new(), bk);
     }
     let t = Instant::now();
-    let tamper = std::env::var("FC_FINISH_TAMPER").ok().filter(|m| m != "salts-early").unwrap_or_default();
+    let tamper = std::env::var("FC_FINISH_TAMPER").ok().filter(|m| !m.starts_with("salts-")).unwrap_or_default();
     let lean = {
         let mut f = fin.lock().unwrap_or_else(PoisonError::into_inner);
         let last = FINISH_SENT.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1 == FINISH_REPS.load(std::sync::atomic::Ordering::SeqCst);
@@ -2068,8 +2075,13 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
 /// (`final_c` plus one). The loop's finish refuses each (`Flock.Firewall.Finish.RepIn.differs`, and for `final_c`, which no
 /// live inner proof answers, its live-only rule: a rep's file is only the one its `inner` request computed), and the refusal
 /// goes to [`FINISH_REFUSED`]. A request carries no pads to doctor: the finish proves with the rep's frame's. `salts-early`
-/// doctors no request: a finish of the worker's own asks for salts early instead ([`Firewall::salts_early`]).
+/// and `salts-again` doctor no request: a finish of the worker's own asks for a rep's salts instead ([`Firewall::salts_beside`]).
 static FINISH_REPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// `FC_FINISH_TAMPER` is `mode`.
+fn finish_mode(mode: &str) -> bool {
+    std::env::var("FC_FINISH_TAMPER").is_ok_and(|m| m == mode)
+}
 static FINISH_SENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 static FINISH_REFUSED: Mutex<Option<String>> = Mutex::new(None);
 
@@ -5203,10 +5215,12 @@ fn worker_wire_case(gpu: bool) -> Value {
 /// each in a process of its own, whose last rep request to the Lean finish carries a chosen passed value, a chosen coin or a
 /// chosen `final_c`: the finish refuses it (the request is not the frame's, or no live inner proof answers it), no proof
 /// leaves, and the verifier gets the honest session's every request but its proofs, `Finish` included, and does not
-/// accept. No request carries the pads: the finish proves with the rep's frame's (`zk_worker_pads`). One more session's
-/// worker opens a finish of its own at table 0 rep 0's first round and asks it for the rep's salts for levels ≥ 1
-/// (`salts-early`): the loop's finish refuses them before the rep's algebraic phase ended, so no round of it depends on
-/// them, and the session goes on on its own finish, the verifier getting the honest session's every request and accepting.
+/// accept. No request carries the pads: the finish proves with the rep's frame's (`zk_worker_pads`). Two more sessions'
+/// workers open a finish of their own and ask it for table 0 rep 0's salts for levels ≥ 1: at the rep's first round
+/// (`salts-early`), which the loop's finish refuses before the rep's algebraic phase ended, so no round of it depends on
+/// them, and just after the session's finish drew them (`salts-again`), which it refuses since the loop keeps a rep's salts
+/// once, so the prover never holds two draws of them. Each session goes on on its own finish, the verifier getting the
+/// honest session's every request and accepting.
 fn worker_finish_case(gpu: bool) -> Value {
     let name = "zk_worker_finish";
     if gpu {
@@ -5233,20 +5247,23 @@ fn worker_finish_case(gpu: bool) -> Value {
                "error": v["error"], "requests": s.len(),
                "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "tampered": s.get(i)}))})
     }).collect();
-    let v = worker_subsession(&[("FC_FINISH_TAMPER", "salts-early".to_string())]);
-    let s = seen(&v);
-    let refused = v["finish_refused"].as_str().is_some_and(|r| r.contains("its salts for levels ≥ 1, asked for before its algebraic phase ended"));
-    let first_miss = (0..h.len().max(s.len())).find(|&i| h.get(i) != s.get(i));
-    let early_ok = v["accepted"] == true && refused && first_miss.is_none();
+    let salts: Vec<Value> = [("salts-early", "its salts for levels ≥ 1, asked for before its algebraic phase ended"),
+                             ("salts-again", "rep 0's salts for levels ≥ 1 were drawn already, on another finish")].iter().map(|&(m, why)| {
+        let v = worker_subsession(&[("FC_FINISH_TAMPER", m.to_string())]);
+        let s = seen(&v);
+        let refused = v["finish_refused"].as_str().is_some_and(|r| r.contains(why));
+        let first_miss = (0..h.len().max(s.len())).find(|&i| h.get(i) != s.get(i));
+        json!({"mode": m, "ok": v["accepted"] == true && refused && first_miss.is_none(), "accepted": v["accepted"],
+               "finish_refused": v["finish_refused"], "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(),
+               "prover_stopped": v["prover_stopped"], "error": v["error"], "requests": s.len(),
+               "first_miss": first_miss.map(|i| json!({"at": i, "honest": h.get(i), "tampered": s.get(i)}))})
+    }).collect();
     json!({"case": name, "expect": "each doctored rep request refused by the loop's finish, no proof sent, the honest session's other requests; \
-                                    salts for levels ≥ 1 asked for before the algebraic phase ended refused, the session on its own finish, accepted",
+                                    a rep's salts for levels ≥ 1 asked for on another finish, before its algebraic phase ended or after the \
+                                    session's finish drew them, refused, the session on its own finish, accepted",
            "honest": {"accepted": honest["accepted"], "error": honest["error"], "requests": h.len()},
-           "modes": modes,
-           "salts_early": {"ok": early_ok, "accepted": v["accepted"], "finish_refused": v["finish_refused"],
-                           "why": v["why"].as_str().unwrap_or("").chars().take(160).collect::<String>(),
-                           "prover_stopped": v["prover_stopped"], "error": v["error"], "requests": s.len(),
-                           "first_miss": first_miss.map(|i| json!({"at": i, "honest": h.get(i), "tampered": s.get(i)}))},
-           "pass": honest_ok && modes.iter().all(|c| c["ok"] == true) && early_ok})
+           "modes": modes, "salts": salts,
+           "pass": honest_ok && modes.iter().chain(&salts).all(|c| c["ok"] == true)})
 }
 
 /// `zk_worker_inner` (live PROTOCOL.md §10.4): the inner proof's rounds that leave are the loop's frame's own

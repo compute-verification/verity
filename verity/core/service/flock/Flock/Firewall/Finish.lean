@@ -759,9 +759,10 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `table I LEN`: table `I`'s level-0 data (`Link.parse`'s, `tabOf`), kept; the answer is its level-0 root.
 * `level0 I LEN`: the root of a level 0 that `level0Of` holds (the session loop's), kept as table `I` (`tabOfLevel0`);
   the answer is its root.
-* `salts I R 0`: rep `R`'s salts for levels ≥ 1 on table `I`, drawn from `get` once (`hiSaltsOf`), kept for its proof
-  file and handed to `keep` with the table's level-0 root; the answer is them (`saltsBytes`). A rep's salts are drawn
-  once: asking again is refused. Where the session loop holds the rep (`own`), they are drawn only once its frame took
+* `salts I R 0`: rep `R`'s salts for levels ≥ 1 on table `I`, drawn from `get` once (`hiSaltsOf`), handed to `keep`
+  with the table's level-0 root and kept for its proof file; the answer is them (`saltsBytes`). A rep's salts are drawn
+  once: asking again is refused, and so is a draw `keep` refuses (the session loop keeps a rep's first, on any of its
+  finishes, and refuses another). Where the session loop holds the rep (`own`), they are drawn only once its frame took
   the coins of every round of the rep's algebraic phase (`Own.algebraEnded`): asking before is refused, so no round of
   the algebraic phase the prover sends can depend on them. Without `liveOnly`, the rep's draws are drawn here too
   (`drawsFrom`) and kept, never answered.
@@ -789,7 +790,7 @@ no such proof answers is refused, never computed afresh from the request.
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
 def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
     (level0Of : ByteArray → IO (Option Level0.Level0))
-    (keep : ByteArray → Nat → Array ByteArray → IO Unit := fun _ _ _ => pure ())
+    (keep : ByteArray → Nat → Array ByteArray → IO (Option String) := fun _ _ _ => pure none)
     (file : ByteArray → Nat → ByteArray → IO (Option String) := fun _ _ _ => pure none)
     (own : Nat → Nat → ByteArray → IO (Option (Except String Own)) := fun _ _ _ => pure none)
     (liveOnly : Bool := false)
@@ -838,10 +839,10 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
           if o.algebraEnded then none else some "its salts for levels ≥ 1, asked for before its algebraic phase ended") then
         return (← refuse why)
       let s ← hiSaltsOf get t
+      if let some why ← keep (flat t.cm0.cap) r s then return (← refuse s!"finish: table {i} {why}")
       let d ← if liveOnly then pure none else some <$> drawsFrom get t
       hi := hi.set! i ((hi[i]!).set! r (some s))
       drawn := drawn.set! i ((drawn[i]!).set! r d)
-      keep (flat t.cm0.cap) r s
       answer (saltsBytes s)
     | ["rep", i, r, len] =>
       let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
@@ -941,11 +942,12 @@ def cmd (args : List String) : IO UInt32 := do
 the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
 loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt drawn from the operating
 system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Registry`, `l0s`), each rep's salts
-for levels ≥ 1 handed to `keep`, the loop's frames' copy, each round of a rep's inner proof to `inner`, which the loop's
-frames release in its place, and each rep's proof file to `file`, the proof the loop sends (`Session.relay`), each rep's
-draws its frame's and its requests held to what the loop holds of it (`own`, `Frames.ownOf`). -/
+for levels ≥ 1 handed to `keep`, the loop's frames' copy, which keeps a rep's once, each round of a rep's inner proof to
+`inner`, which the loop's frames release in its place, and each rep's proof file to `file`, the proof the loop sends
+(`Session.relay`), each rep's draws its frame's and its requests held to what the loop holds of it (`own`,
+`Frames.ownOf`). -/
 def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Registry)
-    (keep : ByteArray → Nat → Array ByteArray → IO Unit) (file : ByteArray → Nat → ByteArray → IO (Option String))
+    (keep : ByteArray → Nat → Array ByteArray → IO (Option String)) (file : ByteArray → Nat → ByteArray → IO (Option String))
     (own : Nat → Nat → ByteArray → IO (Option (Except String Own)))
     (inner : ByteArray → Nat → Nat → ByteArray → IO (Option String)) (line : String) : IO Unit := do
   let say := fun (s : String) => do

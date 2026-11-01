@@ -844,7 +844,9 @@ levels take them (`LeafSalts::preset`), and so do the loop's opening rounds: no 
 prover. The loop's finish samples them only once the rep's frame took the coins of its algebraic phase's last round
 (`Finish.Own.algebraEnded`): the loop then answers the rep's `place` with `salts` until they are drawn, and the ZK server
 asks for them at the round that opens the opening, before the device builds its first tree past level 0. A `salts`
-request before then, on any finish the prover opens, is refused, so no round of the algebraic phase can depend on them.
+request before then, on any finish the prover opens, is refused, so no round of the algebraic phase can depend on them,
+and so is one after they were drawn: the loop keeps a rep's salts once, whichever of its finishes drew them, so the
+prover never holds two draws of them.
 No request carries the rep's samples: the loop's finish proves each rep with the ones its frame took
 (`Finish.drawsOf`, from `Frames.ownOf`), and refuses a rep no frame holds. After the rep's end check the ZK server sends
 the finish the rep's request with the coins of its PIOP and opening (`inner J R LEN`: the values the frame took, the
@@ -953,8 +955,8 @@ round but are not the ones the stream answered it (`Finish.coinsWhy`). `final_c`
 values fix it: an `inner` request whose slot is any other fails its `zerocheck c_eval` constraint and is refused before
 its inner proof's first round (`Finish.consWhy`), and a `rep` request whose slot is not its `inner` request's is answered
 by no proof computed live, so it is refused.
-`FC_FINISH_TAMPER` doctors the session's last rep request in time (`salts-early` asks for salts early instead), and the
-selftest's `zk_worker_finish` holds each mode to that, beside an honest session:
+`FC_FINISH_TAMPER` doctors the session's last rep request in time (`salts-early` and `salts-again` ask another finish for
+a rep's salts instead), and the selftest's `zk_worker_finish` holds each mode to that, beside an honest session:
 
 | `FC_FINISH_TAMPER` | the last rep request | outcome |
 |---|---|---|
@@ -962,6 +964,7 @@ selftest's `zk_worker_finish` holds each mode to that, beside an honest session:
 | `coins` | the first round's first coin plus one | `… its coins are not the ones the stream answered`; the same |
 | `final-c` | `final_c` plus one | `… proof file is only the one its inner request computed live, and none answers this request`; the same |
 | `salts-early` | none doctored: at table 0 rep 0's first round a finish of the worker's own asks for the rep's salts for levels ≥ 1 | `… its salts for levels ≥ 1, asked for before its algebraic phase ended`; the session goes on on its own finish, and the verifier gets the honest session's every request and accepts |
+| `salts-again` | none doctored: once the session's finish drew table 0 rep 0's salts for levels ≥ 1, a finish of the worker's own asks for them again | `… rep 0's salts for levels ≥ 1 were drawn already, on another finish`: the loop keeps a rep's salts once; the same |
 
 The inner proof's rounds that leave are the frame's own: the loop places each at `Frame.innerSched`, the frame's own round
 (`ε`, `β`, its samples and the round's coin count) on the finish's round (`final_c'`, `τ`'s commitment), which the loop's
