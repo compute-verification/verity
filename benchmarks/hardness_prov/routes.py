@@ -138,10 +138,14 @@ def search(q, t=None):
 
 
 def stats(q):
+    """Public code statistics, with `tail{a}`: the share of the codes' energy beyond ±a, Σ(|q| − a)₊² / Σq², which the
+    cheap part of a route whose residual stays in [−a, a] must carry."""
     q = np.asarray(q, dtype=np.int64)
     p = np.bincount((q + 127).ravel(), minlength=255) / q.size
     nz = p[p > 0]
-    return {"sigma_q": float(q.std()), "entropy_bits": float(-(nz * np.log2(nz)).sum()),
+    e = float((q.astype(np.float64) ** 2).sum()) or 1.0
+    tails = {f"tail{a}": float((np.maximum(np.abs(q) - a, 0).astype(np.float64) ** 2).sum() / e) for a in (15, 31, 63)}
+    return {**tails, "sigma_q": float(q.std()), "entropy_bits": float(-(nz * np.log2(nz)).sum()),
             "frac_abs_le15": float((np.abs(q) <= 15).mean()), "frac_abs_gt31": float((np.abs(q) > 31).mean()),
             "frac_abs_gt63": float((np.abs(q) > 63).mean()),
             "frac_zero": float((q == 0).mean()), "p_odd": float((q % 2 != 0).mean())}
