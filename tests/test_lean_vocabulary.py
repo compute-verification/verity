@@ -797,8 +797,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (vllm)",
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes its memory leaves by tier (vllm)",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Opening":
-        "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (vllm)",
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Registration":
         "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a view of its head (vllm)",
     "integrations/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
