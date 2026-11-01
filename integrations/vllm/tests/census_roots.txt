@@ -78,6 +78,7 @@ verity_vllm.protocols.pouw.h1.window
 verity_vllm.protocols.pouw.native
 verity_vllm.protocols.pouw.lead
 verity_vllm.protocols.pouw.lead.feed      # the lead's coin feed: the coin link's packing and the in-process certifier, until the lead arm imports it
+verity_vllm.protocols.pouw.lead.record      # the pass's record, until the lead arm imports it
 verity_vllm.protocols.pouw.pearl_c.passes
 verity_vllm.protocols.pouw.pearl_c
 verity_vllm.protocols.pouw.pearl_c.graphs
