@@ -389,3 +389,13 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
   - Distillation (SmolLM2-1.7B) leaves the gap at 0.037 nats. The matched no-teacher control ends about 04:00Z, and the
     call doesn't depend on it.
   - vy-nebius-1 stops about 04:15Z.
+- **HT-USEFUL, first signal** (note:compute-research/20261101T0215Z-report-hardness-useful; measured before training;
+  pricing runs r20261101-022311-7b3b and -022318-73f7):
+  - **Rotating each matrix, then clipping to a 1–2% overflow, hardens Llama-3.2-1B.** All 112 matrices stay above 1 at
+    the floor correction prices of 1.48 and 1.78, even when the attacker reorders rows and columns: at least 1.097
+    (sm_120) and 1.123 (H200) at 1%, and at least 1.094 at every price on both chips at 2%.
+  - **Stock int8** has 19–26 matrices below 1. Rotation alone keeps all above 1, but 16 are under 1.05. Clipping
+    without rotation misses the 5% line and ruins perplexity.
+  - **Quality before training:** +0.1–0.4% perplexity with 16-bit activations, and +1.0–1.2% under design U's 2-bit
+    noise.
+  - Post-training quality, 2-bit-noise training, trained-code pricing and 8B are due about 06:30Z.
