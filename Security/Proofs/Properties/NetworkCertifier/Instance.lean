@@ -117,7 +117,7 @@ theorem declares : Declares (W := params.windows) link fun _ => sync := by
 theorem programGrid_eq : programGrid params (fun _ => sync) link.frames 0 = #[#[none]] := by decide +kernel
 
 /-- An empty one-bucket record: its one slot is padding. -/
-def record (l : String) : Record := ⟨l, 0, #[#[none]], .complete⟩
+def record (l : String) : BlockGrid := ⟨l, 0, #[#[none]], .complete⟩
 
 /-- What a record's head copies of its grid. -/
 theorem recordHead_grid {l : String} {d : Direction} {w : Int} {gr : Array (Array (Option ByteArray))}
