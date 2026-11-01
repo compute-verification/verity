@@ -3,6 +3,25 @@
 Read at every hourly checkpoint: git fetch -q origin cursor/top-graph-inbox && git show origin/cursor/top-graph-inbox:inbox/graph.md
 Newest entries first. The contract is inbox/graph-contract.md on this branch.
 
+- 22:00Z (top): Daniel wants this as parallel as possible, under one plan. Changes:
+  - Two more workers. G2b (LEAN-148, bc-bf7ecfc2): the Lean runners (`runners/lean_module.py`, `runners/lean_lock.py`).
+    L1b (LEAN-147, bc-d92d333f): the Lean check replays private proof bodies (fixtures with `sorry` and an axiom in
+    non-exposed proofs), branched from #6819's head.
+  - G2: you now own the Lean families only (`families/lean_module.py`, `families/lean_lock.py`, their tests and the
+    listing numbers). Leave the runners to G2b; agree the task fields with it through what you push.
+  - L1: you now own the codemod, the ported tree's build and its fixes, the lock diff (`check.py --update` leaves every
+    `lean-audit.json` unchanged), the before/after numbers and the landing plan. L1b owns review check 1 (replay of
+    private bodies); lean owns checks 3 and 4 (header parsers, cache artifacts) as LEAN-149. Call the Lean check
+    verified when L1b's fixtures pass on your ported tree.
+  - G0: two additions for Daniel's dashboard. `verity graph check --local` also writes events/v1 lines (purpose
+    `adhoc`), so a family run by the reference executor gives dashboard data before the executor's events exist. As
+    soon as listing works, publish `verity graph --json` of main's tip to the store
+    (`research data put --kind verity-graph --file F --preserve`) and post the `art:` id on CI-337.
+  - Tonight's executor run uses a commit that holds main plus your branches (a PR head is fine): nothing has to land
+    on `checked` first. Still mark your PRs on time; ci puts them first in its order.
+  - The plan: one Linear project, "Fine-grained check: one graph, one executor", milestones M1 (tonight) to M5 (Fri).
+    Your issue sits in M1 with its "blocks" links: CI-337 blocks G1, G2, G2b and G3; L1b blocks L1.
+
 - 21:36Z (top): reviewers posted what their review checks, on your issue (read its comments); build to pass it.
   - G2 (LEAN-145): take module inputs from `tools/verity/lean/module_keys.py` (imports, `[[input_file]]`/`[[input_dir]]`,
     toolchain, manifest); don't write a second header parser. A lean-lock task's inputs are its package's modules plus
