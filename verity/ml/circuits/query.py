@@ -7,7 +7,8 @@ concatenated; a block whose calls are not adjacent is rejected (`GapError`), nev
 `parse(text)` turns the general structural query syntax of `verity.ml.circuits.query_ast` into its AST:
 `members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`,
 `override(F, {"//Gemm_v1{*}": G})`, `zip(...)`, `where(F, spec=..., form=..., w_max=...)`, `union/minus/inter(F, G)`,
-`root()`, `table(".", "owners")`, `table(path, name, of="gates")`, `group(F, "name")`, `group(F, ["base", "static:K"])`.  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
+`root()`, `table(".", "owners")`, `table(path, name, of="gates")`, `group(F, "name")`, `group(F, ["base", "static:K"])`,
+`members(path, sel, k=(r, c))`, `label(F, affine=(a, b, n))`, `label(F, table="dev")` (a tuple and a list are one value).  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
 `//A ! groups(F, k)` -> `members("//A", "@fn:F", k)` (k adjacent members of one node per set; the legacy `query()`
 below is untouched and keeps its exact block semantics).
 """
@@ -18,8 +19,8 @@ import re
 from typing import Iterator
 
 from .query_ast import (Default, Each, Instances, Members, Nodes, NodeSel, Path, Query, QueryError, Rest, Root, Zip,
-                      concat as _concat, group as _group, inter as _inter, minus as _minus, override as _override,
-                      table as _table, union as _union, where as _where)
+                      concat as _concat, group as _group, inter as _inter, label as _label, members as _members,
+                      minus as _minus, override as _override, table as _table, union as _union, where as _where)
 from .layout import FunctionCall, Circuit, Region
 
 
@@ -190,6 +191,8 @@ class _Parser:
             return self.dict()
         if k == "p" and v == "[":
             return self.list()
+        if k == "p" and v == "(":
+            return self.tuple_()
         if k == "id":
             if v in ("True", "False", "None") and not (self.peek(1)[0] == "p" and self.peek(1)[1] == "("):
                 self.i += 1
@@ -220,6 +223,16 @@ class _Parser:
                 self.i += 1
         self.take("p", "]")
         return out
+
+    def tuple_(self) -> tuple:
+        self.take("p", "(")
+        out: list = []
+        while not self.at("p", ")"):
+            out.append(self.value())
+            if self.at("p", ","):
+                self.i += 1
+        self.take("p", ")")
+        return tuple(out)
 
     def call(self) -> Query:
         name = self.take("id")[1]
@@ -265,10 +278,8 @@ def _construct(name: str, args: list, kw: dict) -> Query:
         return Instances(Path.parse(args[0]))
     if name == "members":
         need(2)
-        k = _int_arg(name, "k", args[2] if len(args) > 2 else kw.get("k", 1))
-        if k <= 0:
-            raise QueryError("members(...) needs a positive k")
-        return Members(Path.parse(args[0]), NodeSel.parse(args[1]), k)
+        k = args[2] if len(args) > 2 else kw.get("k", 1)
+        return _members(Path.parse(args[0]), NodeSel.parse(args[1]), k if isinstance(k, (list, tuple)) else _int_arg(name, "k", k))
     if name == "nodes":
         need(2)
         return Nodes(Path.parse(args[0]), NodeSel.parse(args[1]))
@@ -320,6 +331,11 @@ def _construct(name: str, args: list, kw: dict) -> Query:
         if not isinstance(args[1], (str, list)):
             raise QueryError(f"group(F, key): the key is a key part or a list of them, got {args[1]!r}")
         return _group(_q(args[0]), args[1])
+    if name == "label":
+        need(1)
+        if len(args) > 1 or set(kw) - {"affine", "table"}:
+            raise QueryError("label(F, affine=[a, b, n]) or label(F, table=NAME): the map is one keyword argument")
+        return _label(_q(args[0]), affine=kw.get("affine"), table=kw.get("table"))
     raise QueryError(f"unknown query constructor {name!r}")
 
 
