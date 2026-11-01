@@ -27,7 +27,7 @@ Review landing, of every change the low-risk lane (above) doesn't take.  `main` 
 on a review onto the
 landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs the full check on its tip, and `main` is
 fast-forwarded only to a commit of it whose after-landing run passed every step on the merge gate (`_promote`: not
-circuit-check, ci.toml's `gate = false`, whose red reverts its culprit on `checked`); with `land_into = "main"` they
+circuit-check, off it by drive's policy, policy.toml's `off_gate`, whose red reverts its culprit on `checked`); with `land_into = "main"` they
 land on `main` and are checked after.  A tick
 syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
@@ -79,7 +79,7 @@ alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  c
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
 time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED`) with every ci.toml job (`AFTER_LANDING`),
-circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (`gate = false`: `_gating`), its base the last
+circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (policy.toml's `off_gate`: `_gating`), its base the last
 verified `checked` commit, below the tip, for ratchet-gate to judge the
 landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
@@ -104,7 +104,11 @@ landing goes on.  The ring (`_ring`) quotes the run, the first error line
 post (`_red_owners`: the suite's in the registry, else the step's in ci.toml); the culprit is
 reverted on `checked`, never on `main`, `FIX_WINDOW_S` after it (`_red_clock`), and the same two told, unless a fix is marked (`_fix`); a red
 circuit-check's culprit at once (`CIRCUIT_RED`), and while circuit-check is red on `checked` no PR whose own change touches
-its inputs lands (`_circuit_held`), every other one landing on.  A red run moves nothing on `main`.  While the oldest landing no run verified is
+its inputs lands (`_circuit_held`), every other one landing on.  A red run moves nothing on `main`.  The runners report each
+failure as it is; a failure an unexpired allowance of the tip's policy covers (policy.toml's `allow`, `research.policy`:
+`_allowed`) is not red: it names no culprit, reverts nothing and holds no promotion, and a run that failed only on such failures
+verifies its tip (`_only_allowed`).  An expired allowance is as if absent, and the ring of the red it no longer covers names it
+and rings its owner.  While the oldest landing no run verified is
 `BEHIND_S` old, drive rings every `BEHIND_EVERY_S` (`_behind`) who acts on each unreverted red, or `CI` and `TOP` while
 nothing red explains it.  A run with no readable state `LOST_AFTER_S` after its launch is lost.
 
@@ -141,6 +145,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
+from . import policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, check_id, compare,
                        old_verdicts)
 from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
@@ -205,7 +210,7 @@ REVIEWED = "a land verdict at each head"
 #: the keys of drive's state that only train landing kept, dropped from a state that has them
 TRAIN_STATE = ("launched", "deferred", "resent", "base", "bisect", "orphans", "per_pr", "prewarm")
 #: the after-landing run of a review landing: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the
-#: merge gate (`gate = false`: circuit-check, ratchet-gate) among them, which no check before landing runs
+#: merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate) among them, which no check before landing runs
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
@@ -1185,8 +1190,9 @@ class Driver:
     def follow_postland(self, drive: dict) -> None:
         """The post-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
         exited 75, or was stopped), the next `start_postland` launches it again.  One already failing under `--keep-going` is
-        named red at once (`_red`), and cancelled once only its `TAIL` is left.  A pass verifies its tip only when every step it
-        ran passed in it (`_unrun`).  One still launching (`_resolve`) runs; one whose train.sh registered no run is told to
+        named red at once (`_red`), and cancelled once only its `TAIL` is left.  A run that failed only on failures an
+        allowance of its tip's policy covers (`_only_allowed`) is a pass.  A pass verifies its tip only when every step it ran
+        passed in it, or failed only on allowed failures (`_unrun`).  One still launching (`_resolve`) runs; one whose train.sh registered no run is told to
         `CI`, and launched again."""
         if not (pl := drive.get("postland")) or not (run := pl.get("run")):
             return
@@ -1214,15 +1220,19 @@ class Driver:
                 return
             states = {r: ("lost", -1) for r in states}
         early = next((s[3] for s in states.values() if len(s) > 3 and s[0] in ACTIVE and s[3]), None)
+        if early and self._only_allowed(run):
+            early = None
         if not early and any(st in ACTIVE for st, *_ in states.values()):
             self._gate_passed(pl, run)
             return
         self._timed(drive, "postland", run["ids"])
-        if not early and self._every_shard(run, states, lambda rc: rc == 0):
+        if not early and (self._every_shard(run, states, lambda rc: rc == 0)
+                          or self._every_shard(run, states, lambda rc: rc in (0, 1)) and self._only_allowed(run)):
             pl["run"] = None
             self._gate_passed(pl, run)
             self._shadow_old(drive, run)
-            if unrun := self._unrun(run["ids"], [s for s in pl.get("steps") or AFTER_LANDING if s not in run.get("skip", ())]):
+            if unrun := self._unrun(run["ids"], [s for s in pl.get("steps") or AFTER_LANDING if s not in run.get("skip", ())],
+                                    tip):
                 if run.get("baseline"):
                     self._red_baseline(drive, pl, run, f"it passed without passing {', '.join(unrun)}")
                     return
@@ -1430,9 +1440,9 @@ class Driver:
 
     def _gating(self, commit: str) -> list[str]:
         """The after-landing steps `main` waits for at ``commit`` (`_promote`): every step but those a run skips by name
-        (`AFTER_LANDING_OPTIONAL`) and the jobs ``commit``'s own ci.toml takes off the merge gate (`gate = false`:
-        circuit-check, `merge.declared_jobs`), which still run there and revert their culprit on `checked`; every such step when
-        that ci.toml can't be read."""
+        (`AFTER_LANDING_OPTIONAL`) and the jobs ``commit``'s own drive policy takes off the merge gate (policy.toml's
+        `off_gate`: circuit-check, `merge.declared_jobs`), which still run there and revert their culprit on `checked`; every
+        such step when that ci.toml or policy can't be read."""
         from .merge import declared_jobs
 
         cache = self.__dict__.setdefault("_gating_of", {})
@@ -1442,15 +1452,15 @@ class Driver:
         return cache[commit]
 
     def _gate_passed(self, pl: dict, run: dict) -> None:
-        """An after-landing run, ended or still running, that passed every step `main` waits for at its tip (`_gating`),
-        whatever a step off the gate does or did (circuit-check, pending or red): its tip is `gated` (with "gated_run", its ids),
-        a commit `_promote` may move `main` to."""
+        """An after-landing run, ended or still running, that passed every step `main` waits for at its tip (`_gating`), or
+        failed it only on failures an allowance covers (`_allowed_steps`), whatever a step off the gate does or did
+        (circuit-check, pending or red): its tip is `gated` (with "gated_run", its ids), a commit `_promote` may move `main` to."""
         tip, ids = run["tip"], " ".join(run["ids"])
         if (g := pl.get("gated")) and (g == tip or not self._ancestor(g, tip)):
             return
-        passed = {st.get("step") for d in self._evidence(Verdict("failed", ids)) for st in step_records(d)
-                  if st.get("status") == "passed"}
-        if set(self._gating(tip)) <= passed:
+        dirs = self._evidence(Verdict("failed", ids))
+        passed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "passed"}
+        if set(self._gating(tip)) <= passed | self._allowed_steps(tip, dirs):
             pl["gated"], pl["gated_run"] = tip, ids
 
     def _shards_launched(self, drive: dict, pl: dict, run: dict) -> bool:
@@ -1490,17 +1500,72 @@ class Driver:
         missed = [g for g in groups if all(states[r][1] in never for r in g if r in states)]
         return bool(missed) and all(g in missed or any(states[r][1] == 0 for r in g if r in states) for g in groups)
 
-    def _unrun(self, ids: list[str], steps: list[str]) -> list[str]:
-        """The ``steps`` no run among ``ids`` records as passed in its steps.jsonl: a run's exit 0 says only that
-        nothing failed (a step `skipped:`, or one `--deferred` maps to no part, passes it too)."""
-        got = set()
-        for d in self.evidence(self.repo, ids):
+    def _unrun(self, ids: list[str], steps: list[str], tip: str | None = None) -> list[str]:
+        """The ``steps`` no run among ``ids`` records as passed in its steps.jsonl, nor (with ``tip``, the commit it checked)
+        as failed only on allowed failures (`_allowed_steps`): a run's exit 0 says only that nothing failed (a step
+        `skipped:`, or one `--deferred` maps to no part, passes it too)."""
+        got, dirs = set(), self.evidence(self.repo, ids)
+        for d in dirs:
             with contextlib.suppress(OSError):
                 for line in (d / PROGRESS[0]).read_text().splitlines():
                     with contextlib.suppress(ValueError):
                         if (rec := json.loads(line)).get("status") == "passed":
                             got.add(rec.get("step"))
+        if tip is not None:
+            got |= self._allowed_steps(tip, dirs)
         return [s for s in steps if s not in got]
+
+    # -- drive's policy (`research.policy`, policy.toml at the commit judged): which jobs gate, and which failures an unexpired
+    #    allowance covers, so they are not red: no culprit, no revert, no hold on `main`
+
+    def _policy(self, commit: str) -> policy.Policy:
+        """``commit``'s drive policy, read once per tick; one that can't be read is logged and taken as none (every job gates,
+        no failure is allowed)."""
+        cache = self.__dict__.setdefault("_policy_of", {})
+        if commit not in cache:
+            got = policy.at(self.repo, commit)
+            if isinstance(got, str):
+                self.q.log(f"research queue drive: {got}: no failure is allowed at {commit[:12]}")
+                got = policy.Policy()
+            cache[commit] = got
+        return cache[commit]
+
+    def _allowed(self, tip: str, key: str, d: Path, rec: dict) -> policy.Verdict:
+        """Whether an allowance of ``tip``'s policy covers failed ``key`` (`suite NAME`, or a step: circuit-check's by its
+        log's failures), with the expired ones that would have."""
+        pol, now = self._policy(tip), self.now()
+        if key.startswith("suite "):
+            return pol.suite(key.split(" ", 1)[1], rec, now)
+        if key == CIRCUIT_RED:
+            return pol.circuit(_step_log(d, rec), now)
+        return policy.Verdict(False)
+
+    def _allowed_steps(self, tip: str, dirs: list[Path]) -> set[str]:
+        """The steps that failed in the run whose records are ``dirs`` only on failures ``tip``'s allowances cover: pytest and
+        lean-suites when each suite of theirs that failed is covered, circuit-check when each failure its log names is; none
+        that failed uncovered in any of them."""
+        ok: set[str] = set()
+        bad: set[str] = set()
+        for d in dirs:
+            rows = suite_rows(d)
+            for st in step_records(d):
+                step = st.get("step") or ""
+                if st.get("status") != "failed" or not_run(st):
+                    continue
+                if step in ("pytest", "lean-suites"):
+                    failed = [(n, s) for n, s in rows.items() if s["status"] == "failed" and s["step"] == step]
+                    covered = bool(failed) and all(self._allowed(tip, f"suite {n}", d, s).covered for n, s in failed)
+                else:
+                    covered = self._allowed(tip, f"step {step}", d, st).covered
+                (ok if covered else bad).add(step)
+        return ok - bad
+
+    def _only_allowed(self, run: dict) -> bool:
+        """Whether ``run`` failed only on failures its tip's allowances cover: some step failed, and each failed step is
+        `_allowed_steps`'."""
+        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
+        failed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
+        return bool(failed) and failed <= self._allowed_steps(run["tip"], dirs)
 
     def _postland_failed(self, drive: dict, pl: dict, run: dict, why: str, signalled: bool = False) -> None:
         """A post-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or a
@@ -1541,7 +1606,7 @@ class Driver:
         anyway with the steps it passed alone (`verified_as`), so landing goes on and a later failure reverts only on a step that
         passed here (`_unconfirmed`); `CI` is told."""
         tip, steps = run["tip"], (run.get("as") or {}).get("steps") or list(AFTER_LANDING)
-        unrun = self._unrun(run["ids"], steps)
+        unrun = self._unrun(run["ids"], steps, tip)
         pl["verified"], pl["verified_as"] = tip, {"steps": [s for s in steps if s not in unrun], "no_cache": run["as"]["no_cache"]}
         pl["verified_run"] = " ".join(run["ids"])
         pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, tip)]
@@ -1590,8 +1655,10 @@ class Driver:
     def _red(self, drive: dict, pl: dict, run: dict, ended: bool = False) -> int:
         """Read an after-landing run's records, still running or ``ended``: each suite and step it passed is green at its tip
         (`_green`), and each it failed is named (`_name`): a step a cancel stopped is `not run`, never failed.  pytest and
-        lean-suites are named by their suites, and only as a step when no suite of theirs failed (a timeout, a kill).  The
-        number of failed suites and steps."""
+        lean-suites are named by their suites, and only as a step when no suite of theirs failed (a timeout, a kill).  A
+        failure an unexpired allowance of the tip's policy covers (`_allowed`) is not red: it is named nothing, and once the run
+        ended its red record ends as a pass's would; one whose allowance expired is named with it, so its ring says which.  The
+        number of failed suites and steps not covered."""
         tip = run["tip"]
         dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
         fails: dict[str, tuple[Path, dict]] = {}
@@ -1611,14 +1678,24 @@ class Driver:
                         fails[f"step {step}"] = (d, st)
                 elif st.get("status") == "passed":
                     self._green(pl, f"step {step}", tip)
+        expired: dict[str, tuple[policy.Allowance, ...]] = {}
+        for key, (d, rec) in list(fails.items()):
+            v = self._allowed(tip, key, d, rec)
+            if v.covered:
+                del fails[key]
+                if ended:
+                    self._green(pl, key, tip, "failed only on what an allowance of its policy covers")
+            elif v.expired:
+                expired[key] = v.expired
         if not (self.dry_run or self.q.shadow):
             for key, (d, rec) in fails.items():
-                self._name(drive, pl, run, key, d, rec, sorted(stopped))
+                self._name(drive, pl, run, key, d, rec, sorted(stopped), expired.get(key, ()))
             self._start_bisect(pl)
         return len(fails)
 
-    def _green(self, pl: dict, key: str, tip: str) -> None:
-        """``key`` passed at ``tip``: its newest green, and its red record at or below ``tip`` (and a bisection of it) ends."""
+    def _green(self, pl: dict, key: str, tip: str, how: str = "passed") -> None:
+        """``key`` passed at ``tip`` (or ``how`` it was not red there): its newest green, and its red record at or below ``tip``
+        (and a bisection of it) ends."""
         green = pl.setdefault("green", {})
         if green.get(key) != tip and (key not in green or self._ancestor(green[key], tip)):
             green[key] = tip
@@ -1626,7 +1703,7 @@ class Driver:
             del pl["red"][key]
             if (pl.get("bisect") or {}).get("key") == key:
                 del pl["bisect"]
-            self.q.log(f"research queue drive: {key} passed on `{self.q.into}` {tip[:12]}; its red record of {r['tip'][:12]} ends")
+            self.q.log(f"research queue drive: {key} {how} on `{self.q.into}` {tip[:12]}; its red record of {r['tip'][:12]} ends")
 
     def _base_of(self, pl: dict, key: str, step: str, tip: str) -> str | None:
         """The newest commit at or below ``tip`` an after-landing run passed ``key`` at: its green, else the last verified
@@ -1674,14 +1751,16 @@ class Driver:
         except (KeyError, TypeError, AttributeError):
             return None
 
-    def _name(self, drive: dict, pl: dict, run: dict, key: str, d: Path, rec: dict, stopped: list[str]) -> None:
+    def _name(self, drive: dict, pl: dict, run: dict, key: str, d: Path, rec: dict, stopped: list[str],
+              expired: tuple[policy.Allowance, ...] = ()) -> None:
         """Name the culprit of failed ``key`` among the PRs landed since it last passed (`_base_of`): the one whose change
         touches a file the failure points at (its failing tests, the files its log names, what the read guard caught it reading
         and the test modules that read it), else the one that touches its declared inputs (`_input_rule`); for ratchet-gate,
         the oldest whose merge the gate's log says it fails (`ratchet_failures`) before either; several, a bisection
         by landing decides (`_start_bisect`).  Ring the culprit's lane and the owner of what failed (`_ring`): drive
-        reverts the culprit `FIX_WINDOW_S` after unless a fix is marked (`_red_clock`).  A key already named for this tip, or whose culprit
-        is still on `main` unreverted, is left as it is."""
+        reverts the culprit `FIX_WINDOW_S` after unless a fix is marked (`_red_clock`).  The ``expired`` allowances that covered
+        it are kept with the record (``expired``: each one's text, ``allowed_by``: its owner), so the ring names them and rings
+        their owners too.  A key already named for this tip, or whose culprit is still on `main` unreverted, is left as it is."""
         red, tip = pl.setdefault("red", {}), run["tip"]
         if (old := red.get(key)) and (old["tip"] == tip or (pl.get("bisect") or {}).get("key") == key
                                       or (old.get("culprit") and not old.get("reverted") and not self._undone(old["culprit"][3]))):
@@ -1691,6 +1770,8 @@ class Driver:
         step = rec.get("step") or ""
         r = {"tip": tip, "ids": run["ids"], "first": first_error(d, rec), "step": step, "culprit": None,
              "owner": self._path_owner(rec["suite"]) if rec.get("suite") else None, "not_run": stopped}
+        if expired:
+            r["expired"], r["allowed_by"] = [a.text() for a in expired], sorted({a.owner for a in expired})
         red[key] = r
         gate = ratchet_failures(d, rec) if step == RATCHET_STEP else []
         if gate:
@@ -1733,6 +1814,9 @@ class Driver:
         failed, the run, its first error line and what drive does next, once per key and culprit."""
         c = r.get("culprit")
         nr = f" Not run (a cancel stopped them): {', '.join(r['not_run'])}." if r.get("not_run") else ""
+        if r.get("expired"):
+            nr += (f" Its allowance in policy.toml expired, so it is red again: {'; '.join(r['expired'])}. Fix it, or extend "
+                   "the allowance in a reviewed change.")
         clock = ("" if not c else
                  f" Drive reverts #{c[0]} now, and lands no PR touching circuit-check's inputs until it passes on "
                  f"`{self.q.into}`" if key == CIRCUIT_RED else
@@ -1745,11 +1829,12 @@ class Driver:
 
     def _red_owners(self, key: str, r: dict) -> tuple[str | None, ...]:
         """Who red record ``r`` of ``key`` rings, first the one who acts: its culprit's lane (`_owner`), then the owner of
-        what failed, its suite's (the registry's, `r["owner"]`) else its step's (ci.toml's at its tip); (None,) (`CI`) when
-        neither is known."""
+        what failed, its suite's (the registry's, `r["owner"]`) else its step's (ci.toml's at its tip), then the owner of each
+        allowance of it that expired (`r["allowed_by"]`); (None,) (`CI`) when none is known."""
         c = r.get("culprit")
         what = r.get("owner") or self._step_owner(r.get("step") or key.split(" ", 1)[-1], r["tip"])
-        return tuple(dict.fromkeys(h for h in (self._owner(Member(*c)) if c else None, what) if h)) or (None,)
+        return tuple(dict.fromkeys(h for h in (self._owner(Member(*c)) if c else None, what, *(r.get("allowed_by") or ()))
+                                   if h)) or (None,)
 
     def _start_bisect(self, pl: dict) -> None:
         """Bisect the first red record with candidates and no culprit (`_bisect_step`), when no bisection runs: its failed

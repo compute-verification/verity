@@ -2,8 +2,8 @@
 admitted PR, one merge commit each, in the order they were admitted.  Drive (`research.drive`) fast-forwards `checked` to the top
 of the longest prefix of `next` whose every member has a reviewer's land verdict at its head, merges onto `checked` each member
 whose merge changes no Lean, lock or soundness-path file (drive.toml's `lowrisk_lane`) on its ready mark alone, and `main` to a commit of `checked`
-only once that commit's after-landing run, the full check, passed every step on the merge gate (not circuit-check, ci.toml's
-`gate = false`): `main` holds only tested commits.
+only once that commit's after-landing run, the full check, passed every step on the merge gate (not circuit-check, policy.toml's
+`off_gate`), or failed it only where an unexpired allowance of that policy covers: `main` holds only tested commits.
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
@@ -2569,9 +2569,21 @@ QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu",
 LEAN_BUILDS = ("verity/core/service/flock",)
 
 
+def allowed(repo: Path, base: str | None) -> Callable[[dict], bool] | None:
+    """What drive's policy at ``base`` (the quick tier's base, a commit of `main`: `research.policy.at`) allows of a failed suite's
+    row, as drive judges it after landing; None when it allows nothing there or can't be read, so every failure refuses."""
+    from . import policy
+
+    pol = policy.at(repo, base) if base else None
+    if not isinstance(pol, policy.Policy) or not pol.allow:
+        return None
+    now = time.time()
+    return lambda row: pol.suite(str(row.get("name")), row, now).covered
+
+
 class QuickTier:
     """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout (`quick_tier.tier`, judged by
-    `quick_tier.judge`): one worktree of the caller's repository per machine under `root`, checked out at the head and cleaned of
+    `quick_tier.judge`, with what drive's policy on `main` allows: `allowed`): one worktree of the caller's repository per machine under `root`, checked out at the head and cleaned of
     everything but its `.venv` and the `.lake` of each of `LEAN_BUILDS` for each PR (one PR at a time: `{name}.lock`), so its
     environment syncs only what moved and Lake rebuilds only what changed.  Each of `LEAN_BUILDS` is built first (with the PATH's
     `lake`, else elan's; none, or a failed build, refuses).  Passes are cached by input (`suites.py`), so a re-run after a failure
@@ -2591,7 +2603,8 @@ class QuickTier:
             if base is None:
                 return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
             out = self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
-            return quick_tier.judge(quick_tier.tier(wt, out, pr.head, base, QUICK_TIER, LEAN_BUILDS), pr.head)
+            return quick_tier.judge(quick_tier.tier(wt, out, pr.head, base, QUICK_TIER, LEAN_BUILDS), pr.head,
+                                    covers=allowed(self.repo, base))
 
     @contextlib.contextmanager
     def _checkout(self, pr: PR):
@@ -2719,7 +2732,7 @@ class RemoteQuickTier(QuickTier):
               f"(`research inspect {rid}`)", flush=True)
         d = R.runs_root() / rid
         status, why = self._wait(d, on)
-        return why or judge_run(d, rid, on, pr.head, status)
+        return why or judge_run(d, rid, on, pr.head, status, allowed(self.repo, base))
 
     def _wait(self, d: Path, on: str) -> tuple[dict, str | None]:
         """The run's status.json once it says the run ended, from its records fetched every `poll_s` until the wait's deadline; or why
@@ -2781,21 +2794,26 @@ def tier_report(d: Path, rid: str, on: str, status: dict):
     return res, None
 
 
-def judge_report(res, rid: str, on: str, head: str, status: dict) -> str | None:
-    """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``; else what failed."""
-    if (why := quick_tier.judge(res.doc.get("tier"), head, f"its output is in run {rid}'s log on {on}")) is not None:
+def judge_report(res, rid: str, on: str, head: str, status: dict, covers: Callable[[dict], bool] | None = None) -> str | None:
+    """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``, its failures all
+    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: `done`, exit 0 and validation
+    passed when it found no failure, and `done`, exit 1 and validation failed when every one it found is allowed."""
+    tier, output = res.doc.get("tier"), f"its output is in run {rid}'s log on {on}"
+    if (why := quick_tier.judge(tier, head, output, covers)) is not None:
         return why
-    if status.get("state") != "done" or status.get("rc") != 0 or res.validation_status != "passed":
+    want = ("done", 0, "passed") if quick_tier.judge(tier, head, output) is None else ("done", 1, "failed")
+    if (status.get("state"), status.get("rc"), res.validation_status) != want:
         return (f"run {rid}'s facts show a pass, but it ended {status.get('state')} (exit {status.get('rc')}) with validation "
                 f"{res.validation_status}")
     return None
 
 
-def judge_run(d: Path, rid: str, on: str, head: str, status: dict) -> str | None:
-    """None when ended run ``rid`` (records in ``d``) reports a pass of the quick tier at ``head``; else what failed: a run that ends
-    without the facts, with facts from another run or head, or other than `done` with exit 0, is a failure."""
+def judge_run(d: Path, rid: str, on: str, head: str, status: dict, covers: Callable[[dict], bool] | None = None) -> str | None:
+    """None when ended run ``rid`` (records in ``d``) reports a pass of the quick tier at ``head`` (``covers``: `judge_report`);
+    else what failed: a run that ends without the facts, with facts from another run or head, or other than as it judged
+    itself, is a failure."""
     res, why = tier_report(d, rid, on, status)
-    return why or judge_report(res, rid, on, head, status)
+    return why or judge_report(res, rid, on, head, status, covers)
 
 
 def _json_file(p: Path) -> dict:
@@ -4503,7 +4521,8 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
             "which is no open PR's head now, nor its tree (pushed again since, or closed?)"))
     if records is not None and (why := records(prs[0])):
         return refuse(f"#{prs[0].number} is not marked ready at {prs[0].head[:12]}: {why}")
-    return _mark(store, prs[0], by, judge_report(res, rid, machine, head, status), "judge")
+    covers = allowed(repo or Path.cwd(), tier.get("base") if isinstance(tier, dict) else None)
+    return _mark(store, prs[0], by, judge_report(res, rid, machine, head, status, covers), "judge")
 
 
 def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:

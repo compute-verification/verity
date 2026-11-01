@@ -27,13 +27,15 @@ from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
-#: a ci.toml with a job for each after-landing step, circuit-check off the merge gate as in the tree
-CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n'
-                                         + ('gate = false\n' if s == "circuit-check" else "") for s in AFTER_LANDING)
+#: a ci.toml with a job for each after-landing step, and drive's policy taking circuit-check off the merge gate as in the tree
+CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' for s in AFTER_LANDING)
+POLICY_TOML = 'schema = "policy/v0"\noff_gate = ["circuit-check"]\n'
+#: the files `_move_main` writes for a tree declaring `CI_TOML` under `POLICY_TOML`
+GATED_TREE = {"tools/verity/check/ci.toml": CI_TOML, "tools/verity/check/policy.toml": POLICY_TOML}
 
 
 def test_the_after_landing_run_runs_circuit_check_which_is_off_the_merge_gate():
-    """circuit-check is off the merge gate (ci.toml's `gate = false`): no recorded check runs it, so the after-landing run must,
+    """circuit-check is off the merge gate (policy.toml's `off_gate`): no recorded check runs it, so the after-landing run must,
     and must pass it to verify `main` (it is no step the run may skip by name)."""
     from research.drive import CHECK_STEPS
 
@@ -48,14 +50,17 @@ def world(tmp_path):
 
 def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, monkeypatch):
     """`_promote` waits at a commit for every after-landing step but those a run skips by name and the jobs that commit's own
-    ci.toml takes off the merge gate (circuit-check); for every such step when that ci.toml can't be read."""
+    drive policy takes off the merge gate (circuit-check); for every such step when its ci.toml or policy can't be read."""
     h = Review(world, monkeypatch)
     every = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL]
     assert h.d._gating(_main(world)) == every
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    _move_main(world, GATED_TREE)
     h.q.fetch()
     assert h.d._gating(_main(world)) == [s for s in every if s != "circuit-check"]
-    _move_main(world, {"tools/verity/check/ci.toml": "not toml ["})
+    _move_main(world, {"tools/verity/check/policy.toml": "not toml ["})
+    h.q.fetch()
+    assert h.d._gating(_main(world)) == every
+    _move_main(world, {"tools/verity/check/policy.toml": POLICY_TOML, "tools/verity/check/ci.toml": "not toml ["})
     h.q.fetch()
     assert h.d._gating(_main(world)) == every
 
