@@ -127,7 +127,7 @@ def Registry.put (R : Registry) (p : Rep) : Registry :=
 else why not: a name no live session has, or a session before its `Hello`. -/
 def Registry.named (R : Registry) (L0 : Level0.Registry) (what name : String) : Except String Session := do
   let some (_, sid) := L0.sessions.find? (·.1 == name)
-    | throw s!"a {what} for a session the loop is not serving (coin tree root {name})"
+    | throw s!"a {what} for a session the loop is not serving (id {name})"
   let some s := R.sessions.find? (·.sid == sid) | throw s!"a {what} of session {sid} before its Hello"
   return s
 

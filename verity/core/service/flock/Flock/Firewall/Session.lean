@@ -13,7 +13,9 @@ the prover's bytes:
   nonce from the setup's values (`helloOf`), never from the text. A setup whose sizes are past what the loop's frames
   read (`sizesOk`) is refused there: no `Hello` leaves, and the session is stopped.
 * `Hello`'s answer must be the coin tree's root and session key (`Coins.Session.start`), under a tree whose streams are
-  the session's (`streamsOk`), and it is relayed as it is.
+  the session's (`streamsOk`), and it never reaches the prover: what the prover receives in its place is the loop's id
+  for the session, drawn from the operating system with the `Hello`'s nonce (`idFrame`), by which the session is named
+  on the loop's frames port once its answer checked (`Level0.nameOf`).
 * `Commit` and `Round` leave only as the schedule's next opening (`State.request`, `reqAt`: the session stream's at
   `Commit`, its count `Hello`'s link points', then each rep stream's rounds in order at the counts `Zk.verifyRep` draws,
   `planOf`), never at a place the prover names. The coins answered must open the committed tree there
@@ -29,8 +31,8 @@ the prover's bytes:
   `Frames.coins`), and the prover receives them only once the frame took them.
 * Each table's level 0 is the loop's: on its frames port the loop draws a table's mask-slot words, level-0 hiding and
   salts from the operating system for the packed witness the prover hands it, writes the words into the witness's mask
-  slot, and commits level 0 on them (`level0`, `Level0.draw`), for the live session and table the request names (by its
-  coin tree's root, `Level0.nameOf`), at its statement's `m`, once a table: a second request for a table is refused
+  slot, and commits level 0 on them (`level0`, `Level0.draw`), for the live session and table the request names (by the
+  loop's id for it, `Level0.nameOf`), at its statement's `m`, once a table: a second request for a table is refused
   (`Level0.Registry.draw`). A `Commit`'s roots leave only as each table's one draw for
   its own session, at its table's `m` (`Level0.commit`), and the `Commit` that leaves is the
   loop's (`commitFrame`): `root_F` the session's Σ, the roots its tables' level 0 now bound, and no public words. Every
@@ -252,9 +254,13 @@ def State.coins (S : State) (a : ByteArray) : State × ByteArray :=
     | .ok (C', c) => ({ S with session := some C' }, ⟨(Coins.frame (c.length / 16) c).toArray⟩)
     | .error e => S.refuse e
 
+/-- `Resp::Coins`' frame of the loop's id `id` for a session: what the prover receives for `Hello`'s answer. -/
+def idFrame (id : ByteArray) : ByteArray := ⟨(Coins.frame (id.size / 16) id.data.toList).toArray⟩
+
 /-- **What the prover receives** for the auditor's answer `a` to a request of kind `k`, and the session after: the draw
-taken from `Register`'s answer, `Hello`'s answer checked, a round's coins opened (`State.coins`); anything else as it is. -/
-def State.answer (S : State) (k : Kind) (a : ByteArray) : State × ByteArray :=
+taken from `Register`'s answer, the loop's id `id` for the session once `Hello`'s answer checked (`idFrame`), a round's
+coins opened (`State.coins`); anything else as it is. -/
+def State.answer (S : State) (k : Kind) (a : ByteArray) (id : ByteArray := .empty) : State × ByteArray :=
   match k, byte? a 0 with
   | .register, some 6 => match getBytes a 1 with
     | some (d, _) => match String.fromUTF8? d with
@@ -270,7 +276,7 @@ def State.answer (S : State) (k : Kind) (a : ByteArray) : State × ByteArray :=
         S.refuse s!"{Coins.STOP}the session has no coin tree of its own streams (session, then each table's rep0 and rep1, distinct)"
       else S.refuse s!"{Coins.STOP}Hello's answer before the Hello"
     | none, some h => match Coins.Session.start h a.data.toList with
-      | .ok C => ({ S with session := some C }, a)
+      | .ok C => ({ S with session := some C }, idFrame id)
       | .error e => S.refuse e
   | .commit, some 2 => S.coins a
   | .round _ _, some 2 => S.coins a
@@ -543,6 +549,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
       break
     | .ok .hello =>
       let nonce ← IO.getRandomBytes Hello.NONCE_BYTES.toUSize
+      let id ← IO.getRandomBytes Level0.ID_BYTES.toUSize
       let set ← S.setupAt specs st.draw
       match st.sendHello set nonce with
       | .error (st', out) =>
@@ -553,8 +560,8 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
         if let .ok (spec, sts) := set then reg.modify (·.begin sid spec sts)
         sendFrame a h
         let some r ← recvFrame a | break
-        let (st', out) := st.answer .hello r
-        if st.session.isNone && st'.session.isSome then l0s.modify (·.name (Level0.nameOf r) sid st.tables.size)
+        let (st', out) := st.answer .hello r id
+        if st.session.isNone && st'.session.isSome then l0s.modify (·.name (Level0.nameOf id) sid st.tables.size)
         st := st'
         sendFrame p out
     | .ok k =>
@@ -705,7 +712,7 @@ the `N` bytes of the mask slot's words, the hiding the loop drew for the table f
 committed, the last `R` of them. The loop writes its words into the witness's mask slot (`Frames.Registry.maskOf`,
 `Frame.MaskSlot.fill`) before it commits level 0 on it (`Level0.draw`, `Level0.drawsOf`), so the slot's words are the
 loop's whatever the prover's witness held there. The table's `Level0` is kept in `l0s` for table `TABLE` of the live
-session named `SESSION` (`Level0.nameOf`: the hex of its coin tree's root) until that session ends, and only that
+session named `SESSION` (`Level0.nameOf`: the hex of the loop's id for it) until that session ends, and only that
 session's `Commit` may carry its root, as that table's. A table's level 0 is drawn once a session: a second request for
 it, or one for a table the session does not have or at another `M`, is refused, and nothing drawn for it is kept or
 answered (`Level0.Registry.draw`, in the one update that keeps the first). Anything else is answered `err WHY`. -/

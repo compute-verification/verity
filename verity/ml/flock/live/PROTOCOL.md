@@ -740,7 +740,9 @@ that leave are the loop's finish's files. A `Prime`, a frame of a tag it doesn't
 `Open` of a stream the session doesn't have are refused. It sends its own
 `Hello` (the Lean `Hello` at the auditor's sample and a nonce it samples from the OS) in place of the prover's, checks
 `Hello`'s answer (20 words, key bit 2047 clear) and every coin opening against the root, and hands the prover only the
-coins, as `coin_tree::Checked` does. The tree, link count and nonce it checks them under are the values it set up and
+coins, as `coin_tree::Checked` does. `Hello`'s answer itself never reaches the prover: once it checked, the prover
+receives in its place the loop's id for the session, four words sampled from the OS with the nonce (`Session.idFrame`).
+The tree, link count and nonce it checks them under are the values it set up and
 sent (`Session.helloOf`), never a parse of the `Hello`: the setup's coin tree, whose streams must be the session stream
 then each table's `rep0` and `rep1`, distinct (`Session.streamsOk`), else `Hello`'s answer is refused. It asks for each
 opening at the schedule's place, not the prover's: the session stream's at `Commit`, then every round of each rep
@@ -767,8 +769,8 @@ place (`place SESSION I R`: `alg N`, `open N` or `own`, by which it ends a faile
 values the frame took (`vals SESSION I R`, `ok N` and the words in absorbed order, for its end check), and it passes every
 device round through, unmasked, to the loop (`firewall::Gate`).
 A connection there whose first line is `level0 SESSION TABLE M LEN`, followed by a table's `LEN`-byte packed witness, is
-table `TABLE`'s level 0 (`Session.level0`, §10.2) for the live session named `SESSION`: the hex of its coin tree's root,
-the first four words of its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and
+table `TABLE`'s level 0 (`Session.level0`, §10.2) for the live session named `SESSION`: the hex of the loop's id for it,
+the four words the prover received for its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and
 the `N` bytes of the mask slot's words, the extra lanes, the paddings and the salts the loop sampled, then its `R`-byte
 root, or `err WHY`; the loop wrote the words into the witness's mask slot before it committed level 0, whatever the
 witness held there. A session the loop isn't serving is refused, and so is a table the session lacks, an `M` other than
@@ -885,7 +887,9 @@ the opening, level 0's values included, must equal the loop's own opening round 
 nothing of level 0 the worker sends leaves except as the ZK server computed it. The worker also sees the mask slot's
 words, which the loop draws and writes into the witness it commits (§10.2), and which leave the worker no free choice
 either: a worker that keeps words of its own there commits another codeword, and the session stops at its `Finish`
-(`zk_worker_level0`).
+(`zk_worker_level0`). Of the verifier's messages it sees only the coins, stripped of their openings: never `Hello`'s
+answer, the coin tree's root and the session key, in whose place it receives the loop's id for the session, four words
+the loop samples, which it names the session by on the loop's frames port.
 
 In a session of several tables each table has a ZK server of its own in turn: its salt context and recheck, and its reps'
 frames in the loop, one table's ending before the next table's begins. A later table's level-0 root leaves in table 0's `Commit`, before any

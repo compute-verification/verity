@@ -173,11 +173,11 @@ fn f128_wire(v: &[F128]) -> Vec<u8> {
     v.iter().flat_map(|x| [x.lo.to_le_bytes(), x.hi.to_le_bytes()].concat()).collect()
 }
 
-/// The name the Lean session loop knows a session by (`Level0.nameOf`): the hex of its coin tree's root, the first four
-/// words of `Hello`'s answer `coins`, as the wire carries them.
+/// The name the Lean session loop knows a session by (`Level0.nameOf`): the hex of the loop's id for it, the four words
+/// the loop answers the session's `Hello` with in place of the auditor's answer (`Session.idFrame`), as the wire carries them.
 #[cfg(feature = "sha512")]
-pub fn level0_session(coins: &[F128]) -> String {
-    crate::hex(&f128_wire(&coins[..4.min(coins.len())]))
+pub fn level0_session(id: &[F128]) -> String {
+    crate::hex(&f128_wire(id))
 }
 
 /// The `flock-firewall` the ZK server releases through: `FC_FIREWALL_LEAN`, else the Lean verifier's build in this checkout.

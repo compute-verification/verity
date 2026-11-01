@@ -273,11 +273,11 @@ class TcpFrame:
 
 @pytest.mark.parametrize("line, why", [
     (json.dumps({"layout": {"n_mlv": 1, "n_lc": 1, "n_ood0": 1, "k0": 1}}), "err a request `{line}`"),
-    ("rep " + "ab" * 64 + " 0 0", "err a rep for a session the loop is not serving (coin tree root " + "ab" * 64 + ")"),
+    ("rep " + "ab" * 64 + " 0 0", "err a rep for a session the loop is not serving (id " + "ab" * 64 + ")"),
     ("rep " + "ab" * 64 + " 0 2", "err rep 2: a table has reps 0 and 1"),
     ("rep x 0", "err a request `rep x 0`"),
-    ("place " + "ab" * 64 + " 0 0", "err a place for a session the loop is not serving (coin tree root " + "ab" * 64 + ")"),
-    ("vals " + "ab" * 64 + " 0 1", "err a vals for a session the loop is not serving (coin tree root " + "ab" * 64 + ")"),
+    ("place " + "ab" * 64 + " 0 0", "err a place for a session the loop is not serving (id " + "ab" * 64 + ")"),
+    ("vals " + "ab" * 64 + " 0 1", "err a vals for a session the loop is not serving (id " + "ab" * 64 + ")"),
     ("places " + "ab" * 64 + " 0 0", "err a request `{line}`"),
     ("vals x 0", "err a request `vals x 0`"),
 ])
@@ -336,9 +336,11 @@ def _answer(key_top: int = 0, root: int = 0x11) -> bytes:
     return coins([bytes([root]) * 16] * 4 + [b"\x22" * 16] * 15 + [b"\x22" * 15 + bytes([key_top])])
 
 
-def _name(answer: bytes) -> str:
-    """The session's name on the loop's frames port (`Level0.nameOf`): its coin tree root's hex."""
-    return answer[5:69].hex()
+def _name(a: bytes) -> str:
+    """The session's name on the loop's frames port (`Level0.nameOf`): the hex of the loop's id for it, four words, which
+    is what the prover receives for `Hello`'s answer (`Session.idFrame`)."""
+    assert a[:5] == b"\x02" + struct.pack("<I", 4) and len(a) == 5 + 64, a[:40]
+    return a[5:].hex()
 
 
 class Sessions:
@@ -354,9 +356,7 @@ class Sessions:
         """A session past its `Hello`'s answer, and its name."""
         s = self.lp.connect()
         call(s, REGISTER)
-        a = call(s, hello(""))
-        assert a[:1] == b"\x02" and len(a) == 5 + 16 * 20, a[:40]
-        return s, _name(a)
+        return s, _name(call(s, hello("")))
 
     def ended(self) -> str:
         """The loop's next line on its standard error that a session ended and its level 0 were freed."""
@@ -369,9 +369,10 @@ class Sessions:
 @pytest.mark.parametrize("key_top, why", [(0x00, None), (0x80, STOP + "the verifier's session key has bit 2047 set")])
 def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
     """At the fixture's statement and a sample of none, the `Hello` that leaves is the recorded one at the loop's own nonce,
-    whatever the prover sent; its answer passes through when it is a root and a key, else is refused. After it, a
-    `Commit` whose roots no Lean level 0 drew is refused without reaching the auditor (`test_a_commit_leaves_only_with_
-    the_loops_level_0` takes one that does)."""
+    whatever the prover sent; its answer is checked to be a root and a key, else refused, and never reaches the prover,
+    which receives the loop's id for the session in its place: no byte of the coin tree's root or the session key. After
+    it, a `Commit` whose roots no Lean level 0 drew is refused without reaching the auditor (`test_a_commit_leaves_only_
+    with_the_loops_level_0` takes one that does)."""
     recorded, nonce, _ = _record(zk, "selftest/honest")
     answers = {10: draw("null"), 1: _answer(key_top), 7: coins([])}
     auditor = Auditor(lambda f: answers[f[0]])
@@ -385,7 +386,8 @@ def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
     got = NONCE.search(text)[1]
     assert text == recorded.replace(nonce, got)
     if why is None:
-        assert r == _answer(key_top)
+        words = [r[5 + 16 * i:21 + 16 * i] for i in range(4)]
+        assert _name(r) and not set(words) & {b"\x11" * 16, b"\x22" * 16, b"\x22" * 15 + bytes([key_top])}, r.hex()
         assert reason(call(s, COMMIT)).startswith(STOP + "a Commit whose roots are of [], where the session's tables are [")
     else:
         assert reason(r) == why
@@ -414,7 +416,7 @@ def level0(lp: Loop, m: int, z: bytes, name: str = "00" * 64, table: int = 0):
 
 
 @pytest.mark.parametrize("z, why", [(b"\0" * 3, "err a 3-byte witness, not whole words"),
-                                    (b"\0" * 16, f"err a level-0 request for a session the loop is not serving (coin tree root {'00' * 64})")])
+                                    (b"\0" * 16, f"err a level-0 request for a session the loop is not serving (id {'00' * 64})")])
 def test_a_level_0_the_loop_cannot_draw(loop, z, why):
     """A level-0 request is a witness of whole words for a live session's table; anything else is refused before the loop
     draws (`test_the_loop_draws_level_0_at_the_statement_with_its_own_mask_words` takes a live session's)."""
@@ -510,12 +512,12 @@ def doctored(roots: list[tuple[str, bytes]]) -> bytes:
 
 @pytest.mark.slow
 def test_a_sessions_level_0_lives_only_as_long_as_it(zk):
-    """A level 0 is drawn only for a session the loop is serving, named by its coin tree root, and every one drawn for a
+    """A level 0 is drawn only for a session the loop is serving, named by the loop's id for it, and every one drawn for a
     session, committed or not, is freed when that session ends, whatever the others hold: a prover that draws
     and never commits leaves nothing behind."""
     S = Sessions(_args(zk, "pub-16.bin"))
     got = level0(S.lp, 25, _zeros(25), "ab" * 64)
-    assert got == f"err a level-0 request for a session the loop is not serving (coin tree root {'ab' * 64})", got
+    assert got == f"err a level-0 request for a session the loop is not serving (id {'ab' * 64})", got
     s, name = S.session()
     m = _statement_m(S.lp, name)
     assert level0(S.lp, m, _zeros(m), name)[0].startswith("ok ")
@@ -589,7 +591,7 @@ def test_a_round_before_the_commitment_never_leaves(zk):
     lp = Loop(auditor, _args(zk, "pub-16.bin"))
     s = lp.connect()
     call(s, REGISTER)
-    assert call(s, hello("")) == _answer()
+    _name(call(s, hello("")))
     why = reason(call(s, round_("t/rep0", b"r", 6)))
     assert why == STOP + "a round of t/rep0 before the step-0 coin commitment", why
     assert reason(call(s, COMMIT)) == why
@@ -606,7 +608,7 @@ def test_a_finish_before_the_last_opening_never_leaves(zk):
     lp = Loop(auditor, _args(zk, "pub-16.bin"))
     s = lp.connect()
     call(s, REGISTER)
-    assert call(s, hello("")) == _answer()
+    _name(call(s, hello("")))
     why = reason(call(s, b"\x06"))
     assert why.startswith(STOP + "a Finish after 0 openings, where the schedule's are "), why
     assert int(why.rsplit(" ", 1)[1]) == len(_schedule(_args(zk, "pub-16.bin"), "null"))
@@ -648,16 +650,20 @@ def test_the_schedule_is_the_recorded_rounds(zk, name, public, tables):
 
 
 @pytest.mark.slow
-def test_each_session_its_own_nonce(zk):
+def test_each_session_its_own_nonce_and_id(zk):
+    """Each session's `Hello` leaves at a nonce of its own, and the prover receives an id of the loop's own for each in
+    place of the auditor's answer, though the auditor answers both alike."""
     recorded, nonce, _ = _record(zk, "selftest/honest")
     auditor = Auditor(lambda f: {10: draw("null"), 1: _answer()}[f[0]])
     lp = Loop(auditor, _args(zk, "pub-16.bin"))
+    names = []
     for _ in range(2):
         s = lp.connect()
         call(s, REGISTER)
-        call(s, hello(""))
+        names.append(_name(call(s, hello(""))))
         s.close()
     texts = [c[1][5:].decode() for c in auditor.got]
     got = [NONCE.search(t)[1] for t in texts]
     assert got[0] != got[1] and texts == [recorded.replace(nonce, g) for g in got]
+    assert names[0] != names[1] and _answer()[5:69].hex() not in names, names
     lp.close()

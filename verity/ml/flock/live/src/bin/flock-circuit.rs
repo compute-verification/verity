@@ -205,14 +205,15 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
 /// (`Flock.Firewall.Level0`). The words replace the mask slot's in the host witness `w` (`z`, `a` and `b`, whose circuit is
 /// the identity there, and the lincheck's packing of `z`), the hiding `l0`'s and the salts the table's level-0 salts, so the
 /// prover commits the codeword the loop did, and the loop's root is returned: the root of record. The loop keeps it for
-/// table `j` of the session whose `Hello` was answered `coins`, until that session ends, and draws a table's level 0 once.
+/// table `j` of the session whose `Hello` the loop answered with its id for it, `id`, until that session ends, and draws a
+/// table's level 0 once.
 /// Without the loop, nothing changes and nothing is returned. Under `FC_LEVEL0_TAMPER=MODE` (the selftest's
 /// `zk_worker_level0`), table 0 asks the loop for one more level 0 after its own: `second` for table 0 again, `past` for a
 /// table the session does not have (index [`LEVEL0_PAST`]); the loop's refusal goes to [`LEVEL0_REFUSED`] (a sample it
 /// answers goes there as `drawn again`), and the session goes on on the first draw. `own-mask` instead fills table 0's mask
 /// slot with [`steer`]'s word and keeps it, never taking the loop's words. [`LEVEL0_MASK`] records what the loop answered.
 #[cfg(feature = "sha512")]
-fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], j: usize, w: &mut Witness,
+fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, id: &[F128], j: usize, w: &mut Witness,
                l0: &mut flock_core::pcs::ligerito::zk::Level0Zk, salts: &Mutex<flock_live::zk_hooks::LeafSalts>)
                -> Result<Option<Vec<u8>>, String> {
     use flock_core::pcs::ligerito::zk::EXTRA_LANES;
@@ -232,7 +233,7 @@ fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, coins: &[F128], j: 
     let handed: Vec<F128> = words.iter().map(|&i| z[i]).collect();
     let pcs = pcs_of(st, lig);
     let lc = pcs.ligerito_prover_config().expect("Ligerito config");
-    let (session, t_pad) = (flock_live::firewall::level0_session(coins), l0.t_pad);
+    let (session, t_pad) = (flock_live::firewall::level0_session(id), l0.t_pad);
     let z_sent: &[F128] = &z[..];
     let draw = |table: usize| flock_live::firewall::lean_level0(addr, &session, table, st.m, z_sent, words.len(), 1 << lc.initial_log_msg_cols,
                                                                 (1 << lc.initial_k) + EXTRA_LANES, t_pad, pcs.n_leaves());
@@ -3636,12 +3637,14 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
         match call(&t, Req::Hello(hello.clone()))? {
-            // M0's seed commitment (4 words), or the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them)
-            Resp::Coins(c) if c.len() == if is_zk(st) { 20 } else { 4 } && (is_zk(st) || seed_coins()) => commit = c,
+            // M0's seed commitment (4 words), the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them),
+            // or under the Lean session loop, which checked them, the loop's id for the session in their place (4, `Session.idFrame`)
+            Resp::Coins(c) if c.len() == if is_zk(st) && !plan.lean_session { 20 } else { 4 } && (is_zk(st) || seed_coins()) => commit = c,
             // FC_COINS=os: nothing committed, every round's coins the verifier's OS draws
             Resp::Ok if !is_zk(st) && !seed_coins() => {}
-            r => return Err(format!("hello: step 0 expects the verifier's {}, got {r:?}",
-                                    if is_zk(st) || seed_coins() { "seed commitment" } else { "Ok (FC_COINS=os)" })),
+            r => return Err(format!("hello: step 0 expects {}, got {r:?}",
+                                    if plan.lean_session { "the Lean session loop's id for the session" }
+                                    else if is_zk(st) || seed_coins() { "the verifier's seed commitment" } else { "the verifier's Ok (FC_COINS=os)" })),
         }
         // several tables: every table after the first commits its level-0 root (and draws its level-0 hiding) before any stream
         // opens, so the session's one Commit, in table 0's first rep, carries every table's root

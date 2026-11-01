@@ -14,7 +14,7 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
   extra lanes, the paddings, the salts. `draw` reads those bytes from the OS in one read.
 * `ofDraws_ok`: what `ofDraws` keeps is what it commits: the rows, layers and root of a `Level0` it returns are `Link`'s
   of its own inputs (`toIn`), its root `Link.root toIn`, so a statement over `toIn` needs none of the stored fields.
-* `Registry`, `commit`: the loop's tables, each drawn for one table of a live session named by its coin tree's root
+* `Registry`, `commit`: the loop's tables, each drawn for one table of a live session named by the loop's id for it
   (`nameOf`, `Registry.draw`), once: a second draw for the same table, or one for a table the session does not have, is
   refused. Each is gone when that session ends (`Registry.close`). A session's `Commit` is held to them: the root it
   carries for its table `i` must be the `Level0` the loop drew for that session's table `i`, at that table's own `m`. So
@@ -191,7 +191,7 @@ structure Slot where
   deriving Inhabited
 
 /-- **The loop's tables' level 0**: each drawn one (`slots`), and the sessions a level-0 request may name (`sessions`):
-each live session's name, the hex of its coin tree's root (`nameOf`), its number and its count of tables. A slot lives
+each live session's name, the hex of the loop's id for it (`nameOf`), its number and its count of tables. A slot lives
 only as long as the session it was drawn for (`close`). -/
 structure Registry where
   slots : Array Slot := #[]
@@ -199,9 +199,12 @@ structure Registry where
   tables : Array (Nat × Nat) := #[]
   deriving Inhabited
 
-/-- A session's name: the hex of its coin tree's root, the first 64 bytes of the words of `Hello`'s answer `a`
-(`Resp::Coins`: tag, `u32le` count, then the words), which the prover receives as it is. -/
-def nameOf (a : ByteArray) : String := hexOf (a.extract 5 69)
+/-- The bytes of the loop's id for a session, which it draws from the operating system for the session's `Hello`. -/
+def ID_BYTES : Nat := 64
+
+/-- A session's name: the hex of the loop's id for it, which the prover receives in place of `Hello`'s answer
+(`Session.idFrame`), so it never sees the coin tree's root or the session key. -/
+def nameOf (id : ByteArray) : String := hexOf id
 
 /-- Session `sid`, named `name` once its `Hello`'s answer checked, with `n` tables. -/
 def Registry.name (R : Registry) (name : String) (sid n : Nat) : Registry :=
@@ -212,7 +215,7 @@ a table the session does not have, or a table the loop already drew a level 0 fo
 what makes the level 0 the session binds the loop's one draw, not one the prover picked among several. -/
 def Registry.draw (R : Registry) (name : String) (j : Nat) (l : Level0) : Except String Registry :=
   match R.sessions.find? (·.1 == name) with
-  | none => .error s!"a level-0 request for a session the loop is not serving (coin tree root {name})"
+  | none => .error s!"a level-0 request for a session the loop is not serving (id {name})"
   | some (_, sid) =>
     let n := ((R.tables.find? (·.1 == sid)).map (·.2)).getD 0
     if j ≥ n then .error s!"a level-0 request for table {j} of a session with {n} tables"
