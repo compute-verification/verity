@@ -2,7 +2,7 @@
 """`python3 tools/verity/check/slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max S] [--run-max S] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
 
 `check.py --record --on MACHINE` starts its check through this, so a lane's own check queues behind the train checks for a slot
-instead of spreading over every core the checks share (vy-nebius-1, 1 Oct: two unslotted checks on 0-127 at load 137).
+instead of spreading over every core the checks share (two unslotted checks on the same cores overload them both).
 
 A machine's slots are SLOTS (`/workspace/research/locks/slots`; CHECK_SLOTS overrides), one per line:
 
@@ -18,11 +18,11 @@ reads the key as unknown and the slot as any other). A slot with mem=GB is skipp
 (`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM, less what
 live research.mem reservations hold but don't use yet, `reserved_gb`: for a `--priority` waiter, or on an only=trains slot, only
 other priority checks' reservations, so a train never waits behind a research job's unused reservation), so a
-check starts only when its measured peak fits and queues instead of being killed with the others under the slice (node 1,
-8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs), and CMD gets GB as SLOT_MEM_ENV, which check.py makes
-circuit-check's budget, so two checks' circuit-checks never each budget all the memory free when they began (node 2, 10 Oct
-20:06Z: two cold ones, each at its six 125-151 GiB targets, filled the 1600 GiB slice); while the check runs, the slot holds a
-research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what the check may still take.
+check starts only when its measured peak fits and queues instead of being killed with the others under the slice, and CMD
+gets GB as SLOT_MEM_ENV, which check.py makes circuit-check's budget, so two checks' circuit-checks never each budget all the
+memory free when they began (two cold ones, each with targets of well over 100 GiB, can fill a whole slice); while the check
+runs, the slot holds a research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what
+the check may still take.
 With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is, unless
 CHECK_SLOTS named that file: then it exits NOT_STARTED, naming the pools the machine has (a run sent to a pool the node lacks
@@ -43,7 +43,7 @@ waiters go by rank, then arrival: the train that lands next takes the next slot,
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
 being taken: inside a `research run` (RESEARCH_RUN_DIR), the run's timeout, which counted the wait too, becomes the time it has
 run so far plus SECONDS, through its harness's control file (research.telemetry.run's CONTROL_TIMEOUT). `research queue ready
---on` sends both (#1344, #1282, #1314 timed out in node 1's line and were reported failed).
+--on` sends both, so a check that times out waiting in a line is reported as never started, not as failed.
 
 `CHECK_MIN_MEM_GB=GB` (MIN_MEM_ENV) in the environment: only a slot whose mem= is at least GB (or that sets none) is taken; on
 a machine that lists no such slot the waiter exits NOT_STARTED at once, naming the slots it has. `check.py --record --priority`
@@ -52,8 +52,8 @@ slot: in one, every parallel suite gets one test worker and circuit-check one ta
 time. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
 
 `--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on when none had a
-free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them (9 Oct: four checks waited up to
-54 min on node 1 while a node 2 slot was free). Each waits in its own machine's line. The one holding a slot runs only if it
+free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them, and never waits in one
+machine's line while another's slot is free. Each waits in its own machine's line. The one holding a slot runs only if it
 claims PAIR first: `mkdir TWINS/PAIR` beside SLOTS on this machine (`--twin PAIR`) or on HOME, over the ssh PEERS names for it.
 Its twins, finding the claim (each poll here, every TWIN_PEEK_S from another machine, and whenever one holds a slot), leave
 their line and exit NOT_STARTED. A claim that can't be made (HOME unreachable or not in PEERS) also exits NOT_STARTED, so a
@@ -103,7 +103,7 @@ MIN_MEM_ENV = "CHECK_MIN_MEM_GB"
 #: the check's own scope unit (a `scope=1` slot), which spans.py reads its memory from
 SCOPE_ENV = "CHECK_SCOPE_UNIT"
 #: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`): a slot whose mem= is smaller waits for and reserves
-#: this instead (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193, and the ledger under-reported it)
+#: this instead (reserving only the slot's mem= would under-report the run in the ledger)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 USAGE = "usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
@@ -182,10 +182,10 @@ def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
     """CMD in a transient systemd user scope of its own (`scope=1` on its slot), and the scope's unit name. `--scope` registers
     this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
     whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
-    per-check peak: 23 Oct, train-slot sizing rested on summed RSS, which counts shared pages over and over). On a node that
+    per-check peak, and summed RSS counts shared pages over and over). On a node that
     caps each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
     to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
-    a scoped check (exit 75, 26 Oct)."""
+    a scoped check (exit 75)."""
     unit = f"check-{slot}-{run_id}"
     cap = session_cap()
     props = [f"--property=MemoryMax={cap}"] if cap else []
@@ -208,7 +208,7 @@ def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use, in GiB: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's
     session scope and the user slice on a VM; a pod's /proc/meminfo is the host's). A cgroup's page cache (active_file and
     inactive_file in its memory.stat) is in its memory.current but the kernel reclaims it at the limit, so it counts as left:
-    on vy-nebius-cpu-1 273 GB of cache held slot a's 560 GB line shut with 677 GB available (9 Oct 20:50Z)."""
+    counted as used, a machine's cache can hold a slot's line shut with far more than its mem= available."""
     def read(p: Path) -> str:
         try:
             return p.read_text().strip()
@@ -255,11 +255,11 @@ def _rss_tree(pid: int, proc: Path) -> int | None:
 
 def reserved_gb(proc: Path = Path("/proc"), priority: bool = False) -> int:
     """GiB that live research.mem reservations in RAMLOCK hold but don't use yet, each run's largest once, as research.mem's
-    `reserved_bytes` counts them: a reserved run lowering toward its peak isn't in MemAvailable yet (23 Oct 23:16Z, top: when a
-    check ended on cpu-4, proofs' waiting 345 GB shares and a train's twins would race for the freed memory, and a twin admitted
-    beside a lowering share reads well over 560 GB free). With `priority` (a train check's gate), only priority waiters'
+    `reserved_bytes` counts them: a reserved run lowering toward its peak isn't in MemAvailable yet (when a
+    check ends, waiting reservations and a train's twins race for the freed memory, and a twin admitted beside a lowering
+    reservation would read far more free than there is). With `priority` (a train check's gate), only priority waiters'
     reservations (`reserve`'s "priority") count: any other job counts at the memory it holds, which `memory_gb` already left out,
-    so trains come first (24 Oct, cpu-1: train slot b free at -91 GB net behind proofs' 279 GB pool reservations using 25 and 5)."""
+    so trains come first (a train slot never waits behind pool reservations that hold memory they don't use)."""
     by: dict[str, float] = {}
     for f in sorted(RAMLOCK.glob("*.json")) if RAMLOCK.is_dir() else ():
         try:
@@ -289,13 +289,13 @@ def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
     "priority" for a `--priority` waiter's check (a train's, or drive's post-landing run), which other train checks' gates count in
     full (`reserved_gb`). research.mem counts
     the GB less what the check's process tree holds, and stops counting it when that pid is gone or the run ended. Without it,
-    research.mem admitted work beside two full checks until node 1 ran out of memory (8:21Z, 10 Oct). The line to print, or None
+    research.mem would admit work beside two full checks until the machine ran out of memory. The line to print, or None
     for a slot without mem=."""
     if not slot.get("mem"):
         return None
     gb = round(slot["mem"] * 2 ** 30 / 1e9, 1)                  # mem= is in GiB (`memory_gb`), research.mem's GB are 10^9 bytes
     path = RAMLOCK / f"check-{slot['name']}.json"
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = research_run_dir()
     doc = {"owner": "check", "gb": gb, "started": f"{now:%Y-%m-%dT%H:%M:%SZ}", "pid": os.getpid(),
            "note": f"check slot {slot['name']}: {run_id() or os.getcwd()}",
            **({"priority": True} if priority else {}), **({"run_id": run_id(), "run_dir": run_dir} if run_dir else {})}
@@ -323,8 +323,8 @@ def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
     return out
 
 
-#: no slot starts a check while DISK has fewer free inodes or GB than these: on 27 Oct cpu-2, -4, -5 and -6 ran out of inodes with
-#: bytes to spare, and checks that started there died mid-build with ENOSPC; waiting costs less than a check lost at its end
+#: no slot starts a check while DISK has fewer free inodes or GB than these: a machine can run out of inodes with
+#: bytes to spare, and a check that starts there dies mid-build with ENOSPC; waiting costs less than a check lost at its end
 DISK = Path("/workspace")
 DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50
 
@@ -464,6 +464,11 @@ def describe(who: dict) -> str:
     return ", ".join(p for p in parts if p)
 
 
+def research_run_dir() -> str | None:
+    """The run dir of the `research run` this process runs in (RESEARCH_RUN_DIR), else None."""
+    return os.environ.get("RESEARCH_RUN_DIR")
+
+
 def _read(p: Path) -> dict:
     try:
         return json.loads(p.read_text() or "{}")
@@ -541,9 +546,35 @@ def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotoni
     return f"slot: the run's timeout is now {t:g} s from its start: {run_max:g} s from taking slot {slot}"
 
 
+def defer_run(waited_s: float, line: str, run_dir: str | None) -> str | None:
+    """Move the `research run` in ``run_dir``'s timeout ``waited_s`` later, the time it spent in ``line`` (a wait with no limit of
+    its own, as a Lean audit slot's), so the wait doesn't use up the time its work was given. Its timeout now is RUN_TIMEOUT's
+    when that was set, else its status.json's. What was done, in a line; None when there is nothing to move (no wait, not in a
+    `research run`, or a run with no timeout)."""
+    if not run_dir or waited_s <= 0:
+        return None
+    ctl = Path(run_dir) / RUN_TIMEOUT
+    doc = _read(ctl)
+    now = doc.get("timeout_s") if isinstance(doc, dict) else doc
+    if not isinstance(now, (int, float)) or isinstance(now, bool):
+        now = _read(Path(run_dir) / "status.json").get("timeout_s")
+    if not isinstance(now, (int, float)) or isinstance(now, bool) or now <= 0:
+        return None
+    t = round(now + waited_s, 3)
+    try:
+        ctl.parent.mkdir(parents=True, exist_ok=True)
+        tmp = ctl.with_name(f".{ctl.name}.{os.getpid()}")
+        tmp.write_text(json.dumps({"timeout_s": t, "actor": "timeout",
+                                   "reason": f"{now:g} s, plus {waited_s:g} s waited in {line}"}) + "\n")
+        os.replace(tmp, ctl)
+    except OSError as e:
+        return f"{line}: the run's timeout stays {now:g} s from its start, counting this {waited_s:g} s wait ({ctl}: {e})"
+    return f"{line}: the run's timeout is now {t:g} s from its start: {now:g} s, plus the {waited_s:g} s it waited here"
+
+
 def record_slot(run_dir: str | None, doc: dict) -> None:
     """``doc`` as the run's RUN_SLOT, replaced whole, so `research status` shows a check waiting in the line as waiting and not as
-    running since its run began (10 Oct: af2d waited 95 min on node 1 and was reported running all along). Nothing outside a
+    running since its run began. Nothing outside a
     `research run`; a write that fails never stops the check."""
     if not run_dir:
         return
@@ -701,8 +732,8 @@ DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the sl
 
 def usable(slots: list[dict]) -> list[dict]:
     """The slots whose every core this process may run on. Pinning onto any other fails (EINVAL), so a check never takes one:
-    on vy-nebius-1 a `research run` session was held to cores 0-127, and slot d on 128-159 killed every check that took it
-    (2 Oct 07:20Z). A `research run` starts on the host's /etc/vy/direct-cpus, so a slot's cores must be listed there too."""
+    a slot with cores outside a `research run` session's set kills every check that takes it. A `research run` starts on
+    the host's /etc/vy/direct-cpus, so a slot's cores must be listed there too."""
     mine = allowed()
     return [s for s in slots if cpulist(s["cpus"]) <= mine]
 
@@ -820,7 +851,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if not listed:
         sys.exit(f"slot: {SLOTS} lists no slots")
     # already inside a slot this machine's lock still holds (a `research run --pool` job that wraps its own command in slot.py,
-    # 19 Oct: the inner waiter queued behind its own outer lock and stopped cpu-1's research pool): run CMD in that slot
+    # whose inner waiter would queue behind its own outer lock and stop the machine's research pool): run CMD in that slot
     if (held := os.environ.get("CHECK_SLOT")) and any(s["name"] == held for s in listed) and locked(SLOTS.parent / f"check-{held}.lock"):
         print(f"slot: already in check slot {held}; running CMD in it", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
@@ -848,7 +879,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     me = asker(by, pair)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = research_run_dir()
     since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {}),
              **({"rank": rank} if rank is not None else {})}
     record_slot(run_dir, {"state": "waiting", **since})

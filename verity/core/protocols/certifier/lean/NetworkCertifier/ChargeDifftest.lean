@@ -8,8 +8,7 @@ import Lean.Data.Json
 on them. `NetworkCertifier/ChargeDifftestMain.lean` reads both files and fails unless `evaluate`, which computes the same
 results from the program's definitions (`NetworkCertifier.AdviceV1`), gives every one of them. The Lean audit runs it
 (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.NetworkCertifier.Code`
-(`CodeChargesV1`) proves `charges` equal to the reference's (`Security/Definitions/NetworkCertifier/AdviceV1.lean`),
-which `BitsCount` for advice v1 and the leak bounds read.
+(`CodeChargesV1`) proves `charges` equal to the reference's (`Security/Definitions/NetworkCertifier/AdviceV1.lean`).
 
 An instance is a window size `N`, a book (`arrived`, n_arrived's bin frequencies at bins `0 … bitlen N`, its `total`,
 each zero count's `(freq, total)`, and the contexts' `priors`), a first carry, and windows, each `N` slots that ask or

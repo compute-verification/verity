@@ -14,7 +14,9 @@ own Commit.
   key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds one batch of K's tile
   template a call (S × the linears), its tile units (`units`, S × slot(T)/32 × Σn/32) the batch's members, so its
   descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
-  times.
+  times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`served.write_program`),
+  and ``served_verdicts.py program`` writes the same file without serving, so the period-open of it (``served_verdicts.py
+  period open``) goes out before the server starts, ahead of window 0's reserve at startup.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.ChallengerGate`): window 0's session is
   reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and window
@@ -53,7 +55,11 @@ admission and gaps, the credit gate, the coins, the commitment's calls root, its
 port, how the session closed and its end entry) and where its time went (``seconds``); a window whose H1 failed to open
 or close carries its error there instead, and the Commit serves on. ``serve.json``'s ``protocols`` is
 `H1Windows.describe`, ``summary.json``'s ``pouw_h1`` `H1Windows.summary` with the windows that failed.
-``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`)."""
+``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`). Its ``unit``
+and ``ks`` shape the declared Program: ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` declares J10-R's tile unit
+(`pouw_h1_served.unit_of`) over the linears at K 2,048 alone, the form a period's guarantee covers (core's
+`period_check.form`), and the linears at any other K serve on their arm unrecorded, uncredited as attention is. Unset,
+the Program is v1's over every linear."""
 from __future__ import annotations
 
 import bisect
@@ -71,7 +77,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.protocols.pouw.h1 import SCHEME
+from verity_vllm.protocols.pouw.h1 import PROGRAM, PROGRAM_META, SCHEME
 
 ENTRY = f"pouw:{SCHEME}"
 #: the pouw settings the server sets for each window itself
@@ -132,6 +138,32 @@ class GateOptions:
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
                                          help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
                                               "challenger reaches the server (ssh -R)")
+    h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
+                                   help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
+                                        "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
+                                        "owner-only, for proving its drawn units and rounds after the close; never a "
+                                        "published path")
+    h1_model: str | None = option("--h1-model", default=None, metavar="ROLE",
+                                  help="with --challenger-gate: the auditor's registration role of the served model (a role "
+                                       "of the pinned tree's manifests/checkpoints-int8.json, the gate's models.MANIFESTS); "
+                                       "its b/<K> are committed under the salt key the gate's "
+                                       "model-key hands for the window Program's circuit, so the windows' weights root is the "
+                                       "registry's, the root the period signs; without it the key is local and credits nothing")
+    h1_weights_root: str | None = option("--h1-weights-root", default=None, metavar="HEX",
+                                         help="with --h1-model: the registration's weights root (the period's signed one), "
+                                              "required when the role is registered more than once under the circuit")
+
+
+def model_key_of(gate: Any, model: str, weights_root: str | None) -> Callable[[str], tuple[bytes, str]]:
+    """The salt key of ``model``'s auditor registration under a window Program's circuit, from the gate's ``model-key``
+    (`auditor.gate_model_key`), with the registry's weights root it opens: a callable of the circuit's digest."""
+    def key(circuit: str) -> tuple[bytes, str]:
+        words = ["model-key", "--model", model, "--circuit", circuit]
+        if weights_root:
+            words += ["--weights-root", weights_root]
+        answer = gate.call(*words)
+        return bytes.fromhex(answer["key"]), str(answer["weights_root"])
+    return key
 
 
 def config_of(value: str | None) -> dict[str, Any]:
@@ -177,6 +209,8 @@ def refusal(opts: Any) -> str | None:
                 "auditor host's peers, where its challenger reaches the server (ssh -R)")
     if gate and not opts.protocols:
         return f"--challenger-gate draws PoUW H1's coins: it needs --protocols {ENTRY}"
+    if opts.gate.h1_prover and not opts.protocols:
+        return f"--h1-prover keeps PoUW H1's prover state: it needs --protocols {ENTRY}"
     if opts.protocols_config and not opts.protocols:
         return "--protocols-config without --protocols"
     if not opts.protocols:
@@ -410,26 +444,32 @@ class H1Windows:
     runner and each window's coins come from, ``out`` where each window's transcript goes (``h1/w<k>/``). ``key`` is the
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
     when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
-    coins). ``closer`` (a `worker`) runs each window's release off the engine loop, and
-    `close` hands back its outcome's `Future`; None: on the loop, the outcome itself. ``clock`` times each part."""
+    coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
+    None: kept nowhere, so no drawn unit or round of it can be proved). ``closer`` (a `worker`) runs each window's
+    release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
+    ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
+    draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
-                 sessions: GateSessions | None = None, closer: Any = None,
+                 sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
+                 draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
-        from verity.core.protocols.sampled_proofs.one_stage import partition as P
-
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
         from verity_vllm.protocols.pouw.h1 import served as SV
 
         self.model, self.com, self.rows, self.steps, self.engine = model, com, int(rows), int(steps), engine
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
+        self.prover = None if prover is None else Path(prover)
         self.closer, self.clock = closer, clock
         self.draws: Any = None
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
-        self.layers = PHK.layers(model, pouw.linear_types())
+        pw = pouw.Settings.of(self.config.get("pouw", {}))
+        self.layers = PHK.layers(model, pouw.linear_types(), pw.ks)
+        if unit is None:
+            self.unit = unit = SV.unit_of(pw.unit)
         if not self.layers:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]
@@ -439,10 +479,19 @@ class H1Windows:
         t0 = time.perf_counter()
         self.program = SV.declared(shapes, modules, self.rows, self.steps, unit=unit)
         t1 = time.perf_counter()
-        self.digest = P.program_digest(self.program)
-        print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} in {time.perf_counter() - t1:.1f} s",
-              flush=True)
+        self.digest = SV.write_program(self.program, SV.declared_layout(shapes, modules, self.rows, self.steps),
+                                    self.out / "h1", rows=self.rows, steps=self.steps)
+        print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} and {PROGRAM} in "
+              f"{time.perf_counter() - t1:.1f} s", flush=True)
+        registered = None
+        if model_key is not None:
+            key, registered = model_key(self.digest)
         self.weights = SV.register_weights(self.digest, shapes, SV.weights_of(self.layers), key or os.urandom(32))
+        self.weights_key = "local" if registered is None else "auditor"
+        if registered is not None and self.weights.root().hex() != registered:
+            raise ValueError(f"{ENTRY}: the served weights committed under the auditor's key give root "
+                             f"{self.weights.root().hex()[:16]}, not the registration's {registered[:16]}: the served "
+                             f"checkpoint or the window Program's linears differ from the registered ones")
         self.tap: Any = None
         self.comp: Any = None
         self.run: Any = None
@@ -488,13 +537,15 @@ class H1Windows:
         return self.readied
 
     def describe(self) -> dict[str, Any]:
-        """serve.json's ``protocols``: the entry, T and S, the period's Program digest, the weights' root, where the
-        coins come from (``challenger``, with the gate's peer, or ``in-process``), where each window's session is reserved
-        (``ahead``: window 0's at startup and window k+1's while window k serves, outside a period), where its release
-        runs and what was made ready before the server listened (``ready``, `ready`)."""
+        """serve.json's ``protocols``: the entry, T and S, the period's Program digest and its descriptor's file
+        (`served.write_program`), the weights' root, where the coins come from (``challenger``, with the gate's peer, or
+        ``in-process``), where each window's session is reserved (``ahead``: window 0's at startup and window k+1's while
+        window k serves, outside a period), where its release runs and what was made ready before the server listened
+        (``ready``, `ready`)."""
         coins = {"coins": "in-process"} if self.sessions is None else {"coins": "challenger", "peer": self.sessions.peer}
         return {"entry": ENTRY, "rows": self.rows, "steps": self.steps, "program": self.digest,
-                "weights_root": self.weights.root().hex(), "weights_key": "local", **coins,
+                "program_file": f"h1/{PROGRAM}",
+                "weights_root": self.weights.root().hex(), "weights_key": self.weights_key, **coins,
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
                 "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
@@ -518,8 +569,10 @@ class H1Windows:
                 self.sessions.held_of(reserved["session"])
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
+        prover = self.prover_of(window)
         served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap, window=os.urandom(64),
-                           program=self.program, program_digest=self.digest)
+                           program=self.program, program_digest=self.digest,
+                           prover=None if prover is None else str(prover))
         settings = {**self.config.get("pouw", {}), "rows": self.rows, "steps": self.steps, "served": served,
                     "transcript_dir": str(self.out / "h1" / f"w{window}"), **coins}
         ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": settings})
@@ -532,6 +585,13 @@ class H1Windows:
             raise
         self.run, self.window, self.held = pouw.h1_run(ENTRY), window, held
         self.opened = {"reserve": round(t1 - t0, 4), "install": round(self.clock() - t1, 4)}
+
+    def prover_of(self, window: int) -> Path | None:
+        """Window ``window``'s prover directory, ``prover/w<k>`` (owner-only, `pouw_h1_prover.private`), or None
+        without ``prover``."""
+        from verity_vllm.protocols.pouw.h1 import prover as PV
+
+        return None if self.prover is None else PV.private(PV.private(self.prover) / f"w{window}")
 
     def close(self, window: int) -> dict[str, Any] | Future | None:
         """Window ``window``'s H1 closed: on the loop its hooks and the tap come off the engine and the committer; then
@@ -659,14 +719,24 @@ class H1Windows:
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,
                  seconds: dict[str, float]) -> dict[str, Any]:
+        """Window ``window``'s outcome. With ``prover``, a window that served a step and registered its live tables has
+        its rounds' live@<s> rows dumped to ``prover/w<k>/live`` (`pouw_h1_live.dump`), its outcome's ``live_dump``."""
+        from verity_vllm.protocols.pouw.h1 import live as LV
+
         d, c = run.details, run.commits
+        live_dump = None
+        if self.prover is not None and run.served is not None and run.served.live and d.get("steps_served"):
+            try:
+                live_dump = LV.dump(run, self.prover_of(window) / "live")
+            except (KeyError, ValueError, OSError) as e:
+                live_dump = {"error": f"{type(e).__name__}: {e}"[:300]}
         roots1, gate = d.get("roots1"), d.get("gate", {})
         return {"entry": ENTRY, "window": window, "rows": self.rows, "steps": self.steps,
                 "steps_served": d.get("steps_served"), "roots1": roots1, "requests": d.get("requests"),
                 "static": d.get("static"), "u": d.get("u"), "refused": run.refused[:8],
                 "gate": {k: gate.get(k) for k in ("coins", "gate_passed", "refused", "padded", "units")},
                 "coin_source": c.get("coin_source"), "calls_root": c.get("calls_root"), "weights_root": c.get("weights_root"),
-                "served_refused": list(run.served.refused[:8]) if run.served is not None else None,
+                "served_refused": list(run.served.refused[:8]) if run.served is not None else None, "live_dump": live_dump,
                 "tied": bool(roots1["tied"]) if roots1 is not None and d.get("steps_served") else None,
                 "session": None if not held else {**held, "unopened": d.get("unopened"),
                                                   "closed": d.get("challenger"), "end": end},
@@ -697,17 +767,24 @@ class H1Windows:
 def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
     """The server's arm under ``--protocols`` over the served ``llm`` and its committer ``com`` (None without): T
     ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` (window
-    0's reserved while the Program is declared) and its release on a `worker` of its own, made ready (`H1Windows.ready`)."""
+    0's reserved while the Program is declared), its prover state in ``--h1-prover`` and its release on a `worker` of its
+    own, made ready (`H1Windows.ready`)."""
     if not opts.protocols:
         return None
     sessions = sessions_of(opts)
     if sessions is not None:
         sessions.ahead_of(0)
+    model_key = None
+    if sessions is not None and opts.gate.h1_model:
+        model_key = model_key_of(sessions.gate, opts.gate.h1_model, opts.gate.h1_weights_root)
     arm = H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                    config=config_of(opts.protocols_config), sessions=sessions, closer=worker("h1-release"))
+                    config=config_of(opts.protocols_config), sessions=sessions, prover=opts.gate.h1_prover,
+                    closer=worker("h1-release"), model_key=model_key)
     arm.ready()
     return arm
 
 
-__all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "LISTEN_S", "MARGIN", "OWN", "POLLS", "SCHEME",
-           "SESSIONED", "arm_of", "config_of", "listening", "refusal", "sessions_of", "units", "worker"]
+__all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "LISTEN_S", "MARGIN", "OWN", "POLLS", "PROGRAM",
+           "PROGRAM_META", "SCHEME", "SESSIONED", "arm_of", "config_of", "listening", "model_key_of", "refusal", "sessions_of",
+           "units",
+           "worker"]

@@ -1,5 +1,5 @@
 /-
-A net committed at a position map (PRF-133, part 3): the logical rows, checked as `Net.ofRows` checks them (their order
+A net committed at a position map: the logical rows, checked as `Net.ofRows` checks them (their order
 included), placed at committed positions `pos`. Column `x` of the logical net is the committed net's column `pos[x]`, its
 row `pos[x]` the logical row `x` with every reference `v` read as `pos[v]`; the committed slot's other rows are empty (a
 forced zero, as past `useful`). So the committed system is the logical one permuted, and the order check stays over

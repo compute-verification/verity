@@ -7,7 +7,7 @@ import hashlib
 
 import pytest
 
-from verity.core.wire import (HEADER, REFUSALS, Body, FrameReader, Hex, Int, List, Message, Phase, Refused, Registry, Schema,
+from verity.core.wire import (HEADER, REFUSALS, Body, FrameReader, Hex, Int, List, Message, MessageTypes, Phase, Refused, Schema,
                               Str, canonical, frame, frames, parse, split)
 from verity.core.wire import handshake as H
 from verity.ml.commitments.identity import canonical_json_bytes
@@ -15,7 +15,7 @@ from verity.ml.crypto import lms
 
 PING = Schema("Ping", 1, "structure", {"n": Int(0, 9), "who": Str(8), "ids": List(Hex(4), 3)}, Body(max=16, unit=2))
 PING2 = Schema("Ping", 2, "output", {"n": Int()})
-R = Registry([PING, PING2])
+R = MessageTypes([PING, PING2])
 OK = Message("Ping", {"n": 3, "who": "é", "ids": ["00ff00ff"]}, b"\x00\x01")
 
 
@@ -84,7 +84,7 @@ def test_a_phase_refuses_what_it_doesnt_expect():
 
 
 def test_a_registry_restricted_to_some_types():
-    only = (R | Registry([Schema("Pong", 1, "private")])).only(["Pong"])
+    only = (R | MessageTypes([Schema("Pong", 1, "private")])).only(["Pong"])
     assert only.types == {"Pong"}
     assert refused(only.decode, R.encode(Message("Ping", {"n": 1}, version=2))) == "unknown-type"
     # The header's bounds come first: a body where the registry allows none is refused before its type is read.

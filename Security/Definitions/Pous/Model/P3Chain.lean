@@ -9,16 +9,17 @@ import Definitions.Pous.Model.Invertible
 # P3 with a concrete `H`: the overwrite chain on `Π₂`
 
 The definitions the concrete-`H` P3 pins read (`Pous.Guarantees.P3ConcreteMeets64`, `P3ConcreteMeets14GB`,
-`P3ConcreteMeets64D12`), copied verbatim from the proofs' sources. Each source namespace `PousX` becomes `Pous.X` (the
+`P3ConcreteMeets64D12`), copied verbatim from the proofs' source modules (the like-named sections of
+`Security/Proofs/Pous/Chain/Flat.lean` hold the rest of each). Each source namespace `PousX` becomes `Pous.X` (the
 `Pous.Dense` precedent), so these copies never clash with the sources' own files, and a graded submission, with the
 same renaming, states and proves the pins about these constants:
-- `Pous.Sponge` (`lean/submissions/sponge-dense/SpongeDense.lean`, §§2, 7 and 9): the overwrite chain `H` on `Π₂`, the
+- `Pous.Sponge` (`SpongeDense`): the overwrite chain `H` on `Π₂`, the
   two-permutation model `p3ChainModel` (a tweakable `P` of labels, one independent uniform permutation per tweak, and
   an untweaked `Π₂` of `2m + 512` bits, `m = n·wc`), and the labels `c¹`, `c²`;
-- `Pous.ColumnAware.basePath` and `Pous.P3Column.bandGraph` (`pebbling/ColumnAwareDraft.lean`,
-  `p3-column/BandComb.lean`): the band DRG `B(n, k)`;
-- `Pous.P3Meets` (`p3-meets/P3Meets64.lean`): the reference tag `salt ‖ u64(s)` and the packing of `W`;
-- `Pous.P3Concrete` (`p3-concrete/P3ConcreteModel.lean`): the public decoder and the schemes `p3SchemeC` (one segment)
+- `Pous.ColumnAware.basePath` and `Pous.P3Column.bandGraph` (`Pebbling.ColumnAwareDraft`,
+  `PebblingCol.BandComb`): the band DRG `B(n, k)`;
+- `Pous.P3Meets` (`PebblingMeets.P3Meets64`): the reference tag `salt ‖ u64(s)` and the packing of `W`;
+- `Pous.P3Concrete` (`P3Concrete.P3ConcreteModel`): the public decoder and the schemes `p3SchemeC` (one segment)
   and `p3SchemeNC` (`N` segments).
 
 **The scheme.** Labels are `n = 220` components of `wc` bits. With `ω = (P, Π₂)` and `tag = salt ‖ u64(s)`:

@@ -1006,7 +1006,7 @@ def _empty(fid, gates) -> dict:
 def _leaf_lookup(params):
     """``leaf(k) -> (parameter name, width)`` for the Call's k-th input leaf, without listing the leaves (an embedding table
     parameter has over 10^8)."""
-    from verity.ml.circuits.types import Array, Record, Tuple
+    from verity.ml.circuits.types import Array, RecordType, Tuple
 
     starts, names, types, o = [], [], [], 0
     for name, t in params:
@@ -1021,9 +1021,9 @@ def _leaf_lookup(params):
         while True:
             if isinstance(t, Array):
                 t, k = t.elem, k % t.elem.leaves
-            elif isinstance(t, (Tuple, Record)):
+            elif isinstance(t, (Tuple, RecordType)):
                 for f in t.fields:
-                    f = f[1] if isinstance(t, Record) else f
+                    f = f[1] if isinstance(t, RecordType) else f
                     if k < f.leaves:
                         t = f
                         break
@@ -1532,7 +1532,7 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
     return {"params": params, "inputs": inputs, "param_roles_complete": pin is not None or not inputs,
             "param_roles": "exact (edges' ports and param_inputs)" if pin is not None else
                            "activations exact from edges' ports; which parameter reads each of `inputs` is not in this program graph "
-                           "(param_inputs, verity PR #94), so input roles are not assigned to parameters"}
+                           "(param_inputs), so input roles are not assigned to parameters"}
 
 
 def _library_digest() -> str:

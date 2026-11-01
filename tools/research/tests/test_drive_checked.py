@@ -81,12 +81,29 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
-    assert any(p.startswith("@ci @lane-2 queue: #2 reverted on `checked`") for p in h.posts), h.posts
+    assert any(p.startswith("@lane-2 @pkg-owner queue: #2 reverted on `checked`") for p in h.posts), h.posts
     assert h.posted[-1][0] == reverted
     _pass(h, ("pkg",))
     h.tick()
     assert _main(world) == reverted and not h.postland()["red"]
     assert world.on_next(h.q) == []                             # #2, reverted, is still open: its head is on `checked`
+
+
+def test_a_pr_containing_a_head_landed_on_checked_never_waits_for_it_and_one_on_an_unlanded_pr_still_does(world, monkeypatch):
+    """A PR that landed on `checked` stays open until `main` follows it, and may be held or lose its mark meanwhile: a PR built
+    on its head doesn't wait for it.  A PR built on an unlanded PR that isn't admitted still waits."""
+    h = Review(world, monkeypatch, land_into="checked")
+    world.gh.put(5, five := world.change({"x.txt": "5\n"}))
+    h.review(5)
+    assert h.tick().startswith("landed #5"), world.logs
+    world.gh.put(5, five, labels=("hold",))
+    world.gh.put(7, world.change({"k.txt": "7\n"}, base=five))
+    world.gh.put(6, six := world.change({"y.txt": "6\n"}, base=five), ready=False)
+    world.gh.put(8, world.change({"z.txt": "8\n"}, base=six))
+    h.tick()
+    st = h.q.status()
+    assert st[7].state != "waiting" and st[7].after == (), st[7]
+    assert st[8].state == "waiting" and st[8].why == "contains #6, which isn't admitted" and st[8].held == {6: six}
 
 
 def test_main_follows_no_baseline_that_passed_fewer_steps(world, monkeypatch):
@@ -230,6 +247,45 @@ def test_main_stays_while_a_step_on_the_gate_is_red_whatever_circuit_check_did(w
     assert any(f"step {red} is red on `checked`" in p for p in h.posts), h.posts
 
 
+def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_and_nothing_rings_or_relaunches(world, monkeypatch):
+    """The 3-shard after-landing run of `checked`'s tip passed and `main` moved to it on its gate, but no shard ran ratchet-gate
+    (in no shard of ci.toml's plans): drive took the run as one that passed without it, so `checked`'s last verified commit and
+    its red record stayed, the behind-ring rang, and no run launched for that tip.  With ratchet-gate in the last shard
+    (`check.py shard`), the pass verifies the tip and ends the red record in the tick `main` moves, and the next ticks neither
+    ring nor launch again."""
+    from research.drive import BEHIND_EVERY_S, BEHIND_S
+
+    off = ("circuit-check", "ratchet-gate")
+    _move_main(world, {"tools/verity/check/ci.toml": 'schema = "ci/v0"\n' + "".join(
+        f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' + ('gate = false\n' if s in off else "") for s in AFTER_LANDING)})
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.after_landing_shards, h.d.after_landing_no_cache = 3, True
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
+    before = h.postland()["verified"]
+    state = h.q.load_state()
+    state["drive"]["postland"]["red"] = {"step lean-suites": {"tip": before, "ids": ["r-old"], "first": "x", "culprit": None}}
+    h.q.save_state(state)
+    tip = _landed(h, {"a.txt": "1\n"})
+    shards = (("lean-audit", "pytest"), ("lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
+              ("flock-circuit-build", "circuit-check", "flock-rust-tests", "ratchet-gate"))
+    assert {s for x in shards for s in x} == set(AFTER_LANDING) - set(AFTER_LANDING_OPTIONAL)
+    assert [kw for _, _, kw in h.posted] == [{"cc_records": True}], "circuit-check's records step first"
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert [kw["shard"] for _, _, kw in h.posted[1:]] == ["1/3", "2/3", "3/3"]
+    h.run_state.update({f"r-post-{k + 1}": ("done", 0, None) for k in range(3)})
+    h.evidence = [_steps_run(world.tmp, f"r-post-{k + 1}", {s: "passed" for s in x}) for k, x in enumerate(shards)]
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == tip == pl["verified"] and pl["run"] is None and not pl["red"] and not pl["pending"], world.logs
+    assert "failed" not in pl and pl["verified_run"] == "r-post-1 r-post-2 r-post-3"
+    for _ in range(2):
+        h.clock += BEHIND_S + BEHIND_EVERY_S
+        h.tick()
+    assert len(h.posted) == 4 and not any("last verified commit" in p for p in h.posts), h.posts
+    assert not any("passed without passing" in p for p in h.posts), h.posts
+
+
 def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
     """ci's `--steps` baseline counts once it names every step on the merge gate: circuit-check, off it, needn't be among them."""
     from research import queue as Q
@@ -249,8 +305,8 @@ def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
 
 
 def test_a_main_pushed_outside_drive_is_merged_into_checked_and_main_follows_once_that_is_checked(world, monkeypatch):
-    """The lander's pure move lands on `main` on its own check while `checked` holds landings `main` lacks: drive merges it
-    into `checked`, whose next after-landing run checks the two together before `main` moves on."""
+    """The lander's `research merge --push` lands on `main` on its own check while `checked` holds landings `main` lacks: drive
+    merges it into `checked`, whose next after-landing run checks the two together before `main` moves on."""
     h = Review(world, monkeypatch, land_into="checked")
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
@@ -283,7 +339,9 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
 
 
 def test_land_into_takes_checked_or_main_and_only_drive_pushes_checked(world, monkeypatch):
-    assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into == "main"
+    assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into is None
+    # a config that doesn't set it leaves the queue to read drive.toml's at `main`, as with no config
+    assert DriveFlags.parse('on = ["m"]\n').land_into is None
     with pytest.raises(QueueError, match="land_into"):
         DriveFlags.parse('land_into = "staging"\n')
     monkeypatch.delenv("RESEARCH_DRIVE", raising=False)

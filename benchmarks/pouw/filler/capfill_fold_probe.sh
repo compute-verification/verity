@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# FILLER (note:20261017T0652Z-draft-filler): what the fold and the step's own SMs are worth beside the step, on one GPU.
-# (1) The pump at the leader's split with each fold: duo (NC 2), and P2-FF r9's XIN13 and LI (NC 4, provisional under
-# FOLD-OPT), at S 1024, alone (dalone) and beside the step at each decode point (dcap lfill's pump arm; its lane arm is
-# the lane filler on the step's SMs). duo at S 256 is r20261017-072934-dd50's control. (2) The pump on every SM at the
+# What the fold and the step's own SMs are worth beside the step, on one GPU.
+# (1) The pump at the leader's split with each fold: duo (NC 2), and the r9 folds XIN13 and LI (NC 4, provisional),
+# at S 1024, alone (dalone) and beside the step at each decode point (dcap lfill's pump arm; its lane arm is the lane
+# filler on the step's SMs). duo at S 256 is the control. (2) The pump on every SM at the
 # lowest stream priority beside the step at the highest (dcap dfill co), at chunks short enough (DFILL_CHUNK_LOG2, MMAs an
 # SM a chunk) that the step's blocks get SMs between the pump's: certified MMAs on the step's SMs during the step without
 # fusing them into its kernels. Clocks are read, never set.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FILLER (note:20261017T0652Z-draft-filler): why a 1-block pump that leaves half of every SM free still holds the step
+# Why a 1-block pump that leaves half of every SM free still holds the step
 # off (capfill_co_probe.sh: 7-37x served time, the same at 4 and 24 KB of pad). ncu's launch statistics (registers, shared
 # memory, block size) of every kernel of the step at B 1, 32 and 256; the step's linears alone and its attention alone
 # (DFILL_KIND 0, 1) beside the 1-block pump co-scheduled on every SM; and the 2-block pump at true short chunks (S 32,

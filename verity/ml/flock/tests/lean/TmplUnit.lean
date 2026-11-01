@@ -1,7 +1,7 @@
 import Flock
 
 /-!
-The prover's side of a templated statement (PRF-133): its unit's rows at the positions the verifier folds them at. It
+The prover's side of a templated statement: its unit's rows at the positions the verifier folds them at. It
 unrolls the unit (`Tmpl.posMap`), which no verifier of record may do (`tests/test_verifier_cost.py`), so it is its own
 executable, built beside `flock-verify` by `pod/90-tmpl-unit.sh` (`lean_exe flock-tmpl-unit`, root `TmplUnit`).
 
