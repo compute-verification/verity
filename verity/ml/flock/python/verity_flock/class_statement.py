@@ -40,7 +40,6 @@ import os
 import re
 import resource
 import subprocess
-import sys
 import threading
 import time
 import weakref
@@ -60,6 +59,7 @@ from verity.ml.circuits.cut import DefinitionCut
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
 
+from . import challengers as CH
 from . import circuit as FC
 from . import class_sweep
 from . import gf2
@@ -1306,53 +1306,13 @@ def _zk() -> list[str]:
     return ["--zk"] if os.environ.get("FLOCK_ZK") == "1" else []
 
 
-#: the pods' challenger helper (`challenger_start`, `challenger_end`, `challenger_audit`), which FLOCK_CHALLENGER=1 runs
-CHALLENGER_SH = Path(__file__).resolve().parents[2] / "pod" / "challenger.sh"
-
-
-def _challenger_env(d: Path) -> dict:
-    return os.environ | {"CHALLENGER_REPO": os.environ.get("CHALLENGER_REPO") or str(CHALLENGER_SH.parents[4]),
-                         "CHALLENGER_PY": os.environ.get("CHALLENGER_PY") or sys.executable,
-                         "CHALLENGER_WORK": str(d.with_name(f"{d.name}-work"))}
-
-
-def _challenger(d: Path) -> tuple[subprocess.Popen, list[str]]:
-    """FLOCK_CHALLENGER=1: the auditor's challenger for one verifier process (`pod/challenger.sh`, whose Lean the pod built
-    before the run), its record under ``d``, and the flags `serve` takes so that it samples and opens every session's coin tree.
-    The process exits with the challenger's status once that server's last session closes."""
-    p = subprocess.Popen(["bash", "-c", '. "$0" && challenger_start "$1" || exit 1; echo "$CHALLENGER $CHALLENGER_SECRET"; '
-                          'challenger_end "$1"', str(CHALLENGER_SH), str(d)], stdout=subprocess.PIPE, text=True, env=_challenger_env(d))
-    got = (p.stdout.readline() if p.stdout else "").split()
-    if len(got) != 2:
-        p.wait()
-        err = d / "challenger.err"
-        raise RuntimeError(f"no challenger under {d}: {err.read_text()[-300:] if err.exists() else 'it never listened'}")
-    return p, ["--tree-from", got[0], "--tree-secret-file", got[1]]
+_challenger = CH.start
 
 
 def _challengers_end(d: Path, srvs: list[subprocess.Popen], chs: list[subprocess.Popen]) -> list[dict]:
-    """Each challenger's exit status once its server has closed, and the audit of that server's session records (named for its
-    pid) against the challenger's release log (`challenger_audit`: Python's `sessions_tree_reason`, the Lean's
-    `challenger_session_trees`); ``ok`` when the challenger exited 0 and the audit passed every record. A challenger still open
-    a minute after its server is gone (a server killed before its last session) is killed, and fails."""
-    out = []
-    for i, (s, p) in enumerate(zip(srvs, chs)):
-        ch = d / f"challenger-{i}"
-        try:
-            rc = p.wait(timeout=60)
-        except subprocess.TimeoutExpired:
-            pid = ch.with_name(f"{ch.name}-work") / ch.name / "pid"
-            try:
-                os.kill(int(pid.read_text()), 9)
-            except (OSError, ValueError):
-                p.kill()
-            rc = p.wait()
-        sessions = sorted(str(x.parent) for x in (d / "sessions").glob(f"*-{s.pid}/session.json"))
-        a = subprocess.run(["bash", "-c", '. "$0" && challenger_audit "$@"', str(CHALLENGER_SH), str(ch), *sessions],
-                           capture_output=True, text=True, env=_challenger_env(ch))
-        out.append({"exit": rc, "sessions": len(sessions), "audit": a.returncode == 0, "ok": rc == 0 and bool(sessions) and a.returncode == 0}
-                   | ({} if a.returncode == 0 else {"audit_tail": (a.stdout + a.stderr)[-400:]}))
-    return out
+    """Each server's challenger (``d/challenger-<i>``) once the server has closed, and its audit of that server's session
+    records, the directories named for its pid (`challengers.end`)."""
+    return [CH.end(d / f"challenger-{i}", p, CH.records(d / "sessions", f"*-{s.pid}")) for i, (s, p) in enumerate(zip(srvs, chs))]
 
 
 def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int, host: str, port: int, operator: str,
@@ -1370,7 +1330,7 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
     law = ["--draw-law", os.environ["FLOCK_DRAW_LAW"]] if os.environ.get("FLOCK_DRAW_LAW") else []
-    chs = [_challenger(d / f"challenger-{i}") for i in range(servers)] if os.environ.get("FLOCK_CHALLENGER") == "1" else []
+    chs = [_challenger(d / f"challenger-{i}") for i in range(servers)] if CH.wanted() else []
     bounded = bounded or bool(chs)
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
