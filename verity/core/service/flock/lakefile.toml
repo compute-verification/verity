@@ -25,6 +25,10 @@ name = "flock-firewall"
 root = "FlockFirewall"
 
 [[lean_exe]]
+name = "flock-frame-tape"
+root = "FlockFrameTape"
+
+[[lean_exe]]
 name = "flock-rec-sparse"
 root = "FlockRecSparse"
 
@@ -35,7 +39,3 @@ root = "FlockWitness"
 [[lean_exe]]
 name = "flock-rec-opening"
 root = "FlockRecOpening"
-
-[[lean_exe]]
-name = "flock-frame-tape"
-root = "FlockFrameTape"
