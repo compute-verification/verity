@@ -45,6 +45,7 @@ from band_gpu.memory_challenger import (  # noqa: E402
     quantiles,
 )
 from p2_v1 import reference  # noqa: E402
+from verity.core.protocols.pous.verifier import MerkleTree
 
 
 def params_of(manifest: dict[str, Any], payload_bytes: int) -> reference.Params:
@@ -59,7 +60,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
     blocks, bps = params.blocks, params.blocks_per_segment
     if len(leaves) != blocks:
         raise ValueError(f"{len(leaves)} leaves for a store of {blocks} blocks")
-    root = reference.root(leaves)
+    root = MerkleTree(leaves).root
     epoch = reference.epoch_id(params, model, salt, root)
     source = os.urandom(32)
     if cpu is not None:
