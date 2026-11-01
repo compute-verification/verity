@@ -23,9 +23,10 @@ the prover's bytes:
   stream's `Round` carries the device's round, and what leaves in its place is the frame's release against the
   statement's round there (`Frames.round`), in a `Round` of the schedule's stream and count (`roundFrame`; any byte the
   prover put after its round is dropped): the algebraic phase's scheduled round, the opening's (the loop's own
-  `Drive.openStep`, on the session's `Commit` coins and the rep's salts for levels ≥ 1), then the inner proof's own. Its
-  coins, once opened, are the frame's (`Frames.feedOf`, `Frames.coins`), and the prover receives them only once the frame
-  took them.
+  `Drive.openStep`, on the session's `Commit` coins and the rep's salts for levels ≥ 1), then the inner proof's, the
+  frame's own on the rounds the loop's finish computed and handed the loop's frames before the prover relays them
+  (`Frame.innerSched`, `Frames.Registry.innerRound`). Its coins, once opened, are the frame's (`Frames.feedOf`,
+  `Frames.coins`), and the prover receives them only once the frame took them.
 * Each table's level 0 is the loop's: on its frames port the loop draws a table's level-0 hiding and salts from the
   operating system for the packed witness the prover hands it, and commits level 0 on them (`level0`, `Level0.draw`),
   for the live session and table the request names (by its coin tree's root, `Level0.nameOf`), once a table: a second
@@ -37,8 +38,10 @@ the prover's bytes:
   loop's own finish's, a connection to the frames port (`Finish.serveLoop`): it reads each table's level 0 from the
   loop's `Level0` of the table's root, draws each rep's salts for levels ≥ 1 itself, which the prover's trees then take,
   refuses a rep's request whose draws, passed values, extra claims or coins are not its frame's (`Frames.ownOf`,
-  `Finish.RepIn.differs`), refuses a table's level-0 data from the host (`table`) and any rep's proof file but the one
-  its live inner request computed (`Finish.Kept`), and keeps each rep's proof file, once (`Frames.Registry.file`).
+  `Finish.RepIn.differs`) or whose `final_c` its passed values do not fix (`Finish.consWhy`), and coins answering its
+  inner proof's rounds that are not the stream's (`Finish.coinsWhy`), refuses a table's level-0 data from the host
+  (`table`) and any rep's proof file but the one its live inner request computed (`Finish.Kept`), and keeps each rep's
+  proof file, once (`Frames.Registry.file`).
 * A `Proof` the prover sends is answered `Resp::Ok` and dropped. The proofs that leave, just before `Finish`, are the
   loop's kept files (`ownProofs`), every rep's of the session's bound level 0 or none, and only once every rep's frame
   ended not stopped (`Frames.finish`). The finish computes none where a constraint fails on the pads. Where a frame
@@ -725,7 +728,8 @@ def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO
 `Frames.startRep`, the frame then the loop's own in `reg`); a rep's next place or the values its frame took (`place …`,
 `vals …`, `Frames.ask`); one table's level 0 (`level0 …`, `level0`); or a session's
 proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
-levels ≥ 1 kept in `reg` for its opening, its proof file for the session's `Proof` (`Frames.Registry.file`), and its
+levels ≥ 1 kept in `reg` for its opening, its inner proof's rounds for the frame to release
+(`Frames.Registry.innerRound`), its proof file for the session's `Proof` (`Frames.Registry.file`), and its
 requests refused unless they carry its frame's draws, the values it took, the session's extra claims and the coins the
 stream answered (`Frames.ownOf`).
 Anything else is answered `err WHY`. -/
@@ -738,6 +742,10 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
     | .error e => (some e, R)
   let own := fun (i r : Nat) (root : ByteArray) => do
     return some (Frames.ownOf (← reg.get) (← l0s.get) i r root)
+  let inner := fun (root : ByteArray) (r j : Nat) (b : ByteArray) => reg.modifyGet fun R =>
+    match R.innerRound root r j b with
+    | .ok R' => (none, R')
+    | .error e => (some e, R)
   repeat
     let c ← srv.accept.block
     let _ ← IO.asTask (prio := .dedicated) do
@@ -746,7 +754,7 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
       if first.startsWith "level0 " then
         try level0 ch l0s first catch e => IO.eprintln s!"level 0: {e}"
       else if first.startsWith "finish " then
-        try Finish.serveLoop ch S specs l0s keep file own first catch e => IO.eprintln s!"finish: {e}"
+        try Finish.serveLoop ch S specs l0s keep file own inner first catch e => IO.eprintln s!"finish: {e}"
       else if first.startsWith "rep " then
         try Frames.startRep ch reg l0s first catch e => IO.eprintln s!"rep: {e}"
       else if first.startsWith "place " || first.startsWith "vals " then

@@ -10,7 +10,9 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
   (`Drive.openStep`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
-  `Drive.extras`, and the rep's salts for levels ≥ 1, the loop's finish's), then none, at the inner proof's own rounds. Rep 1's frame first takes
+  `Drive.extras`, and the rep's salts for levels ≥ 1, the loop's finish's), then the inner proof's: the frame's own round
+  (`Frame.innerSched`) on the rounds the loop's finish computed for the rep before they went to the host
+  (`Registry.inner`, `Finish.serve`'s `inner`), so the host only relays them. Rep 1's frame first takes
   rep 0's algebraic-phase coins (`prior`). What leaves is the frame's release, at the stream's first round after its
   domain frame (`domainFrame`, `Transcript.init`'s).
 * `coins`: once the coins answered that round open the committed tree (`State.answer`), the frame takes them
@@ -75,13 +77,14 @@ structure Session where
   sts : Array Stmt
   link : Option (Array F128) := none
 
-/-- **The loop's frames**: the sessions, each rep's frame, and each rep's salts for levels ≥ 1 and its proof file by its
-table's level-0 root, the loop's finish's (`Finish.serve`'s `keep` and `file`). -/
+/-- **The loop's frames**: the sessions, each rep's frame, and each rep's salts for levels ≥ 1, its inner proof's rounds
+and its proof file by its table's level-0 root, the loop's finish's (`Finish.serve`'s `keep`, `inner` and `file`). -/
 structure Registry where
   sessions : Array Session := #[]
   reps : Array Rep := #[]
   salts : Array (ByteArray × Nat × Array ByteArray) := #[]
   files : Array (ByteArray × Nat × ByteArray) := #[]
+  inner : Array (ByteArray × Nat × Array ByteArray) := #[]
 
 /-- Rep `r`'s proof file `b` on the table of level-0 root `root`, as the loop's finish computed it; a rep's file is kept
 once, and asking again is refused. -/
@@ -89,6 +92,19 @@ def Registry.file (R : Registry) (root : ByteArray) (r : Nat) (b : ByteArray) : 
   if R.files.any fun (x, q, _) => x == root && q == r then
     .error s!"rep {r}'s proof file of its table was computed already"
   else .ok { R with files := R.files.push (root, r, b) }
+
+/-- The inner proof's rounds the loop's finish computed for rep `r` on the table of level-0 root `root`, so far. -/
+def Registry.innerOf (R : Registry) (root : ByteArray) (r : Nat) : Array ByteArray :=
+  ((R.inner.find? fun (x, q, _) => x == root && q == r).map (·.2.2)).getD #[]
+
+/-- Rep `r`'s inner proof's round `j`, `b`, on the table of level-0 root `root`, as the loop's finish computed it before
+it went to the host: the rounds come in order, from one inner proof, each once; any other is refused. -/
+def Registry.innerRound (R : Registry) (root : ByteArray) (r j : Nat) (b : ByteArray) : Except String Registry :=
+  let got := R.innerOf root r
+  if got.size != j then
+    .error s!"rep {r}'s inner round {j}, where the loop's finish computed {got.size} of its table's rounds already"
+  else if j == 0 then .ok { R with inner := R.inner.push (root, r, #[b]) }
+  else .ok { R with inner := R.inner.map fun (x, q, rs) => if x == root && q == r then (x, q, rs.push b) else (x, q, rs) }
 
 /-- Session `sid`, set up on `spec` and `sts` at its `Hello`. -/
 def Registry.begin (R : Registry) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) : Registry :=
@@ -186,11 +202,13 @@ def replyWhy : Frame.Reply → String
   | .round _ v => v
   | .done s => if s then "stop" else "ok"
 
-/-- **The frame and place of session `sid`'s round `content` of table `i`'s rep `r`**, in the loop's frames `R` and
-level 0s `L0`, on a stream whose domain frame is `dom`: the rep's frame ready to take it (at the stream's first round, its
-algebraic phase's scheduled rounds on the session's level 0, `withAlg`, and rep 1's after rep 0's algebraic-phase coins),
-the round's place (`placeOf`) and whether it is the stream's first round; or why the round has none. -/
-def roundPlace (R : Registry) (L0 : Level0.Registry) (sid i r : Nat) (dom content : ByteArray) :
+/-- **The frame and place of session `sid`'s round `content` of table `i`'s rep `r`**, squeezing `n` coins, in the loop's
+frames `R` and level 0s `L0`, on a stream whose domain frame is `dom`: the rep's frame ready to take it (at the stream's
+first round, its algebraic phase's scheduled rounds on the session's level 0, `withAlg`, and rep 1's after rep 0's
+algebraic-phase coins), the round's place and whether it is the stream's first round; or why the round has none. The
+place is `placeOf`'s, but past the opening: there the inner proof's round `j` is the frame's own (`Frame.innerSched`) on
+the rounds the loop's finish computed for the rep (`Registry.innerOf`), and one the finish has not computed has none. -/
+def roundPlace (R : Registry) (L0 : Level0.Registry) (sid i r : Nat) (dom content : ByteArray) (n : Nat) :
     Except String (Rep × Frame.Place × Bool) := do
   let some (_, p) := R.find sid i r | throw s!"a round of table {i} rep {r}, whose frame the loop has not started"
   let some s := R.sessions.find? (·.sid == sid) | throw s!"a round of session {sid}, which the loop is not serving"
@@ -210,7 +228,14 @@ def roundPlace (R : Registry) (L0 : Level0.Registry) (sid i r : Nat) (dom conten
       | (.ok, st') => p := { p with st := st' }
       | (a, _) => throw s!"rep 0's algebraic-phase coins: {replyWhy a}"
   let (place, _, p') ← placeOf R.salts l0 s p (s.spec.domain name r).toUTF8
-  return (p', place, first)
+  match place with
+  | .own =>
+    let j := p'.st.m.inner.getD 0
+    let fin := R.innerOf l0.root r
+    if Frame.INNER_ROUNDS ≤ j then throw s!"a round after the inner proof's {Frame.INNER_ROUNDS}"
+    if fin.size ≤ j then throw s!"table {i} rep {r}'s inner round {j} before the loop's finish computed it"
+    return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first)
+  | _ => return (p', place, first)
 
 /-- A round's effect on the loop: what leaves (or why nothing does), the rep's frame after it, which the loop puts back,
 the rank check's result where the round made it, and the round and why the rep stopped where the round stopped it. -/
@@ -225,7 +250,7 @@ level 0s `L0`, on a stream whose domain frame is `dom`, the stream's first round
 (`Frame.step`, which takes the first round whole and releases it without the domain frame), after the stream's domain
 frame at its first round, at the round's place (`roundPlace`). -/
 def roundStep (R : Registry) (L0 : Level0.Registry) (sid i r : Nat) (dom content : ByteArray) (n : Nat) : RoundStep :=
-  match roundPlace R L0 sid i r dom content with
+  match roundPlace R L0 sid i r dom content n with
   | .error e => { out := .error e }
   | .ok (p, place, first) =>
     let free := match place with
@@ -309,7 +334,8 @@ def ownOf (R : Registry) (L0 : Level0.Registry) (i r : Nat) (root : ByteArray) :
 
 /-- **What the loop tells the prover of table `i`'s rep `r`** in the live session named `name`, for the request line
 `line` on `ch`, past the session's `Commit`: `place NAME I R` is answered by its next round's place (`placeOf`), `alg N`
-or `open N` for the algebraic phase's or the opening's scheduled round, squeezing `N` coins, else `own`; `vals NAME I R`
+or `open N` for the algebraic phase's or the opening's scheduled round, squeezing `N` coins, else `own`: the inner proof's,
+whose rounds the host relays from the loop's finish (`roundPlace`); `vals NAME I R`
 by `ok N` followed by the `N` bytes of the values the frame took so far (`Rep.vals`). A prover whose device stops sends
 each place's round empty (its first, the domain frame alone): the frame fails it, and the scheduled round leaves in its
 place. Anything else is answered `err WHY`. -/
@@ -344,12 +370,13 @@ def ask (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry)
       | _ => say "own"
   | _ => err s!"a request `{line.trim}`"
 
-/-- Session `sid` ended: its frames, their openings and the salts and proof files of its tables' level 0 (`roots`) are
-gone. -/
+/-- Session `sid` ended: its frames, their openings and the salts, inner proofs' rounds and proof files of its tables'
+level 0 (`roots`) are gone. -/
 def close (reg : IO.Ref Registry) (sid : Nat) (roots : Array ByteArray) : IO Unit :=
   reg.modify fun R =>
     { sessions := R.sessions.filter (·.sid != sid), reps := R.reps.filter (·.sid != sid),
       salts := R.salts.filter fun (root, _, _) => !roots.contains root,
-      files := R.files.filter fun (root, _, _) => !roots.contains root }
+      files := R.files.filter fun (root, _, _) => !roots.contains root,
+      inner := R.inner.filter fun (root, _, _) => !roots.contains root }
 
 end Flock.Firewall.Frames
