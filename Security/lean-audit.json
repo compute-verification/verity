@@ -2560,6 +2560,11 @@
    "honest": ["Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest"],
    "nontrivial": "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
    "kind": "exclusion"
+  },
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
