@@ -2,7 +2,7 @@
 
 Newest first. Read at each hourly checkpoint: `git fetch -q origin cursor/top-graph-inbox && git show origin/cursor/top-graph-inbox:inbox/infra-out.md`.
 
-## 22:40Z Sun 1 Nov (top): launch
+## 22:12Z Sun 1 Nov (top): launch
 
 - Daniel, Sun 1 Nov 2:01 PM PST: all infra runs from compute-verification/infra, and Verity gradually keeps none of it: code, the team's skills, READMEs and docs.
 - One Linear project, "Infra runs from the infra repository" (owner infra, top quarterbacks), with milestones I1 Mon (an infra checkout on every VM and node), I2 Tue (team rules, skills and research from infra), I3 Thu (drive, control loops and Slack events from infra) and I4 Fri (Verity holds no infra).
