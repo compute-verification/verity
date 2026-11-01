@@ -4,22 +4,27 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 * `matchesPublic`: `registration.matches_public`, the verifier's own public file (its scheme, roots, their domains and its
   instance count) against the record, with Python's codes in its order (`scheme`, `roots`, `domains`, `population`) and
   details;
-* `sessionRegistered`: `audit.session_registered`, the `{value: root}` the verifiers of record that accepted report opening
-  the sessions' registered reads against (a verdict's `registered`, `{port: {"value", "root"}}`), a value reported under
-  two roots mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its
-  roots' ports and registered values);
+* `sessionRegistered`: `audit.session_registered`, the `{value: read}` the verifiers of record that accepted report opening
+  the sessions' registered reads against (a verdict's `registered`, `{port: {"value", "root", "domain", "leaves", "words",
+  "word_bits"}}`), each on `READ_KEYS` (`readOf`: the root, its domain and its shape), a value reported under two reads
+  mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its roots'
+  ports and registered values);
 * `checks`: `audit_record`'s checks, each with Python's detail: the draw's and the proved units' always, and the receipt's,
-  the served draw's, the sessions' roots' and the registered roots' when they fail;
-* `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
-  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input. Python writes `delta` as a float: here it is the double nearest
+  the served draw's, the sessions' roots' and the registered reads' (each value's entry, `registeredReads`) when they fail;
+* `record`: the record, every field as `audit_record` writes it, the registered reads its checks read derived here from
+  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input. `checks` and `ownRegistered` run linear in the
+  registration's roots: each is compiled as its form on `lastRoots`, a hash map of `byPort` (`checks_eq_checksFast`,
+  `ownRegistered_eq_ownRegisteredFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
   the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every law
   (`Bound.boundOf`).
 -/
 import SampledProofs.Bound
 import SampledProofs.Draw
 import SampledProofs.PyJson
+import SampledProofs.Registered
 import Flock.WindowRecord
 import CoreProtocol.Profile
+import Std.Data.HashMap
 
 namespace SampledProofs.Record
 
@@ -42,10 +47,20 @@ def byPort (rec : Json) : Array (String × Json) :=
     | .str p => (acc.filter fun (q : String × Json) => q.1 != p).push (p, r)
     | _ => acc) #[]
 
-/-- `{e["value"]: e["root"] for e in rec.get("registered", [])}`: the last root of each value. -/
-def registeredRoots (rec : Json) : Array (String × Json) :=
+/-- What a session's read of a registered value is held to of the record's entry for it (`audit.READ_KEYS`): the root it
+was opened against, that root's domain, and its shape (its leaves, a row's words and their bits). -/
+def READ_KEYS : Array String := #["root", "domain", "leaves", "words", Registered.WIDTH_KEY]
+
+/-- `audit.read_of`: a read or an entry on `READ_KEYS`, a missing key null and a missing width the default, which an entry
+names only by leaving it out. -/
+def readOf (e : Json) : Json :=
+  Json.mkObj (READ_KEYS.toList.map fun k =>
+    (k, if k == Registered.WIDTH_KEY then (field? e k).getD (Lean.toJson Registered.WORD_BITS) else getD e k))
+
+/-- `{e["value"]: read_of(e) for e in rec.get("registered", [])}`: the last entry of each value, on `READ_KEYS`. -/
+def registeredReads (rec : Json) : Array (String × Json) :=
   (match getD rec "registered" with | .arr es => es | _ => #[]).foldl (fun (acc : Array (String × Json)) e => match getD e "value" with
-    | .str v => (acc.filter fun (q : String × Json) => q.1 != v).push (v, getD e "root")
+    | .str v => (acc.filter fun (q : String × Json) => q.1 != v).push (v, readOf e)
     | _ => acc) #[]
 
 def matchesPublic (rec scheme roots domains population : Json) : Check := Id.run do
@@ -70,15 +85,15 @@ def sessionRegistered (verdicts : Array (String × Json)) : Option (Array (Strin
       let mut acc := out.getD #[]
       for (_, e) in entries (getD v "registered") do
         let .str value := getD e "value" | continue
-        let root := getD e "root"
+        let read := readOf e
         acc := match acc.find? (·.1 == value) with
-          | some (_, r) => acc.map fun (k, x) => if k == value then (k, if jeq r root then r else .null) else (k, x)
-          | none => acc.push (value, root)
+          | some (_, r) => acc.map fun (k, x) => if k == value then (k, if jeq r read then r else .null) else (k, x)
+          | none => acc.push (value, read)
       out := some acc
   return out
 
 def ownRegistered (rec : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
-  let named := (byPort rec).map (·.1) ++ (registeredRoots rec).map (·.1)
+  let named := (byPort rec).map (·.1) ++ (registeredReads rec).map (·.1)
   opened.map (·.filter fun (v, _) => named.contains v)
 
 private def sortedInts (xs : Array Int) : Array Int := xs.qsort (· < ·)
@@ -108,7 +123,7 @@ def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Arra
     if roots.isEmpty || !wrong.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
   if (field? reg "registered").isSome || sessionRegistered.isSome then
-    let want := registeredRoots reg
+    let want := registeredReads reg
     let opened := sessionRegistered.getD #[]
     if !sameDict opened want then
       let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with
@@ -119,6 +134,100 @@ def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Arra
         ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
         ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
   return out
+
+/-- `byPort` as a hash map, port to its last root. -/
+def lastRoots (rec : Json) : Std.HashMap String Json :=
+  (match getD rec "roots" with | .arr rs => rs | _ => #[]).foldl (fun (m : Std.HashMap String Json) r => match getD r "port" with
+    | .str p => m.insert p r
+    | _ => m) {}
+
+theorem find?_byPort (rec : Json) (p : String) :
+    (byPort rec).find? (·.1 == p) = (lastRoots rec)[p]?.map (p, ·) := by
+  unfold byPort lastRoots
+  generalize (match getD rec "roots" with | .arr rs => rs | _ => #[]) = rs
+  rw [← Array.foldl_toList, ← Array.foldl_toList]
+  suffices h : ∀ (l : List Json) (acc : Array (String × Json)) (m : Std.HashMap String Json),
+      acc.find? (·.1 == p) = m[p]?.map (p, ·) →
+      (l.foldl (fun (acc : Array (String × Json)) r => match getD r "port" with
+        | .str p => (acc.filter fun (q : String × Json) => q.1 != p).push (p, r) | _ => acc) acc).find? (·.1 == p)
+        = (l.foldl (fun (m : Std.HashMap String Json) r => match getD r "port" with
+          | .str p => m.insert p r | _ => m) m)[p]?.map (p, ·) from
+    h _ _ _ (by simp)
+  intro l
+  induction l with
+  | nil => intro acc m h; simpa using h
+  | cons r l ih =>
+    intro acc m h
+    simp only [List.foldl_cons]
+    apply ih
+    split
+    · rename_i q _
+      rw [Array.find?_push, Array.find?_filter, Std.HashMap.getElem?_insert]
+      by_cases hq : q = p
+      · subst hq
+        have : (fun (a : String × Json) => decide ((a.1 != q) = true ∧ (a.1 == q) = true)) = fun _ => false := by
+          funext a; by_cases ha : a.1 = q <;> simp [ha]
+        have none : acc.find? (fun _ => false) = none := by simp
+        rw [this, none]; simp
+      · have : (fun (a : String × Json) => decide ((a.1 != q) = true ∧ (a.1 == p) = true)) = (·.1 == p) := by
+          funext a; by_cases ha : a.1 = p
+          · simp [ha, Ne.symm hq]
+          · simp [ha]
+        rw [this, h]; simp [hq]
+    · exact h
+
+theorem contains_byPort (rec : Json) (v : String) :
+    ((byPort rec).map (·.1)).contains v = (lastRoots rec).contains v := by
+  rw [Array.contains_map, Std.HashMap.contains_eq_isSome_getElem?, ← Option.isSome_map (f := (v, ·)), ← find?_byPort,
+    Array.isSome_find?]
+  congr 1; funext a; exact BEq.comm
+
+/-- `ownRegistered`, each value's test a hash lookup. -/
+def ownRegisteredFast (rec : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
+  let ports := lastRoots rec
+  let values := (registeredReads rec).map (·.1)
+  opened.map (·.filter fun (v, _) => ports.contains v || values.contains v)
+
+@[csimp] theorem ownRegistered_eq_ownRegisteredFast : @ownRegistered = @ownRegisteredFast := by
+  funext rec opened
+  simp only [ownRegistered, ownRegisteredFast, Array.contains_append, contains_byPort]
+
+/-- `checks`, each session root's registered root a hash lookup. -/
+def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json)
+    (digest : String) (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
+    (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
+  let mut out := #[("draw", Draw.checkDrawFull draw (getD reg "population") law),
+    ("proved", Draw.checkProvedFull draw provedUnits instances)]
+  if !jeq (getD receipt "registration") (Json.str digest) then
+    out := out.push ("receipt", failed "receipt" (obj [("receipt", getD receipt "registration")]))
+  if let some s := served then
+    if sortedInts s != sortedInts units then
+      out := out.push ("served", failed "served" (obj [("served", intsJson ((sortedInts s).extract 0 16)),
+        ("drawn", intsJson (units.extract 0 16))]))
+  if let some roots := sessionRoots then
+    let registered := lastRoots reg
+    let wrong := sortStrings (roots.filterMap fun (p, r) =>
+      match registered[p]?.map (p, ·) with
+      | some (_, x) => if jeq (getD x "root") r then none else some p
+      | none => some p)
+    if roots.isEmpty || !wrong.isEmpty then
+      out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
+  if (field? reg "registered").isSome || sessionRegistered.isSome then
+    let want := registeredReads reg
+    let opened := sessionRegistered.getD #[]
+    if !sameDict opened want then
+      let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with
+        | some (_, o) => if jeq o r then none else some v
+        | none => some v
+      out := out.push ("registered", failed "registered" (obj [
+        ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
+        ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
+        ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
+  return out
+
+@[csimp] theorem checks_eq_checksFast : @checks = @checksFast := by
+  funext reg receipt draw law units provedUnits instances digest served sessionRoots sessionRegistered
+  simp only [checks, checksFast, find?_byPort]
 
 /-- The profile's draw of the law a draw names (`audit.profile`): a work law is the stratified law at its sizes. -/
 def profileDraw (law : Json) : Option Core.Draw :=

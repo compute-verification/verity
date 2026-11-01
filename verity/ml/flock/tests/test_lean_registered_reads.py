@@ -28,6 +28,7 @@ from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array
 from verity_flock import circuit as FC
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
+from registered_finding import finding, opened
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
@@ -140,7 +141,8 @@ def test_an_honest_registered_statement_is_accepted_and_reports_its_roots(staged
     code, out = _statement(staged, _stage(staged, "honest"), staged.dir / "own.json")
     assert code == 0, out
     line = json.loads(out.splitlines()[0])
-    assert line["registered"] == {"cs": {"value": VALUE, "root": staged.reg.root.hex()}}
+    assert line["registered"] == finding(json.loads((staged.dir / "own.json").read_text())["ports"])
+    assert opened(line["registered"]) == {"cs": {"value": VALUE, "root": staged.reg.root.hex()}}
     assert line["partition_check"]["units"] == "derived"
     assert json.loads(line["identity"])["outputs"].startswith("hidden"), "the statement hides its outputs (§16.13)"
 
@@ -301,8 +303,8 @@ def test_a_registered_output_row_is_accepted_and_reports_its_root(staged):
     code, out = _statement(staged, _stage_out(staged, "out-honest"), staged.dir / "own-out.json")
     assert code == 0, out
     line = json.loads(out.splitlines()[0])
-    assert line["registered"] == {"cs": {"value": VALUE, "root": staged.reg.root.hex()},
-                                  "out": {"value": OUT_VALUE, "root": staged.out.root.hex()}}
+    assert opened(line["registered"]) == {"cs": {"value": VALUE, "root": staged.reg.root.hex()},
+                                          "out": {"value": OUT_VALUE, "root": staged.out.root.hex()}}
 
 
 def test_a_registered_output_row_must_be_the_registered_row(staged):
@@ -538,6 +540,6 @@ def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     assert ok["accepted"] is False and ok["why"] == ("refused: a shared-row public file (header shared_rows): a statement form "
                                                      "the soundness proof does not cover"), ok
     root = json.loads((rope / "registered" / "own.json").read_text())["ports"]["cs"]["root"]
-    assert ok["registered"] == {"cs": {"value": VALUE, "root": root}}
+    assert opened(ok["registered"]) == {"cs": {"value": VALUE, "root": root}}
     moved = verify("honest", rope / "vectors" / "wrong-position" / "registered.json")
     assert moved["accepted"] is False and "reads position" in moved["why"], moved

@@ -17,8 +17,8 @@ The audit record carries the registration and its receipt, the sample, the prove
 verifier's verdict. A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves
 the record incomplete. The record is accepted, and the profiles are present, only when there is a verdict of
 record (`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the draw, the proved
-proof blocks, the served draw, the sessions' roots and, for registered values, the roots their reads were opened against passed
-their checks.
+proof blocks, the served draw, the sessions' roots and, for registered values, the roots their reads were opened against,
+with those roots' domains and shapes (`READ_KEYS`), passed their checks.
 """
 from __future__ import annotations
 
@@ -30,12 +30,16 @@ from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 
-from .draw import check_draw, check_proved, law_of
+from .draw import check_draw, check_proved, law_of, same_json
+from .registered import WIDTH_KEY, WORD_BITS
 from .registration import digest as registration_digest
 
 FORMAT = "verity/one-stage/audit/v0"
 PROFILE = "verity/integrity-profile/v1"
 LEVEL = "unit"
+#: what a session's read of a registered value is held to of the record's entry for it: the root it was opened against,
+#: that root's domain, and its shape (its leaves, a row's words and their bits)
+READ_KEYS = ("root", "domain", "leaves", "words", WIDTH_KEY)
 
 
 def _sha512(obj: Any) -> str:
@@ -98,18 +102,26 @@ def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any
                          "verdict": verdict}}
 
 
+def read_of(e: Mapping[str, Any]) -> dict[str, Any]:
+    """A read or an entry on `READ_KEYS`, a missing key None and a missing width the default, which an entry names only by
+    leaving it out (Lean `Record.readOf`)."""
+    return {k: e.get(k, WORD_BITS if k == WIDTH_KEY else None) for k in READ_KEYS}
+
+
 def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
-                       registration: Mapping[str, Any] | None = None) -> dict[str, str | None] | None:
-    """`audit_record`'s `session_registered` from the verdicts alone: the `{value: root}` that the verdicts of record report
-    (the Lean verdict's `registered`, `{port: {"value", "root"}}`) on the sessions they accepted, a value two of them
-    report under different roots mapped to None. None when no accepted verdict of record reports registered reads. With
-    `registration`, only its own values (its roots' ports and its registered values)."""
-    out: dict[str, str | None] | None = None
+                       registration: Mapping[str, Any] | None = None) -> dict[str, dict[str, Any] | None] | None:
+    """`audit_record`'s `session_registered` from the verdicts alone: the `{value: read}` that the verdicts of record report
+    (the Lean verdict's `registered`, `{port: {"value", "root", "domain", "leaves", "words", "word_bits"}}`, each on
+    `READ_KEYS`) on the sessions they accepted, a value two of them report under different reads mapped to None. None
+    when no accepted verdict of record reports registered reads. With `registration`, only its own values (its roots'
+    ports and its registered values)."""
+    out: dict[str, dict[str, Any] | None] | None = None
     for v in verdicts.values():
         if v.get("of_record") and v.get("accepted") is True and isinstance(v.get("registered"), Mapping):
             out = {} if out is None else out
             for e in v["registered"].values():
-                out[e["value"]] = e["root"] if out.get(e["value"], e["root"]) == e["root"] else None
+                r = read_of(e)
+                out[e["value"]] = r if same_json(out.get(e["value"], r), r) else None
     if out is None or registration is None:
         return out
     named = {r["port"] for r in registration["roots"]} | {e["value"] for e in registration.get("registered", [])}
@@ -120,12 +132,12 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  law: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None,
-                 session_registered: Mapping[str, str] | None = None) -> dict[str, Any]:
+                 session_registered: Mapping[str, Mapping[str, Any] | None] | None = None) -> dict[str, Any]:
     """`draw` is the verifier's own draw. `served`: the proof blocks the sessions were served, when the draw was handed to them
     (each must serve exactly the draw). `session_roots`: `{registered port: root}` from the sessions' statements (each
-    must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
-    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); a registration with
-    registered values needs it, each the registered root."""
+    must be the registered root). `session_registered`: `{value: read}`, the registered roots the verdicts of record opened
+    the sessions' reads against with their domains and shapes (`session_registered(verdicts)`, never the registration's
+    own); a registration with registered values needs it, each its entry's (`read_of`)."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
@@ -138,11 +150,12 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         if not session_roots or wrong:
             checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
     if "registered" in registration or session_registered is not None:
-        want = {e["value"]: e["root"] for e in registration.get("registered", [])}
-        if dict(session_registered or {}) != want:
+        want = {e["value"]: read_of(e) for e in registration.get("registered", [])}
+        opened = dict(session_registered or {})
+        wrong = sorted(v for v in want if not same_json(opened.get(v), want[v]))
+        if set(opened) != set(want) or wrong:
             checks["registered"] = {"ok": False, "codes": ["registered"],
-                                    "detail": {"registered": sorted(want), "opened": sorted(session_registered or {}),
-                                               "wrong": sorted(v for v in want if (session_registered or {}).get(v) != want[v])}}
+                                    "detail": {"registered": sorted(want), "opened": sorted(opened), "wrong": wrong}}
     ran = {k: v for k, v in verdicts.items() if v.get("accepted") is not None}
     of_record = [v for v in verdicts.values() if v.get("of_record")]
     accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)

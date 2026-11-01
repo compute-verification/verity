@@ -25,9 +25,13 @@ the record, the log's positions and its coin bound to its binding and the record
 or take W as an output of the log's earlier record (`outputs`: W's entry is that record's port `EARLIER_OUT`, its domain
 and root, or that record's registered value `EARLIER_VALUE`, its domain and root at W's leaves, words and word bits,
 R7-output), and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream,
-R6-prover). A verifier may name its window's open root (`window_root`, `WROOT`) and the values it holds across windows
+R6-prover). On the program whose verifier's circuit also registers `C`, no parameter of the program (`CIRCUIT_SETUPS`),
+the verifier names `C`'s leaves (`circuit_params`), which R7 counts its rows from. A verifier may name its window's open
+root (`window_root`, `WROOT`) and the values it holds across windows
 (`held`): the record registers every other value it doesn't fill, pin or take as an output under `WROOT`'s domain, and
-the log's earlier record under another window's (`EARLIER_WROOT`), its own or none.
+the log's earlier record under another window's (`EARLIER_WROOT`), its own or none. The verifier of record reports the
+sessions' reads of each registered value at its entry's root, domain and shape (`reads`, `Flock.Registered.finding`),
+and the changes to them read another (`_other_reads`).
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, and integer
 populations in a sample.
@@ -240,6 +244,31 @@ class RegisteredSetup(Setup):
         """Of `values`, the ones the verifier fills itself, with their sources."""
         return {}
 
+    def circuit_params(self, values) -> dict:
+        """Of `values`, the registered parameters of the verifier's circuit that are no parameter of its program."""
+        return {}
+
+
+class CircuitSetup(RegisteredSetup):
+    """A `RegisteredSetup` whose verifier also expects registered parameters of its circuit that are no parameter of its
+    program, as a window circuit's scan state: `circuit`, `{value: leaves}`, each of 16-bit leaves, `words` a row in any
+    row format."""
+
+    def __init__(self, program, values, circuit, formats=None):
+        self.circuit = dict(circuit)
+        super().__init__(program, values, formats)
+
+    def _rows(self, v: str, w: int) -> tuple:
+        if v not in self.circuit:
+            return super()._rows(v, w)
+        n = self.circuit[v] // w
+        rows = [[(i * 40503 + 7) % (1 << 16) for i in range(r * w, (r + 1) * w)] for r in range(n)]
+        return rows, [hashlib.shake_256(f"{v}/{w}/{r}".encode()).digest(192) for r in range(n)], 16, \
+            self.formats.get(v, G.SCHEMA)
+
+    def circuit_params(self, values) -> dict:
+        return {v: self.circuit[v] for v in values or {} if v in self.circuit}
+
 
 class SuppliedSetup(RegisteredSetup):
     """A `RegisteredSetup` whose verifier fills some values itself: `sup`, `{value: rows of sources}`
@@ -281,7 +310,12 @@ SUPPLIED_SETUPS = [
         ("S", Array(2, Array(2, Array(16, Value(32))))), ("W", Array(6, Value(16)))), ("S", "W")),
         [{"S": 32, "W": 2}, {"W": 3, "S": 32}],
         {"S": [[{"window": COIN}] + [{"position": "0"}] * 8, [{"position": "2"}] * 8 + [{"window": COIN}]]})]
-REGISTERED_SETUPS += SUPPLIED_SETUPS
+#: A program whose verifier's circuit also registers `C`, 12 leaves of 16 bits that are no parameter of the program, as a
+#: window circuit's scan state, in `row/v2` rows: R7 counts its rows from the leaves the verifier holds for it.
+CIRCUIT_SETUPS = [
+    CircuitSetup(_registered_program("CoreSampledProofsRegisteredCircuit", 2, (("W", Array(6, Value(16))),), ("W",)),
+                 [{"C": 3}, {"C": 4, "W": 2}, {"W": 3, "C": 12}, {"C": 2, "x": 1}], {"C": 12}, {"C": G.SCHEMA_V2})]
+REGISTERED_SETUPS += SUPPLIED_SETUPS + CIRCUIT_SETUPS
 PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS}
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
 #: The strata a work table may name: the templates' and the Calls'.
@@ -469,7 +503,8 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger") if isinstance(j, dict) and k in j}
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "circuit_params")
+                   if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
     if not desc:
@@ -529,6 +564,13 @@ def decode_params(j) -> dict:
             R._schemas(j["row_schemas"], j["registered"] or {}, G.sources(j.get("supplied", {})))
         except ValueError as e:
             raise D.Reject(str(e)) from None
+    if "circuit_params" in j:
+        if not isinstance(j["circuit_params"], dict):
+            raise D.Reject("circuit parameters are not an object")
+        try:
+            R._circuit_params(j["circuit_params"], j["registered"] or {}, G.sources(j.get("supplied", {})))
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     if "binding" in j:
         if not isinstance(j["binding"], dict):
             raise D.Reject("the binding is not an object")
@@ -546,7 +588,8 @@ def decode_params(j) -> dict:
     delta = ratio(j["delta"])
     if not 0 < delta < 1:
         raise D.Reject("delta is not in (0, 1)")
-    if R.unwindowed(PROGRAMS[sha], j["registered"] or {}, j.get("row_schemas"), window, fixed, j["log"]):
+    if R.unwindowed(PROGRAMS[sha], j["registered"] or {}, j.get("row_schemas"), window, fixed, j["log"],
+                    j.get("circuit_params")):
         raise D.Reject("a value it doesn't hold across windows that the log registered, and no window root")
     return {**j, "program": PROGRAMS[sha], "delta": delta}
 
@@ -598,7 +641,8 @@ def _registered_reads(verdicts: dict) -> None:
 def _registration(p: dict, rec) -> tuple[str, ...]:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
-                   p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held")).codes
+                   p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
+                   p.get("circuit_params")).codes
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -728,9 +772,23 @@ def registered(j):
     p = _params_of(_json(j))
     fixed = [*(p.get("held") or ()), *(p.get("pinned") or {}), *G.sources(p.get("supplied", {})), *(p.get("outputs") or {})]
     try:
-        return G.registered_entries(p["program"], p["registered"] or {}, p.get("row_schemas"), p.get("window_root"), fixed)
+        return G.registered_entries(p["program"], p["registered"] or {}, p.get("row_schemas"), p.get("window_root"), fixed,
+                                    p.get("circuit_params"))
     except ValueError:
         return None
+
+
+def circuit_shape(j):
+    j = _json(j)
+    p = _params_of(j)
+    if not p["registered"]:
+        raise D.Reject("the verifier expects no values registered")
+    if not (isinstance(j.get("value"), str) and _nat(j.get("leaves")) and _nat(j.get("words"))):
+        raise D.Reject("value is not a string, or leaves or words not a natural number")
+    try:
+        return {"rows": G.circuit_shape(p["program"], j["value"], j["leaves"], j["words"])}
+    except ValueError as e:
+        return {"refused": str(e)}
 
 
 def domain(j):
@@ -1345,9 +1403,11 @@ def _record_of(s: Setup, values, law: dict, window: dict, log=(), binding=None, 
 
 
 def reads(rec: dict) -> dict:
-    """A Lean verdict's `registered`: per port of the statement, the value it reads and the root it opened against (the
-    record's)."""
-    return {f"{e['value']}.{i}": {"root": e["root"], "value": e["value"]} for e in rec["registered"] for i in range(2)}
+    """A Lean verdict's `registered` (`Flock.Registered.finding`): per port of the statement, the value it reads, the root it
+    opened against and that root's domain and shape (the record's)."""
+    return {f"{e['value']}.{i}": {"value": e["value"], "root": e["root"], "domain": e["domain"], "leaves": e["leaves"],
+                                  "words": e["words"], "word_bits": e.get("word_bits", G.WORD_BITS)}
+            for e in rec["registered"] for i in range(2)}
 
 
 @st.composite
@@ -1411,6 +1471,8 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
         params["parameters"] = s.signature
     if isinstance(s, RegisteredSetup) and s.supplied(values):
         params["supplied"] = s.supplied(values)
+    if isinstance(s, RegisteredSetup) and s.circuit_params(values):
+        params["circuit_params"] = s.circuit_params(values)
     if output:
         params["outputs"] = {"W": {**({"value": EARLIER_VALUE} if reuse else {"port": EARLIER_OUT}),
                                    "record": R.digest(log[-1])}}
@@ -1662,22 +1724,27 @@ def _earlier(a: dict) -> str:
     return R.digest(a["params"]["log"][-1]) if a["params"]["log"] else "ee" * 64
 
 
-def _registered(value):
-    """The verifier's registered values changed, its held values the ones still among them (a held value it doesn't expect
-    registered is a malformed parameter, which `registration._window` refuses whatever else changed)."""
+def _expects(value):
+    """The verifier's registered values changed, its held values and circuit parameters the ones still among them (one it
+    doesn't expect registered is a malformed parameter, which `registration._window` and `_circuit_params` refuse whatever
+    else changed)."""
     def change(a, x):
         r = a["params"]["registered"] = value(a, x)
         if "held" in a["params"]:
             a["params"]["held"] = [v for v in a["params"]["held"] if isinstance(r, dict) and v in r]
+        if "circuit_params" in a["params"]:
+            a["params"]["circuit_params"] = {v: n for v, n in a["params"]["circuit_params"].items()
+                                             if isinstance(r, dict) and v in r}
     return change
 
 
 REGISTERED_PARAMS = [
-    _registered(lambda a, x: [{"W": 4}, {"W": 0}, {"E": 1}, {"M": 1}, {"V": 1}, {"nope": 1}, {"T": 3},
-                              {"U": 2}, {"W": -1}, {"W": True}, {"W": "2"}, [], "W", {}, {"T": 2}][x % 15]),
-    _registered(lambda a, x: {**a["params"]["registered"],
-                              **[{"D": 1}, {"x": 1}, {"T": 4}, {"U": 3}, {"W": 6}, {"x": 3}][x % 6]}),
-    lambda a, x: (a["params"].pop("parameters"), a["params"].update(registered=None), a["params"].pop("held", None)),
+    _expects(lambda a, x: [{"W": 4}, {"W": 0}, {"E": 1}, {"M": 1}, {"V": 1}, {"nope": 1}, {"T": 3},
+                           {"U": 2}, {"W": -1}, {"W": True}, {"W": "2"}, [], "W", {}, {"T": 2}, {"C": 5}][x % 16]),
+    _expects(lambda a, x: {**a["params"]["registered"],
+                           **[{"D": 1}, {"x": 1}, {"T": 4}, {"U": 3}, {"W": 6}, {"x": 3}, {"C": 6}][x % 7]}),
+    lambda a, x: (a["params"].pop("parameters"), a["params"].update(registered=None), a["params"].pop("held", None),
+                  a["params"].pop("circuit_params", None)),
     lambda a, x: a["params"].pop("parameters"),
     _set("params", "parameters", lambda a, x: _signature(a["params"]["parameters"], x)),
     _set("params", "log", lambda a, x: [{**a["record"], "registered": [
@@ -1705,19 +1772,30 @@ REGISTERED_PARAMS = [
         {"S": G.SCHEMA_V2}, {"nope": G.SCHEMA_V2}, {"A": "u16"}, {"A": "hm96-sha512/row/v2 "}, {"A": 1}, ["A"], "A", None,
         {}][x % 15]),
     lambda a, x: a["params"].pop("row_schemas", None),
+    _set("params", "circuit_params", lambda a, x: [
+        {"W": 6}, {"x": 2}, {"T": 4}, {"C": 13}, {"C": 0}, {"C": 24}, {"C": 6}, {"nope": 12}, {"S": 32}, {"C": -1},
+        {"C": True}, {"C": "12"}, ["C"], "C", None, {}][x % 16]),
+    _set("params", "circuit_params", lambda a, x: {**(a["params"].get("circuit_params") or {}),
+                                                   **[{"W": 6}, {"D": 4}, {"T": 4}, {"A": 8}, {"x": 3}][x % 5]}),
+    lambda a, x: a["params"].pop("circuit_params"),
 ]
 
 
 def _other_reads(r: dict, x: int) -> dict:
-    """The verdict of record's registered reads, changed: one port's root another (so its value's two ports disagree), every
-    root upper case, a value missing or added (one the record names as a root port, or one it doesn't name), only one
-    port's, none."""
+    """The verdict of record's registered reads, changed: one port's root another (so its value's two ports disagree), or
+    every port of its value read under another domain, leaf count, row width or word width, or with its leaves `true`;
+    every root upper case; every read without its domain and shape; a value missing or added (one the record names as a
+    root port, or one it doesn't name); only one port's; none."""
     ports = sorted(r)
     p = ports[x % len(ports)]
     v = r[p]["value"]
+    every = lambda **kw: {k: {**e, **kw} if e["value"] == v else e for k, e in r.items()}  # noqa: E731
     return [{**r, p: {**r[p], "root": "12" * 64}}, {k: e for k, e in r.items() if e["value"] != v}, {},
             {**r, "extra.0": {"root": "ab" * 64, "value": "extra"}}, {**r, "x.0": {"root": ROOTS["x"], "value": "x"}},
-            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]}][x % 7]
+            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]},
+            every(domain="cd" * 64), every(leaves=(r[p].get("leaves") or 0) + 1), every(words=None),
+            every(word_bits=32 if r[p].get("word_bits") == 16 else 16),
+            every(leaves=True), {k: {"value": e["value"], "root": e["root"]} for k, e in r.items()}][x % 13]
 
 
 REGISTERED_EVIDENCE = [
@@ -2036,13 +2114,21 @@ def registered_values(draw) -> dict:
     a = draw(changed_audits([REGISTERED_PARAMS, PARAMS], 1, 0, REGISTERED_SETUPS))
     if "parameters" in a["params"] and draw(st.booleans()):
         names = [p[0] for p in a["params"]["parameters"] if isinstance(p, list) and p and isinstance(p[0], str)]
+        circuit = a["params"].get("circuit_params")
+        names += list(circuit) if isinstance(circuit, dict) else []
         a["params"]["registered"] = draw(st.dictionaries(st.sampled_from([*names, "nope"]), st.integers(0, 7), max_size=3))
     return {"params": a["params"]}
 
 
 REGISTERED_ENTRIES = D.Port(PIECES, "registered", registered, st.one_of(
     registered_values(), changed_audits([WINDOWS], 1, 0, REGISTERED_SETUPS).map(lambda a: {"params": a["params"]}),
+    changed_audits([REGISTERED_PARAMS], 1, 0, CIRCUIT_SETUPS).map(lambda a: {"params": a["params"]}),
     _audit_inputs(lambda a: {"params": a["params"]}, [PARAMS]), JSON), package=PACKAGE)
+CIRCUIT_SHAPE = D.Port(PIECES, "circuit_shape", circuit_shape, st.one_of(
+    st.builds(lambda a, v, n, w: {"leaves": n, "params": a["params"], "value": v, "words": w},
+              changed_audits([REGISTERED_PARAMS], 1, 0, REGISTERED_SETUPS),
+              st.sampled_from(["C", "W", "x", "T", "S", "nope", "é"]), st.integers(0, 30), st.integers(0, 8)),
+    JSON), package=PACKAGE)
 TEXT = st.text(max_size=4) | st.sampled_from(["W", "x", "é", "\x00", "\U0001f600", '"'])
 def _domains(widths):
     return st.builds(lambda program, value, words, leaves, b: {"leaves": leaves, "program": program, "value": value,
@@ -3009,7 +3095,8 @@ HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hi
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300),
+              (CIRCUIT_SHAPE, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
@@ -3186,7 +3273,8 @@ def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
               "held": sorted(set(values) - set(s.supplied(values) or {})), "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
               "scheme": SCHEME, "work_table": None, **({"supplied": s.supplied(values)} if s.supplied(values) else {}),
-              **({"row_schemas": {v: f for v, f in s.formats.items() if v in values}} if s.formats else {})}
+              **({"row_schemas": {v: f for v, f in s.formats.items() if v in values}} if s.formats else {}),
+              **({"circuit_params": s.circuit_params(values)} if s.circuit_params(values) else {})}
     evidence = {"draw": {**law, "population": s.population, "units": [0]}, "instances": 1, "proved_units": [0],
                 "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                 "sessions": [], "statement": {},
@@ -3259,6 +3347,50 @@ def test_a_bit_row_values_rows_are_counted_in_its_format(pieces):
             b = copy.deepcopy(a)
             drop(b)
             assert codes(b) == (["R7-leaves", "R7-domain"] if "A" in values else []), values
+
+
+def test_a_circuit_parameter_is_counted_from_its_leaves(pieces):
+    """R7 counts a registered parameter of the verifier's circuit that is no parameter of its program (`C`, as a window
+    circuit's scan state) from the leaves the verifier holds for it, `words` a row in any row format, Lean and Python
+    agreeing: each registration of it is accepted, with or without its row format. Each refusal is both sides' and for
+    the same reason, the `circuit_shape` piece comparing it whole: a circuit parameter that is also a parameter of the
+    program, or whose leaves are not whole rows, is `R7-registered`; without its leaves `C` is no parameter
+    (`R7-registered`); other leaves that are whole rows are other rows under another domain (`R7-leaves`, `R7-domain`);
+    and circuit parameters of any other form refuse the verifier's inputs."""
+    s = CIRCUIT_SETUPS[0]
+
+    def codes(b):
+        kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    def shape(b, value, leaves, words):
+        case = {"leaves": leaves, "params": b["params"], "value": value, "words": words}
+        out = circuit_shape(copy.deepcopy(case))
+        assert D.replay(CIRCUIT_SHAPE, _json(case), pieces) == ("output", D.canonical(out))
+        return out
+
+    def changed(a, **circuit):
+        b = copy.deepcopy(a)
+        b["params"]["circuit_params"] = {**b["params"]["circuit_params"], **circuit}
+        return b
+
+    for values in s.values:
+        a, w = _v2_audit(s, values), values["C"]
+        assert codes(a) == [] and codes({**a, "params": {**a["params"], "row_schemas": {}}}) == [], values
+        assert shape(a, "C", 12, w) == {"rows": 12 // w}
+        for p in (v for v in values if v != "C"):
+            assert codes(changed(a, **{p: 6})) == ["R7-registered"], (values, p)
+            assert shape(a, p, 6, values[p]) == {"refused": f"circuit parameter {p} is a parameter of the program"}
+        for n in (13, 0):
+            assert codes(changed(a, C=n)) == ["R7-registered"], (values, n)
+            assert shape(a, "C", n, w) == {"refused": f"circuit parameter C: {n} leaves are not rows of {w}"}
+        assert shape(a, "C", 12, 0) == {"refused": "circuit parameter C: 12 leaves are not rows of 0"}
+        assert codes(changed(a, C=24)) == ["R7-leaves", "R7-domain"], values
+        b = copy.deepcopy(a)
+        del b["params"]["circuit_params"]
+        assert codes(b) == ["R7-registered"], values
+        for bad in ({"nope": 12}, {"C": -1}, {"C": True}, {"C": "12"}, ["C"], "C", None):
+            assert codes({**a, "params": {**a["params"], "circuit_params": bad}}) == "reject", (values, bad)
 
 
 def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
@@ -3417,15 +3549,22 @@ def test_every_public_items_code_is_reached(pieces):
 
 def test_a_v2_audit_reads_the_sessions_registered_roots(server):
     """A v2 audit of each program accepts when the verifier of record reports the sessions' registered reads opened against
-    the registered roots (and a value the registration doesn't name is not its to read), and rejects them opened against
-    another root, a value's reads missing, a root port's value read as registered, or none reported."""
+    the registered roots, under their domains and in their shapes (and a value the registration doesn't name is not its to
+    read), and rejects them opened against another root, under another domain, in another leaf count, row width or word
+    width, reported without their domains and shapes, a value's reads missing, a root port's value read as registered, or
+    none reported."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
         opened = a["evidence"]["verdicts"]["lean"]["registered"]
         p = sorted(opened)[0]
         v = opened[p]["value"]
+        every = lambda **kw: {k: {**e, **kw} if e["value"] == v else e for k, e in opened.items()}  # noqa: E731
         for got, want in ((opened, "accept"), ({**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}}, "accept"),
-                          ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"),
+                          ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"), (every(root="12" * 64), "reject"),
+                          (every(domain="cd" * 64), "reject"), (every(leaves=opened[p]["leaves"] + 1), "reject"),
+                          (every(words=None), "reject"),
+                          (every(word_bits=32 if opened[p]["word_bits"] == 16 else 16), "reject"),
+                          ({k: {"value": e["value"], "root": e["root"]} for k, e in opened.items()}, "reject"),
                           ({k: e for k, e in opened.items() if e["value"] != v}, "reject"),
                           ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
             lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}

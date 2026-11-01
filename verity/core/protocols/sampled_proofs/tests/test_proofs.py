@@ -145,7 +145,9 @@ def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_
     assert (f.accepted, f.why) == (True, ""), f
     assert PF.ks_form_why(fx / "stage" / "circuit.txt", fx / "stage" / "pub-32.bin") is None
     assert f.program == partition["program"]
-    assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT}}
+    port = json.loads((fx / "stage" / "registered.json").read_text())["ports"]["cs"]
+    assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT, "domain": port["domain"], "leaves": port["leaves"],
+                                   "words": port.get("words"), "word_bits": port.get("word_bits", 16)}}
     assert f.units == DRAWN
     draw = json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
     assert tuple(draw["units"]) == DRAWN, draw

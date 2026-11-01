@@ -14,7 +14,9 @@ A v2 record (`verity/registration/v2`) adds `"registered": [{"value", "root", "l
 before the salt), and each value an earlier record of the log registered under the domain it takes now to that record's
 root (`heldRoots`). The verifier expects a v2 record exactly when it expects values registered. Its entry for a value
 counts the value's rows in the row format the verifier holds for it (`schemas`; a bit row's `words` hold as many of its
-leaves as their bits do), and in `row/v1` rows when it names none.
+leaves as their bits do), and in `row/v1` rows when it names none. A value that is a registered parameter of the
+verifier's circuit and no parameter of its program (`circuitParams`: a window circuit's scan state) is counted from the
+16-bit leaves the verifier holds for it, `words` a row (`Registered.circuitShape`).
 
 A verifier that names its window's open root R (`windowRoot`, which it reads from the challenger's signed open of the
 window, never from the record) takes every registered value's domain under R (`Registered.domainAt`) but the ones it
@@ -108,6 +110,9 @@ structure Verifier where
   windowRoot : Option String := none
   /-- of `registered`, values it holds across windows, whose domain leaves `windowRoot` out -/
   held : Array String := #[]
+  /-- of `registered`, the registered parameters of its circuit that are no parameter of its program, `(value, n)` each,
+  `n` its 16-bit leaves, which it holds from its own circuit (`Registered.circuitShape`) -/
+  circuitParams : Array (String × Nat) := #[]
 
 private def optStr : Option String → Json
   | some s => Json.str s
@@ -118,9 +123,9 @@ def fixedOf (v : Verifier) : Array String :=
   v.held ++ v.pinned.map (·.1) ++ v.supplied.map (·.1) ++ v.outputs.map (·.1)
 
 /-- The verifier's own entries (`registration._check_registered`'s `registered_entries`): each value's domain under the
-window's open root, but `fixedOf`'s. -/
+window's open root, but `fixedOf`'s, and its circuit's registered parameters counted from its circuit. -/
 def ownEntries (v : Verifier) : V (Array Registered.Entry) :=
-  Registered.entries v.program.desc v.params v.registered v.schemas v.windowRoot (fixedOf v)
+  Registered.entries v.program.desc v.params v.registered v.schemas v.windowRoot (fixedOf v) v.circuitParams
 
 /-- `registration.held_roots`, read at the verifier's own entries (`mine`, none where they don't compute): `(value,
 root)` for each of its values an earlier record of the log registered under the domain `mine` gives it, the root of

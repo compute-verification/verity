@@ -325,6 +325,39 @@ def test_a_bit_row_value_counts_its_parameters_leaves_in_its_bits():
         G.shape(prog, "A", 33, G.SCHEMA_V2)
 
 
+def test_a_circuit_parameter_is_counted_from_the_leaves_the_verifier_holds():
+    """A registered parameter of the verifier's circuit that is no parameter of its program (a window circuit's scan state)
+    has no Input gates: R7 counts its rows from the 16-bit leaves the verifier holds for it (`circuit_params`), `words` a
+    row in any row format, under the same domain rule. One that is also a parameter of the program, or whose leaves are
+    not whole rows, is refused (`R7-registered`), as is the value without its leaves; other leaves are other rows under
+    another domain; and circuit parameters of any other form refuse the verifier's inputs."""
+    prog = _program()
+    dig = P.program_digest(prog)
+    want = {"leaves": 3, "words": 4, "word_bits": 16, "domain": G.domain(dig, "state", 4, 3).domain_id.hex()}
+    for schemas in (None, {"state": G.SCHEMA_V2}):
+        assert G.registered_entries(prog, {"state": 4, "W": 2}, schemas, circuit={"state": 12})["state"] == want
+    assert G.registered_entries(prog, {"state": 4}, window="ab" * 64, circuit={"state": 12})["state"]["domain"] == \
+        G.domain(dig, "state", 4, 3, window="ab" * 64).domain_id.hex()
+    with pytest.raises(ValueError, match="'state' is not a parameter"):
+        G.registered_entries(prog, {"state": 4})
+    with pytest.raises(ValueError, match="circuit parameter W is a parameter of the program"):
+        G.registered_entries(prog, {"W": 2}, circuit={"W": 10})
+    for n, w in ((13, 4), (0, 4), (12, 0)):
+        with pytest.raises(ValueError, match=f"circuit parameter state: {n} leaves are not rows of {w}$"):
+            G.registered_entries(prog, {"state": w}, circuit={"state": n})
+    state = G.Registered.commit(dig, "state", [[4 * r + j for j in range(4)] for r in range(3)], schema=G.SCHEMA_V2)
+    rec, ports = _record(prog, _registered(prog))
+    rec = {**rec, "registered": [*rec["registered"], state.entry()]}
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2, "state": 4}}
+    assert R.check(rec, prog, Q, **kw, circuit_params={"state": 12}).ok
+    assert R.check(rec, prog, Q, **kw).codes == ("R7-registered",)
+    assert R.check(rec, prog, Q, **kw, circuit_params={"state": 12, "W": 10}).codes == ("R7-registered",)
+    assert R.check(rec, prog, Q, **kw, circuit_params={"state": 24}).codes == ("R7-leaves", "R7-domain")
+    for bad in ({"nope": 12}, {"state": -1}, {"state": True}, ["state"]):
+        with pytest.raises(ValueError, match="circuit parameter"):
+            R.check(rec, prog, Q, **kw, circuit_params=bad)
+
+
 def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
     """A tile's parameter of R whole rows reads each at its own key `a[i]` (the circuit's port `a{i}`): proof block u's rows 2u
     and 2u + 1. The reads file names each as a port of A, in A's row format, with its own positions; a parameter that is
@@ -677,23 +710,37 @@ def test_a_record_without_registered_values_keeps_v1s_bytes():
     assert R.digest(v1) == hashlib.sha512(b"verity/registration/v1\0" + canonical_json(v1)).hexdigest()
 
 
+def _finding(reg, **kw) -> dict:
+    """The Lean verdict's registered finding of a port reading `reg` (`Flock.Registered.finding`), with `kw` changed."""
+    e = reg.entry()
+    return {"value": e["value"], "root": e["root"], "domain": e["domain"], "leaves": e["leaves"], "words": e["words"],
+            "word_bits": e.get("word_bits", G.WORD_BITS), **kw}
+
+
 def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
+    """The reads are held to each value's entry on its root, that root's domain and its shape: another root, domain,
+    leaf count, row width or word width fails, and so does a root reported alone."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
-    ok = audit.audit_record(*args, session_registered={"W": reg.root.hex()})
+    read = audit.read_of(reg.entry())
+    assert read == {k: v for k, v in _finding(reg).items() if k != "value"}
+    ok = audit.audit_record(*args, session_registered={"W": read})
     assert ok["accepted"] and "registered" not in ok["checks"]
     assert ok["integrity_profile"]["inputs"]["registered"] == [{k: reg.entry()[k] for k in ("value", "root", "leaves", "domain")}]
-    for opened in (None, {}, {"W": "cd" * 64}, {"W": reg.root.hex(), "V": "cd" * 64}):
+    for opened in (None, {}, {"W": {**read, "root": "cd" * 64}}, {"W": read, "V": read}, {"W": {**read, "domain": "cd" * 64}},
+                   {"W": {**read, "leaves": read["leaves"] + 1}}, {"W": {**read, "words": read["words"] + 1}},
+                   {"W": {**read, "words": None}}, {"W": {**read, "word_bits": 32}}, {"W": {**read, "leaves": True}},
+                   {"W": reg.root.hex()}, {"W": None}):
         r = audit.audit_record(*args, session_registered=opened)
-        assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"] and r["integrity_profile"] is None
+        assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"] and r["integrity_profile"] is None, opened
     v1 = R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED)
     plain = audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:])
     assert plain["accepted"] and "registered" not in plain["integrity_profile"]["inputs"]
-    assert not audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:], session_registered={"W": reg.root.hex()})["accepted"]
+    assert not audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:], session_registered={"W": read})["accepted"]
 
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
@@ -703,21 +750,28 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
-    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64, "registered": {"w": {"value": "W", "root": reg.root.hex()}}}
-    assert audit.session_registered({"lean": lean}) == {"W": reg.root.hex()}
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64, "registered": {"w": _finding(reg)}}
+    read = audit.read_of(reg.entry())
+    assert audit.session_registered({"lean": lean}) == {"W": read}
     for v in ({**lean, "accepted": False}, {**lean, "accepted": None}, {**lean, "of_record": False}, {**lean, "registered": None},
               {k: x for k, x in lean.items() if k != "registered"}):
         assert audit.session_registered({"lean": v}) is None, v
-    other = {**lean, "registered": {"w": {"value": "W", "root": "cd" * 64}}}
+    other = {**lean, "registered": {"w": _finding(reg, root="cd" * 64)}}
     assert audit.session_registered({"lean": lean, "lean-2": other}) == {"W": None}
-    assert audit.session_registered({"lean": lean, "lean-2": lean}) == {"W": reg.root.hex()}
+    assert audit.session_registered({"lean": lean, "lean-2": lean}) == {"W": read}
+    assert audit.session_registered({"lean": lean, "lean-2": {**lean, "registered": {"w": _finding(reg, leaves=True)}}}) == {
+        "W": None}, "true is not 1"
 
     def decide(verdicts):
         return audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, verdicts,
                                   0.25, session_registered=audit.session_registered(verdicts))
 
     assert decide({"lean": lean})["accepted"]
-    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}}):
+    changed = [{"w": _finding(reg, **kw)} for kw in ({"domain": "cd" * 64}, {"leaves": reg.entry()["leaves"] * 2},
+                                                      {"words": None}, {"word_bits": 32})]
+    old = {"w": {"value": "W", "root": reg.root.hex()}}
+    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}},
+                     *({"lean": {**lean, "registered": r}} for r in [*changed, old])):
         r = decide(verdicts)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"], verdicts
 

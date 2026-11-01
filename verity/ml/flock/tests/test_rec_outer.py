@@ -25,6 +25,7 @@ from verity_flock import rec_open as R
 from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
 from verity_flock import rec_vstar as V
+from registered_finding import finding
 
 BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
 PROGRAM = O.session_program(b"a test session")
@@ -271,7 +272,7 @@ def test_the_lean_verifier_reads_the_statement_under_the_verifiers_own_files(sta
     d = staged[0]
     line = _statement(d)
     own = json.loads((d / "registered.json").read_text())["ports"]
-    assert line["registered"] == {k: {"value": v["value"], "root": v["root"]} for k, v in own.items()}
+    assert line["registered"] == finding(own)
 
 
 @pytest.mark.slow

@@ -20,6 +20,11 @@ gates are then its own nodes' gates.
   identity `identity_digest_sha512("veritor/indexed-domain/range/v1", {"start": 0, "step": 1, "stop": rows})` and
   `uint(rows)`; a per-window value's binding adds `"window": R`, the window's open root (`domainAt`), so a root
   registered in one window opens under no other window's domain, and a value held across windows leaves it out.
+
+A registered parameter of the verifier's circuit that is no parameter of its program (a window circuit's scan state,
+which every member reads) has no Input gates to count: the verifier holds its count of 16-bit leaves from its own circuit
+(`circuitShape`), a row holds `words` of them in any row format, and its domain is the same derivation over the
+program's SHA-512. One that is also a parameter of the program is refused, as are leaves that are not whole rows.
 -/
 import Flock.Program
 import Flock.Public
@@ -162,18 +167,32 @@ def rowLeaves (p : Param) (schema : String) (words b : Nat) : V Nat :=
     else pure (words * b / w)
   | ws => throw s!"parameter {p.name}: its leaves are not one width ({ws})"
 
+/-- `registered.circuit_shape`: the leaves and leaf width of the circuit's registered parameter `v`, `n` 16-bit leaves of
+which a row holds `words` in any row format, or an error where Python raises: `v` is a parameter of the program, whose
+own leaves `entries` counts, or its leaves are not rows of `words`. -/
+def circuitShape (ps : Array Param) (v : String) (n words : Nat) : V (Nat × Nat × Nat) :=
+  if ps.any (·.name == v) then throw s!"circuit parameter {v} is a parameter of the program"
+  else if n < 1 || words < 1 || n % words != 0 then throw s!"circuit parameter {v}: {n} leaves are not rows of {words}"
+  else pure (n, words, WORD_BITS)
+
 /-- `registered_entries`: the verifier's own entry for each parameter it expects registered (`values`: `(parameter,
 words)`, in order), each in its row format (`schemas`: `(parameter, schema)`, `SCHEMA` for one it doesn't name), or an
 error where Python raises: no such parameter, its gates not one interval, its leaves not one width of at most 32 bits,
 or a row not dividing them into rows. `window`: the window's open root, which every value's domain binds but the ones in
-`fixed`, the values held across windows (`domainAt`). -/
+`fixed`, the values held across windows (`domainAt`). `circuit`: of `values`, the registered parameters of the
+verifier's circuit that are no parameter of its program, `(value, n)` each, `n` its 16-bit leaves (`circuitShape`). -/
 def entries (d : Desc) (ps : Array Param) (values : Array (String × Nat)) (schemas : Array (String × String) := #[])
-    (window : Option String := none) (fixed : Array String := #[]) : V (Array Entry) :=
+    (window : Option String := none) (fixed : Array String := #[]) (circuit : Array (String × Nat) := #[]) :
+    V (Array Entry) :=
   values.mapM fun (v, w) => do
-    let some p := ps.find? (·.name == v) | throw s!"{v} is not a parameter of the program"
-    let some (_, n) := p.gates | throw s!"parameter {v}: its gates are not one interval"
-    let b ← width p
-    let k ← rowLeaves p ((schemas.find? (·.1 == v)).elim SCHEMA (·.2)) w b
+    let (n, k, b) ← match circuit.find? (·.1 == v) with
+      | some (_, n) => circuitShape ps v n w
+      | none => do
+        let some p := ps.find? (·.name == v) | throw s!"{v} is not a parameter of the program"
+        let some (_, n) := p.gates | throw s!"parameter {v}: its gates are not one interval"
+        let b ← width p
+        let k ← rowLeaves p ((schemas.find? (·.1 == v)).elim SCHEMA (·.2)) w b
+        pure (n, k, b)
     if k < 1 || n % k != 0 then throw s!"parameter {v}: {n} leaves are not rows of {w}"
     return { value := v, leaves := n / k, words := w, wordBits := b,
              domain := Flock.hexOf (← domainAt (Flock.hexOf d.sha512) v w (n / k) b

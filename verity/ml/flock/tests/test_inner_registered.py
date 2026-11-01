@@ -20,6 +20,7 @@ from verity.ml.commitments import hm96
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from registered_finding import opened
 
 pytestmark = pytest.mark.slow
 N = 8
@@ -175,7 +176,7 @@ def test_an_honest_inner_statement_reads_its_description_from_the_registration(s
     code, out = statement(d, d / IR.OWN)
     assert code == 0, out
     line = json.loads(out.splitlines()[0])
-    assert line["registered"] == {"cs": {"value": IR.VALUE, "root": got["cs"]["root"]}}
+    assert opened(line["registered"]) == {"cs": {"value": IR.VALUE, "root": got["cs"]["root"]}}
     assert json.loads(line["identity"])["leaf_scheme"] == FC.LEAF_SCHEME_PLAIN
     code, out = statement(d, None)
     assert code == 1 and "the verifier holds no registered roots" in out, out

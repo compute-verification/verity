@@ -258,15 +258,18 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
+          outputs: Mapping[str, Mapping[str, str]] | None = None,
+          circuit_params: Mapping[str, int] | None = None) -> Verdict:
     """`registration.check` (R1-R7) by the verifier."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held)
-    got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
-                                                  work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs),
-                       "record": dict(rec)})
+                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
+                 circuit_params=circuit_params)
+    params = _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+                     supplied, pinned, binding, schemas, window_root, held, outputs)
+    if circuit_params is not None:
+        params["circuit_params"] = dict(circuit_params)
+    got = lean("registration", {"params": params, "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
     return _decide(got, py, whole=False)
