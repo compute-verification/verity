@@ -414,3 +414,15 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
 - **HT-SCALE closed:** the teacher (SmolLM2-1.7B) does not narrow A′'s gap at matched tokens (0.0373 against
   0.0359 nats at D/4, a shift of +0.0014, within the seed spread of 0.011–0.013). It used 186.8 GPU-h in total, about
   $392. Final evidence: art:adbda5ff…
+- **HT-USEFUL final** (note:compute-research/20261101T0700Z-report-hardness-useful-v2; measured):
+  - **Operating point:** a random-sign Hadamard rotation on each linear's input, a clip to 2% Strassen overflow per
+    matrix, and the 2-bit noise.
+  - **Quality under the served noise:** 1B after training is +1.06% WikiText-2 and +0.94% FineWeb-Edu, with zero-shot
+    0.604 against 0.606. 8B untrained is +0.95–1.01%. The noise accounts for 0.65–0.77 of those points.
+  - **Hardness, with the attacker's orderings:** every trained 1B matrix is at least 9.9% (sm_120) or 12.9% (H200) over
+    stock at both floors, and training moved no minimum. Every 8B matrix is at least 6.2% or 8.6% over.
+  - **70B's down_proj** (K 28,672) is only 4.3–4.6% over on sm_120. The margin scales as about 0.17·√(2048/K) (an
+    estimated fit), so cap K at 8,192 per proof unit (70B's K 8,192 matrices are at least 1.054; argued).
+  - **Open (coordinator's smell):** the low-rank-plus-residual split search (HT-PUBLIC's family) wasn't rerun on the
+    rotated, clipped codes. Rotation preserves singular values, so HT-PROV's 0.82-on-q/k route needs checking here
+    too.
