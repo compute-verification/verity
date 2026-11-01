@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The hidden-read kill experiment (read_gadget.py): GemmCoordinate<K> class statements with and without two hidden Merkle reads
 # a template instance, each proved in loopback --zk sessions on the CPU under /usr/bin/time, every case with the same instances, cores and
-# session counts; then Lean's flock-verify on each case's last session. Each case's sessions take their coin trees from its own
+# session counts, each session drawing every unit (--draw subset:N); then Lean's flock-verify on each case's last session. Each case's sessions take their coin trees from its own
 # challenger (challenger.sh: serve --tree-from), and their records are held to its release log. Run from the verity tree
 # (research run --cwd source); CPU only. Outputs under out/ (flat): host.txt, check.json, stage-<case>.json,
 # statement-<case>.txt, live.tsv (one LIVE record per proof: case, json), time-{prove,serve}-<case>.txt (peak RSS and wall
@@ -100,7 +100,7 @@ for case in ${CASES:-today-2304 reads2-2304 reads4-2304 today-4096 reads2-4096};
   $B statement --zk --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement-$case.txt 2>&1
   challenger_start $O/challenger-$case || exit 1
   /usr/bin/time -v -o $O/time-serve-$case.txt $B serve --zk --listen 127.0.0.1:$PORT --out $D/sessions --instances $D/pub-$N.bin \
-    --circuit $D/circuit.txt --tables $D/tables --pin $PIN --operator loopback --sessions $((${WARM:-1} + ${RUNS:-2})) \
+    --circuit $D/circuit.txt --tables $D/tables --pin $PIN --operator loopback --draw subset:$N --sessions $((${WARM:-1} + ${RUNS:-2})) \
     "${TREE_FROM[@]}" > $O/serve-$case.log 2>&1 &
   SP=$!
   for i in $(seq 1800); do grep -q SERVING $O/serve-$case.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
