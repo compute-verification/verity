@@ -42,7 +42,7 @@ MS = {
     "D.lean": "module\nimport B\ntheorem d : True := trivial\n",
     "F.lean": "import B\ntheorem f : b = b := rfl\n",
     "G.lean": "module\nimport all A\ntheorem g : privA = 2 := rfl\n",
-    "H.lean": "module\npublic import A\ntheorem h : a = 1 := by sorry\n",
+    "H.lean": "module\npublic import A\ntheorem h : a = 1 := by sorry\naxiom hidden : a = 1\npublic theorem h2 : a = 1 := hidden\n",
     "Ms.lean": "import C\nimport D\nimport F\nimport G\nimport H\n",
     "lakefile.toml": 'name = "ms"\ndefaultTargets = ["Ms"]\n\n[[lean_lib]]\nname = "Ms"\n'
                      'roots = ["A", "B", "C", "D", "F", "G", "H", "Ms"]\n',
@@ -142,8 +142,9 @@ def test_a_module_system_package_compiles_part_by_part_to_lake_s_bytes(tree, tmp
             if o["name"] != "axioms":
                 assert artifact(tmp_path / "x", got[t["id"]], o["name"]) == lib(built, o["path"]).read_bytes(), \
                     (t["id"], o["name"])
-    h = json.loads(artifact(tmp_path / "x", got["lean-module:ms/H.lean"], "axioms"))
-    assert h == {"module": "H", "axioms": {"_private.H.0.h": ["sorryAx"]}}, "a private proof's sorry is in its axioms"
+    h = json.loads(artifact(tmp_path / "x", got["lean-module:ms/H.lean"], "axioms"))["axioms"]
+    assert h["_private.H.0.h"] == ["sorryAx"], "a private theorem's sorry is in its axioms"
+    assert h["h2"] == ["_private.H.0.hidden"], "so is an axiom only a public theorem's unexposed proof uses"
 
 
 def test_a_module_that_does_not_compile_fails_with_lean_s_errors(tree, tmp_path):
