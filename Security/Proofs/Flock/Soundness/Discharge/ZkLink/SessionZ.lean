@@ -139,24 +139,6 @@ theorem plurSZ_tau [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK 
   have := key (2 + r) (by omega) (by omega)
   rwa [show 2 + r - 2 = r by omega] at this
 
-theorem plurSZ_lev [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK F mPts) (n r ℓ : ℕ) (hr : r < 2)
-    (d : Cap D) (g : Game (List (OutZC F D Sl))) (σ : Strategy g) :
-    Rewinding.IsPluralityE (fun outs : List (OutZC F D Sl) => opRZ Hs.H Hs.E Hs.Lf T.sch r ℓ d (outs.getD n dfltOutZC))
-      g σ (rowT (lvOf T.sch ℓ).lanes (lvOf T.sch ℓ).logLen (plurSZ Hs T n (slotOf r ℓ + 4) d g σ)) := by
-  have key : ∀ s, 4 ≤ s → Rewinding.IsPluralityE
-      (fun outs : List (OutZC F D Sl) => opRZ Hs.H Hs.E Hs.Lf T.sch ((s - 4) % 2) ((s - 4) / 2) d
-        (outs.getD n dfltOutZC)) g σ
-      (rowT (lvOf T.sch ((s - 4) / 2)).lanes (lvOf T.sch ((s - 4) / 2)).logLen (plurSZ Hs T n s d g σ)) := by
-    intro s hs
-    unfold plurSZ
-    simp only [show ¬ s < 2 by omega, show ¬ s < 4 by omega, ↓reduceIte, rowT_tabOf]
-    exact Classical.choose_spec (Rewinding.exists_pluralityE _ g σ)
-  have h1 : (slotOf r ℓ + 4 - 4) % 2 = r := by unfold slotOf; omega
-  have h2 : (slotOf r ℓ + 4 - 4) / 2 = ℓ := by unfold slotOf; omega
-  have := key (slotOf r ℓ + 4) (by omega)
-  rw [h1, h2] at this
-  exact this
-
 section Terms
 
 variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts)

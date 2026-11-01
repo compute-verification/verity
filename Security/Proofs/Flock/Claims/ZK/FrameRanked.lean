@@ -59,11 +59,6 @@ theorem good_of_same {c : Cfg} {s s' : Masker} (hg : Good c s) (h : Same s s') :
 
 theorem same_refl (s : Masker) : Same s s := ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-theorem same_trans {s s' s'' : Masker} (h : Same s s') (h' : Same s' s'') : Same s s'' := by
-  obtain ⟨a1, a2, a3, a4, a5, a6⟩ := h
-  obtain ⟨b1, b2, b3, b4, b5, b6⟩ := h'
-  exact ⟨b1.trans a1, b2.trans a2, b3.trans a3, b4.trans a4, b5.trans a5, b6.trans a6⟩
-
 theorem eq_of_isLabel {l : ByteArray} {L : String} (h : isLabel l L = true) : l = L.toUTF8 := by
   unfold isLabel at h
   have e := beq_iff_eq.1 h

@@ -283,13 +283,6 @@ def oodPoint {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestO
     fOf (c.rest.oodPt r ⟨i, h.1⟩ ⟨j.val, h.2⟩)
   else 0
 
-/-- **`oodPoint` is the drawn point**: coordinate `j` of out-of-domain sample `i` is the coin `z ← sampleVec (m − 7)`
-that `ZkLigerito.ligerito` draws, embedded by `fOf` (the refinement `Refine.vecOf` reads every executable point by). -/
-theorem oodPoint_eq {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
-    (i : Fin (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0) (j : Fin (Tz.S.m - 7)) (hj : j.val < st.m - 7) :
-    oodPoint Tz st c r i.val j = fOf (c.rest.oodPt r i ⟨j.val, hj⟩) := by
-  simp only [oodPoint, dif_pos (And.intro i.isLt hj)]
-
 /-- **A prover of Ligerito's levels ≥ 1**: rep `r`'s bytes after `T'`, as a function of what the simulator holds (the
 draw's table and statement, the public coin vector `c`, whose level ≥ 1 coins `RestZK.ligZ`…`ligB` its sumcheck and
 query messages read, and the restart `y₁'`) and the fresh prover coins `Hi`, the salts of levels ≥ 1's salted Merkle

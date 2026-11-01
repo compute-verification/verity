@@ -245,33 +245,6 @@ theorem pos_sig {r : ℚ} (hr : Representable r) (h0 : 0 < r) :
   rw [abs_of_pos h0] at hn
   refine ⟨n, by rw [← hn, div_mul_cancel₀ _ (ulp_pos r).ne'], by exact_mod_cast hb.1, by exact_mod_cast hb.2⟩
 
-theorem absorb_pos {r i : ℚ} (hr : Representable r) (h0 : 0 < r) (hi : 2 * |i| < ulp r)
-    (hb : 2 ^ binade r < r ∨ 0 ≤ i) : rn (r + i) = r := by
-  obtain ⟨n, hn, n1, n2⟩ := pos_sig hr h0
-  have hu := ulp_pos r
-  have hk : (2 : ℚ) ^ binade r = 2 ^ 23 * ulp r := by rw [ulp, abs_of_pos h0, two_pow_23]
-  have hk1 : (2 : ℚ) ^ (binade r + 1) = 2 ^ 24 * ulp r := by rw [ulp, abs_of_pos h0, two_pow_24]
-  obtain ⟨i1, i2⟩ := abs_lt.1 (show |i| < ulp r / 2 by linarith)
-  have n2' : (n : ℚ) + 1 ≤ 2 ^ 24 := by exact_mod_cast (show n + 1 ≤ 2 ^ 24 by omega)
-  have hlo : 2 ^ binade r ≤ r + i := by
-    rcases hb with hb | hb
-    · have : (2 : ℚ) ^ 23 + 1 ≤ n := by
-        have : (2 : ℚ) ^ 23 < n :=
-          lt_of_mul_lt_mul_right (show (2 : ℚ) ^ 23 * ulp r < n * ulp r by rw [← hk, ← hn]; exact hb) hu.le
-        exact_mod_cast (show (2 : ℤ) ^ 23 + 1 ≤ n by exact_mod_cast this)
-      rw [hk]; nlinarith
-    · linarith [(binade_spec h0).1]
-  have hhi : r + i < 2 ^ (binade r + 1) := by rw [hk1]; nlinarith
-  have hx : 0 < r + i := lt_of_lt_of_le (two_zpow_pos _) hlo
-  have hbx : binade (r + i) = binade r := binade_unique hx hlo hhi
-  have hux : ulp (r + i) = ulp r := by rw [ulp, ulp, abs_of_pos hx, abs_of_pos h0, hbx]
-  rw [rn_eq, ite_eq_right (not_lt.2 hx.le), one_mul, abs_of_pos hx, rp, hux]
-  have : roundEven ((r + i) / ulp r) = n := by
-    apply roundEven_near
-    rw [add_div, (div_eq_iff hu.ne').2 hn, add_sub_cancel_left, abs_div, abs_of_pos hu, div_lt_iff₀ hu]
-    linarith
-  rw [this, ← hn]
-
 theorem moves_pos {r i : ℚ} (hr : Representable r) (h0 : 0 < r) (hi : ulp r ≤ |i|) : rn (r + i) ≠ r := by
   obtain ⟨n, hn, n1, n2⟩ := pos_sig hr h0
   have hu := ulp_pos r
@@ -302,21 +275,6 @@ theorem rnAdd_exact (x y : ℚ) (h : Representable (x + y)) : rnAdd x y = x + y 
 
 theorem rnAdd_mono (x y x' y' : ℚ) (h : x + y ≤ x' + y') : rnAdd x y ≤ rnAdd x' y' := rn_mono h
 
-theorem rnAdd_absorb (r i : ℚ) (hr : Representable r) (h0 : r ≠ 0) (hi : 2 * |i| < ulp r)
-    (hb : 2 ^ binade |r| < |r| ∨ 0 ≤ r * i) : rnAdd r i = r := by
-  unfold rnAdd
-  rcases h0.lt_or_gt with h | h
-  · have hb' : 2 ^ binade (-r) < -r ∨ 0 ≤ -i := by
-      rw [abs_of_neg h] at hb
-      rcases hb with hb | hb
-      · exact Or.inl hb
-      · exact Or.inr (by nlinarith)
-    have := absorb_pos (representable_neg hr) (neg_pos.2 h) (by rwa [ulp_neg, abs_neg]) hb'
-    rw [show -r + -i = -(r + i) by ring, rn_neg] at this
-    linarith
-  · rw [abs_of_pos h] at hb
-    exact absorb_pos hr h hi (hb.imp id fun hb => (mul_nonneg_iff_of_pos_left h).1 hb)
-
 theorem rnAdd_moves (r i : ℚ) (hr : Representable r) (h0 : r ≠ 0) (hi : ulp r ≤ |i|) : rnAdd r i ≠ r := by
   unfold rnAdd
   rcases h0.lt_or_gt with h | h
@@ -343,15 +301,5 @@ theorem wordQ_representable {w : Nat} {x : ℚ} (h : wordQ w = some x) : Represe
 
 
 /-! ## The pinned statements -/
-
-theorem rnAddExact : RnAddExact := rnAdd_exact
-
-theorem rnAddMono : RnAddMono := rnAdd_mono
-
-theorem rnAddAbsorb : RnAddAbsorb := rnAdd_absorb
-
-theorem rnAddMoves : RnAddMoves := rnAdd_moves
-
-theorem wordsRepresentable : WordsRepresentable := fun _ _ => wordQ_representable
 
 end Pouw.Fp8Atom.Proofs

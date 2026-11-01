@@ -63,10 +63,6 @@ def unitCoins (S : Model.Statement) (v : UnitVals) : List Game.Msg :=
   (consumed v.t.rounds v.t.k (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6)) ++
     consumed v.t.rounds (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6) + 1) v.t₄.k).map (coinArr fOf)
 
-theorem unitWeave_eq (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape)
-    (d : FlockVBridge.Compiled.RepData) (v : UnitVals) :
-    unitWeave S sch₀ nX sh d v = weave (unitShape S sch₀ nX) (unitMsgs nX sh d v) (unitCoins S v) := rfl
-
 /-- **A rep's extra claims are two per region, whatever the points.** -/
 theorem extraClaims_length (S : Model.Statement) (a b : ℕ) (pts pts' : Fin 2 → Fin b → 𝔽) :
     (Model.extraClaims S a b pts).length = (Model.extraClaims S a b pts').length := by
@@ -91,18 +87,6 @@ theorem ligMsgs_length {D D' : Type} (p p' : LigeritoProof) (capD : Array ByteAr
     (ligMsgs p capD sch).length = (ligMsgs p' capD' sch).length := by
   simp only [ligMsgs, kMsgs, List.length_append, List.length_map, List.length_range', List.length_cons,
     List.length_nil, recMsgs_length p p' capD capD' sch.ext (sch.levels.size - 1) 0 0 (sch.k0 + 4) (sch.k0 + 4) 3 3]
-
-/-- **A rep's messages' count** is its setup's and schedule's, whatever its proof and values. -/
-theorem unitMsgs_length (nX : ℕ) {sh sh' : Flock.Shape} {d d' : FlockVBridge.Compiled.RepData} {v v' : UnitVals}
-    (hst : v.st = v'.st) (hs : v.sch = v'.sch) : (unitMsgs nX sh d v).length = (unitMsgs nX sh' d' v').length := by
-  simp only [unitMsgs, holoRepMsgs, holoLcMsgs, zcMsgs, lcMsgs, opMsgs, List.length_append, List.length_cons,
-    List.length_map, List.length_range, List.length_nil, hst, hs,
-    ligMsgs_length v.p.ligerito v'.p.ligerito capDig capDig v'.sch]
-
-/-- **A rep's coins' count** is its setup's and its transcripts' rounds'. -/
-theorem unitCoins_length (S : Model.Statement) {v v' : UnitVals} (hk : v.t.k = v'.t.k) (hst : v.st = v'.st)
-    (h₄ : v.t₄.k = v'.t₄.k) : (unitCoins S v).length = (unitCoins S v').length := by
-  simp only [unitCoins, consumed, List.length_map, List.length_append, List.length_range', hk, hst, h₄]
 
 /-- **A rep's messages' count** reads only its setup's `m` and `k_log` and its schedule. -/
 theorem unitMsgs_length_of (nX : ℕ) {sh sh' : Flock.Shape} {d d' : FlockVBridge.Compiled.RepData}
@@ -769,31 +753,6 @@ theorem unitMsgs_lig_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' :
   rw [← hsch]
   exact (ligMsgs_proofOf_read sh capDig b.sch hc).2.2 k ks hk h
 
-/-- **The Ligerito slice reads its key list at every index**, with the empty default past `ligKeys`. -/
-theorem unitMsgs_lig_getD_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' : RepData}
-    (hm : b.st.m = b'.st.m) (hkLog : b.st.kLog = b'.st.kLog)
-    (hsch : b.sch = b'.sch) (hc : RecCapsRead b.lig b'.lig) (k : ℕ)
-    (h : KeysRead sh d d' ((ligKeys b.sch).getD k [])) :
-    (unitMsgs nX sh d (b.vals sh d))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k]? =
-      (unitMsgs nX sh d' (b'.vals sh d'))[b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k]? := by
-  cases hk : (ligKeys b.sch)[k]? with
-  | some ks =>
-      exact unitMsgs_lig_read nX sh hm hkLog hsch hc hk
-        (by simpa [List.getD_eq_getElem?_getD, hk] using h)
-  | none =>
-      rw [unitMsgs_lig nX sh d (b.vals sh d)
-          (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k) (k := k) rfl,
-        unitMsgs_lig nX sh d' (b'.vals sh d')
-          (i := b.st.m - 6 + 2 + (b.st.kLog - 6 + 2) + (2 + nX) + k) (k := k)
-          (congrArg₂ (fun m kLog => m - 6 + 2 + (kLog - 6 + 2) + (2 + nX) + k) hm hkLog)]
-      change (ligMsgs (FlockVBridge.Family.proofOf sh b.params b.cap b.lig d).ligerito capDig b.sch)[k]? =
-        (ligMsgs (FlockVBridge.Family.proofOf sh b'.params b'.cap b'.lig d').ligerito capDig b'.sch)[k]?
-      rw [← hsch]
-      have hp := ligMsgs_proofOf_read sh (params := b.params) (params' := b'.params) (cap := b.cap)
-        (cap' := b'.cap) (lig := b.lig) (lig' := b'.lig) (d := d) (d' := d') capDig b.sch hc
-      have hge := List.getElem?_eq_none_iff.1 hk
-      rw [List.getElem?_eq_none (hp.1 ▸ hge), List.getElem?_eq_none (hp.2.1 ▸ hge)]
-
 end slices
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -1033,67 +992,6 @@ def unitKeys (nX : ℕ) (sh : Flock.Shape) (m : ℕ) : List Flock.RecAlgebra.Key
   else if m < z + l + (2 + nX) then rsKeys (m - z - l)
   else (ligKeys sh.sched).getD (m - z - l - (2 + nX)) []
 
-/-- **The recursive caps are read at each stage** at the two layers that stage's commitments hold. -/
-def RecCapsReadAt
-    (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc) : Prop :=
-  ∀ s ρ, ReadAt (st := st) (hp := hp) zs dg N k Rw own sel s fun _ _ _ Lb _ _ _ Lb' =>
-    RecCapsRead (b Lb ρ).lig (b Lb' ρ).lig
-
-/-- **A rep unit's messages read only `unitKeys`**, composing the zerocheck, lincheck, ring-switch and Ligerito slices. -/
-theorem msgsOfKeys_unit (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
-    (nX : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc) (hh : sh.holo = true)
-    (hsh : ∀ Lb i, FlockVBridge.Family.ShapeIs sh (b Lb i).st (b Lb i).sch)
-    (hcaps : RecCapsReadAt (st := st) (hp := hp) (zs := zs) (dg := dg) (N := N) (k := k) (Rw := Rw)
-      (own := own) (sel := sel) b) {σ : List Exec.Kind} {c₀ : ℕ} :
-    MsgsOfKeys (st := st) (hp := hp) zs dg N k Rw own sel σ c₀ (unitKeys nX sh) M
-      (fun R ω t Lb ρ => unitMsgs nX sh (M.rep R ω t Lb ρ) ((b Lb ρ).vals sh (M.rep R ω t Lb ρ))) := by
-  intro s ρ R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX m _ hread
-  let Lb := layers zs dg N k Rw R ω t R₂ τ
-  let Lb' := layers zs dg N k Rw R' ω' t' R₂' τ'
-  obtain ⟨hm, hkLog, hsch⟩ := hsh Lb ρ
-  obtain ⟨hm', hkLog', hsch'⟩ := hsh Lb' ρ
-  have hM : (b Lb ρ).st.m = (b Lb' ρ).st.m := hm.symm.trans hm'
-  have hK : (b Lb ρ).st.kLog = (b Lb' ρ).st.kLog := hkLog.symm.trans hkLog'
-  have hS : (b Lb ρ).sch = (b Lb' ρ).sch := hsch.symm.trans hsch'
-  have hread' : KeysRead sh (M.rep R ω t Lb ρ) (M.rep R' ω' t' Lb' ρ) (unitKeys nX sh m) := by
-    simpa only [KeysRead, rep_w, rep_comb, Lb, Lb'] using hread
-  let z := sh.m - 6 + 2
-  let l := sh.kLog - 6 + 2
-  by_cases hz : m < z
-  · have hkeys : KeysRead sh (M.rep R ω t Lb ρ) (M.rep R' ω' t' Lb' ρ) (zcKeys sh.m m) := by
-      simpa [unitKeys, z, l, hz] using hread'
-    exact unitMsgs_zc_read nX sh hM (by simpa [z, hm] using hz)
-      (by simpa only [KeysRead, Lb, Lb', ← hm] using hkeys)
-  by_cases hl : m < z + l
-  · have hj : m - z < (b Lb ρ).st.kLog - 6 + 2 := by simp only [← hkLog]; omega
-    have hi : (b Lb ρ).st.m - 6 + 2 + (m - z) = m := by simp only [← hm]; omega
-    have hkeys : KeysRead sh (M.rep R ω t Lb ρ) (M.rep R' ω' t' Lb' ρ)
-        (lcKeys sh.kLog (m - z)) := by
-      simpa [unitKeys, z, l, hz, hl] using hread'
-    simpa only [Lb, Lb', hi] using unitMsgs_lc_read nX hh hM hK hj
-      (by simpa only [KeysRead, Lb, Lb', ← hkLog] using hkeys)
-  by_cases hr : m < z + l + (2 + nX)
-  · have hj : m - z - l < 2 + nX := by omega
-    have hi : (b Lb ρ).st.m - 6 + 2 + ((b Lb ρ).st.kLog - 6 + 2) + (m - z - l) = m := by
-      simp only [← hm, ← hkLog]
-      omega
-    have hkeys : KeysRead sh (M.rep R ω t Lb ρ) (M.rep R' ω' t' Lb' ρ) (rsKeys (m - z - l)) := by
-      simpa [unitKeys, z, l, hz, hl, hr] using hread'
-    simpa only [Lb, Lb', hi] using unitMsgs_rs_read nX sh hM hK hj
-      hkeys
-  · have hi : (b Lb ρ).st.m - 6 + 2 + ((b Lb ρ).st.kLog - 6 + 2) + (2 + nX) +
-        (m - z - l - (2 + nX)) = m := by
-      simp only [← hm, ← hkLog]
-      omega
-    have hkeys : KeysRead sh (M.rep R ω t Lb ρ) (M.rep R' ω' t' Lb' ρ)
-        ((ligKeys sh.sched).getD (m - z - l - (2 + nX)) []) := by
-      simpa [unitKeys, z, l, hz, hl, hr] using hread'
-    have hlig := unitMsgs_lig_getD_read nX sh hM hK hS
-      (hcaps s ρ R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX) _
-      (by simpa only [Lb, Lb', hsch] using hkeys)
-    rw [hi] at hlig
-    exact hlig
-
 /-- **Each message is read on its stage**, from its keys' read at the stage (`WCombRead` at `sentK`). -/
 theorem weaveMsgsRead_of_keys {σ : List Exec.Kind} {c₀ : ℕ} {keys : ℕ → List Flock.RecAlgebra.Key}
     {M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)}
@@ -1217,9 +1115,6 @@ theorem capTie_vals {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {c
 def repIdxB (S₀ : Model.Statement) (b : ValsSrc) : List ℕ :=
   List.range' 0 (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6)) ++
     List.range' (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1) (b.t₄.k - (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1))
-
-theorem repIdx_vals (S₀ : Model.Statement) (b : ValsSrc) (sh : Flock.Shape) (d : RepData) :
-    repIdx S₀ (b.vals sh d) = repIdxB S₀ b := rfl
 
 /-- **`RepsDrawn` on `b` alone**: at every layers, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed
 rounds) draws round `q` of stream `s i`, `q` the `p`-th of rep `i`'s (`repIdxB`), and those rounds are below `r`. -/

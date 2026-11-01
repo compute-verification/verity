@@ -139,20 +139,6 @@ def oneRunExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Co
   cost s := (run H P V x s.1 s.2.1).pLog.length + (run H P V x s.1 s.2.1).vLog.length +
     (E.eval H P x s.1 s.2.1 s.2.2).2.1 + ((pick x (run H P V x s.1 s.2.1) (E.eval H P x s.1 s.2.1 s.2.2).1).eval H).2.length
 
-/-- `oneRunExt` at every prover and statement. -/
-def oneRunExtFamily {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → OC (Option (Msg × Msg))) : FinderFamily :=
-  fun _ _ _ P x => oneRunExt H V E pick P x
-
-/-- An event on which `pick` outputs a collision has probability at most `oneRunExt`'s. -/
-theorem Pr_le_oneRunExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
-    (x : Msg) (Ev : Ω × (Fin (V.k x) → Coin) × E.C x → Prop)
-    (hEv : ∀ s, Ev s → ∃ u v,
-      ((pick x (run H P V x s.1 s.2.1) (E.eval H P x s.1 s.2.1 s.2.2).1).eval H).1 = some (u, v) ∧ Collision H u v) :
-    Pr Ev ≤ (oneRunExt H V E pick P x).Pr H :=
-  Pr_mono hEv
-
 /-- **`oneRunExt`'s cost**: a run's calls `T`, `E`'s `N_h` and `pick`'s `c`, each at most. -/
 theorem oneRunExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     (pick : Msg → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)

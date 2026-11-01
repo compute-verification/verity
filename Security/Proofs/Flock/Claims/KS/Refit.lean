@@ -358,22 +358,6 @@ theorem weightNat_cast (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
   unfold Claims.Flock.Numbers.weightNat
   simp [Nat.cast_list_sum, List.map_map, Function.comp_def]
 
-/-- A table's weight is at most the session's, at table 0. -/
-theorem tableWeight_le_weight {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
-    (h0 : (tables zk x).head? = some (spec, st)) : tableWeight zk st ≤ weight zk x := by
-  unfold weight
-  cases ht : tables zk x with
-  | nil => rw [ht] at h0; cases h0
-  | cons p rest =>
-    rw [ht, List.head?_cons, Option.some.injEq] at h0
-    subst h0
-    simp only [List.map_cons, List.sum_cons]
-    have : 0 ≤ (rest.map fun p => tableWeight zk p.2).sum :=
-      List.sum_nonneg fun a ha => by
-        obtain ⟨q, -, rfl⟩ := List.mem_map.1 ha
-        exact tableWeight_nonneg zk q.2
-    linarith
-
 /-- **Table 0's weight and the other tables' share of `k`** fit in the weight (`lens_le_weights`). -/
 theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables zk x).head? = some (spec, st)) :
