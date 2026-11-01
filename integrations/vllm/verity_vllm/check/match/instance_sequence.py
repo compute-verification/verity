@@ -1,4 +1,4 @@
-"""A decoded root body as the comparator reads it (`Prog`): its instance sequence, segmented into engine steps at the sampling
+"""A decoded root body as the comparator reads it (`RootView`): its instance sequence, segmented into engine steps at the sampling
 events, and the canonical source of every operand run (the forms are `program_compare`'s, its docstring states them)."""
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "Sel
 # (index 5) of the top-p select, the one sampling event with a 6th operand (patterns.TokenSelectGumbelTopP._stage3); the request Program
 # takes it as the request-owned INPUT `splits` (int32 [T+1], after the seed) and event s reads `splits[s:s+1]` (vllm_meta.StochasticRequest).
 # compare BINDS the two: the fold's constant at the request's event s IS the value of the Program's input entry s -- canonicalised
-# ("SPLITS", s, s+1) on both sides; the constant's VALUE is kept (`Prog.splits_values`, by select node) for GM-01's per-engine-step
+# ("SPLITS", s, s+1) on both sides; the constant's VALUE is kept (`RootView.splits_values`, by select node) for GM-01's per-engine-step
 # relation check (`global_match.sampler_geometry_check`: S_t == SplitsFor_v1(|live(t)|, num_SMs)).  Nothing about S is a static of the
 # Definition.
 _CONST_RE = re.compile(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$")
@@ -44,7 +44,7 @@ def _registry():
     return reg
 
 
-class Prog(PeerReads, PX.PrefixInput):
+class RootView(PeerReads, PX.PrefixInput):
     """A decoded root body as an instance sequence."""
 
     compact = False   # operand representation: runs (record) | run progressions (cb_a.compact); set per instance in __init__

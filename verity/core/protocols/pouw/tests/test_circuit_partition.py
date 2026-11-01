@@ -29,7 +29,7 @@ def test_the_template_query_applies_and_numbers_units_as_core_does():
 
 
 def test_the_weight_program_is_its_y_units():
-    """A weight's Y strips and c₀ are formed once per run and weight, in their own Program (X-SPC-70)."""
+    """A weight's Y strips and c₀ are formed once per run and weight, in their own Program."""
     prog, q = P.weight_program(SHAPE), P.weight_query(SHAPE)
     assert PO.evaluate(prog, q).population == SHAPE.n // 16
     assert PO.verify(PO.build(prog, q), prog).ok
@@ -44,7 +44,7 @@ def test_a_one_strip_call_has_no_node_units():
 @pytest.mark.slow
 @pytest.mark.parametrize("kind", ["shift24", "word"])
 def test_the_unit_cut_computes_every_value_in_exactly_one_unit(kind):
-    """`validate_unit_cut` over the whole call, for both P's (X-SPC-98): every gate certified once, reads across units
+    """`validate_unit_cut` over the whole call, for both P's: every gate certified once, reads across units
     through committed values, and no value computed in two units (`gate-recomputed`)."""
     uc = P.unit_cut(SHAPE, kind)
     assert uc.verdict.ok, uc.verdict.codes
@@ -109,7 +109,7 @@ def test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule():
     us = P.units_of(fn, SHAPE)
     assert not wr.ok
     assert {us[u].role for u, _ob, _og in wr.too_wide} == set(P.POUW_ROLES) - {"form_y"}
-    # the verifier never takes this Program: it builds its own and compares digests (X-SPC-73)
+    # the verifier never takes this Program: it builds its own and compares digests
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.program import Program
     from verity.core.protocols.pouw.circuit import traced_as
@@ -123,7 +123,7 @@ def test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule():
 
 def test_the_width_rule_is_over_the_protocols_program_and_its_served_outputs():
     """`width_rule` takes no Definition and no served count: those are the protocol's. A variant's check refuses an empty
-    served set, which would pass vacuously (X-SPC-73)."""
+    served set, which would pass vacuously."""
     with pytest.raises(ValueError):
         P.width_rule_of(ncp2.linear(SHAPE), SHAPE, "shift24", 0)
 
@@ -132,8 +132,7 @@ def test_the_width_rule_is_over_the_protocols_program_and_its_served_outputs():
 @pytest.mark.parametrize("kind", ["shift24", "word"])
 def test_calls_on_one_weight_compose_without_recompute(kind):
     """Two calls on one weight in one root: the weight's Y units once, each call's own units reading them. With Y per call
-    the second call recomputed the first's whole Y unit, and with the key's per-call lanes last two of its XORs (X-SPC-70,
-    X-SPC-71); now no value is computed in two units."""
+    the second call recomputed the first's whole Y unit, and with the key's per-call lanes last two of its XORs; now no value is computed in two units."""
     uc = P.window_cut(ncp2.Shape(16, 64, 16), 2, kind)
     assert uc.verdict.ok, uc.verdict.codes
     assert Counter(u.role for u in uc.units) == {"form_y": 1, "digest": 2, "key": 2, "form_x": 2, "tile": 2, "dequant": 512}

@@ -37,7 +37,7 @@ hash alike at a uniform key `g ∈ GF(p)` with probability at most `(W − 1)/p`
 in `g` of degree at most `W − 1`. Blocks whose words agree mod `p` (a word `w` and `w ± p`) hash alike at every key, so
 the event asks that the residues differ. -/
 def PolyNonCollision : Prop :=
-  ∀ (W : ℕ) (x y : Block W),
+  ∀ (W : ℕ) (x y : Chunk W),
     prob (PMF.uniformOfFintype (ZMod P)) (fun g => residues x ≠ residues y ∧ blockHash g x = blockHash g y) ≤
       ((W - 1 : ℕ) : ℝ≥0∞) / P
 
@@ -46,7 +46,7 @@ def PolyNonCollision : Prop :=
 `g ∈ [2, p − 1]` from a uniform 31-bit value, three points twice as likely as the rest, so its largest point mass is
 `2^-30`. -/
 def PolyNonCollisionKeyed : Prop :=
-  ∀ (W : ℕ) (ν : PMF (ZMod P)) (x y : Block W),
+  ∀ (W : ℕ) (ν : PMF (ZMod P)) (x y : Chunk W),
     prob ν (fun g => residues x ≠ residues y ∧ blockHash g x = blockHash g y) ≤ ((W - 1 : ℕ) : ℝ≥0∞) * ⨆ g, ν g
 
 /-- **Unpredictability under partial reads.** Draw a block from any distribution `μ` (the stored block, conditioned on
@@ -63,7 +63,7 @@ of anything computed from the block is outside that model: a Kedlaya–Umans eva
 the hash, so conditioned on it `wordGuess μ j = 1` and the bound is vacuous. That case is why no bandwidth guarantee
 rests on this statement. -/
 def PolyUnpredictable : Prop :=
-  ∀ (W : ℕ) (μ : PMF (Block W)) (j : Fin W) (g : (ZMod P)ˣ) (t : ZMod P),
+  ∀ (W : ℕ) (μ : PMF (Chunk W)) (j : Fin W) (g : (ZMod P)ˣ) (t : ZMod P),
     prob μ (fun x => blockHash (g : ZMod P) x = t) ≤ 3 * wordGuess μ j
 
 /-- **A partially read block's words.** For a block whose words outside `U` are fixed (`known`'s, what was read) and whose
@@ -74,7 +74,7 @@ key. The view here is words of the block. A view of anything computed from the b
 say) is outside the model and can give the hash outright, which is why no bandwidth guarantee rests on this
 statement. -/
 def PartialReadGuess : Prop :=
-  ∀ (W : ℕ) (known : Block W) (U : Finset (Fin W)) (j : Fin W),
+  ∀ (W : ℕ) (known : Chunk W) (U : Finset (Fin W)) (j : Fin W),
     wordGuess (partialRead known U) j = if j ∈ U then (2 ^ 32 : ℝ≥0∞)⁻¹ else 1
 
 /-- **The fold.** Two lists of block hashes that differ once padded with zero hashes fold alike at a uniform `z ∈ GF(p)`
@@ -92,7 +92,7 @@ uniform key `(g, z)` with probability at most `((W − 1) + (R − 1))/p`: eithe
 at at most `R − 1` points `z`, or every block hash agrees, which the block that differs allows at at most `W − 1` points
 `g`. -/
 def DigestNonCollision : Prop :=
-  ∀ (R W : ℕ) (xs ys : Fin R → Block W),
+  ∀ (R W : ℕ) (xs ys : Fin R → Chunk W),
     prob (PMF.uniformOfFintype (ZMod P × ZMod P))
         (fun k => (∃ r, residues (xs r) ≠ residues (ys r)) ∧ digest k.1 k.2 xs = digest k.1 k.2 ys) ≤
       ((W - 1 + (R - 1) : ℕ) : ℝ≥0∞) / P
@@ -100,6 +100,6 @@ def DigestNonCollision : Prop :=
 /-- **The reference computes the hash.** `reference_block_hash`'s loop, `acc ← acc · g + (w mod p)` over the block's words
 in order from `acc = 0` (`hornerHash`), returns `blockHash g x`. -/
 def HornerIsBlockHash : Prop :=
-  ∀ (W : ℕ) (g : ZMod P) (x : Block W), hornerHash g (List.ofFn x) = blockHash g x
+  ∀ (W : ℕ) (g : ZMod P) (x : Chunk W), hornerHash g (List.ofFn x) = blockHash g x
 
 end Accounting.Guarantees.Tag

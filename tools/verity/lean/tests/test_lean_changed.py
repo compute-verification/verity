@@ -426,7 +426,7 @@ def test_build_builds_the_files_modules_on_the_slot_tree_and_reports_each_files_
 
 def test_build_builds_nothing_off_a_node_or_where_the_node_keeps_no_dependencies(trying, tmp_path, monkeypatch, capsys):
     """An agent VM has no Lean slots, and a node without the package's dependencies would fetch Mathlib cold: both are
-    skipped with why, so the preflight notes them instead of refusing."""
+    skipped with why, so the preflight passes the build to its next node, or refuses naming why."""
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "absent")
     assert LC.main(["--build", "Sec/Proofs/Flock/X.lean"]) == 2
@@ -440,6 +440,31 @@ def test_build_builds_nothing_off_a_node_or_where_the_node_keeps_no_dependencies
     assert "Mathlib" in doc["skipped"]["Sec/Proofs"] and doc["built"] == {} and calls["build"] == []
     with pytest.raises(SystemExit):
         LC.main(["--build", "Sec/Proofs/Flock/X.lean", "--try", "Sec/Proofs/Flock/X.lean"])
+
+
+def test_build_with_no_wait_builds_nothing_when_every_build_slot_is_taken(trying, tmp_path, monkeypatch, capsys):
+    """The preflight builds on a node it can fall back from with `--no-wait`: a full `build` pool is a skip naming why, at once,
+    so the next node gets the build before the step's deadline; without it the slot is waited for, as before."""
+    _, calls = trying
+    (slots := tmp_path / "lean-slots").write_text("build 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    asked = []
+
+    def hold(pool, **kw):
+        asked.append((pool, kw))
+        if not kw.get("queue", True):
+            raise LC.LEAN_SLOT.Refused("all 1 Lean audit slot(s) of pool build are taken, and this request doesn't wait in line")
+
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    assert LC.main(["--no-wait", "--build", "Sec/Proofs/Flock/X.lean"]) == 2
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert doc == {"built": {}, "failed": {}, "skipped": {"*": "no `build` Lean slot here (all 1 Lean audit slot(s) of pool "
+                                                               "build are taken, and this request doesn't wait in line)"}}
+    assert calls["build"] == [] and asked == [("build", {"or_any": False, "queue": False})]
+    assert LC.main(["--build", "Sec/Proofs/Flock/X.lean"]) == 0
+    assert asked[1] == ("build", {"or_any": False, "queue": True}) and calls["build"]
+    with pytest.raises(SystemExit):
+        LC.main(["--no-wait", "--try", "Sec/Proofs/Flock/X.lean"])
 
 
 def test_module_of_reads_the_packages_src_dir(trying):

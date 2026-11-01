@@ -3,8 +3,8 @@ to the Python on the shared harness (`verity_difftest`): `leaf_lanes.registered_
 `leaf_lanes.verifier_entries`' entries and roots and at the unit's placement (each value its own table from row 0, or
 placed in a window table from a base row), the files h1_lanes' statements read (`benchmarks/pouw/h1_lanes/run.py`),
 and `pouw-leaf-own`'s check (`leafOwn?`), which accepts each such file and refuses one whose data port is not the
-layout's read at the records' root and the unit's placement or one of whose ports has two reads, and its draw policy
-(`checkFull`), which accepts a session record that draws every unit and refuses one that doesn't.
+layout's read at the records' root and the unit's placement or one of whose ports has two reads, and its sample policy
+(`checkFull`), which accepts a session record that samples every unit and refuses one that doesn't.
 
 The drawn inputs are registrations naming the leaf's four registered tables (one sometimes missing, one sometimes named
 twice, the partials sometimes among them), produced records with and without the partials, leaf tiles of 2 to 64 lanes,
@@ -205,7 +205,7 @@ def _record(draw: dict | None) -> str:
 
 @pytest.mark.parametrize("n", [1, 3])
 def test_the_full_draw_passes(n: int, server) -> None:
-    """A session that draws every unit of its population, `subset` of all of them, passes the draw policy."""
+    """A session that samples every unit of its population, `subset` of all of them, passes the sample policy."""
     draw = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
     assert FULL.lean(server, {"record": _record(draw)}) == ("output", "true")
 
@@ -218,7 +218,7 @@ def test_the_full_draw_passes(n: int, server) -> None:
     ({"law": "subset", "population": 2, "k": 2, "units": [1, 0]}, "the session's draw: U2"),
 ])
 def test_the_draw_policy_refuses_a_partial_draw(draw: dict | None, why: str, server) -> None:
-    """A session record with no draw, a draw that leaves a unit out, an empty population, another law, or a draw
+    """A session record with no sample, a sample that leaves a unit out, an empty population, another law, or a sample
     flock-verify's format refuses, is refused by name."""
     kind, got = FULL.lean(server, {"record": _record(draw)})
     assert kind == "reject" and why in got

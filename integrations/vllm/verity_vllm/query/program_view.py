@@ -2,8 +2,8 @@
 
 Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Program, in body order):
 
-* :func:`from_descriptor` -- the Program descriptor (`descriptor.json.gz`, `verity.ml.circuits.codec`): the `program_fn` definition's body
-  nodes give every Call's Definition, output type and operand references; `annotations["node_hints"]` gives its name.
+* :func:`from_descriptor` -- the Program descriptor (`descriptor.json.gz`) as `verity.ml.circuits.codec.decode_program` decodes it: the
+  program function's body nodes give every Call's Definition, output type and operand references; the annotations' `node_hints` its name.
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
   name annotation, produced by the same derivation on meta tensors (nothing executed).  The output type is not in a row: it is
@@ -506,8 +506,8 @@ class _Builder:
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def ports_of_type(t) -> tuple[Port, ...]:
-    """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a Record."""
-    from verity.ml.circuits.types import Record, Tuple as TupleT
+    """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
+    from verity.ml.circuits.types import RecordType, Tuple as TupleT
 
     def one(name: str, lo: int, ty) -> Port:
         n = ty.leaves
@@ -519,7 +519,7 @@ def ports_of_type(t) -> tuple[Port, ...]:
             out.append(one(str(i), lo, f))
             lo += f.leaves
         return tuple(out)
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         out, lo = [], 0
         for k, f in t.fields:
             out.append(one(k, lo, f))
@@ -695,9 +695,10 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
 
 
 def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
-    """A Program descriptor (dict, or a path to `descriptor.json[.gz]`) -> ProgramView of its `program_fn` body, or of the root's body
-    when the program function is inlined into the root (a request Build's descriptor).  Names from
-    `annotations["node_hints"]` (node index -> hint); ports from each node's own output type; outputs from the body's `ret`."""
+    """A Program descriptor (dict, or a path to `descriptor.json[.gz]`), decoded by `codec.decode_program` -> ProgramView of its
+    program function's body, or of the root's body when the program function is inlined into the root (a request Build's
+    descriptor).  Names from the decoded annotations' `node_hints` (node index -> hint); ports from each node's own output type;
+    outputs from the body's `ret`."""
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
@@ -708,8 +709,8 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
         registry, _errors = load()
     from verity.ml.circuits.program import is_input
     decoded = decode_program(desc, registry)
-    hints = {int(k): str(v) for k, v in (desc.get("annotations") or {}).get("node_hints", {}).items()}
-    fn = decoded.defs.get(desc["program_fn"])
+    hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}
+    fn = decoded.defs.get(decoded.program_fn_id)
     if fn is not None:
         body = fn.body
         params = _params_view((n, t) for n, t in body.params)

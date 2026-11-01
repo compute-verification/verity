@@ -38,7 +38,7 @@ from verity.ml.definitions.registry import b1, lifted as L, pad_prims as PP, pri
 from verity.ml.definitions.numerics import serve3_reference as ref
 from verity.ml.definitions.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
-from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
 I32, BF16, F32 = Value(32), Value(16), Value(32)
 N_EVENTS = D_MAX + 1  # prefill event + D_MAX decode events (the Serve_v2 skeleton; SPEC R3 maps this to Workload_v1's T = cap−1)
@@ -88,9 +88,9 @@ def test_bit_lifts_to_two_bits():
 
 
 def test_lift_type_is_a_functor_on_leaves():
-    t = Record(("a", Array(3, I32)), ("b", Tuple(BF16, Array(2, Value(1)))))
+    t = RecordType(("a", Array(3, I32)), ("b", Tuple(BF16, Array(2, Value(1)))))
     lt = L.lift_type(t)
-    assert lt == Record(("a", Array(3, Value(33))), ("b", Tuple(Value(17), Array(2, Value(2)))))
+    assert lt == RecordType(("a", Array(3, Value(33))), ("b", Tuple(Value(17), Array(2, Value(2)))))
     assert lt.leaves == t.leaves and lt.leaf_widths() == [w + 1 for w in t.leaf_widths()]
     assert L.unlift_type(lt) == t
     assert L.lift_words(t, [1, 2, 3, 4, 1, 0]) == [1, 2, 3, 4, 1, 0] and L.bot_words(t) == [1 << 32] * 3 + [1 << 16, 2, 2]

@@ -1,18 +1,21 @@
 """Conformance of the Lean verifier's `Q_word` v1 over programs (`flock-verify qword-program`: `Flock.Program` decodes
-#120's `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.Qword` cuts it) with core's
+the `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.Qword` cuts it) with core's
 (`verity.ml.circuits.codec.decode_program`, `verity.ml.circuits.cut`, `verity.ml.circuits.partition_object`).
 
     python qword_program_agree.py --lean BIN --out DIR [--vectors partition_vectors.json] [--format format_vectors.json]
-        [--program DESCRIPTOR]... [--registry MODULE]
+        [--widths CASES.jsonl] [--program DESCRIPTOR]... [--registry MODULE]
 
-- `--vectors` (#111): the program's SHA-512, the population, every Call's units, owners, derived committed set and graph
+- `--vectors`: the program's SHA-512, the population, every Call's units, owners, derived committed set and graph
   (every field core pins), and every unit's `locate`.
-- `--format` (#120): the wide-gate Call's graph, the forward reference Q_word refuses (word for word), and every decoder
+- `--format`: the wide-gate Call's graph, the forward reference Q_word refuses (word for word), and every decoder
   refusal of `test_format_spec.REJECT` (the Lean decoder must refuse each; it holds no registry, so an unknown primitive is
   refused by the query instead).
-- `--qword-vectors` (#111): every evaluation, the order refusals, the verify refusals (the query's, and the cuts'), and
+- `--qword-vectors`: every evaluation, the order refusals, the verify refusals (the query's, and the cuts'), and
   every descriptor's cuts at several (X, W) against core's `verify`.
-- `--program` (a real descriptor, e.g. a #101 Build's): per Call its units; per Definition a Call names, its units, the
+- `--widths` (PROTOCOL.md §17.1 D22): descriptors whose references name leaves of other widths than their types
+  give them, and their neighbours, each with the codec's refusal: the Lean decoder refuses each `E_REINTERPRET` the codec
+  does, word for word, and no other.
+- `--program` (a real descriptor, e.g. a served Build's): per Call its units; per Definition a Call names, its units, the
   SHA-512 of its owners and, for a flat cut, of its graph. `--registry` names the module that registers its primitives.
   With `--cuts`, per Definition its cut on its Call's whole graph against core's `check_cut` (`--core-skip PREFIX`: one core
   can't hold here, checked by Lean only).
@@ -105,6 +108,29 @@ def check_format(a, out, bad):
     return refused, len(spec.REJECT)
 
 
+def check_widths(a, out, bad):
+    """Each `--widths` line is `{"program", "codec"}`: a descriptor and the codec's refusal of it (`decode_program`; null
+    where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET` with the codec's message,
+    and none other as `E_REINTERPRET`."""
+    both = neither = 0
+    for k, line in enumerate(Path(a.widths).read_text().splitlines()):
+        case = json.loads(line)
+        (out / "widths.desc").write_text(case["program"])
+        got = lean(a, out / "widths.desc")
+        err = "" if got["ok"] else got.get("error", "")
+        why = case["codec"] or ""
+        if "E_REINTERPRET" in why:
+            if err == why:
+                both += 1
+            else:
+                bad.append(("widths", k, err[:300], why[:300]))
+        elif "E_REINTERPRET" in err:
+            bad.append(("widths", k, err[:300], why[:300]))
+        else:
+            neither += 1
+    return {"both_refuse": both, "neither": neither}
+
+
 def _root_body(d):
     return d["definitions"][d["root"]]["body"]
 
@@ -114,7 +140,7 @@ def _text(x):
 
 
 def check_qword_vectors(a, out, bad):
-    """`qword_vectors.json` (#111): every evaluation (population, owners digest, every Call's graph, owners, kinds, units and
+    """`qword_vectors.json`: every evaluation (population, owners digest, every Call's graph, owners, kinds, units and
     committed set), every order refusal (the `order_violation` detail), and the verify refusals that are the query's
     (`query-inapplicable`); the cut refusals are the width rule and the invariant, which `qword-program` does not check."""
     v = json.loads(Path(a.qword_vectors).read_text())
@@ -335,6 +361,7 @@ def main():
     ap.add_argument("--vectors")
     ap.add_argument("--format")
     ap.add_argument("--qword-vectors")
+    ap.add_argument("--widths")
     ap.add_argument("--program", action="append", default=[])
     ap.add_argument("--registry")
     ap.add_argument("--cuts", action="store_true", help="with --program: every Definition's cut, against core's check_cut")
@@ -352,6 +379,8 @@ def main():
         res["decoder_rejects_refused"] = check_format(a, out, bad)
     if a.qword_vectors:
         res["qword_vectors"] = check_qword_vectors(a, out, bad)
+    if a.widths:
+        res["widths"] = check_widths(a, out, bad)
     for p in a.program:
         res[f"program {Path(p).parent.name}/{Path(p).name}"] = check_program(a, p, out, bad)
     res["disagree"] = bad[:50]

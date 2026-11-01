@@ -8,7 +8,7 @@ one table) on the committed inputs, bit-sliced (`verity.ml.circuits.evaluation.b
 BUNDLE is the Commit's sealed replay bundle, or KEEP the slim keep its decided replay left (`commit/replay_slim_p<pair>`, the kept
 leaves; `cpu_replay.open_keep`).  The Commit's records (`runs.jsonl`, `verdict.json`, `summary.json`, the binding map) are copied
 into ``OUT/boolean`` beside a link to it, so the replay rewrites the copies and never the record; `cpu_replay.of_record` checks the
-copies and the bundle against each other (manifest sha256, run root, binding map), the draw is the replay's own (seeded from the
+copies and the bundle against each other (manifest sha256, run root, binding map), the sample is the replay's own (seeded from the
 run root), and the Program is the
 Build's of record (`row_dir/build_request`, its digest checked against the Commit's).  A row whose Definition has no Boolean version,
 or whose Boolean version does not keep the Call's boundary (the word view of its signature is not the Call's), is not evaluated, by
@@ -16,7 +16,7 @@ name.  ``--word`` replays the same draw with the word evaluators into ``OUT/word
 is fitted to the cgroup's memory from each pick's bound (`BooleanRows.peak_bytes`, `driver.fit_pool`); a pick that cannot fit is
 refused (exit 2).
 
-``OUT/boolean_replay.json`` cites the Commit (Program digest, run root, binding map sha256, bundle manifest sha256, the draw's seed),
+``OUT/boolean_replay.json`` cites the Commit (Program digest, run root, binding map sha256, bundle manifest sha256, the sample's seed),
 holds σ over the Program's row Definitions (word id -> Boolean id, or why not), and per replay the picks by family: picked,
 evaluated, mismatched.  ``OUT/boolean/rows.jsonl`` is one line per row the Boolean evaluator was asked for (interior rows included).
 """

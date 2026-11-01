@@ -191,7 +191,7 @@ def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], m
     With ``system_prompts`` N, each request opens with one of N system prompts (`system_prompt`, the user turn's prompt length
     then as drawn). With ``turns``, each conversation goes on for 0 … ``turns`` more turns, listed after the ``n`` first turns:
     a turn ``follows`` the one before it, and arrives ``gap`` steps after it finished, its prompt that turn's prompt, its
-    streamed ids and ``suffix`` (the user's next question, framed), which `run` puts together then. With both 0, the draws
+    streamed ids and ``suffix`` (the user's next question, framed), which `run` puts together then. With both 0, the samples
     and the requests are the same as without them."""
     lo, hi = prompt_tokens
     head, tail = frame or ((CHAT_HEAD, CHAT_TAIL) if chat else ("", "\n\nAnswer: "))
