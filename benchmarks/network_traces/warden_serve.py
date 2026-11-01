@@ -33,8 +33,8 @@ endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an ou
 `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends it to
 the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
 (`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
-`--window-per-group` sends them in groups of the n, group g's half a bucket into link-window g·G (`group_windows`), so
-that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
+`--window-per-group` sends them in groups of the n, group g's half a bucket into execution phase g·G (`group_windows`),
+so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
 loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
@@ -163,7 +163,7 @@ FILLER = ("Notes: the meeting moved to Thursday, the printer on the third floor 
 TEMPERATURES = (0.0, 0.7, 1.0)
 #: a prompt id's bits, the scan's IDB (`scan_zk.CLASS`): the scan reads each prompt id and output id in IDB bits
 PROMPT_ID_BITS = 17
-#: the public file of a `--window-per-group` rehearsal: each group's requests and link-windows (`groups`)
+#: the public file of a `--window-per-group` rehearsal: each group's requests and execution phases (`groups`)
 GROUPS = "groups.json"
 
 
@@ -198,8 +198,8 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
                top_p: float | None = None) -> list[dict]:
     """n warden-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids": its
     fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform, and
-    the sampling drawn as `varied_traffic` draws it (top_p 1), or `temperature` and `top_p`, when given, every
-    request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
+    the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when given,
+    every request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
     exactly these."""
     rng = random.Random(seed)
     at, out = start_s, []
@@ -217,7 +217,7 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
 
 
 def group_windows(params: WardenParams, tokens: int) -> int:
-    """The link-windows a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
+    """The execution phases a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
     first bucket (`prompt_traffic`'s ``window_per_group``), each answered by at most `tokens` id events and the trailer:
     admitted by the bucket after its arrival's (and one more for the client's lag), its last egress cell in bucket
     s + D + ⌊tokens/r⌋ (the warden's schedule), so a group's cells are all in its own windows."""
@@ -269,7 +269,8 @@ def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: Ward
 
 
 def groups(n: int, per: int, params: WardenParams, max_tokens: int) -> list[dict]:
-    """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its link-windows."""
+    """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its execution
+    phases."""
     G = group_windows(params, max_tokens)
     return [{"group": g, "requests": list(range(g * per, min(n, (g + 1) * per))), "windows": [g * G, (g + 1) * G]}
             for g in range(-(-n // per))]
@@ -449,7 +450,7 @@ async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int =
 class Publisher:
     """The warden's `publish`, inline: each record packed to its file (`requests.records`, `responses.records`,
     `fails.records`), and certified by `issuer` under its link name and direction (`CERTIFIED`) with the schedule's
-    parameters digest, one line of `certified.jsonl` each, or the link-window under `refused`; the wire's two also
+    parameters digest, one line of `certified.jsonl` each, or the execution phase under `refused`; the wire's two also
     committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's thread, or on any
     thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals."""
 
@@ -461,7 +462,7 @@ class Publisher:
 
     def withhold(self, record: Record, grid: GridParams) -> None:
         """The warden's `withhold`: a record of a window in which it refused a connection, kept and committed as
-        `keep` does but neither certified nor signed, its link-window under `refused` with ``"withheld": true``."""
+        `keep` does but neither certified nor signed, its execution phase under `refused` with ``"withheld": true``."""
         self.keep(record, grid, withheld=True)
 
     def keep(self, record: Record, grid: GridParams, withheld: bool = False) -> None:
@@ -478,7 +479,7 @@ class Publisher:
 
     def attest(self, record: Record, link: str, direction: Direction, withheld: bool = False) -> None:
         """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
-        line of `cells.jsonl` (the registration, or the link-window under `refused`, and the cost), the salts to
+        line of `cells.jsonl` (the registration, or the execution phase under `refused`, and the cost), the salts to
         `cells.salts` (witness)."""
         t0 = time.perf_counter()
         cells_ = self.commit(link, direction, record, self.params, self.issuer.session)
@@ -840,7 +841,7 @@ def read_records(run: Path, params: WardenParams) -> dict[str, list[Record]]:
 
 
 def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord], list]:
-    """`certified.jsonl`: the certified records by (link, direction, window), and the link-windows the signer
+    """`certified.jsonl`: the certified records by (link, direction, window), and the execution phases the signer
     refused (not those the warden withheld, `Publisher.withhold`)."""
     got, refused = {}, []
     for line in path.read_text().splitlines() if path.exists() else []:
@@ -855,8 +856,8 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
 
 
 def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
-    """`cells.jsonl` and `cells.salts`, line by line: each link-window's registration (or refusal) and cost, its rows'
-    salts and its wiring's (`warden_rows.read_witness`)."""
+    """`cells.jsonl` and `cells.salts`, line by line: each execution phase's registration (or refusal) and cost, its
+    rows' salts and its wiring's (`warden_rows.read_witness`)."""
     path = run / "cells.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
     salts = ar.read_blobs(run / "cells.salts")
@@ -1170,9 +1171,9 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--requests", type=int, default=100)
         q.add_argument("--rate", type=float, default=0.5, help="Poisson arrivals a second")
         q.add_argument("--seed", type=int, default=0)
-        q.add_argument("--max-tokens", type=int, default=256, help="the most max_tokens a request draws")
-        q.add_argument("--prompt-max", type=int, default=1024, help="the most prompt tokens a request draws")
-        q.add_argument("--temperature", type=float, help="every request's temperature (default: drawn, 0, 0.7 or 1)")
+        q.add_argument("--max-tokens", type=int, default=256, help="the most max_tokens a request samples")
+        q.add_argument("--prompt-max", type=int, default=1024, help="the most prompt tokens a request samples")
+        q.add_argument("--temperature", type=float, help="every request's temperature (default: sampled, 0, 0.7 or 1)")
         q.add_argument("--top-p", type=float, help="every request's top_p (default: none sent, the endpoint's own)")
     t.set_defaults(model="model")
     for q in (f, s):

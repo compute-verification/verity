@@ -6,7 +6,7 @@ import Definitions.Accounting.Assumptions.Compose
 # PoUW's credit on an arbitrary declared circuit (trusted)
 
 THEOREM's composed statement. Each `def G : Prop` is proved as `Accounting.SecurityProofs.Compose.G` in
-`Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.Dag`
+`Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.IntDag`
 with its call sites, its rounds, their coin modes, the service's commit coins and its proof units, its words, kinds,
 cuts and late cones read off the IR.
 Nothing about its form is a hypothesis beyond `Declared.Wf` (call sites, rounds and units in range; one unit's gates in

@@ -456,6 +456,35 @@ def test_the_launcher_refuses_a_tree_shipped_without_git(tmp_path, repo, machine
     assert not (machine / "runs").exists(), "nothing claimed"
 
 
+def test_a_clone_run_after_a_source_run_shipped_the_commit_without_git_launches(tmp_path, repo, machine, monkeypatch):
+    """A `--cwd source` run shipped the commit by the archive stream, and every later `--cwd clone` run of it (the train's
+    recorded checks) was refused.  The clone run makes the shared tree a checkout in place and launches; the source run's tree
+    stays where it is."""
+    sha = _git(repo, "rev-parse", "HEAD")
+    shared = machine / "src" / sha
+
+    def go(n: int, cwd: str) -> Path:
+        runs = tmp_path / f"runs{n}"
+        assert main(["run", "--runs-dir", str(runs), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2",
+                     "--no-sampler", "--cwd", cwd, "--", PY, "-c", PROBE]) == 0
+        [rid] = [p.name for p in runs.iterdir()]
+        wait_runner(machine / "runs" / rid)
+        return machine / "runs" / rid
+
+    monkeypatch.setenv("RESEARCH_SHIP", "stream")
+    go(0, "source")
+    assert not (shared / ".git").exists() and json.loads((shared / remote.READY_FILE).read_text())["transport"] == "stream"
+    monkeypatch.delenv("RESEARCH_SHIP")
+    run_dir = go(1, "clone")
+    assert _seen(run_dir)["head"] == sha and Path(_seen(run_dir)["cwd"]) == (machine / "scratch" / run_dir.name / "tree").resolve()
+    ready = json.loads((shared / remote.READY_FILE).read_text())
+    assert ready["checkout"] is True and ready["transport"] == "stream+git" and ready["identity"] == sha
+    assert (shared / ".lake" / "packages" / "dep").is_dir(), "the source run's tree is the one made a checkout, not a new one"
+    assert remote.tracked_dirt(shared) == [] and _git(shared, "rev-parse", "HEAD") == sha
+    assert json.loads((run_dir / "job.json").read_text())["run"]["remote"]["source_transport"] == "stream+git"
+    assert go(2, "clone").is_dir() and not list((machine / "src").glob(f"{sha}.git-*")), "reused, nothing left beside it"
+
+
 def test_the_launcher_refuses_a_shipped_research_package_that_predates_clone(tmp_path, repo, machine, capsys):
     old = repo / "tools" / "research" / "src" / "research"
     old.mkdir(parents=True)

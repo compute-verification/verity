@@ -1692,6 +1692,21 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
     assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
+def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
+    """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
+    skips and `worktree add` refuses: every relaunch of that commit registered no run."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    stale = tmp_path / f"train-{git('rev-parse', 'HEAD')[:12]}"
+    (stale / ".venv").mkdir(parents=True)
+    (stale / "README.md").write_text("left\n")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert (stale / "a").read_text() == "b\n" and not (stale / "README.md").exists()
+
+
 def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
     """Drive's after-landing run of `main`'s tip names the last verified `main` (`--base`), so ratchet-gate judges the landings
     above it, not the tip against itself: train.sh resolves it after its fetch and hands check.py that commit, and registers

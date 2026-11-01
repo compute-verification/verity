@@ -11,7 +11,7 @@ back-to-back GEMMs (so clocks and power settle where they will sit under load, s
 `--reps` timed GEMMs bracketed by CUDA events; the reported number is `2 n^3 / median(reps)`.  BF16 goes through `torch.matmul`
 (cuBLAS, FP32 accumulate is cuBLAS's default for bf16 and reduced-precision reduction is switched off explicitly); e4m3 through
 `torch._scaled_mm` with unit scales and `out_dtype=torch.float32`.  A small sub-block of every timed product is checked against an
-FP32 reference (`validation`).  The cuBLAS kernel name comes from `torch.profiler`; the SASS opcode is taken from `ncu` only if
+FP32 reference (`validation`); nvfp4's check compares none (`NO_REFERENCE`).  The cuBLAS kernel name comes from `torch.profiler`; the SASS opcode is taken from `ncu` only if
 that binary is already on the machine, otherwise it is recorded as "not captured".
 
 result.json (`research/result/v0.1`, kind `native-peak/v1`) carries the headline fields at the top level -- device, dtype,
@@ -41,31 +41,27 @@ RESULT_SCHEMA = "research/result/v0.1"
 KIND = "native-peak/v1"
 DTYPES = ("bf16", "e4m3", "nvfp4")
 
-#: Datasheet dense tensor-core peaks (flop/s) with FP32 accumulate, keyed by a regex on `torch.cuda.get_device_name`.  First match
-#: wins.  RTX 4090: NVIDIA Ada GPU architecture whitepaper (BF16 with FP32 acc 165.2 TFLOPS, FP8 with FP32 acc 330.3 TFLOPS,
-#: boost clock, dense).  A100 SXM4 / PCIe 80GB: NVIDIA A100 datasheet (BF16 312 TFLOPS dense; no FP8 tensor cores).  RTX 5090:
-#: NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A table "GeForce RTX 5090 vs RTX 4090 vs RTX 3090" -- BF16 with FP32
-#: accumulate 209.5, FP8 with FP32 accumulate 419, "Peak FP4 Tensor TFLOPS with FP32 Accumulate (FP4 AI TOPS)" 1676 dense / 3352
-#: with 2:4 sparsity (the card's headline "3352 AI TOPS" is the sparse figure), all at the 2407 MHz boost clock.
+#: Datasheet dense tensor-core peaks (flop/s) with FP32 accumulate, keyed by a regex on `torch.cuda.get_device_name`; first match
+#: wins.  Each entry's source is its results' `spec_source`; tests/test_native_peak.py holds the table to every census line.
 SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
     (r"RTX\s*4090", {"bf16": 165.2e12, "e4m3": 330.3e12, "nvfp4": None}, "NVIDIA Ada GPU Architecture whitepaper, RTX 4090 dense, FP32 accumulate; Ada has no FP4"),
     (r"A100-SXM4", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB), BF16 dense; Ampere has no FP8"),
     (r"A100.*PCIe", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (PCIe 80GB), BF16 dense; Ampere has no FP8"),
-    # H100 SXM5: benchmarks/census/hardware.json h100-sxm5-80gb/bf16 and h100-sxm5-80gb/e4m3 (tests/test_native_peak.py checks every census line).
     (r"H100.*(SXM|HBM3)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
      "NVIDIA Hopper architecture whitepaper, H100 SXM5 dense (BF16 1978.9 / FP8 3957.8 TFLOPS with sparsity, halved), FP32 accumulate; Hopper has no FP4"),
     (r"H100.*PCIe", {"bf16": 756.0e12, "e4m3": 1513.0e12, "nvfp4": None}, "NVIDIA H100 PCIe datasheet, dense (sparse figures halved), FP32 accumulate; Hopper has no FP4"),
+    # H200 SXM: the H100 SXM5's tensor cores and clocks (census has no H200 line); the H200 NVL's peaks are lower.
+    (r"H200(?!.*NVL)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
+     "NVIDIA H200 data sheet, H200 SXM dense (BF16 1,979 / FP8 3,958 TFLOPS with sparsity, halved to the Hopper whitepaper's "
+     "989.4 / 1978.9), FP32 accumulate; Hopper has no FP4"),
     (r"L40S", {"bf16": 362.05e12, "e4m3": 733.0e12, "nvfp4": None},
      "NVIDIA L40S GPU datasheet, dense (BF16 733 / FP8 1,466 TFLOPS with sparsity, halved); Ada has no FP4"),
-    (r"RTX\s*PRO\s*6000.*Server", {"bf16": 500.0e12, "e4m3": 1000.0e12, "nvfp4": 2000.0e12},
-     "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (FP16 | BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved), "
-     "FP32 accumulate at full rate (RTX PRO Blackwell whitepaper Table 4); census rtx-pro-6000-server/{bf16,e4m3,e2m1}"),
-    (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
-     "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
     # benchmarks/census/hardware.json rtx-pro-6000-server/{bf16,e4m3,e2m1}.  The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".
     (r"RTX\s*PRO\s*6000.*Server", {"bf16": 500.0e12, "e4m3": 1000.0e12, "nvfp4": 2000.0e12},
-     "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved); FP32 "
-     "accumulate at the FP16-accumulate rate (RTX PRO Blackwell whitepaper, Table 4)"),
+     "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (FP16 | BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved); "
+     "FP32 accumulate at the FP16-accumulate rate (RTX PRO Blackwell whitepaper v1.1, Table 4)"),
+    (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
+     "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
 ]
 
 #: --dtype nvfp4: the block-scaled FP4 instruction itself (`mma_peak_fp4.cu`) -- see `measure_nvfp4_mma`.
@@ -205,6 +201,17 @@ def _gemm_fn(dtype: str, a, b, device: str):
         out = torch._scaled_mm(a, b, scale_a=one, scale_b=one, out_dtype=torch.float32)
         return out[0] if isinstance(out, tuple) else out
     return fn
+
+
+#: what a check that compares no reference (max_rel_err and tolerance None) reports in place of its error
+NO_REFERENCE = "determinism + SASS only"
+
+
+def check_text(c: dict) -> str:
+    """A check's comparison in a line: its error against the reference and the tolerance, or `NO_REFERENCE`."""
+    if c["max_rel_err"] is None:
+        return NO_REFERENCE
+    return f"max_rel_err {c['max_rel_err']:.2e} (tol {c['tolerance']:.0e})"
 
 
 def _check(out, ref_a, ref_b, dtype: str, block: int = CHECK_BLOCK) -> dict:
@@ -415,7 +422,7 @@ def measure_nvfp4_mma(device: str, warmup: int, reps: int, sustain_s: float, out
     copies = n_sass // mmas_per_iter if mmas_per_iter and n_sass % mmas_per_iter == 0 else 0
     ok = finite and same and copies >= 1 and all("E2M1" in op for op in sass["opcodes"])
     check = {"ok": ok, "finite": finite, "deterministic": same, "sass_mma_count": n_sass, "expected_mma_count": mmas_per_iter,
-             "sass_body_copies": copies, "opcodes": sass["opcodes"], "tolerance": 0.0, "max_rel_err": 0.0,
+             "sass_body_copies": copies, "opcodes": sass["opcodes"], "tolerance": None, "max_rel_err": None,
              "what": "outputs finite and bit-identical across two launches; cuobjdump counts NSETS x NACC E2M1 MMAs in the kernel "
                      "(the body once: #pragma unroll 1; whole unrolled copies would be a multiple)"}
     lib.nvfp4_peak_teardown()
@@ -595,11 +602,11 @@ def build_result(run_id: str, dtype: str, envd: dict, sizes: list[dict], sass: d
         validation = {"status": "passed" if checks_ok else "failed",
                       "checker": "outputs finite and bit-identical across two launches; cuobjdump -sass counts the loop body's E2M1 MMAs "
                                  "(NSETS x NACC, or whole unrolled copies of it)",
-                      "detail": f"finite={c['finite']} deterministic={c['deterministic']} sass {c['sass_mma_count']}/{c['expected_mma_count']} "
+                      "detail": f"{check_text(c)}: finite={c['finite']} deterministic={c['deterministic']} sass {c['sass_mma_count']}/{c['expected_mma_count']} "
                                 f"(x{c.get('sass_body_copies', 0)}) {c['opcodes']} {'ok' if c['ok'] else 'FAIL'}", "evidence": measurement_files[:1]}
     else:
         validation = {"status": "passed" if checks_ok else "failed", "checker": "fp32 reference on a 256x256 sub-block of every timed product",
-                      "detail": "; ".join(f"{s['n']}^3 max_rel_err {s['check']['max_rel_err']:.2e} (tol {s['check']['tolerance']:.0e}) {'ok' if s['check']['ok'] else 'FAIL'}" for s in sizes),
+                      "detail": "; ".join(f"{s['n']}^3 {check_text(s['check'])} {'ok' if s['check']['ok'] else 'FAIL'}" for s in sizes),
                       "evidence": measurement_files[:1]}
     meas = []
     if best:
@@ -713,7 +720,7 @@ def main(argv: list[str] | None = None) -> int:
         results.append(r)
         print(f"native_peak nvfp4 {r['label']}: median {r['seconds_median'] * 1e3:.3f} ms = {r['flop_per_second'] / 1e12:.1f} TFLOP/s "
               f"(sustained {r['sustain']['flop_per_second'] / 1e12:.1f} over {r['sustain']['iterations']} launches), check {'ok' if r['check']['ok'] else 'FAIL'} "
-              f"{r['check']['opcodes']} x{r['check']['sass_mma_count']}", flush=True)
+              f"({check_text(r['check'])}) {r['check']['opcodes']} x{r['check']['sass_mma_count']}", flush=True)
         time.sleep(0.3)
         sampler.stop()
         r["smi"] = sampler.window(r["smi_window"]["t0"], r["smi_window"]["t1"])
@@ -742,7 +749,7 @@ def main(argv: list[str] | None = None) -> int:
             results.append(r)
             print(f"native_peak {a.dtype} {n}^3: median {r['seconds_median'] * 1e3:.3f} ms = {r['flop_per_second'] / 1e12:.1f} TFLOP/s "
                   f"(sustained {r['sustain']['flop_per_second'] / 1e12:.1f} over {r['sustain']['iterations']} it), check {'ok' if r['check']['ok'] else 'FAIL'} "
-                  f"rel {r['check']['max_rel_err']:.2e}, kernels {r['kernels'][:2]}", flush=True)
+                  f"{check_text(r['check'])}, kernels {r['kernels'][:2]}", flush=True)
         time.sleep(0.3)
         sampler.stop()
         for r in results:

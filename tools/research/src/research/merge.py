@@ -157,7 +157,7 @@ def invocation(argv, command) -> tuple[str, object]:
         i = rest.index("--verdicts-in")
         rest = rest[:i] + rest[i + 2:]
     mode: tuple[str, object] = ("check", None)
-    if "--shard" in rest[:-1] and (m := re.fullmatch(r"([1-9]\d*)/([1-9]\d*)", rest[rest.index("--shard") + 1])):
+    if "--shard" in rest[:-1] and (m := re.fullmatch(r"(?:auto:)?([1-9]\d*)/([1-9]\d*)", rest[rest.index("--shard") + 1])):
         i = rest.index("--shard")
         mode, rest = ("shard", (int(m.group(1)), int(m.group(2)))), rest[:i] + rest[i + 2:]
     if rest and not (rest[0] == "--cores" and len(rest) == 2 and rest[1].isdigit()):
@@ -239,12 +239,13 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
               command: tuple[str, ...] = ()) -> tuple[list[dict] | None, str | None]:
     """(the steps of the one check the shard attempts ``ids`` make, None) when together they are a passing check of the clean
     ``commit``, else (None, why).  Each must be a passing ``tool`` attempt of ``commit`` whose command is the declared
-    ``command`` with `--shard K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that shard, ``commit`` and
-    its config (``commit``'s tree of `tools/verity/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
-    together, one N with K = 1..N once each, one list of every part, which their parts make exactly once and which covers every
-    job ``commit``'s `ci.toml` puts on the gate (`declared_jobs`: not circuit-check or ratchet-gate, which run after landing),
-    and the same steps outside their parts (the preflight), passed in each.  The steps: those once, then each part as its
-    shard's step ran it."""
+    ``command`` with `--shard K/N` or `--shard auto:K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that
+    shard, ``commit`` and its config (``commit``'s tree of `tools/verity/check/`), with no step but passed or skipped and its
+    steps' parts its shard's parts; together, one N with K = 1..N once each, one list of every part and one auto plan's digest
+    (or none), whose parts they make exactly once and which covers every job ``commit``'s `ci.toml` puts on the gate
+    (`declared_jobs`: not circuit-check or ratchet-gate, which run after landing), and the same steps outside their parts (the
+    preflight), passed in each, but for an auto plan's builds a shard runs beside its parts.  The steps: those once, then each
+    part as its shard's step ran it."""
     if not ids or len(set(ids)) != len(ids):
         return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
     config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/verity/check", check=False).stdout.strip()
@@ -290,10 +291,11 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
         if arg[0] in shards:
             return None, f"shard {arg[0]}/{arg[1]} is named twice ({shards[arg[0]][0]}, {rid})"
         shards[arg[0]] = (rid, sh, steps)
-        plans.add((arg[1], json.dumps(sh["all"])))
+        plans.add((arg[1], json.dumps(sh["all"]), (sh.get("plan") or {}).get("digest") if isinstance(sh.get("plan"), dict) else None))
     if len(plans) != 1:
-        return None, "the shards are of different plans (their N, or every part they say an unsharded check covers)"
-    (n, _), = plans
+        return None, ("the shards are of different plans (their N, every part they say an unsharded check covers, or their auto "
+                      "plan's digest)")
+    (n, _, auto), = plans
     if missing := [k for k in range(1, n + 1) if k not in shards]:
         return None, f"shard {', '.join(f'{k}/{n}' for k in missing)} is not among them"
     every = shards[1][1]["all"]
@@ -308,7 +310,9 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     if uncovered := [j for j in jobs if not any(p == j or p.startswith(j + ":") for p in every)]:
         return None, f"no shard runs {', '.join(uncovered)}, which {commit[:12]}'s ci.toml puts on the gate"
     names = {p.partition(":")[0] for p in every}
-    common = [[s["step"] for s in shards[k][2] if not s.get("parts")] for k in sorted(shards)]
+    # an auto plan's shard runs the builds its parts need beside them (`tools/verity/check/shards.py`): a job's step outside its
+    # parts, passed or skipped like every step of a shard, whose part another shard holds
+    common = [[s["step"] for s in shards[k][2] if not s.get("parts") and not (auto and s["step"] in names)] for k in sorted(shards)]
     if any(sorted(c) != sorted(common[0]) for c in common) or names & set(common[0]):
         return None, "the shards ran different steps outside their parts, or a job outside its parts"
     out = [{"step": s, "status": "passed" if all(x.get("status") == "passed" for k in shards for x in shards[k][2] if x["step"] == s)

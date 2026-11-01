@@ -87,7 +87,10 @@ when the run ends.  `rec-compose` refuses unless each part has exactly one sessi
 parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
 coin tree's, drawn at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
 The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
-it answers is the auditor-trusted challenger's (`trusted-host`).
+it answers is the auditor-trusted challenger's (`trusted-host`).  The live challenger keeps it one event a line: its
+operator stages the record before any session and closes it after the last, and C-Flock's `flock-circuit serve --zk
+--rec-run FILE --rec-part J` appends each `open` in one write before the `Hello`'s answer leaves, refusing a `Hello` it
+can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
 
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
