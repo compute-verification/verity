@@ -1,7 +1,7 @@
 """The plain-integer reference: what every kernel is checked against.
 
 `evaluate_region` / `evaluate_call` are the gate-by-gate oracle (IR §6). A `Trace` is an indexed assignment gate index ->
-encoding (Python int bit pattern), a run's gate values. The oracle walks a gate selection gate by gate in canonical order,
+encoding (Python int bit pattern), a run's gate values. The oracle walks a region gate by gate in canonical order,
 reading operands from the trace and applying the primitive's total evaluator. `Input` gates are never evaluated: their
 values must already be in the trace (they are the prescribed inputs; the correspondence tool authenticates them
 separately).  `evaluate(target, *args)` runs a target on one input of plain ints: a primitive through its evaluator, a
@@ -22,7 +22,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Iterable, Sequence
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.layout import Circuit, FunctionCall, GateSelection
+from verity.ml.circuits.layout import Circuit, FunctionCall, Region
 from verity.ml.circuits.ports import forward, harness
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine
@@ -52,7 +52,7 @@ class MissingValue(KeyError):
     pass
 
 
-def evaluate_region(circuit: Circuit, sub: GateSelection, trace: Trace, *, strict: bool = True) -> Trace:
+def evaluate_region(circuit: Circuit, sub: Region, trace: Trace, *, strict: bool = True) -> Trace:
     """Evaluate every gate of `sub` in canonical order, writing into `trace` (mutated and returned).
     `Input` gates must be present already. With `strict=False`, gates whose operands are missing are skipped."""
     for gv in sub:
@@ -260,8 +260,8 @@ class _Operands:
 class _TableTrace(dict):
     """A trace whose registered tables' Input gates are read through the table, never stored.
 
-    ``in`` doesn't see those gates, only ``[]`` does. `evaluate_region` asks ``in`` only of Input gates inside its selection,
-    and a standalone call's selection holds none."""
+    ``in`` doesn't see those gates, only ``[]`` does. `evaluate_region` asks ``in`` only of Input gates inside its region,
+    and a standalone call's region holds none."""
 
     def __init__(self) -> None:
         super().__init__()
