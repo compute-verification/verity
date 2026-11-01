@@ -15,7 +15,7 @@
 # (a node's runs go through a slot of its gpu pool; the GPUs come from gpu-lease inside, for the GPU work alone)
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt. VARIANTS: the variants, each a comma-separated KEY=VALUE list
-# over row (the leaf row, dither.Shape.row; 1024) and v31.cu's Knobs: cprio (lo), carve (100), dyn (1), ccta (1), pf (0),
+# over row (the leaf row, dither.Shape.row; 16384) and v31.cu's Knobs: cprio (lo), carve (100), dyn (1), ccta (1), pf (0),
 # sched (0), ltw (0), served (0; 1: served calls, O committed and T_S implied, dither.Shape(o=True), their params named
 # served-*), gemm (0; 1 in a -DV31_WG build: a served call's D from wg_proto.cuh's GEMM, and the bench adds
 # wgmma.linear's arm, wgl), wgbn (256), wgg (16), rp (0; 4: the O rows hashed in the GEMM's producer warpgroup; 5: and in
@@ -23,7 +23,7 @@
 # r5h (96), r5w (1), tst (0; 1: RP 5's O and prefix-sum stores through shared memory with TMA), hall (0), hchunk (0),
 # wgw (1), lminb (5), sahead (0), full (1), sminb (4), lfold (0) and mask (0);
 # and nreg (the GEMM's register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's).
-# Default "row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1".
+# Default "row=16384,cprio=hi,sched=1 row=8192,cprio=hi,sched=1".
 # FILL_LS: the segment lengths L (default "768 2048", t 3 and 8 at LP 256; 0: L = K; each with min(L, K) at most 8 LP,
 # dither/PROTOCOL.md's "The segment and the noise tile"); FILL_SHAPES: the bench's NAME:M:N:K list (default Llama 3
 # 8B's QKV, O, gate-up and down at m 16384); V31_ARMS, the bench's arms to time (default all); REPS (default 7); Q, the
@@ -51,7 +51,7 @@ PY=${PY:-uv run -q --no-project --with numpy python}
 export PYTHONPATH=.
 GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a}
 LP=${LP:-256} Q=${Q:-64} REPS=${REPS:-7}
-VARIANTS=${VARIANTS:-"row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1"}
+VARIANTS=${VARIANTS:-"row=16384,cprio=hi,sched=1 row=8192,cprio=hi,sched=1"}
 W=$(mktemp -d /dev/shm/accel-v31.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
@@ -124,9 +124,9 @@ for v in $VARIANTS; do
   for L in $FILL_LS; do
     sv=(); [ "$(knob "$v" served 0)" = 1 ] && sv=(--served)
     # shellcheck disable=SC2086
-    $PY $D/v31.py fill-params "$W/fparams" $FILL_SHAPES --lp "$LP" --L "$L" --row "$(knob "$v" row 1024)" "${sv[@]}" \
+    $PY $D/v31.py fill-params "$W/fparams" $FILL_SHAPES --lp "$LP" --L "$L" --row "$(knob "$v" row 16384)" "${sv[@]}" \
       2>> "$O/prep.err"
-    echo "fill-params $(knob "$v" row 1024)${sv[*]} L$L rc $?" >> "$O/rc.txt"
+    echo "fill-params $(knob "$v" row 16384)${sv[*]} L$L rc $?" >> "$O/rc.txt"
   done
 done
 # the GPU steps, a lease each (LEASE_ONCE=1: all of them under one lease, LEASE's). First a canary, one call of the
@@ -138,7 +138,7 @@ fill_gpu() {
       ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
     v=${VARIANTS%% *} L=${FILL_LS%% *} s=${FILL_SHAPES%% *}
     # shellcheck disable=SC2046
-    env $(knob_env "$v") timeout 300 "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$O/canary.log" 2>&1
+    env $(knob_env "$v") timeout 300 "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 16384)" "$s" > "$O/canary.log" 2>&1
     rc=$?
     echo "canary rc $rc" >> "$O/rc.txt"
     [ $rc = 0 ] || exit 3
@@ -174,7 +174,7 @@ fill_gpu() {
             f="$O/nsys-$tag-${s%%:*}"
             # shellcheck disable=SC2046
             env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" "$NSYS" profile -t cuda -s none --cpuctxsw none -f true -o "$f" \
-              "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
+              "$W/v31" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 16384)" "$s" > "$f.log" 2>&1
             echo "nsys $tag ${s%%:*} rc $?" >> "$O/rc.txt"
           done
         done
@@ -202,7 +202,7 @@ fill_gpu() {
         mkdir -p "$W/fbench/$tag"
         # shellcheck disable=SC2046,SC2086
         env $(knob_env "$v") "$W/v31${n:+-n$n}" fill-bench "$REPS" "$W/fbench/$tag" "$W/fparams" "$LP" "$L" \
-          "$(knob "$v" row 1024)" $FILL_SHAPES > "$O/fill-bench-$tag.jsonl" 2> "$O/fill-bench-$tag.err"
+          "$(knob "$v" row 16384)" $FILL_SHAPES > "$O/fill-bench-$tag.jsonl" 2> "$O/fill-bench-$tag.err"
         echo "fill-bench $tag rc $?" >> "$O/rc.txt"
         kill $smi'
       echo "lease fill-bench $v L$L rc $?" >> "$O/rc.txt"
@@ -227,7 +227,7 @@ fill_gpu() {
           for extra in "${tens:+,$tens}" ""; do
             env $(knob_env "$v") V31_ONCE_OVL="${OVL_CALLS:-4}" V31_LT_TUNE=0 "$NCU" --clock-control none --section ComputeWorkloadAnalysis \
               --section SpeedOfLight --metrics "sm__cycles_active.avg,sm__cycles_elapsed.avg$extra" -f -o "$f" \
-              "$W/v31${n:+-n$n}" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 1024)" "$s" > "$f.log" 2>&1
+              "$W/v31${n:+-n$n}" fill-once "$W/fparams" "$LP" "$L" "$(knob "$v" row 16384)" "$s" > "$f.log" 2>&1
             rc=$?
             [ $rc = 0 ] && break
           done
