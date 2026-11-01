@@ -535,7 +535,7 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
 
 
 def test_an_issue_that_waits_only_on_landing_is_neither_overdue_nor_slipped_and_is_counted_apart(tmp_path):
-    """The queue's wait is ci's (COMM-79): In Review, every attached PR open and marked ready at its head."""
+    """The queue's wait is ci's: In Review, every attached PR open and marked ready at its head."""
     fake = FakeLinear()
     fake.open = [issue("INF-50", "In Review", dueDate="2026-10-18", attachments={"nodes": [pr(20, "open")]}),        # waits
                  issue("INF-51", "In Review", dueDate="2026-10-18", attachments={"nodes": [pr(21, "open")]}),        # unmarked

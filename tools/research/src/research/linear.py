@@ -209,13 +209,12 @@ def _lane(i: dict, owners: dict[str, str]) -> str:
     return _lane_label(i) or owners.get(i["team"]["key"]) or NO_LANE
 
 
-def ask_findings(asks: list[dict], now: float, landing: set[str] = frozenset()) -> list[dict]:
+def ask_findings(asks: list[dict], now: float) -> list[dict]:
     """The audit's findings on people's asks (`Linear.asks`), as `audit` gives them (ASK_KINDS):
     - parked: in Backlog, or canceled, without ASKER_OK: only its asker parks or cancels it.  A duplicate isn't parked: the
       ask goes on in the issue it duplicates.
     - unstaffed: in Triage or Todo ASK_START_H after it was filed: In Progress means its worker is on it.
-    - slipped: not closed, and its date moved later ASK_SLIPS times or more, unless it waits on landing (`landing`: its
-      work is done and its PRs are marked; the wait is the landing queue's, not its lead's).
+    - slipped: not closed, and its date moved later ASK_SLIPS times or more.
     - repeated: not done, and restated (`asked again` comments) more often than answered (`postmortem` comments)."""
     out = []
     for a in asks:
@@ -229,7 +228,7 @@ def ask_findings(asks: list[dict], now: float, landing: set[str] = frozenset()) 
             and f"{who}'s ask, filed {(now - a['created']) / 3600:.0f} h ago, has no worker: move it to In Progress (`research msg "
                 f"linear state {ident} In Progress`) with a comment naming its worker (a `bc-` id, or the lead) and the date its "
                 "outcome lands",
-            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS and ident not in landing
+            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS
             and f"its date moved later {a['slips']} times ({' -> '.join(a['dates'])}): comment what missed each date and what holds "
                 "the next; top hears of it",
             "repeated": t != "completed" and a["again"] > a["postmortems"]
@@ -584,7 +583,8 @@ class Linear:
             }
             out += [{"issue": ident, "url": i["url"], "title": i["title"], "team": key, "lane": lane, "state": state, "kind": k,
                      "fix": found[k]} for k in AUDIT_KINDS if found.get(k)]
-        out += ask_findings(self.asks(owners, teams, now), now, {x["issue"] for x in self.landing})
+        waits = {x["issue"] for x in self.landing}
+        out += [f for f in ask_findings(self.asks(owners, teams, now), now) if not (f["kind"] == "slipped" and f["issue"] in waits)]
         order = {k: n for n, k in enumerate(AUDIT_KINDS)}
         return sorted(out, key=lambda x: (x["lane"], x["team"], int(x["issue"].rsplit("-", 1)[1]), order[x["kind"]]))
 
