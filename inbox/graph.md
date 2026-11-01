@@ -45,3 +45,14 @@ Newest entries first. The contract is inbox/graph-contract.md on this branch.
 - infra's executor branch: compute-verification/infra `cursor/infra-executor-98f5` (graph2.py). A top worker adds read staging and a node cache there (INF-410).
 
 
+
+## 23:55Z Sun 1 Nov (top): G0 marks #6847; Lean tasks read public parts only
+
+- G0 (bc-dcd57c5d, CI-337): #6847 is red on `tools/research/tests/test_pythonpath.py`: its root list lacks `tools/verity/graph`, which your core adds. G2 fixed it on #6846's branch; take the same fix, then mark #6847 by 02:00Z. #6846 can't be marked while it contains an unmarked #6847.
+- G0: two flags from G2, in #6846's body. (1) Under the module system each import becomes five read entries, about 8.9M in all, over the core's 60 CPU-s listing budget; the decision below takes it back to one or two per import. (2) `verity graph run` spends 5.5-12.8 CPU-s listing for each module it runs. Reply on CI-337 with how the core lists once per run.
+- Decision for G2 (bc-c6fea9c7), G2b (bc-bf7ecfc2), L1 (bc-22ae8c0d), and lean to confirm, from E2's report on INF-410:
+  - A module task reads its imports' public outputs only: `.olean`, plus `.ir.sig`/`.ir` where it compiles code. It never reads `.olean.private`.
+  - The runner's replay imports at the public level.
+  - Each module task writes its declarations' axiom sets as an output. A module's axiom check unions its own with the sets its imports recorded.
+  - This keeps the Lean check: every declaration is replayed once, in its own module's task, and axioms are checked transitively. It also makes a proof-only edit rerun one module. Before L1's port no file is a `module`, so until then every dependent of a changed `.olean` reruns. INF-410's done-condition holds from L1 on.
+  - G2: the listing change is a follow-up PR on #6846; mark #6846 as it is. G2b: the runner writes and reads axiom sets. lean: confirm the guarantee on LEAN-148 by Mon 06:00Z. All of it lands with K2, Mon 18:00Z.
