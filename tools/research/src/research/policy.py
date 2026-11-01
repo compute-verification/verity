@@ -1,6 +1,6 @@
-"""Drive's policy over what the runners report (`PATH`, `tools/verity/check/policy.toml`).  The runners (`suites.py`, `circuit-check`,
-check.py's steps) report each suite's, test's, target's and step's real verdict; this file says which ci.toml jobs are off the merge
-gate (`off_gate`) and which failures drive doesn't take as red until a deadline (`allow`):
+"""Drive's policy over what the runners (`suites.py`, `circuit-check`, check.py's steps) report (`PATH`,
+`tools/verity/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures drive doesn't take as
+red until a deadline (`allow`):
 
     schema = "policy/v0"
     off_gate = ["circuit-check", "ratchet-gate"]

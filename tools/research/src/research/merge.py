@@ -194,7 +194,7 @@ SHARD_KIND = "check-shard/v1"
 
 def declared(repo: Path, commit: str) -> list[dict] | None:
     """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
-    `after` when it has one; an older ci.toml's `gate`), or None when it can't be read."""
+    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
     import tomllib
 
     from .store import tools_registry
@@ -213,7 +213,7 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` declares that are on the merge gate (every job but
-    those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or an older ci.toml marks `gate = false`), or why they
+    those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
     can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's after-landing run, whose red
     reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
     from . import policy

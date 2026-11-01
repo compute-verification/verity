@@ -79,7 +79,7 @@ def test_merge_requires_every_job_but_those_off_the_gate_and_refuses_an_unreadab
     assert merge.declared_jobs(world.origin, _main(world)) == ["pytest", "circuit-check"]
     _move_main(world, {"tools/verity/check/policy.toml": _policy()})
     assert merge.declared_jobs(world.origin, _main(world)) == ["pytest"]
-    _move_main(world, {"tools/verity/check/policy.toml": None,                   # an older ci.toml's own `gate = false`
+    _move_main(world, {"tools/verity/check/policy.toml": None,                   # ci.toml's own `gate = false`
                        "tools/verity/check/ci.toml": ci.replace('name = "circuit-check"\n', 'name = "circuit-check"\ngate = false\n')})
     assert merge.declared_jobs(world.origin, _main(world)) == ["pytest"]
     _move_main(world, {"tools/verity/check/policy.toml": "not toml ["})

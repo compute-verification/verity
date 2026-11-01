@@ -1,12 +1,11 @@
-# Drive's policy over what the runners report. The runners (suites.py, circuit-check, check.py's steps) report each suite's, test's,
-# target's and step's real verdict and nothing else; this file says what of it gates and what may stay red (`research.policy`
-# reads it). Drive reads it at the commit it judges, so an allowance lands with the tip it lets pass; `research merge` reads
+# Drive's policy over what the runners (suites.py, circuit-check, check.py's steps) report: what of it gates and what may stay red
+# (`research.policy` reads it). Drive reads it at the commit it judges, so an allowance lands with the tip it lets pass; `research merge` reads
 # `off_gate` at the commit it merges; the quick tier's judge reads it at the tier's base on `main`. ci owns this file;
 # `tests/test_drive_policy.py` holds it to the parse and to ci.toml's jobs.
 schema = "policy/v0"
 
-# The ci.toml jobs off the merge gate. A recorded check, whole or a shard, leaves them out (`check.py`'s OFF_GATE, from
-# `declaration.load`), `research merge` requires them of no check, and drive moves `main` without them: they run in drive's
+# The ci.toml jobs off the merge gate. A recorded check, whole or a shard, leaves them out (`check.py`'s
+# OFF_GATE, from `declaration.load`), `research merge` requires them of no check, and drive moves `main` without them: they run in drive's
 # after-landing run (`--deferred`, every job), where a red reverts its culprit on `checked`. circuit-check returns to the gate
 # once `circuit-check --all` fits inside the rest of the check (under 30 minutes); ratchet-gate judges the merges above the
 # run's base, and no plan holds it. A job here has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
