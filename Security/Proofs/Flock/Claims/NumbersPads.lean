@@ -2,6 +2,7 @@ module
 
 public import Flock.Zk
 public import Mathlib.Tactic.NormNum
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The pads' domain: the length of the `--zk` inner code, pinned to the code
