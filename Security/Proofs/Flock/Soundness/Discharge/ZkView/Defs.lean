@@ -164,7 +164,7 @@ def Coined.tab (T : Coined K W Hi VL z) : Table 𝔽 K W Salt (Bits × Salt) Byt
   Gp := T.Gp
   rbar := T.rbar
   ρ := T.ρ
-  vals := T.vals
+  vals := fun r w u V => T.vals r w u V.2.1
   ia := T.ia
   ib := T.ib
   ζ := T.ζ
