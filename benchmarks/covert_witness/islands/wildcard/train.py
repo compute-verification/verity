@@ -433,7 +433,7 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     print(json.dumps({"positions": n_pos, "steps": n_steps, "cache_gb": round(gb, 2), "per_position_step": per_pos,
                       "fill_per_token": fill_tok, "top_k": K}), flush=True)
     if gb > a.cache_gb:
-        raise SystemExit(f"wildcard cached: the cache needs {gb:.1f} GB > --cache-gb {a.cache_gb}")
+        raise Skip(f"wildcard cached: the cache needs {gb:.1f} GB > --cache-gb {a.cache_gb}")
     dev = prepare.DEVICE
     xs = torch.empty(n_pos, d, dtype=torch.bfloat16, device=dev)
     es = torch.empty(n_pos, d, dtype=torch.bfloat16, device=dev)
