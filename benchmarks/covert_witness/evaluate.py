@@ -1,7 +1,8 @@
-"""The evaluator and witness checker (fixed): the only process that reads the held-out sets.
+"""The evaluator and witness checker (fixed): with the harness's evaluator, the only process that reads the held-out sets.
 
-    python evaluate.py --submission DIR --class CLASS --timing FILE --run RUN.json --out witness.json [--split search]
-    python evaluate.py --start NAME --out start.json [--split search]     # a start's own score and evaluation cost
+    python evaluate.py --submission DIR --class CLASS --timing FILE --run RUN.json --out witness.json
+    python evaluate.py --start NAME --out start.json     # a start's own score and evaluation cost
+    CW_FINAL=1 python evaluate.py ... --split final      # final scoring (the scorer's, after the search)
 
 For a submission it checks, in order, and records every result in the witness record:
 
@@ -14,9 +15,11 @@ For a submission it checks, in order, and records every result in the witness re
    GPU_SECONDS_CAP; the declared trainable set covers `changed` (the analytic `prepare.train_flops` is recorded beside it);
 5. the class's caps on 8·|E|, E's format and the updated layers;
 
-then scores decode(θ, E) on the search set (`prepare.evaluate_bpb`). The FLOPs-to-target curve is the harness's
-checkpoints (the first E in each 5% of the run, scored as it ran). A candidate is valid when every check passes.
-`--split final` is the final test set's, which no island's launcher runs.
+then scores decode(θ, E) (`prepare.Scorer.search`): hashed first, then on a fresh slice of the search pool, paired with
+θ on the same slice. The FLOPs-to-target curve is the harness's checkpoints (the first E in each 5% of the run, scored
+the same way as it ran, each on its own slice). A candidate is valid when every check passes. The promotion and final
+sets are sealed: the harness seals each scored model's promotion value, and `--split final` runs only in final mode
+(`CW_FINAL=1`, which also loads the sealed start), where every score is the final set's.
 """
 from __future__ import annotations
 
@@ -32,19 +35,25 @@ import torch
 import prepare
 
 
-def score(rec: dict, model: dict[str, torch.Tensor], split: str) -> dict:
-    with torch.device(prepare.DEVICE):
-        net = prepare.Net(rec["config"])
-    net.load(model)
-    return prepare.evaluate_bpb(net, split, rec["tokenizer"])
+def score(scorer: prepare.Scorer, model: dict[str, torch.Tensor]) -> dict:
+    t0 = time.perf_counter()
+    out = scorer.search(model, prepare.digest(model))
+    if "slice" in out:
+        out["slice"]["digest"] = "prepare.digest"
+    return out | {"seconds": time.perf_counter() - t0}
 
 
-def check(sub: Path, klass: str, timing: Path, run: Path, split: str) -> dict:
+def eval_cost(scorer: prepare.Scorer, rec: dict) -> dict:
+    toks, man = prepare.held_out(scorer.split, rec["tokenizer"])
+    return prepare.eval_cost(rec, len(toks), man["bytes"]) | {"set": scorer.split}
+
+
+def check(sub: Path, klass: str, timing: Path, run: Path) -> dict:
     caps = prepare.CLASSES[klass]
     meta = json.loads((sub / "meta.json").read_text())
     rec = prepare.start_record(meta["start"])
     theta = prepare.load_theta(meta["start"])
-    out = {"schema": "covert-witness/witness/v2", "version": prepare.VERSION, "class": klass, "caps": caps, "start": meta["start"],
+    out = {"schema": "covert-witness/witness/v3", "version": prepare.VERSION, "class": klass, "caps": caps, "start": meta["start"],
            "theta_digest": rec["digest"], "budget": {"train_flops": prepare.TRAIN_FLOP_BUDGET,
                                                       "flop_slack": prepare.HARNESS_FLOP_SLACK,
                                                       "gpu_seconds": prepare.GPU_SECONDS_CAP}, "checks": {}, "notes": meta.get("notes")}
@@ -111,14 +120,12 @@ def check(sub: Path, klass: str, timing: Path, run: Path, split: str) -> dict:
         L = rec["config"]["n_layer"]
         lowest = out["structure"]["lowest_updated_layer"]
         c["shallow"] = lowest is None or lowest >= L + 1 - caps["top_blocks"]
-    toks, man = prepare.held_out(split, rec["tokenizer"])
-    out["eval_cost"] = prepare.eval_cost(rec, len(toks), man["bytes"]) | {
+    scorer = prepare.Scorer(rec, theta)
+    out["eval_cost"] = eval_cost(scorer, rec) | {
         "rule": "the model has θ's tensors, shapes and dtypes (checks.architecture), so its parameters, evaluation FLOPs "
                 "and weight bytes per byte are the start's"}
     out["valid"] = all(v is True for v in c.values())
-    t0 = time.perf_counter()
-    out["score"] = score(rec, decoded, split)
-    out["score"]["seconds"] = time.perf_counter() - t0
+    out["score"] = score(scorer, decoded)
     out["curve"] = [{"step": cp["step"], "train_flops": 2 * cp["macs"], "e_bytes": cp.get("e_bytes"), "bpb": cp.get("val_bpb"),
                      "source": cp.get("source")} for cp in r.get("checkpoints", [])]
     return out
@@ -131,22 +138,25 @@ def main() -> int:
     ap.add_argument("--class", dest="klass", choices=sorted(prepare.CLASSES))
     ap.add_argument("--timing", type=Path)
     ap.add_argument("--run", type=Path, help="the harness's run.json (te_core.run --script)")
-    ap.add_argument("--split", default="search", choices=("search", "final"))
+    ap.add_argument("--split", default=None, choices=("search", "final"), help="final: only with CW_FINAL=1")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
+    if a.split is not None and (a.split == "final") != prepare.FINAL_MODE:
+        ap.error("the final set is sealed: final scoring is `CW_FINAL=1 python evaluate.py ... --split final`, "
+                 "and in final mode every score is the final set's")
     torch.backends.cuda.matmul.allow_tf32 = True
     if a.start:
         rec = prepare.start_record(a.start)
         theta = prepare.load_theta(a.start)
-        held = prepare.held_out(a.split, rec["tokenizer"])
-        out = {"schema": "covert-witness/start-score/v1", "start": a.start, "digest": rec["digest"],
-               "parameters": rec["parameters"], "score": score(rec, theta, a.split),
-               "eval_cost": prepare.eval_cost(rec, len(held[0]), held[1]["bytes"]),
+        scorer = prepare.Scorer(rec, theta)
+        out = {"schema": "covert-witness/start-score/v2", "start": a.start, "digest": rec["digest"],
+               "parameters": rec["parameters"], "score": {"split": scorer.split, "bpb": scorer.start_bpb},
+               "eval_cost": eval_cost(scorer, rec),
                "structure_full_update": prepare.deep_share(rec, set(theta)), "provenance": rec["provenance"]}
     else:
         if not (a.submission and a.klass and a.timing and a.run):
             ap.error("--submission, --class, --timing and --run, or --start")
-        out = check(a.submission, a.klass, a.timing, a.run, a.split)
+        out = check(a.submission, a.klass, a.timing, a.run)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(out, indent=1) + "\n")
     s = out.get("score", {})
