@@ -3,7 +3,8 @@ task list misses (`cli.run`) builds the bodies of only the bindings whose record
 roots reach from its record.
 
 Every binding still runs (`targets.catalog_units`, in catalog order, each under its units, `targets._produce`): its roots are
-made now, unbuilt, so a registry a binding enumerates is read as it is now.  A binding's record (a `circuit_check.cache` entry of
+made now, unbuilt, so a registry a binding enumerates is read as it is now (under ``--binding``, while the catalog's roots
+record counts, only that binding's: below).  A binding's record (a `circuit_check.cache` entry of
 the request ``catalog-unit``, keyed by the binding's units and which of that binding's occurrences it is) holds the ids of its
 roots and what they reach (`_reach`): each primitive, specialization and reference by id, with its kind, family, gate count,
 whether it is Boolean, the ids its body calls (in the order `targets.reachable` visits them) and, where `targets.select` could
@@ -55,6 +56,13 @@ where this process stores them, as a full build's are (a full build digests none
 ``--records-only`` (`cli.records`) builds and stores the records so and checks no target, so that each run from a copy of
 its cache (each shard of one run, on a machine of its own) builds no binding.
 
+It stores one more record, the catalog's roots (`store_roots`): every binding's root ids in catalog order and the suite's
+Call families, held to what the task list's entry is held to (`cache.task_list_reads`: what every binding read while it made
+its roots, every in-tree module imported and every binding file whole, so a new binding entry, a new Definition in a registry
+module or a new module an enumerated package lists makes it miss) and to every binding's record's reads.  While it counts and
+every binding's record counts, a ``--binding`` run makes only that binding's roots, each other binding's when something reads
+them, held to the ids the record lists (`plan`'s ``binding``).
+
 A run from the records, forked or not, has no process that imported every module a full build has imported before its
 checks, and `sidecars.owner` reads those: a Definition a factory makes is owned by the module that binds it at its top level,
 which only another binding's body may import, and the block check (`checks.UNIT_OWNERS`) and a by-calls root's callees go by
@@ -77,6 +85,8 @@ from . import targets as TG
 
 REQUEST = "catalog-unit"
 REGISTERED = ("<registered>",)
+#: the catalog's roots record (`store_roots`), beside the bindings'
+ROOTS = ("<roots>",)
 
 
 class Stale(Exception):
@@ -89,12 +99,13 @@ class Entry:
     what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted, with that record's
     reads.  Built in a process of its own (``apart``, `built_apart`), with what that process read: its record's reads and its
     share of the task list's (``listed``), and the CPU seconds it took (``seconds``, which its record keeps).  ``words``: the
-    Boolean Definitions its build registered (`_words`), where a process built it apart."""
+    Boolean Definitions its build registered (`_words`), where a process built it apart.  ``made`` None: its roots are the ids
+    the catalog's roots record lists (``ids``, `plan`'s ``binding``), made by ``make`` when first read and held to those ids."""
     units: tuple[str, ...]
     kind: str
     label: str
     key: dict
-    roots: list[Any]
+    made: list[Any] | None
     nodes: dict[str, dict] = field(default_factory=dict)
     reused: bool = False
     apart: bool = False
@@ -102,10 +113,21 @@ class Entry:
     listed: dict[str, list[str]] | None = None
     seconds: float | None = None
     words: list[list[str | None]] | None = None
+    ids: list[str] | None = None
+    make: Callable[[], list[Any]] | None = None
+
+    @property
+    def roots(self) -> list[Any]:
+        if self.made is None:
+            made = TG._produce(self.units, self.make)
+            if [fn.id for fn in made if _kind(fn) is not None] != self.ids:
+                raise Stale(f"{self.name}: its roots are not the ones the catalog's roots record lists")
+            self.made = made
+        return self.made
 
     @property
     def root_ids(self) -> list[str]:
-        return [fn.id for fn in self.roots if _kind(fn) is not None]
+        return list(self.ids) if self.made is None else [fn.id for fn in self.made if _kind(fn) is not None]
 
     @property
     def name(self) -> str:
@@ -388,36 +410,59 @@ def merged(parts: Iterable[dict[str, list[str]]]) -> dict[str, list[str]]:
 
 
 def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = None,
-         apart: tuple[int, float, dict[str, float]] | None = None) -> Plan | None:
+         apart: tuple[int, float, dict[str, float]] | None = None,
+         binding: Callable[[tuple[str, ...]], bool] | None = None) -> Plan | None:
     """The catalog from the bindings' records (the module's docstring); None when there are none of this checker's version (a
     full build stores them) or none counts.  With ``apart`` (`built_apart`'s ``jobs``, ``budget`` and ``weights``), each binding
     whose record doesn't count is built in a process of its own, and so is every binding when none counts, there are none or
     there is no ``cache``: this process builds no body.  `Stale` when a record disagrees with what was built now.  A pinned id
     a reused record holds no descriptor for (stored before its pin, `derive`) is made from the binding it is taken from
-    (`_materialize`) and described in this run; that record is not stored again."""
+    (`_materialize`) and described in this run; that record is not stored again.
+
+    With ``binding`` (whether a binding's units are those of the one binding `cli.run`'s ``--binding`` checks), while the
+    catalog's roots record counts (`store_roots`), only that binding's roots are made now: every other binding's are the ids
+    that record lists, made where something reads them (`Entry.roots`), and the Call families are its.  Where the catalog
+    lists other bindings than the record, that binding makes other roots or a binding's record misses, the plan is made as
+    without ``binding``."""
     TG.load_registries()
     first = key(REGISTERED, 0)
     stored = cache is not None and CC._dir(cache, first).is_dir()
     if not stored and apart is None:
         return None
+    ahead = CC.lookup(cache, key(ROOTS, 0), repo, moved=False) if stored and binding is not None else None
+    want = deque(ahead[0]["entries"] if ahead is not None else ())
+    raised = {label: err for label, err in ahead[0]["root_errors"]} if ahead is not None else {}
     registered = TG._registered()
     entries = [Entry(REGISTERED, "registered", "", first, registered)]
     TG.ROOT_ERRORS.clear()
     seen: Counter = Counter()
     for units, make, kind, label in TG.catalog_units():
         n, seen[units] = seen[units], seen[units] + 1
-        try:
-            roots = TG._produce(units, make)
-        except Exception as e:  # a model's error is named, as the catalog names it
-            if kind != "model":
-                raise
-            TG.ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
-            continue
-        entry = Entry(units, kind, label, key(units, n), roots)
+        ids = want.popleft()[3] if want and want[0][:3] == [list(units), kind, label] else None
+        if ahead is not None and ids is None:
+            if kind == "model" and label in raised:
+                TG.ROOT_ERRORS.append((label, raised[label]))
+                continue
+            return plan(cache, repo, log, apart)
+        if ids is not None and not binding(units):
+            entry = Entry(units, kind, label, key(units, n), None, ids=ids, make=make)
+        else:
+            try:
+                roots = TG._produce(units, make)
+            except Exception as e:  # a model's error is named, as the catalog names it
+                if kind != "model":
+                    raise
+                TG.ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
+                continue
+            entry = Entry(units, kind, label, key(units, n), roots)
+            if ahead is not None and entry.root_ids != ids:
+                return plan(cache, repo, log, apart)
         hit = _lookup(cache, repo, entry) if stored else None
         if hit is not None:
             rec, entry.reads = hit
             entry.nodes, entry.reused, entry.words, entry.seconds = rec["nodes"], True, rec.get("words"), rec.get("seconds")
+        elif ahead is not None:
+            return plan(cache, repo, log, apart)
         elif kind == "model" and apart is None:
             try:
                 with CC.producing(units):
@@ -427,6 +472,8 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
                 continue
         entries.append(entry)
     hit = _lookup(cache, repo, entries[0]) if stored else None
+    if ahead is not None and (want or hit is None):
+        return plan(cache, repo, log, apart)
     if hit is not None:
         rec, entries[0].reads = hit
         entries[0].nodes, entries[0].reused, entries[0].words, entries[0].seconds = (rec["nodes"], True, rec.get("words"),
@@ -451,7 +498,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
             listed = merged(e.listed for e in kept)
     made: list[dict[str, Any]] = []
     for e in entries:
-        made.append({fn.id: fn for fn in e.roots if _kind(fn) is not None})
+        made.append({fn.id: fn for fn in e.made or () if _kind(fn) is not None})
         if not e.reused and not e.apart:
             e.nodes, objs = _reach(e.roots, pinned=pinned)
             made[-1].update(objs)
@@ -466,14 +513,30 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
     for fid in d.ids:
         if "d" not in d.nodes[fid]:
             d.nodes[fid].update(_described(_materialize(entries, objects, fid, via=d.via.get(fid)), d.nodes[fid]["k"]))
-    calls = call_families(entries, d, objects)
+    calls = set(ahead[0]["calls"]) if ahead is not None else call_families(entries, d, objects)
     out = Plan(entries, objects, d, calls, listed, scratch)
     words = made_words(out)
     if log:
         log(f"circuit-check: catalog from records: {sum(e.reused for e in entries)} of {len(entries)} bindings reused, "
             f"{sum(e.apart for e in entries)} built apart, {len(objects)} Definitions built here and {words} Boolean "
-            "Definitions another process's build registered made or imported here")
+            "Definitions another process's build registered made or imported here" + (
+            f"; {sum(e.made is not None for e in entries)} bindings' roots made, the others' listed by the catalog's roots "
+            "record" if ahead is not None else ""))
     return out
+
+
+def store_roots(cache: Path, repo: Path, plan: Plan) -> str | None:
+    """The catalog's roots record (`ROOTS`): each binding's units, kind, label and root ids in catalog order, the models whose
+    roots or body raised (`targets.ROOT_ERRORS`) and the suite's Call families, held to what the task list's entry holds
+    (`cache.task_list_reads` of every root and object, with what each binding built apart read of it, ``Plan.listed``) and
+    to every binding's record's reads, digested now, unless one counts already; its entry id."""
+    if (hit := CC.lookup(cache, key(ROOTS, 0), repo, moved=False)) is not None:
+        return hit[1]
+    reads = merged([CC.task_list_reads([*(fn for e in plan.entries for fn in e.roots), *plan.objects.values()]),
+                    plan.listed or {}, *(e.reads or {} for e in plan.entries)])
+    return CC.store(cache, key(ROOTS, 0), repo, reads, {
+        "entries": [[list(e.units), e.kind, e.label, e.root_ids] for e in plan.entries if e.units != REGISTERED],
+        "root_errors": [list(x) for x in TG.ROOT_ERRORS], "calls": sorted(plan.calls)})
 
 
 def owners(plan: Plan) -> dict[str, str]:
@@ -560,9 +623,9 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
 
 
 def held(cache: Path, entries: list[Entry]) -> int:
-    """The bytes ``entries``' records take in ``cache``: what a run from a copy of it copies."""
+    """The bytes ``entries``' records and the catalog's roots record take in ``cache``: what a run from a copy of it copies."""
     with CC.internal():
-        return sum(p.stat().st_size for e in entries for p in CC._dir(cache, e.key).glob("*.json"))
+        return sum(p.stat().st_size for k in [*(e.key for e in entries), key(ROOTS, 0)] for p in CC._dir(cache, k).glob("*.json"))
 
 
 def made_entries() -> list[Entry]:
@@ -880,6 +943,6 @@ def built_entries() -> list[Entry] | None:
     return entries
 
 
-__all__ = ["APART_GB", "REQUEST", "Derived", "Entry", "Plan", "Stale", "built_apart", "built_entries", "built_here",
+__all__ = ["APART_GB", "REQUEST", "ROOTS", "Derived", "Entry", "Plan", "Stale", "built_apart", "built_entries", "built_here",
            "call_families", "derive", "from_manifest", "key", "made_entries", "make", "manifest", "merged", "plan", "planned",
-           "store"]
+           "store", "store_roots"]

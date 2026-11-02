@@ -20,7 +20,7 @@ from circuit_check import cli
 from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
-from test_cache import REPO, _bindings, _tree
+from test_cache import REPO, _bindings, _edit, _tree
 from test_units import BINDINGS as UNIT_BINDINGS
 from test_units import FORKED as UNITS_FORKED
 from test_units import HARNESS as UNITS
@@ -387,6 +387,19 @@ def test_every_shard_from_a_copy_of_one_records_only_run_s_cache_builds_no_bindi
 
 #: `test_units`' setup, then ``circuit-check --all --bindings -j 2`` (`cli.bindings`) from the records in the tree's cache
 BINDINGS_ONLY = UNITS[:UNITS.index("rep = cli.run(")] + 'print(json.dumps(cli.bindings(root / "cache", log=None, jobs=2)))\n'
+#: `test_units`' bindings, each root function writing its units to ``<root>-roots.jsonl`` (beside the tree) as it runs
+ROOTS_LOGGED = ("def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, make,",
+                "def logged(units, make):\n"
+                "    def run():\n"
+                "        with CC.internal(), open(root.parent / f'{root.name}-roots.jsonl', 'a') as f:\n"
+                "            f.write(json.dumps(units) + '\\n')\n"
+                "        return make()\n"
+                "    return run\n\n\n"
+                "def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, logged(units, make),")
+
+
+def _roots_made(log: Path) -> set[str]:
+    return {SH.binding(json.loads(ln)) for ln in log.read_text().splitlines()} if log.exists() else set()
 
 
 def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
@@ -398,9 +411,12 @@ def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
 def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own_targets_and_together_the_list(tmp_path):
     """``--bindings`` names each catalog binding with the targets ``--binding`` checks under it: together the whole list, each
     target once.  Each forked ``--binding`` run, in a tree of its own from a copy of one ``--records-only`` run's cache (a task
-    on another machine), builds no binding and no body in its own process and checks exactly its targets, with the verdicts a
-    full build gives; run again, it reuses every target.  With no record it refuses rather than build, and given a name no
-    catalog binding has, rather than check nothing."""
+    on another machine), builds no binding and no body in its own process, makes only its own binding's roots (the catalog's
+    roots record lists the others'), keys and checks exactly its targets, with the verdicts a full build gives; run again, it
+    reuses every target.  With the roots record stale (a module no binding reads edited) it makes every binding's roots, with
+    the same verdicts.  With no record it refuses rather than build, and given a name no catalog binding has, rather than
+    check nothing."""
+    assert UNITS_FORKED.count(ROOTS_LOGGED[0]) == 1
     root = _tree(tmp_path / "t")
     _bindings(root, *UNIT_BINDINGS)
     cold = _py(root, UNITS.replace("units=True)", "units=True, binding='_core_roots')"))
@@ -411,21 +427,32 @@ def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own
     named = json.loads(got.stdout.strip().splitlines()[-1])
     assert sorted(named["bindings"]) == ["<registered>", "_core_roots", "_model_roots", "_sized_roots", "_xor_roots"]
     assert sorted(label for ts in named["bindings"].values() for _, label in ts) == UNIT_IDS and named["root_errors"] == []
+
+    def forked(name: str) -> str:
+        # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
+        # first check to load it records the kernels it registers as reads this process can't digest
+        return UNITS_FORKED.replace(*ROOTS_LOGGED).replace("fork=True)", f"fork=True, binding={name!r})").replace(
+            "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
+
     values: dict = {}
     for i, (name, targets) in enumerate(named["bindings"].items()):
         tree = _copied(root, tmp_path / f"b{i}")
-        # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
-        # first check to load it records the kernels it registers as reads this process can't digest
-        forked = UNITS_FORKED.replace("fork=True)", f"fork=True, binding={name!r})").replace(
-            "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
-        out = _run_units(tree, forked)
+        out = _run_units(tree, forked(name))
         assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], (name, out["stats"])
         assert sorted(out["values"]) == sorted(label for _, label in targets) and out["hits"] == [], name
+        assert _roots_made(tmp_path / f"b{i}-roots.jsonl") == {name} - {"<registered>"}, name
+        assert len(out["keys"]) == len(out["values"]), (name, out["keys"])
         values.update(out["values"])
         if name == "_core_roots":
-            again = _run_units(tree, forked)
+            again = _run_units(tree, forked(name))
             assert again["stats"]["units"] == out["stats"]["units"] and again["here"] == [], again["stats"]
             assert again["hits"] == sorted(again["values"]) == sorted(out["values"]), again
     assert values == _fresh(root)["values"]
+    stale = _copied(root, tmp_path / "stale")
+    _edit(stale, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    out = _run_units(stale, forked("_core_roots"))
+    assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], out["stats"]
+    assert _roots_made(tmp_path / "stale-roots.jsonl") == set(named["bindings"]) - {"<registered>"}
+    assert out["values"] == {t: values[t] for _, t in named["bindings"]["_core_roots"]}
     unknown = _py(root, UNITS.replace("units=True)", "units=True, binding='_no_roots')"))
     assert unknown.returncode and cli.NO_BINDING in unknown.stderr, unknown.stderr
