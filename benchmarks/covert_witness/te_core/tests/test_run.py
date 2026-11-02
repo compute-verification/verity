@@ -138,6 +138,12 @@ def test_mezo_run_is_rebuilt_from_its_seed_log(tmp_path, theta_file):
     assert all(set(s["rho"]) == {f"{k}/r{r}" for k in ("10kB", "100kB", "1MB") for r in (1, 10, 100)} for s in subs)
     assert subs[-1]["macs"] == rec["totals"]["macs"]
     assert subs[0]["macs"] < subs[-1]["macs"]
+    final = json.loads((out / "run.json").read_text())
+    for cp in final["checkpoints"]:
+        cp["score"] = {"val": 1.0}  # final mode scores on the final set, which has no slice
+    (out / "run.json").write_text(json.dumps(final))
+    subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1")
+    assert [s["val_slice"] for s in subs] == [None] * 6
 
 
 TOKENS_OUTSIDE = MODEL + '''
