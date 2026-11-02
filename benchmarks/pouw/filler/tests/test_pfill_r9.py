@@ -1,8 +1,7 @@
-"""P2-FF r9's two receipt folds in pfill (note:20261016T1117Z-draft-fullfloor-s-r9): NC 4 built with -DPFILL_LI
-(LOP3+IMAD) or -DPFILL_XIN13 (XOR-in with rotations 13, 19). pfill_ref.py's receipts are held to pfill.cuh's host
-`dfill_ref` built with g++ and each flag, the reference dgate holds the GPU to, in each integer tile kind; pfill_ref's step
-to P2-FF's reference twins; and the key path to P2-FF's `key_ok_r9`, the reference functions below copied verbatim from
-its receipt_folds_r9.py (art:91c156a1)."""
+"""The two r9 receipt folds in pfill: NC 4 built with -DPFILL_LI (LOP3+IMAD) or -DPFILL_XIN13 (XOR-in with rotations 13,
+19). pfill_ref.py's receipts are held to pfill.cuh's host `dfill_ref` built with g++ and each flag, the reference dgate
+holds the GPU to, in each integer tile kind; pfill_ref's step to the reference twins; and the key path to the
+reference's `key_ok_r9`, the reference functions below copied verbatim from its receipt_folds_r9.py."""
 
 from __future__ import annotations
 
@@ -39,7 +38,7 @@ extern "C" void r9_keys(const uint64_t* st, uint32_t* k) {
 }
 """
 
-# ---------------------------------------------------------------- P2-FF's receipt_folds_r9.py (art:91c156a1), verbatim
+# ---------------------------------------------------------------- receipt_folds_r9.py, verbatim
 M32 = 0xFFFFFFFF
 
 
@@ -125,7 +124,7 @@ def test_r9_tile_draws_past_a_rejected_key(kind):
 
 
 def test_r9_step_is_p2ffs():
-    """pfill_ref.absorb's LI and XIN13 steps are P2-FF's twins, over a chain of 8 steps from y = pos."""
+    """pfill_ref.absorb's LI and XIN13 steps are the r9 twins, over a chain of 8 steps from y = pos."""
     rng = np.random.default_rng(9)
     while True:
         a0, a1, k0, k1 = (int(x) for x in rng.integers(0, 1 << 32, 4, dtype=np.uint64))
@@ -162,8 +161,8 @@ def _adversarial_keys(rng: np.random.Generator, n: int) -> list[int]:
 
 
 def test_r9_key_check_is_p2ffs(build):
-    """pf_key_ok_r9 (host build) and pfill_ref.key_ok_r9 agree with P2-FF's key_ok_r9 on random keys and on keys built
-    at the edges of its int8 window, which it both accepts and rejects; the default keys pass."""
+    """pf_key_ok_r9 (host build) and pfill_ref.key_ok_r9 agree with the r9 twin's key_ok_r9 on random keys and on keys
+    built at the edges of its int8 window, which it both accepts and rejects; the default keys pass."""
     rng = np.random.default_rng(1117)
     lib = build(R.S8, "-DPFILL_LI")
     rand = [int(x) for x in rng.integers(0, 1 << 32, 1500, dtype=np.uint64)] + [0x9E3779B9, 0x7F4A7C15]

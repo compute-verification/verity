@@ -1,5 +1,5 @@
 /-
-The lincheck fold of a templated unit, split (PRF-133): `Tmpl.fold`'s sum, with each Definition that the call tree
+The lincheck fold of a templated unit, split: `Tmpl.fold`'s sum, with each Definition that the call tree
 reaches on more than one path folded once per class into a table and each placement combining the table, so the fold
 reads each such Definition's description once per lane scale, not once per call path. No verifier path reads it yet.
 

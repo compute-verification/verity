@@ -157,7 +157,7 @@ def test_peel_factors_are_pinned():
 
 def test_seeds_are_keyed_as_the_design_says():
     """E_A reads (salt, root_A, root_B, index); F_A, E_B and F_B read (salt, root_B) only: per job.  A duplicated unit
-    under another index gets fresh E_A and fresh C̃ (X-PC-5)."""
+    under another index gets fresh E_A and fresh C̃."""
     s = C.PearlC(k_min=32, tile=(16, 16))
 
     def ctx(index=3, salt=b"s", ra=b"a", rb=b"b"):
@@ -255,7 +255,7 @@ def test_registry_and_domain():
 
 def test_the_census_k_is_in_v1s_domain_only():
     """The H100 record's census k = 256 (GLM-5.3's down projections per TP8 rank) is in -h3 v1's domain, where a row's cap
-    is 4ρ (card a6872606), and no other k under 1,024 is; v0, h0 and sm_120's record have no census k."""
+    is 4ρ, and no other k under 1,024 is; v0, h0 and sm_120's record have no census k."""
     h3 = get("pearl-c-h100-v1-h3")
     params = dict(h3.certificate.parameters)
     assert h3.census_ks == (256,) and params["census_ks"] == (256,) and params["census_row_cap"] == "1/100"
@@ -536,7 +536,7 @@ def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4, add: int = 32, bf
     return mkn + mkn * add / 128 - add * m * n + m * k * 32 + 2 * bf16 * 32 * m * n + fs * m * k + qa * m * k
 
 
-#: sm_120's measured W1 rates (node 2, locked 2,100 MHz; `r20260930-063213-c94a`, `r20260930-061717-3e84`), per SM per
+#: sm_120's measured W1 rates (node 2, locked 2,100 MHz), per SM per
 #: clock: the unit, a dense E4M3 `mma.sync` MAC with FP32 accumulation; FADD in the measured 64-add loop, and alone
 #: (issue-bound, from the two-loop fit); FFMA alone; and the BF16 MAC's and the E4M3 cast's prices (alone, and in the
 #: packing loop)
@@ -573,7 +573,7 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
 @pytest.mark.parametrize("m", [1, 32, 128, 2048])
 @pytest.mark.parametrize("k,n", [(128, 128), (1024, 64), (3584, 4608), (3584, 37888), (18944, 3584), (65536, 16)])
 def test_wref_is_leans_wref_of(m, k, n):
-    """Red team F2: W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
+    """W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
     is not in either, at any m."""
     s = get("pearl-c-h100-v1")
     sh = Shape(m, k, n)
@@ -582,7 +582,7 @@ def test_wref_is_leans_wref_of(m, k, n):
 
 
 def test_lifecycle_work_has_no_weight_side():
-    """Red team F2: two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
+    """Two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover, Verifier
 

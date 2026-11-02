@@ -55,7 +55,7 @@ the header's count up to R_b are all 0.
 * G7 Shapes: each flat entry's classes and their shapes are its units' circuits' (`units.Activation.circuits`), within
   max_gates gates and max_in_bits input bits [shape, unit-too-large].
 
-A width, a covering or a count that a consumer's weighting relies on must hold for every unit, faulty or not; only these global
+A width, a covering or a count that a consumer's weighting relies on must hold for every unit, correct or not; only these global
 predicates give that.  Instances of a Definition are laid out identically, so a check per entry is a check of every activation.
 
 **Local predicates** (`check_unit`, with sampled proof block i; `openings` lists the rows it reads):
