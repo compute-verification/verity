@@ -8896,6 +8896,27 @@
    "assumptions": [],
    "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
   },
+  "Nci.Formalism.SecurityProofs.FitHonestServing": {
+   "owner": "@training"
+  },
+  "Nci.Formalism.SecurityProofs.FitServing": {
+   "owner": "@training"
+  },
+  "Nci.Formalism.SecurityProofs.FitTraining": {
+   "owner": "@training"
+  },
+  "Nci.Formalism.SecurityProofs.Security": {
+   "owner": "@training"
+  },
+  "Nci.Formalism.SecurityProofs.Slowdown": {
+   "owner": "@training"
+  },
+  "Nci.Formalism.SecurityProofs.SlowdownEven": {
+   "owner": "@training"
+  },
+  "Nci.Formalism.SecurityProofs.SlowdownFrozenTail": {
+   "owner": "@training"
+  },
   "Nci.Ldl.SecurityProofs.BlockDescription": {
    "owner": "@training",
    "signature": ["Nci.Ldl.SecurityProofs.BlockDescription : Nci.Ldl.Guarantees.BlockDescription"],
@@ -13494,7 +13515,14 @@
    "Pous.SecurityProofs.ObligationWide320_honest": "frozen (no-function): ObligationWide320's honest witness, arithmetic: P2's per-round floor p = 0.043 and bad-event mass 2^-137 meet its RoundsBound premise at 320 rounds and 2^-20, and at the registered point's 2^19 blocks its WideBlockCount, TagsInjective and StateWithin premises hold; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance."
+   "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Nci.Formalism.SecurityProofs.FitServing": "frozen (no-function): It is about an arbitrary declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), and concludes its slowdown, not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.FitHonestServing": "frozen (no-function): FitServing at Δ = 0, beside it: it is about an arbitrary declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), and concludes its slowdown, not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.FitTraining": "frozen (no-function): It is about an arbitrary declaration and a Verity.Partition of it into the blocks of a reduction tree (Nci.Formalism.TreeBlocks, Security/Definitions/Nci/Formalism/Inference.lean), and concludes its slowdown, not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): It is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its (c,k)-partitions, under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.SlowdownEven": "frozen (no-function): Slowdown's case of an evenly spread update, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its (c,k)-partitions, under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.SlowdownFrozenTail": "frozen (no-function): Slowdown's case of a single updated layer with a frozen tail, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its (c,k)-partitions, under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): It is about an arbitrary run of a class of methods (Nci.Formalism.Run, Security/Definitions/Nci/Formalism/Runs.lean) and a (c,k)-partition of its declaration, under the named CutCost and EfficiencyFloor (Security/Definitions/Nci/Assumptions/Formalism.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
