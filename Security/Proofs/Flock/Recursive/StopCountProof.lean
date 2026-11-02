@@ -7,7 +7,9 @@ import Proofs.Flock.Recursive.StopCount
 `Flock.SecurityProofs.RecStopsOfRun`, by an invariant of `StopCount.step` (`Inv`) over the run's ops, on the record's
 rules as `Firewall.Record` writes them and as `Proofs.Properties.Firewall` proves them (`admit_ok`, `served_ok`,
 `nextOf_lt`, `stopOf_push_stop`, `afterOnTime`). What one more event does to a recursive session's open, stop, finish,
-released statements and the slot's orphan comes first.
+released statements and the slot's orphan comes first. Its witnesses come last: `RecStopsOfRun_honest`, an honest run
+that runs through and releases its statement at its release time, and `RecStopsOfRun_nontrivial`, a firewall without
+`admit` (`Witness.stepAll`), where what reached the auditor is no cut at the run's stop.
 -/
 
 namespace Flock.StopCount
@@ -1202,5 +1204,58 @@ namespace Flock.SecurityProofs
 theorem RecStopsOfRun : Flock.Guarantees.RecStopsOfRun := fun M steps s =>
   have hI := StopCount.Inv.ofRun M steps
   ⟨hI.sent_cutAt s, hI.admLe s, hI.runsThrough s, hI.leftSched s⟩
+
+end Flock.SecurityProofs
+
+namespace Flock.StopCount.Witness
+
+open Core.Firewall
+
+/-- One message a statement. -/
+def one : String → ℕ → ℕ := fun _ _ => 1
+
+/-- An honest run: a recursive session of one statement, scheduled to release it at 150 ms, whose inner session sends
+its message and finishes, whose outer session takes the slot, is admitted, sends its message, passes its `Finish` at
+its release time and is accepted. -/
+def honest : List Step :=
+  [.openRec "st" #["a"] none (some { start := 100, windows := #[50] }), .innerSend "r0000", .innerFinish "r0000",
+   .seat "r0000" "a", .relay, .barrier 150 .ok .ok, .verdict (.ok true)]
+
+/-- A firewall without `admit`: an outer session that finds the slot free takes it, as statement `0`'s, whatever the
+record says. -/
+def stepAll (M : String → ℕ → ℕ) (σ : St) : Step → St
+  | .seat s part =>
+    match σ.holder with
+    | some _ => σ
+    | none => { σ with holder := some ⟨s, part, ⟨"", 0, none⟩, false⟩, adm := bump σ.adm s 1 }
+  | st => step M σ st
+
+def runAll (M : String → ℕ → ℕ) (steps : List Step) : St := steps.foldl (stepAll M) St.init
+
+/-- At `stepAll`, an outer session takes the slot before the inner session sent anything, and sends its message. -/
+def unordered : List Step := [.openRec "st" #["a"] none none, .seat "r0000" "a", .relay]
+
+end Flock.StopCount.Witness
+
+namespace Flock.SecurityProofs
+
+open Core.Firewall Flock.StopCount Flock.StopCount.Witness
+
+/-- **`RecStopsOfRun` says something at an honest run**: its session runs through (`recStop … = none`), every message of
+both statements reached the auditor, nothing is left unreleased, and the statement's proofs left at its release time. -/
+theorem RecStopsOfRun_honest :
+    (recStop one (run one honest) "r0000").isNone = true ∧ (run one honest).sent "r0000" 0 = 1 ∧
+      (run one honest).sent "r0000" 1 = 1 ∧ unreleasedOf (run one honest) "r0000" = false ∧
+      (run one honest).left "r0000" 1 = releaseMs (schedOf (run one honest) "r0000") 0 ∧
+      (run one honest).left "r0000" 1 = some 150 := by
+  decide +kernel
+
+/-- **`RecStopsOfRun` fails at a firewall without `admit`**: there, statement `1`'s message reached the auditor while
+none of the inner session's did, which is no cut at the run's stop. -/
+theorem RecStopsOfRun_nontrivial :
+    ¬ (runAll one unordered).sent "r0000" 1 =
+      cutAt (fun p : Fin (nOf (runAll one unordered) "r0000") => one "r0000" p)
+        (recStop one (runAll one unordered) "r0000") 1 := by
+  decide +kernel
 
 end Flock.SecurityProofs
