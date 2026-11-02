@@ -18,4 +18,9 @@ open Finset
 open scoped ENNReal
 variable {n : ℕ}
 
+/-- A set whose harm exceeds a harm bound escapes with probability below `δ`. -/
+theorem escape_lt_of_harm_gt {L : Law n} {h : Fin n → ℝ} {δ : ℝ≥0∞} {H : ℝ} (hH : IsHarmBound L h δ H)
+    {B : Finset (Fin n)} (hB : H < ∑ u ∈ B, h u) : L.escape B < δ :=
+  lt_of_not_ge fun h' => absurd (hH B h') (not_le.2 hB)
+
 end FlockSoundness.Audit

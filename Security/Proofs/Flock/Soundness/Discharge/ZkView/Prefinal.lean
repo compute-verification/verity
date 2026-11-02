@@ -90,4 +90,11 @@ theorem card_fiber_of_bijective {α β : Type} {f : α → β} (hf : Function.Bi
   Nat.card_eq_one_iff_unique.2
     ⟨⟨fun x y => Subtype.ext (hf.1 (x.2.trans y.2.symm))⟩, ⟨⟨_, (hf.2 b).choose_spec⟩⟩⟩
 
+theorem zk_wire_prefinal : ZkWirePrefinal := by
+  intro K W Hi VL _ _ _ _ J n Cn Tp _ _ zs T out hc w w' hreg hreg' V G
+  simp only [honest, run_comap]
+  exact CROnly.adaptive_prefinal_gap (fun c j => (T c j).tab) (fun c j => (T c j).rep) My saltHash leafH
+    (msgsAt T out) (digAt T) (pairProver T out hc) (fun _ _ _ _ => rfl) (randAt T) (fun _ => 1)
+    (fun c => card_fiber_of_bijective (randAt_bijective T c)) out (fun _ _ _ _ => rfl) w w' hreg hreg' V G
+
 end FlockSoundness.Discharge.ZkView

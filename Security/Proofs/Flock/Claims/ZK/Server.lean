@@ -149,6 +149,11 @@ theorem slots_of_pass {W R : Type} {S : ZkServer W R} {wk : S.Worker} {x : Msg} 
       (fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)) = true :=
   (Bool.and_eq_true _ _).mp hp |>.2
 
+/-- A round the server refuses fails. -/
+theorem pass_of_refuses {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
+    (h : List (Msg × Msg)) (hr : S.refuses x w ρ h = true) : S.pass wk x w ρ κ h = false := by
+  simp [pass, hr]
+
 /-- Every round so far, the current one's included, passed. -/
 def live {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : Bool :=
@@ -670,6 +675,9 @@ def Blind {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (wk : S.Worker) : Prop :=
   ∀ x w (ρ ρ' : Rw × Rp) (h h' : List (Msg × Msg)) s, ρ.1 = ρ'.1 → h.map Prod.snd = h'.map Prod.snd →
     wk x w ρ h s = wk x w ρ' h' s
 
+theorem lift_blind {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) : S.Blind (S.lift bw) :=
+  fun _ _ _ _ _ _ _ hρ hh => by simp only [lift, hρ, hh]
+
 /-- **Every pad-blind worker is one the server runs**, at any fixed draws `rp`. -/
 theorem Blind.eq_lift {W Rw Rp : Type} {S : ZkServer W (Rw × Rp)} {wk : S.Worker} (hb : S.Blind wk) (rp : Rp) :
     wk = S.lift fun x w r as s => wk x w (r, rp) (as.map fun a => (([] : Msg), a)) s := by
@@ -804,6 +812,17 @@ theorem RefD.own {W R : Type} {S : ZkServer W R} {H : Msg → Msg} {P : W → Pr
     {fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val} {n : Msg → ℕ} {wk : S.Worker} {x : Msg} {w : W}
     (hRef : S.RefD H P fill n wk x w) : S.RefDOwn H P fill n wk x w :=
   fun ρ κ h _ hc => hRef ρ κ h hc
+
+/-- The deferred frame at `(x, w)` reads the stand-in only at `(x, w)`. -/
+theorem frameD_congr {W R : Type} (S : ZkServer W R) {fill fill' : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val}
+    (wk : S.Worker) (x : Msg) (w : W) (hf : ∀ j s ρ h, fill x j s w ρ h = fill' x j s w ρ h) (ρ : R) (κ : S.Chk)
+    (h : List (Msg × Msg)) : S.frameD fill wk x w ρ κ h = S.frameD fill' wk x w ρ κ h := by
+  have e : ∀ ρ h s, S.wkD fill wk κ x w ρ h s = S.wkD fill' wk κ x w ρ h s := fun ρ h s => by
+    simp only [wkD, hf]
+  have ec : S.copy (S.wkD fill wk κ) x w ρ h = S.copy (S.wkD fill' wk κ) x w ρ h := by
+    funext i s
+    simp only [copy, e]
+  simp only [frameD, ec, e]
 
 /-- **The deferred split**: for every worker, check coins and tape, the deferred server releases `P`'s run, or that
 run with its last message replaced by the stop (cut at `n x - c`, `c : Fin 2`). -/

@@ -316,6 +316,11 @@ def TableBoundθKept (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg �
             Pr fun d : (Fin (D.V.k x) → Coin) × A => keep ω d.1 d.2 = true ∧ (run H P D.V x ω d.1).out = .acc ∧
               ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω d.1).seen 0) p.val = some u ∧ u ≠ C p
 
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+theorem EscapesD.fitsFork_toAbort {H : Msg → Msg} {Ω A : Type} {V : Verifier Coin} {P : Prover Ω} {x : Msg}
+    {keep : Ω → (Fin (V.k x) → Coin) → A → Bool} (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1)
+    (hk : e.Kept keep) (C c : ℝ) : (e.toAbort hk).FitsFork C c ↔ e.FitsFork C c := Iff.rfl
+
 omit [Nonempty Coin] in
 /-- **The tie**: the fixed-table bound at every thinning of acceptance, with escapes on kept runs, is the bound at the
 abort law, its escapes tied to the runs as they abort. -/

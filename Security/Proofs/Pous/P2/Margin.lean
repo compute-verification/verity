@@ -255,6 +255,11 @@ theorem row_b19_128 : P2RowE (2 ^ 19) 16448 (8169621180 + 128 * 2 ^ 19 + 1) (2 ^
 theorem row_b19_256 : P2RowE (2 ^ 19) 16448 (8169621180 + 256 * 2 ^ 19 + 1) (2 ^ 20) 127 129 :=
   ⟨505618, by norm_num, by norm_num, by norm_num, log_b19_256.trans (by norm_num)⟩
 
+/-- The largest `g` is exact: `g + 1` fails the 1% inequality at each row. -/
+theorem row_b19_g_max : ¬ (((497557 : ℚ)) / 2 ^ 19) ^ 88 ≤ 1 / 100 ∧ ¬ (((499480 : ℚ)) / 2 ^ 19) ^ 95 ≤ 1 / 100 ∧
+    ¬ (((501579 : ℚ)) / 2 ^ 19) ^ 104 ≤ 1 / 100 ∧ ¬ (((505618 : ℚ)) / 2 ^ 19) ^ 127 ≤ 1 / 100 := by
+  norm_num
+
 /-! ### `B = 2^19`: the slack rows at `ε = 2^-129` and `2^-128` -/
 
 section B19
@@ -409,6 +414,11 @@ theorem not_slack_b19 (lam m kr : ℕ) (hS : m * 16448 ≤ 8169621180 + lam * 2 
   · have : ((m1p (2 ^ 19) 16448 p b).B : ℝ) = 2 ^ 19 := by norm_num [m1p]
     rw [this]; exact hbig
 
+/-- **`λ = 0`: raw storage (496,693 blocks, fraction 0.94737) breaks every `k ≤ 85`.** -/
+theorem raw_b19_0 (p b D Q k : ℕ) (hk : k ≤ 85) (ε : ℝ≥0∞) :
+    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 0 D Q k ε :=
+  not_slack_b19 0 496693 85 (by norm_num) (by norm_num) (by norm_num) p b D Q k hk ε
+
 /-- **`λ = 64`: raw storage (498,733 blocks, fraction 0.95126) breaks every `k ≤ 92`.** -/
 theorem raw_b19_64 (p b D Q k : ℕ) (hk : k ≤ 92) (ε : ℝ≥0∞) :
     ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 64 D Q k ε :=
@@ -424,7 +434,19 @@ theorem raw_b19_256 (p b D Q k : ℕ) (hk : k ≤ 121) (ε : ℝ≥0∞) :
     ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 256 D Q k ε :=
   not_slack_b19 256 504854 121 (by norm_num) (by norm_num) (by norm_num) p b D Q k hk ε
 
+/-- Raw storage keeps exactly those blocks: one more block would exceed the raised state bound. -/
+theorem raw_counts_max : 496694 * 16448 > 8169621180 + 0 * 2 ^ 19 ∧ 498734 * 16448 > 8169621180 + 64 * 2 ^ 19 ∧
+    500774 * 16448 > 8169621180 + 128 * 2 ^ 19 ∧ 504855 * 16448 > 8169621180 + 256 * 2 ^ 19 := by
+  norm_num
+
 /-! ### The families at `ε = 2^-128` -/
+
+/-- The `2^-129` audit bound gives the `2^-128` one. -/
+theorem audit_eps128 {M : IdealModel} {sch : Scheme M} {lam D Q k : ℕ}
+    (h : MeetsWithSlack sch .sequential lam D Q k ((2⁻¹ : ℝ≥0∞) ^ 129)) :
+    AuditSecure sch .sequential (sch.stateBound Params.ρ + lam * sch.B) D Q k (ENNReal.ofReal Params.δ)
+      Params.εMax :=
+  (meetsWithSlack_mono h eps129_le le_rfl).2.2.2.2
 
 theorem fam_64 : ∀ (B : ℕ) [NeZero B], 2 ^ 10 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
     MeetsWithSlack (m1p B 16448 (2 ^ 16448 - 21065) b) .sequential 64 D (2 ^ 20) 95 Params.εMax :=
@@ -449,5 +471,15 @@ theorem fam_256 : ∀ (B : ℕ) [NeZero B], 2 ^ 10 ≤ B → B ≤ 2 ^ 23 → �
 theorem fam_256_128 : ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 → ∀ D,
     MeetsWithSlack (m1p B 16448 (2 ^ 16448 - 21065) b) .sequential 256 D (2 ^ 20) 128 Params.εMax :=
   fun B _ h0 h1 b hsp hb D => meetsWithSlack_mono (fam_256_128_129 B h0 h1 b hsp hb D) eps129_le le_rfl
+
+/-- `λ = 0`, `k = 88`, `ε = 2^-129` on the whole family, as a `Meets` statement. -/
+theorem fam_meets_129 : ∀ (B : ℕ) [NeZero B], 2 ^ 8 ≤ B → B ≤ 2 ^ 23 → ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 →
+    ∀ D, Meets (m1p B 16448 (2 ^ 16448 - 21065) b) .sequential D (2 ^ 20) 88 ((2⁻¹ : ℝ≥0∞) ^ 129) :=
+  fun B _ h0 h1 b hsp hb D => (meetsWithSlack_zero _ _ _ _ _ _).1 (fam_0_129 B h0 h1 b hsp hb D)
+
+/-- **Satisfiability of the uniform certificates' numeric hypotheses** is discharged inside each `fam_*` by
+`norm_num`; the width hypotheses are `PousP2p.widths` (`b = 16447`, `16432`), and `2^19`, `2^23` lie in every
+family range. The rows are not vacuous: `raw_b19_*` break each at a smaller `k`. -/
+theorem b19_in_ranges : 2 ^ 10 ≤ 2 ^ 19 ∧ 2 ^ 19 ≤ 2 ^ 23 ∧ 2 ^ 10 ≤ 2 ^ 23 := by norm_num
 
 end PousMargin

@@ -73,6 +73,16 @@ noncomputable def withCoins {P : Composed.LigProver}
     (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest :=
   fun x c j => { withOuter cz x c j with beta := fun r => betaAt c j.val r.val, rho := fun r => rhoAt c j.val r.val }
 
+theorem coinReads_withCoins {P : Composed.LigProver}
+    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
+    CoinReads (withCoins cz) :=
+  fun _ _ _ _ => ⟨rfl, rfl⟩
+
+theorem outerReads_withCoins {P : Composed.LigProver}
+    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
+    OuterReads (withCoins cz) :=
+  outerReads_withOuter cz
+
 theorem repSlot_eq {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) {q : ℕ}
     {sch : _root_.Flock.Schedule} {tPad : ℕ} (hz : _root_.Flock.Zk.schedule (stsOf x)[q / 2]!.m = .ok (sch, tPad))
     (f : _root_.Flock.Schedule → ℕ) :

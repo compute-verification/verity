@@ -147,6 +147,13 @@ theorem not_efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
     (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployZkTrim rel) p :=
   Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.zkCountedRD_nil_pos)
 
+/-- **Neither record is `Efficient` at `0` or at `X`.** -/
+theorem not_efficient_zero_X (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+    ¬ Claims.Flock.Efficient H (deployPlainTrim rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployPlainTrim rel) Polynomial.X ∧
+      ¬ Claims.Flock.Efficient H (deployZkTrim rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployZkTrim rel) Polynomial.X :=
+  ⟨not_efficient_plain H rel 0 (eval_zero), not_efficient_plain H rel Polynomial.X (eval_X),
+    not_efficient_zk H rel 0 (eval_zero), not_efficient_zk H rel Polynomial.X (eval_X)⟩
+
 /-- **`E^rep`'s reruns at the deployed plain verifier**, at every decoder: at most `1 + 210·2^256`, and
 `1 + 210·⌈4·N₀/e⌉` in expectation. -/
 theorem erepRuns_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)

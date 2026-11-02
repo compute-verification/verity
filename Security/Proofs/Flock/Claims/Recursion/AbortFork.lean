@@ -108,6 +108,9 @@ def EscapesD.toAbort (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1) (hk
 theorem EscapesD.term_toAbort [Fintype Coin] [Fintype A] (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1)
     (hk : e.Kept keep) : (e.toAbort hk).term = e.term := rfl
 
+theorem EscapesD.fits_toAbort (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1) (hk : e.Kept keep) (C : ℝ) :
+    (e.toAbort hk).Fits C ↔ e.Fits C := Iff.rfl
+
 end Tie
 
 section BAbort

@@ -89,7 +89,26 @@ theorem fit_rows_length (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (r : I.R
     ((I.fit x).rows w r h).length = (slotsAt x h.length).length := by
   simp [InnerRec.fit]
 
+theorem fit_rows_getElem? (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (r : I.R) (h : List (Msg × Msg)) (j : ℕ) :
+    ((I.fit x).rows w r h)[j]? =
+      ((slotsAt x h.length)[j]?).map fun sl => fitSlot x sl ((I.rows w r h).getD j #[]) := by
+  simp [InnerRec.fit, List.getElem?_mapIdx]
+
 theorem fitRow_size (k : ℕ) (ws : Array ℕ) : (fitRow k ws).size = k := by
   simp [fitRow]
+
+theorem fitSlot_size (x : Msg) (sl : ℕ × ℕ × ℕ) (ws : Array ℕ) (h32 : isTop x sl = true → 32 ≤ widthAt x sl) :
+    (fitSlot x sl ws).size = widthAt x sl := by
+  unfold fitSlot
+  split
+  · rename_i ht
+    simp [fitRow_size]
+    have := h32 ht
+    omega
+  · exact fitRow_size _ _
+
+theorem strs_length (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : (I.fit x).Tape) (h : List (Msg × Msg)) :
+    (strs (I.fit x) w ρ h).length = (slotsAt x h.length).length := by
+  simp [strs, InnerRec.fit]
 
 end RecDeploy.VStarBuild

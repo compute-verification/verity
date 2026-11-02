@@ -191,6 +191,13 @@ theorem DistOn.bind_on {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ → Pr
         exact .other s hne fun t d => ih t d σ' (ht d)
       · exact hbad _ _ (hnot hσ fun ts b hp e => by cases hp; simp [kindOf] at e)
 
+theorem DistOn.bind_on_eq {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂}
+    {Bad₂ : β₂ → Prop} {P : β → Prop} {j j' : ℕ} {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)}
+    (hK : ∀ i a b (hr : R i a b), DistOn slot Bad₂ j (h i a b hr)) (hB : ∀ b y, ¬ P b → Out (f' b) y → Bad₂ y)
+    {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} (hL : NoSlot slot L) {σ : List Kind}
+    (hσ : ExactOn g' σ P) (hj : j' = j + coinsK σ) : DistOn slot Bad₂ j' (Lock.bind h L) :=
+  hj ▸ DistOn.bind_on hK hB hL σ hσ
+
 end On
 
 section Interleave

@@ -10,6 +10,8 @@ variable {m n k : Nat}
 
 theorem groupWordP_hopper : groupWordP hopperE4m3K32 = groupWord := rfl
 
+theorem totalP_hopper : totalP hopperE4m3K32 = total := rfl
+
 theorem chainP_hopper (G : Nat) : chainP hopperE4m3K32 G = chain G := rfl
 
 theorem ctChainP_hopper (G : Nat) : @ctChainP m n k hopperE4m3K32 G = @ctChain m n k G := rfl

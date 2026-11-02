@@ -32,6 +32,35 @@ theorem h1tTagTable : H1TTagTable := by
   have h := List.all_eq_true.mp Checks.tagTable_all v hv
   simpa [TagVec.holds, and_assoc] using h
 
+theorem h1tSaltConformance : H1TSaltConformance := by
+  refine ⟨by decide +kernel, fun v hv => ?_⟩
+  have h := List.all_eq_true.mp Checks.saltVectors_all v hv
+  simpa [SaltVec.holds] using h
+
+theorem rowVec_chain {v : RowVec} (h : v.holds = true) : ∀ p < 2 * v.T,
+    freshWord v.T v.xs v.bs v.j v.σ p = v.I.getD p 0 ∧
+      wordQ (v.R.getD p 0) = some (runVal v.T v.xs v.bs v.j v.σ p) := by
+  unfold RowVec.holds at h
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, beq_iff_eq, Option.isSome_iff_exists] at h
+  obtain ⟨⟨hI, h0⟩, hR⟩ := h
+  have key : ∀ p < 2 * v.T, wordQ (v.R.getD p 0) = some (runVal v.T v.xs v.bs v.j v.σ p) := by
+    intro p
+    induction p with
+    | zero =>
+      intro hp
+      obtain ⟨⟨hw, ⟨x, hx⟩⟩, -⟩ := hI 0 hp
+      simp only [runVal, freshVal, wordVal, hw, hx, h0, Option.getD_some]
+    | succ p ih =>
+      intro hp
+      obtain ⟨⟨hw, ⟨y, hy⟩⟩, -⟩ := hI (p + 1) hp
+      have hr := hR p (by omega)
+      rw [ih (by omega), hy] at hr
+      simp only [runVal, freshVal, wordVal, hw, hy, Option.getD_some, hr, Option.bind_some, Option.map_some]
+  exact fun p hp => ⟨(hI p hp).1.1, key p hp⟩
+
+theorem h1tChainConformance : H1TChainConformance :=
+  ⟨by decide +kernel, fun v hv => rowVec_chain (List.all_eq_true.mp Checks.rowVectors_all v hv)⟩
+
 /-! ## The salt fields -/
 
 theorem h1tReadsFields : H1TReadsFields := by
@@ -97,7 +126,55 @@ theorem h1tTupleInjective : H1TTupleInjective := by
   norm_num at e0 e1 e2
   split_ifs at e1 e2 <;> omega
 
+theorem h1tTupleWrap : H1TTupleWrap := by
+  intro j
+  have h1 : (j + 88412) % 23 = j % 23 := by omega
+  have h2 : (j + 88412) / 23 % 62 = j / 23 % 62 := by omega
+  have h3 : (j + 88412) / 1426 % 62 = j / 1426 % 62 := by omega
+  simp only [tuple, h1, h2, h3]
+
+theorem freshWord_col {T : ℕ} {x b b' : ℕ → Code} {j j' : ℕ} {σ : ℕ → SliceSalt}
+    (h : ∀ τ, colLanes b j τ = colLanes b' j' τ) (p : ℕ) : freshWord T x b j σ p = freshWord T x b' j' σ p := by
+  unfold freshWord; rw [h, h]
+
+theorem runVal_col {T : ℕ} {x b b' : ℕ → Code} {j j' : ℕ} {σ : ℕ → SliceSalt}
+    (h : ∀ τ, colLanes b j τ = colLanes b' j' τ) (p : ℕ) : runVal T x b j σ p = runVal T x b' j' σ p := by
+  induction p with
+  | zero => simp only [runVal, freshVal, freshWord_col h]
+  | succ p ih => simp only [runVal, freshVal, freshWord_col h, ih]
+
+theorem h1tWrapDuplicate : H1TWrapDuplicate := by
+  intro U j j' hj hb i a
+  have hc : ∀ τ, colLanes (U.col j) j.val τ = colLanes (U.col j') j'.val τ := by
+    intro τ
+    funext l
+    unfold colLanes
+    split_ifs
+    · simp only [Unit.col, hb]
+    · rw [hj, h1tTupleWrap]
+  funext g
+  cases a with
+  | inl p => simp only [Unit.word, freshVal, freshWord_col hc]
+  | inr p => simp only [Unit.word, runVal_col hc]
+
 /-! ## Counting -/
+
+/-- The credited `R` positions `1 ≤ p ≤ 2T − 3` are `2T − 3` of them. -/
+def posEquiv (T : ℕ) : {p : Fin (2 * T) // 1 ≤ p.val ∧ p.val + 3 ≤ 2 * T} ≃ Fin (2 * T - 3) where
+  toFun p := ⟨p.1.val - 1, by omega⟩
+  invFun q := ⟨⟨q.val + 1, by omega⟩, by simp only; omega⟩
+  left_inv p := by ext; simp only; omega
+  right_inv q := by ext; simp
+
+theorem h1tPosCard : H1TPosCard := by
+  intro T hT
+  rw [Fintype.card_sum, Fintype.card_fin, Fintype.card_congr (posEquiv T), Fintype.card_fin]
+  omega
+
+theorem h1tNonVacuous : H1TNonVacuous := by
+  refine ⟨⟨1, 32768, 88412, fun _ _ => ⟨0x38, by norm_num⟩, fun _ _ => ⟨0x38, by norm_num⟩⟩,
+    ⟨by norm_num, by norm_num, fun _ _ => rfl, fun _ _ => rfl⟩, rfl, rfl, rfl, rfl, ?_⟩
+  exact h1tPosCard 1130 (by norm_num)
 
 theorem halfOfInvolution : HalfOfInvolution := by
   intro α _ ψ P hψ hP
@@ -142,5 +219,43 @@ theorem rn_err (y : ℚ) : |rn y - y| ≤ ulp y / 2 := by
       _ ≤ _ := this
   · rw [ite_eq_right (not_lt.2 h), abs_of_nonneg h, one_mul]
     exact rp_err y
+
+theorem rnErr : RnErr := rn_err
+
+/-- Below one ulp of a positive representable `r`, `r + i` is in `r`'s binade or below. -/
+theorem ulp_add_le_pos {r i : ℚ} (hr : Representable r) (h0 : 0 < r) (hi : |i| < ulp r) :
+    ulp (r + i) ≤ ulp r := by
+  obtain ⟨n, hn, n1, n2⟩ := pos_sig hr h0
+  have hu := ulp_pos r
+  have hk1 : (2 : ℚ) ^ (binade r + 1) = 2 ^ 24 * ulp r := by rw [ulp, abs_of_pos h0, two_pow_24]
+  obtain ⟨i1, i2⟩ := abs_lt.1 hi
+  have n2' : (n : ℚ) + 1 ≤ 2 ^ 24 := by exact_mod_cast (show n + 1 ≤ 2 ^ 24 by omega)
+  have n1' : (2 : ℚ) ^ 23 ≤ n := by exact_mod_cast n1
+  have hx : 0 < r + i := by nlinarith [mul_le_mul_of_nonneg_right n1' hu.le]
+  have hhi : r + i < 2 ^ (binade r + 1) := by rw [hk1]; nlinarith [mul_le_mul_of_nonneg_right n2' hu.le]
+  have hb : binade (r + i) ≤ binade r := by
+    have := (zpow_lt_zpow_iff_right₀ (one_lt_two (α := ℚ))).1 (lt_of_le_of_lt (binade_spec hx).1 hhi)
+    omega
+  unfold ulp
+  rw [abs_of_pos hx, abs_of_pos h0]
+  exact zpow_le_zpow_right₀ one_le_two (by omega)
+
+theorem ulp_add_le {r i : ℚ} (hr : Representable r) (h0 : r ≠ 0) (hi : |i| < ulp r) : ulp (r + i) ≤ ulp r := by
+  rcases h0.lt_or_gt with h | h
+  · have := ulp_add_le_pos (representable_neg hr) (neg_pos.2 h) (i := -i) (by rwa [ulp_neg, abs_neg])
+    rwa [show -r + -i = -(r + i) by ring, ulp_neg, ulp_neg] at this
+  · exact ulp_add_le_pos hr h hi
+
+theorem rnAdd_moves_half (r i : ℚ) (hr : Representable r) (h0 : r ≠ 0) (hi : ulp r < 2 * |i|) : rnAdd r i ≠ r := by
+  rcases le_or_gt (ulp r) |i| with h | h
+  · exact rnAdd_moves r i hr h0 h
+  intro e
+  have herr := rn_err (r + i)
+  unfold rnAdd at e
+  rw [e, show r - (r + i) = -i by ring, abs_neg] at herr
+  have := ulp_add_le hr h0 h
+  linarith
+
+theorem rnAddMovesHalf : RnAddMovesHalf := rnAdd_moves_half
 
 end Pouw.Fp8Atom.H1T.Proofs

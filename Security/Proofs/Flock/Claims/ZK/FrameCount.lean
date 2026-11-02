@@ -63,6 +63,10 @@ theorem tally_eq {α : Type} {ns ns' : List ℕ} {Q : α → Prop} {p : TMW RecM
     Tally ns' Q p :=
   e ▸ h
 
+theorem tally_mono {α : Type} {ns : List ℕ} {Q Q' : α → Prop} {p : TMW RecM α} (h : Tally ns Q p)
+    (hQ : ∀ a, Q a → Q' a) : Tally ns Q' p :=
+  fun t s a t' s' e => let ⟨hq, hc⟩ := h t s a t' s' e; ⟨hQ a hq, hc⟩
+
 theorem tally_throw {α : Type} {ns : List ℕ} {Q : α → Prop} (e : String) :
     Tally ns Q (throw e : TMW RecM α) := by
   intro t s a t' s' h

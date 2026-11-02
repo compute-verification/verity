@@ -295,4 +295,7 @@ theorem bytes_beq_self (b : ByteArray) : (b == b) = true := by
   show (b.data == b.data) = true
   simp
 
+theorem bytes_bne_self (b : ByteArray) : (b != b) = false := by
+  simp [bne, bytes_beq_self]
+
 end FlockComplete.JsonRT

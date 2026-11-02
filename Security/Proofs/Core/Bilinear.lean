@@ -113,6 +113,37 @@ def naive (m k n : ℕ) : IntScheme (Fin m × Fin k × Fin n) m k n where
   v t j l := if t.2.1 = j ∧ t.2.2 = l then 1 else 0
   w t i l := if t.1 = i ∧ t.2.2 = l then 1 else 0
 
+theorem naive_brent (m k n : ℕ) : (naive m k n).Brent := by
+  intro i j j' l i' l'
+  simp only [naive, Fintype.sum_prod_type]
+  by_cases h : i = i' ∧ j = j' ∧ l = l'
+  · obtain ⟨rfl, rfl, rfl⟩ := h
+    simp [ite_and, Finset.sum_ite_eq']
+  · simp only [h, ite_false]
+    apply Finset.sum_eq_zero; intro a _
+    apply Finset.sum_eq_zero; intro b _
+    apply Finset.sum_eq_zero; intro c _
+    by_cases h1 : a = i ∧ b = j
+    · by_cases h2 : b = j' ∧ c = l
+      · by_cases h3 : a = i' ∧ c = l'
+        · exact absurd ⟨h1.1 ▸ h3.1, h1.2 ▸ h2.1, h2.2 ▸ h3.2⟩ h
+        · simp [h3]
+      · simp [h2]
+    · simp [h1]
+
+/-- **Nontrivial**: Strassen's 2 × 2 scheme, seven products, satisfies Brent's equations, so the cover inequality is
+no rank bound: narrowness is what `narrow_rank` needs. -/
+def strassen2 : IntScheme (Fin 7) 2 2 2 where
+  u t i j := (strassen.u[t.val]!)[2 * i.val + j.val]!
+  v t j l := (strassen.v[t.val]!)[2 * j.val + l.val]!
+  w t i l := (strassen.w[2 * i.val + l.val]!)[t.val]!
+
+theorem strassen2_brent : strassen2.Brent := by
+  unfold IntScheme.Brent strassen2
+  decide
+
+theorem strassen2_rank : Fintype.card (Fin 7) < 2 * 2 * 2 := by decide
+
 
 end Cover
 
@@ -123,6 +154,22 @@ def CapLog (fs : List Atom) : Prop := ∀ f ∈ fs, f.cap ≤ 2 ^ f.weight8
 
 /-- Every atom that holds more than 256 values per operand weighs at least 16 eighths. -/
 def WideHeavy (fs : List Atom) : Prop := ∀ f ∈ fs, 257 ≤ f.cap → 16 ≤ f.weight8
+
+theorem capLog_instances : ∀ fs ∈ instances, CapLog fs := by
+  intro fs hfs f hf
+  simp only [instances, List.mem_cons, List.not_mem_nil, or_false] at hfs
+  rcases hfs with rfl | rfl | rfl | rfl <;>
+    simp only [h200Sheet, h200Measured, rtx6000Sheet, rtx6000Measured, s8, b1, List.mem_cons,
+      List.not_mem_nil, or_false] at hf <;>
+    rcases hf with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
+
+theorem wideHeavy_instances : ∀ fs ∈ instances, WideHeavy fs := by
+  intro fs hfs f hf
+  simp only [instances, List.mem_cons, List.not_mem_nil, or_false] at hfs
+  rcases hfs with rfl | rfl | rfl | rfl <;>
+    simp only [h200Sheet, h200Measured, rtx6000Sheet, rtx6000Measured, s8, b1, List.mem_cons,
+      List.not_mem_nil, or_false] at hf <;>
+    rcases hf with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
 
 theorem ceil_mul_ge (a d : ℕ) (hd : 0 < d) : a ≤ d * ((a + d - 1) / d) := by
   have := Nat.div_add_mod (a + d - 1) d

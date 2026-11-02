@@ -20,6 +20,38 @@ namespace Pouw.ReceiptProofs
 
 open Pouw.Receipt
 
+/-- Equal spreads are receipts that differ by one XOR constant on every start state. -/
+theorem duoWordSpread_eq_iff {n : ℕ} (k a : BitVec n) (r h : ℕ) (d e : BitVec n) :
+    duoWordSpread k a r h d = duoWordSpread k a r h e ↔
+      ∃ κ, ∀ s, duoReceipt h (duoWord k a r s d) ^^^ duoReceipt h (duoWord k a r s e) = κ := by
+  constructor
+  · intro H
+    refine ⟨duoReceipt h (duoWord k a r (0, 0) d) ^^^ duoReceipt h (duoWord k a r (0, 0) e), fun s => ?_⟩
+    have e1 := congrFun (congrFun H s) (0, 0)
+    simp only [duoWordSpread] at e1
+    apply BitVec.eq_of_getLsbD_eq
+    intro i _
+    have e2 := congrArg (fun v => v.getLsbD i) e1
+    simp only [BitVec.getLsbD_xor] at e2 ⊢
+    revert e2
+    cases (duoReceipt h (duoWord k a r s d)).getLsbD i <;> cases (duoReceipt h (duoWord k a r s e)).getLsbD i <;>
+      cases (duoReceipt h (duoWord k a r (0, 0) d)).getLsbD i <;>
+      cases (duoReceipt h (duoWord k a r (0, 0) e)).getLsbD i <;> decide
+  · rintro ⟨κ, H⟩
+    funext s s'
+    have e1 := H s
+    have e2 := H s'
+    simp only [duoWordSpread]
+    apply BitVec.eq_of_getLsbD_eq
+    intro i _
+    have f1 := congrArg (fun v => v.getLsbD i) e1
+    have f2 := congrArg (fun v => v.getLsbD i) e2
+    simp only [BitVec.getLsbD_xor] at f1 f2 ⊢
+    revert f1 f2
+    cases (duoReceipt h (duoWord k a r s d)).getLsbD i <;> cases (duoReceipt h (duoWord k a r s e)).getLsbD i <;>
+      cases (duoReceipt h (duoWord k a r s' d)).getLsbD i <;>
+      cases (duoReceipt h (duoWord k a r s' e)).getLsbD i <;> cases κ.getLsbD i <;> decide
+
 /-- The carry threshold: if the carry into bit `n − 1` of `X + δ` equals the carry into a lower bit `i` of `X + ε` for
 every `X`, then `δ ≡ 0 (mod 2^(n−1))`. Otherwise `X = 2^(n−1) − (δ mod 2^(n−1)) − 2^i` (or `0`) and `X + 2^i` agree
 modulo `2^i` and straddle the threshold. -/

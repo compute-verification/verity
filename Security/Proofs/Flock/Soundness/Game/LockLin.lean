@@ -240,6 +240,21 @@ theorem nodeE_mono (plur : Chooser T D β) (slot : ℕ) {Ψ Ψ' : D → (g : Gam
       · exact h _ _ _
       · exact nodeE_mono plur slot h _ σ'.2
 
+theorem nodeE_nonneg (plur : Chooser T D β) (slot : ℕ) {Ψ : D → (g : Game β) → Strategy g → ℝ}
+    (hΨ : ∀ d g σ, 0 ≤ Ψ d g σ) :
+    ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
+      0 ≤ nodeE plur slot Ψ L σ'
+  | _, _, _, .ret _, _ => le_rfl
+  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L, σ' => by
+      simp only [nodeE]
+      exact div_nonneg (Finset.sum_nonneg fun c _ => nodeE_nonneg plur slot hΨ (L c) (σ' c)) (Nat.cast_nonneg _)
+  | _, _, _, .send _ L, σ' => nodeE_nonneg plur slot hΨ (L σ'.1) σ'.2
+  | _, _, _, @Lock.table _ _ _ _ _ _ _ _ s _ _ k' _ _ _ L, σ' => by
+      simp only [nodeE]
+      split_ifs
+      · exact hΨ _ _ _
+      · exact nodeE_nonneg plur slot hΨ _ σ'.2
+
 /-- **A continuation's expectation at the slot is at most the run's**: for a nonnegative leaf function, the node's
 continuation is the rest of the run. -/
 theorem nodeE_le_expect (plur : Chooser T D β) (slot : ℕ) (c : β → ℝ) (hc : ∀ b, 0 ≤ c b) :

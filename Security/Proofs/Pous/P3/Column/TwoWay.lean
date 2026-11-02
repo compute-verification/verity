@@ -43,6 +43,12 @@ theorem low_mono {r r' : ℕ} (h : r ≤ r') :
   | refl => exact Finset.Subset.refl _
   | step _ ih => exact ih.trans (by rw [cr_succ]; exact Finset.subset_union_left)
 
+theorem top_mono {r r' : ℕ} (h : r ≤ r') :
+    (colReach G c0 r).topWhole ⊆ (colReach G c0 r').topWhole := by
+  induction h with
+  | refl => exact Finset.Subset.refl _
+  | step _ ih => exact ih.trans (by rw [cr_succ]; exact Finset.subset_union_left)
+
 theorem mem_low_succ {r : ℕ} {w : Fin n} (h : w ∈ (colReach G c0 (r + 1)).lowerWhole) :
     w ∈ (colReach G c0 r).lowerWhole ∨ G.par w ⊆ (colReach G c0 r).lowerWhole ∨
       ∀ u, (w, u) ∈ (colReach G c0 r).lowerCol := by
@@ -128,6 +134,9 @@ theorem flow_mem {w : Fin n} {s : ℕ} (hs : w ∈ (colReach G c0 s).lowerWhole)
   have hex : ∃ r, w ∈ (colReach G c0 r).lowerWhole := ⟨s, hs⟩
   have he : flow G c0 w = Nat.find hex := by unfold flow; simp only [hex, ↓reduceDIte]
   rw [he]; exact Nat.find_spec hex
+
+theorem flow_zero {w : Fin n} (h : w ∈ c0.lowerWhole) : flow G c0 w = 0 :=
+  Nat.le_zero.1 (flow_min G c0 (s := 0) h)
 
 /-- A lower label not held but whole by round `r` became whole at `flow ≥ 1`, by its parents or by promotion. -/
 theorem flow_rule {w : Fin n} {r : ℕ} (hr : w ∈ (colReach G c0 r).lowerWhole) (h0 : w ∉ c0.lowerWhole) :

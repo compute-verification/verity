@@ -89,9 +89,35 @@ theorem toRows_oneGate {outs : List ℕ} (up : FlockSoundness.UProg k one outs) 
     Prog.OneGate (up.toRows hk) (up.oneOf hk) :=
   toRows_oneAt hk up
 
+/-- **A program of units' rows circuit has each unit's composed rows.** -/
+theorem toRows_rows : ∀ {outs : List ℕ} (up : FlockSoundness.UProg k one outs) (u : Fin up.n),
+    (up.toRows hk).rows u = up.rowsOf hk u
+  | _, .inputs, u => u.elim0
+  | _, .snoc up s src valid, u => by
+    induction u using Fin.lastCases with
+    | last =>
+      change (FlockSoundness.Prog.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
+        (up.insOf_ne hk s src valid)).rows (Fin.last up.n) = _
+      rw [Prog.rows_last]
+      show s.R = ((UProg.snoc up s src valid).spec hk (Fin.last up.n)).R
+      rw [UProg.spec_last]
+    | cast v =>
+      change (FlockSoundness.Prog.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
+        (up.insOf_ne hk s src valid)).rows v.castSucc = _
+      rw [Prog.rows_castSucc, toRows_rows up v]
+      show (up.spec hk v).R = ((UProg.snoc up s src valid).spec hk v.castSucc).R
+      rw [UProg.spec_castSucc]
+
 variable {outs : List ℕ} (up : FlockSoundness.UProg k one outs) {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin up.n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin up.n)) → (R : Reg) → Fin up.n → Fin (plan S R).length}
+
+/-- **`hConst` for a program of units over circuit types**, at places carrying the program's own instances: only a
+unit's constant column sits on the constant input. -/
+theorem constCols_toRows {os : Finset (Fin up.rowsN)} (pp : ProgPlaces (up.toRows hk) os plan tab)
+    (hinst : ∀ u, pp.inst u = Prog.instC (up.toRows hk) os u) :
+    ((up.toRows hk).partition os).ConstCols plan tab pp.derived.place {up.oneOf hk} :=
+  constCols_of_instC pp (toRows_oneGate hk up) hinst
 
 end UProg
 

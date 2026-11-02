@@ -14,6 +14,34 @@ about the openings assumed.
 
 namespace Flock.Registered
 
+/-- **`checkPort` accepting, row by row**: the port is the circuit's first port `p` of its name, the header's entry
+gives `positions` and `paths`, and every row of its table opens the registered root at its position through its path
+(`badRow`). -/
+theorem checkPort_rows {c : Circuit} {pub : Public} {t : Tables} {indices : Array Nat} {reg : Port}
+    (h : checkPort c pub t indices reg = .ok ()) :
+    ∃ p positions paths, (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some p ∧
+      entry pub reg = .ok (positions, paths) ∧ ∀ r < t.counts.getD p 0,
+        opens reg (tableRow pub t p r) (positions.getD r 0) (paths.getD r ByteArray.empty) = true := by
+  unfold checkPort at h
+  simp only at h
+  split at h
+  · rename_i p hp
+    split at h
+    · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+    · split at h
+      · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+      · obtain ⟨⟨positions, paths⟩, hent, h⟩ := except_bind_ok h
+        simp only at h
+        split at h
+        · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+        · split at h
+          · exact absurd h (throw_ne_ok _ _)
+          · rename_i hrow
+            refine ⟨p, positions, paths, hp, hent, fun r hr => ?_⟩
+            have ho := List.find?_eq_none.mp hrow r (List.mem_range.mpr hr)
+            simpa using ho
+  · exact absurd h (throw_ne_ok _ _)
+
 end Flock.Registered
 
 namespace RecDeploy

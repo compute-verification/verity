@@ -222,4 +222,25 @@ theorem ligeritoPZk_ret (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
       | (with_reducible apply Total.liftTM; intro _; exact ⟨_, rfl⟩)
       | split)
 
+/-- `CoinsT`'s pair condition is `rhoIndependent` at the coins' replies. -/
+theorem rhoIndependent_of {k : ℕ} (r : Fin k → FlockDeploy.Coin) {a : ℕ} (ha : a + 1 < k) (h : ¬ rhoDep r a) :
+    Zk.rhoIndependent (coinKOf (Claims.coinSeq r a).bytes, coinKOf (Claims.coinSeq r (a + 1)).bytes) = true := by
+  have hz : ¬ ((Claims.coinSeq r a).at 0 * (Claims.coinSeq r (a + 1)).at 1 +
+      (Claims.coinSeq r a).at 1 * (Claims.coinSeq r (a + 1)).at 0).isZero = true :=
+    fun hz => h ⟨ha, FlockLevel3.F128.isZero_iff _ hz⟩
+  simpa [Zk.rhoIndependent, coinKOf, coinOf_bytes] using hz
+
+/-- **The masked Ligerito prover returns on good coins**: answered by the coins `r` from the bodies `l`, where the pair
+`ρ` at sends `|l| + 2 + k_0` and `|l| + 3 + k_0` is not dependent (`CoinsT`'s `¬ rhoDep`). -/
+theorem ligeritoPZk_ret_coins {k : ℕ} (r : Fin k → FlockDeploy.Coin) (h : ByteArray → ByteArray) (ms : MerkleScheme)
+    (sch : Schedule) (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128)
+    (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (t : Transcript) (l : Array Claims.Msg) (hk : l.size + 3 + sch.k0 < k)
+    (hr : ¬ rhoDep r (l.size + 2 + sch.k0)) :
+    ∃ a l', ((ligeritoPZk (asksS fun j => (Claims.coinSeq r j).bytes) (Hashes.ofSha512 h : Hashes PS) ms sch T cm0 tb
+      b lay hv rep tPad extra lanePad salt nonce).run t).go l = (.ok a, l') := by
+  refine ligeritoPZk_ret _ h ms sch T cm0 tb b lay hv rep tPad extra lanePad salt nonce hn hk0 t l ?_
+  rw [show l.size + 3 + sch.k0 = l.size + 2 + sch.k0 + 1 by omega]
+  exact rhoIndependent_of r (by omega) hr
+
 end FlockComplete.L0

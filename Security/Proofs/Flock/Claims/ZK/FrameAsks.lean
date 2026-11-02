@@ -63,6 +63,13 @@ theorem ot_eq {α : Type} {ns ns' : List ℕ} {Q : α → Prop} {p : TMW OpenM �
     OT I ns' Q p :=
   e ▸ h
 
+theorem ot_throw {α : Type} {ns : List ℕ} {Q : α → Prop} (e : String) : OT I ns Q (throw e : TMW OpenM α) :=
+  fun _ _ _ _ => trivial
+
+theorem ot_throw_bind {α β : Type} {ns : List ℕ} {R : β → Prop} (e : String) (f : α → TMW OpenM β) :
+    OT I ns R (throw e >>= f) :=
+  ot_eq (ot_bind (Q := fun _ => False) (ms := []) (ot_throw e) fun _ h => h.elim) (List.append_nil ns)
+
 theorem ot_liftTM {α : Type} (x : _root_.Flock.Transcript.TM α) : OT I [] (fun _ => True) (liftTM x : TMW OpenM α) := by
   intro t got rest hI
   rcases hx : x t with e | r
@@ -306,6 +313,10 @@ theorem ot_lift_pure {α : Type} (x : α) :
 theorem otl_lift_pure {α : Type} (x : α) :
     OTL I [] (fun r => r = x) (liftT (StateT.lift (pure x : OpenM α)) : LP OpenM α) :=
   otl_liftT (ot_lift_pure x)
+
+theorem otl_at {α : Type} {ns : List ℕ} {Q : α → Prop} {p : LP OpenM α} (h : OTL I ns Q p) (st : LigState) :
+    OT I ns (fun r => Q r.1) (p.run st) :=
+  h st
 
 theorem ot_run_bind {α β : Type} {ns ms : List ℕ} {Q : α → Prop} {R : β → Prop} {p : LP OpenM α} {st : LigState}
     {f : α × LigState → TMW OpenM β} (hp : OTL I ns Q p) (hf : ∀ a, Q a.1 → OT I ms R (f a)) :

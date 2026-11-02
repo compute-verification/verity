@@ -310,4 +310,16 @@ noncomputable def keyRowsEnc (ho : c.outNet = c.unitNet)
   keyRowsOut (outs := outs) (popOf := popOf) (hparse := hparse) (rowW := rowW) (saltCol := saltCol) rowEnc
     rowEnc_inj bitCode bitCode_inj ho hsite hkeys houts hc1 hz1
 
+/-- `keyRowsEnc`'s `enc` is `rowEnc`. -/
+theorem keyRowsEnc_enc (ho : c.outNet = c.unitNet)
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hkeys : KeysRow c hU rowW) (houts : OutsOut c hU n outs)
+    (hc1 : ((keyProg c hU n).partition outs).ConstCols plan tab (keyPlace hparse outs)
+      {oneG (c := c) (hU := hU) (n := n)})
+    (hz1 : ((keyProg c hU n).partition outs).ZeroCols plan tab (keyPlace hparse outs)
+      {zeroG (c := c) (hU := hU) (n := n)}) :
+    (keyRowsEnc (rowW := rowW) (hparse := hparse) (saltCol := saltCol) ho hsite hkeys houts hc1 hz1).enc =
+      rowEnc := rfl
+
 end FlockSoundness.Discharge.Layout

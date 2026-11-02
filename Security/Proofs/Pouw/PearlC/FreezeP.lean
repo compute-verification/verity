@@ -41,8 +41,19 @@ open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs P
 /-! ## The twins at `hopperE4m3K32` are today's definitions (the chain's are `Accum`'s `groupWordP_hopper`, …) -/
 
 theorem stepP_hopper : stepP hopperE4m3K32 = Skip.step := rfl
+theorem promoteGroupP_hopper : promoteGroupP hopperE4m3K32 = promoteGroup := rfl
+theorem wordInP_hopper : wordInP hopperE4m3K32 = wordIn := rfl
+theorem inTotalP_hopper : inTotalP hopperE4m3K32 = inTotal := rfl
+theorem laterWordsP_hopper : laterWordsP hopperE4m3K32 = laterWords := rfl
+theorem keepsP_hopper : keepsP hopperE4m3K32 = keeps := rfl
+theorem jointAtP_hopper : jointAtP hopperE4m3K32 = jointAt := rfl
 theorem jointFlagsP_hopper : jointFlagsP hopperE4m3K32 = jointFlags := rfl
 theorem wordFlagsP_hopper : wordFlagsP hopperE4m3K32 4 = wordFlags := rfl
+theorem unitFlagsP_hopper {m n k : ℕ} : @unitFlagsP hopperE4m3K32 m n k 4 = unitFlags := rfl
+
+/-- `sm120Step` is `stepP` of the sm_120 atom at floor −133. -/
+theorem sm120Step_eq (acc : Nat) (a b : Fin 32 → Code) : sm120Step acc a b = stepP (sm120E4m3K32 (-133)) acc (a, b) :=
+  rfl
 
 /-! ## The floor is unobservable at or below −126 -/
 
@@ -173,6 +184,16 @@ theorem step_floor (p p' : Pipeline) (hg : p.groups = p'.groups) (hw : p.width =
 theorem sm120_floor {z z' : ℤ} (hz : z ≤ -126) (hz' : z' ≤ -126) : (sm120E4m3K32 z).step = (sm120E4m3K32 z').step :=
   step_floor _ _ rfl rfl hz hz'
 
+/-- Every floor in `[−145, −126]` gives `sm120Step`. -/
+theorem sm120Step_floor {z : ℤ} (hz : z ≤ -126) : sm120StepAt z = sm120Step := by
+  funext acc a b
+  unfold sm120StepAt sm120Step sm120E4m3
+  rw [sm120_floor hz (by norm_num : (-133 : ℤ) ≤ -126)]
+
+/-- Hopper's floor −139 is unobservable too. -/
+theorem hopper_floor {z : ℤ} (hz : z ≤ -126) : (⟨[32], 14, z⟩ : Pipeline).step = hopperE4m3K32.step :=
+  step_floor _ _ rfl rfl hz (by norm_num [hopperE4m3K32])
+
 /-! ## (d) Skipping in place, over any atom -/
 
 section Skipping
@@ -216,6 +237,15 @@ with some set of atoms of its group `t / G`. -/
 def WordSkippableP (G : Nat) (atoms : List AtomIn) (t : Nat) : Prop :=
   ∃ M : List Bool, M.length = atoms.length ∧ M.getD t false = true ∧ (∀ s, M.getD s false = true → s / G = t / G) ∧
     chainSkipP p G atoms (M.toChunks G) [] = chainP p G atoms
+
+theorem idFlagsP_hopper : idFlagsP hopperE4m3K32 = idFlags := rfl
+theorem promFlagsP_hopper : promFlagsP hopperE4m3K32 = promFlags := rfl
+theorem totalSkipP_hopper : totalSkipP hopperE4m3K32 = totalSkip := rfl
+theorem chainSkipP_hopper : chainSkipP hopperE4m3K32 = chainSkip := rfl
+theorem skipInP_hopper : skipInP hopperE4m3K32 = skipIn := rfl
+theorem skipOneP_hopper : skipOneP hopperE4m3K32 = skipOne := rfl
+theorem absorbedP_hopper : absorbedP hopperE4m3K32 = absorbed := rfl
+theorem wordSkippableP_hopper : WordSkippableP hopperE4m3K32 4 = WordSkippable := rfl
 
 theorem total_eq_foldlP (gs : List (List AtomIn)) : totalP p gs = gs.foldl (promoteGroupP p) (some 0) := by
   rw [totalP, List.foldl_map]; rfl
@@ -337,6 +367,14 @@ theorem joint_completeP (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length)
   intro j h1 h2 hmj
   exact jointFlags_getElemP p gs i hi m hm h j h2 (by rw [List.getD_eq_getElem _ _ h1]; exact hmj)
 
+/-- Absorbed atoms are jointly flagged, under any atom. -/
+theorem joint_of_absorbedP (gs : List (List AtomIn)) (i j : Nat) (hi : i < gs.length)
+    (hj : j < (jointFlagsP p gs i).length) (h : absorbedP p gs i j = true) : (jointFlagsP p gs i)[j] = true := by
+  have hj' : j < gs[i].length := by rwa [length_jointFlagsP p gs i hi] at hj
+  have hs := (skipOne_iffP p gs i j hi).2 h
+  rw [skipOneP, List.getD_eq_getElem _ _ hi] at hs
+  exact jointFlags_getElemP p gs i hi _ (length_oneMask _ _) hs j hj (oneMask_getD _ _ hj')
+
 /-- **Completeness of the joint flags on a word**, under any atom and promotion depth `G > 0`. -/
 theorem jointFlags_completeP {G : Nat} (hG : 0 < G) (atoms : List AtomIn) (t : Nat)
     (h : WordSkippableP p G atoms t) : (jointFlagsP p (atoms.toChunks G) (t / G)).getD (t % G) false = true := by
@@ -389,6 +427,13 @@ end Skipping
 theorem joint_flagsComplete_hopper {m n k : ℕ} (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) :
     ∀ i j t, WordSkippable (rowAtoms (Aq i) (Bq j)) t → unitFlags Aq Bq i j t = true :=
   joint_flagsCompleteP hopperE4m3K32 (by decide) Aq Bq
+
+/-- On sm_120, at any floor and promotion depth `G > 0`, the joint flags are complete for in-group skips. -/
+theorem sm120_joint_flagsComplete (z : ℤ) {G : Nat} (hG : 0 < G) {m n k : ℕ} (Aq : Matrix (Fin m) (Fin k) Code)
+    (Bq : Matrix (Fin n) (Fin k) Code) :
+    ∀ i j t, WordSkippableP (sm120E4m3K32 z) G (rowAtoms (Aq i) (Bq j)) t →
+      unitFlagsP (sm120E4m3K32 z) G Aq Bq i j t = true :=
+  joint_flagsCompleteP _ hG Aq Bq
 
 /-! ## (a) An identity needs domination, at width `w ≥ 24` -/
 
@@ -700,6 +745,11 @@ theorem identity_needs_domination_hopper {acc : Nat} {tc : Term} (hw : fp32Value
 def preSumW (z : ℤ) (w : ℕ) (a b : Fin 32 → Code) : ℚ :=
   ∑ l, truncTo (2 ^ (maxExp z (List.ofFn fun l => product (a l) (b l)) - w + 1)) (val (a l) * val (b l))
 
+theorem preSumW_hopper : preSumW (-139) 14 = preSum := by
+  have h : ∀ E : ℤ, E - ((14 : ℕ) : ℤ) + 1 = E - 13 := fun E => by push_cast; ring
+  funext a b
+  simp only [preSumW, preSum, gridExp, h]
+
 theorem packValue_inf_ne (s : Bool) : packValue (.inf s) ≠ 0 := by cases s <;> decide
 
 /-- **(b1)** at width `24 ≤ w ≤ 115` and any floor: from `+0`, on finite codes, the atom is an identity exactly when
@@ -751,6 +801,11 @@ theorem step_zero_iffW {w : ℕ} (hw24 : 24 ≤ w) (hw : w ≤ 115) (z : ℤ) (a
       rw [h] at htot; exact_mod_cast (mul_eq_zero.1 htot).resolve_right (two_zpow_ne _)
     rw [h0]; simp [normalize, Term.zero, packValue, packTerm]
 
+/-- (b1) at `hopperE4m3K32`, in `step_zero_iffW`'s form (`Freeze.hopperStep_zero_iff`). -/
+theorem step_zero_iff_hopper (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) :
+    hopperE4m3K32.step 0 (List.ofFn a) (List.ofFn b) = 0 ↔ preSumW (-139) 14 a b = 0 := by
+  rw [preSumW_hopper]; exact hopperStep_zero_iff a b ha hb
+
 /-- (b1) on sm_120, at any floor. -/
 theorem sm120_step_zero_iff (z : ℤ) (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false)
     (hb : ∀ l, (b l).isNaN = false) :
@@ -774,6 +829,8 @@ theorem aligned_natAbs_ltW {w : ℕ} (hw : 24 ≤ w) (E : ℤ) (t : Term) (hm : 
 
 /-- The incoming word of atom `j` of a group from `+0`, under `p`. -/
 def inWordP (p : Pipeline) (g : List AtomIn) (j : Nat) : Nat := (g.take j).foldl (stepP p) 0
+
+theorem inWordP_hopper : inWordP hopperE4m3K32 = inWord := rfl
 
 /-- A running word of a group from `+0` after `j` atoms at width `w`: `+0`, or normal with exponent in
 `[−12 − (w − 1)·j, 16 + 7j]`. -/

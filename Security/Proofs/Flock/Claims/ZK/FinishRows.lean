@@ -77,6 +77,9 @@ section ViewProof
 
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) {nE : ℕ} (v : Fin nE → 𝔽) (g : ℕ → F128)
 
+theorem hab_gt_fa : (layOf Tz st).fa + 2 < (layOf Tz st).hab := by
+  simp only [Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc, Zk.PadLayout.fc]; omega
+
 theorem zp64_gt_fa : (layOf Tz st).fa + 2 < (layOf Tz st).zp 64 := by
   simp only [Zk.PadLayout.zp, Zk.PadLayout.lc, Zk.PadLayout.fc]; omega
 

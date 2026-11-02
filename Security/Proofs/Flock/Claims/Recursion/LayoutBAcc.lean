@@ -251,6 +251,15 @@ theorem mem_accBlock {r : XR} {e : ℕ × ℕ × List (Msg × List HmNets.Lin)} 
   obtain ⟨a, ha, rfl⟩ := hp
   exact ⟨a.2.1, a.2.2, ha, rfl⟩
 
+/-- **Every held row up to the chain's last is in the block.** -/
+theorem accBlock_findIdx {r : XR} {p : ℕ} (hp : p ≤ chainTop r) (hc : (accCanon r p).isSome) :
+    ((accBlock r).findIdx? (·.1 == p)).isSome := by
+  obtain ⟨e, he⟩ := Option.isSome_iff_exists.1 hc
+  rw [List.findIdx?_isSome, List.any_eq_true]
+  refine ⟨(p, e.1, accSegs e.2.1 e.2.2), ?_, by simp⟩
+  unfold accBlock
+  exact List.mem_filterMap.2 ⟨p, List.mem_range.2 (by omega), by rw [he]; rfl⟩
+
 /-! ## The last message's bytes -/
 
 /-- A piece of an assembled round off the witnesses, as `LayoutB.assembled` reads it. -/
@@ -423,6 +432,49 @@ theorem layoutBAcc_owner {x : Msg} {ws : List Claims.Flock.Wit} (hws : ws.length
   have hnS : nS x = r.w.parts.length := by simp [nS, hr]
   obtain ⟨hown, hheld⟩ := row_layoutBAcc rest hr hcan
   exact ⟨o, ws[o]'(by omega), _, hown, List.getElem?_eq_getElem (by omega), hheld _⟩
+
+/-- **Part `s` holds its `j`-th holding of row `p` at slot `Nat.pair p j`**, unless it is the row's owner and `j > 0`:
+the owner holds every slot of its row at its first holding. -/
+theorem rowAt_layoutBAcc {x : Msg} {r : XR} (hr : readX x = some r) {s p j : ℕ} {c : Circuit} {h : String × ℕ}
+    (hs : s < r.w.parts.length) (hc : r.w.parts[s]?.bind partCircuit = some c)
+    (hj : (accHoldings r s p)[j]? = some h) (hj0 : (accCanon r p).map (·.1) = some s → j = 0) :
+    (layoutBAcc rest).rowAt x s (Nat.pair p j) = some (accSegs c h) := by
+  have hh : accHolder r p s = some (s, c, (accHoldings r s p).head!) := by
+    have hne : accHoldings r s p ≠ [] := fun h0 => by simp [h0] at hj
+    obtain ⟨a, l, hal⟩ := List.exists_cons_of_ne_nil hne
+    simp [accHolder, hc, hal]
+  obtain ⟨e, he⟩ := Option.isSome_iff_exists.1 (accCanon_isSome hs hh)
+  show ((readX x).bind fun r => accRowAt r s (Nat.pair p j)) = _
+  rw [hr, Option.bind_some]
+  unfold accRowAt
+  simp only [Nat.unpair_pair]
+  obtain ⟨o, c', h'⟩ := e
+  rw [he]
+  dsimp only
+  split_ifs with hso
+  · subst hso
+    have h0 := hj0 (by rw [he]; rfl)
+    subst h0
+    have hc' : r.w.parts[s]?.bind partCircuit = some c' := (accCanon_spec he).2.1
+    have hh' : (accHoldings r s p).head? = some h' := (accCanon_spec he).2.2
+    rw [hc] at hc'
+    cases Option.some.inj hc'
+    rw [List.head?_eq_getElem?, hj] at hh'
+    cases Option.some.inj hh'
+    rfl
+  · simp only [hc, Option.bind_some, hj, Option.map_some]
+
+/-- **Slot `σ` is placed wherever its row has an owner, up to the chain's last**, and the statement doesn't fix the last
+round. -/
+theorem accIn_isSome {x : Msg} {r : XR} (hr : readX x = some r) {σ : ℕ}
+    (hfx : (layoutBTops (finAcc rest)).fixedAt x (layoutOf.rounds x - 1) = none) (hpos : 0 < layoutOf.rounds x)
+    (hp : σ.unpair.1 ≤ chainTop r) (hc : (accCanon r σ.unpair.1).isSome) : (accIn rest x σ).isSome := by
+  obtain ⟨k, hk⟩ := Option.isSome_iff_exists.1 (accBlock_findIdx hp hc)
+  have hc' : (layoutBTops (finAcc rest)).fixedAt x (layoutOf.rounds x - 1) = none ∧ 0 < layoutOf.rounds x :=
+    ⟨hfx, hpos⟩
+  unfold accIn accOff
+  rw [ite_eq_left hc', hr, Option.bind_some, hk]
+  rfl
 
 /-- `chainAt` at a placed slot: the two elements of round `i`'s bytes from offset `off`. -/
 theorem chainAt_of_accIn {x : Msg} {ms : List Msg} {p i off : ℕ} (hin : accIn rest x (Nat.pair p 0) = some (i, off))

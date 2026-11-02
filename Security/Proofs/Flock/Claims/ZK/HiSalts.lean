@@ -62,6 +62,13 @@ noncomputable abbrev hiTape (P : Composed.LigProver) (x : Msg) (t : Fin Claims.F
     (j : Fin (jOf x)) (r : Fin 2) : Fin (Composed.hiCount (zkTab x j).table) → ZkView.Salt :=
   (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).1 j).2.2.2.2.2.2.2.2.2 r
 
+/-- `TapePlan.ofLayout`'s base of table `j` is the layout's reading of cell `j`. -/
+theorem ofLayout_tape_base {P : Composed.LigProver} (L : TapeLayout P)
+    (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (x : Msg)
+    (t : Fin Claims.Flock.zkTableCap → L.Cell) (j : Fin (jOf x)) :
+    ((TapePlan.ofLayout L z).tape x t).1 j = (L.read x j (t (Fin.castLE (jOf_le_cap x) j))).1 :=
+  rfl
+
 /-- `exeRead`'s levels ≥ 1 salts: the cell's, by level and position or at a leftover place, at `ιH`. -/
 theorem exeRead_hi {z : ZkView.Sizes} (hz : Fits z zMax) {h : ℕ}
     (ιH : Fin h ↪ (Fin (schMax + 1) × Fin schMax) ⊕ Fin schMax) (c : ExeCell) (r : Fin 2) :

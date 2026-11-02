@@ -213,6 +213,12 @@ theorem contRecord_congr {arr arr' : ℕ → ℕ} (s : ContState sch.B) (i : Fin
   unfold contRecord contProg contMem contSend
   rw [hl]
 
+theorem length_contRecords (arr : ℕ → ℕ) :
+    ∀ (s : ContState sch.B) (l : List (Fin sch.B)),
+      (contRecords mach D Q D_late Q_late W pp C ω arr s l).length = l.length
+  | _, [] => rfl
+  | s, i :: l => by simp [contRecords, length_contRecords arr _ l]
+
 end Congr
 
 /-! ## The view at slot `t` -/
@@ -339,6 +345,12 @@ theorem slotHit_congr (u : M.Ω × sch.Coins) {x x' : Fin T → Fin b × Fin sch
     (hx : ∀ s : Fin T, (s : ℕ) < t → x s = x' s) :
     slotHit sch D Q D_late Q_late W mach a u x t = slotHit sch D Q D_late Q_late W mach a u x' t := by
   unfold slotHit
+  rw [arrS_congr a hx, histAt_congr a hx]
+
+theorem slotBad_congr (u : M.Ω × sch.Coins) {x x' : Fin T → Fin b × Fin sch.B} {t : ℕ}
+    (hx : ∀ s : Fin T, (s : ℕ) < t → x s = x' s) :
+    slotBad sch D Q D_late Q_late β W mach a u x t ↔ slotBad sch D Q D_late Q_late β W mach a u x' t := by
+  unfold slotBad
   rw [arrS_congr a hx, histAt_congr a hx]
 
 theorem slotQ_congr (u : M.Ω × sch.Coins) {x x' : Fin T → Fin b × Fin sch.B} {t : ℕ}

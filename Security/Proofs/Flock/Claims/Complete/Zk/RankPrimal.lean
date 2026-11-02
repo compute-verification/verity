@@ -270,6 +270,18 @@ theorem map_mul_congr {S : Finset ι} {V : AddSubgroup (ι → F)} (hV : V ≤ c
   · rintro ⟨v, hv, rfl⟩
     exact ⟨v, hv, mul_coordSub h (hV hv)⟩
 
+theorem Kc_congr {S : Finset ι} {V : AddSubgroup (ι → F)} (hV : V ≤ coordSub S) {c c' : ι → F}
+    (h : ∀ i ∈ S, c i = c' i) : Kc V c = Kc V c' := by
+  unfold Kc
+  congr 1
+  ext w
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · rintro ⟨hw, h'⟩
+    exact ⟨hw, by rwa [← mul_coordSub h (hV hw)]⟩
+  · rintro ⟨hw, h'⟩
+    exact ⟨hw, by rwa [mul_coordSub h (hV hw)]⟩
+
 theorem csz_map_le (V : AddSubgroup (ι → F)) (f : (ι → F) →+ (ι → F)) : csz (V.map f) ≤ csz V := by
   unfold csz
   calc (univ.filter (· ∈ V.map f)).card = ((univ.filter (· ∈ V)).image f).card := by
@@ -298,6 +310,9 @@ theorem csz_projS_mono {S' S : Finset ι} (h : S' ⊆ S) (U : AddSubgroup (ι �
 
 theorem csz_projS_le (S : Finset ι) (U : AddSubgroup (ι → F)) : csz (projS S U) ≤ csz U := csz_map_le _ _
 
+theorem csz_le_of_le (V : AddSubgroup (ι → F)) : csz V ≤ Fintype.card (ι → F) :=
+  (Finset.card_le_univ _).trans (le_of_eq (by simp))
+
 /-- The points of `V` vanishing at `e`. -/
 noncomputable def kerE (V : AddSubgroup (ι → F)) (e : ι) : ℕ := csz (V ⊓ coordSub ({e} : Finset ι)ᶜ)
 
@@ -306,6 +321,8 @@ theorem kerE_mul_le (V : AddSubgroup (ι → F)) (e : ι) : kerE V e * csz (proj
   exact csz_ker_mul_le V {e}
 
 theorem one_le_kerE (V : AddSubgroup (ι → F)) (e : ι) : 1 ≤ kerE V e := csz_pos _
+
+theorem one_le_csz (V : AddSubgroup (ι → F)) : 1 ≤ csz V := csz_pos V
 
 /-- **The kept count by supports**: with every nonzero point of `V ≤ F^S` of support at least `m ≥ 1`, the nonzero
 points off full support each vanish at some `e ∈ S` and so lie among `kerE V e`'s, each of

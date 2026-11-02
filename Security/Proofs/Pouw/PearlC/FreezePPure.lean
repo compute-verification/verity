@@ -43,6 +43,10 @@ section Pure
 
 variable (p : Pipeline)
 
+theorem flagsAt_zero : flagsAt p 0 = pureFlagsP p := rfl
+
+theorem flagsAt_of_ne_zero {G : Nat} (hG : G ≠ 0) : flagsAt p G = wordFlagsP p G := ite_eq_right hG
+
 theorem length_rowAtoms {k : ℕ} (a b : Fin k → Code) : (rowAtoms a b).length = k / 32 := List.length_ofFn
 
 /-! ## The lone skip -/
