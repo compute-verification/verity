@@ -18,7 +18,9 @@ keep "$DATA" "the starts ladder's training stream (islands/ref-optim/data.sh)"
 keep "$work" "the starts ladder's $size run: its checkpoint (a resume) and registered starts (islands/ref-optim/ladder.sh)"
 nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv,noheader || true
 if [ ! -s "$work/count.json" ]; then
-  CUDA_VISIBLE_DEVICES=${gpus[0]} "$P" "$here/ladder.py" count --size "$size" --batch "$batch" --out "$work" "$@"
+  # LADDER_COUNT_MICRO: a smaller micro-batch for the eager count, whose activations a compiled run doesn't keep
+  CUDA_VISIBLE_DEVICES=${gpus[0]} "$P" "$here/ladder.py" count --size "$size" --batch "$batch" --out "$work" "$@" \
+    ${LADDER_COUNT_MICRO:+--micro "$LADDER_COUNT_MICRO"}
 fi
 cp "$work/count.json" "$OUT/count.json"
 exec "$P" -m torch.distributed.run --standalone --nproc_per_node "$n" "$here/ladder.py" train --size "$size" \
