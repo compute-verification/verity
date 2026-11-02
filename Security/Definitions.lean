@@ -13,6 +13,7 @@ import Definitions.Nci.Dark
 import Definitions.Nci.Packed
 import Definitions.Nci.Covering
 import Definitions.Nci.Formalism
+import Definitions.Nci.Formalism.Instances
 import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads

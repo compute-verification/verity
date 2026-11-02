@@ -21,5 +21,6 @@ The assumptions A1 and A2 are `Nci.Formalism.Assumptions` (`Definitions.Nci.Assu
 Slowdown and Security are `Nci.Formalism.Guarantees` (`Definitions.Nci.Guarantees.Formalism`), and their proofs
 `Nci.Formalism.SecurityProofs`; the reconstruction lemma and the split of a block's inputs are proved beside them
 (`Nci.Formalism.reconstruction`, `Nci.Formalism.reads_split`). Units: `|C|`, `c` and `w` count gates; `k`, `τ`, `a`, `u`, `Δ` and
-`Δ_grad` count values, which are bits.
+`Δ_grad` count values, which are bits. The honest instance and the counter-example the theorems' witnesses are stated at
+are `Definitions.Nci.Formalism.Instances`.
 -/

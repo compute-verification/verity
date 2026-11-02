@@ -20,6 +20,9 @@ The three theorems of Daniel's training formalism v1 (`Definitions.Nci.Formalism
   Daniel's `φ s a / (k t)` with the factor `1 - t - ε`, which is near `1` for a short tail;
 * **Security** (§5): under A1 and A2, a run of the methods considered that reaches `ℓ*` in `N` periods of `n` blocks of
   `c` gates has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound for it and `p` A2's floor.
+
+Slowdown, its two cases and Security each have an honest and a nontrivial lemma, their premises holding together and
+each bound failing without A1 (`Definitions.Nci.Guarantees.Formalism.Witnesses`).
 -/
 
 namespace Nci.Formalism.Guarantees
