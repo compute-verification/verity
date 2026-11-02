@@ -4,10 +4,12 @@
 # verifier's process the driver runs (`remote-audit-verifier`, `RemoteAudit.Verifier`), the session as a core
 # protocol (`remote-audit-protocol`, `RemoteAudit.Protocol`, onsite's bandwidth component), and a P2 store's receipts
 # and openings (`RemoteAudit.P2`) and its sessions, of record in the verifier's process (`RemoteAudit.P2Session`),
-# which `p2.py` and `p2_party.py` are held to by the same difftest. Code: Lean core and the packages below, no Mathlib
-# and nothing of Security.
+# which `p2.py` and `p2_party.py` are held to by the same difftest, and such a session as a core protocol
+# (`remote-audit-p2-protocol`, `RemoteAudit.P2Protocol`, which replays its case, `p2_case.py`). Code: Lean core and
+# the packages below, no Mathlib and nothing of Security.
 name = "remote_audit"
-defaultTargets = ["RemoteAudit", "remote-audit-difftest", "remote-audit-verifier", "remote-audit-protocol"]
+defaultTargets = ["RemoteAudit", "remote-audit-difftest", "remote-audit-verifier", "remote-audit-protocol",
+  "remote-audit-p2-protocol"]
 
 [leanOptions]
 autoImplicit = false
@@ -49,3 +51,7 @@ root = "RemoteAudit.VerifierMain"
 [[lean_exe]]
 name = "remote-audit-protocol"
 root = "RemoteAudit.ProtocolMain"
+
+[[lean_exe]]
+name = "remote-audit-p2-protocol"
+root = "RemoteAudit.P2ProtocolMain"

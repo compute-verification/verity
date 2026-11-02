@@ -31,6 +31,16 @@ about = "compile and kernel-replay {name}"
 resources = { cores = 1, mem_gb = 6, disk_gb = 1 }
 timeout_s = 900
 
+[family.lean-env]
+files = ["**/lean-toolchain", "**/lake-manifest.json"]
+kinds = ["lean-env"]
+env = "lean"
+about = "make {name}'s lean env and kernel-replay its modules (scope {scope})"
+# the largest env's whole replay (the toolchain, Mathlib and ArkLib with theirs), its env made cold, with headroom;
+# `cores` is the replay's LEAN_NUM_THREADS
+resources = { cores = 16, mem_gb = 32, disk_gb = 60 }
+timeout_s = 7200
+
 [family.lean-lock]
 files = ["**/lean-audit.json"]
 kinds = ["lean-lock"]
