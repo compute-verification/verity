@@ -40,7 +40,7 @@ def test_a_clock_above_fmax_is_refused(tmp_path):
 def test_omega_is_a6s(name):
     """Each tensor class's ω is its accumulator fragment's words, as A6 (`SheetWords`) lists them: mma.sync m16n8k32
     s32 128, wgmma m64n256k32 4096 a warp, tcgen05.mma 128 × 256 32768, and DMMA's two registers an f64 element, 128
-    at m8n8k4 and 256 at m16n8k16 (A6-WIDE)."""
+    at m8n8k4 and 256 at m16n8k16."""
     w = omega(sheet(DEVICES / name))
     a6 = {"IMMA16832_S8": 128, "DMMA884": 128, "DMMA16816": 256,
           **({"IGMMA_S8_N256": 4096} if name == "sm_90" else {"UTCIMMA_M128_N256": 32768})}
