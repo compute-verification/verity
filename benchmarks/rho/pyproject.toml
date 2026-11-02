@@ -16,6 +16,7 @@ inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "be
           "Security/Definitions/Nci/Remote.lean", "Security/Definitions/Nci/Guarantees/Remote.lean",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/slowdown.py",
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
+          "verity/core/periods/__init__.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/pous", "verity/core/claims", "verity/ml/__init__.py", "verity/ml/commitments",
           "verity/ml/crypto", "verity/ml/randomness", "verity/core/deploy", "verity/core/wire"]

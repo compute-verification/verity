@@ -13,6 +13,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
 inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
           "benchmarks/network_traces/scan_zk.py", "benchmarks/network_traces/warden_zk.py",
+          "benchmarks/network_traces/round_coins.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "benchmarks/census/deployments.json",
