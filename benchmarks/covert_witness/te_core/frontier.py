@@ -1,10 +1,11 @@
 """The search's frontier, read from the ledger's index.
 
-    python -m te_core.frontier [--root DIR] [--json OUT] [--pin COMMIT]
+    python -m te_core.frontier [--root DIR] [--json OUT] [--pin COMMIT ...]
 
-It reads only the submissions measured by the pinned measurement commit (covert_witness's `pin.py`; `--pin` names
-another), and leaves out, each marked with its reason (`status`): an invalid record, an unscored one, one measured by
-another commit (`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the
+It reads only the submissions measured by the pinned measurement commit or an earlier commit its `pinned.json` names as
+measuring the same version (`same_version`; covert_witness's `pin.py`; `--pin`, repeated, names others), and leaves
+out, each marked with its reason (`status`): an invalid record, an unscored one, one measured by any other commit
+(`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the
 first to submit an E is the one its compute is counted for), and one with covered steps ingested by a te_core before
 3.0 (`re-ingest`: 3.0 prices ρ by thresholds; `python -m te_core.ledger ingest RUN_DIR` prices it again). Per (k, r)
 cell of the grid (score.K_BITS x score.R):
@@ -52,17 +53,24 @@ def version(v) -> tuple[int, ...]:
         return ()
 
 
-def pinned() -> str:
+def pinned() -> tuple[str, ...]:
+    """The pin's commit, then the earlier commits that measure the same version (`same_version`)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from pin import pinned as read
 
-    return read()["commit"]
+    pin = read()
+    return (pin["commit"], *pin.get("same_version", []))
 
 
-def status(rows: list[dict], pin: str) -> dict[str, str]:
-    """Each left-out record's reason: invalid, unscored, other-version, duplicate-e, re-ingest. An E repeats an earlier
-    record's when that record was measured at the pin or is another agent's: an agent's own relaunch at a new pin of an
-    E it had at an old one counts."""
+def commits(pin: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    return (pin,) if isinstance(pin, str) else tuple(pin)
+
+
+def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
+    """Each left-out record's reason: invalid, unscored, other-version, duplicate-e, re-ingest. `pin` is a commit or the
+    commits of one version. An E repeats an earlier record's when that record was measured at the pin or is another
+    agent's: an agent's own relaunch at a new pin of an E it had at an old one counts."""
+    pins = set(commits(pin))
     out, first = {}, {}
     for r in sorted(rows, key=lambda r: (r.get("written_ts", 0), r["id"])):
         e = (r.get("output") or {}).get("e_sha256")
@@ -72,16 +80,16 @@ def status(rows: list[dict], pin: str) -> dict[str, str]:
             out[r["id"]] = "invalid"
         elif r.get("val_bpb") is None:
             out[r["id"]] = "unscored"
-        elif r.get("measurement_commit") != pin:
+        elif r.get("measurement_commit") not in pins:
             out[r["id"]] = "other-version"
         elif version(r.get("te_core")) < PRICED_FROM and coverage_of(r.get("families", [])):
             out[r["id"]] = "re-ingest"
         if e and out.get(r["id"]) != "duplicate-e":
-            first.setdefault(e, set()).add((r.get("measurement_commit") == pin, r.get("agent")))
+            first.setdefault(e, set()).add((r.get("measurement_commit") in pins, r.get("agent")))
     return out
 
 
-def valid(rows: list[dict], pin: str | None = None) -> list[dict]:
+def valid(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> list[dict]:
     left_out = status(rows, pin or pinned())
     return [r for r in rows if r["id"] not in left_out]
 
@@ -137,7 +145,7 @@ def targets(rows: list[dict], key: str) -> list[dict]:
     return out
 
 
-def report(rows: list[dict], pin: str | None = None) -> dict:
+def report(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> dict:
     rows = valid(rows, pin)
     out = {}
     for key in KEYS:
@@ -153,7 +161,7 @@ def report(rows: list[dict], pin: str | None = None) -> dict:
     return out
 
 
-def candidates(rows: list[dict], tier: int, pin: str | None = None) -> list[str]:
+def candidates(rows: list[dict], tier: int, pin: str | tuple[str, ...] | None = None) -> list[str]:
     """The frontier members and elites, in any cell, among submissions run at tier - 1 and not yet promoted to `tier`."""
     pool = [r for r in valid(rows, pin) if r["tier"] == tier - 1 and r.get("promoted", 0) < tier]
     ids = set()
@@ -175,7 +183,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--json", type=Path, default=None)
-    ap.add_argument("--pin", default=None, help="the measurement commit (default covert_witness's pin.py)")
+    ap.add_argument("--pin", action="append", default=None,
+                    help="a measurement commit, repeated for one version's (default covert_witness's pin.py)")
     ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
     ap.add_argument("--as", dest="agent", default="", help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
@@ -184,14 +193,14 @@ def main(argv=None) -> int:
               f"`python promote.py --tier {a.promote}` (the scorer's)", file=sys.stderr)
         return 2
     rows = Ledger(a.root).index()
-    pin = a.pin or pinned()
+    pin = tuple(a.pin) if a.pin else pinned()
     rep = report(rows, pin)
     left_out = status(rows, pin)
     if a.json:
-        a.json.write_text(json.dumps({"pin": pin, "left_out": left_out, "cells": rep}, indent=1) + "\n")
+        a.json.write_text(json.dumps({"pin": list(pin), "left_out": left_out, "cells": rep}, indent=1) + "\n")
     print(markdown(rep))
     reasons = sorted(set(left_out.values()))
-    print(f"pin {pin[:12]}: {len(rows) - len(left_out)} of {len(rows)} submissions; left out: "
+    print(f"pin {' + '.join(c[:12] for c in pin)}: {len(rows) - len(left_out)} of {len(rows)} submissions; left out: "
           + (", ".join(f"{sum(v == x for v in left_out.values())} {x}" for x in reasons) or "none"))
     return 0
 

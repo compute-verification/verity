@@ -1,8 +1,9 @@
 """The pinned measurement version (fixed): the one commit of the integrator's branch whose fixed side (prepare,
 evaluate, the decoder, te_core, candidate.sh, sandbox.py) measures every candidate. `pinned.json` on that branch names
 it. launch.py and promote.py run from it (`source`: a clean checkout of it beside this one), launch.py taking only the
-candidate's island from the candidate's commit; a record measured by any other commit is `other-version` and stays out of
-the frontier and the promotions (`te_core.frontier`).
+candidate's island from the candidate's commit; a record measured by any other commit than it and the earlier commits
+`same_version` lists (each measuring every search run as it does) is `other-version` and stays out of the frontier and
+the promotions (`te_core.frontier`).
 
     python3 pin.py [--fetch]     # the pin, as launch.py and the frontier read it
 
