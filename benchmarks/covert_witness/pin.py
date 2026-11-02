@@ -11,6 +11,7 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import subprocess
@@ -42,15 +43,18 @@ def pinned(fetch: bool = False) -> dict:
 
 def source(fetch: bool = True) -> tuple[dict, Path]:
     """The pin and a clean detached worktree of its commit (made once per repository and commit), which `research run
-    --source` ships."""
-    pin = pinned(fetch)
-    common = git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
-    wt = CHECKOUTS / hashlib.sha256(common.encode()).hexdigest()[:12] / pin["commit"]
-    if not wt.exists():
-        wt.parent.mkdir(parents=True, exist_ok=True)
-        r = git("worktree", "add", "--detach", str(wt), pin["commit"])
-        if r.returncode:
-            raise SystemExit(f"pin: git worktree add {wt} {pin['commit']} failed: {r.stderr.strip()[-500:]}")
+    --source` ships. Launches started together take turns (a lock under CHECKOUTS), so one makes the worktree."""
+    CHECKOUTS.mkdir(parents=True, exist_ok=True)
+    with open(CHECKOUTS / ".lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        pin = pinned(fetch)
+        common = git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
+        wt = CHECKOUTS / hashlib.sha256(common.encode()).hexdigest()[:12] / pin["commit"]
+        if not wt.exists():
+            wt.parent.mkdir(parents=True, exist_ok=True)
+            r = git("worktree", "add", "--detach", str(wt), pin["commit"])
+            if r.returncode:
+                raise SystemExit(f"pin: git worktree add {wt} {pin['commit']} failed: {r.stderr.strip()[-500:]}")
     head = git("rev-parse", "HEAD", cwd=wt).stdout.strip()
     dirty = git("status", "--porcelain", "--untracked-files=all", cwd=wt).stdout.strip()
     if head != pin["commit"] or dirty:

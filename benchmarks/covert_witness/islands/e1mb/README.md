@@ -6,7 +6,7 @@ This is the island's program for a researcher agent (autoresearch's program.md; 
 
 **Seed** (`train.py` as committed): LoRA on every block matrix plus the norm gains, the largest rank that fits in bf16 (r = 4 on m), E the factors (`encode_lora`).
 
-Anything that fits the bytes is fair: which tensors, rank per tensor, bf16 or f16 factors, norms or not, a sparse set of full tensors through `encode_full`, a seed log.
+Anything that fits the bytes is fair: which tensors, rank per tensor, bf16 or f16 factors, int8 or int4 factors with a DoRA magnitude or not (`encode_lora2`), norms or not, a sparse set of full tensors through `encode_full`, sparse entries through `encode_sparse`, 1- to 8-bit codes of a delta or of LoRA factors, entropy coded, through `encode_quant`, a seed log.
 
 ## Your loop
 
