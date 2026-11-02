@@ -9,11 +9,15 @@ trained for as many steps as the budget allows. Modes:
   each step backprops the loss to θ_S, projects the gradient onto the directions (g_α = Z g) and takes an Adam step on α.
   Two GEMVs a step with Z are logged as `extra` FLOPs. E is c = −α. `--redraw N` splits each arm into N equal blocks, each
   over d fresh directions (block b's are z_{bd}..z_{bd+d−1}) from where the blocks before it left θ, so an arm explores N·d
-  directions in the memory of d; each redraw's d·|S| draws are logged as `extra`.
+  directions in the memory of d; each redraw's d·|S| draws are logged as `extra`. `--exact` caches Z in fp32 and builds
+  each step's weights with the decoder's own sequential adds (θ_S, then `add_(z_i, alpha=−c_i)` in order), so every step
+  reads decode(θ, E_t) bit for bit and declares E_t (`prepare.declare_step`) for the harness to credit; its d adds a step
+  cost d·|S| MACs, so keep d·|S| to a few 1e9.
 - `fit` (a low-dimensional reparameterization solved exactly): train S itself with AdamW, then solve the minimum-norm c with
   −Zᵀc = Δ over d ≥ |S| directions (S small: the norm gains). The Gram matrix's FLOPs are logged as `extra`.
 - `mezo` (zeroth-order, ES with shared seeds): per coefficient two forwards at θ ± εz on one batch, c = lr·(L₊ − L₋)/2ε;
-  `--pop K` draws K seeds a step at the same θ (antithetic ES) and applies them all.
+  `--pop K` draws K seeds a step at the same θ (antithetic ES) and applies them all. The perturbations go through
+  `prepare.seedlog_step` from the masters, so each step declares the log so far plus a ∓ε suffix per forward.
 
 `--probe` (on by default on a GPU) first backprops one micro-batch with every tensor trained and records each tensor's mean
 squared gradient (a d-direction subspace over S captures about d/|S| of ‖g_S‖², so the dense tensors are where directions
@@ -21,7 +25,7 @@ buy the most); its pass is logged as `extra`.
 
 The submitted model is `prepare.decode(θ, E)` itself, so it is the decoder's bit for bit.
 
-    python guard.py islands/seed/train.py --start s50 --out SUB --mode subspace --perturb blocks [--dim 0] [--lr 3e-5]
+    python benchmarks/covert_witness/launch.py seed s50 --note "MECHANISM ..." -- --mode fit --perturb norms --lrs 3e-4,1e-3
 """
 from __future__ import annotations
 
@@ -138,6 +142,7 @@ def main() -> int:
     ap.add_argument("--dims", default="", help="subspace arms' d (one per --lrs arm): Z is built at the largest, arm k uses "
                                                "its first d_k rows")
     ap.add_argument("--redraw", type=int, default=1, help="subspace: blocks of fresh directions an arm (N·d ≤ E's cap)")
+    ap.add_argument("--exact", action="store_true", help="subspace: every step reads decode(θ, E_t) and declares it")
     ap.add_argument("--probe", action=argparse.BooleanOptionalAction, default=prepare.DEVICE.startswith("cuda"))
     ap.add_argument("--fit-ratio", type=float, default=2.0, help="fit: d = ratio x |S|, within E's cap")
     ap.add_argument("--coeff", choices=("f32", "f16"), default="f32")
@@ -182,38 +187,46 @@ def main() -> int:
     if a.mode == "mezo":
         return mezo(a, net, rec, theta, params, names, shapes, d_cap, fwd, gen, tokens, info, t_start, steps, grads)
 
-    W = torch.cat([params[n].detach().float().reshape(-1) for n in names])
-    at = 0
-    views = []
-    for n, s in zip(names, shapes):
-        k = math.prod(s)
-        params[n].data = W[at: at + k].view(s)
-        params[n].requires_grad_(True)
-        views.append(params[n])
-        at += k
-    theta0 = W.clone()
+    views = [params[n] for n in names]
+    for v in views:
+        v.requires_grad_(True)
+    sizes = [math.prod(s) for s in shapes]
+    theta0 = torch.cat([v.detach().float().reshape(-1) for v in views])
+    W = theta0.clone()
+
+    @torch.no_grad()
+    def load(flat: torch.Tensor) -> None:
+        """Write a flat S into the live tensors (the harness sees every write to a weight)."""
+        for v, part in zip(views, flat.split(sizes)):
+            v.copy_(part.view_as(v))
+
+    def live() -> torch.Tensor:
+        return torch.cat([v.detach().float().reshape(-1) for v in views])
     trainable = {"full": names}
     train_pass = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
 
     if a.mode == "subspace":
         dims = [int(x) for x in a.dims.split(",")] if a.dims else []
         d = max(dims) if dims else (a.dim or d_cap)
+        z_dtype = torch.float32 if a.exact else torch.bfloat16
+        z_bytes = 4 if a.exact else 2
         if prepare.DEVICE.startswith("cuda"):
             free = torch.cuda.mem_get_info()[0]
-            d_mem = int((free - a.z_reserve_gb * 2**30) // (2 * P))
+            d_mem = int((free - a.z_reserve_gb * 2**30) // (z_bytes * P))
             d = min(d, d_mem)
         d = min(d, d_cap // a.redraw)
         if d < 1:
             raise SystemExit(f"seed-subspace: no room for a direction over {P} parameters")
         t0 = time.perf_counter()
-        Z = torch.empty(d, P, dtype=torch.bfloat16, device=prepare.DEVICE)
+        Z = torch.empty(d, P, dtype=z_dtype, device=prepare.DEVICE)
         fill_directions(Z, gen, a.seed, shapes)
         if prepare.DEVICE.startswith("cuda"):
             torch.cuda.synchronize()
         build_s = time.perf_counter() - t0
-        info |= {"d": d, "redraw": a.redraw, "Z_gb": round(Z.numel() * 2 / 2**30, 2), "Z_build_s": round(build_s, 1)}
+        info |= {"d": d, "redraw": a.redraw, "exact": a.exact, "Z_gb": round(Z.numel() * z_bytes / 2**30, 2),
+                 "Z_build_s": round(build_s, 1)}
         steps.append({"op": "extra", "flops": d * P})
-        extra = 4 * d * P
+        extra = (6 if a.exact else 4) * d * P
         per_step = train_pass + extra
     else:
         d = min(a.dim or max(int(a.fit_ratio * P), P + 64), d_cap)
@@ -248,6 +261,7 @@ def main() -> int:
         data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
         with torch.no_grad():
             W.copy_(theta0)
+        load(theta0)
         if a.mode == "subspace":
             dk = min(dims[k], d) if dims else d
             Zk, extra_k = Z[:dk], 4 * dk * P
@@ -262,14 +276,24 @@ def main() -> int:
         else:
             opt = torch.optim.AdamW(views, lr=lr, betas=(a.beta1, a.beta2), weight_decay=0.0)
 
+        @torch.no_grad()
+        def rebuild(c: list[float]) -> None:
+            """W from `base` (the decode through the blocks before) by the decoder's adds over c, in its order."""
+            W.copy_(base)
+            for i, ci in enumerate(c):
+                W.add_(Zk[i], alpha=-ci)
+
+        def current() -> list[float]:
+            return [prepare.quantize_coefficient(-x, a.coeff) for x in alpha.tolist()]
+
         def marks_of(n: int) -> set[int]:
-            return ({round(n * j / 4) for j in (1, 2, 3)} if len(lrs) == 1 else {round(n / 2)}) - {0}
+            return ({round(n * j / 20) for j in range(1, 20)} if len(lrs) == 1 else {round(n / 2)}) - {0}
 
         def coefficients() -> list[float]:
             if a.mode == "subspace":
                 return [prepare.quantize_coefficient(x, a.coeff) for x in done + (-alpha).tolist()]
             steps.append({"op": "extra", "flops": fitter.solve_flops})
-            c, res = fitter.solve(W.detach() - theta0)
+            c, res = fitter.solve(live() - theta0)
             print(json.dumps({"arm": k, "fit_residual": res}), flush=True)
             return c
 
@@ -292,24 +316,36 @@ def main() -> int:
                     arm_steps = n_steps = max(fit_steps, step + 1)
                     marks = marks_of(arm_steps)
             frac = schedule(step, arm_steps, a.warmup)
+            rows = data.next(a.batch)
             if a.mode == "subspace" and min(a.redraw - 1, step * a.redraw // arm_steps) > block:
                 block += 1
-                with torch.no_grad():
-                    base.add_((alpha.to(Zk.dtype) @ Zk).float())
-                done += (-alpha).tolist()
+                if a.exact:
+                    c = current()
+                    rebuild(c)
+                    base.copy_(W)
+                    done += c
+                else:
+                    with torch.no_grad():
+                        base.add_((alpha.to(Zk.dtype) @ Zk).float())
+                    done += (-alpha).tolist()
                 fill_directions(Zk, gen, a.seed, shapes, first=block * dk)
                 dirty = max(dirty, dk)
                 steps.append({"op": "extra", "flops": dk * P})
                 for t in (alpha, m1, m2):
                     t.zero_()
                 t_adam = 0
-            if a.mode == "subspace":
+            if a.mode == "subspace" and a.exact:
+                c = current()
+                rebuild(c)
+                load(W)
+                prepare.declare_step(prepare.encode_seedlog(names, a.seed, done + c, a.coeff))
+            elif a.mode == "subspace":
                 with torch.no_grad():
                     torch.add(base, (alpha.to(Zk.dtype) @ Zk).float(), out=W)
+                load(W)
             else:
                 for g in opt.param_groups:
                     g["lr"] = lr * frac
-            rows = data.next(a.batch)
             total = 0.0
             for i in range(0, a.batch, a.micro):
                 x = rows[i: i + a.micro]
@@ -341,7 +377,7 @@ def main() -> int:
                 if a.mode == "subspace":
                     row |= {"block": block, "alpha_rms": float(alpha.pow(2).mean().sqrt())}
                 else:
-                    row["delta_rms"] = float((W.detach() - theta0).pow(2).mean().sqrt())
+                    row["delta_rms"] = float((live() - theta0).pow(2).mean().sqrt())
                 print(json.dumps(row), flush=True)
             if step in marks or (step == arm_steps and not last):
                 c = coefficients()
@@ -354,9 +390,13 @@ def main() -> int:
     arms.append({"arm": len(lrs) - 1, "lr": lrs[-1], "d": len(alpha) if a.mode == "subspace" else d,
                  "directions": len(coeffs), "step": arm_steps, "snapshot": None,
                  "own_flops": prepare.train_flops(rec, trainable, steps[first:])["flops"]})
-    if a.mode == "subspace":
+    if a.mode == "subspace" and a.exact:
+        rebuild(current())
+    elif a.mode == "subspace":
         with torch.no_grad():
             torch.add(base, (alpha.to(Zk.dtype) @ Zk).float(), out=W)
+    else:
+        W = live()
     blob = prepare.encode_seedlog(names, a.seed, coeffs, a.coeff)
     model = prepare.decode(theta, blob)
     with torch.no_grad():
@@ -418,12 +458,13 @@ def mezo(a, net, rec, theta, params, names, shapes, d_cap, fwd, gen, tokens, inf
     info |= {"arms": lrs, "steps_per_arm": n_steps, "pop": a.pop, "flops_per_coefficient": per_coeff}
     print(json.dumps(info), flush=True)
 
+    eps = prepare.quantize_coefficient(a.eps, a.coeff)
+
     @torch.no_grad()
     def loss_at(masters, sign: float, seed: int, x: torch.Tensor) -> float:
-        gen.manual_seed(seed)
         for w, m in zip(live, masters):
-            z = torch.randn(m.shape, generator=gen, device=prepare.DEVICE, dtype=torch.float32)
-            w.copy_((m + sign * a.eps * z).to(w.dtype))
+            w.copy_(m)
+        prepare.seedlog_step(live, seed, -sign * eps, gen)
         return float(loss_of(fwd, x))
 
     snaps, arms = [], []
@@ -438,11 +479,13 @@ def mezo(a, net, rec, theta, params, names, shapes, d_cap, fwd, gen, tokens, inf
         while step < n_steps and time.perf_counter() < deadline:
             x = data.next(a.batch)
             frac = schedule(step, n_steps, a.warmup)
+            seeds = [a.seed + len(coeffs) + j for j in range(a.pop)]
+            prepare.declare_step(prepare.encode_seedlog(names, a.seed, coeffs, a.coeff),
+                                 tuple(prepare.encode_seedlog(names, s, [c], a.coeff) for s in seeds for c in (-eps, eps)))
             cs = []
-            for j in range(a.pop):
-                s = a.seed + len(coeffs) + j
+            for s in seeds:
                 lp, lm = loss_at(masters, 1.0, s, x), loss_at(masters, -1.0, s, x)
-                cs.append(prepare.quantize_coefficient(lr * frac * (lp - lm) / (2 * a.eps) / a.pop, a.coeff))
+                cs.append(prepare.quantize_coefficient(lr * frac * (lp - lm) / (2 * eps) / a.pop, a.coeff))
                 steps.extend([{"op": "forward", "tokens": tokens}] * 2)
                 ema = (lp + lm) / 2 if ema is None else 0.99 * ema + 0.01 * (lp + lm) / 2
             for j, c in enumerate(cs):
