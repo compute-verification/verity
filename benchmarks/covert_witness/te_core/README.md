@@ -68,16 +68,19 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **ρ (slowdown)**: max(1, φcβ / (k(k + β))) if D ≥ k/β, else 1, for each option, then the larger of (a) and (b), at
   each (k, r).
 - **bpb**: the held-out bits per byte of the output model from the integrator's fixed evaluator: `val` during the search
-  (for covert_witness, a paired score on a fresh slice of its search pool, drawn after the output's digest), `test`
-  when finally scored. An evaluator returns None for a sealed split, and the record then holds no test bpb.
+  (for covert_witness, a paired score on a fresh slice of its search pool, drawn after the output's digest, by its
+  evaluation job after the training job ended), `test` when finally scored. An evaluator returns None for a sealed
+  split, and the record then holds no test bpb.
 - **l\***: a target bits per byte, the start's bpb less 0.5%, 1%, 2% or 5%.
 - **W\*(l\*)**: the least |C|·ρ over submissions with val bpb ≤ l\*.
 - **honest(l\*)**: the least |C| over the reference runs' checkpoints with val bpb ≤ l\*.
 - **Effective slowdown**: W\*(l\*) / honest(l\*).
 - **Niche**: a mechanism tag × β range × φ range × start cell (`frontier.BETA_EDGES`, `PHI_EDGES`).
 - **Elite**: a niche's submission with the least val bpb, ties going to the least |C|·ρ.
-- **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r), among the
-  runs of the current `VERSION` (a submission's `run_te_core`).
+- **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r), among those
+  measured by the pinned measurement commit (covert_witness's `pin.py`, a submission's `measurement_commit`); invalid,
+  unscored, `other-version` and `duplicate-e` submissions (an E digest an earlier submission had) are left out
+  (`frontier.status`).
 - **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
   GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
   seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
@@ -85,9 +88,11 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 ## What the integrator calls
 
 covert_witness's islands run unmodified (`cw.py`): the harness wraps the fixed `prepare.load_start`,
-`TrainData.next`, `encode_*` and `submit`, and scores each E with `prepare.Scorer`, uncounted: the output's digest,
-then a fresh slice of the search pool, and the promotion set's score sealed under the digest (covert_witness's README;
-the final set only in its final mode). From `benchmarks/covert_witness/`:
+`TrainData.next`, `encode_*` and `submit`, and writes each checkpoint's E to `OUT/E/`, uncounted. It scores nothing:
+covert_witness's evaluation job (`cw.score_run`, run by its evaluate.py after the training job, outside that job's
+sandbox) decodes each E with `prepare.decode` and scores it with `prepare.Scorer`: the output's digest, then a fresh
+slice of the search pool, and the promotion set's score sealed under the digest (covert_witness's README; the final
+set only in its final mode). From `benchmarks/covert_witness/`:
 
 ~~~text
 python -m te_core.run --script islands/CLASS/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
@@ -141,7 +146,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `score.py` | `score` (options (a) and (b)), `score_grid`, `checkpoints`, `w_star`, `honest`, `effective_slowdown` |
 | `ledger.py` | `Ledger` (append-only, per agent, evidence store), `ingest`, the index |
 | `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
-| `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its evaluator; `CWPlan`, the family `prepare.declare_step` writes |
+| `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its E checkpoints; `score_run`, the evaluation job's scoring of them; `CWPlan`, the family `prepare.declare_step` writes |
 | `hooks.py` | what a standalone script may call, no-ops outside the harness |
 | `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
@@ -161,8 +166,10 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
   can lower it again. A start's buffers (RoPE tables) are taken as θ's.
 - **Harness work is neither counted nor timed**: loading, encoding, decoding and evaluation run outside the dispatch
   mode and outside the steps' clocks; `totals` sums the steps' seconds and `process_*` the whole process.
-- **The held-out guard is the integrator's**: an audit hook refuses `prepare.UNREADABLE` (the search pool and the
-  sealed side) except while the harness loads or evaluates; a second thread could read during an evaluation, and a subprocess runs unguarded (logged to `guard.log`).
+- **The held-out guard is the integrator's**: covert_witness's training job runs in a sandbox (its `sandbox.py`) where
+  the held-out sets and the sealed side aren't mounted at all, and an audit hook also refuses `prepare.UNREADABLE`
+  except while the harness loads a start. A subprocess runs outside the hook (logged to `guard.log`), still inside the
+  sandbox, and its CPU seconds are in the sandbox's process-tree record, not in the count.
 - **Script steps follow the data stream**: a script that fetches all its data at once is one step, which keeps every
   count but coarsens D and φ.
 - **Weight shape**: a forward activation with a weight's exact 2-D shape, in a matmul of two token-indexed operands,
