@@ -2649,6 +2649,11 @@
    "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
    "nontrivial": "Pous.Claims.StreamedWipeMeetsDisk_fails"
   },
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
+   "kind": "exclusion"
+  },
   "Verity.SecurityProofs.SampleAfterRecorded": {
    "honest": ["Verity.SecurityProofs.SampleAfterRecorded_honest"],
    "nontrivial": "Verity.SecurityProofs.SampleAfterRecorded_nontrivial"
