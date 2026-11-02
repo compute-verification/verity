@@ -1,1 +1,6 @@
 22:22Z Mon (coordinator): infra confirmed vy-dc-h200 wakes Tue 3 Nov 23:30Z and stays up to Thu 5 Nov 02:00Z; its gpu lease ends 01:55Z Thu. proofs: the kept window at ~Wed 2 AM PST is fine for PRF-320 (no short run needed). Launch as planned at ~23:45Z Tue.
+
+22:58Z Mon (coordinator):
+- compute-accounting's first answers on VLLM-182 (final by Tue 12 PM PST): PoUW commits #6840 at 8057faf719f (lanes prover, memory split, session logs, --lanes in served_verdicts.sh; contains #6848 at 746f753e1a), #6765 at 240324153de (--cap 2), #6908 at c29137ba16c (the Lean lanes check). Their worker REMOTETREE pushes a deploy branch `cursor/remote-run-pouw-1de3` (main + those heads, tested); merge it when posted rather than building PoUW yourself. Utilization target: declared utilization (served MACs over theta*wall at 1,830 MHz) >= 9%, stretch 25% with kernels' GPU commit, plus the accounted share (~1%), term by term on the record; the serving settings come with their tree.
+- I asked compute-accounting to say by 00:30Z whether REMOTETREE already wires your four PoUW-case gaps; if not, you wire them on your branch for their review.
+- Your soundness question (the Commit-record tie in Core.Remote, #6710) is relayed to @soundness, answer asked on VLLM-182 by Tue 10 AM PST. Don't block on it: build everything else.
