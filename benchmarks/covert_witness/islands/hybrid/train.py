@@ -6,6 +6,8 @@
 - `--store bf16` writes every full tensor through the `lora` format's bf16 `full` list: the evaluator multiplies weights at
   bf16 under autocast, so the f32 low halves `encode_full` would carry never reach a matmul. `--store f32` is `encode_full`.
 - `--select-pool P`: draw P·batch windows, score them with a forward (logged), train on the `--select-by` share.
+- `--cache-windows W --cache-epochs E` (the top block's MLP only): each data step reads W windows, runs θ once to the top
+  MLP's input, and trains E shuffled passes over that cache, so a pass costs the top MLP and the head, not the prefix.
 - `--head sampled`: the loss's softmax runs over each micro-batch's distinct targets plus `--head-neg` uniform negatives
   (log-Q corrected), so a shallow step skips most of the tied head's forward and input gradient (2·50304·d MACs a token).
 
@@ -29,6 +31,7 @@ import torch
 import torch.nn.functional as F
 
 import prepare
+from model import rope
 
 LEAVES = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 GROUPS = {"qkv": ("wq", "wk", "wv"), "attn": ("wq", "wk", "wv", "wo"), "gu": ("w_gate", "w_up"),
@@ -163,6 +166,9 @@ def main() -> int:
     ap.add_argument("--head-neg", type=int, default=2048)
     ap.add_argument("--head-plan", type=int, default=10240,
                     help="head rows a micro-batch is planned at, for the step count (the log prints the mean measured)")
+    ap.add_argument("--cache-windows", type=int, default=0,
+                    help="cache θ's top-MLP input for this many windows per step and train --cache-epochs passes on it")
+    ap.add_argument("--cache-epochs", type=int, default=1)
     ap.add_argument("--snaps", type=int, default=8, help="E snapshots at k/SNAPS of each arm, for the FLOPs-to-target curve")
     ap.add_argument("--arms", default="", help="a packed LR sweep: comma-separated multipliers of every LR, one arm each, "
                     "each from θ on the same data order with its share of the budget (later arms' checkpoints are "
@@ -245,12 +251,27 @@ def main() -> int:
     pool = a.select_pool * a.batch
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}]
                                    + ([{"op": "forward", "tokens": pool * prepare.EVAL_CTX}] if a.select_pool > 1 else []))["flops"] + extra
-    V, d = net.inner.embed.shape if a.head == "sampled" else (0, 0)
-    if a.head == "sampled":
-        per_step -= 2 * 2 * (V - a.head_plan) * d * tokens
-    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
+    V, d = net.inner.embed.shape
+    head_saving = 2 * 2 * (V - a.head_plan) * d if a.head == "sampled" else 0
+    per_step -= head_saving * tokens
     mults = [float(x) for x in a.arms.split(",")] if a.arms else [1.0]
-    n_arm = n_steps // len(mults)
+    W, E = a.cache_windows, a.cache_epochs
+    if W:
+        top = {f"blocks.{L - 1}.{x}.weight" for x in ("w_gate", "w_up", "w_down")}
+        if set(full_m + lora) - top or a.select_pool > 1 or W % a.batch:
+            raise SystemExit("hybrid: --cache-windows trains only the top block's MLP (and the gains above it), without "
+                             "selection, on a multiple of --batch windows")
+        nodes = prepare.positions(rec)
+        fwd_tok = prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": 1}])["flops"]
+        prefix_tok = fwd_tok - sum(n["flops"] for n in nodes if (n["layer"], n["stage"]) >= (L, 4))
+        epoch_tok = per_step / tokens - prefix_tok
+        chunk = W * prepare.EVAL_CTX * (prefix_tok + E * (epoch_tok + extra / tokens))
+        n_chunks = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // chunk) // len(mults)
+        n_arm = n_chunks * E * (W // a.batch)
+        n_steps = n_arm * len(mults)
+    else:
+        n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
+        n_arm = n_steps // len(mults)
     fwd = torch.compile(net) if fused else net
     dev = prepare.DEVICE.split(":")[0]
     structure = prepare.deep_share(rec, set(full + lora))
@@ -266,46 +287,78 @@ def main() -> int:
         base_lrs = [[grp["lr"] for grp in o.param_groups] for o in opts]
         data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
         fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
-        if a.fresh and fresh.get("kept", 0) < n_arm * pool:
-            raise SystemExit(f"hybrid: --fresh leaves {fresh.get('kept')} windows, the run reads {n_arm * pool}")
+        reads = n_chunks * W if W else n_arm * pool
+        if a.fresh and fresh.get("kept", 0) < reads:
+            raise SystemExit(f"hybrid: --fresh leaves {fresh.get('kept')} windows, the run reads {reads}")
         arms.append({"lr_mult": mult, "first_step": arm * n_arm, "steps": n_arm})
         print(json.dumps({"arm": arm, "lr_mult": mult, "steps": n_arm, "full": len(full_m), "lora": len(lora),
                           "rank": rank if lora else None, "norms": len(norms), "E_bytes": size, "flops_per_step": per_step,
                           "phi": structure["phi"], "lowest_updated_layer": structure["lowest_updated_layer"],
                           "data": fresh}), flush=True)
-        for step in range(n_arm):
-            frac = lr_frac(step, n_arm, a.warmup, a.schedule, a.cooldown)
+        k = 0
+
+        def train_step(micro_losses) -> None:
+            nonlocal k
+            frac = lr_frac(k, n_arm, a.warmup, a.schedule, a.cooldown)
             for o, lrs in zip(opts, base_lrs):
                 for grp, lr in zip(o.param_groups, lrs):
                     grp["lr"] = lr * frac
-            rows = data.next(pool)
-            if a.select_pool > 1:
-                rows = choose(fwd, rows, a.batch, a.micro, a.select_by, dev)
-                steps.append({"op": "forward", "tokens": pool * prepare.EVAL_CTX, "what": f"selection by {a.select_by} loss"})
-            for i in range(0, a.batch, a.micro):
-                x = rows[i: i + a.micro]
+            total = 0.0
+            for fn, share in micro_losses:
                 with torch.autocast(dev, dtype=torch.bfloat16):
-                    if a.head == "sampled":
-                        loss, n_cand = sampled_loss(net.inner, x, a.head_neg, gneg)
-                        cands.append(n_cand)
-                    else:
-                        logits = fwd(x[:, :-1])
-                        loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
-                loss = loss * (len(x) / a.batch)
-                loss.backward()
+                    loss = fn()
+                (loss * share).backward()
+                total += float(loss.detach()) * share
             torch.nn.utils.clip_grad_norm_([p for o in opts for grp in o.param_groups for p in grp["params"]], 1.0)
             for o in opts:
                 o.step()
                 o.zero_grad(set_to_none=True)
-            steps.append({"op": "train", "tokens": tokens})
             if extra:
                 steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
-            if (step + 1) % 100 == 0:
-                print(json.dumps({"arm": arm, "step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
-                                  "s": round(time.perf_counter() - t0, 1),
+            k += 1
+            if k % 100 == 0:
+                print(json.dumps({"arm": arm, "step": k, "loss": round(total, 5), "s": round(time.perf_counter() - t0, 1),
                                   **({"candidates": round(sum(cands) / len(cands))} if cands else {})}), flush=True)
-            if step + 1 in marks or (step + 1 == n_arm and arm < len(mults) - 1):
+            if k in marks or (k == n_arm and arm < len(mults) - 1):
                 snaps.append((encode(a.store, factors, params, full, theta), len(steps)))
+
+        def head(hn, tgt):
+            if a.head == "full":
+                return F.cross_entropy(F.linear(hn, net.inner.embed).float().view(-1, V), tgt.reshape(-1))
+            loss, n_cand = sampled_loss(net.inner, hn, tgt, a.head_neg, gneg)
+            cands.append(n_cand)
+            return loss
+
+        if W:
+            gshuf = torch.Generator(device="cpu").manual_seed(a.seed + 2)
+            for _ in range(n_chunks):
+                rows = data.next(W)
+                with torch.no_grad(), torch.autocast(dev, dtype=torch.bfloat16):
+                    mids = torch.cat([after_attention(net.inner, rows[i: i + a.micro, :-1]) for i in range(0, W, a.micro)])
+                steps.append({"op": "forward", "tokens": W * prepare.EVAL_CTX, "what": "cache: theta to the top MLP's input"})
+                for _ in range(E):
+                    perm = torch.randperm(W, generator=gshuf).to(rows.device)
+                    for b in range(0, W, a.batch):
+                        idx = perm[b: b + a.batch]
+                        train_step([(lambda j=idx[i: i + a.micro]: head(top_mlp(net.inner, mids[j]), rows[j, 1:]),
+                                     len(idx[i: i + a.micro]) / a.batch) for i in range(0, a.batch, a.micro)])
+                        steps.append({"op": "extra", "flops": int(a.batch * prepare.EVAL_CTX * epoch_tok),
+                                      "what": "cached top-MLP step"})
+        else:
+            for _ in range(n_arm):
+                rows = data.next(pool)
+                if a.select_pool > 1:
+                    rows = choose(fwd, rows, a.batch, a.micro, a.select_by, dev)
+                    steps.append({"op": "forward", "tokens": pool * prepare.EVAL_CTX,
+                                  "what": f"selection by {a.select_by} loss"})
+                if a.head == "full":
+                    fns = [lambda x=rows[i: i + a.micro]: F.cross_entropy(
+                        fwd(x[:, :-1]).float().view(-1, V), x[:, 1:].reshape(-1)) for i in range(0, a.batch, a.micro)]
+                else:
+                    fns = [lambda x=rows[i: i + a.micro]: head(F.rms_norm(net.inner.hidden(x[:, :-1]), (d,), net.inner.norm),
+                                                               x[:, 1:]) for i in range(0, a.batch, a.micro)]
+                train_step([(fn, len(rows[i: i + a.micro]) / a.batch) for fn, i in zip(fns, range(0, a.batch, a.micro))])
+                steps.append({"op": "train", "tokens": tokens})
     blob = encode(a.store, factors, params, full, theta)
     model = prepare.decode(theta, blob)
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=full + lora,
@@ -316,21 +369,39 @@ def main() -> int:
     return 0
 
 
-def sampled_loss(lm, x: torch.Tensor, k: int, gen: torch.Generator) -> tuple[torch.Tensor, int]:
+def sampled_loss(lm, hn: torch.Tensor, tgt: torch.Tensor, k: int, gen: torch.Generator) -> tuple[torch.Tensor, int]:
     """Cross-entropy through the tied head over the micro-batch's distinct targets plus k negatives drawn uniformly from the
     rest of the vocabulary, each carrying log((V - |targets|) / k) for the rest's share of the partition function (sampled
     softmax with its log-Q correction). The head rows are gathered with index_select, so the token count stays the batch's."""
-    inp, tgt = x[:, :-1], x[:, 1:]
-    h = F.rms_norm(lm.hidden(inp), (lm.embed.shape[1],), lm.norm)
     cand, idx = torch.unique(tgt, return_inverse=True)
-    z = F.linear(h, lm.embed.index_select(0, cand))
+    z = F.linear(hn, lm.embed.index_select(0, cand))
     V = lm.embed.shape[0]
     if k and V - len(cand) > k:
-        rest = torch.ones(V, device=x.device)
+        rest = torch.ones(V, device=hn.device)
         rest[cand] = 0.0
         neg = torch.multinomial(rest, k, replacement=False, generator=gen)
-        z = torch.cat([z, F.linear(h, lm.embed.index_select(0, neg)) + math.log((V - len(cand)) / k)], -1)
+        z = torch.cat([z, F.linear(hn, lm.embed.index_select(0, neg)) + math.log((V - len(cand)) / k)], -1)
     return F.cross_entropy(z.float().view(-1, z.shape[-1]), idx.reshape(-1)), len(cand)
+
+
+def after_attention(lm, inp: torch.Tensor) -> torch.Tensor:
+    """θ's residual stream after the top block's attention: the top MLP's input, cached for --cache-epochs passes."""
+    blk = lm.blocks[-1]
+    x = lm.hidden(inp, len(lm.blocks) - 1)
+    b, t, d = x.shape
+    cos, sin = lm.cos[:t], lm.sin[:t]
+    h = F.rms_norm(x, (d,), blk.attn_norm)
+    q, k, v = (w(h).view(b, t, blk.n_head, d // blk.n_head).transpose(1, 2) for w in (blk.wq, blk.wk, blk.wv))
+    q, k = rope(q, cos, sin), rope(k, cos, sin)
+    return x + blk.wo(F.scaled_dot_product_attention(q, k, v, is_causal=True).transpose(1, 2).reshape(b, t, d))
+
+
+def top_mlp(lm, x: torch.Tensor) -> torch.Tensor:
+    """The top block's MLP and the final norm on a cached residual stream."""
+    blk = lm.blocks[-1]
+    d = x.shape[-1]
+    h = F.rms_norm(x, (d,), blk.mlp_norm)
+    return F.rms_norm(x + blk.w_down(F.silu(blk.w_gate(h)) * blk.w_up(h)), (d,), lm.norm)
 
 
 @torch.no_grad()
