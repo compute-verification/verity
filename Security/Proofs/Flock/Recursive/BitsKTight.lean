@@ -123,7 +123,8 @@ theorem recursiveBitsK_tight (b : Brings) (aux : Msg → ℕ → _root_.Flock.Re
     exact (recursiveBitsK b aux nOf hd recRest decI hdecI decO hdecO x hx Ω P t ht1 hrun nR (hc []).1 (2 ^ 55)
       (fun ps => (hc ps).2.2) hSB hBI hFdev hFCI hF0I).trans
       (add_le_add hκ (mul_le_mul_of_nonneg_left hε (Nat.cast_nonneg t)))
-  · exact ((Claims.Pr_mono (q := fun _ => False) fun q hq => hex ⟨q.1, q.2.1, hq.1⟩).trans_eq
-      Claims.Pr_false).trans hpos
+  · unfold Claims.PrBad
+    refine le_trans (Claims.Pr_mono (q := fun _ => False) fun q hq => ?_) (Claims.Pr_false.le.trans hpos)
+    exact hex ⟨q.1, q.2.1, hq.1⟩
 
 end RecDeploy
