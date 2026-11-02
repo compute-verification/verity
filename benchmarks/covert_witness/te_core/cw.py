@@ -20,7 +20,7 @@ under `prepare.HELD_OUT`), except while the harness's own evaluator runs. Subpro
 from __future__ import annotations
 
 import hashlib
-import importlib
+import importlib.util
 import os
 import sys
 from contextlib import contextmanager
@@ -39,7 +39,11 @@ def import_prepare(script: Path):
     for d in [Path(script).resolve().parent, *Path(script).resolve().parents]:
         if (d / "prepare.py").is_file():
             sys.path.insert(0, str(d))
-            return importlib.import_module("prepare")
+            spec = importlib.util.spec_from_file_location("prepare", d / "prepare.py")
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["prepare"] = mod
+            spec.loader.exec_module(mod)
+            return mod
     raise SystemExit(f"{script}: no prepare.py at or above it")
 
 
@@ -82,7 +86,8 @@ class Adapter:
 
         p.load_start, p.TrainData.next, p.submit = load_start_, next_, submit_
         for name in ("encode_full", "encode_lora", "encode_seedlog"):
-            setattr(p, name, self._encoder(getattr(p, name)))
+            if hasattr(p, name):
+                setattr(p, name, self._encoder(getattr(p, name)))
         sys.addaudithook(self._hook)
 
     def _encoder(self, encode):

@@ -395,11 +395,13 @@ def run_script(a, args: list[str]) -> dict:
             rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
         except BudgetExceeded as e:
             meta["stopped"] = str(e)
+        except Exception as e:  # noqa: BLE001 - the run's record says how the program failed
+            rc, meta["error"] = 1, f"{type(e).__name__}: {e}"
         te.close()
     sys.argv = argv0
     hooks.ACTIVE = None
     meta |= adapter.meta() | {"script_rc": rc}
-    problems = [f"the script exited {rc}"] if rc else []
+    problems = [f"the script exited {rc}" + (f" ({meta['error']})" if "error" in meta else "")] if rc else []
     if not adapter.submitted and "stopped" not in meta:
         problems.append("the script submitted nothing")
     return te.finish(meta, problems)
