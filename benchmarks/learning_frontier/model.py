@@ -10,8 +10,10 @@ learning-rate grid serves both families.
 """
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
@@ -151,6 +153,37 @@ class LM(nn.Module):
         if self.rank:
             logits = logits + self.emb_scale * F.linear(F.linear(x, self.emb_a), self.emb_b)
         return logits
+
+
+def theta_digest(state: dict[str, torch.Tensor]) -> str:
+    """sha256 of a model's weights: each tensor in key order, as its name, dtype and shape, then its bytes (C order, the
+    machine's little-endian), so the digest depends on the values only, not on how a file serialized them."""
+    h = hashlib.sha256()
+    for k in sorted(state):
+        t = state[k].detach().to("cpu").contiguous()
+        h.update(f"{k}\0{t.dtype}\0{tuple(t.shape)}\0".encode())
+        h.update(t.reshape(-1).view(torch.uint8).numpy().tobytes())
+    return h.hexdigest()
+
+
+def save_theta(model: nn.Module, path: Path, meta: dict) -> str:
+    """Write the weights (fp32, CPU) and `meta` to `path` atomically; return their digest."""
+    state = {k: v.detach().float().cpu() for k, v in model.state_dict().items()}
+    digest = theta_digest(state)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    torch.save({"state": state, "meta": meta | {"theta_sha256": digest}}, tmp)
+    tmp.rename(path)
+    return digest
+
+
+def load_theta(path: Path, expect: str = "") -> tuple[dict[str, torch.Tensor], dict]:
+    """The weights and meta `save_theta` wrote, refusing a file whose weights don't match their recorded digest (or `expect`)."""
+    obj = torch.load(path, map_location="cpu", weights_only=True)
+    digest = theta_digest(obj["state"])
+    for want in (obj["meta"].get("theta_sha256"), expect):
+        if want and want != digest:
+            raise SystemExit(f"{path}: weights have sha256 {digest}, expected {want}")
+    return obj["state"], obj["meta"] | {"theta_sha256": digest}
 
 
 def matrix_shapes(size: Size, vocab: int = VOCAB) -> list[tuple[int, int]]:
