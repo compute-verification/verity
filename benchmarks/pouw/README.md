@@ -37,6 +37,6 @@ directory's `*.sh` builds and runs it through `research run`, and each `*ref.py`
 `contents/kernels/`.
 
 `edited_gemm/egemm_ref.py` imports the E2E slice's `derive.py` from `e2e_slice/` beside it (the slice's receipt and noise
-derivation, as cursor/egemm-ea24 has it);
-`edited_gemm/receipt_folds_r9.py` is P2-FF r9's reference as recorded (art:91c156a1…), held by its sha256, so leave it
+derivation);
+`edited_gemm/receipt_folds_r9.py` is the r9 folds' reference as recorded, held by its sha256, so leave it
 unedited.

@@ -6,11 +6,11 @@ Payload blocks are generated, not stored: payload `j` is 64 pieces of 64 bytes, 
 below p (two pieces a word at p1024, one at p512), and payload 0 is all zeros (the weights may be).  The store is under
 the default codec, p1024 masked at k = 3.  Every coin and salt comes from `entropy(label)`, SHA-512 in counter mode:
 call c returns the first n bytes of `SHA512(label ‖ u64be c) ‖ SHA512(label ‖ u64be c + 1) ‖ …`, the counter running on
-across calls (`Entropy`).  The challenger (`coins.local`, session 0's epoch of the one challenger) draws each coin of its
+across calls (`Entropy`).  The challenger (`coins.local`, session 0's epoch of the one challenger) flips each coin of its
 layout and then its salt, in layout order: window 0's challenge, its openings coin, then the append coins; a coin is 64
 bytes and the audit's is its first 32, so one SHA-512 block a coin.  `coins.window` is R, the session's window over its
 registration, which σ_0 is opened after; the commitment names no registration, so every variant's coins are the same
-coins under the same root, each opened after its own R.  The payload salts are drawn in block order and the receipt
+coins under the same root, each opened after its own R.  The payload salts are sampled in block order and the receipt
 leaves' salts pass by pass, leaf by leaf.  The
 three passes are one window's chain: pass 0 follows the registration's digest and each later pass the root before it.
 A GPU receipter fills its store with the same payloads, encodes them under the pinned codec seed, and checks its blocks,

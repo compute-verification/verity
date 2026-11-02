@@ -3,17 +3,20 @@ doesn't control (the challenger host, `trusted-host`) while the prover stays on 
 
 The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its
 store's block count and payload root (`{"register": {"blocks", "payload_root"}}`). The verifier registers it from
-its own coins and answers with the registration and the session's coin commitment. It then sends each pass's challenge
-(`{"run": {"challenge", "i", "previous", "t"}}`, answered `{"root"}`) and each window's draws (`{"open": {"draws",
-"t"}}`, answered `{"openings": hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and
-`{"end": true}` last. Its clock, log and coins are the verifier's own (`period.session`), so the case is the one
-`period.run` makes in one process.
+its own coins and answers with the registration (`{"hold": {"registration"}}`). It then sends each pass's challenge,
+its value and the root it was opened after (`{"run": {"challenge", "i", "previous", "t"}}`, the challenge a
+`coins.Released`, answered `{"root"}`), and each window's draws (`{"open": {"draws", "t"}}`, answered `{"openings":
+hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and `{"end": {"commitment",
+"openings"}}` last, once the session has its outcome: the coin commitment and every released coin's opening, which
+the prover checks each challenge it was sent against (`audit.Prover.end`), or `{"end": {}}` for a session left
+undecided. Its clock, log and coins are the verifier's own (`period.session`), so the case is the one `period.run`
+makes in one process.
 
 `python -m verity.core.protocols.remote_bandwidth.verifier_party [--listen HOST:PORT]` is the verifier's side (`main`):
 it reads the request `{"deadline_ns", "node", "passes", "samples", "window_ns", "windows"}` as one JSON line on stdin,
-prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `period_with(party, request,
-store)` is the leg's side: it starts the verifier's side with `party.command`, connects to `party.address` (by default
-the port it printed, on this machine) and plays the prover (`prove`).
+prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `side_of(period, node)` is
+where `period.json` puts that side (`stream.Side`), and `period_with(side, request, store)` is the leg's: it starts the
+side, connects to it and plays the prover (`prove`).
 """
 
 from __future__ import annotations
@@ -23,12 +26,12 @@ import json
 import os
 import secrets
 import socket
-import subprocess
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from typing import Any, BinaryIO
+
+from verity.core.deploy.stream import Side
 
 from . import audit, wire
 from . import coins as C
@@ -57,7 +60,7 @@ class Remote:
     """The prover across the connection `f`, as the verifier's side sees it (`period.Prover`)."""
 
     def __init__(self, f: BinaryIO) -> None:
-        self.f = f
+        self.f, self.ended = f, False
 
     def register(self) -> tuple[int, bytes]:
         m = _recv(self.f).get("register")
@@ -65,10 +68,10 @@ class Remote:
             raise ValueError("the prover opens with {\"register\": {\"blocks\", \"payload_root\"}}")
         return m["blocks"], bytes.fromhex(m["payload_root"])
 
-    def hold(self, registration: audit.Registration, commitment: C.LiveCommitment) -> None:
-        _send(self.f, {"hold": {"commitment": commitment.to_json(), "registration": P.registration_json(registration)}})
+    def hold(self, registration: audit.Registration) -> None:
+        _send(self.f, {"hold": {"registration": P.registration_json(registration)}})
 
-    def run(self, challenge: C.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+    def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
         _send(self.f, {"run": {"challenge": challenge.to_json(), "i": i, "previous": previous.hex(), "t": t}})
         root = _recv(self.f).get("root")
         if not isinstance(root, str):
@@ -81,27 +84,35 @@ class Remote:
         got = wire.decode_openings(bytes.fromhex(body)) if isinstance(body, str) else None
         return [] if got is None else got
 
-    def end(self) -> None:
-        _send(self.f, {"end": True})
+    def end(self, commitment: C.LiveCommitment | None = None, openings: Sequence[C.LiveOpening] = ()) -> None:
+        """The session's last message, with its coins disclosed (`audit.Session.disclose`), or without for a session
+        left undecided; sent once."""
+        if not self.ended:
+            _send(self.f, {"end": {} if commitment is None else {"commitment": commitment.to_json(),
+                                                                  "openings": [o.to_json() for o in openings]}})
+            self.ended = True
 
 
 def prove(f: BinaryIO, prover: P.Local) -> int:
     """The prover's side over the connection `f`, `prover` holding the store: each message answered until the verifier
-    ends the session; the passes run."""
+    ends the session, whose coins it checks then if the end discloses them; the passes run."""
     blocks, root = prover.register()
     _send(f, {"register": {"blocks": blocks, "payload_root": root.hex()}})
     passes = 0
     while True:
         (kind, m), = _recv(f).items()
         if kind == "hold":
-            prover.hold(P.registration_of(m["registration"]), C.LiveCommitment.from_json(m["commitment"]))
+            prover.hold(P.registration_of(m["registration"]))
         elif kind == "run":
-            root = prover.run(C.LiveOpening.from_json(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
+            root = prover.run(C.Released.from_json(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
             _send(f, {"root": root.hex()})
             passes += 1
         elif kind == "open":
             _send(f, {"openings": wire.encode_openings(prover.open(m["t"], [tuple(d) for d in m["draws"]])).hex()})
         elif kind == "end":
+            if m:
+                prover.end(C.LiveCommitment.from_json(m["commitment"]),
+                           [C.LiveOpening.from_json(o) for o in m["openings"]])
             return passes
         else:
             raise ValueError(f"no message {kind!r}")
@@ -109,7 +120,8 @@ def prove(f: BinaryIO, prover: P.Local) -> int:
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Callable[[], int] = time.monotonic_ns,
           sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until) -> P.Period:
-    """The verifier's side of one session over the connection `f` (`period.session` against `Remote`)."""
+    """The verifier's side of one session over the connection `f` (`period.session` against `Remote`), ended with its
+    coins disclosed once it has its outcome."""
     remote = Remote(f)
     out = P.session(request["node"], remote, coins, windows=request["windows"], passes=request["passes"],
                     samples=request["samples"], window_ns=request["window_ns"], deadline_ns=request["deadline_ns"],
@@ -118,31 +130,16 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Calla
     return out
 
 
-@dataclass(frozen=True)
-class Party:
-    """Where the verifier and its challenger run: `host`, the machine's name; `command`, the argv that starts their side
-    there and speaks `main`'s stdin and stdout; `address`, where the prover connects, `None` for this machine at the
-    port the side prints."""
+def command() -> tuple[str, ...]:
+    """The argv that starts the verifier's side as a process on this machine."""
+    return (sys.executable, "-m", MODULE, "--listen", "127.0.0.1:0")
 
-    host: str
-    command: tuple[str, ...]
-    address: tuple[str, int] | None = None
 
-    @classmethod
-    def of(cls, period: Mapping[str, Any], node: str) -> Party:
-        """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-        node, else `challenger.bandwidth`'s `command` and `address` (`"HOST:PORT"`), which infra writes once the host
-        serves the verifier's side (`benchmarks/live_verifier`)."""
-        host = period.get("challenger_host") or node
-        if host == node:
-            return cls(node, (sys.executable, "-m", MODULE, "--listen", "127.0.0.1:0"))
-        entry = (period.get("challenger") or {}).get("bandwidth") or {}
-        if not entry.get("command") or not entry.get("address"):
-            raise RuntimeError(f"the challenger host {host} isn't wired for bandwidth: period.json's "
-                               f"challenger.bandwidth.command and .address start the verifier there and reach it from "
-                               f"{node} (infra's)")
-        h, _, p = entry["address"].rpartition(":")
-        return cls(host, tuple(entry["command"]), (h, int(p)))
+def side_of(period: Mapping[str, Any], node: str) -> Side:
+    """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
+    node, else `challenger.bandwidth`'s `command` and `address`, which infra writes once the host serves the verifier's
+    side (`benchmarks/live_verifier`)."""
+    return Side.of(period, node, "bandwidth", command())
 
 
 def placement(node: str, host: str) -> dict[str, Any]:
@@ -160,22 +157,16 @@ def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = a
             "windows": windows}
 
 
-def period_with(party: Party, request: Mapping[str, Any], store: bytes, *,
+def period_with(side: Side, request: Mapping[str, Any], store: bytes, *,
                 entropy: Callable[[int], bytes] = os.urandom) -> tuple[P.Period, dict[str, Any]]:
-    """One session with the verifier's side `party` starts and this process the prover of `store`: the period, and the
+    """One session with the verifier's side `side` starts and this process the prover of `store`: the period, and the
     side's report (`host`, `passes`)."""
-    p = subprocess.Popen(list(party.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-    try:
-        p.stdin.write(json.dumps(dict(request), sort_keys=True) + "\n")
-        p.stdin.close()
-        port = json.loads(p.stdout.readline())["listening"]
-        with socket.create_connection(party.address or ("127.0.0.1", port)) as s, s.makefile("rwb") as f:
-            passes = prove(f, P.Local(request["node"], store, entropy=entropy))
-        got = json.loads(p.stdout.readline())
-    finally:
-        rc = p.wait()
-    if rc != 0:
-        raise RuntimeError(f"the verifier's side on {party.host} exited {rc}")
+
+    def drive(s: socket.socket) -> int:
+        with s.makefile("rwb") as f:
+            return prove(f, P.Local(request["node"], store, entropy=entropy))
+
+    got, passes = side.talk(request, drive)
     return P.Period(got["answer"], got["case"]), {"host": got["host"], "passes": passes}
 
 
@@ -195,7 +186,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PREMISE", "Party", "Remote", "main", "period_with", "placement", "prove", "request_of", "serve"]
+__all__ = ["PREMISE", "Remote", "command", "main", "period_with", "placement", "prove", "request_of", "serve",
+           "side_of"]
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -6,10 +6,10 @@
     python tools/verity/check/pins.py --merged OURS THEIRS [--conflicted PATH...]   regenerate what a merge of THEIRS into
                                                  OURS, under way at the root, wrote by merging text (`merged`)
 
-A pin is written only by its command, never by hand: #1499's revert came from a hand-written one. A pin is stale when a file it
-records has another digest in the tree (or is gone), or, for a `sha256sum` listing, when its command's arguments (a `find`
-among them) name a file it doesn't list or no longer name one it does (`Pin.gap`), and its command, run at the root of a
-checkout, rewrites it from the tree.
+A pin is written only by its command, never by hand: a hand-written one can record a digest its command doesn't. A pin is
+stale when a file it records has another digest in the tree (or is gone), or, for a `sha256sum` listing, when its command's
+arguments (a `find` among them) name a file it doesn't list or no longer name one it does (`Pin.gap`), and its command, run
+at the root of a checkout, rewrites it from the tree.
 `tests/test_pins.py` fails while a pin is stale, naming its command, and while a tracked file records the digest of a Lean source
 (`*.lean`, a Lake manifest, lakefile or toolchain) without being listed here. `tools/move/restack.py` runs `--regen` on every
 restacked branch. Not listed, since another check owns them: a `lean-audit.json`'s records (the Lean check, `check.py --update`)

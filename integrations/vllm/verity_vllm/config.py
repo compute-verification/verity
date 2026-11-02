@@ -527,7 +527,7 @@ class RowConfig:
 
     @property
     def row(self) -> str | None:
-        """The row id the requests were drawn for (``sweep.row_id``); a variant file (``olmoe-1b-7b-padded__…``) keeps its base row's."""
+        """The row id the requests were sampled for (``sweep.row_id``); a variant file (``olmoe-1b-7b-padded__…``) keeps its base row's."""
         sw = self.workload.get("sweep")
         return sw.get("row_id") if isinstance(sw, Mapping) else None
 
@@ -651,7 +651,7 @@ class CommitConfig:
                                   help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
                                        "the record's extraction slowdown")
     replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
-                              help="config run: the k units drawn uniformly from every unit (k/k equal bounds the wrong fraction) or "
+                              help="config run: the k units sampled uniformly from every unit (k/k equal bounds the wrong fraction) or "
                                    "stratified by family (each family at least once, the rest split evenly)")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
@@ -693,9 +693,10 @@ class CommitConfig:
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
     guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="1",
-                                  help="0 opts out, for A/B only: by default the attention stream's ROW word 3 carries GuardNegInfZero(m) after a "
-                                       "row's first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written "
-                                       "by the guarded-max FA2/FA3 tap build")
+                                  help="0 opts out, for A/B only: by default the row loads the guarded-max FA2/FA3 tap build, whose "
+                                       "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every "
+                                       "block's max * scale (acquire.sources.hidden_source.TAP_ROW3); only a manifest that names the stream "
+                                       "binds it")
     router_tap: str = option("--router-tap", env="ROUTER_TAP", default="1",
                              help="0 opts out, for A/B only: by default the row commits the selection-order router's softmax per token row "
                                   "(verity_vllm.query.router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source) "

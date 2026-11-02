@@ -145,6 +145,24 @@ theorem port_self {net : Net} (h : Built net) (hlog : net.unitLog ≤ 32) {x : �
   rw [sparseEntry_ofRows ha, sparseEntry_ofRows hb, ofRows_row ha hw, ofRows_row hb hw, hra, hrb]
   exact ⟨hself, hself⟩
 
+/-- **A built net's input port bits' rows are `[x]`**, in `A` and in `B` (`port_self`'s rows). -/
+theorem port_row {net : Net} (h : Built net) (hlog : net.unitLog ≤ 32) {x : ℕ} (hx : x ∈ portBits net.inGroups) :
+    net.a.row x = #[x] ∧ net.b.row x = #[x] := by
+  obtain ⟨_, _, _, ig, _, ra, rb, ho⟩ := h
+  obtain ⟨-, ha, hb, -, -, hig, -⟩ := Net.ofRows_ok ho
+  have hin := (Net.ofRows_inputs ho).2
+  rw [hig, portBits_eq] at hx
+  obtain ⟨g, hg, hxr⟩ := List.mem_flatMap.1 hx
+  rw [List.mem_range'_1] at hxr
+  have hlt : x - g.col * WORD < g.bits.foldl (· + ·) 0 := by
+    rw [← Array.foldl_toList, foldl_add_eq_sum]; omega
+  obtain ⟨hra, hrb⟩ := hin g hg _ hlt
+  rw [show g.col * WORD + (x - g.col * WORD) = x by omega] at hra hrb
+  have hw : 2 ^ net.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by norm_num) hlog
+  refine ⟨?_, ?_⟩
+  · rw [ofRows_row ha hw, hra]
+  · rw [ofRows_row hb hw, hrb]
+
 /-- A port bit is bit `t` of some port `p`. -/
 theorem mem_portBits {gs : Array Group} {x : ℕ} (hx : x ∈ portBits gs) :
     ∃ p t, p < (portCols gs).size ∧ t < (portCols gs)[p]!.2 ∧ x = (portCols gs)[p]!.1 + t := by

@@ -40,7 +40,7 @@ def test_a_real_engines_serving_is_accepted_and_a_prover_that_drops_a_kv_block_i
     """The one test that runs a real engine's steps under the audit (every other session test scripts its serving):
     the engine's allocs, KV writes and frees reach the verifier as appends, releases and plans, a pass a step.  Honest
     serving is accepted, with the memory line's weights the layout's and its KV read the record's post-seed reads; a
-    prover that withholds the first block appended is rejected at a receipt on it (every receipt is drawn)."""
+    prover that withholds the first block appended is rejected at a receipt on it (every receipt is sampled)."""
     remote_or_skip()
     d = serve(tmp_path / "serve", "serve")
     v, p = d["verifier"], d["prover"]

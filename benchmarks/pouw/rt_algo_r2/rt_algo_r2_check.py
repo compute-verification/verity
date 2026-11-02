@@ -1,4 +1,4 @@
-"""RT-ALGO round 2: bit-exact checks of the credited-word algebra of three targets (note:20261019T0618Z-draft-rt-algo-r2).
+"""Bit-exact checks of the credited-word algebra of three targets.
 
 - (c) The prefix barrier in the compiled unit. The unit's receipt is 2 (KS + m) words over KS + m sets; T_0 .. T_(KS-2)
   are running partials, while T_(KS-1), O' and D_1 .. D_(m-1) are final-only (invariant under a reordering of the
@@ -76,10 +76,10 @@ def check_final_words_are_order_invariant(rng):
 
 
 def check_credit_is_prefix_worth():
-    """The credit rule counts K = 32 KS MACs a cell (#2639's `credit.tally`, Cr = sum count N K), the prefix sets' worth.
+    """The credit rule counts K = 32 KS MACs a cell ('s `credit.tally`, Cr = sum count N K), the prefix sets' worth.
     Of those KS sets, T_(KS-1) is final-only (c2), so 1/KS of the credit rests on the fresh-coin barrier alone; the m digit
     sets are uncredited. Over Llama-3.1-8B's seven linears, weighted by MACs, the final-only share is near the headline
-    0.656%. This is the rule's formula; #2639 gives no useful-work credit until the same-GEMM gate."""
+    0.656%. This is the rule's formula; no useful-work credit is given until the same-GEMM gate."""
     rows, last = [], {}
     for K, want_m in ((4096, 2), (14336, 3)):
         ks = K // 32
@@ -147,7 +147,7 @@ def check_compiled_unit_is_cp_w():
 
 def check_zero_rows_do_noised_work(rng):
     """A tile of all-zero A rows still carries noised work, X = b (main's ungated unit): its receipt has nonzero words. A
-    dead-tile gate that zeroes the receipt where every A byte is zero (#2639's `PouwH1Tile_v2`) removes that work, while
+    dead-tile gate that zeroes the receipt where every A byte is zero ('s `PouwH1Tile_v2`) removes that work, while
     admission reads the queue, not the row."""
     _z, receipt = reference(*_unit(rng, 4, 8, 64, zero_a=True))
     if not any(w & M32 for w in receipt):
@@ -280,7 +280,7 @@ def check_e4m3i_design_a_admissible():
 
 
 def check_fp4_design_a_admissible():
-    """Design A on E2M1×2 at integer block scales (FP-NATIVE's FP4-A2, FPX-DESIGN's nvi): a coin's coefficient is
+    """Design A on E2M1×2 at integer block scales (FP-NATIVE's FP4-A2, fpx_design's nvi): a coin's coefficient is
     Δ_P s_P Δ_X s_X. With scales to 15, e + e′ = 2 (2 + 3 + 2 + 3) = 20 < 32; `AdmWrap` at s32 needs
     v₂(s_P) + v₂(s_X) <= 11, which integer UE4M3 scales uncapped (64 = 2^6 .. 256 = 2^8) break."""
     pos = sorted({0, 1, 2, 3, 4, 6, 8, 12})
@@ -310,7 +310,7 @@ def _prop_q_pair(c1, c2, M, v):
 
 
 def check_design_a_prop_q():
-    """Proposition Q's halving (note:20261016T0208Z-draft-fullfloor-s-r4 §1), generalized to design A: two entries with
+    """Proposition Q's halving, generalized to design A: two entries with
     coin pairs (β_k, b_k), (β_k, b′_k) of coefficient c_k and no b b′ pair are one product N = (s1 − s2)(s1 + s2),
     s1 = β1 + q1 (b1 + b1′), s2 = β2 − q2 (b2 + b2′), q_k = c_k 2^(v−1): (N − affine) >> v is their bilinear part mod 2^M
     once v >= M + 1 − 2 v₂(c), the b b′ terms landing on 2^M. At e4m3i's c = 2^5 and M = 32, v = 23 and N fits s64; on a

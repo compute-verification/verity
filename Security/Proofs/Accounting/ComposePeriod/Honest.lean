@@ -33,14 +33,14 @@ theorem prob_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p �
 /-! ## The circuit, its scheme and the honest period -/
 
 /-- The word: step `0` of an `S8Dot_v1` body of `K = L = 32` (its `T_1`, a served step), committed. -/
-def word : Accounting.Gates.Gate Unit where
+def word : Accounting.Gates.IntGate Unit where
   op := .const 0
   args := []
   lo := 0
   hi := 0
   step := 0
   prim := "S8Dot_v1"
-  site := .dot 32 32 [] 0
+  place := .dot 32 32 [] 0
   commit := true
 
 /-- One gate, one call site, one live round, one unit, every value committed before the round's coin. -/
@@ -79,7 +79,7 @@ def period : (n : ℕ) → Period Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × U
 
 /-- Its proofs' run: every drawn tile's proof accepted, opening values in `Unit`, every relation and rightness
 holding. -/
-def run (n : ℕ) : PeriodRun Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
+def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
   accepted := fun _ _ _ => True
   opened := fun _ _ _ _ => ()
   rel := fun _ _ _ _ => True
@@ -280,7 +280,7 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
   · split_ifs <;> simp [tileWords_eq]
   · split_ifs <;> simp [tileWords_eq]
   · classical
-    unfold PeriodRun.prefixLen
+    unfold Outcomes.prefixLen
     rw [Finset.filter_true_of_mem fun w _ => hc x w, Finset.card_univ, Fintype.card_fin]
   · classical
     have hx : ∀ w, (run n).Credited x w := hc x
@@ -321,7 +321,7 @@ def periodR (n : ℕ) : Period Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit
 
 /-- Its proofs' run: window `w`'s proof is accepted iff its round's coin is `true`, so the accepted prefix ends at the
 first window whose coin is `false`, a stopping time of the coins. -/
-def runR (n : ℕ) : PeriodRun Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
+def runR (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
   accepted := fun x w _ => (coinAt x w).1.1 = true
   opened := fun _ _ _ _ => ()
   rel := fun _ _ _ _ => True
@@ -381,7 +381,7 @@ theorem acceptsUpTo_periodR (wt : (Fin 1 → Bool) → Fin 1 → ℝ) (a b : ℝ
 /-- **No window is credited** when the first window's proof is refused. -/
 theorem prefixLen_false (n : ℕ) : (runR (n + 1)).prefixLen (constPath false (n + 1)) = 0 := by
   classical
-  unfold PeriodRun.prefixLen
+  unfold Outcomes.prefixLen
   rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
   intro w _ hc
   exact Bool.false_ne_true (hc 0 (Fin.zero_le w) 0)
@@ -389,7 +389,7 @@ theorem prefixLen_false (n : ℕ) : (runR (n + 1)).prefixLen (constPath false (n
 /-- **One window is credited** when the first window's proof is accepted and the second's refused. -/
 theorem prefixLen_mid (n : ℕ) (hn : 0 < n) : (runR (n + 1)).prefixLen (midPath n) = 1 := by
   classical
-  unfold PeriodRun.prefixLen
+  unfold Outcomes.prefixLen
   rw [Finset.card_eq_one]
   refine ⟨0, Finset.ext fun w => ?_⟩
   rw [Finset.mem_filter, Finset.mem_singleton]
@@ -406,7 +406,7 @@ theorem prefixLen_mid (n : ℕ) (hn : 0 < n) : (runR (n + 1)).prefixLen (midPath
 /-- **Every window is credited** when no proof is refused. -/
 theorem prefixLen_true (n : ℕ) : (runR n).prefixLen (constPath true n) = n := by
   classical
-  unfold PeriodRun.prefixLen
+  unfold Outcomes.prefixLen
   rw [Finset.filter_true_of_mem fun w _ => credited_const_true n w, Finset.card_univ, Fintype.card_fin]
 
 /-- **Its credited live words**, on the coins that accept every window: the dead first window's are none. -/

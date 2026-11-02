@@ -14,7 +14,7 @@ Each time is CUDA events around the work on torch's stream, the median over ``--
 J10-R units-kernel receipts are held to the torch chain's over hashlib's stream, word for word, and noise.cu's J10-R
 stream to hashlib's. Writes ``--out`` (JSON) and prints a line a linear.
 
-    research run --on vy-nebius-2 --pool research --mem-gb 48 --cwd source --source . --as LANE --env JOB=tests -- \
+    research run --on MACHINE --pool research --mem-gb 48 --cwd source --source . --as LANE --env JOB=tests -- \
       bash benchmarks/pouw/served_h1/j10r_gpu.sh
 """
 from __future__ import annotations

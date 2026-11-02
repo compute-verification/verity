@@ -13,7 +13,7 @@ forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves
   `take` the e2e's decode response reports.
 - **What it is not:** the scheme's own A root seeds forming (seed_A), so the statement's roots are in addition to its.  Prefill
   runs eagerly, so its rows are not committed here; nor are the fp8-p rows (the tile's inputs), which a prover commits after
-  the pass, before the draw (rows_bench.py's ``batch.p.hm96``).
+  the pass, before the sample (rows_bench.py's ``batch.p.hm96``).
 
 `check` is the gate before any timing: a forward of every weight (m = 32) captured whole and replayed from poisoned stages
 and outputs must give Python's roots and b ‖ c over the rows it staged, which must be the calls' A words; the no-write

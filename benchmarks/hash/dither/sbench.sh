@@ -40,7 +40,7 @@ echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # SBENCH_SHIP_OUT=1 builds the libraries below and the coins' Lean verifier, writes them to out/sbench-ship.tar and exits;
 # SBENCH_SHIP=TAR (such a tar, copied to the host) takes them in place of building, so a host that may not build builds
 # nothing.  A ship is refused (exit 17) unless its key is this run's (what the builds read: the CUDA
-# sources here, sha512_rows' sha512x.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
+# sources here, verity/ml/kernels/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
 # MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
 # that leaves those alone.  Neither covers --bw-passes.
 COINS_PKG=verity/core/protocols/pouw/lean/check
@@ -50,7 +50,7 @@ SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_K
 COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.path.normpath(os.path.join(p, x["dir"]))
   for x in json.load(open(os.path.join(p, "lake-manifest.json")))["packages"] if x["type"] == "path"))' "$COINS_PKG")
 ship_key() {
-  git ls-tree -r HEAD -- benchmarks/hash/dither benchmarks/torch_gpu/sha512_rows/sha512x.cuh | grep -E '\.(cu|cuh)$'
+  git ls-tree -r HEAD -- benchmarks/hash/dither verity/ml/kernels/sha512.cuh | grep -E '\.(cu|cuh)$'
   for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
   echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
   echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}${HB_KC_FLAGS_B:+ HB_KC_FLAGS_B=$HB_KC_FLAGS_B}"
@@ -234,7 +234,8 @@ fi
 # the per-call challenger round's measured round trips (paced samples in percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
 cd integrations/vllm
-PY=${PY:-/workspace/jobs/venv312/bin/python3}
+[ -x /workspace/jobs/venv312/bin/python3 ] && PY=${PY:-/workspace/jobs/venv312/bin/python3}
+PY=${PY:-$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python3")} || exit 2
 export PATH=$(dirname "$PY"):$PATH
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=$FI_ARCH
