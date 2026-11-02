@@ -220,7 +220,7 @@ def test_the_whole_scope_keys_an_env_on_its_files_and_the_imports_scope_on_the_h
     assert ts["lean-env:Sec"]["vars"] == {"package": "Sec", "scope": "imports"}
     got = listed(tmp_path / "imports-more", **OTHER_ENVS, **more)["lean-env:Sec"]
     assert json.loads(got["vars"]["modules"]) == ["Init", "Init.Data.List", "Mathlib.Logic.Basic", "Std.Data.HashMap"]
-    assert got["key"] != whole["lean-env:Sec"]["key"]
+    assert got["key"] != ts["lean-env:Sec"]["key"], "in the imports scope the same header change reruns it"
 
 
 def test_a_scope_that_isn_t_one_makes_no_graph(tmp_path, monkeypatch):
