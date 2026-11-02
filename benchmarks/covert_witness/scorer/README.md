@@ -10,7 +10,7 @@ python scorer.py collect                               # new manifests -> index.
 python scorer.py score                                 # score.json, score.md, submissions.json
 python scorer.py board --promote --digest [--append]   # this hour's PROMOTED and DIGEST lines (--append pushes them)
 python scorer.py post TAG TEXT                         # one line onto islands/scorer/BOARD.md, pushed
-python scorer.py final entries|plan [--deadline HH:MM]  # the FINAL lines; the reruns that fit by the deadline
+python scorer.py final entries|plan [--begin HH:MM] [--deadline HH:MM]  # the FINAL lines; the reruns that fit
 python scorer.py final launch ID... [--seeds 101,102,103] [--node N] [--smoke] [--dry-run]
 python scorer.py final collect|table                   # final-set reruns (below)
 ~~~
@@ -23,8 +23,9 @@ lock, so the two never collide.
 - **Records**: evidence/v1 artifacts with `meta.covert_witness.class` (launch.py's, one per candidate) and te_core
   ledger records (`meta.schema` te-core/submission/v1), written since `TE_SCORER_SINCE`. The start registry's bpbs and
   tensors come from launch.py's start-scores record. A record's agent is the `cursor/te-<direction>-4207` branch holding
-  its commit (`candidate.json`), else its run's commit, else the direction its meta names, else its class. The index
-  names each record's witness schema and version and its harness's te_core.
+  its island's commit (witness v4's `island.commit`; before it, `candidate.json`'s commit), else its run's commit, else
+  the direction its meta names, else its class. The index names each record's witness schema and version and its
+  harness's te_core.
 - **Who is scored**: honest(l*) reads the reference directions (`ref-*`, and the harness's reference smoke), whatever
   the class, at the end of each run's own schedule only (its last checkpoint, `schedule_ends`; the coordinator, 12:05Z:
   a checkpoint inside a longer reference schedule is not what an honest run of that length reaches). W* reads every
@@ -32,22 +33,25 @@ lock, so the two never collide.
   (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
 - **What a record must show to count**: launch.py uploads a record from an agent's VM, so its `witness.json` and
   `run/run.json` must be the node's (`custody_problems`: the hashes of `out/witness.json` and `out/run/run.json` in the
-  run-record the node's runner publishes, the attempt's `outputs.run_record`), and every fixed-side file at its commit
-  (`benchmarks/covert_witness` outside `islands/`, `scorer/` and docs) must be one the harness's branches
-  (`cursor/covert-witness-4207`, `cursor/te-core-4207`) held since 30 Oct (`fixed_side`). A record whose E (sha256) is
+  run-record the node's runner publishes, the attempt's `outputs.run_record`), and its fixed side must be the
+  harness's: a witness v4 record's `measurement_commit` one that `pinned.json` on `TE_BRANCH` has named (launch.py ships
+  the pin and only the island), an earlier record's every fixed-side file at its commit (`benchmarks/covert_witness`
+  outside `islands/`, `scorer/` and docs) one the harness's branches (`cursor/covert-witness-4207`,
+  `cursor/te-core-4207`) held since 30 Oct (`fixed_side`). A record whose E (sha256) is
   an earlier record's (`replays`), or whose harness counted under half the FLOPs of the run's own steps
   (`over_train_flops` < `COUNTED_FLOOR`), is a counted-compute escape and unscored (the coordinator, 10:35Z). Otherwise
   the record is invalid, with the reason in the ledger.
-- **Regime**: from te_core 2.2 (`PAIRED`, on `cursor/covert-witness-4207`) a checkpoint's val bpb is the paired score on
-  a fresh slice of the search pool (its submission's `val_slice`), against the start's whole-pool bpb (witness v3's
-  `score.start_bpb`). A record with both is in the current regime, and only those make the frontier, the promotions,
-  the cells and the final table, each against the start bpb its records carry (the median); earlier records (the fixed
-  search set) are scored apart, in `score.md`'s second half. Version numbers don't mark the regime:
-  `cursor/te-core-4207`'s te_core 2.8 predates it.
+- **Regime** (`regime_of`): a record measured by the pin (`pinned.json` at `TE_BRANCH`'s head, `pins`) is `current`,
+  and only those make the frontier, honest, the promotions, the cells and the finals (the coordinator, 12:55Z: the v2.3
+  pin is the last tonight), each against the start bpb its records carry (the median). The rest are labelled context,
+  scored apart in `score.md` and in the digest's context lines: `pin V` (an earlier pin's), `paired` (te_core 2.2's
+  paired slices before the pins: `score.start_bpb` and every checkpoint's `val_slice`), and `earlier` (the fixed search
+  set).
 - **ρ**: te_core's (`TE_CORE_PATH`, its `score.score_grid`, `w_star`, `honest`, `effective_slowdown`, `frontier.TARGETS`).
   A record made inside te_core's harness (witness v2/v3, covert_witness v2.1) is priced by the harness's count: `collect`
   ingests the node's `run.json` with the te_core of the official branch with the highest VERSION that holds `PAIRED`
-  (`te_current`, a worktree at `TE_CURRENT`), so a pricing fix re-prices every record. One submission per checkpoint
+  (`te_current`, a worktree at `TE_CURRENT`), so a pricing fix re-prices every record, the pin's included (the
+  coordinator, 12:55Z: re-ingest, not a re-pin, is how a later ρ reaches them). One submission per checkpoint
   carries |C|, U, D, φ and ρ, and the record is refused if te_core's |C| isn't the witness's or a ρ is below 1. Its
   entry takes |C|, φ and D from the last checkpoint. The te_core records agents publish themselves are listed and never
   scored. A witness v1 record has no te_core count, so its annotation is analytic (`scorer.analytic`):
@@ -81,12 +85,19 @@ lock, so the two never collide.
 - **Final scoring** (`scorer.py final`): an entry (a valid current-regime search record) is rerun at fresh seeds (101,
   102, 103 on the `--seed` and `--data-seed` flags its train.py takes; once if it takes neither, since the harness seeds
   nothing for a `--script` run) by the harness's `launch.py CLASS START --direction scorer --final --no-wait ... --
-  TRAIN_ARGS`. The rerun ships `overlay`: a commit whose tree is the harness branch head's (`TE_BRANCH`) with the entry's
-  `islands/`, its parents both. So every rerun is measured by one fixed side, the harness's latest, with the entry's own
-  island code and train args. In final mode (`CW_FINAL=1`) every score is the final set's, and launch.py preserves the
+  TRAIN_ARGS` with `--island` and `--program` the entry's, run from `overlay`: a commit whose tree is the harness branch
+  head's (`TE_BRANCH`) with the entry's `islands/`, its parents both. launch.py ships the pin and takes only that
+  island (checked to be the entry's tree), so every rerun is measured by the pin with the entry's own island code and
+  train args, and `final table` refuses one measured by any other commit. In final mode (`CW_FINAL=1`) every score is the final set's, and launch.py preserves the
   record with meta `final: true` and ingests it into no ledger. `final collect` runs `launch.py --collect` once per ended
   run and reads its witness and te_core's submissions from its `run.json`. `final table` refuses a rerun that isn't
   done, valid, scored on the final split, priced at the witness's |C|, ρ ≥ 1 and over the counter floor. It averages the
   seeds per checkpoint and writes the table of W* and W*/honest per start, target, k and r, against the final set's
   start bpb, beside the search set's from the current regime's records, and both frontier plots, into
-  `$TE_SCORER_STATE/final/`.
+  `$TE_SCORER_STATE/final/`. `final entries` reads each direction's last `[FINAL]` line (its own board on its
+  `cursor/te-*` branch or the merged board; art ids or run ids). `final plan` orders the reruns (the coordinator,
+  12:55Z): the entries that set honest or W* at some target in the pin's table, shortest first, then the directions'
+  other FINAL entries in their direction's order, shortest first. It keeps the seeds that end by `--deadline` (17:00Z)
+  starting at `--begin` (15:00Z) on the listed nodes' GPUs (8 a node; a rerun takes its record's GPU seconds plus 10
+  minutes). A `--smoke` launch checks
+  the pipeline and never enters the table.

@@ -11,10 +11,10 @@ rebuilt by `collect`. Records are the evidence/v1 artifacts whose meta has `cove
 te-core/submission/v1 ledger records (te_core.ledger's), written since `$TE_SCORER_SINCE`.
 
 A record is scored only if its witness and run.json are the node's (`custody_problems`: launch.py uploads records from an
-agent's VM, the node's runner publishes the run's out/) and its commit's fixed side is the harness's (`fixed_side`). A
+agent's VM, the node's runner publishes the run's out/) and its fixed side is the harness's (a pin, or `fixed_side`). A
 record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by the harness's count: `collect` ingests
 the node's run.json with the newest official te_core (`te_current`), one submission per checkpoint carrying |C|, U, D, φ
-and ρ; the te_core records agents publish themselves are listed, never scored. Only paired-slice records (`PAIRED`)
+and ρ; the te_core records agents publish themselves are listed, never scored. Only the pin's records (`regime_of`)
 make the frontier, the promotions (decided by the sealed set, `sealed_bits`) and the final table. A witness v1 record carries the witness
 (training FLOPs, φ over forward weight-matmul FLOPs, |E|, search bpb, the FLOPs-to-target curve), not te_core's count. Its
 annotation here is analytic, from the record's declared trainable set and step-log tokens over the start's tensors: U is
@@ -36,7 +36,6 @@ import json
 import math
 import os
 import re
-import shlex
 import struct
 import subprocess
 import sys
@@ -58,7 +57,9 @@ TE_BRANCH = os.environ.get("TE_BRANCH", "cursor/covert-witness-4207")  # the har
 #: search pool (its record's val_slice), against the start's whole-pool bpb (witness v3's score.start_bpb). Version
 #: numbers don't mark it (te-core-4207's 2.8 predates it), so the scorer reads the record's own fields
 PAIRED = "4cc610c6766"
-REGIME = "te_core 2.2+ (paired slices)"
+#: the integrator's measurement pins: every commit this file named on TE_BRANCH, the head's being the pin whose records
+#: alone make the frontier, honest and the finals (coordinator 12:55Z); a record names its own (witness v4)
+PIN_FILE = "benchmarks/covert_witness/pinned.json"
 COUNTED_FLOOR = 0.5  # the harness's count over the run's own step log, below which the counter missed work
 BOARD = Path(os.environ.get("TE_BOARD", Path(__file__).resolve().parents[1] / "islands" / "scorer" / "BOARD.md"))
 BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `HH:MMZ scorer [TAG] text (record ids)`. The "
@@ -74,7 +75,6 @@ THIN = 2
 SHORT = 12
 
 sys.path.insert(0, str(TE_CORE))
-from te_core import VERSION as TE_CORE_VERSION  # noqa: E402
 from te_core.annotate import Annotation, StepAnnotation  # noqa: E402
 from te_core.frontier import PHI_EDGES, TARGETS, bin_of  # noqa: E402
 from te_core.score import (C_PER_FORWARD_TOKEN, K_BITS, R, block_c, cell, effective_slowdown, honest,  # noqa: E402
@@ -89,6 +89,15 @@ def short(art: str) -> str:
 
 def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def read_json(text: str):
+    """A record file's JSON. candidate.sh writes its args unescaped, so a regex in them (`blocks\\.2`) leaves a
+    backslash JSON refuses: such a backslash is read as itself."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return json.loads(re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", text))
 
 
 # ---- the store ---------------------------------------------------------------------------------------------------------
@@ -287,6 +296,43 @@ def fixed_side(commit: str, official: set) -> list[str]:
     return [f"fixed side differs from the harness's: {', '.join(diff[:4])}" + (" …" if len(diff) > 4 else "")] if diff else []
 
 
+def pins() -> dict:
+    """{"pin": the head's pinned.json, "pins": {commit: pin} for every pin the file has named on TE_BRANCH}."""
+    g = ["git", "-C", str(REPO)]
+    subprocess.run(g + ["fetch", "-q", "origin", f"+refs/heads/{TE_BRANCH}:refs/remotes/origin/{TE_BRANCH}"],
+                   capture_output=True, text=True)
+    out = {}
+    for c in subprocess.run(g + ["log", "--reverse", "--format=%H", f"origin/{TE_BRANCH}", "--", PIN_FILE],
+                            capture_output=True, text=True, check=True).stdout.split():
+        p = subprocess.run(g + ["show", f"{c}:{PIN_FILE}"], capture_output=True, text=True)
+        if p.returncode == 0:
+            pin = json.loads(p.stdout)
+            out[pin["commit"]] = pin
+    head = json.loads(subprocess.run(g + ["show", f"origin/{TE_BRANCH}:{PIN_FILE}"], capture_output=True, text=True,
+                                     check=True).stdout)
+    return {"pin": head, "pins": out | {head["commit"]: head}}
+
+
+def pin_of() -> dict:
+    """The pin `collect` last read."""
+    p = STATE / "pin.json"
+    return json.loads(p.read_text())["pin"] if p.exists() else {}
+
+
+def regime_name() -> str:
+    pin = pin_of()
+    return (f"v{pin.get('version', '?')}-pin ({pin.get('commit', '')[:12]}, te_core {pin.get('te_core', '?')}, data "
+            f"{pin.get('data', '?')})")
+
+
+def regime_of(mc: str, pinned: dict, paired: bool) -> str:
+    """`current` for the pin's records, `pin V` for an earlier pin's, `paired` for te_core 2.2's paired-slice records
+    before the pins, else `earlier`."""
+    if mc and mc in pinned["pins"]:
+        return "current" if mc == pinned["pin"]["commit"] else f"pin {pinned['pins'][mc].get('version', '?')}"
+    return "paired" if paired else "earlier"
+
+
 def te_current() -> str:
     """TE_CURRENT checked out at the official branch head with the highest te_core VERSION among those holding PAIRED, the
     te_core every harness record is re-ingested with (a pricing fix re-prices every record): an agent's branch can carry
@@ -307,6 +353,12 @@ def te_current() -> str:
         raise SystemExit(f"scorer: no official branch holds te_core's paired slices ({PAIRED})")
     subprocess.run(g + ["checkout", "-q", "--detach", f"origin/{best[1]}"], capture_output=True, text=True, check=True)
     return subprocess.run(g + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def te_version() -> str:
+    """The VERSION of TE_CURRENT's te_core, which prices every record (`te_current`)."""
+    v = re.search(r'^VERSION = "([\d.]+)"', (TE_CURRENT / "benchmarks/covert_witness/te_core/__init__.py").read_text(), re.MULTILINE)
+    return v[1] if v else "?"
 
 
 def te_ingest(run_dir: Path, root: Path, mechanism: str, run: str) -> list[dict] | str:
@@ -336,25 +388,34 @@ def ingest_run(r, art: str, recorded: str, sha: str, run: str, mechanism: str, t
     return [te_rec_row(x, f"{art}#{x['checkpoint_step']}", recorded) | {"derived": True, "record": art} for x in recs]
 
 
+def island_commit(w: dict | None, cand: dict) -> str:
+    """The commit the candidate's program came from: witness v4's island (the pin measured it), else the candidate's."""
+    return ((w or {}).get("island") or {}).get("commit") or cand.get("commit", "")
+
+
 def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict | None = None, te: str = "",
-           official: set | None = None) -> dict:
+           official: set | None = None, pinned: dict | None = None) -> dict:
     cw = man["meta"]["covert_witness"]
     files = {f["path"]: f for f in man["payload"].get("files", [])}
     d = STATE / "records" / art.removeprefix("art:")
     got = {}
     for name in SMALL_FILES:
         if name in files:
-            got[name] = json.loads(blob(r, files[name]["sha256"], d / name).read_text())
+            got[name] = read_json(blob(r, files[name]["sha256"], d / name).read_text())
     w, cand, meta = got.get("witness.json"), got.get("candidate.json", {}), got.get("meta.json", {})
-    agent, direction = direction_of(commits.get(cand.get("commit", ""), []), cw.get("class", ""))
+    commit, island = island_commit(w, cand), (w or {}).get("island") or {}
+    mc = (w or {}).get("measurement_commit") or ""
+    agent, direction = direction_of(commits.get(commit, []), cw.get("class", ""))
     if not agent and cw.get("direction"):
         direction = cw["direction"]
     if cw.get("final"):
         direction = "scorer"
     checks = (w or {}).get("checks", {})
     bad = sorted(k for k, v in checks.items() if v is not True) + custody_problems(files, custody)
-    if w and official is not None:
-        bad += fixed_side(cand.get("commit", ""), official)
+    if w and mc and pinned is not None:
+        bad += [] if mc in pinned["pins"] else [f"measured by {mc[:12]}, which {TE_BRANCH}'s pinned.json never named"]
+    elif w and official is not None:
+        bad += fixed_side(commit, official)
     curve = (w or {}).get("curve") or []
     harness = (w or {}).get("harness")
     notes = (w or {}).get("notes") or {}
@@ -381,7 +442,9 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
     return {
         "id": art, "source": "launch.py", "run": cw.get("run"), "class": cw.get("class"), "start": cw.get("start"),
         "note": cw.get("note", ""), "mechanism": mechanism_of(cw.get("note", "")), "screen": screen_key(cw.get("note", "")),
-        "agent": agent, "direction": direction, "commit": cand.get("commit", ""), "args": cand.get("args", ""),
+        "agent": agent, "direction": direction, "commit": commit, "args": cand.get("args", ""),
+        "island": island.get("name"), "program": island.get("program"), "island_tree": island.get("tree"),
+        "measurement_commit": mc,
         "launched": run_time(cw.get("run", "")), "recorded": recorded,
         "valid": bool(w and w.get("valid")) and not bad, "failed_checks": bad if w else ["no witness"],
         "derived": derived,
@@ -400,8 +463,8 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
         "e_sha256": e_digest(r, files, d, harness), "final": bool(cw.get("final")),
         "te_core": (harness or {}).get("te_core"), "harness_version": (w or {}).get("version"),
         "start_bpb": (w or {}).get("score", {}).get("start_bpb"),
-        "regime": "current" if (w or {}).get("score", {}).get("start_bpb") is not None and derived
-        and all(t.get("val_slice") for t in derived) else "earlier",
+        "regime": regime_of(mc, pinned or {"pins": {}}, (w or {}).get("score", {}).get("start_bpb") is not None
+                            and bool(derived) and all(t.get("val_slice") for t in derived)),
     }
 
 
@@ -494,16 +557,17 @@ def collect(since: str = SINCE) -> dict:
     commit_of = {}
     for art, _, man in cw:
         files = {f["path"]: f for f in man["payload"].get("files", [])}
-        if "candidate.json" in files:
-            p = blob(r, files["candidate.json"]["sha256"], STATE / "records" / art.removeprefix("art:") / "candidate.json")
-            commit_of[art] = json.loads(p.read_text()).get("commit", "")
+        got = {n: read_json(blob(r, files[n]["sha256"], STATE / "records" / art.removeprefix("art:") / n).read_text())
+               for n in ("candidate.json", "witness.json") if n in files}
+        commit_of[art] = island_commit(got.get("witness.json"), got.get("candidate.json", {}))
     runs = attempts(r, since)
     commits = branches(set(commit_of.values()) | {a["commit"] for a in runs})
     custody = {a["run"]: by_art.get(a["run_record"]) for a in runs if a.get("run_record")}
-    official = official_blobs()
+    official, pinned = official_blobs(), pins()
+    (STATE / "pin.json").write_text(json.dumps(pinned, indent=1) + "\n")
     with ThreadPoolExecutor(16) as ex:
         rows = list(ex.map(lambda x: cw_row(r, x[0], x[1], x[2], commits, custody.get(
-            x[2]["meta"]["covert_witness"].get("run")), te, official), cw))
+            x[2]["meta"]["covert_witness"].get("run")), te, official, pinned), cw))
         rows += [d for x in rows for d in x.pop("derived")]
         rows += [t for t in ex.map(lambda x: te_row(r, x[0], x[1], x[2]), tes) if t]
     rows += te_ledger_rows({x.get("te_id") for x in rows if x["source"] == "te_core" and not x.get("derived")})
@@ -534,7 +598,7 @@ def collect(since: str = SINCE) -> dict:
            "runs_without_record": [a["run"] for a in runs if not a["record"] and not a.get("cancelled")
                                     and run_time(a["run"]) >= SEARCH_START],
            "cancelled": len([a for a in runs if a.get("cancelled")]),
-           "te_core_commit": te, "seconds": round(time.time() - t0, 1)}
+           "te_core_commit": te, "pin": pinned["pin"], "seconds": round(time.time() - t0, 1)}
     (STATE / "collect.json").write_text(json.dumps(out, indent=1) + "\n")
     return out
 
@@ -798,16 +862,20 @@ def score(write: bool = True) -> dict:
     starts = json.loads((STATE / "starts.json").read_text())
     subs = submissions(rows, starts)
     col = STATE / "collect.json"
-    rep = {"at": now(), "te_core": TE_CORE_VERSION, "regime": REGIME,
+    rep = {"at": now(), "te_core": te_version(), "regime": regime_name(), "pin": pin_of(),
            "te_core_commit": json.loads(col.read_text()).get("te_core_commit", "") if col.exists() else "",
            "annotation": "the harness's count for witness v2 records, analytic for witness v1 (module docstring)",
            "p_bits": P_BITS, "c_per_forward_token": C_PER_FORWARD_TOKEN, "starts": {}, "earlier": {},
            "submissions": len(subs)}
-    cur, old = [x for x in subs if x["regime"] == "current"], [x for x in subs if x["regime"] != "current"]
+    cur = [x for x in subs if x["regime"] == "current"]
     for s in STARTS:
         c = block_c(forward_macs_per_token(starts[s]))
         rep["starts"][s] = start_table([x for x in cur if x["start"] == s], regime_start_bpb(cur, s), c)
-        rep["earlier"][s] = start_table([x for x in old if x["start"] == s], starts[s]["bpb"], c)
+    for reg in sorted({x["regime"] for x in subs} - {"current"}):
+        old = [x for x in subs if x["regime"] == reg]
+        rep["earlier"][reg] = {s: start_table([x for x in old if x["start"] == s], starts[s]["bpb"] if reg == "earlier"
+                                              else regime_start_bpb(old, s), block_c(forward_macs_per_token(starts[s])))
+                               for s in STARTS}
     if write:
         (STATE / "score.json").write_text(json.dumps(rep, indent=1) + "\n")
         (STATE / "submissions.json").write_text(json.dumps(subs) + "\n")
@@ -817,9 +885,10 @@ def score(write: bool = True) -> dict:
 
 def score_md(rep: dict) -> str:
     lines = [f"# Scores, {rep['at']} (te_core {rep['te_core']}; {rep['annotation']}; p = {rep['p_bits']})", ""]
-    for name, part in ((rep["regime"] + " records (paired slice scores against the start's whole search-pool bpb)",
-                        rep["starts"]),
-                       ("earlier records (the fixed search set; not comparable with the above)", rep.get("earlier", {}))):
+    parts = [(rep["regime"] + " records (paired slice scores against the start's whole search-pool bpb)", rep["starts"])]
+    parts += [(f"{reg} records (context: not comparable with the above, and out of the final table)", part)
+              for reg, part in rep.get("earlier", {}).items()]
+    for name, part in parts:
         lines += [f"# {name}", ""]
         lines += start_md(part)
     return "\n".join(lines) + "\n"
@@ -863,7 +932,7 @@ def cell_of(x: dict) -> tuple:
 
 def drop_of(x: dict, starts: dict) -> float | None:
     """The relative bpb drop from the start: a current-regime record against the whole-pool start bpb it carries."""
-    s0 = x.get("start_bpb") if x.get("regime") == "current" else starts.get(x["start"], {}).get("bpb")
+    s0 = x.get("start_bpb") if x.get("regime", "earlier") != "earlier" else starts.get(x["start"], {}).get("bpb")
     return (s0 - x["bpb"]) / s0 if s0 and isinstance(x.get("bpb"), (int, float)) else None
 
 
@@ -1098,27 +1167,39 @@ def frontier_lines(part: dict) -> list[str]:
     return out
 
 
+def context_lines(earlier: dict) -> list[str]:
+    """The frontier of each earlier pin's records and of the paired records (the fixed search set's only if neither
+    reaches a target)."""
+    order = sorted((r for r in earlier if r.startswith("pin ")), key=lambda r: tuple(map(int, re.findall(r"\d+", r))),
+                   reverse=True) + [r for r in ("paired",) if r in earlier]
+    out = [f"Context, the {reg} records' frontier (not comparable, and out of the final table): " + " ".join(lines)
+           for reg in order if (lines := frontier_lines(earlier[reg]))]
+    if not out and (lines := frontier_lines(earlier.get("earlier", {}))):
+        out = ["Context, the earlier records' frontier (the fixed search set; not comparable, and out of the final "
+               "table): " + " ".join(lines)]
+    return out
+
+
 def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     out = []
     cw = entries(rows)
     n, nv = len(cw), len([x for x in cw if x["valid"]])
     nc = len([x for x in rows if x["source"] == "launch.py" and x.get("cancelled")])
     ncur = len([x for x in current(cw) if x["valid"]])
-    reg = rep.get("regime") if isinstance(rep.get("regime"), str) else REGIME
+    reg = rep.get("regime") or regime_name()
     out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid, {ncur} of them {reg} records; direction audit's, "
                f"the scorer's final reruns and {nc} of runs cancelled unrun not counted). Frontier per target below, "
                f"{reg} records only (l* from the start's whole-pool bpb they carry): honest = least "
-               f"training FLOPs (2|C|) of the reference directions (ref-*) reaching l*; W*/honest per (k, r) in the order "
-               f"10kB r1,r10,r100 | 100kB | 1MB, te_core rho, with the W* entries, (c) priced by the harness's count, (a) "
-               f"by the analytic annotation (p 16); full tables, the earlier records' included, in the scorer's score.md.")
+               f"training FLOPs (2|C|) of the reference runs whose own schedule ends at l* or below; W*/honest per (k, r) "
+               f"in the order 10kB r1,r10,r100 | 100kB | 1MB, te_core {rep.get('te_core')} rho, with the W* entries, (c) "
+               f"priced by the harness's count, (a) by the analytic annotation (p 16); full tables, the earlier regimes' "
+               f"included, in the scorer's score.md.")
     lines = frontier_lines(rep["starts"])
     nsub = sum(st["submissions"] for st in rep["starts"].values())
     out += [f"{hhmm} scorer [DIGEST] frontier {x}" for x in lines] or [
-        f"{hhmm} scorer [DIGEST] frontier: "
-        + (f"the {reg} records' {nsub} checkpoints reach no target yet. " if nsub else
-           f"no {reg} record yet. ")
-        + "The earlier records' (the fixed search set; not comparable, and out of the final table): "
-        + (" ".join(frontier_lines(rep.get("earlier", {}))) or "none")]
+        f"{hhmm} scorer [DIGEST] frontier: " + (f"the {reg} records' {nsub} checkpoints reach no target yet." if nsub
+                                                else f"no {reg} record yet.")]
+    out += [f"{hhmm} scorer [DIGEST] {x}" for x in context_lines(rep.get("earlier", {}))]
     if pr["new"] and "decided" in pr:
         out.append(f"{hhmm} scorer [DIGEST] newly promoted: " + ", ".join(short(p["id"]) for p in pr["new"]) + ".")
     empty = empty_cells(rows, starts)
@@ -1180,10 +1261,10 @@ def direction_sentence(d: str, rows: list[dict], starts: dict) -> str:
     if not v:
         return f"{len(xs)} records, none valid yet ({', '.join(mechs)})."
     best = max(current(v) or v, key=lambda x: drop_of(x, starts))
-    return (f"{len(xs)} records, {len(v)} valid ({len(current(v))} {REGIME}), {len(mechs)} mechanisms "
+    return (f"{len(xs)} records, {len(v)} valid ({len(current(v))} {regime_name()}), {len(mechs)} mechanisms "
             f"({', '.join(mechs)}); best{'' if best.get('regime') == 'current' else ' (earlier regime)'} "
             f"{short(best['id'])} '{best['note']}' on {best['start']}: {best['bpb']:.4f} bpb "
-            f"({100 * drop_of(best, starts):+.2f}% from the start) at {best['train_flops']:.3g} FLOPs, |E| "
+            f"({abs(100 * drop_of(best, starts)):.2f}% {'below' if drop_of(best, starts) > 0 else 'above'} the start) at {best['train_flops']:.3g} FLOPs, |E| "
             f"{fmt(best['E_bytes'], ',')} B, phi {fmt(best['phi'], '.2f')}.")
 
 
@@ -1288,9 +1369,10 @@ def unseeded(args: list[str]) -> list[str]:
 
 def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node: str | None = None,
                  kind: str = "rerun") -> list[dict]:
-    """launch.py --final --no-wait for each seed of each entry (a valid search record of the current regime), from the
-    overlay of its island on the harness's head; one line each into FINAL/launches.jsonl. A `smoke` (the pipeline's
-    check before the final) is collected like a rerun and never enters the table."""
+    """launch.py --final --no-wait for each seed of each entry (a valid search record of the pin), from the overlay of
+    its island on the harness's head (launch.py ships the pin and takes only HEAD's islands/ISLAND/, the entry's tree);
+    one line each into FINAL/launches.jsonl. A `smoke` (the pipeline's check before the final) is collected like a rerun
+    and never enters the table."""
     rows = [json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip()]
     harness = subprocess.run(["git", "-C", str(official_src()), "rev-parse", "HEAD"], capture_output=True, text=True,
                              check=True).stdout.strip()
@@ -1298,16 +1380,20 @@ def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node:
     for i in ids:
         x = next((r for r in rows if r["source"] == "launch.py" and r["id"].removeprefix("art:").startswith(
             i.removeprefix("art:"))), None)
-        if x is None or not x["valid"] or x.get("final") or x.get("regime") != "current" or not x.get("commit"):
-            raise SystemExit(f"scorer: {i} is not a valid {REGIME} search record of launch.py's")
+        if x is None or not x["valid"] or x.get("final") or x.get("regime") != "current" or not x.get("island"):
+            raise SystemExit(f"scorer: {i} is not a valid {regime_name()} search record of launch.py's")
         commit = overlay(x["commit"], harness)
         src = source_at(commit)
+        got = git("rev-parse", f"{commit}:{ISLANDS}/{x['island']}")
+        if got != x["island_tree"]:
+            raise SystemExit(f"scorer: {short(x['id'])}'s island tree is {x['island_tree']}, its commit holds {got}")
         for seed in seeds if seed_args(x, 0) else seeds[:1]:
             tag = "final" if kind == "rerun" else "final smoke"
             note = f"{tag} {short(x['id'])} seed {seed}" if seed_args(x, 0) else f"{tag} {short(x['id'])} (no seed flag)"
             argv = [sys.executable, "benchmarks/covert_witness/launch.py", x["class"], x["start"], "--direction", "scorer",
-                    "--final", "--no-wait", "--note", note, "--mechanism", x["mechanism"], *(["--node", node] if node else []),
-                    "--", *unseeded(shlex.split(x.get("args") or "")), *seed_args(x, seed)]
+                    "--final", "--no-wait", "--note", note, "--mechanism", x["mechanism"], "--island", x["island"],
+                    "--program", x["program"], *(["--node", node] if node else []),
+                    "--", *unseeded((x.get("args") or "").split()), *seed_args(x, seed)]
             row = {"kind": kind, "id": x["id"], "seed": seed if seed_args(x, 0) else None, "commit": commit,
                    "entry_commit": x["commit"], "harness": harness, "class": x["class"], "start": x["start"],
                    "mechanism": x["mechanism"], "note": note, "at": now(), "argv": argv, "run": ""}
@@ -1316,6 +1402,7 @@ def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node:
                                    capture_output=True, text=True)
                 m = next((json.loads(l) for l in p.stdout.splitlines() if l.startswith('{"run"')), None)
                 row |= {"run": m["run"] if m else "", "node": m["node"] if m else "", "rc": p.returncode,
+                        "measurement_commit": (m or {}).get("measurement_commit"),
                         "err": "" if m else (p.stdout + p.stderr)[-800:]}
                 with (FINAL / "launches.jsonl").open("a") as f:
                     f.write(json.dumps(row) + "\n")
@@ -1347,10 +1434,11 @@ def final_entries() -> dict[str, dict]:
     return out
 
 
-def final_plan(deadline: str = "15:20", seeds=FINAL_SEEDS) -> dict:
-    """The FINAL entries in launch order, and which of their reruns can end by `deadline` (UTC today) on the listed
-    nodes' GPUs: entries that set honest or W* in the current table first (most cells first), then the rest in their
-    direction's order, then table-setters no direction named. A rerun's time is its record's GPU seconds plus 10 minutes."""
+def final_plan(begin: str = "15:00", deadline: str = "17:00", seeds=FINAL_SEEDS) -> dict:
+    """The reruns in launch order, and which of them end by `deadline` if they start at `begin` (UTC today, or now if
+    later) on the listed nodes' GPUs (coordinator 12:55Z: finals 15:00-17:00Z, ~2 h of 24 GPUs): the entries that set
+    honest or W* at some target in the pin's table, shortest first, then the directions' other FINAL entries in their
+    direction's order, shortest first. A rerun's time is its record's GPU seconds plus 10 minutes."""
     rows = [json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip()]
     rep = json.loads((STATE / "score.json").read_text())
     sets: dict[str, int] = {}
@@ -1369,16 +1457,20 @@ def final_plan(deadline: str = "15:20", seeds=FINAL_SEEDS) -> dict:
                                 else "earlier regime" if x.get("regime") != "current" else "a final rerun"})
             elif x["id"] not in {y["id"] for y, _, _ in named}:
                 named.append((x, d, k))
-    order = sorted(named, key=lambda e: (-sets.get(e[0]["id"], 0), e[2], e[1]))
-    extra = [(x, "(table)", 9) for x in rows if sets.get(x["id"]) and x["id"] not in {y["id"] for y, _, _ in named}
-             and x["source"] == "launch.py"]
+    by_id = {x["id"]: (x, d, k) for x, d, k in named}
+    setters = [by_id.get(x["id"], (x, x["direction"], -1)) for x in rows
+               if x["source"] == "launch.py" and sets.get(x["id"]) and x.get("regime") == "current"]
+    budget = lambda e: e[0].get("gpu_seconds") or 3000
+    order = sorted(setters, key=budget) + sorted((e for e in named if not sets.get(e[0]["id"])),
+                                                 key=lambda e: (e[2], budget(e), e[1]))
     nodes = listed_nodes()
-    t0 = datetime.now(timezone.utc)
-    end = t0.replace(hour=int(deadline[:2]), minute=int(deadline[3:]), second=0, microsecond=0)
+    now_ = datetime.now(timezone.utc)
+    hm = lambda s: now_.replace(hour=int(s[:2]), minute=int(s[3:]), second=0, microsecond=0)
+    t0, end = max(now_, hm(begin)), hm(deadline)
     free = [0.0] * (GPUS_PER_NODE * len(nodes))
     plan = []
-    for x, d, _ in order + sorted(extra, key=lambda e: -sets[e[0]["id"]]):
-        dur = (x.get("gpu_seconds") or 3000) + 600
+    for x, d, _ in order:
+        dur = budget((x,)) + 600
         ss = list(seeds if seed_args(x, 0) else seeds[:1])
         fit = []
         for s in ss:
@@ -1386,10 +1478,11 @@ def final_plan(deadline: str = "15:20", seeds=FINAL_SEEDS) -> dict:
             if t0.timestamp() + free[j] + dur <= end.timestamp():
                 free[j] += dur
                 fit.append(s)
-        plan.append({"id": x["id"], "direction": d, "start": x["start"], "sets_cells": sets.get(x["id"], 0),
-                     "gpu_seconds": x.get("gpu_seconds"), "seeds": fit, "dropped_seeds": [s for s in ss if s not in fit]})
-    return {"at": now(), "deadline": deadline, "nodes": nodes, "gpus": len(free), "finals": fin, "refused": refused,
-            "plan": plan}
+        plan.append({"id": x["id"], "direction": d, "named": x["id"] in by_id, "start": x["start"],
+                     "sets_cells": sets.get(x["id"], 0), "gpu_seconds": x.get("gpu_seconds"), "seeds": fit,
+                     "dropped_seeds": [s for s in ss if s not in fit]})
+    return {"at": now(), "begin": t0.strftime("%H:%MZ"), "deadline": deadline, "nodes": nodes, "gpus": len(free),
+            "gpu_hours_planned": round(sum(free) / 3600, 1), "finals": fin, "refused": refused, "plan": plan}
 
 
 def final_collect() -> list[dict]:
@@ -1432,6 +1525,7 @@ def final_collect() -> list[dict]:
                                   "macs": (w.get("harness") or {}).get("macs"), "te_core": (w.get("harness") or {}).get(
                                       "te_core"), "gpu_seconds": w.get("gpu_seconds"),
                                   "over": (w.get("harness") or {}).get("over_train_flops"),
+                                  "measurement_commit": w.get("measurement_commit"),
                                   "failed_checks": sorted(k for k, v in (w.get("checks") or {}).items() if v is not True)}
             if (o / "run" / "run.json").exists():
                 te = te or te_current()
@@ -1485,7 +1579,7 @@ def table(subs: list[dict], l0: dict[str, float]) -> dict:
 
 
 def table_md(tab: dict, split: str, seeds: str) -> str:
-    lines = [f"W* and the effective slowdown W*/honest on the {split} set ({REGIME} records, te_core's ρ on the harness's "
+    lines = [f"W* and the effective slowdown W*/honest on the {split} set ({regime_name()} records, te_core's ρ on the harness's "
              f"count; FLOPs = 2 MACs; {seeds})", ""]
     for s, st in tab.items():
         lines += [f"### {s} (start {st['start_bpb']:.4f} bpb)", "",
@@ -1565,6 +1659,9 @@ def rerun_problems(r: dict) -> list[str]:
     bad = list(w["failed_checks"]) + ([] if w["valid"] else ["witness invalid"])
     bad += [] if w["split"] == "final" else [f"scored on the {w['split']} split, not the final set"]
     bad += [] if isinstance(w["start_bpb"], (int, float)) else ["no start bpb"]
+    pin = pin_of().get("commit")
+    if w.get("measurement_commit") != pin:
+        bad.append(f"measured by {(w.get('measurement_commit') or 'no commit')[:12]}, not the pin {(pin or '?')[:12]}")
     if r.get("ingest_error") or not led:
         return bad + [r.get("ingest_error") or "no te_core submission"]
     if abs(led[-1]["macs"] - (w["macs"] or -1)) > 1e-9 * led[-1]["macs"]:
@@ -1603,7 +1700,7 @@ def final_table(write: bool = True) -> dict:
     fin = seed_mean(subs)
     search_subs = [x for x in json.loads((STATE / "submissions.json").read_text()) if x.get("regime") == "current"]
     l0_search = {s: v for s in STARTS if (v := regime_start_bpb(search_subs, s)) is not None}
-    rep = {"at": now(), "te_core": TE_CORE_VERSION, "regime": REGIME, "final": table(fin, l0), "search": table(search_subs, l0_search),
+    rep = {"at": now(), "te_core": te_version(), "regime": regime_name(), "pin": pin_of(), "final": table(fin, l0), "search": table(search_subs, l0_search),
            "final_starts": l0, "search_starts": l0_search, "reruns": reruns, "entries": sorted({x["id"] for x in fin})}
     if write:
         FINAL.mkdir(parents=True, exist_ok=True)
@@ -1635,13 +1732,15 @@ def main(argv=None) -> int:
     f.add_argument("ids", nargs="*", help="launch: record ids (12-hex prefixes)")
     f.add_argument("--seeds", default=",".join(map(str, FINAL_SEEDS)))
     f.add_argument("--node", default=None, help="launch: one of nodes.txt's nodes (default: launch.py's turn)")
-    f.add_argument("--deadline", default="15:20", help="plan: HH:MM UTC by which a planned rerun ends")
+    f.add_argument("--begin", default="15:00", help="plan: HH:MM UTC the reruns start (or now, if later)")
+    f.add_argument("--deadline", default="17:00", help="plan: HH:MM UTC by which a planned rerun ends")
     f.add_argument("--dry-run", action="store_true")
     f.add_argument("--smoke", action="store_true", help="launch: a check of the pipeline, never in the table")
     a = ap.parse_args(argv)
     if a.cmd == "final":
         if a.what in ("entries", "plan"):
-            rep = final_entries() if a.what == "entries" else final_plan(a.deadline, tuple(int(s) for s in a.seeds.split(",")))
+            rep = final_entries() if a.what == "entries" else final_plan(
+                a.begin, a.deadline, tuple(int(s) for s in a.seeds.split(",")))
             if a.what == "plan":
                 FINAL.mkdir(parents=True, exist_ok=True)
                 (FINAL / "plan.json").write_text(json.dumps(rep, indent=1) + "\n")
