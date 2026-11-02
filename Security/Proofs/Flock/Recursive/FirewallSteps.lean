@@ -1,0 +1,281 @@
+import Flock.Firewall.Honest
+import Proofs.Flock.Recursive.FirewallTemplate
+import Proofs.Flock.Recursive.FirewallWire
+import Proofs.Flock.Recursive.FirewallObj
+
+/-!
+# The firewall's steps on requests it takes
+
+`FirewallTemplate` shows what the firewall sends wherever it doesn't refuse; this file shows where it doesn't. `Runs m st
+Q`: from the state `st`, `m` returns at a state `Q` holds of. `Draws m rows P`: `m` draws one salt for each of `rows`, in
+order, and changes nothing else, its result and the rows' commit strings `P`. `Goes s reqs st t`: the firewall's loop
+takes every request of `reqs` from `st`, ending at `t`. Each `run_*` is one request the firewall takes, at the state
+after it.
+-/
+
+namespace FlockSoundness.Discharge.Recursion.FirewallSteps
+
+open Lean (Json)
+open Flock Flock.Firewall
+
+/-! ## Total correctness of the firewall's state monad -/
+
+/-- From `st`, `m` returns `a` at a state `t` with `Q a t`. -/
+def Runs {α : Type} (m : Fw α) (st : State) (Q : α → State → Prop) : Prop :=
+  ∃ a t, m.run st = .ok (a, t) ∧ Q a t
+
+theorem Runs.bind {α β : Type} {m : Fw α} {f : α → Fw β} {st : State} {Q : α → State → Prop}
+    {R : β → State → Prop} (h : Runs m st Q) (hf : ∀ a t, Q a t → Runs (f a) t R) : Runs (m >>= f) st R := by
+  obtain ⟨a, t, hm, hq⟩ := h
+  obtain ⟨b, u, hb, hr⟩ := hf a t hq
+  exact ⟨b, u, by rw [StateT.run_bind, hm]; exact hb, hr⟩
+
+theorem Runs.pure {α : Type} {a : α} {st : State} {Q : α → State → Prop} (h : Q a st) :
+    Runs (Pure.pure a : Fw α) st Q :=
+  ⟨a, st, rfl, h⟩
+
+theorem Runs.pure_bind {α β : Type} {a : α} {f : α → Fw β} {st : State} {R : β → State → Prop}
+    (h : Runs (f a) st R) : Runs (Pure.pure a >>= f) st R := h
+
+theorem Runs.conseq {α : Type} {m : Fw α} {st : State} {Q Q' : α → State → Prop} (h : Runs m st Q)
+    (hQ : ∀ a t, Q a t → Q' a t) : Runs m st Q' := by
+  obtain ⟨a, t, hm, hq⟩ := h
+  exact ⟨a, t, hm, hQ a t hq⟩
+
+theorem Runs.ite_neg {α : Type} {c : Prop} [Decidable c] {a b : Fw α} {st : State} {Q : α → State → Prop}
+    (hc : ¬c) (h : Runs b st Q) : Runs (if c then a else b) st Q := by
+  rw [ite_eq_right hc]
+  exact h
+
+theorem Runs.ite_pos {α : Type} {c : Prop} [Decidable c] {a b : Fw α} {st : State} {Q : α → State → Prop}
+    (hc : c) (h : Runs a st Q) : Runs (if c then a else b) st Q := by
+  rw [ite_eq_left hc]
+  exact h
+
+theorem Runs.get {β : Type} {f : State → Fw β} {st : State} {R : β → State → Prop} (h : Runs (f st) st R) :
+    Runs (MonadState.get >>= f) st R := h
+
+theorem Runs.set {st t : State} {Q : PUnit → State → Prop} (h : Q ⟨⟩ t) :
+    Runs (MonadStateOf.set t : Fw PUnit) st Q :=
+  ⟨⟨⟩, t, rfl, h⟩
+
+theorem Runs.modify {f : State → State} {st : State} {Q : PUnit → State → Prop} (h : Q ⟨⟩ (f st)) :
+    Runs (modify f : Fw PUnit) st Q :=
+  ⟨⟨⟩, f st, rfl, h⟩
+
+theorem Runs.send {m : Sent} {st : State} {Q : PUnit → State → Prop} (h : Q ⟨⟩ { st with sent := st.sent.push m }) :
+    Runs (send m) st Q :=
+  ⟨⟨⟩, _, rfl, h⟩
+
+theorem Runs.lift {α : Type} {x : V α} {a : α} {st : State} {Q : α → State → Prop} (hx : x = .ok a) (h : Q a st) :
+    Runs (liftM x : Fw α) st Q := by
+  subst hx
+  exact ⟨a, st, rfl, h⟩
+
+theorem Runs.lift_bind {α β : Type} {x : V α} {a : α} {f : α → Fw β} {st : State} {R : β → State → Prop}
+    (hx : x = .ok a) (h : Runs (f a) st R) : Runs (liftM x >>= f) st R := by
+  subst hx
+  exact h
+
+theorem Runs.modify_bind {β : Type} {g : State → State} {f : PUnit → Fw β} {st : State} {R : β → State → Prop}
+    (h : Runs (f ⟨⟩) (g st) R) : Runs (_root_.modify g >>= f) st R := h
+
+theorem Runs.set_bind {β : Type} {t : State} {f : PUnit → Fw β} {st : State} {R : β → State → Prop}
+    (h : Runs (f ⟨⟩) t R) : Runs (MonadStateOf.set t >>= f) st R := h
+
+theorem Runs.send_bind {β : Type} {m : Sent} {f : PUnit → Fw β} {st : State} {R : β → State → Prop}
+    (h : Runs (f ⟨⟩) { st with sent := st.sent.push m } R) : Runs (Flock.Firewall.send m >>= f) st R := h
+
+/-! ## Salts drawn in order -/
+
+/-- The commit strings of `rows` under the salts `ys`, row by row. -/
+def cs (rows : List (Array Nat)) (ys : List ByteArray) : List ByteArray :=
+  List.zipWith (fun row y => Hm96.Default512.commitString (rowDigest row) y) rows ys
+
+theorem cs_append (a b : List (Array Nat)) (ys : List ByteArray) : cs (a ++ b) ys = cs a ys ++ cs b (ys.drop a.length) :=
+  FirewallRun.zipWith_append_left _ a b ys
+
+/-- `m` draws one salt for each of `rows`, in order, and changes nothing else; `P` holds of its result and the rows'
+commit strings. -/
+def Draws {α : Type} (m : Fw α) (rows : List (Array Nat)) (P : α → List ByteArray → Prop) : Prop :=
+  ∀ st : State, rows.length ≤ st.salts.length →
+    ∃ a, m.run st = .ok (a, { st with salts := st.salts.drop rows.length }) ∧ P a (cs rows st.salts)
+
+theorem Draws.runs {α : Type} {m : Fw α} {rows : List (Array Nat)} {P : α → List ByteArray → Prop}
+    (h : Draws m rows P) {st : State} (hl : rows.length ≤ st.salts.length) :
+    Runs m st (fun a t => t = { st with salts := st.salts.drop rows.length } ∧ P a (cs rows st.salts)) := by
+  obtain ⟨a, hm, hp⟩ := h st hl
+  exact ⟨a, _, hm, rfl, hp⟩
+
+theorem draws_salted (row : Array Nat) : Draws (salted row) [row] (fun c l => l = [c]) := by
+  intro st hl
+  obtain ⟨sent, hello, committed, roots, linked, streams, rounds, stopped, finished, salts⟩ := st
+  cases salts with
+  | nil => exact absurd hl (by simp)
+  | cons y rest => exact ⟨_, FirewallRun.run_salted row _, rfl⟩
+
+theorem draws_lift {α : Type} {x : V α} {a : α} (hx : x = .ok a) : Draws (liftM x : Fw α) [] (fun b l => b = a ∧ l = []) := by
+  subst hx
+  intro st _
+  exact ⟨a, rfl, rfl, rfl⟩
+
+theorem draws_mapM {α β γ : Type} (f : α → Fw β) (R : α → List (Array Nat)) (Hs : β → List ByteArray) (K : β → γ)
+    (k : α → γ) : ∀ (l : List α), (∀ a ∈ l, Draws (f a) (R a) (fun b c => Hs b = c ∧ K b = k a)) →
+      Draws (l.mapM f) (l.flatMap R) (fun bs c => bs.flatMap Hs = c ∧ bs.map K = l.map k)
+  | [], _ => fun st _ => ⟨[], rfl, rfl, rfl⟩
+  | a :: l, hf => by
+    intro st hl
+    rw [List.flatMap_cons, List.length_append] at hl
+    obtain ⟨b, hb, hb1, hb2⟩ := hf a (List.mem_cons_self ..) st (by omega)
+    obtain ⟨bs, hbs, hbs1, hbs2⟩ := draws_mapM f R Hs K k l (fun a' ha' => hf a' (List.mem_cons_of_mem _ ha'))
+      { st with salts := st.salts.drop (R a).length } (by simp only [List.length_drop]; omega)
+    refine ⟨b :: bs, ?_, ?_, ?_⟩
+    · rw [List.mapM_cons, StateT.run_bind, hb, ok_bind', StateT.run_bind, hbs]
+      simp only [List.drop_drop, List.flatMap_cons, List.length_append]
+      rfl
+    · rw [List.flatMap_cons, List.flatMap_cons, hb1, hbs1, cs_append]
+    · rw [List.map_cons, List.map_cons, hb2, hbs2]
+where
+  ok_bind' {δ ε : Type} (a : δ) (g : δ → V ε) : (Except.ok a : V δ) >>= g = g a := rfl
+
+theorem draws_saltedTop (top : ByteArray) : Draws (saltedTop top) (topRows top) (fun l c => l = c) := by
+  have h := draws_mapM salted (fun row => [row]) (fun c => [c]) (fun _ => ()) (fun _ => ()) (topRows top)
+    (fun row _ => fun st hl => by
+      obtain ⟨c, hc, hc1⟩ := draws_salted row st hl
+      exact ⟨c, hc, hc1.symm, rfl⟩)
+  rw [List.flatMap_singleton'] at h
+  intro st hl
+  obtain ⟨l, hm, hl1, _⟩ := h st hl
+  exact ⟨l, hm, by rw [← hl1, List.flatMap_singleton']⟩
+
+/-! ## The firewall's loop -/
+
+/-- The firewall's loop takes each of `reqs` in turn from `st`, ending at `t`. -/
+def Goes (s : Schedule) : List ByteArray → State → State → Prop
+  | [], st, t => t = st
+  | b :: bs, st, t => ∃ u, (FirewallRun.stepOf s b).run st = .ok ((), u) ∧ Goes s bs u t
+
+theorem goes_append (s : Schedule) : ∀ (a b : List ByteArray) {st t u : State}, Goes s a st t → Goes s b t u →
+    Goes s (a ++ b) st u
+  | [], _, _, _, _, ha, hb => by subst ha; exact hb
+  | _ :: a, b, _, _, _, ⟨v, hv, ha⟩, hb => ⟨v, hv, goes_append s a b ha hb⟩
+
+theorem goes_flatMap (s : Schedule) (F : Nat → List ByteArray) (S : Nat → State)
+    (h : ∀ i < n, Goes s (F i) (S i) (S (i + 1))) : Goes s ((List.range n).flatMap F) (S 0) (S n) := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    rw [List.range_succ, List.flatMap_append, List.flatMap_singleton]
+    exact goes_append s _ _ (ih fun i hi => h i (by omega)) (h n (by omega))
+
+theorem forIn_goes (s : Schedule) : ∀ (reqs : List ByteArray) {st t : State}, Goes s reqs st t →
+    Id.run (forIn reqs (st, false) (FirewallRun.body s)) = (t, false)
+  | [], _, _, h => by subst h; rfl
+  | b :: bs, st, t, ⟨u, hu, h⟩ => by
+    rw [List.forIn_cons]
+    have e : FirewallRun.body s b (st, false) = .yield (u, false) := by
+      simp only [FirewallRun.body, Bool.false_eq_true, ↓reduceIte, hu]
+      rfl
+    rw [e]
+    exact forIn_goes s bs h
+
+/-- **The firewall finishes where its loop takes every request** and ends finished. -/
+theorem run_of_goes {s : Schedule} {reqs ys : List ByteArray} {t : State} (h : Goes s reqs { salts := ys } t) :
+    run s reqs ys = (t.sent, t.finished) := by
+  rw [FirewallRun.run_eq]
+  unfold FirewallRun.loop
+  rw [forIn_goes s reqs h]
+  simp
+
+theorem goes_one {s : Schedule} {b : ByteArray} {r : Req} (hb : decode b = .ok r) {st t : State}
+    (h : (step s r).run st = .ok ((), t)) : Goes s [b] st t :=
+  ⟨t, by unfold FirewallRun.stepOf; rw [StateT.run_bind, show (liftM (decode b) : Fw Req).run st = .ok (r, st) by
+    rw [hb]; rfl]; exact h, rfl⟩
+
+/-! ## The requests `decode` reads -/
+
+theorem decode_putPing {b : ByteArray} (hb : b.size < 2 ^ 32) : decode (putPing b) = .ok .ping := by
+  simp only [putPing, decode, FirewallWire.tag_size, FirewallWire.tag_get, Bool.false_eq_true, ite_false]
+  rw [StateT.run_bind, FirewallWire.rdBytes_at (FirewallWire.at_tag 9 _) hb, FirewallWire.ok_bind]
+  rfl
+
+theorem decode_putProof {table : String} {rep : Nat} {proof : ByteArray} (h1 : table.toUTF8.size < 2 ^ 32)
+    (h2 : rep < 2 ^ 32) (h3 : proof.size < 2 ^ 32) : decode (putProof table rep proof) = .ok .proof := by
+  have a := FirewallWire.at_tag 5 (putStr table ++ (putLE 4 rep ++ putBytes proof))
+  simp only [putProof, decode, FirewallWire.tag_size, FirewallWire.tag_get, Bool.false_eq_true, ite_false]
+  rw [StateT.run_bind, FirewallWire.rdStr_at a.left h1, FirewallWire.ok_bind, StateT.run_bind,
+    FirewallWire.rdU32_at a.right.left h2, FirewallWire.ok_bind, StateT.run_bind,
+    FirewallWire.rdBytes_at a.right.right h3, FirewallWire.ok_bind]
+  rfl
+
+/-! ## The requests the firewall takes -/
+
+theorem Runs.run_eq {m : Fw Unit} {st t₀ : State} (h : Runs m st fun _ t => t = t₀) : m.run st = .ok ((), t₀) := by
+  obtain ⟨⟨⟩, t, hm, rfl⟩ := h
+  exact hm
+
+theorem pinned_ok {what : String} {got want : Json} (h : canonForm got = canonForm want) :
+    pinned what got want = .ok () := by
+  simp only [pinned, h, bne_self_eq_false, Bool.false_eq_true, ite_false]
+  rfl
+
+theorem nodes_ok {top : ByteArray} (h : isCap top = true) : nodes top = .ok (top.size / NODE_BYTES) := by
+  simp [nodes, h]
+  rfl
+
+/-- `l.mapM f` where each `f a` returns `k a` and leaves the state. -/
+theorem run_mapM_pure {α β : Type} (f : α → Fw β) (k : α → β) :
+    ∀ (l : List α), (∀ a ∈ l, ∀ st, (f a).run st = .ok (k a, st)) → ∀ st, (l.mapM f).run st = .ok (l.map k, st)
+  | [], _, _ => rfl
+  | a :: l, hf, st => by
+    rw [List.mapM_cons, StateT.run_bind, hf a (List.mem_cons_self ..) st]
+    show (do let p ← (List.mapM f l).run st; (Pure.pure (k a :: p.1) : Fw (List β)).run p.2) = _
+    rw [run_mapM_pure f k l (fun a' ha' => hf a' (List.mem_cons_of_mem _ ha')) st]
+    rfl
+
+theorem eraseDups_of_nodup {l : List String} (h : l.Nodup) : l.eraseDups = l := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    rw [List.eraseDups_cons]
+    have hl := List.nodup_cons.mp h
+    rw [List.filter_eq_self.mpr fun b hb => ?_, ih hl.2]
+    have hne : b ≠ a := fun e => hl.1 (e ▸ hb)
+    simpa using hne
+
+theorem run_ping (s : Schedule) (st : State) : (step s .ping).run st = .ok ((), st) := rfl
+
+theorem run_register (s : Schedule) {st : State} (hf : st.finished = false) :
+    (step s .register).run st = .ok ((), st) := by
+  refine Runs.run_eq ?_
+  rw [step]
+  exact Runs.get (Runs.ite_neg (by simp [hf]) (Runs.pure rfl))
+
+theorem run_proof (s : Schedule) {st : State} (hf : st.finished = false) : (step s .proof).run st = .ok ((), st) := by
+  refine Runs.run_eq ?_
+  rw [step]
+  exact Runs.get (Runs.ite_neg (by simp [hf]) (Runs.pure rfl))
+
+/-- **Hello**: at a schedule's Hello as `FirewallObj.hello` takes it, the worker's Hello with a plain Σ. -/
+theorem run_hello (s : Schedule) {H L : FirewallObj.Tree} {A B : List ((_ : String) × Json)}
+    (he : s.hello = .obj ⟨⟨H⟩⟩) (hH : H.Ordered) (hpH : plainObj H = true) (hL : L.Ordered)
+    (hpL : plainObj L = true) (hsplit : H.toListModel = A ++ ⟨"link", .obj ⟨⟨L⟩⟩⟩ :: B)
+    (hs : ∀ e ∈ L.toListModel, e.1 ≠ "sigma") (hc : ∀ e ∈ H.toListModel, e.1 ≠ "coins") {sigma : String}
+    (hsig : plainStr sigma = true) {st : State} (hf : st.finished = false) (hh : st.hello = false) :
+    (step s (.hello (printJson (helloWith s.hello sigma)))).run st =
+      .ok ((), { st with hello := true, sent := st.sent.push (.hello s.hello) }) := by
+  obtain ⟨hp, T, hT, hsg, hco, hcan⟩ := FirewallObj.hello hH hpH hL hpL hsplit hs hc hsig
+  rw [← he] at hp hT hco hcan
+  refine Runs.run_eq ?_
+  rw [step]
+  refine Runs.get (Runs.ite_neg (by simp [hf]) ?_)
+  refine Runs.get (Runs.ite_neg (by simp [hh]) ?_)
+  rcases hj : Flock.JsonParse.parse (printJson (helloWith s.hello sigma)) with e | j <;>
+    rw [FirewallJson.parse_printJson hp] at hj <;> cases hj
+  refine Runs.pure_bind ?_
+  refine Runs.ite_neg (by simp [hT, hsg]) ?_
+  refine Runs.ite_neg (by simp [hco]) ?_
+  refine Runs.ite_neg (by simp [FirewallJson.fractional_printJson hp]) ?_
+  exact Runs.lift_bind (pinned_ok (by rw [hT]; exact hcan)) (Runs.modify_bind (Runs.send rfl))
+
+end FlockSoundness.Discharge.Recursion.FirewallSteps
