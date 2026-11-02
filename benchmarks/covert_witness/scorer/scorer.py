@@ -334,6 +334,8 @@ def collect(since: str = SINCE) -> dict:
         a = by_run.get(x.get("run"))
         if x["source"] == "launch.py" and not x.get("commit") and a:
             x["commit"], x["agent"], x["direction"] = a["commit"], a["agent"], a["direction"]
+        if x["source"] == "launch.py":
+            x["cancelled"] = bool(a and a.get("cancelled") and x["failed_checks"] == ["no witness"])
     rows.sort(key=lambda x: (x.get("launched") or "", x["id"]))
     STATE.mkdir(parents=True, exist_ok=True)
     (STATE / "index.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in rows))
@@ -367,7 +369,7 @@ def index_md(rows: list[dict], runs: list[dict], starts: dict) -> str:
         else:
             ann = analytic(x, starts) if x["valid"] and x["start"] in starts else None
             D, how = ann and ann["depth"], "a"
-        d = x["direction"] + (" (not scored)" if is_audit(x) else "")
+        d = x["direction"] + (" (not scored)" if is_audit(x) else " (cancelled unrun)" if x.get("cancelled") else "")
         lines.append(f"| `{short(x['id'])}` | {(x['agent'] or '').removeprefix('cursor/') or '—'} | {d} | {x['class']} | "
                      f"{x['note']} | {x['start']} | {(x['launched'] or '')[11:16]} | {fmt(x['train_flops'])} | "
                      f"{fmt(x['bpb'], '.4f')} | {fmt(drop, '.2f')} | {fmt(x['E_bytes'], ',')} | {fmt(x['phi'], '.3f')} | "
@@ -626,8 +628,8 @@ def drop_of(x: dict, starts: dict) -> float | None:
 
 def entries(rows: list[dict], audit: bool = False) -> list[dict]:
     """One row per candidate: a launch.py record, or a te_core run's last checkpoint (φ and D read at 10kB/r1). A witness
-    v2 record takes |C|, φ and D from its run's last te_core checkpoint (the harness's count). The auditor's records only
-    with `audit` (the ledger lists them; nothing scores them)."""
+    v2 record takes |C|, φ and D from its run's last te_core checkpoint (the harness's count). The auditor's records and
+    the records of runs cancelled unrun only with `audit` (the ledger lists them; nothing scores or counts them)."""
     launched = run_rows(rows)
     last: dict[str, dict] = {}
     for x in rows:
@@ -643,7 +645,8 @@ def entries(rows: list[dict], audit: bool = False) -> list[dict]:
         out.append(x | ({"phi": at10(t["phi"]), "D": at10(t["D"]), "train_flops": 2 * t["macs"], "te_id": t["te_id"],
                          "tier": t.get("tier"), "families": t.get("families")} if t else {}))
     out += [x | {"phi": at10(x.get("phi")), "D": at10(x.get("D"))} for x in last.values()]
-    return sorted((x for x in out if audit or not is_audit(x)), key=lambda x: (x.get("launched") or "", x["id"]))
+    return sorted((x for x in out if audit or not (is_audit(x) or x.get("cancelled"))),
+                  key=lambda x: (x.get("launched") or "", x["id"]))
 
 
 def at10(v):
@@ -759,7 +762,9 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     out = []
     cw = entries(rows)
     n, nv = len(cw), len([x for x in cw if x["valid"]])
-    out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid; direction audit's not counted). Frontier per target "
+    nc = len([x for x in rows if x["source"] == "launch.py" and x.get("cancelled")])
+    out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid; direction audit's and {nc} of runs cancelled unrun not "
+               f"counted). Frontier per target "
                f"below: honest = least FLOPs of the reference directions (ref-*) reaching l*; W*/honest per (k, r) in the "
                f"order 10kB r1,r10,r100 | 100kB | 1MB, te_core rho, with the W* entries, (c) priced by the harness's "
                f"count, (a) by the analytic annotation (p 16); full tables in the scorer's score.md.")
