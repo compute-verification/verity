@@ -684,8 +684,9 @@ def run_galore(run: Run) -> None:
 
 
 def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
+    """bf16 on the GPU; fp32 on the CPU, where bf16 inside a training process now and then blew up (CPU smokes)."""
     a, b, c = 3.4445, -4.7750, 2.0315
-    x = g.bfloat16()
+    x = g.bfloat16() if g.is_cuda else g.float()
     tall = x.shape[0] > x.shape[1]
     if tall:
         x = x.T
