@@ -88,3 +88,34 @@ def test_the_screen_reads_names_not_substrings():
     for bad in ("te.counter.paused = 1", "from te_core import flops", "import te_core.run", "torch._dynamo.reset()",
                 "with uncounted():", "sys.modules['x']"):
         assert te_run.screen(bad), bad
+
+
+
+def run_mezo(root, *island_args) -> tuple[int, Path, dict]:
+    out = root / "out"
+    rc = te_run.main(["--script", str(FAKE / "islands" / "mezo" / "train.py"), "--out", str(out), "--",
+                      "--start", "fake", "--out", str(root / "sub"), *island_args])
+    return rc, out, json.loads((out / "run.json").read_text())
+
+
+def test_declared_steps_are_a_family_rebuilt_by_prepares_decoder(cw_root):
+    """Each step's two perturbed reads are credited through `prepare.declare_step` (cw.CWPlan)."""
+    rc, _, rec = run_mezo(cw_root)
+    assert rc == 0 and rec["invalid"] == [], rec["invalid"]
+    assert rec["digest_key"] and all(len(ds) == 2 for ds in rec["steps"][2]["weights"].values())
+    (fam,) = rec["families"]
+    assert fam["family"] == "E" and fam["failed"] == {} and fam["covers"] == list(range(6))
+    assert all(b > 0 for b in fam["beta"].values())
+
+
+def test_a_step_that_reads_what_it_did_not_declare_fails_its_rebuild(cw_root):
+    import sys
+
+    from te_core.counterexample import check
+    from te_core.cw import CWPlan
+
+    rc, out, rec = run_mezo(cw_root, "--bad-step", "3")
+    prepare = sys.modules["prepare"]
+    theta = prepare.theta_of()
+    v = check(out / "families" / "E", rec, theta, rec["c"], n_sample=6, coin=b"x", plan=CWPlan(prepare, theta, "cpu"))
+    assert list(v.failed) == [3] and v.covers == [0, 1, 2, 4, 5]

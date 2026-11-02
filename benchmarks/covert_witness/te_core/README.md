@@ -54,7 +54,11 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **φ (deep use, T2)**: the share of |C| in updated MACs that have at least D_min updated MACs upstream.
 - **Counterexample family X**: a decoder from `codecs/` (a `codecs.Plan`) plus per-step encodings E_t. Each E_t
   rebuilds its step's updated weights from θ bit for bit, for at most c MACs; declared imported computed values travel
-  in E_t.
+  in E_t. A covert_witness script declares a step with `prepare.declare_step(base, suffixes)`: its family `E` is
+  decoded by the fixed `prepare.decode` (`cw.CWPlan`), so any E whose decoder rebuilds a step's weights within c (a
+  seed log, low-rank, sparse or quantized updates in a fixed format) is credited, not only adapter factors. The
+  decoder may produce more weights than the step read; every weight the step read is compared against its value digest
+  (`flops.KeyedDigest`, keyed from the OS when the run starts, the key in `run.json`).
 - **β_t**: a step's counterexample β, bits(E_t) over the step's updated MACs per token block.
 - **Coverage**: a family covers the sampled steps that rebuild bit for bit (5 sampled steps at search time, 20 at
   final, drawn from a live coin). A uniform family also covers every step it declares, if every sampled step verified.
@@ -83,7 +87,7 @@ covert_witness's islands run unmodified (`cw.py`): the harness wraps the fixed `
 at tier 2), uncounted. From `benchmarks/covert_witness/`:
 
 ~~~text
-python -m te_core.run --script islands/CLASS/train.py --out OUT [--budget-fraction F] [--tier T] \
+python -m te_core.run --script islands/CLASS/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
     -- --start NAME --out SUB [--budget-fraction F] [TRAIN_ARGS...]
 python -m te_core.launch --script islands/CLASS/train.py --tier 0 --agent A --direction D --mechanism M \
     [--nodes FILE] [-- TRAIN_ARGS...]        # FILE: `vy-nebius-2 pool=gpu`
@@ -133,7 +137,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `score.py` | `score` (options (a) and (b)), `score_grid`, `checkpoints`, `w_star`, `honest`, `effective_slowdown` |
 | `ledger.py` | `Ledger` (append-only, per agent, evidence store), `ingest`, the index |
 | `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
-| `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its evaluator |
+| `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its evaluator; `CWPlan`, the family `prepare.declare_step` writes |
 | `hooks.py` | what a standalone script may call, no-ops outside the harness |
 | `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
