@@ -19,7 +19,7 @@ from verity.ml.circuits.types import Array
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
+pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 SALT = hashlib.sha512(b"salt").digest()
 ROOTS = (hashlib.sha512(b"a/64@3").digest(), hashlib.sha512(b"b/64").digest())
 GRID48 = tuple((i, j) for i in range(4) for j in range(8))

@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
+"""PoUB over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
 weights `W` encoded under P2 (`pous.schemes.p2`, `p2-16448/v4`) at PoUS's setup, and each receipt is of a unit of four
 of its 2,056-byte blocks, which a GPU sketches as it decodes them while serving.
 
@@ -221,9 +221,8 @@ class Prover(audit.Prover):
     """The honest prover over a P2 store: each pass's receipts from its plan's units (`pass_under`), or from receipts
     the decode computed (`commit`), committed in the audit's tree."""
 
-    def __init__(self, store: Store, commitment: coins.LiveCommitment, *,
-                 entropy: Callable[[int], bytes] = os.urandom) -> None:
-        super().__init__(store, None, commitment, entropy=entropy)
+    def __init__(self, store: Store, *, entropy: Callable[[int], bytes] = os.urandom) -> None:
+        super().__init__(store, None, entropy=entropy)
 
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> audit.Pass:
         plan = plan or Plan.whole(self.store.registration.blocks)
