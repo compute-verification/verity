@@ -60,11 +60,13 @@ def pinned() -> str:
 
 
 def status(rows: list[dict], pin: str) -> dict[str, str]:
-    """Each left-out record's reason: invalid, unscored, other-version, duplicate-e, re-ingest."""
-    out, first = {}, set()
+    """Each left-out record's reason: invalid, unscored, other-version, duplicate-e, re-ingest. An E repeats an earlier
+    record's when that record was measured at the pin or is another agent's: an agent's own relaunch at a new pin of an
+    E it had at an old one counts."""
+    out, first = {}, {}
     for r in sorted(rows, key=lambda r: (r.get("written_ts", 0), r["id"])):
         e = (r.get("output") or {}).get("e_sha256")
-        if e and e in first:
+        if e and any(at_pin or agent != r.get("agent") for at_pin, agent in first.get(e, ())):
             out[r["id"]] = "duplicate-e"
         elif r.get("invalid"):
             out[r["id"]] = "invalid"
@@ -74,8 +76,8 @@ def status(rows: list[dict], pin: str) -> dict[str, str]:
             out[r["id"]] = "other-version"
         elif version(r.get("te_core")) < PRICED_FROM and coverage_of(r.get("families", [])):
             out[r["id"]] = "re-ingest"
-        if e:
-            first.add(e)
+        if e and out.get(r["id"]) != "duplicate-e":
+            first.setdefault(e, set()).add((r.get("measurement_commit") == pin, r.get("agent")))
     return out
 
 
