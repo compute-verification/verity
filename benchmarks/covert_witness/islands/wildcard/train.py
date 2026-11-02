@@ -12,11 +12,14 @@ Methods:
 - `kfac`: closed form. Accumulate, over the budget's tokens at θ, each trained matrix's gradient G and its input and
   output-gradient second moments A, S; then one natural-gradient step W − η S⁻¹ G A⁻¹ (damped, scaled to unit RMS per
   element), η picked by a line search on fresh training batches.
+- `cached`: a set in the top blocks trained over θ's cached activations with a top-K head (`train_cached`).
+- `scale`: every tensor of the set times one line-searched scalar.
+- `--extrapolate`: after training, θ + αΔ with α line-searched (ExPO); `--suite`: several configs in one run.
 
 This file runs under the class its shim names (`islands/<class>/train.py` sets KLASS); its source rides in the
-submission's notes.
+submission's notes. Every method marks explicit harness steps (te_core.hooks), so it runs under `te_core.run --script`:
 
-    python guard.py islands/reference/train.py --start s50 --out SUB --set mlp-in:-1 [--method adamw] [--lr 1e-3]
+    python benchmarks/covert_witness/launch.py shallow s50 --note "cachedhead ..." -- --set mlp-in:-1 --method cached
 """
 from __future__ import annotations
 
@@ -400,28 +403,41 @@ CACHED_OK = ("w_gate", "w_up", "w_down")
 
 
 def train_cached(a, net, rec, theta, params, tuned, data):
-    """The top block's MLP (and the final gain) trained over cached activations with a top-K head.
+    """A set in the top blocks trained over cached activations with a top-K head.
 
-    θ's prefix is frozen, so the residual stream x_mid entering the top block's MLP is the same at every step: each fresh
-    position is run once through θ (a logged forward), and x_mid is cached with θ's top-K tokens there, the rest's
-    probability-weighted mean embedding ē and c = lse_rest(θ) − ē·z(θ). Training steps then sample cached positions and
-    run only the MLP, the final norm and K + 2 head rows: loss = lse(top-K logits, target, c + ē·z) − target logit, which
-    has θ's exact gradient at θ (the rest's log-mass to first order in z). Each chunk of fresh positions is followed by
-    its share of the steps, and its end is a snapshot. Every cached-step FLOP is logged as `extra`, counted as the meter
-    counts a train pass above the lowest trained node (every matmul's input gradient, the trained matrices' weight
-    gradients)."""
+    θ's prefix below the set is frozen, so the residual stream entering it is the same at every step: each fresh
+    position is run once through θ (a logged forward), and that activation is cached with θ's top-K tokens there, the
+    rest's probability-weighted mean embedding ē and c = lse_rest(θ) − ē·z(θ). Training steps then run only the cached
+    part and K + 2 head rows: loss = lse(top-K logits, target, c + ē·z) − target logit, which has θ's exact gradient at θ
+    (the rest's log-mass to first order in z). A set within the top block's MLP (and the final gain) caches x_mid, the
+    residual entering that MLP, and samples single positions; any other set caches the residual entering its lowest
+    block for whole windows and runs blocks from there (attention needs the window). Each chunk of fresh positions is
+    followed by its share of the steps, and its end is a snapshot. Every cached-step FLOP is logged as `extra`, counted
+    as the meter counts a train pass above the lowest trained node (every matmul's input gradient, the trained
+    matrices' weight gradients), with attention at its full square."""
     inner = net.inner
-    L, d, V = len(inner.blocks), inner.size.d_model, inner.vocab
+    L, d, V, T = len(inner.blocks), inner.size.d_model, inner.vocab, prepare.EVAL_CTX
     top = inner.blocks[L - 1]
     ok = {f"blocks.{L - 1}.{leaf}.weight" for leaf in CACHED_OK} | {"norm"}
-    if not set(tuned) <= ok:
-        raise SystemExit(f"wildcard cached: the set must be within the top block's MLP and the final norm: {tuned}")
+    if "embed" in tuned:
+        raise SystemExit("wildcard cached: the tied embedding is read below every cached activation")
+    seq = not set(tuned) <= ok
+    start = min((int(n.split(".")[1]) for n in tuned if n.startswith("blocks.")), default=L - 1)
+    if seq and a.sample != "uniform":
+        raise Skip("wildcard cached: --sample loss draws positions; a window cache draws whole windows")
     mats = [n for n in tuned if params[n].ndim == 2]
     gains = [n for n in tuned if params[n].ndim == 1]
-    K, P = a.top_k, a.batch * prepare.EVAL_CTX
+    K, P = a.top_k, a.batch * T
     d_ff = top.w_gate.weight.shape[0]
-    fwd_mm = 2 * 3 * d * d_ff + 2 * (K + 2) * d
-    per_pos = 2 * fwd_mm + sum(2 * params[n].numel() for n in mats)
+    head = 2 * (K + 2) * d
+    if seq:
+        attn = 2 * prepare.attention_flops(rec, T)
+        fwd_mm = (L - start) * (2 * (4 * d * d + 3 * d * d_ff) + attn) + head
+        per_pos = 2 * fwd_mm + (L - start) * attn + sum(2 * params[n].numel() for n in mats)
+    else:
+        fwd_mm = 2 * 3 * d * d_ff + head
+        per_pos = 2 * fwd_mm + sum(2 * params[n].numel() for n in mats)
+    mic = max(T, a.cached_micro // T * T) if seq else a.cached_micro
     trainable = {"full": tuned}
     fill_tok = prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": 1}])["flops"] + 2 * V * d
     n_pos = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (fill_tok + a.epochs * per_pos))
@@ -443,10 +459,12 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     dup = torch.empty(n_pos, dtype=torch.bool, device=dev)
     ce0 = torch.empty(n_pos, dtype=torch.float32, device=dev)
     grab = {}
-    handles = [top.register_forward_pre_hook(lambda m, i: grab.__setitem__("x", i[0])),
-             top.wo.register_forward_hook(lambda m, i, o: grab.__setitem__("o", o)),
-             top.register_forward_hook(lambda m, i, o: grab.__setitem__("y", o))]
+    handles = [inner.blocks[start].register_forward_pre_hook(lambda m, i: grab.__setitem__("x", i[0])),
+               top.register_forward_hook(lambda m, i, o: grab.__setitem__("y", o))]
+    if not seq:
+        handles.append(top.wo.register_forward_hook(lambda m, i, o: grab.__setitem__("o", o)))
     embed = inner.embed.detach()
+    cos, sin = inner.cos[:T], inner.sin[:T]
 
     @torch.no_grad()
     def fill(lo: int, hi: int, steps: list):
@@ -473,7 +491,7 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             mass = p.sum(-1).clamp_min(1e-30)
             ebar = (p @ embed) / mass[:, None]
             del p
-            xs[at: at + n] = (grab["x"] + grab["o"]).view(n, d).bfloat16()
+            xs[at: at + n] = (grab["x"] if seq else grab["x"] + grab["o"]).reshape(n, d).bfloat16()
             es[at: at + n] = ebar.bfloat16()
             ids[at: at + n] = (k_ids - 32768).to(torch.int16)
             tgt[at: at + n] = t.int()
@@ -486,8 +504,14 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     def cached_loss(ix: torch.Tensor, w: torch.Tensor | None = None) -> torch.Tensor:
         x = xs[ix].float()
         with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
-            h = F.rms_norm(x, (d,), top.mlp_norm)
-            y = x + top.w_down(F.silu(top.w_gate(h)) * top.w_up(h))
+            if seq:
+                x = x.view(-1, T, d)
+                for b in inner.blocks[start:]:
+                    x = b(x, cos, sin)
+                y = x.reshape(-1, d)
+            else:
+                h = F.rms_norm(x, (d,), top.mlp_norm)
+                y = x + top.w_down(F.silu(top.w_gate(h)) * top.w_up(h))
         z = rms(y.float(), inner.norm)
         sub = torch.einsum("pd,pkd->pk", z, embed[ids[ix].int() + 32768])
         own = (z * embed[tgt[ix]]).sum(-1)
@@ -505,8 +529,11 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     gen = torch.Generator(device=dev).manual_seed(a.data_seed)
     per_chunk, step_per_chunk, filled, step = n_pos // chunks, n_steps // chunks, 0, 0
     t0 = time.perf_counter()
-    m = min(per_chunk // 2, a.cached_micro)
+    if seq and per_chunk < 2 * T:
+        raise Skip("wildcard cached: a window cache needs two windows a chunk (one held out)")
+    m = max(T, min(per_chunk // 2, mic) // T * T) if seq else min(per_chunk // 2, mic)
     held = torch.arange(m, device=dev)
+    window = torch.arange(T, device=dev)
 
     @torch.no_grad()
     def held_loss(what: str) -> float:
@@ -518,7 +545,10 @@ def train_cached(a, net, rec, theta, params, tuned, data):
         frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
         for g, lr in zip(opt.param_groups, base):
             g["lr"] = lr * frac
-        if imp is not None:
+        if seq:
+            sq = m // T + torch.randint((filled - m) // T, (P // T,), device=dev, generator=gen)
+            ix, w = (sq[:, None] * T + window).reshape(-1), None
+        elif imp is not None:
             cdf, weight = imp
             j = torch.searchsorted(cdf, torch.rand(P, device=dev, generator=gen) * cdf[-1]).clamp_max(len(cdf) - 1)
             ix, w = j + m, weight[j]
@@ -526,15 +556,16 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             ix, w = m + torch.randint(filled - m, (P,), device=dev, generator=gen), None
         ix = tokens_of(ix)
         tot = 0.0
-        for i in range(0, P, a.cached_micro):
-            wi = None if w is None else w[i: i + a.cached_micro]
-            loss = cached_loss(ix[i: i + a.cached_micro], wi) * (len(ix[i: i + a.cached_micro]) / P)
+        for i in range(0, P, mic):
+            wi = None if w is None else w[i: i + mic]
+            loss = cached_loss(ix[i: i + mic], wi) * (len(ix[i: i + mic]) / P)
             loss.backward()
             tot += float(loss.detach())
         torch.nn.utils.clip_grad_norm_(trained, a.clip)
         opt.step()
         opt.zero_grad(set_to_none=True)
-        steps.append({"op": "extra", "flops": per_pos * P, "what": "cached step: top MLP, final norm, top-K head"})
+        steps.append({"op": "extra", "flops": per_pos * P,
+                      "what": (f"cached step: blocks {start}-{L - 1}" if seq else "cached step: top MLP") + ", top-K head"})
         return tot
 
     for c in range(chunks):
