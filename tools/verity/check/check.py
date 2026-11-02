@@ -935,9 +935,9 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
     return None
 
 
-def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
+def lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None = None) -> int:
     """Unpack the pinned upstream build and inputs, check every binary against the pin and that this machine can run them, and
-    run `ci.py` on every replayable set."""
+    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of flock-verify)."""
     import tarfile
 
     pin = json.loads(UPSTREAM_PIN.read_text())
@@ -963,7 +963,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
         return 1
     ci = pin.get("ci", {})
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
-    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify"),
+    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(verify or FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
@@ -2741,7 +2741,7 @@ def main(argv: list[str]) -> int:
         urls = lean_deps_url_file(Path(tempfile.mkdtemp(prefix="check-lean-deps-")))
         print(f"--send {urls}" if urls else "")
         return 0
-    if argv[:1] == ["--lean-agreement"] and len(argv) == 4:
+    if argv[:1] == ["--lean-agreement"] and len(argv) in (4, 5):
         return lean_agreement(*map(Path, argv[1:]))
     if argv[:1] == ["--lean-slot"] and len(argv) > 1:
         cmd = lean_slot(argv[1:])
