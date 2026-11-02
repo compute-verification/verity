@@ -63,7 +63,10 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   have hc := (setupH_spec ht hst).1
   have hcirc : ins.read.circ = st'.c := by
     simp only [Readable.Read.circ, ProvedScope.circuitOf, htags, hh, Bool.false_eq_true, ↓reduceIte, hc]
-  rw [hcirc] at ho
+  have hstmt : ins.read.stmt = st'.c := by
+    rw [Readable.Read.stmt, hcirc]
+    exact FlockSoundness.unrolled_flat (FlockSoundness.parse_facts hc).tmpl
+  rw [hstmt] at ho
   have hm := parse_m hs hset (by simp)
   simp only [Bool.false_eq_true, ↓reduceIte] at hm₁
   have hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" := by

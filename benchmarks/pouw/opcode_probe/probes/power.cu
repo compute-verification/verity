@@ -1,4 +1,4 @@
-// Clock and power under load (EPS1's eps_clock, note:20261017T0310Z-report-eps1-program): does a program with a lighter
+// Clock and power under load (eps_clock): does a program with a lighter
 // tensor load run at a higher SM clock than the saturated honest kernel under the board's power cap? Every kernel runs
 // one 512-thread block an SM; `--sustain NAME SECONDS` launches it back to back for SECONDS and prints a JSON line a
 // launch: every block's clock64 cycles and %globaltimer ns over the timed loop (their ratio is the SM clock the block

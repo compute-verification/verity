@@ -40,8 +40,11 @@ def test_run_refuses_an_unknown_job_variable_before_it_launches(monkeypatch: pyt
 
 
 def _record(tmp_path: Path, **env: str) -> subprocess.CompletedProcess:
-    base = {k: v for k, v in RS.REGISTRY.environ().items() if not k.startswith(RS.REGISTRY.prefixes) and k != "RESEARCH_RUN_ID"}
-    return subprocess.run([sys.executable, str(HERE / "settings.py"), "record", str(tmp_path / "settings.json")],
+    """job.sh's first command, as the pod's python3 runs it: no site-packages and no PYTHONPATH, so what settings.py imports
+    it finds in the tree itself."""
+    base = {k: v for k, v in RS.REGISTRY.environ().items()
+            if not k.startswith(RS.REGISTRY.prefixes) and k not in ("RESEARCH_RUN_ID", "PYTHONPATH")}
+    return subprocess.run([sys.executable, "-S", str(HERE / "settings.py"), "record", str(tmp_path / "settings.json")],
                           env={**base, **env}, capture_output=True, text=True, check=False)
 
 

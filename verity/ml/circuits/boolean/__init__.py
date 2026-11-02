@@ -14,8 +14,8 @@ leaves and every primitive it reaches is one of them, an `Input1_v1` or a `Regis
 **Elements and the word view.** A Boolean Definition's ports carry bits; an *element* of a port is an innermost
 `Array<w, Value<1>>` (one w-bit element, bit j = leaf j, least significant first) or a lone `Value<1>`. `word_type` replaces
 each element by `Value<w>`: the word view of a Boolean Definition is the signature of the word Definition it computes, and
-`verity.ml.circuits.evaluation` evaluates it on words through that view. A port's format (BF16, E4M3, ...) is an annotation
-(`verity.ml.circuits.annotations`), outside every digest; the word view never reads it.
+`verity.ml.circuits.evaluation` evaluates it on words through that view. A port's format (BF16, E4M3, ...) is metadata
+(`verity.ml.circuits.metadata`), outside every digest; the word view never reads it.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from typing import Any
 from verity.ml.circuits.codec import register_lazy_family
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Type, Value
 
 __all__ = ["AND", "BIT", "CONSTANTS", "KINDS", "NOT", "XOR", "and_gate", "bit_type", "constant", "elements", "gate_kind",
            "is_boolean", "is_constant_bit", "is_gate", "operands", "word_type", "xor_gate"]
@@ -183,7 +183,7 @@ def elements(t: Type) -> list[int]:
         return elements(t.elem) * t.n
     if isinstance(t, Tuple):
         return [w for f in t.fields for w in elements(f)]
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return [w for _, f in t.fields for w in elements(f)]
     raise TypeError(f"{t!r} is not a Boolean type (its leaves must be Value<1>)")
 
@@ -198,8 +198,8 @@ def word_type(t: Type) -> Type:
         return Array(t.n, word_type(t.elem))
     if isinstance(t, Tuple):
         return Tuple(*[word_type(f) for f in t.fields])
-    if isinstance(t, Record):
-        return Record(*[(k, word_type(f)) for k, f in t.fields])
+    if isinstance(t, RecordType):
+        return RecordType(*[(k, word_type(f)) for k, f in t.fields])
     raise TypeError(f"{t!r} is not a Boolean type (its leaves must be Value<1>)")
 
 
@@ -211,6 +211,6 @@ def bit_type(t: Type) -> Type:
         return Array(t.n, bit_type(t.elem))
     if isinstance(t, Tuple):
         return Tuple(*[bit_type(f) for f in t.fields])
-    if isinstance(t, Record):
-        return Record(*[(k, bit_type(f)) for k, f in t.fields])
+    if isinstance(t, RecordType):
+        return RecordType(*[(k, bit_type(f)) for k, f in t.fields])
     raise TypeError(t)

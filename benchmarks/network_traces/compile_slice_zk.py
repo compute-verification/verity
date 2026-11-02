@@ -60,7 +60,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   priors, excepted); the prover's instance file, which holds those rows, is the control. A found piece fails the run
   when the lane's one rule calls it leaked (`leak_scan.scan`): there is no byte-count or witness-class exemption.
 * **rescan**: a finished ``prove``'s scan taken again under that rule (`leak_scan.rescan`) from the verifier's files it
-  kept, the pieces recomputed from its slice, kinds and partition (a salt the run drew isn't, so a found salt reads
+  kept, the pieces recomputed from its slice, kinds and partition (a salt the run sampled isn't, so a found salt reads
   leaked).
 * **Cost** (``--points``): sessions whose verifier samples the first k units, behind the ZK server (`a8.cost`).
 """

@@ -167,6 +167,7 @@ theorem coefCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
   have hsz : p.sts.size = 1 := by rw [hp]; exact (oneFull_staged hS hsu).1
   have hc0 := partCircuit_staged hS hx ht' hpi hr hpc h0
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht' hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨u, -, hupv, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
   have hn : p.sts[0].c.unit.name = Flock.RecOpen.unitName LANES HH := (htab 0 h0).1
   have hpar := FlockVBridge.params_of_check P.recNet hn
@@ -371,6 +372,7 @@ theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   have hp : p = { i0.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx htyp hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hn : p.sts[0].c.unit.name = Flock.RecOpen.unitName LANES HH := (htab 0 h0p).1
   have hpar := FlockVBridge.params_of_check P.recNet hn
   rw [e0] at hpar
@@ -476,7 +478,7 @@ level, and `verifierRows` gives the same `κ` and contexts at check 5's shape an
 (`verifierRows_filter`, `verifierRows_comb`, `verifierRows_congr`); `coefRead`'s lanes are the level's (`levelMatch`)
 and its `alphaOf` the level's context's (`alphaOf_eq`). -/
 theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
-    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : OpenLower.PiecesInRangeR pieces)
     (hI : OpenLower.InnerCoinsR untr b Bk s x c) : CoefTieR untr b pieces Bk s x c := by
   intro xO hsh i spec sts hsu ht f inn hf hload r ss lv LANES HH n hr hss hsv cr dr hop q hq ho
@@ -565,7 +567,7 @@ theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPi
 /-- **`CoefTieR` at a dense compiled statement**, from the verifier's checks and the pieces' ranges
 (`innerCoinsR_staged`). -/
 theorem coefTieR_dense {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ} {x : Msg}
-    {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0)
+    {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) (hR : OpenLower.PiecesInRangeR pieces)
     (hB : RestRead.kI x ≤ Bk (xIOf x)) : CoefTieR recRead b pieces Bk s x c :=
   coefTieR_of hst hd hR (OpenLower.innerCoinsR_staged hst hd hB)
@@ -639,6 +641,7 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   have hpc : r.w.parts[s]?.bind partCircuit = some cc := by rw [hpt, Option.bind_some]; exact hcc
   have hc0 := partCircuit_staged hS hxp htyp hpi hr hpc h0p
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hxp htyp hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hn : p.sts[0].c.unit.name = Flock.RecOpen.unitName LANES HH := (htab 0 h0p).1
   have hpar := FlockVBridge.params_of_check P.recNet hn
   have hrk := (FlockC3.RegLevels.check_rows P.recNet (.inl hpar)).1

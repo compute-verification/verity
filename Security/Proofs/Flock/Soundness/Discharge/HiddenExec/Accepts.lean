@@ -58,10 +58,52 @@ theorem setupTables_okH (hh : tags.hiddenOutputs = true)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact Or.inl ⟨by assumption, _, by assumption, rfl, rfl⟩
+  · exact Or.inl ⟨by assumption, _, ok_of_refuse (by assumption), rfl, rfl⟩
   all_goals
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
-    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, hall j hj⟩, mPts_of_any (by assumption), rfl⟩
+    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
+
+set_option maxHeartbeats 4000000 in
+/-- **`setupTables` refuses pinned outputs** under a tag with hidden outputs: no table it returns has any
+(`HmRow.pinnedCount`). -/
+theorem setupTables_pinnedH (hh : tags.hiddenOutputs = true)
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) :
+    ∀ (j : ℕ) (hj : j < sts.size), HmRow.pinnedCount sts[j].c.metaJ = 0 := by
+  unfold Stmt.setupTables at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h : jp0 () = .ok (spec, sts) := by
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  replace h : jp1 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp1] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  replace h : jp2 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp2] at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind, ite_eq_left hh] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+  · intro j hj
+    have hj0 : j = 0 := by simpa using hj
+    subst hj0
+    have hr := refuse_ok (by assumption)
+    first | exact bne_eq_false_iff_eq.1 hr.2 | simpa using hr.2
+  all_goals
+    obtain ⟨-, hall⟩ := range_mapM_ok (by assumption)
+    intro j hj
+    have hr := refuse_ok (hall j hj)
+    first | exact bne_eq_false_iff_eq.1 hr.2 | simpa using hr.2
 
 theorem setupTables_okAny : SetupTablesOkAny := by
   intro tags cf pf coins count tables draw partition program work stratified closure spec sts h
@@ -155,7 +197,7 @@ theorem setupTables_retainH (hh : tags.hiddenOutputs = true)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact congrArg Tags.retainRounds (setupHidden_tags (by assumption))
+  · exact congrArg Tags.retainRounds (setupHidden_tags (ok_of_refuse (by assumption)))
   all_goals rfl
 
 /-- The session's spec retains rounds exactly when its tags do, for either tag. -/

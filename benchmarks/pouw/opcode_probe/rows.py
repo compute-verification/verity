@@ -1,5 +1,5 @@
-"""The price row a probe writes, in RS-W′'s row schema (machine_model's `data/census/EPOCH.csv`, read by
-`verity_machine_model.model`; branch `cursor/machine-model-ea24`).
+"""The price row a probe writes, in the machine model's row schema (`data/census/EPOCH.csv`,
+read by `verity_machine_model.model`).
 
 A census line is ``kind,row,rate,noise,cycles,u,since,until,runs``: the instruction class, the machine row it holds, its
 measured rate (warp instructions/SM/clk, 4 SMSPs an SM) derated by `noise`, the epochs it holds and its runs. `u_of`
