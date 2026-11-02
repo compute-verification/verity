@@ -15,21 +15,24 @@
 #      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  H1_DRAWN_MEM_GB (the
 #      prover's budget, default 90% of the host's memory)  PY (served_verdicts.sh's venv python, default .venv's)
 #      H1_DRAWN_ONLY=1: write and check the statements, no verdict
-# Out: PIECE_DIR/drawn/ (stage/, the plan and each statement's files and session; out/ job.sh's logs;
-# statements.json), then served_verdicts.py pouw's files in PIECE_DIR.
+# Out: PIECE_DIR/drawn/ (statements.json and job.log), then served_verdicts.py pouw's files in PIECE_DIR. The staging
+# (stage/: the plan and each statement's witness files and session) and job.sh's other logs go to a `mktemp -d`
+# scratch directory removed on exit: PIECE_DIR is under the run's $OUT, and a staged witness never goes there.
 set -uo pipefail
 SD=${1:?SERVE_DIR} WIN=${2:?WINDOW} P=${3:?PIECE_DIR}
 cd "$(dirname "$0")/../../.." || exit 1
 VPY=${PY:-$(pwd)/.venv/bin/python}
 mkdir -p "$P/drawn"
 P=$(cd "$P" && pwd)
-export RESEARCH_RUN_DIR=$P/drawn HZ_CONFIGS=drawn HZ_RUNS=1 HZ_WARM=0 HZ_PYTHON=$VPY
+mkdir -p "${TMPDIR:-/tmp}" && SCR=$(mktemp -d "${TMPDIR:-/tmp}/h1-drawn.XXXXXX") || exit 1
+export RESEARCH_RUN_DIR=$SCR HZ_CONFIGS=drawn HZ_RUNS=1 HZ_WARM=0 HZ_PYTHON=$VPY
 export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048576)}' /proc/meminfo)}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
+trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W" "$SCR"' EXIT
 setup
 export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python${PYTHONPATH:+:$PYTHONPATH}
-WK=$P/drawn/stage ST=$P/drawn/statements.json
+WK=$SCR/stage ST=$P/drawn/statements.json
 args=(--circuits "${H1_CIRCUITS:?H1_CIRCUITS: pouw_h1_circuits --out, with the drawn K file}")
 [ -n "${H1_DRAW_K:-}" ] && args+=(--k "$H1_DRAW_K")
 st=("${args[@]}" --work "$WK")
@@ -53,5 +56,5 @@ done
 "$PY" "$J/../h1_prove/drawn.py" check "$SD" "$WIN" "${args[@]}" --statements "$ST" --lean "$LEAN" 2>&1 | tee -a "$OUT/job.log"
 [ "${PIPESTATUS[0]}" = 0 ] || { log "drawn: credit refuses the statements"; exit 1; }
 [ "${H1_DRAWN_ONLY:-0}" = 1 ] && exit 0
-exec "$VPY" benchmarks/one_stage/served_verdicts.py pouw "$SD" "$WIN" "$P" --statements "$ST" \
+"$VPY" benchmarks/one_stage/served_verdicts.py pouw "$SD" "$WIN" "$P" --statements "$ST" \
   ${H1_LIVE_EVIDENCE:+--live-evidence "$H1_LIVE_EVIDENCE"}
