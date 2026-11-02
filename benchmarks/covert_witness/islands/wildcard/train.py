@@ -115,6 +115,36 @@ def delta_of(params: dict, theta: dict, names: list[str]) -> dict:
     return {n: params[n].detach().to(theta[n].dtype).cpu() for n in names}
 
 
+PROBE_BATCHES = 4
+
+
+def probe_flops(a, rec, trainable, n_values: int) -> int:
+    tokens = a.batch * prepare.EVAL_CTX
+    return PROBE_BATCHES * n_values * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": tokens}])["flops"]
+
+
+def line_search(a, fwd, data, steps: list, apply, values: list[float]) -> tuple[float, dict]:
+    """Mean loss on PROBE_BATCHES fresh training batches (each logged as a forward pass) at every value `apply` sets; the
+    least wins and stays applied."""
+    tokens = a.batch * prepare.EVAL_CTX
+    probe = [data.next(a.batch) for _ in range(PROBE_BATCHES)]
+    results = {}
+    for v in values:
+        apply(v)
+        tot = 0.0
+        with torch.no_grad():
+            for rows in probe:
+                for i in range(0, a.batch, a.micro):
+                    x = rows[i: i + a.micro]
+                    tot += float(loss_of(fwd, x)) * len(x)
+                steps.append({"op": "forward", "tokens": tokens})
+        results[v] = tot / (PROBE_BATCHES * a.batch)
+    best = min(results, key=results.get)
+    apply(best)
+    print(json.dumps({"line_search": results, "best": best}), flush=True)
+    return best, results
+
+
 def lora_bytes(theta: dict, mats: list[str], gains: list[str], rank: int) -> int:
     fac = {n: (torch.zeros(rank, theta[n].shape[1]), torch.zeros(theta[n].shape[0], rank), 1.0) for n in mats}
     return len(prepare.encode_lora(fac, "bf16", {n: theta[n] for n in gains}))
@@ -180,7 +210,9 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
 
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
-    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
+    alphas = [1.0] + a.extrapolate if a.extrapolate else []
+    reserve = probe_flops(a, rec, trainable, len(alphas)) if alphas else 0
+    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // per_step)
     base = [[g["lr"] for g in o.param_groups] for o, _ in opts]
     if a.ema and factors:
         raise SystemExit("wildcard: --ema is for full-tensor sets")
@@ -221,8 +253,32 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
             snaps.append((encode(ema if ema is not None else params), len(steps)))
-    return encode(ema if ema is not None else params), trainable, steps, snaps, {"steps": n_steps,
-                                                                                 "lora_rank": a.lora_rank}
+    info = {"steps": n_steps, "lora_rank": a.lora_rank}
+    if alphas:
+        info["alpha"], info["line_search"] = extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas)
+    return encode(ema if ema is not None else params), trainable, steps, snaps, info
+
+
+@torch.no_grad()
+def extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas):
+    """θ + α Δ for the α in `alphas` whose probe loss is least (ExPO's extrapolation; adapters scale B)."""
+    if factors:
+        ends = {n: B.detach().clone() for n, (_, B, _) in factors.items()}
+
+        def apply(al):
+            for n, (_, B, _) in factors.items():
+                B.copy_(al * ends[n])
+    else:
+        src = ema if ema is not None else params
+        ends = {n: src[n].detach().float().clone() for n in tuned}
+        start = {n: theta[n].to(prepare.DEVICE).float() for n in tuned}
+
+        def apply(al):
+            for n in tuned:
+                params[n].copy_(start[n] + al * (ends[n] - start[n]))
+                if ema is not None:
+                    ema[n].copy_(params[n])
+    return line_search(a, fwd, data, steps, apply, alphas)
 
 
 def train_kfac(a, net, rec, theta, params, tuned, data, fwd):
@@ -247,9 +303,7 @@ def train_kfac(a, net, rec, theta, params, tuned, data, fwd):
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     moment_flops = sum(2 * tokens * (params[n].shape[0] ** 2 + params[n].shape[1] ** 2) for n in mats)
-    probe_batches = 4
-    probe_flops = prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": tokens}])["flops"]
-    reserve = probe_batches * probe_flops * (len(a.etas) + 1)
+    reserve = probe_flops(a, rec, trainable, len(a.etas) + 1)
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // (per_step + moment_flops))
     if n_steps < 1:
         raise SystemExit("wildcard kfac: the budget leaves no accumulation step after the line search's reserve")
@@ -288,30 +342,159 @@ def train_kfac(a, net, rec, theta, params, tuned, data, fwd):
             params[n].grad = None
     steps.append({"op": "extra", "flops": inv_flops, "what": "kfac solves"})
     base = {n: params[n].detach().clone() for n in tuned}
-    probe = [data.next(a.batch) for _ in range(probe_batches)]
 
     @torch.no_grad()
-    def probe_loss() -> float:
-        tot = 0.0
-        for rows in probe:
-            for i in range(0, a.batch, a.micro):
-                tot += float(loss_of(net, rows[i: i + a.micro], 1.0)) * len(rows[i: i + a.micro])
-            steps.append({"op": "forward", "tokens": tokens})
-        return tot / (probe_batches * a.batch)
-
-    results = {0.0: probe_loss()}
-    for eta in a.etas:
-        with torch.no_grad():
-            for n in tuned:
-                params[n].copy_(base[n] - eta * direction[n])
-        results[eta] = probe_loss()
-    best = min(results, key=results.get)
-    with torch.no_grad():
+    def apply(eta):
         for n in tuned:
-            params[n].copy_(base[n] - best * direction[n])
-    print(json.dumps({"line_search": results, "eta": best}), flush=True)
+            params[n].copy_(base[n] - eta * direction[n])
+
+    best, results = line_search(a, net, data, steps, apply, [0.0] + a.etas)
     return (prepare.encode_full(delta_of(params, theta, tuned)), trainable, steps, [],
             {"steps": n_steps, "line_search": results, "eta": best})
+
+
+CACHED_OK = ("w_gate", "w_up", "w_down")
+
+
+def train_cached(a, net, rec, theta, params, tuned, data):
+    """The top block's MLP (and the final gain) trained over cached activations with a top-K head.
+
+    θ's prefix is frozen, so the residual stream x_mid entering the top block's MLP is the same at every step: each fresh
+    position is run once through θ (a logged forward), and x_mid is cached with θ's top-K tokens there, the rest's
+    probability-weighted mean embedding ē and c = lse_rest(θ) − ē·z(θ). Training steps then sample cached positions and
+    run only the MLP, the final norm and K + 2 head rows: loss = lse(top-K logits, target, c + ē·z) − target logit, which
+    has θ's exact gradient at θ (the rest's log-mass to first order in z). Each chunk of fresh positions is followed by
+    its share of the steps, and its end is a snapshot. Every cached-step FLOP is logged as `extra`, counted as the meter
+    counts a train pass above the lowest trained node (every matmul's input gradient, the trained matrices' weight
+    gradients)."""
+    inner = net.inner
+    L, d, V = len(inner.blocks), inner.size.d_model, inner.vocab
+    top = inner.blocks[L - 1]
+    ok = {f"blocks.{L - 1}.{leaf}.weight" for leaf in CACHED_OK} | {"norm"}
+    if not set(tuned) <= ok:
+        raise SystemExit(f"wildcard cached: the set must be within the top block's MLP and the final norm: {tuned}")
+    mats = [n for n in tuned if params[n].ndim == 2]
+    gains = [n for n in tuned if params[n].ndim == 1]
+    K, P = a.top_k, a.batch * prepare.EVAL_CTX
+    d_ff = top.w_gate.weight.shape[0]
+    fwd_mm = 2 * 3 * d * d_ff + 2 * (K + 2) * d
+    per_pos = 2 * fwd_mm + sum(2 * params[n].numel() for n in mats)
+    trainable = {"full": tuned}
+    fill_tok = prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": 1}])["flops"] + 2 * V * d
+    n_pos = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (fill_tok + a.epochs * per_pos))
+    chunks = a.snaps + 1
+    seqs = max(chunks, n_pos // prepare.EVAL_CTX) // chunks * chunks
+    n_pos = seqs * prepare.EVAL_CTX
+    n_steps = max(chunks, int(a.epochs * n_pos) // P) // chunks * chunks
+    gb = n_pos * (4 * d + 2 * K + 9) / 2 ** 30
+    print(json.dumps({"positions": n_pos, "steps": n_steps, "cache_gb": round(gb, 2), "per_position_step": per_pos,
+                      "fill_per_token": fill_tok, "top_k": K}), flush=True)
+    if gb > a.cache_gb:
+        raise SystemExit(f"wildcard cached: the cache needs {gb:.1f} GB > --cache-gb {a.cache_gb}")
+    dev = prepare.DEVICE
+    xs = torch.empty(n_pos, d, dtype=torch.bfloat16, device=dev)
+    es = torch.empty(n_pos, d, dtype=torch.bfloat16, device=dev)
+    ids = torch.empty(n_pos, K, dtype=torch.int16, device=dev)
+    tgt = torch.empty(n_pos, dtype=torch.int32, device=dev)
+    cs = torch.empty(n_pos, dtype=torch.float32, device=dev)
+    dup = torch.empty(n_pos, dtype=torch.bool, device=dev)
+    grab = {}
+    hooks = [top.register_forward_pre_hook(lambda m, i: grab.__setitem__("x", i[0])),
+             top.wo.register_forward_hook(lambda m, i, o: grab.__setitem__("o", o)),
+             top.register_forward_hook(lambda m, i, o: grab.__setitem__("y", o))]
+    embed = inner.embed.detach()
+    eb = embed.bfloat16()
+
+    @torch.no_grad()
+    def fill(lo: int, hi: int, steps: list):
+        at = lo
+        while at < hi:
+            rows = data.next(min(a.micro, (hi - at) // prepare.EVAL_CTX))
+            n = rows.shape[0] * prepare.EVAL_CTX
+            with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
+                logits = net(rows[:, :-1]).float().view(n, V)
+            y = rms(grab["y"].float().view(n, d), inner.norm)
+            t = rows[:, 1:].reshape(-1)
+            k_ids = logits.topk(K, dim=-1).indices
+            lse = torch.logsumexp(logits, dim=-1)
+            logits_t = logits.gather(1, t[:, None])[:, 0]
+            p = torch.softmax(logits, dim=-1)
+            del logits
+            p.scatter_(1, k_ids, 0.0)
+            p.scatter_(1, t[:, None], 0.0)
+            mass = p.sum(-1).clamp_min(1e-30)
+            ebar = (p.bfloat16() @ eb).float() / mass[:, None]
+            del p
+            xs[at: at + n] = (grab["x"] + grab["o"]).view(n, d).bfloat16()
+            es[at: at + n] = ebar.bfloat16()
+            ids[at: at + n] = (k_ids - 32768).to(torch.int16)
+            tgt[at: at + n] = t.int()
+            cs[at: at + n] = lse + mass.log() - (es[at: at + n].float() * y).sum(-1)
+            if at < a.cached_micro:
+                true_ce.append((lse - logits_t)[: a.cached_micro - at])
+            dup[at: at + n] = (k_ids == t[:, None]).any(-1)
+            steps += [{"op": "forward", "tokens": n}, {"op": "extra", "flops": 2 * V * d * n, "what": "cache: rest mean"}]
+            at += n
+
+    def cached_loss(ix: torch.Tensor) -> torch.Tensor:
+        x = xs[ix].float()
+        with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
+            h = F.rms_norm(x, (d,), top.mlp_norm)
+            y = x + top.w_down(F.silu(top.w_gate(h)) * top.w_up(h))
+        z = rms(y.float(), inner.norm)
+        sub = torch.einsum("pd,pkd->pk", z.bfloat16(), eb[ids[ix].int() + 32768]).float()
+        own = (z * embed[tgt[ix]]).sum(-1)
+        rest = cs[ix] + (es[ix].float() * z).sum(-1)
+        own_slot = torch.where(dup[ix], torch.full_like(own, -torch.inf), own)
+        lse = torch.logsumexp(torch.cat([sub, own_slot[:, None], rest[:, None]], dim=-1), dim=-1)
+        return (lse - own).mean()
+
+    groups = [{"params": [params[n] for n in mats], "lr": a.lr}, {"params": [params[n] for n in gains], "lr": a.norm_lr}]
+    groups = [g for g in groups if g["params"]]
+    opt = torch.optim.AdamW(groups, betas=(0.9, a.beta2), weight_decay=a.wd, fused=dev.startswith("cuda"))
+    base = [g["lr"] for g in opt.param_groups]
+    trained = [p for g in opt.param_groups for p in g["params"]]
+    steps, snaps = [], []
+    gen = torch.Generator(device=dev).manual_seed(a.data_seed)
+    per_chunk, step_per_chunk, filled, step = n_pos // chunks, n_steps // chunks, 0, 0
+    t0 = time.perf_counter()
+    true_ce = []
+    for c in range(chunks):
+        fill(filled, filled + per_chunk, steps)
+        filled += per_chunk
+        if c == 0:
+            m = min(per_chunk, a.cached_micro)
+            with torch.no_grad():
+                at_theta = float(cached_loss(torch.arange(m, device=dev)))
+            steps.append({"op": "extra", "flops": fwd_mm * m, "what": "cached: loss check at theta"})
+            print(json.dumps({"cached_loss_at_theta": at_theta, "true_loss": float(torch.cat(true_ce)[:m].mean()),
+                              "positions_checked": m}), flush=True)
+        for _ in range(step_per_chunk):
+            frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
+            for g, lr in zip(opt.param_groups, base):
+                g["lr"] = lr * frac
+            ix = torch.randint(filled, (P,), device=dev, generator=gen)
+            for i in range(0, P, a.cached_micro):
+                loss = cached_loss(ix[i: i + a.cached_micro]) * (len(ix[i: i + a.cached_micro]) / P)
+                loss.backward()
+            torch.nn.utils.clip_grad_norm_(trained, a.clip)
+            opt.step()
+            opt.zero_grad(set_to_none=True)
+            steps.append({"op": "extra", "flops": per_pos * P, "what": "cached step: top MLP, final norm, top-K head"})
+            step += 1
+            if step % 100 == 0:
+                print(json.dumps({"step": step, "chunk": c, "loss": float(loss.detach()) * P / a.cached_micro,
+                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+        if c < chunks - 1:
+            snaps.append((prepare.encode_full(delta_of(params, theta, tuned)), len(steps)))
+    for h in hooks:
+        h.remove()
+    return (prepare.encode_full(delta_of(params, theta, tuned)), trainable, steps, snaps,
+            {"steps": n_steps, "positions": n_pos, "epochs": n_steps * P / n_pos, "top_k": K})
+
+
+def rms(x: torch.Tensor, gain: torch.Tensor) -> torch.Tensor:
+    return F.rms_norm(x, (x.shape[-1],), gain.float())
 
 
 def main() -> int:
@@ -321,7 +504,7 @@ def main() -> int:
     ap.add_argument("--mechanism", default="", help="the --note's mechanism name, kept in the notes")
     ap.add_argument("--set", dest="tset", default="mlp-in:-1")
     ap.add_argument("--allow-deep", action="store_true")
-    ap.add_argument("--method", default="adamw", choices=("adamw", "muon", "kfac"))
+    ap.add_argument("--method", default="adamw", choices=("adamw", "muon", "kfac", "cached"))
     ap.add_argument("--lora-rank", type=int, default=0,
                     help="train the set's matrices through rank-r adapters (E `encode_lora`); -1 fits the class's cap")
     ap.add_argument("--lr", type=float, default=1e-3)
@@ -335,6 +518,11 @@ def main() -> int:
     ap.add_argument("--ema", type=float, default=0.0, help="snapshot and submit an EMA of the weights (decay per step)")
     ap.add_argument("--damping", type=float, default=1e-2)
     ap.add_argument("--etas", default="1e-4,3e-4,1e-3,3e-3,1e-2", help="kfac: per-element RMS step sizes searched")
+    ap.add_argument("--extrapolate", default="", help="adamw/muon: α values searched for θ + α Δ after training (1 is kept)")
+    ap.add_argument("--top-k", type=int, default=256, help="cached: θ's top-K tokens kept per position")
+    ap.add_argument("--epochs", type=float, default=8.0, help="cached: training positions per cached position")
+    ap.add_argument("--cache-gb", type=float, default=80.0)
+    ap.add_argument("--cached-micro", type=int, default=8192, help="cached: positions per backward")
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
@@ -342,6 +530,7 @@ def main() -> int:
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     a = ap.parse_args()
     a.etas = [float(x) for x in a.etas.split(",")]
+    a.extrapolate = [float(x) for x in a.extrapolate.split(",") if x]
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
@@ -358,6 +547,8 @@ def main() -> int:
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     if a.method == "kfac":
         blob, trainable, steps, snaps, info = train_kfac(a, net, rec, theta, params, tuned, data, net)
+    elif a.method == "cached":
+        blob, trainable, steps, snaps, info = train_cached(a, net, rec, theta, params, tuned, data)
     else:
         blob, trainable, steps, snaps, info = train_iterative(a, net, rec, theta, params, tuned, data, torch.compile(net))
     model = prepare.decode(theta, blob)
