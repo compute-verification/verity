@@ -20,7 +20,7 @@ no word of the round and releases it as it came:
   rounds do outside a masked phase at a row of pads within a `u64`'s count; the frame's own rounds (`Frame.innerSched`)
   pass only as themselves.
 * `Loop.InnerOffAny`: the states `Loop.progOf` and `Loop.freshOf` give keep it (`innerOffAny_progOf`,
-  `innerOffAny_freshOf`), and so does the state the frame takes coins at (`innerOffAny_takeAt`).
+  `innerOffAny_freshOf`), and so does every answer (`innerOffAny_answer`), so the state the frame takes coins at does.
   `LeanRelease.ofLoop_answered_on`: at the session loop's own frames, once the inner proof's label came the state a
   round is checked at is outside every masked phase. `LeanRelease.ofLoop_answered_inner`: past a rep's schedule, that
   state counts the inner proof's round, below its last, at a row of pads within a `u64`'s count.
@@ -599,16 +599,6 @@ theorem innerOffAny_freshOf (x : Msg) (cs : List FlockDeploy.Coin) {m : Masker} 
         exact ⟨default, innerOff_empty _⟩
       · exact ⟨c', innerOff_stepEq hst (innerOff_empty c')⟩
 
-theorem innerOffAny_takeAt {n : ℕ} {same : Bool} {cN cP : Cfg} {prog : Masker} {fresh : Except String Masker}
-    {cs : Array F128} {m : Masker} (hp : InnerOffAny prog) (hf : ∀ m, fresh = .ok m → InnerOffAny m)
-    (h : LeanRelease.takeAt n same cN cP prog fresh cs = .ok m) : InnerOffAny m := by
-  unfold LeanRelease.takeAt at h
-  split_ifs at h
-  · exact hf m h
-  · exact innerOffAny_answer hp h
-  · obtain ⟨a, -, h⟩ := bindV_ok h
-    exact hf m h
-
 end Loop
 
 namespace LeanRelease
@@ -632,8 +622,12 @@ theorem ofLoop_answered_on (T : CoinLayer.TableData)
     · exact ha
     · cases ha
   rw [ofLoop_frameAnswer T L₀ real x ρ e0 h1] at hF
-  obtain ⟨c, hc⟩ := innerOffAny_takeAt (innerOffAny_progOf x (h1.map fun p => CoinLayer.rd p.2))
-    (fun m hm => innerOffAny_freshOf x (h1.map fun p => CoinLayer.rd p.2) hm) hF
+  have hm : InnerOffAny m := by
+    rcases takeAt_ok hF with ⟨-, hf⟩ | ⟨-, -, ha⟩ | ⟨-, -, -, hf⟩
+    · exact innerOffAny_freshOf x _ hf
+    · exact innerOffAny_answer (innerOffAny_progOf x _) ha
+    · exact innerOffAny_freshOf x _ hf
+  obtain ⟨c, hc⟩ := hm
   exact (hc hi).1
 
 open Loop in
@@ -709,7 +703,7 @@ theorem ofLoop_answered_inner (T : CoinLayer.TableData)
   have hxs : xs.size + 2 < 2 ^ 64 := by
     rw [hxe, extras_size]
     have := Nat.mul_le_mul_left sts[k / 2]!.regions.size
-      ((linkPoints_size_le sts[k / 2]! (wordsAt x cs 0)).trans (by rw [hls]; exact Nat.min_le_right _ _))
+      ((linkPoints_size_le sts[k / 2]! (wordsAt x cs 0)).trans (hls.trans_le (Nat.min_le_right _ _)))
     omega
   have hT := Count.real_tabAlike (hR ρ s0 spec sts hx) hph' hreal
   obtain ⟨hdg, hmb, hn, hlq, hpd, hdd⟩ := Count.real_bounds hph' hT
@@ -726,7 +720,7 @@ theorem ofLoop_answered_inner (T : CoinLayer.TableData)
   have hsz := roundsAt_size hR'
   obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hs'
   obtain ⟨sched, hs⟩ := schedSoFar_pop_ok hs'
-  have hss : sched' = sched := schedSoFar_pop_eq hs hs' (by simp) (by omega)
+  have hss : sched' = sched := schedSoFar_pop_eq (j := j) hs hs' (by simp) (by omega)
   rw [hss] at hsz
   have hrow : ((ofLoop T L₀ real).cfg x ρ ((m0, r0) :: h1)).rowH.size < 2 ^ 64 := by
     obtain ⟨-, hH, -, -⟩ := ofLoop_cfg_place T L₀ real x ρ ((m0, r0) :: h1) hx hq2 hki hph'
