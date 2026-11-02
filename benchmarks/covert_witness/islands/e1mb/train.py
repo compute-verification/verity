@@ -17,7 +17,10 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 - schedule: `--schedule` linear (warmup, linear decay to 0), wsd (`--cooldown` fraction), cosine; `--batch`;
 - data: `--fresh` skips the windows the start trained on (its seed-0 order's prefix).
 
-    python guard.py islands/e1mb/train.py --start m100 --out SUB [--targets all] [--rank 0] [--norms all] [--lr 1e-3]
+The run plans its steps for the harness (`hooks.plan`) and encodes E at the end of every `--snaps` + 1 share of them (the
+default 19: each 5%), so each of the harness's 5% checkpoints scores one.
+
+    python launch.py e1mb m100 --note TEXT -- [--targets all] [--rank 0] [--norms all] [--lr 1e-3]
 """
 from __future__ import annotations
 
@@ -33,6 +36,7 @@ import torch
 import torch.nn.functional as F
 
 import prepare
+from te_core import hooks
 
 KLASS = Path(__file__).resolve().parent.name
 LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
@@ -193,7 +197,7 @@ def main() -> int:
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--fresh", action="store_true")
-    ap.add_argument("--snaps", type=int, default=3)
+    ap.add_argument("--snaps", type=int, default=19)
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
@@ -256,6 +260,7 @@ def main() -> int:
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - spent) // per_step)
     marks = {round(n_steps * k / (a.snaps + 1)) for k in range(1, a.snaps + 1)}
+    hooks.plan(n_steps)
     print(json.dumps({"class": KLASS, "steps": n_steps, "rank": rank, "ranks": sorted(set(ranks.values())),
                       "targets": len(ranks), "norms": len(norms), "E_bytes": size, "flops_per_step": per_step,
                       "init_flops": spent, "windows": len(data.order)}), flush=True)
