@@ -142,7 +142,7 @@ def family(r: dict) -> str:
 
 def label(start: str, shape: dict) -> str:
     n = shape["parameters"]
-    return f"{n / 1e6:.0f}M · {shape['tokens_per_param']:g} tok/p ({start})"
+    return f"{n / 1e6:.0f}M · {shape['tokens_per_param']:g} tok/p"
 
 
 class Cycle:
@@ -291,7 +291,8 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
                 "(the tied head is a frozen tail for every run that leaves the embedding frozen). loss = held-out bits "
                 "per byte. target_pct = the deepest target the point reaches. compute_frac is null: C0 is a stub for "
                 "these starts (" + ", ".join(f"{s} {cy.shapes[s]['c0_gates']:.3g}" for s in cy.starts) + " gates, "
-                "te_core.policy). No scratch curve until the ladder's F. One seed (search slices)."}
+                "te_core.policy). No scratch curve until the ladder's F. One seed (search slices). Starts: "
+                + ", ".join(f"{lab[s]} = {s}" for s in cy.starts) + "."}
 
     cols = ["start", "start_id", "size", "saturation", "l0", "target_pct", "g", "S", "S_lo", "S_hi", "basis",
             "reading", "policy", "method", "family", "record", "checkpoint", "H_gates", "W_gates", "rho", "p"]
@@ -396,6 +397,76 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
     return P
 
 
+BODY_MAX = 65536
+BAND_FEW = ("c=4096w k=100kB", "c=4096w k=1MB", "c=100w k=10kB", "c=1w k=10kB")
+
+
+def body(p: dict) -> bytes:
+    return json.dumps(p, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode()
+
+
+def compact(p: dict, keep=lambda r: True, drop: tuple = ()) -> dict:
+    """`p` with the rows `keep` takes, without the columns `drop`, art ids shortened to 12 hex digits and numbers to 4
+    significant digits (losses 6)."""
+    ix = {c: i for i, c in enumerate(p["columns"])}
+
+    def val(c, v):
+        if isinstance(v, str) and v.startswith("art:"):
+            return v[4:16]
+        if isinstance(v, float) and not isinstance(v, bool):
+            return round(v, 6) if c in ("loss", "l0") else float(f"{v:.4g}")
+        return v
+    rows = [[val(c, r[i]) for c, i in ix.items() if c not in drop] for r in p["rows"]
+            if keep({c: r[i] for c, i in ix.items()})]
+    return p | {"columns": [c for c in p["columns"] if c not in drop], "rows": rows}
+
+
+def thin(p: dict) -> dict:
+    """P1's curves at the points that lower the loss by 0.25% or reach a deeper target, each curve's ends kept."""
+    ix = {c: i for i, c in enumerate(p["columns"])}
+    groups: dict[tuple, list] = defaultdict(list)
+    for r in p["rows"]:
+        groups[(r[ix["start"]], r[ix["curve"]], r[ix["policy"]], r[ix["reading"]])].append(r)
+    rows = []
+    for g in groups.values():
+        kept = [g[0]]
+        for i, r in enumerate(g[1:], 1):
+            last = kept[-1]
+            if i == len(g) - 1 or r[ix["target_pct"]] != last[ix["target_pct"]] or \
+                    r[ix["loss"]] <= last[ix["loss"]] * 0.9975:
+                kept.append(r)
+        rows += kept
+    return p | {"rows": rows}
+
+
+def console(P: dict) -> dict:
+    """Each panel cut to the route's body limit (65,536 bytes): P1 thinned, with the band's policies cut to BAND_FEW and
+    then to none if need be; P3 and P4 cut to the reference target if need be. The note says what was cut."""
+    out = {}
+    for pid, p in P.items():
+        tries, drop = [("", lambda r: True)], ()
+        if pid == "p1-loss-vs-compute":
+            drop = ("start_id", "checkpoint", "method", "family")
+            p = thin(p)
+            tries = [("", lambda r: True),
+                     (f" The band here: {', '.join(BAND_FEW)} (the full grid is in the evidence store).",
+                      lambda r: r["curve"] != "covert-policy" or r["policy"] in BAND_FEW),
+                     (" The band here: c=4096w k=100kB and k=1MB, evenly spread (the full grid is in the evidence store).",
+                      lambda r: r["curve"] != "covert-policy" or (r["policy"] in BAND_FEW[:2]
+                                                                  and r["reading"] == "evenly spread")),
+                     (" No band here (the full grid is in the evidence store).", lambda r: r["curve"] != "covert-policy")]
+        elif pid in ("p3-policy-plane", "p4-decomposition"):
+            tries += [(" Only the reference target (-1%) here; every target is in the evidence store.",
+                       lambda r: r["target_pct"] == -100 * REF_TARGET)]
+        for why, keep in tries:
+            q = compact(p, keep, drop)
+            q["note"] = p["note"] + why
+            if len(body(q)) <= BODY_MAX:
+                break
+        out[pid] = q
+    return out
+
+
 def frame(p: dict):
     ix = {c: i for i, c in enumerate(p["columns"])}
     return [{c: r[i] for c, i in ix.items()} for r in p["rows"]]
@@ -444,7 +515,7 @@ def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
         sec.set_xlabel("compute / C0 stub (te_core.policy)", fontsize=8)
         cell = sc[f"{s}|{REF_TARGET}"]
         q = cell["grid"].get(f"spec|{rv.REFERENCE[0]}|{rv.REFERENCE[1]}")
-        ax.set_title(f"{label(s, cy.shapes[s])}, start {cy.l0[s]:.4f} bpb\n−1%: H {fmt(cell['H']['gates'])} gates, "
+        ax.set_title(f"{s} ({label(s, cy.shapes[s])}), start {cy.l0[s]:.4f} bpb\n−1%: H {fmt(cell['H']['gates'])} gates, "
                      f"S {fmt(q['S'])} ({q['mechanism']}, {q['status']})" if q else label(s, cy.shapes[s]), fontsize=9)
         ax.set_xlabel("compute after θ (Boolean gates)")
         ax.set_ylabel("held-out bpb")
@@ -645,7 +716,7 @@ def put_panel(panel: dict) -> str:
     import urllib.request
 
     from research.slack import oidc_token
-    req = urllib.request.Request(f"{PANELS_URL}/{panel['id']}", json.dumps(panel).encode(), method="PUT",
+    req = urllib.request.Request(f"{PANELS_URL}/{panel['id']}", body(panel), method="PUT",
                                  headers={"Authorization": f"Bearer {oidc_token(PANELS_URL)}",
                                           "Content-Type": "application/json"})
     try:
@@ -705,22 +776,26 @@ def main() -> int:
     source = (f"{ids.get('tables', 'unpublished')} (scorer v1cycle {stamp}; rescore_v1.py {commit[:10]}; "
               f"{len(cy.records)} valid v2.3 records, {len(cy.cps)} checkpoints)")
     P = panels(cy, sc, stamp, source)
+    C = console(P)
     paths = plots(cy, P, sc, plots_dir)
     PANELS_DIR.mkdir(parents=True, exist_ok=True)
     plot_of = {"p1": "p1-loss-vs-compute", "p2": "p2-slowdown-vs-gain", "p3": "p3-policy-plane",
                "p4": "p4-decomposition", "a2": "a2-efficiency-floor"}
     for key, pid in plot_of.items():
         (trees[key] / f"{pid}.json").write_text(json.dumps(P[pid], default=float) + "\n")
+        (trees[key] / f"{pid}.console.json").write_bytes(body(C[pid]) + b"\n")
         (trees[key] / paths[key].name).write_bytes(paths[key].read_bytes())
-        (PANELS_DIR / f"{pid}.json").write_text(json.dumps(P[pid], default=float) + "\n")
+        (PANELS_DIR / f"{pid}.json").write_bytes(body(C[pid]) + b"\n")
         (PANELS_DIR / paths[key].name).write_bytes(paths[key].read_bytes())
         if not args.no_publish:
             ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 {pid}", **meta})
     puts = {}
     if not args.no_put:
         for pid in plot_of.values():
-            puts[pid] = put_panel(json.loads(json.dumps(P[pid], default=float)))
+            puts[pid] = put_panel(C[pid])
     summary = meta | {"art": ids, "panels_put": puts, "rows": {k: len(v["rows"]) for k, v in P.items()},
+                      "console_rows": {k: len(v["rows"]) for k, v in C.items()},
+                      "console_bytes": {k: len(body(v)) for k, v in C.items()},
                       "out": str(out)}
     (out / "cycle.json").write_text(json.dumps(summary, indent=1) + "\n")
     line = digest(cy, sc, meta, ids, puts)
