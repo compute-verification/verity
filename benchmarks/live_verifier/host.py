@@ -63,20 +63,22 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610), and `bw_party [--pous-session SID] [--minutes M]` the remote bandwidth audit's P2
+  (`challenger_party.py`, port 47610), and `bw_party [--pous-audit AUDIT] [--minutes M]` the remote bandwidth audit's P2
   party (`verity/core/protocols/remote_bandwidth/p2_party.py`, port 47612, with the registration the host names), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
   and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
   security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
-  on the host, never leaving it. `bw_party`'s registration is the host's, never the caller's: with `--pous-session SID`, the
-  setup the block challenger kept for its PoUS session SID (`<root>/parties/pous/setups/SID.json`, the store that session
-  bound), else the fixture store's in the pinned tree (`PARTY_FIXED`). `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
-  `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host kept it (its signed t0 and
-  t1). A lane
-  never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
-  count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
-  gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
+  on the host, never leaving it. `bw_party`'s registration is the host's, never the caller's: with `--pous-audit AUDIT`
+  (the window's binding, which is public), the setup the block challenger kept for that audit's PoUS session, the store
+  that session bound. Its id is derived on the host from the salt the challenger logged for AUDIT
+  (`<root>/parties/pous/salts`, `setups/<id>.json`), so a caller names a window and never a session. Without the flag,
+  the fixture store's in the pinned tree (`PARTY_FIXED`). `party_key wipe|pous` prints the public half, which the lane
+  pins as `--trusted`, and `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host
+  kept it (its signed t0 and t1). A lane never names a path, an address or an egress count: a session signs `UNCOUNTED`
+  egress until the network certifier's count reaches the host. A session waits for no verifier unit to run, each party
+  serves one session at a time, and the gate kills a party after its session's `--minutes M` (60 by default, at most
+  180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
   evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
@@ -143,8 +145,8 @@ PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611
            "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
-which `bw_party` holds when no PoUS session names its store."""
-SESSION_ID = re.compile(r"[0-9a-f]{64}")
+which `bw_party` holds when no PoUS audit names its store."""
+POUS_AUDIT = re.compile(r"[0-9a-f]{128}")
 PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
 PARTY_MINUTES = (1, 180)
 """A party session's limit (`--minutes M`, 60 by default): the gate kills the party then, so one no prover joined, or whose ssh
@@ -570,19 +572,21 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     """The party's command line for `verb` (`PARTIES`): its module from the pinned tree as `auditor`, its key and session log in
     `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port. A lane names
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
-    `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host;
-    `PARTY_FIXED`'s without it), and nothing of `challenger_party`'s; never a path, an address or an egress count (the
+    `--pous-audit AUDIT` (the registration the block challenger's record of the PoUS session of the window's binding
+    AUDIT gives, its id derived and read on this host; `PARTY_FIXED`'s without it), and nothing of `challenger_party`'s;
+    never a session id, a path, an address or an egress count (the
     session signs UNCOUNTED, which bounds nothing, until the network certifier's count reaches the host)."""
     name, module, port = PARTIES[verb]
     extra: list[str] = []
     args = list(rest)
     while args:
         flag = args.pop(0)
-        if verb == "bw_party" and flag == "--pous-session" and args and "--pous-session" not in extra:
-            sid = args.pop(0)
-            if not SESSION_ID.fullmatch(sid):
-                raise Refused(f"bw_party --pous-session takes a PoUS session id, 64 lowercase hex digits; got {sid!r}")
-            extra += ["--pous-record", str(host.parties / PARTIES["challenger_party"][0]), "--pous-session", sid]
+        if verb == "bw_party" and flag == "--pous-audit" and args and "--pous-audit" not in extra:
+            audit = args.pop(0)
+            if not POUS_AUDIT.fullmatch(audit):
+                raise Refused("bw_party --pous-audit takes the window's binding, 128 lowercase hex digits; "
+                              f"got {audit!r}")
+            extra += ["--pous-record", str(host.parties / PARTIES["challenger_party"][0]), "--pous-audit", audit]
         elif verb == "wipe_party" and flag == "--native" and "--streamer" not in extra:
             extra += ["--streamer", "build"]
         elif verb == "wipe_party" and flag in PARTY_INTS and args and flag not in extra:
@@ -592,7 +596,7 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
                 raise Refused(f"{verb} {flag} takes an integer in [{lo}, {hi}], got {v!r}")
             extra += [flag, v]
         else:
-            takes = {"wipe_party": "[--reads K] [--native] [--threads T]", "bw_party": "[--pous-session SID]"}
+            takes = {"wipe_party": "[--reads K] [--native] [--threads T]", "bw_party": "[--pous-audit AUDIT]"}
             raise Refused(f"{verb} takes {takes.get(verb, 'no flags')}; got {flag!r}")
     if "--threads" in extra and "--streamer" not in extra:
         raise Refused("wipe_party --threads sets the native streamer's threads: give --native too")
@@ -722,7 +726,7 @@ USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC 
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
-         "| bw_party [--pous-session SID] [--minutes M] (the request line on stdin) "
+         "| bw_party [--pous-audit AUDIT] [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
          "| party_log wipe|pous [LOG]")
 

@@ -155,15 +155,17 @@ class Auditor:
     a session log) across a test's runs: a salt request answered by `challenger_party.give_salt` from ``draw``, a
     session refused before it listens as `designate` refuses it (the `RuntimeError` `Side.talk` raises), then served by
     `_in_process_party` with the device's salt log, which `_run` binds into `challenger_party.serve`, and kept in
-    ``keep`` as ``record`` has it. With ``forget``, it serves the request without its audit, under an id of its coins;
-    with ``claim`` too, it reports the audit's id."""
+    ``keep`` as ``record`` has it. With ``keep``, the salt log is there too, as on the host, where the bandwidth party
+    derives the session's id from it. With ``forget``, it serves the request without its audit, under an id of its
+    coins; with ``claim`` too, it reports the audit's id."""
 
     def __init__(self, tmp_path: Path, forget: bool = False, claim: bool = False, keep: Path | None = None,
                  record=lambda request: request, draw=os.urandom) -> None:
         self.signer = ts.TestSigner(b"pous-served-piece", directory=tmp_path)
-        device = Path(tempfile.mkdtemp(prefix="auditor-", dir=tmp_path))
-        mc.SaltLog.create(device / "salts")
-        self.salts, self.log = mc.SaltLog(device / "salts"), ts.session_log(tmp_path)
+        device = keep if keep is not None else Path(tempfile.mkdtemp(prefix="auditor-", dir=tmp_path))
+        device.mkdir(parents=True, exist_ok=True)
+        mc.SaltLog.create(device / CP.SALTS)
+        self.salts, self.log = mc.SaltLog(device / CP.SALTS), ts.session_log(tmp_path)
         self.forget, self.claim, self.draw = forget, claim, draw
         self.serve, self.calls = _in_process_party(self.signer, self.log, keep, record)
         self.sources = []

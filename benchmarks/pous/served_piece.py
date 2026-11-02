@@ -48,13 +48,15 @@ DIR``).
 6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, and before ``C*`` is released, the same
    process runs PoUB-P2's session over the store it holds on the card, so both audits are of one store and no second one
    is encoded. The session's request carried setup's published outputs and P2's parameters (`challenger_party.request_of`'s
-   ``published`` and ``params``), which the challenger kept on its host with the session's id; the bandwidth party there (``--bw-party``, the gate's
-   ``bw_party --pous-session SID`` with ``--bw-minutes`` its cap) builds its registration from that record, never from
-   the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
-   0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
-   case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
-   piece's, `served_bandwidth.py collect`). ``--bw-windows``, ``--bw-passes``, ``--bw-samples`` and ``--bw-window-s``
-   set its length (`held_bandwidth`'s defaults: two minutes); ``--no-bandwidth`` runs none.
+   ``published`` and ``params``), which the challenger kept on its host with the session's id; the bandwidth party there
+   (``--bw-party``, the gate's ``bw_party --pous-audit AUDIT`` with ``--bw-minutes`` its cap, AUDIT the window's
+   binding) builds its registration from that record, never from the prover, the session's id derived there from the
+   salt the challenger logged for the binding, so the prover names the window and never a session. The session's case
+   and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``, 0700), held to PoUS's run case as
+   one store (`p2_case.same_store`); its public answer, under a hiding commitment to the case's digest, to ``--bw-out``
+   (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth piece's,
+   `served_bandwidth.py collect`). ``--bw-windows``, ``--bw-passes``, ``--bw-samples`` and ``--bw-window-s`` set its
+   length (`held_bandwidth`'s defaults: two minutes); ``--no-bandwidth`` runs none.
 
 Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes and the phases' timings) and prints one ``POUS`` line.
 Weights that aren't the pin's are a reject, and a session the challenger's side couldn't complete is undecided, each with
@@ -427,7 +429,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             bandwidth = None
             if bw_party is not None:
                 t = time.monotonic()
-                bw = HB.session(s, node=node, party=bw_party, party_host=bw_host, sid=sid,
+                bw = HB.session(s, node=node, party=bw_party, party_host=bw_host, audit=bind, sid=sid,
                                 request_=bw_request or HB.request(node.encode()), private=bw_private, public=bw_out,
                                 bind=HB.binding(repo, rev, window), window=window, pous_case=pous_case,
                                 case_exe=bw_case_exe)
@@ -486,7 +488,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
     bw = ap.add_argument_group("the bandwidth session over the held store (held_bandwidth.py)")
     bw.add_argument("--bw-party", default=BW_PARTY, help="the shell command that starts the bandwidth party (the gate's "
-                                                         "bw_party verb), to which --minutes and --pous-session are added")
+                                                         "bw_party verb), to which --minutes and --pous-audit are "
+                                                         "added")
     bw.add_argument("--bw-host", default=BW_PARTY_HOST, help="where the party's port is reached from here")
     bw.add_argument("--bw-minutes", type=int, default=BW_MINUTES, help="the party's minutes, the gate's cap on the session")
     bw.add_argument("--bw-windows", type=int, default=HB.WINDOWS)

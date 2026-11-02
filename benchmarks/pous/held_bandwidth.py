@@ -4,11 +4,12 @@ session and before the store is released, so both audits are of one store that o
 is encoded.
 
 **The registration** is the auditor's, never the prover's: the bandwidth party (the auditor gate's ``bw_party
---pous-session SID``) builds it from the memory challenger's own record of PoUS session SID on its host
-(`challenger_party.keep`, `p2_party.pous_record`): the node, P2's parameters, setup's commitment and salt as the request
-declared them before that session, and the root the session bound. Its plan is the whole store. The prover's `Held`
-refuses a registration that isn't its store's (`hold`), and the session's case names the root (`p2_case.store_root`),
-which `p2_case.same_store` holds to PoUS's run case.
+--pous-audit AUDIT``, AUDIT the window's binding) builds it from the memory challenger's own record of that audit's
+PoUS session on its host (`challenger_party.keep`, `p2_party.pous_record`): the node, P2's parameters, setup's
+commitment and salt as the request declared them before that session, and the root the session bound. The host derives
+the session's id from the salt it logged for AUDIT, so the prover names the window and never a session. Its plan is the
+whole store. The prover's `Held` refuses a registration that isn't its store's (`hold`), and the session's case names
+the root (`p2_case.store_root`), which `p2_case.same_store` holds to PoUS's run case.
 
 **A pass** reads every unit of the plan from ``C*``'s rows on their device: σ by the exact int8 product against the
 pass's signs (`p2_v1.bandwidth.Sketch`), y on the device (`receipts_of`), a few units held to `p2.Sketcher` (`spot`), and
@@ -217,21 +218,24 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
     return out | {"public": public, "profile": profile}
 
 
-def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, request_: Mapping[str, Any],
-            private: Path, public: Path, bind: bytes, window: int, pous_case: Mapping[str, Any] | None = None,
-            case_exe: str | None = None, r_bytes_per_s: int | None = R_BYTES_PER_S) -> dict[str, Any]:
+def session(store: Any, *, node: str, party: str, party_host: str, audit: bytes, sid: bytes,
+            request_: Mapping[str, Any], private: Path, public: Path, bind: bytes, window: int,
+            pous_case: Mapping[str, Any] | None = None, case_exe: str | None = None,
+            r_bytes_per_s: int | None = R_BYTES_PER_S) -> dict[str, Any]:
     """One PoUB-P2 session over the held `store` with the bandwidth party `party` (a shell command, to which
-    ``--pous-session`` and PoUS's session id `sid` are added; its port reached at `party_host`), under `request_`: the
-    case and everything naming the store to `private` (0700, files 0600), the public answer and a summary to `public`
-    (``answer.json``, ``bandwidth.json``); the public answer, also returned. With `pous_case` (PoUS's run case), a case
-    whose store isn't PoUS's (`p2_case.same_store`) is refused."""
+    ``--pous-audit`` and the window's binding `audit` are added; its port reached at `party_host`), under `request_`:
+    the case and everything naming the store to `private` (0700, files 0600), with `sid`, PoUS's session id, the one the
+    party derives from `audit`; the public answer and a summary to `public` (``answer.json``, ``bandwidth.json``); the
+    public answer, also returned. With `pous_case` (PoUS's run case), a case whose store isn't PoUS's
+    (`p2_case.same_store`) is refused."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(private, 0o700)
     public.mkdir(parents=True, exist_ok=True)
     scope = SCOPE.format(k=window)
-    command = f"{party} --pous-session {sid.hex()}"
+    command = f"{party} --pous-audit {audit.hex()}"
     summary: dict[str, Any] = {"window": window, "request": dict(request_), "party_host": party_host,
-                               "pous_session": "the PoUS session the PoUS piece ran (its id private)",
+                               "pous_session": "the PoUS session of the window's binding, its id derived on the "
+                                               "auditor's host (private)",
                                "private": str(private), "judge": "lean" if case_exe else "python"}
     with open(private / "prover.log", "a") as log_f:
 
@@ -255,7 +259,7 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
         "answer": answer, "verifier_record": record, "verifier_rc": rc, "request": dict(request_),
         "registration": None if prover is None else p2_party.registration_json(prover.registration, prover.plan),
         "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
-        "pous_session": sid.hex(), "party": command, "party_host": party_host}, 0o600)
+        "pous_audit": audit.hex(), "pous_session": sid.hex(), "party": command, "party_host": party_host}, 0o600)
     summary |= {"setup_s": None if setup_s is None else round(setup_s, 3), "session_wall_s": round(wall, 3),
                 "verifier_rc": rc, "passes": len(prover.steps) if prover else 0,
                 "pass_s": [s["pass_s"] for s in prover.steps] if prover else []}

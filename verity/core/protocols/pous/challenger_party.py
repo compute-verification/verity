@@ -56,7 +56,9 @@ outputs without it before it listens. Each session the challenger completes is k
 `DIR/setups/<session id>.json` (0700, the file 0600: `keep`), the request and the id it designated, so a kept setup is
 always an audit's, under `session_id` of its audit, commitment and salt: the auditor's record of that window's setup,
 from which the remote bandwidth audit's verifier on the same host builds its registration
-(`remote_bandwidth.p2_party --pous-record`), never from a file the prover sends.
+(`remote_bandwidth.p2_party --pous-record DIR --pous-audit AUDIT`), never from a file the prover sends. It is named by
+the window's binding alone, and the id is derived there from the salt log (`DIR/salts`), so no session id crosses from
+the prover.
 """
 
 from __future__ import annotations
@@ -112,7 +114,7 @@ MANIFEST = Manifest(
               Channel(PROVER, CHALLENGER, ("Block",))),
     messages=(Schema("Warmup", 1, "structure", {"index": Int()}), Schema("Index", 1, "coins", {"index": Int()}),
               Schema("End", 1, "structure"), Schema("Block", 1, "private", body=Body(max=MAX_BLOCK))))
-SETUPS = "setups"
+SETUPS, SALTS = "setups", "salts"
 PARAMS = ("blocks_per_segment", "c0", "expander", "segments", "w")
 
 
@@ -477,10 +479,10 @@ def _logs(device: Path) -> tuple[mc.SaltLog, mc.SessionLog]:
     device.mkdir(parents=True, exist_ok=True)
     with open(device / "device.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        for name, log in (("salts", mc.SaltLog), ("sessions", mc.SessionLog)):
+        for name, log in ((SALTS, mc.SaltLog), ("sessions", mc.SessionLog)):
             if not (device / name).exists():
                 log.create(device / name)
-    return mc.SaltLog(device / "salts"), mc.SessionLog(device / "sessions")
+    return mc.SaltLog(device / SALTS), mc.SessionLog(device / "sessions")
 
 
 def _refused(e: BaseException) -> int:
@@ -523,9 +525,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 __all__ = ["AUDIT_BYTES", "CHALLENGER", "COIN_BYTES", "END", "ID", "MANIFEST", "PARAMS", "PREMISE", "PROTOCOL", "PROVER",
-           "SESSION_ID_TAG", "SETUPS", "SOURCE_BYTES", "VERSION", "WARMUPS", "WARMUP_INDEX", "Challenger", "Frames",
-           "Prover", "Refusal", "answer", "command", "designate", "give_salt", "keep", "main", "placement", "report",
-           "request_of", "salt", "serve", "session", "session_id", "setup_of", "side_of"]
+           "SALTS", "SESSION_ID_TAG", "SETUPS", "SOURCE_BYTES", "VERSION", "WARMUPS", "WARMUP_INDEX", "Challenger",
+           "Frames", "Prover", "Refusal", "answer", "command", "designate", "give_salt", "keep", "main", "placement",
+           "report", "request_of", "salt", "serve", "session", "session_id", "setup_of", "side_of"]
 
 if __name__ == "__main__":
     sys.exit(main())

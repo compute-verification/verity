@@ -4,10 +4,12 @@ so they run on a host the prover doesn't control (`trusted-host`) while the prov
 The channel is a pair of byte streams carrying one JSON object of one key a line: the ssh session that starts this side
 (`--stdio`, as a gate's verb starts it) or a TCP connection (`--listen`). The session has no round-trip floor, so ssh's
 latency changes nothing in its verdict. The verifier holds its own registration, never the prover's word for it: the
-memory challenger's own record of a PoUS session's setup on this host (`--pous-record DIR --pous-session SID`,
-`pous_record`: the store PoUS's session SID bound, its whole store the plan, refused unless SID is an audit's session,
-`challenger_party.session_id` of the audit and the commitment and salt the challenger logged for it), or the auditor's
-registration file (`--registration FILE`, `registration_json`); and it draws its coins from its own host's OS.
+memory challenger's own record of a PoUS session's setup on this host (`--pous-record DIR --pous-audit AUDIT`,
+`pous_record`: the store bound by the PoUS session of the window's binding AUDIT, its whole store the plan), or the
+auditor's registration file (`--registration FILE`, `registration_json`); and it draws its coins from its own host's
+OS. The record's session id is derived on this host, `challenger_party.session_id` of AUDIT and the commitment and salt
+the challenger logged for it, so the prover names the window, which is public, and never a session: no other window's
+session is reachable, and a record whose own audit isn't AUDIT is refused.
 The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
 padding past the last tensor, which is PoUS's and which the decode never reads; without one, every unit.
 
@@ -42,7 +44,7 @@ event beside it and can only veto (`Twin`): an event, a held store or an answer 
 Lean answers with an error, rejects the session `disagreement` at that window, and no event follows it. What the
 Lean takes as given is the clock's readings and the coins the challenger (`coins.local`, on this host) releases.
 
-`python -m verity.core.protocols.remote_bandwidth.p2_party (--registration FILE | --pous-record DIR --pous-session SID)
+`python -m verity.core.protocols.remote_bandwidth.p2_party (--registration FILE | --pous-record DIR --pous-audit AUDIT)
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE]` is the verifier's side
 (`main`), each session with fresh coins, the
 Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
@@ -204,16 +206,33 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
     return p2.Registration(request["node"].encode(), p2.codec_of(params), commitment, salt, _unhex(request["binding"]))
 
 
-def pous_record(directory: Path, session_id: str) -> bytes:
+def pous_record(directory: Path, audit: str) -> bytes:
     """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory challenger whose
-    device is `directory` kept for the session `session_id` (64 lowercase hex), on this host (`registration_of_setup`)."""
+    device is `directory` kept, on this host, for the PoUS session of the audit `audit`: the window's binding, 128
+    lowercase hex (`served_piece.binding`, public). The session's id is derived here, `challenger_party.session_id` of
+    the audit and the commitment and salt the challenger logged for it (`memory_challenger.SaltLog`, one an audit), and
+    never taken from the prover, so no other window's session is reachable. ValueError when the challenger drew no salt
+    for the audit, kept no session under that id, or kept one `registration_of_setup` refuses: among them a record
+    whose own audit isn't `audit`."""
     from verity.core.protocols.pous import challenger_party as CP
+    from verity.core.protocols.pous import memory_challenger as mc
 
-    if not re.fullmatch(r"[0-9a-f]{64}", session_id):
-        raise ValueError("a session id is 64 lowercase hex digits")
-    doc = json.loads((directory / CP.SETUPS / f"{session_id}.json").read_text())
-    if doc.get("session_id") != session_id:
-        raise ValueError(f"the record names the session {doc.get('session_id')}, not {session_id}")
+    if not re.fullmatch(r"[0-9a-f]{128}", audit):
+        raise ValueError("a PoUS audit is the window's binding, 128 lowercase hex digits")
+    try:
+        logged = mc.SaltLog(directory / CP.SALTS).get(bytes.fromhex(audit))
+    except mc.SessionLogError as e:
+        raise ValueError(f"the memory challenger's salt log on this host is unreadable: {e}") from None
+    if logged is None:
+        raise ValueError(f"the memory challenger on this host drew no salt for audit {audit}: no PoUS session of the "
+                         "window ran here")
+    sid = CP.session_id(bytes.fromhex(audit), *logged).hex()
+    path = directory / CP.SETUPS / f"{sid}.json"
+    if not path.is_file():
+        raise ValueError(f"the memory challenger on this host kept no session for audit {audit}")
+    doc = json.loads(path.read_text())
+    if doc.get("session_id") != sid:
+        raise ValueError(f"the memory challenger's record for audit {audit} names another session")
     return json.dumps(registration_json(registration_of_setup(doc)), sort_keys=True).encode()
 
 
@@ -743,8 +762,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     held = ap.add_mutually_exclusive_group(required=True)
     held.add_argument("--registration", type=Path, help="the auditor's registration with its plan (registration_json)")
     held.add_argument("--pous-record", type=Path, help="the memory challenger's device on this host, whose record of "
-                                                       "--pous-session's setup is the registration (pous_record)")
-    ap.add_argument("--pous-session", help="with --pous-record: the PoUS session id (64 hex) whose setup is the store")
+                                                       "--pous-audit's session's setup is the registration "
+                                                       "(pous_record)")
+    ap.add_argument("--pous-audit", help="with --pous-record: the window's binding (128 hex), whose PoUS session's "
+                                         "setup is the store, its id derived from the challenger's salt log")
     where = ap.add_mutually_exclusive_group(required=True)
     where.add_argument("--stdio", action="store_true", help="the channel is this process's stdin and stdout")
     where.add_argument("--listen", help="HOST:PORT to accept provers on (port 0: any, printed as {\"listening\"})")
@@ -762,9 +783,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
     a = ap.parse_args(argv)
-    if (a.pous_record is None) != (a.pous_session is None):
-        ap.error("--pous-record and --pous-session go together")
-    data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_session)
+    if (a.pous_record is None) != (a.pous_audit is None):
+        ap.error("--pous-record and --pous-audit go together")
+    data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_audit)
     cases = None
     if a.device is not None:
         a.device.mkdir(parents=True, exist_ok=True)

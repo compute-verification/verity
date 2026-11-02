@@ -21,6 +21,9 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.pous import challenger_party as CP
+from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.protocols.pous import run as R
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.remote_bandwidth import coins, p2, p2_lean, p2_party, receipts
@@ -294,43 +297,92 @@ def test_a_lean_that_holds_another_store_is_refused(exe, store) -> None:
             p2_party.hold(lean, data)
 
 
-def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names(store, tmp_path) -> None:
-    """`--pous-record DIR --pous-session SID`: the registration of the setup the memory challenger kept for PoUS session
-    SID (`challenger_party.keep`), its whole store the plan, SID its audit's (`challenger_party.session_id`); refused for
-    an id out of form, a record of another session, one without a setup, one kept under an id that isn't its audit's,
-    and one whose request carries a setup but names no audit, so its commitment and salt may be the prover's own."""
-    from verity.core.protocols.pous import challenger_party as CP
-    from verity.core.protocols.pous import run as R
+def _challenger(device: Path) -> tuple[mc.SaltLog, mc.SessionLog]:
+    """The memory challenger's salt log and session log on its host, as `challenger_party` makes them in its device."""
+    device.mkdir(parents=True, exist_ok=True)
+    mc.SaltLog.create(device / CP.SALTS)
+    mc.SessionLog.create(device / "sessions")
+    return mc.SaltLog(device / CP.SALTS), mc.SessionLog(device / "sessions")
 
+
+def _ran(device: Path, salts: mc.SaltLog, sessions: mc.SessionLog, params: P2Params, setup: R.Setup,
+         audit: bytes) -> tuple[bytes, dict]:
+    """A PoUS session of `audit` at P2's `params` that the challenger on `device` ran over `setup`, as
+    `challenger_party.main` runs one: designated against the salt it logged for the audit (`designate`), its id claimed
+    and its record kept (`keep`); its id and request."""
+    request = CP.request_of(NODE.decode(), R.Point(params, 1, 1), setup.root, audit=audit, published=setup)
+    sid = CP.designate(request, salts, sessions)
+    sessions.claim(sid)
+    CP.keep(device, sid, request)
+    return sid, request
+
+
+def test_the_registration_is_the_challengers_record_of_the_windows_pous_session(store, tmp_path) -> None:
+    """`--pous-record DIR --pous-audit AUDIT`: the registration of the setup the memory challenger kept for the PoUS
+    session of the window's binding AUDIT, its id derived from the salt the challenger logged for AUDIT
+    (`challenger_party.session_id`), its whole store the plan; refused for an audit out of form (a session id among
+    them), a host whose challenger drew no salt for it or kept no session of it, and a record under the derived id that
+    names another session, has no setup, carries a setup on a request naming no audit (so its commitment and salt may
+    be the prover's own), or is of another audit."""
     reg = store.registration
-    q = reg.params
-    point = R.Point(q, 1, 1)
     audit = hashlib.sha512(b"a window's binding").digest()
-    request = CP.request_of(NODE.decode(), point, reg.root, audit=audit,
-                            published=R.Setup(q.blocks, reg.commitment, reg.root, reg.salt))
-    sid = CP.session_id(audit, reg.commitment, reg.salt)
-    CP.keep(tmp_path, sid, request)
-    doc = json.loads(p2_party.pous_record(tmp_path, sid.hex()))
+    with pytest.raises(ValueError, match="salt log on this host is unreadable"):
+        p2_party.pous_record(tmp_path, audit.hex())
+    salts, sessions = _challenger(tmp_path)
+    with pytest.raises(ValueError, match="drew no salt for audit"):
+        p2_party.pous_record(tmp_path, audit.hex())
+    salts.record(audit, reg.commitment, reg.salt)
+    with pytest.raises(ValueError, match="kept no session for audit"):
+        p2_party.pous_record(tmp_path, audit.hex())
+    sid, request = _ran(tmp_path, salts, sessions, reg.params,
+                        R.Setup(reg.params.blocks, reg.commitment, reg.root, reg.salt), audit)
+    doc = json.loads(p2_party.pous_record(tmp_path, audit.hex()))
     assert p2_party.registration_of(doc) == reg and p2_party.plan_of(doc, reg) == receipts.Plan.whole(reg.blocks)
     assert "plan" not in doc
-    with pytest.raises(ValueError, match="64 lowercase hex"):
-        p2_party.pous_record(tmp_path, "../" + sid.hex()[3:])
-    other = bytes(32)
-    (tmp_path / CP.SETUPS / f"{other.hex()}.json").write_text(json.dumps({"request": request, "session_id": sid.hex()}))
-    with pytest.raises(ValueError, match="names the session"):
-        p2_party.pous_record(tmp_path, other.hex())
-    bare = b"\x01" * 32
-    CP.keep(tmp_path, bare, CP.request_of(NODE.decode(), point, reg.root))
-    with pytest.raises(ValueError, match="has no setup"):
-        p2_party.pous_record(tmp_path, bare.hex())
-    unaudited = hashlib.sha512(b"an id of the challenger's coins").digest()[:32]
-    CP.keep(tmp_path, unaudited, request)
-    with pytest.raises(ValueError, match=r"not of its audit's session: its id is not session_id"):
-        p2_party.pous_record(tmp_path, unaudited.hex())
-    with pytest.raises(ValueError, match=r"not of its audit's session"):
-        p2_party.registration_of_setup({"request": request | {"audit": hashlib.sha512(b"another").hexdigest()},
-                                        "session_id": sid.hex()})
-    prover = b"\x02" * 32
-    CP.keep(tmp_path, prover, {k: v for k, v in request.items() if k != "audit"})
-    with pytest.raises(ValueError, match="ride only on a request naming its audit"):
-        p2_party.pous_record(tmp_path, prover.hex())
+    for bad in (sid.hex(), audit.hex().upper(), "../" + audit.hex()[3:]):
+        with pytest.raises(ValueError, match="128 lowercase hex"):
+            p2_party.pous_record(tmp_path, bad)
+    path = tmp_path / CP.SETUPS / f"{sid.hex()}.json"
+    bare = CP.request_of(NODE.decode(), R.Point(reg.params, 1, 1), reg.root)
+    for kept, why in [({"request": request, "session_id": bytes(32).hex()}, "names another session"),
+                      ({"request": bare, "session_id": sid.hex()}, "has no setup"),
+                      ({"request": {k: v for k, v in request.items() if k != "audit"}, "session_id": sid.hex()},
+                       "ride only on a request naming its audit"),
+                      ({"request": request | {"audit": hashlib.sha512(b"another window").hexdigest()},
+                        "session_id": sid.hex()}, "not of its audit's session: its id is not session_id")]:
+        path.write_text(json.dumps(kept))
+        with pytest.raises(ValueError, match=why):
+            p2_party.pous_record(tmp_path, audit.hex())
+
+
+def test_an_earlier_windows_session_on_the_host_is_never_this_windows_store(store, tmp_path) -> None:
+    """The challenger on this host ran an earlier window's PoUS session over another store: its salt drawn after that
+    store's commitment (`give_salt`), the session `designate`d and kept. This window's bandwidth session never holds
+    that store: the earlier session's id is no audit, and this window's audit is refused until the challenger drew a
+    salt for it and kept its session, and refused when the record under its id is the earlier window's; once this
+    window's session is kept, each window's audit gives its own session's store."""
+    reg = store.registration
+    earlier, window = (hashlib.sha512(b"window %d's binding" % k).digest() for k in (1, 2))
+    salts, sessions = _challenger(tmp_path)
+    commitment, root = (hashlib.sha512(b"the earlier store's " + x).digest() for x in (b"commitment", b"root"))
+    CP.give_salt(salts, {"audit": earlier.hex(), "commitment": commitment.hex()}, draw=Entropy(b"the earlier source"))
+    _, salt = salts.get(earlier)
+    earlier_sid, earlier_request = _ran(tmp_path, salts, sessions, reg.params,
+                                        R.Setup(reg.params.blocks, commitment, root, salt), earlier)
+    with pytest.raises(ValueError, match="128 lowercase hex"):
+        p2_party.pous_record(tmp_path, earlier_sid.hex())
+    with pytest.raises(ValueError, match=f"drew no salt for audit {window.hex()}"):
+        p2_party.pous_record(tmp_path, window.hex())
+    salts.record(window, reg.commitment, reg.salt)
+    with pytest.raises(ValueError, match=f"kept no session for audit {window.hex()}"):
+        p2_party.pous_record(tmp_path, window.hex())
+    sid = CP.session_id(window, reg.commitment, reg.salt)
+    planted = CP.keep(tmp_path, sid, earlier_request)
+    with pytest.raises(ValueError, match="not of its audit's session"):
+        p2_party.pous_record(tmp_path, window.hex())
+    planted.unlink()
+    assert _ran(tmp_path, salts, sessions, reg.params,
+                R.Setup(reg.params.blocks, reg.commitment, reg.root, reg.salt), window)[0] == sid
+    assert p2_party.registration_of(json.loads(p2_party.pous_record(tmp_path, window.hex()))) == reg
+    held = p2_party.registration_of(json.loads(p2_party.pous_record(tmp_path, earlier.hex())))
+    assert (held.commitment, held.salt, held.root) == (commitment, salt, root) != (reg.commitment, reg.salt, reg.root)
