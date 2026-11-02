@@ -183,17 +183,19 @@ def findings(text: str) -> list[tuple[str, int]]:
     return [(kind, text.count("\n", 0, at) + 1) for kind, at in sorted(found, key=lambda x: x[1])]
 
 
-def scan(files: list[str], read=lambda f: (ROOT / f).read_text(encoding="utf-8", errors="replace")) -> dict[str, list]:
+def _read(f: str) -> str | None:
+    """The text of tracked file ``f``, or None when it is deleted in the working tree or a submodule's directory."""
+    path = ROOT / f
+    return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None
+
+
+def scan(files: list[str], read=_read) -> dict[str, list]:
     """{file: its findings} for each scanned file that has some."""
     out = {}
     for f in files:
         if f in _SKIP or os.path.splitext(f)[1] in _BINARY:
             continue
-        try:
-            text = read(f)
-        except (FileNotFoundError, IsADirectoryError):
-            continue
-        if found := findings(text):
+        if (text := read(f)) and (found := findings(text)):
             out[f] = found
     return out
 
