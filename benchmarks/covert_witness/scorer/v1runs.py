@@ -1,6 +1,6 @@
 """The console's A2 and P4 with one row per valid run (coordinator 20:52Z, the dashboard's request), from te_core's rows.
 
-    python v1runs.py --out DIR --scorer STATE [--root LEDGER] [--pin COMMIT ...]
+    python v1runs.py --out DIR --scorer STATE [--root LEDGER] [--pin COMMIT ...] [--final FINAL_DIR] [--prefix P]
 
 Run from benchmarks/covert_witness of te_core's checkout (v1cycle's RESCORE_WT), with DIR the directory
 `python -m te_core.rescore` just wrote (its analysis-gates.json cache is reused). te_core.rescore's A2 is the floor's
@@ -8,8 +8,9 @@ staircase and its P4 one point per algorithm; the console draws the floor itself
 so these carry one row per run, target and reading, at the run's least-compute checkpoint reaching the target, with
 `variant` (the run's launch note) so a method's runs join. Every number is te_core's: the rows are te_core.plots.load's
 (rescore_v1.py's quantities attached by te_core.rescore, Fit and rho under both readings by te_core.formalism, H by
-te_core.frontier.target), selected here, not re-scored. Writes DIR/runs-a2-efficiency-floor.json and
-DIR/runs-p4-decomposition.json, each a whole panel in the route's form.
+te_core.frontier.target), selected here, not re-scored. With --final, the rows carry FINAL_DIR's final values as
+v1final.py gives them to te_core.rescore. Writes DIR/<P>a2-efficiency-floor.json and DIR/<P>p4-decomposition.json (P
+default runs-), each a whole panel in the route's form.
 """
 import argparse
 import json
@@ -64,7 +65,7 @@ def panels(sts: list[plots.Start], var: dict, readings, ctx: dict) -> dict[str, 
                     a2.append(head + sizes)
                     s = r["rho_by"][name][st.ref]
                     p4.append(head + [g, r["gates"] / h if h else None, s, r["gates"] * s / h if h else None,
-                                      plots.basis(r, st.ref), 1] + sizes)
+                                      plots.basis(r, st.ref), len(r["seeds"]) if r.get("seeds") else 1] + sizes)
     every = ("one row per valid run, target and reading, at the run's least-compute checkpoint reaching the target "
              "(over every checkpoint of every valid record, 19:50Z); variant = the run's launch note")
     return {
@@ -80,7 +81,7 @@ def panels(sts: list[plots.Start], var: dict, readings, ctx: dict) -> dict[str, 
             "p4-decomposition", "p against s per run at the reference policy", HEAD + ["g", "p", "s", "S", "basis",
                                                                                         "seeds"] + SIZES, p4,
             f"Per start and target, {every}; p = |C|/H with H over every checkpoint of every valid record, s = rho at "
-            "the reference policy (1 by Fit, else Slowdown's bound floored at 1), S = p s. One seed per point.", ctx)}
+            "the reference policy (1 by Fit, else Slowdown's bound floored at 1), S = p s; seeds = the point's.", ctx)}
 
 
 def main(argv=None) -> int:
@@ -90,9 +91,14 @@ def main(argv=None) -> int:
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--pin", action="append", default=None)
     ap.add_argument("--source", default="")
+    ap.add_argument("--final", type=Path, default=None, help="score with FINAL_DIR's final values (v1final.final_rows)")
+    ap.add_argument("--prefix", default="runs-", help="the written files' prefix")
     a = ap.parse_args(argv)
     ledger = Ledger(a.root)
     rows = ledger.index()
+    if a.final:
+        from v1final import final_rows
+        rows = final_rows(rows, a.final, a.scorer)[0]
     pin = tuple(a.pin) if a.pin else frontier.pinned()
     shapes = policy.starts()
     blocks = rescore.analysed(rescore.ANALYSIS, a.scorer, ledger.root, a.out / "analysis-gates.json")
@@ -105,7 +111,7 @@ def main(argv=None) -> int:
             "bounds: " + "; ".join(f"{s} ({n} rows)" for s, n in sorted(stubs.items())) + ".")
     ctx = {"stamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": a.source, "tail": tail}
     for name, p in panels(sts, variants(a.scorer), formalism.READINGS, ctx).items():
-        (a.out / f"runs-{name}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
+        (a.out / f"{a.prefix}{name}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
         print(f"{name}: {len(p['rows'])} rows")
     return 0
 

@@ -65,6 +65,7 @@ BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
 LEAN = ("start_id", "checkpoint", "method", "family")
 RUNS_LEAN = ("start_id", "record", "checkpoint", "size", "saturation", "compute_frac", "g", "seeds")
 PER_RUN_PANELS = ("a2-efficiency-floor", "p4-decomposition")
+FINAL_TITLE = "FINAL (sealed shard: FINAL entries' 3-seed means, other records at the same drop): "
 VARIANT_LABEL = 40
 
 
@@ -95,17 +96,19 @@ def rescore_head() -> str:
     return commit
 
 
-def rescore(out: Path, gates: Path) -> str:
-    """te_core.rescore into `out` (module docstring, 2); returns its last line."""
+def rescore(out: Path, gates: Path, final: Path | None = None) -> str:
+    """te_core.rescore into `out` (module docstring, 2), through v1final.py with FINAL_DIR's values for `final`, and
+    v1runs.py's per-run A2 and P4 (in final mode also the search's, prefixed search-runs-); returns its last line."""
     out.mkdir(parents=True, exist_ok=True)
     if gates.exists() and not (out / "analysis-gates.json").exists():
         (out / "analysis-gates.json").write_bytes(gates.read_bytes())
     ledger = os.environ.get("TE_LEDGER", str(Path.home() / ".research" / "te-ledger"))
-    cmd = [sys.executable, "-m", "te_core.rescore", "--out", str(out), "--root", ledger, "--scorer", str(S.STATE)]
-    cmd += [x for p in PINS for x in ("--pin", p)]
-    runs = [sys.executable, str(HERE / "v1runs.py"), *cmd[3:]]
+    args = ["--out", str(out), "--root", ledger, "--scorer", str(S.STATE), *(x for p in PINS for x in ("--pin", p))]
+    runs = [sys.executable, str(HERE / "v1runs.py"), *args]
+    cmds = ([[sys.executable, str(HERE / "v1final.py"), str(final), *args], [*runs, "--final", str(final)],
+             [*runs, "--prefix", "search-runs-"]] if final else [[sys.executable, "-m", "te_core.rescore", *args], runs])
     logs = []
-    for c in (cmd, runs):
+    for c in cmds:
         r = subprocess.run(c, cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True,
                            check=False)
         logs.append(r.stdout + r.stderr)
@@ -168,7 +171,7 @@ def thin(p: dict) -> dict:
     return p | {"rows": rows}
 
 
-def console(P: dict) -> dict:
+def console(P: dict, final: bool = False) -> dict:
     """Each panel cut to the route's limits (a body of BODY_MAX bytes, a note of NOTE_MAX characters): the short note,
     and the first of its cuts that fits, which the note names. Every cut keeps both readings, except A2's second and
     third, whose rows agree under both (A2 reads no rho) and so are one row each, `reading` both."""
@@ -206,9 +209,10 @@ def console(P: dict) -> dict:
                       (*RUNS_LEAN, "fit_run_k_bits", "fit_train_k_bits"), variant_label),
                      (" Here -1% only.", ref, RUNS_LEAN, variant_label),
                      (" Here -1% only, no variant.", ref, (*RUNS_LEAN, "variant"), None)]
+        common = COMMON.replace(" One seed.", "") if final else COMMON
         for why, keep, drop, fix in tries:
             q = compact(p, keep, drop, fix)
-            note = f"{SHORT[pid]}{why} {COMMON}"
+            note = f"{SHORT[pid]}{why} {common}"
             q["note"] = note if len(note) <= NOTE_MAX else note[:NOTE_MAX - 1] + "…"
             if len(body(q)) <= BODY_MAX:
                 break
@@ -257,17 +261,18 @@ def main() -> int:
     ap.add_argument("--no-put", action="store_true")
     ap.add_argument("--no-post", action="store_true")
     ap.add_argument("--reput", type=Path, metavar="OUT", help="re-cut a refresh's full panels (OUT/publish) and PUT them")
-    ap.add_argument("--final", type=Path, metavar="FINAL_DIR", help="the final table (not yet on te_core.rescore)")
+    ap.add_argument("--final", type=Path, metavar="FINAL_DIR",
+                    help="the final table: te_core.rescore with FINAL_DIR's values (scorer.py final table; v1final.py); "
+                         "posts FINAL-TABLE, not DIGEST")
     args = ap.parse_args()
     if args.reput:
         return reput(args.reput)
-    if args.final:
-        raise SystemExit("v1cycle --final: the final table isn't on te_core.rescore yet")
-    stamp = now()
-    out = args.out or Path("/tmp/scorer/v1") / stamp.replace(":", "")
+    stamp, final = now(), args.final
+    out = args.out or Path("/tmp/scorer/v1") / f"{'final-' if final else ''}{stamp.replace(':', '')}"
     commit = rescore_head()
-    last = rescore(out / "rescore", args.gates)
+    last = rescore(out / "rescore", args.gates, final)
     rs = out / "rescore"
+    what = "final table" if final else "refresh"
     fr = json.loads((rs / "frontier.json").read_text())
     scored = [json.loads(line) for line in (rs / "formalism.jsonl").open()]
     runs, n2 = {r["run_id"] for r in scored}, night2_runs()
@@ -279,18 +284,32 @@ def main() -> int:
         t.mkdir(parents=True, exist_ok=True)
     for name in ("frontier.md", "frontier.json", "formalism.jsonl", "rescore.log"):
         (trees["tables"] / name).write_bytes((rs / name).read_bytes())
+    fin = json.loads((rs / "final_rows.json").read_text()) if final else None
+    if final:
+        ents = fin["entries"]
+        meta |= {"final": str(final), "entries": len(ents), "entries_matched": sum(e["matched"] > 0 for e in ents.values()),
+                 "final_checkpoints": len(fin["rows"])}
+        (trees["tables"] / "final.md").write_text(final_md(rs, fin, json.loads((final / "table.json").read_text())))
+        (trees["tables"] / "final_rows.json").write_bytes((rs / "final_rows.json").read_bytes())
+        for name in ("table.md", "table.json", "final_submissions.json", "results.jsonl", "plan.json"):
+            if (final / name).exists():
+                (trees["tables"] / f"scorer-final-{name}").write_bytes((final / name).read_bytes())
     (trees["tables"] / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
     ids = {}
     if not args.no_publish:
-        ids["tables"] = put_data(trees["tables"], "evidence/v1", {"what": "te formalism v1 refresh: te_core.rescore's "
+        ids["tables"] = put_data(trees["tables"], "evidence/v1", {"what": f"te formalism v1 {what}: te_core.rescore's "
                                                                           "frontier and per-checkpoint blocks", **meta})
-    source = (f"{ids.get('tables', 'unpublished')[:16]} (scorer v1cycle {stamp}: te_core.rescore {commit[:10]}, "
-              f"{len(scored)} valid v2.3 checkpoints)")
+    source = (f"{ids.get('tables', 'unpublished')[:16]} (scorer v1cycle {what} {stamp}: te_core.rescore "
+              f"{commit[:10]}, {len(scored)} valid v2.3 checkpoints)")
     P = {}
     for pid in PLOT_OF.values():
         own = rs / (f"runs-{pid}.json" if pid in PER_RUN_PANELS else f"{pid}.json")
         P[pid] = json.loads(own.read_text()) | {"source": source}
-    C = console(P)
+        if final:
+            P[pid]["title"] = FINAL_TITLE + P[pid]["title"]
+    if final:
+        P["p1-loss-vs-compute"] = seeds_range(P["p1-loss-vs-compute"], fin["rows"])
+    C = console(P, bool(final))
     PANELS_DIR.mkdir(parents=True, exist_ok=True)
     for key, pid in PLOT_OF.items():
         if pid in PER_RUN_PANELS:
@@ -301,7 +320,7 @@ def main() -> int:
         (PANELS_DIR / f"{pid}.json").write_bytes(body(C[pid]) + b"\n")
         (PANELS_DIR / f"{pid}.png").write_bytes((rs / f"{pid}.png").read_bytes())
         if not args.no_publish:
-            ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 refresh {pid}", **meta})
+            ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 {what} {pid}", **meta})
     puts = {} if args.no_put else {pid: put_panel(C[pid]) for pid in PLOT_OF.values()}
     summary = meta | {"art": ids, "panels_put": puts, "rows": {k: len(v["rows"]) for k, v in P.items()},
                       "console_rows": {k: len(v["rows"]) for k, v in C.items()},
@@ -312,8 +331,63 @@ def main() -> int:
     print(json.dumps(summary))
     print(line)
     if not args.no_post and not args.no_publish:
-        subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "DIGEST", line], check=True)
+        subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "FINAL-TABLE" if final else "DIGEST", line],
+                       check=True)
     return 0
+
+
+def seeds_range(p: dict, rows: dict) -> dict:
+    """P1 with each final checkpoint's seeds' range as loss_lo and loss_hi."""
+    ix = {c: i for i, c in enumerate(p["columns"])}
+    out = []
+    for r in p["rows"]:
+        f = rows.get(r[ix["record"]])
+        out.append([*r[:ix["loss_lo"]], f["bpb_min"], f["bpb_max"], *r[ix["loss_hi"] + 1:]] if f else r)
+    return p | {"rows": out}
+
+
+def final_md(rs: Path, fin: dict, tab: dict) -> str:
+    """Per FINAL entry and target: its least compute reaching the target on the sealed shard (the seeds' mean) beside
+    the search's, and its S at that checkpoint under each reading (v1runs.py's per-run P4, final and search)."""
+    p4 = frame(json.loads((rs / "runs-p4-decomposition.json").read_text()))
+    s4 = frame(json.loads((rs / "search-runs-p4-decomposition.json").read_text()))
+    L = ["## FINAL entries on the sealed shard", "",
+         (f"{len(fin['entries'])} entries; targets from the final starts' bpb ("
+          + ", ".join(f"{s} {v:.4f}" for s, v in sorted(fin["final_starts"].items())) + "). A checkpoint reaches a "
+          "target when its seeds' mean bpb does (all: the worst seed does too). Gates and every quantity but the bpb "
+          "are the search checkpoint's at the nearest MACs (v1final.py); S = p s at that checkpoint, at c = 4096w, "
+          "k = 10 kB, over the final H (te_core.rescore)."), "",
+         ("| entry | start | target | final: least gates (frac; bpb mean [lo, hi]; seeds) | search: least gates (frac) "
+          "| final/search | S literal-x0 (ρ, basis) | S tail-charged (ρ, basis) |"), "|---|---|---|---|---|---|---|---|"]
+    for e, x in sorted(fin["entries"].items(), key=lambda t: str(t[1]["run"])):
+        mine = [r for r in p4 if r["run"] == x["run"]]
+        name = f"{mine[0]['method'] if mine else '?'} {e[4:16]} ({x['run']})"
+        if not x["matched"] or not mine:
+            why = "no final row at a search checkpoint's MACs" if not x["matched"] else "reaches no target"
+            L.append(f"| {name} | | | {why} | | | | |")
+            continue
+        for tp in sorted({r["target_pct"] for r in mine}, reverse=True):
+            at = {r["reading"]: r for r in mine if r["target_pct"] == tp}
+            f = next(iter(at.values()))
+            rec = fin["rows"].get(f["record"], {})
+            lf = fin["final_starts"][f["start_id"]] * (1 + tp / 100)
+            g = next((r for r in s4 if r["run"] == x["run"] and r["target_pct"] == tp), None)
+            seeds = rec.get("seeds") or []
+            fs = (f"{fmt(f['compute_gates'])} ({fmt(f['checkpoint_frac'])}; {rec.get('final_mean_bpb', 0):.4f} "
+                  f"[{rec.get('bpb_min', 0):.4f}, {rec.get('bpb_max', 0):.4f}]; "
+                  f"{'all' if rec.get('bpb_max', 9) <= lf else 'not all'} of {len(seeds)})" if rec else
+                  f"{fmt(f['compute_gates'])} (search value)")
+            gs = f"{fmt(g['compute_gates'])} ({fmt(g['checkpoint_frac'])})" if g else "not reached"
+            ratio = fmt(f["compute_gates"] / g["compute_gates"]) if g else "–"
+            vs = [f"{fmt(at[m]['S'])} ({fmt(at[m]['s'])}, {at[m]['basis']})" if m in at else "–" for m in READINGS]
+            L.append(f"| {name} | {f['start_id']} | {tp:g}% | {fs} | {gs} | {ratio} | " + " | ".join(vs) + " |")
+    L.append("")
+    bad = [x for x in tab.get("reruns", []) if x.get("problems")]
+    if bad:
+        L += ["### Reruns left out", "", "| entry | seed | run | problems |", "|---|---|---|---|"]
+        L += [f"| {x['id'][4:16]} | {x.get('seed')} | {x.get('run')} | {'; '.join(x['problems'])} |" for x in bad]
+        L.append("")
+    return "\n".join(L)
 
 
 def reput(out: Path) -> int:
@@ -352,7 +426,10 @@ def digest(P: dict, meta: dict, ids: dict, puts: dict) -> str:
         parts.append(f"{s}: H {fmt(h)}; S {q}; A2 least gates at " + ", ".join(floor))
     arts = ", ".join(f"{k} {v[:16]}" for k, v in ids.items())
     ok = sum(str(v).startswith("2") for v in puts.values())
-    return (f"v1 refresh (te_core.rescore {meta['te_core'][:10]}: {meta['records']} valid v2.3 records, "
+    head = (f"v1 final table (sealed shard: {meta['entries']} FINAL entries' reruns, {meta['entries_matched']} matched "
+            f"at {meta['final_checkpoints']} checkpoints, 3 seeds' mean; every other record's search value at the same "
+            "drop; " if "entries" in meta else "v1 refresh (")
+    return (f"{head}te_core.rescore {meta['te_core'][:10]}: {meta['records']} valid v2.3 records, "
             f"{meta['night2_records']} from night 2, {meta['checkpoints']} checkpoints, {meta['not_analysed']} not "
             "analysed yet; H and W* over every checkpoint, so S >= 1; both readings of Slowdown's frozen-tail case, "
             "literal-x0 / tail-charged, no headline S; rho a target unless Fit holds for the training) at −1% and "
