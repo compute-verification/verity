@@ -43,6 +43,7 @@ def test_an_island_runs_unmodified_and_is_scored_at_its_encodings(cw_root):
     cps = rec["checkpoints"]
     assert [cp["step"] for cp in cps] == [1, 3, 5, 7]
     assert all(cp["source"] == "encode" and math.isfinite(cp["val_bpb"]) for cp in cps)
+    assert all(cp["format"] == "full" and cp["rebuild_macs"] == 0 for cp in cps)
     assert cps[-1]["submitted"] and rec["submitted"]["model_is_decode"]
     assert cps[0]["macs"] < cps[-1]["macs"] == rec["totals"]["macs"]
     assert rec["start"]["val_bpb"] > cps[-1]["val_bpb"]

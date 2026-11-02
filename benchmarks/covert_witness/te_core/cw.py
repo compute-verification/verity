@@ -15,8 +15,8 @@ The adapter wraps those four kinds of call, and nothing else of the program:
 - `submit` writes the submission as before; the submitted E is always scored, and the record says whether the
   submitted model is decode(θ, E) bit for bit.
 
-The held-out sets are unreadable from the program as under `guard.py` (an audit hook refuses every open, listing or stat
-under `prepare.HELD_OUT`), except while the harness's own evaluator runs. Subprocesses go to `guard.log`.
+The held-out sets are unreadable from the program (an audit hook refuses every open, listing or stat under
+`prepare.HELD_OUT`), except while the harness's own evaluator runs. Subprocesses go to `guard.log`.
 """
 from __future__ import annotations
 
@@ -159,9 +159,10 @@ class Adapter:
             return self.encoded[sha]
         with self.s.uncounted():
             state = self.p.decode(self.s.theta, blob, device=self.s.device)
-        fmt = self.p.format_of(blob) if hasattr(self.p, "format_of") else "unknown"
-        cp = self.s.checkpoint_state(self.s.current_step(), state,
-                                     {"source": source, "e_bytes": len(blob), "e_sha256": sha, "format": fmt})
+            fmt = self.p.format_of(blob) if hasattr(self.p, "format_of") else "unknown"
+            macs = self.p.rebuild_macs(self.s.theta, blob) if hasattr(self.p, "rebuild_macs") else None
+        cp = self.s.checkpoint_state(self.s.current_step(), state, {"source": source, "e_bytes": len(blob), "e_sha256": sha,
+                                                                     "format": fmt, "rebuild_macs": macs})
         self.encoded[sha] = cp
         self.last = (sha, state)
         return cp

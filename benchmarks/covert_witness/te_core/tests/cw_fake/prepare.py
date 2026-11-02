@@ -81,6 +81,10 @@ def format_of(blob):
     return "full" if blob[:8] == b"CWFULL1\n" else "unknown"
 
 
+def rebuild_macs(theta, blob):
+    return 0
+
+
 def same_bits(a, b):
     return a.dtype == b.dtype and a.shape == b.shape and torch.equal(a, b)
 

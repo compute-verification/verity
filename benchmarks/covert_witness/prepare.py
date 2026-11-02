@@ -36,6 +36,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+#: the fixed side's version, in every witness record (README.md)
+VERSION = "2.2"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
 STARTS = ROOT / "starts"
@@ -44,8 +46,12 @@ DEVICE = os.environ.get("CW_DEVICE", "cuda")
 EVAL_CTX = 1024
 #: about 10 GPU-minutes of m's dense AdamW at its measured 1.49e14 FLOP/s (learning_frontier, RTX PRO 6000)
 TRAIN_FLOP_BUDGET = 9e16
-#: the candidate's train.py process, compilation included, on one GPU
-GPU_SECONDS_CAP = 1200.0
+#: the budget is checked on 2x the MACs the harness counts (te_core), which include the elementwise and optimizer work
+#: `train_flops` leaves out: 1.06-1.09x of `train_flops` on the reference island
+HARNESS_FLOP_SLACK = 1.1
+#: the candidate's steps' wall seconds as the harness times them (its own loading, encoding and evaluation excluded), on one
+#: GPU; the harness runs eager and counted, about 2.4x a compiled run's time
+GPU_SECONDS_CAP = 3000.0
 CLASSES = {
     "reference": {"max_e_bytes": None, "formats": None, "top_blocks": None},
     "e1mb": {"max_e_bytes": 1_000_000, "formats": None, "top_blocks": None},
