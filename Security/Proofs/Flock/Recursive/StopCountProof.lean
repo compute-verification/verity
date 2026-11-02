@@ -765,4 +765,327 @@ theorem Inv.innerStop {σ : St} (hI : Inv M σ) (s why : String) : Inv M (step M
           · cases h'
   · exact hI
 
+theorem Inv.seat {σ : St} (hI : Inv M σ) (s part : String) : Inv M (step M σ (.seat s part)) := by
+  dsimp only [step]
+  split
+  · exact hI
+  · rename_i hh
+    have hS1 := Same.slot σ.evs s part
+    have hst1 := (slot_evs σ.evs s part).2
+    obtain ⟨k1, hor1⟩ := orphan_slot σ.evs s part
+    split
+    · rename_i a evs2 hadm
+      obtain ⟨o, j, hO1, hS1', hN1, hserved⟩ := Properties.Firewall.admit_ok hadm
+      obtain ⟨hF1, hp, rfl, rfl⟩ := Properties.Firewall.served_ok hserved
+      have hj := Properties.Firewall.nextOf_lt hN1
+      have hO : openOf σ.evs s = some o := (hS1.open_ s).symm.trans hO1
+      have hses := openOf_session hO
+      have hp' : o.parts[j] = part := by rw [← getElem!_pos o.parts j hj]; exact hp
+      have hadm0 : σ.adm s (j + 1) = 0 := by
+        have hle := hI.admLe s (j + 1)
+        rcases Nat.lt_or_ge (σ.adm s (j + 1)) 1 with h | h
+        · omega
+        · exfalso
+          rcases hI.admDone s j (by omega) with ⟨h', hh', -⟩ | hd
+          · rw [hh] at hh'; cases hh'
+          · rcases hd with ⟨o', hO', hj', hm⟩ | hst | ⟨-, k, p, hor⟩
+            · rw [hO] at hO'
+              cases hO'
+              obtain ⟨_, hn, _⟩ := nextOf_some hN1
+              rw [hses] at hn
+              exact hn ((hS1.rel s).symm ▸ hm)
+            · have := hS1.stop s hst
+              rw [hS1'] at this
+              cases this
+            · have := hst1 k s p hor
+              rw [hS1'] at this
+              cases this
+      refine hI.same hS1 rfl (fun s j t h => hI.leftAt s j t h) (fun h' hh' => ?_) (fun s' p => ?_) (fun s' => ?_)
+        (fun s' j' ha => ?_)
+      · cases hh'
+        refine ⟨o, hO1, hj, hp', hN1, hF1, hS1', rfl, ⟨k1, hor1⟩, ?_⟩
+        show bump σ.adm s (j + 1) s (j + 1) = 1
+        rw [bump_eq, hadm0]
+      · show bump σ.adm s (j + 1) s' p ≤ 1
+        by_cases hq : s' = s ∧ p = j + 1
+        · obtain ⟨rfl, rfl⟩ := hq
+          rw [bump_eq, hadm0]; exact Nat.le_refl _
+        · rw [bump_ne hq]; exact hI.admLe s' p
+      · show bump σ.adm s (j + 1) s' 0 = 0
+        have hq : ¬(s' = s ∧ 0 = j + 1) := fun h => Nat.succ_ne_zero _ h.2.symm
+        rw [bump_ne hq]
+        exact hI.adm0 s'
+      · change bump σ.adm s (j + 1) s' (j' + 1) = 1 at ha
+        by_cases hq : s' = s ∧ j' + 1 = j + 1
+        · exact Or.inl ⟨_, rfl, hq.1.symm, by show j = j'; omega⟩
+        · rw [bump_ne hq] at ha
+          rcases hI.admDone s' j' ha with ⟨h', hh', -⟩ | hd
+          · rw [hh] at hh'; cases hh'
+          · exact Or.inr (hd.same hS1 fun k p _ hor => Or.inr (hst1 k s' p hor))
+    · rename_i w evs2 hadm
+      have hS2 : Same (slot σ.evs s part) evs2 := by
+        rcases admit_error hadm with h | ⟨p, w', h⟩
+        · rw [h]; exact Same.pushRefused _ _ _
+        · rw [h]; exact (Same.pushStop _ _ _ _).trans (Same.pushRefused _ _ _)
+      have hS := hS1.trans hS2
+      refine hI.same hS rfl (fun s j t h => hI.leftAt s j t h) (fun h hh' => ?_) hI.admLe hI.adm0 (fun s' j ha => ?_)
+      · change σ.holder = some h at hh'
+        rw [hh] at hh'; cases hh'
+      · rcases hI.admDone s' j ha with ⟨h', hh', -⟩ | hd
+        · rw [hh] at hh'; cases hh'
+        · exact Or.inr (hd.same hS fun k p _ hor => Or.inr (hS2.stop s' (hst1 k s' p hor)))
+
+theorem Inv.relay {σ : St} (hI : Inv M σ) : Inv M (step M σ .relay) := by
+  dsimp only [step]
+  split
+  · rename_i h hh
+    split
+    · rename_i hlt
+      obtain ⟨o, hO, hj, -, hN, hF, -, -, -, -⟩ := hI.hold h hh
+      have hses := openOf_session hO
+      have hn := nOf_some (σ := σ) hO
+      have hpre : ∀ q, q < h.stmt → σ.sent h.session q = M h.session q := by
+        intro q hq
+        cases q with
+        | zero => exact hI.fin _ hF
+        | succ j =>
+          have hj' : j < h.admitted.index := by simp only [Holder.stmt] at hq; omega
+          obtain ⟨_, _, hrel⟩ := nextOf_some hN
+          have hm := hrel j hj'
+          rw [hses] at hm
+          obtain ⟨o', hO', -, j'', hj'', hx, hsent⟩ := hI.rel _ _ hm
+          rw [hO] at hO'
+          cases hO'
+          have := (hI.parts _ o hO).2 j'' j hj'' (by omega) hx
+          subst this
+          exact hsent
+      exact {
+        le := fun s' p => by
+          show bump σ.sent h.session h.stmt s' p ≤ _
+          by_cases hq : s' = h.session ∧ p = h.stmt
+          · obtain ⟨rfl, rfl⟩ := hq; rw [bump_eq]; exact hlt
+          · rw [bump_ne hq]; exact hI.le s' p
+        past := fun s' p hp' => by
+          show bump σ.sent h.session h.stmt s' p = 0
+          by_cases hq : s' = h.session ∧ p = h.stmt
+          · obtain ⟨rfl, rfl⟩ := hq
+            exfalso
+            change nOf σ h.session ≤ h.stmt at hp'
+            rw [hn] at hp'
+            simp only [Holder.stmt] at hp'
+            omega
+          · rw [bump_ne hq]; exact hI.past s' p hp'
+        pre := fun s' q p hqp hne => by
+          show bump σ.sent h.session h.stmt s' q = M s' q
+          change bump σ.sent h.session h.stmt s' p ≠ 0 at hne
+          by_cases hP : s' = h.session ∧ p = h.stmt
+          · obtain ⟨rfl, rfl⟩ := hP
+            rw [bump_ne (fun h' => by have := h'.2; omega)]
+            exact hpre q hqp
+          · rw [bump_ne hP] at hne
+            by_cases hQ : s' = h.session ∧ q = h.stmt
+            · obtain ⟨rfl, rfl⟩ := hQ
+              have := hI.pre _ _ p hqp hne
+              omega
+            · rw [bump_ne hQ]; exact hI.pre s' q p hqp hne
+        fin := fun s' hf => by
+          show bump σ.sent h.session h.stmt s' 0 = _
+          have hq : ¬(s' = h.session ∧ 0 = h.stmt) := fun h' => Nat.succ_ne_zero _ h'.2.symm
+          rw [bump_ne hq]
+          exact hI.fin s' hf
+        rel := fun s' x hx => by
+          obtain ⟨o', hO', hf, j', hj', hx', hm⟩ := hI.rel s' x hx
+          refine ⟨o', hO', hf, j', hj', hx', ?_⟩
+          show bump σ.sent h.session h.stmt s' (j' + 1) = _
+          by_cases hq : s' = h.session ∧ j' + 1 = h.stmt
+          · obtain ⟨rfl, hq⟩ := hq
+            rw [hq] at hm
+            omega
+          · rw [bump_ne hq]; exact hm
+        parts := hI.parts
+        hold := hI.hold
+        admLe := hI.admLe
+        adm0 := hI.adm0
+        admDone := hI.admDone
+        leftAt := hI.leftAt }
+    · exact hI
+  · exact hI
+
+/-- The holder's stop, recorded: its statement is done, the slot free. -/
+theorem Inv.stopHolder {σ : St} (hI : Inv M σ) {h : Holder} (hh : σ.holder = some h) (why : String) :
+    Inv M { σ with evs := (stop σ.evs h.session h.part why).2, holder := none } := by
+  obtain ⟨o, hO, hj, hp, hN, hF, hS, -, -, -⟩ := hI.hold h hh
+  rw [stop_evs_none _ _ hS]
+  have he := Same.pushStop σ.evs h.session h.part why
+  refine hI.same he rfl (fun s j t h => hI.leftAt s j t h) (fun h' hh' => by cases hh') hI.admLe hI.adm0
+    (fun s j ha => ?_)
+  rcases hI.admDone s j ha with ⟨h', hh', hs, -⟩ | hd
+  · rw [hh] at hh'
+    cases hh'
+    subst hs
+    exact Or.inr (Or.inr (Or.inl (stopOf_push_stop_isSome _ _ _ _)))
+  · exact Or.inr (hd.same he fun k p hn _ => by rw [hh] at hn; cases hn)
+
+/-- The holder's release, recorded once all its statement's messages reached the auditor: its statement is done, the
+slot free. -/
+theorem Inv.released {σ : St} (hI : Inv M σ) {h : Holder} (hh : σ.holder = some h)
+    (heq : σ.sent h.session h.stmt = M h.session h.stmt) :
+    Inv M { σ with evs := release σ.evs h.session h.part, holder := none } := by
+  obtain ⟨o, hO, hj, hp, -, hF, -, -, -, -⟩ := hI.hold h hh
+  have hO' : ∀ s, openOf (release σ.evs h.session h.part) s = openOf σ.evs s :=
+    openOf_push_ne (fun _ h => by cases h)
+  have hF' : ∀ s, finished (release σ.evs h.session h.part) s = finished σ.evs s :=
+    finished_push_ne (fun _ h => by cases h)
+  have hS' : ∀ s, (stopOf σ.evs s).isSome → (stopOf (release σ.evs h.session h.part) s).isSome :=
+    fun _ h => stopOf_push_isSome _ h
+  have hR : ∀ s x, x ∈ relOf σ.evs s → x ∈ relOf (release σ.evs h.session h.part) s :=
+    fun _ _ h => mem_relOf_push _ h
+  exact {
+    le := hI.le
+    past := fun s p hp' => hI.past s p (by simpa [nOf, hO'] using hp')
+    pre := hI.pre
+    fin := fun s hf => hI.fin s ((hF' s).symm.trans hf)
+    rel := fun s x hx => by
+      change x ∈ relOf (σ.evs.push (.release h.session h.part)) s at hx
+      rw [relOf_push_release] at hx
+      split at hx
+      · rename_i hs
+        subst hs
+        rcases Array.mem_push.mp hx with hx | rfl
+        · obtain ⟨o', ho', hf, j, hj', hx', hm⟩ := hI.rel _ x hx
+          exact ⟨o', (hO' _).trans ho', (hF' _).trans hf, j, hj', hx', hm⟩
+        · exact ⟨o, (hO' _).trans hO, (hF' _).trans hF, h.admitted.index, hj, hp, heq⟩
+      · obtain ⟨o', ho', hf, j, hj', hx', hm⟩ := hI.rel s x hx
+        exact ⟨o', (hO' _).trans ho', (hF' _).trans hf, j, hj', hx', hm⟩
+    parts := fun s o' ho' => hI.parts s o' ((hO' s).symm.trans ho')
+    hold := fun h' hh' => by cases hh'
+    admLe := hI.admLe
+    adm0 := hI.adm0
+    admDone := fun s j ha => by
+      rcases hI.admDone s j ha with ⟨h', hh', hs, hi⟩ | hd
+      · rw [hh] at hh'
+        cases hh'
+        subst hs hi
+        refine Or.inr (Or.inl ⟨o, (hO' _).trans hO, hj, ?_⟩)
+        change o.parts[h.admitted.index] ∈ relOf (σ.evs.push (.release h.session h.part)) h.session
+        rw [relOf_push_release]
+        simp [hp]
+      · exact Or.inr (hd.grow (fun o' ho' => (hO' _).trans ho') (hR s) (hS' s)
+          fun k p hn _ => by rw [hh] at hn; cases hn)
+    leftAt := fun s j t hl => by
+      obtain ⟨o', ho', hr⟩ := hI.leftAt s j t hl
+      exact ⟨o', (hO' _).trans ho', hr⟩ }
+
+theorem Inv.barrier {σ : St} (hI : Inv M σ) (now : ℕ) (prove ready : Core.Firewall.Run) :
+    Inv M (step M σ (.barrier now prove ready)) := by
+  dsimp only [step]
+  split
+  · rename_i h hh
+    split
+    · exact hI
+    · split
+      next a hgo =>
+        have ha := after_go hgo
+        subst ha
+        obtain ⟨o, hO, -, -, -, -, -, hr, -, -⟩ := hI.hold h hh
+        refine hI.same (Same.refl _) rfl (fun s j t hl => ?_) (fun h' hh' => ?_) hI.admLe hI.adm0
+          (fun s j ha => ?_)
+        · by_cases hq : s = h.session ∧ j + 1 = h.stmt
+          · obtain ⟨rfl, hq⟩ := hq
+            have hj' : j = h.admitted.index := by simp only [Holder.stmt] at hq; omega
+            subst hj'
+            change put σ.left h.session h.stmt (some (h.admitted.releaseMs.getD now)) h.session h.stmt = some t at hl
+            rw [put_eq, hr] at hl
+            refine ⟨o, hO, ?_⟩
+            cases hrel : o.release with
+            | none => exact Or.inl rfl
+            | some r =>
+              right
+              rw [hrel] at hl
+              simpa [releaseMs] using hl
+          · change put σ.left h.session h.stmt _ s (j + 1) = some t at hl
+            rw [put_ne hq] at hl
+            exact hI.leftAt s j t hl
+        · cases hh'
+          exact hI.hold h hh
+        · rcases hI.admDone s j ha with ⟨h', hh', hs, hi⟩ | hd
+          · rw [hh] at hh'
+            cases hh'
+            exact Or.inl ⟨_, rfl, hs, hi⟩
+          · exact Or.inr (hd.same (Same.refl _) fun k p hn _ => by rw [hh] at hn; cases hn)
+      all_goals exact hI.stopHolder hh _
+  · exact hI
+
+theorem Inv.verdict {σ : St} (hI : Inv M σ) (v : Except String Bool) : Inv M (step M σ (.verdict v)) := by
+  cases v with
+  | error why =>
+    dsimp only [step]
+    split
+    · rename_i h hh
+      split
+      · exact hI.stopHolder hh why
+      · exact hI
+    · exact hI
+  | ok b =>
+    cases b with
+    | false =>
+      dsimp only [step]
+      split
+      · rename_i h hh
+        split
+        · exact hI.stopHolder hh _
+        · exact hI
+      · exact hI
+    | true =>
+      dsimp only [step]
+      split
+      · rename_i h hh
+        split
+        · rename_i hg
+          rw [Bool.and_eq_true] at hg
+          exact hI.released hh (of_decide_eq_true hg.2)
+        · exact hI
+      · exact hI
+
+theorem Inv.cut {σ : St} (hI : Inv M σ) (why : String) : Inv M (step M σ (.cut why)) := by
+  dsimp only [step]
+  split
+  · rename_i h hh
+    split
+    · exact hI
+    · exact hI.stopHolder hh why
+  · exact hI
+
+theorem Inv.die {σ : St} (hI : Inv M σ) : Inv M (step M σ .die) := by
+  show Inv M { σ with holder := none }
+  refine hI.same (Same.refl _) rfl (fun s j t h => hI.leftAt s j t h) (fun h hh => by cases hh) hI.admLe hI.adm0
+    (fun s j ha => ?_)
+  rcases hI.admDone s j ha with ⟨h, hh, hs, -⟩ | hd
+  · obtain ⟨-, -, -, -, -, -, -, -, ⟨k, hor⟩, -⟩ := hI.hold h hh
+    subst hs
+    exact Or.inr (Or.inr (Or.inr ⟨rfl, k, h.part, hor⟩))
+  · exact Or.inr (hd.same (Same.refl _) fun k p _ hor => Or.inl ⟨rfl, hor⟩)
+
+theorem Inv.next {σ : St} (hI : Inv M σ) : ∀ st, Inv M (step M σ st)
+  | .openRec stream parts budget release => hI.openRec stream parts budget release
+  | .innerSend s => hI.innerSend s
+  | .innerFinish s => hI.innerFinish s
+  | .innerStop s why => hI.innerStop s why
+  | .wait s part => hI.wait s part
+  | .seat s part => hI.seat s part
+  | .relay => hI.relay
+  | .barrier now prove ready => hI.barrier now prove ready
+  | .verdict v => hI.verdict v
+  | .cut why => hI.cut why
+  | .die => hI.die
+
+/-- **Every run keeps the invariant.** -/
+theorem Inv.ofRun (M : String → ℕ → ℕ) (steps : List Step) : Inv M (run M steps) := by
+  have : ∀ (l : List Step) σ, Inv M σ → Inv M (l.foldl (step M) σ) := by
+    intro l
+    induction l with
+    | nil => intro σ h; exact h
+    | cons st rest ih => intro σ h; exact ih _ (h.next st)
+  exact this steps _ (Inv.init M)
+
 end Flock.StopCount
