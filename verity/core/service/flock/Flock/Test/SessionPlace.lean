@@ -35,20 +35,22 @@ def opened (S : State) : State := { S with session := S.session.map fun C => { C
 /-- The loop's decision on each request of `ks` in turn, from `S` once `P` left, as `relay` asks it of every request but
 a `Ping` and a `Proof` before a stop, which it answers itself: `ok` where it leaves (a `Commit` or `Round` then opened),
 else the reason of its refusal. -/
-def decisions (S : State) (P : Placed) : List Kind → List String
+def decisions (S : State) (P : Placed) : List Flock.Firewall.Session.Kind → List String
   | [] => []
   | k :: ks =>
     match S.request P k with
     | some (S', out) => reasonOf out :: decisions S' P ks
     | none => "ok" :: decisions (match k with | .commit | .round _ _ => opened S | _ => S) (P.after k) ks
 
-def honest : List Kind := [.openStream A, .commit, .link, .round A 2, .round A 3, .openStream B, .round B 4, .finish]
+def honest : List Flock.Firewall.Session.Kind :=
+  [.openStream A, .commit, .link, .round A 2, .round A 3, .openStream B, .round B 4, .finish]
 
 #guard decisions S₀ P₀ honest == List.replicate honest.length "ok"
 #guard decisions {} {} [.register] == ["ok"]
 
 /-- The honest order's first `n` requests, then `k`: what the loop decides of `k`. -/
-def decideAt (n : Nat) (k : Kind) : String := ((decisions S₀ P₀ (honest.take n ++ [k])).drop n).headD "?"
+def decideAt (n : Nat) (k : Flock.Firewall.Session.Kind) : String :=
+  ((decisions S₀ P₀ (honest.take n ++ [k])).drop n).headD "?"
 
 #guard decideAt 0 .register == stop "a second Register"
 #guard decideAt 3 .register == stop "a second Register"
@@ -80,14 +82,15 @@ def S₁ : State := past #[(A, 2)]
   ["ok", "ok", "ok", "ok", stop s!"a Finish before the Open of {B}"]
 
 /-- After a refusal every request is refused for its reason, the auditor asked nothing more. -/
-def after : List Kind :=
+def after : List Flock.Firewall.Session.Kind :=
   [.register, .hello, .openStream A, .openStream "x", .commit, .link, .round A 2, .proof, .other, .ping, .finish]
 
 #guard [0, 1, 3, 5].all fun n =>
   let why := decideAt n (.round B 4)
   why.startsWith Flock.Firewall.Coins.STOP &&
-    (decisions S₀ P₀ (honest.take n ++ Kind.round B 4 :: after)).drop n == List.replicate (after.length + 1) why
-#guard decisions {} {} (Kind.round A 2 :: after) ==
+    (decisions S₀ P₀ (honest.take n ++ Flock.Firewall.Session.Kind.round B 4 :: after)).drop n ==
+      List.replicate (after.length + 1) why
+#guard decisions {} {} (Flock.Firewall.Session.Kind.round A 2 :: after) ==
   List.replicate (after.length + 1) (stop "coins before the step-0 coin commitment")
 
 end Flock.Test.SessionPlace
