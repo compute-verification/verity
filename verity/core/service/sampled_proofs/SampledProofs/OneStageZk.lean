@@ -362,11 +362,18 @@ def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFile
   push I rd programSha want r s record st coinKey
     (verdictOf I scope ksFiles r.coinKeys record draw st (filesOf bs s st) coinKey)
 
+/-- The units the accepted sessions proved (`proved`, in session order) held to the evidence's `proved_units` (`want`):
+sorted, they must be it. `want` is strictly ascending (`Draw.checkDrawFull`), so a unit two sessions prove (or one
+session twice) refuses, and so does a drawn unit no session proves. -/
+def provedHeld (proved want : Array Nat) : V Unit :=
+  if proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
+  else pure ()
+
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
 session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
 accepted. A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
-the evidence's. -/
+the evidence's (`provedHeld`). -/
 def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
     V Run := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
@@ -386,11 +393,9 @@ def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Opt
   let ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags pubB
   let r ← sessions.foldlM (step I rd bs scope ksFiles (programDigest p.program) (getD p.partition "program"))
     ⟨#[], #[], #[], true⟩
-  match provedUnits? with
-  | some want =>
-    if r.all && r.proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
-    else pure r
-  | none => pure r
+  if let some want := provedUnits? then
+    if r.all then provedHeld r.proved want
+  pure r
 
 /-- The sessions' verdicts in order (`run`'s). -/
 def verdicts (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
@@ -498,5 +503,10 @@ def main (args : List String) : IO UInt32 := do
 #guard (provedUnits "{\"units\":{\"indices\":[7,3,9]}}\nrest".toUTF8 "{\"unit_draw\":{\"units\":[2,0]}}").toOption
   == some #[7, 9]
 #guard (provedUnits "{\"units\":{\"indices\":[7]}}".toUTF8 "{\"unit_draw\":{\"units\":[1]}}").toOption.isNone
+#guard (provedHeld (#[9, 3] ++ #[7]) #[3, 7, 9]).toBool
+#guard !(provedHeld (#[3, 7] ++ #[7, 9]) #[3, 7, 9]).toBool
+#guard !(provedHeld (#[3] ++ #[9]) #[3, 7, 9]).toBool
+#guard !((provedUnits "{\"units\":{\"indices\":[7,3,9]}}".toUTF8 "{\"unit_draw\":{\"units\":[2,2]}}") >>=
+  (provedHeld · #[9])).toBool
 
 end SampledProofs.OneStageZk
