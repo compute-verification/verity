@@ -48,6 +48,11 @@ values, however the circuit is written.
   (through casts). A circuit that sends its update through a sign bit with error feedback, a top-k list or low-rank
   factors has that cut; a dense update's is its elements at that width. `beta` is the cut over the step's updated MACs
   per token.
+- A program recorded from its start (`te_core.capture.script`, `Trace.region`) is measured at one step of its history,
+  and its slots are whatever it carries: a value is update-dependent when it depends on an earlier step's token data
+  (the run's weights, optimizer state and error feedback, kept in place, rebound or written by hand; a cache made from
+  θ and this step's tokens is not), and the cut's sinks are the update-dependent values the step makes that the next
+  step's forward reads, at the width it reads them.
 
 Dataflow follows storage: an in-place op (``add_``, a foreach optimizer kernel) makes a new version of the storage it
 writes, every view of it reads that version, and each element of a foreach list is its own value. A Python scalar read
@@ -341,6 +346,7 @@ class _Flow:
         self.tok: list[bool] = []
         self.step: list[int] = []
         self.bits: list[int] = []
+        self.width: list[int] = []                     # value -> its dtype's bits (64: a Python scalar)
         self.node: list[Any] = []                      # value -> the node that made it
         self.source: dict[int, tuple[str, str]] = {}   # value -> ("attr", target) | ("input", name): a graph source
         self.val: dict[Any, Any] = {}
@@ -364,6 +370,7 @@ class _Flow:
         self.tok.append(tok)
         self.step.append(self._step)
         self.bits.append(_value_bits(val))
+        self.width.append(_dtype_bits(val.dtype) if isinstance(val, torch.Tensor) else 64)
         self.node.append(self._at)
         return len(self.preds) - 1
 
@@ -375,6 +382,7 @@ class _Flow:
         v = self._new(reads, ph, tok)
         if isinstance(val, torch.Tensor):
             self.bits[v] = bits * _dtype_bits(val.dtype)
+            self.width[v] = _dtype_bits(val.dtype)
         self.cur[b] = v
         self.written.add(b)
         self.writes.append((b, v, self._at))
@@ -449,7 +457,8 @@ class _Flow:
             scalars |= self._rd(d)
         shape_only = name in _SHAPE_ONLY
         overwrite = name in _OVERWRITE
-        if lists and any(len(a) > 1 for _, a in lists) and name.startswith("_foreach"):
+        if lists and (any(p in written_pos for p, _ in lists)
+                      or (name.startswith("_foreach") and any(len(a) > 1 for _, a in lists))):
             k = max(len(a) for _, a in lists)
             common = set(scalars)
             for _, a in singles:
@@ -613,29 +622,45 @@ class StepGraph:
         def tokens_of(n) -> int:
             return step_tokens.get(int(n.meta.get("te_step", 0)), tokens) if step_tokens else tokens
 
-        # dependent slots: the largest set of written slots closed under the rule (module docstring)
+        region = base.region
+
+        def in_region(n) -> bool:
+            return region is None or int(n.meta.get("te_step", 0)) == region
+
+        # dependent slots: the largest set of written slots closed under the rule (module docstring); a program recorded
+        # from its start reads it off its history: what a step reads is the run's own when it depends on an earlier
+        # step's token data, through whatever the program carried (in place, rebound, by hand)
         entry = {k: v for v, k in flow.source.items() if k[0] == "attr"}
         writes: dict = {}
         for k, v, _ in flow.writes:
             if k[0] == "attr":
                 writes.setdefault(k, []).append(v)
         before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
-        if updated is None:
-            seeded, slots = set(), set(writes) | before
+        carried: list[int] = []
+        if region is not None:
+            past = {v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < region}
+            dep = _closure(flow, past.__contains__)
+            carried = sorted({p for v, ps in enumerate(flow.preds) if flow.step[v] == region for p in ps
+                              if flow.step[p] < region and dep[p]})
+            dependent: set = set()
+            upd = frozenset()
         else:
-            seeded = {k for k in entry if k[1] in params and params[k[1]][1] in updated}
-            slots = {k for k in set(writes) | before if k[1] not in params}
-        while True:
-            seeds = {entry[k] for k in slots | seeded if k in entry}
-            dep = _closure(flow, seeds.__contains__)
-            kept = {k for k in slots if k not in writes or any(dep[v] for v in writes[k])}
-            if kept == slots:
-                break
-            slots = kept
-        dependent = slots | seeded
-        upd = (frozenset(params[k[1]][1] for k in dependent if k[1] in params) if updated is None
-               else frozenset(updated))
-        seed = _closure(flow, lambda v: flow.phase[v] == "backward")
+            if updated is None:
+                seeded, slots = set(), set(writes) | before
+            else:
+                seeded = {k for k in entry if k[1] in params and params[k[1]][1] in updated}
+                slots = {k for k in set(writes) | before if k[1] not in params}
+            while True:
+                seeds = {entry[k] for k in slots | seeded if k in entry}
+                dep = _closure(flow, seeds.__contains__)
+                kept = {k for k in slots if k not in writes or any(dep[v] for v in writes[k])}
+                if kept == slots:
+                    break
+                slots = kept
+            dependent = slots | seeded
+            upd = (frozenset(params[k[1]][1] for k in dependent if k[1] in params) if updated is None
+                   else frozenset(updated))
+        seed = _closure(flow, lambda v: flow.phase[v] == "backward" and (region is None or flow.step[v] == region))
         dep_par = _closure(flow, lambda v: flow.source.get(v, ("",))[0] == "attr")
 
         def walk(a):
@@ -658,7 +683,7 @@ class StepGraph:
 
         def klass(n, a) -> tuple[str, str | None]:
             src = walk(a)
-            if isinstance(src, torch.fx.Node) and src.op == "get_attr":
+            if region is None and isinstance(src, torch.fx.Node) and src.op == "get_attr":
                 hit = attrs.get(src.target)
                 if hit is None:
                     return "constant", None
@@ -689,7 +714,7 @@ class StepGraph:
         # GEMMs and their dims in every capture
         raw = []
         for n in nodes:
-            gs = _gemms(n)
+            gs = _gemms(n) if in_region(n) else []
             if not gs:
                 continue
             vgs = [_gemms(vs[pos[n]]) for vs in vnodes]
@@ -707,8 +732,10 @@ class StepGraph:
                 return v[g.out] if g.out is not None and g.out < len(v) else None
             return v
 
+        region_sinks = _region_sinks(flow, nodes, region, dep) if region is not None else {}
         # producing: parameter-indexed results reaching a written parameter's final value through weight-shaped values
-        finals = [flow.cur[k] for k in flow.written if k[0] == "attr" and k[1] in params]
+        finals = (list(region_sinks) if region is not None
+                  else [flow.cur[k] for k in flow.written if k[0] == "attr" and k[1] in params])
         reach: set[int] = set()
         stack = list(finals)
         while stack:
@@ -740,7 +767,7 @@ class StepGraph:
         # token-indexed with an update-dependent operand; a gather moves a dependent table's rows with no MAC.
         extra = 0
         for n in nodes:
-            if (n.op != "call_function" or not isinstance(n.target, torch._ops.OpOverload) or _gemms(n)
+            if (n.op != "call_function" or not isinstance(n.target, torch._ops.OpOverload) or not in_region(n) or _gemms(n)
                     or phases.get(n, "forward") != "forward" or _is_view(n.target)
                     or _pk(n.target) in ("_record_function_enter_new", "_record_function_exit")):
                 continue
@@ -812,6 +839,8 @@ class StepGraph:
         matmuls = [m for m in matmuls if m.part != "elementwise"]
         other = {"elementwise": extra, "approx": 0}
         for n in nodes:
+            if not in_region(n):
+                continue
             k, kind = _other_macs(n)
             if kind:
                 other[kind] += k
@@ -819,31 +848,39 @@ class StepGraph:
         # the cut (module docstring)
         fr = [False] * len(flow.preds)
         for v in range(len(flow.preds) - 1, -1, -1):
-            if flow.phase[v] == "forward" and flow.tok[v]:
+            if flow.phase[v] == "forward" and flow.tok[v] and (region is None or flow.step[v] == region):
                 fr[v] = True
-            if fr[v]:
+            if fr[v] and (region is None or flow.phase[v] == "forward"):
                 for p in flow.preds[v]:
-                    if flow.phase[p] == "forward":
+                    if region is not None or flow.phase[p] == "forward":
                         fr[p] = True
-        read_width: dict[str, int] = {}
-        for n in nodes:
-            out = flow.val.get(n)
-            if n.op != "call_function" or phases.get(n, "forward") != "forward" or not isinstance(out, int) \
-                    or not flow.tok[out]:
-                continue
-            for a in _arg_nodes(n):
-                s = walk(a)
-                if isinstance(s, torch.fx.Node) and s.op == "get_attr" and isinstance(a.meta.get("val"), torch.Tensor):
-                    read_width[s.target] = max(read_width.get(s.target, 0), _dtype_bits(a.meta["val"].dtype))
-        sources = [v for v, k in flow.source.items() if k[0] == "input"]
-        sources += [entry[k] for k in dependent if k in entry and not fr[entry[k]]]
-        sinks: dict[int, int] = {}
-        for k in dependent:
-            if k in writes and k in entry and fr[entry[k]]:
-                t = getattr(gm, k[1], None)
-                own_w = _dtype_bits(t.dtype) if isinstance(t, torch.Tensor) else 64
-                sinks[flow.cur[k]] = flow.size.get(k, 1) * min(own_w, read_width.get(k[1], own_w))
-        cut_bits, on_cut = _min_cut(flow, [d and not f for d, f in zip(dep, fr)], sources, sinks)
+        if region is None:
+            read_width: dict[str, int] = {}
+            for n in nodes:
+                out = flow.val.get(n)
+                if n.op != "call_function" or phases.get(n, "forward") != "forward" or not isinstance(out, int) \
+                        or not flow.tok[out]:
+                    continue
+                for a in _arg_nodes(n):
+                    s = walk(a)
+                    if isinstance(s, torch.fx.Node) and s.op == "get_attr" and isinstance(a.meta.get("val"), torch.Tensor):
+                        read_width[s.target] = max(read_width.get(s.target, 0), _dtype_bits(a.meta["val"].dtype))
+            sources = [v for v, k in flow.source.items() if k[0] == "input"]
+            sources += [entry[k] for k in dependent if k in entry and not fr[entry[k]]]
+            sinks: dict[int, int] = {}
+            for k in dependent:
+                if k in writes and k in entry and fr[entry[k]]:
+                    t = getattr(gm, k[1], None)
+                    own_w = _dtype_bits(t.dtype) if isinstance(t, torch.Tensor) else 64
+                    sinks[flow.cur[k]] = flow.size.get(k, 1) * min(own_w, read_width.get(k[1], own_w))
+            cuttable = [d and not f for d, f in zip(dep, fr)]
+        else:
+            sources = [v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] == region]
+            sources += [v for v in carried if not fr[v]]
+            sinks = region_sinks
+            cuttable = [d and not f and not (s == region + 1 and ph == "forward")
+                        for d, f, s, ph in zip(dep, fr, flow.step, flow.phase)]
+        cut_bits, on_cut = _min_cut(flow, cuttable, sources, sinks)
         u_macs = sum(_macs(recs[i][1].dims) for i in fwd)
         beta = cut_bits / (u_macs / region_tokens) if u_macs and region_tokens else None
 
@@ -870,12 +907,15 @@ class StepGraph:
         crossing += [{"kind": "optimizer_state", "name": f"{s['param']}.{s['key']}", "shape": s["shape"], "dtype": s["dtype"]}
                      for s in base.state]
         names_of = {k: (attrs[k[1]][1] if k[1] in attrs else k[1]) for k in dependent}
+        if region is None:
+            dep_names = sorted(names_of.values())
+            sink_names = sorted(names_of[k] for k in dependent if k in writes and k in entry and fr[entry[k]])
+        else:
+            dep_names, sink_names = sorted({label(v) for v in carried}), sorted({label(v) for v in sinks})
         return cls(name, region_tokens, dict(zip(axis_names, base.axis_sizes)), matmuls, plist, crossing, upd, trained, gm,
                    digest=_digest(gm), elementwise_macs=other["elementwise"], approx_macs=other["approx"],
-                   updated_elementwise=updated_elementwise, dependent=sorted(names_of.values()), cut_bits=cut_bits,
-                   beta=beta, cut=cut, sinks=sorted(names_of[k] for k in dependent if k in writes and k in entry and
-                                                    fr[entry[k]]),
-                   _inputs=(base, varied, axis_names))
+                   updated_elementwise=updated_elementwise, dependent=dep_names, cut_bits=cut_bits,
+                   beta=beta, cut=cut, sinks=sink_names, _inputs=(base, varied, axis_names))
 
     def with_updated(self, updated) -> "StepGraph":
         """The same graph classified with another `updated` set (no recapture)."""
@@ -948,6 +988,57 @@ class StepGraph:
                 "updated": sorted(self.updated), "trained": sorted(self.trained), "dependent": self.dependent,
                 "sinks": self.sinks, "cut_bits": self.cut_bits, "beta": self.beta, "cut": self.cut[:12],
                 "params": self.params, "step_crossing": self.step_crossing, "matmuls": [m.to_json() for m in self.matmuls]}
+
+
+def _walks(a) -> bool:
+    """Whether a value read through node `a` is read as its argument's (a view, a cast, a scaling by a constant)."""
+    if not (isinstance(a, torch.fx.Node) and a.op == "call_function" and a.args and isinstance(a.args[0], torch.fx.Node)):
+        return False
+    nm = _pk(a.target)
+    return nm in _WALK or nm in _SCALE and sum(isinstance(x, torch.fx.Node) for x in list(a.args) + list(a.kwargs.values())) == 1
+
+
+def _region_sinks(flow: _Flow, nodes: list, region: int, dep: list[bool]) -> dict[int, int]:
+    """A recorded program's new values (`Trace.region`): each update-dependent value the measured step made, or the next
+    step made before its forward, that the next step's forward reads; its capacity its elements at the narrowest of its
+    own width and the widest the forward reads it at (through views and casts into a token-indexed op). The next step's
+    forward is its token-indexed values and what they read through its own values outside backward and an optimizer's
+    step, so its gradient clipping, which reads the step's gradients outside both, isn't."""
+    nxt = region + 1
+    ahead = [flow.step[v] == nxt and flow.phase[v] == "forward" for v in range(len(flow.preds))]
+    model = [False] * len(flow.preds)
+    for v in range(len(flow.preds) - 1, -1, -1):
+        if ahead[v] and (model[v] or flow.tok[v]):
+            model[v] = True
+            for p in flow.preds[v]:
+                if ahead[p]:
+                    model[p] = True
+    out: dict[int, int] = {}
+    for v, ps in enumerate(flow.preds):
+        if model[v]:
+            for p in ps:
+                if dep[p] and flow.step[p] >= region and not ahead[p]:
+                    out[p] = 0
+    read: dict[int, int] = {}
+    for n in nodes:
+        o = flow.val.get(n)
+        if (n.op != "call_function" or int(n.meta.get("te_step", 0)) != nxt or not isinstance(o, int)
+                or flow.phase[o] != "forward" or not flow.tok[o]):
+            continue
+        for a in _arg_nodes(n):
+            val = a.meta.get("val")
+            if not isinstance(val, torch.Tensor):
+                continue
+            prev, cur = n, a
+            while _walks(cur) and int(cur.meta.get("te_step", 0)) == nxt:
+                prev, cur = cur, cur.args[0]
+            for x in flow.reads.get((prev, cur), ()):
+                if x in out:
+                    read[x] = max(read.get(x, 0), _dtype_bits(val.dtype))
+    for x in out:
+        w = max(flow.width[x], 1)
+        out[x] = flow.bits[x] // w * min(w, read.get(x, w))
+    return out
 
 
 def _min_cut(flow: _Flow, cuttable: list[bool], sources: list[int], sinks: dict[int, int]) -> tuple[int, list[int]]:
