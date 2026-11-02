@@ -306,12 +306,17 @@ def dot_chain(x: np.ndarray, w: np.ndarray, dot_id: str, n_threads: int | None =
 _K16_SRC = Path(__file__).resolve().parent / "cpp" / "k16_chain.cpp"
 
 
+def k16_build() -> Path:
+    """`cpp/k16_chain.cpp`'s library, built by `_jit` where it is stale; raises where it cannot be built."""
+    from verity.ml.definitions.numerics import _jit
+    return _jit.atomic_build(_jit.lib_path("libk16_chain.so"), [_K16_SRC], lambda out: _jit.cxx_compile(out, _K16_SRC))
+
+
 @functools.lru_cache(maxsize=1)
 def k16_lib() -> ctypes.CDLL | None:
-    """`cpp/k16_chain.cpp`, built by `_jit` on first use; None where it cannot be built (`_chain` then computes the same words)."""
-    from verity.ml.definitions.numerics import _jit
+    """`k16_build`'s library, built on first use; None where it cannot be built (`_chain` then computes the same words)."""
     try:
-        lib = ctypes.CDLL(str(_jit.atomic_build(_jit.lib_path("libk16_chain.so"), [_K16_SRC], lambda out: _jit.cxx_compile(out, _K16_SRC))))
+        lib = ctypes.CDLL(str(k16_build()))
     except (OSError, subprocess.CalledProcessError):
         return None
     lib.k16_chain.restype = ctypes.c_int

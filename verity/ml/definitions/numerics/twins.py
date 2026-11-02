@@ -126,13 +126,19 @@ def rms_twin():
 
 
 def preload() -> dict[str, Any]:
-    """Build/load the three C++ models and the MUFU tables now.  The tables are reconstructed from int8 deltas with
+    """Build/load every C++ model of `cpp/` and the MUFU tables now, and give each model's library by name (`LIBRARIES`);
+    raises where a model does not build.  `fa2_twin` and `rms_twin` only import their models, and `dense_rows.k16_lib`
+    builds its own on first use: left to them, the first check to run a model compiles it, which circuit-check's tracer
+    cannot see.  The tables are reconstructed from int8 deltas with
     int64 cumsum temporaries (~0.25 GB transient over the 0.22 GB they occupy, shared with the gate primitives); doing
     this before the fold's Program and the checkpoint fields are resident keeps the process high-water mark lower and
     lets the freed transient space be reused (laptop: 1.4 GB -> ~1.1 GB on M1 tier b)."""
+    from verity.ml.definitions.numerics import dense_rows
+
     _tc_lib()
-    fa2_twin()
-    rms_twin()
+    fa2_twin()[0].lib()
+    rms_twin()[0].lib()
+    LIBRARIES["k16_chain"] = str(dense_rows.k16_build())
     silu_table()
     return dict(LIBRARIES)
 

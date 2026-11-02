@@ -32,6 +32,9 @@ what it read beyond what `READS` declares (``reads``, ``undeclared``: `run`), wh
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
 its time went (``seconds_by_check``, `checks.spent`).
+
+A run that records builds the C++ models first, in a process of its own (`prebuild`), and exits 2 before any check when
+they don't build.
 """
 from __future__ import annotations
 
@@ -1431,6 +1434,36 @@ def _batch_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     return 1 if bad else 0
 
 
+#: what `prebuild` runs in a process of its own: every C++ model of `verity.ml.definitions.numerics` (`twins.preload`), then the
+#: registries, which build there whatever else they build on first use
+PREBUILD = ("import json\n"
+            "from verity.ml.definitions.numerics import twins\n"
+            "from circuit_check import targets\n"
+            "built = twins.preload()\n"
+            "targets.load_registries()\n"
+            "print(json.dumps(built))\n")
+
+
+def prebuild(log: Callable[[str], None] | None = print) -> str | None:
+    """`PREBUILD`, before the tracer starts: None once it built every model, else why not, with its exit status and its error's
+    last line.  A model left unbuilt is compiled by the first check that runs it, a program the tracer cannot see, so that
+    check's verdict is never stored (`cache.untraced`).  Everything it writes is written here too."""
+    t0 = time.time()
+    r = subprocess.run([sys.executable, "-c", PREBUILD], cwd=REPO, capture_output=True, text=True)
+    lines = r.stdout.splitlines()
+    if said := lines if r.returncode else lines[:-1]:
+        print("\n".join(said))
+    if r.stderr:
+        sys.stderr.write(r.stderr)
+    if r.returncode:
+        end = r.stderr.strip().splitlines()[-1:] or ["it wrote no error"]
+        return (f"the C++ models' prebuild exited {r.returncode} ({end[0]}; its output is above), so a check would compile them "
+                f"untraced")
+    if log:
+        log(f"circuit-check: the C++ models are built ({time.time() - t0:.1f}s): {', '.join(sorted(json.loads(lines[-1])))}")
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="circuit-check", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("targets", nargs="*", help="Definition ids, template or subcircuit ids, request Program paths")
@@ -1553,11 +1586,9 @@ def main(argv: list[str] | None = None) -> int:
         progress.unlink(missing_ok=True)
     cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
     if cache:
-        # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
-        prebuild = ("from circuit_check import targets; targets.load_registries()\n"
-                    "try:\n    from verity.ml.definitions.numerics import twins\nexcept ImportError:\n    twins = None\n"
-                    "if twins:\n    twins.preload()        # the three C++ models, which checks otherwise compile on first use\n")
-        subprocess.run([sys.executable, "-c", prebuild], cwd=REPO, capture_output=True)
+        if (why := prebuild(log=None if a.quiet else print)) is not None:
+            print(f"circuit-check: refused: {why}", file=sys.stderr)
+            return 2
         CC.trace(REPO)
     jobs = default_jobs(a.all) if a.jobs is None else a.jobs or auto_jobs()
     if a.records_only:
