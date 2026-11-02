@@ -1660,7 +1660,11 @@ def final_entries() -> dict[str, dict]:
     subprocess.run(["git", "-C", str(REPO), "fetch", "-q", "origin", *(f"+{h}:refs/remotes/origin/{h[11:]}" for h in heads)],
                    capture_output=True, text=True)
     t0 = int(NIGHT_START[11:13]) * 60 + int(NIGHT_START[14:16])
-    order = lambda at: (lambda m: m + 1440 * (m < t0))(int(at[:2]) * 60 + int(at[3:5]))
+
+    def order(at: str) -> int:
+        m = int(at[:2]) * 60 + int(at[3:5])
+        return m + 1440 * (m < t0)
+
     out: dict[str, dict] = {}
     for h in heads:
         ref = f"origin/{h[11:]}"
