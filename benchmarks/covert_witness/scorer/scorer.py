@@ -978,9 +978,11 @@ def at10(v):
 def promotions(rows: list[dict], starts: dict, promoted: dict) -> dict:
     """This hour's promotion candidates: each direction's top third by relative bpb drop, and the best of each thin cell
     (at most THIN valid records), among the current regime's valid records not promoted before; plus re-screens of
-    mechanisms already screened. Which candidates are promoted is the sealed set's (`sealed_bits`)."""
+    mechanisms already screened. Which candidates are promoted is the sealed set's (`sealed_bits`). The harness's own
+    smokes (its branch's commits, note `smoke ...`) check the harness and are no direction's entry."""
     valid = [x for x in current(entries(rows)) if x["valid"] and drop_of(x, starts) is not None
-             and (x["launched"] or "") >= SEARCH_START]
+             and (x["launched"] or "") >= SEARCH_START
+             and not (x["agent"] == "cursor/covert-witness-4207" and x["mechanism"] == "smoke")]
     new, why = [], {}
     by_dir: dict[str, list[dict]] = {}
     for x in valid:
