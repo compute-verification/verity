@@ -108,6 +108,8 @@ def main() -> int:
     ap.add_argument("--fit-ratio", type=float, default=2.0, help="fit: d = ratio x |S|, within E's cap")
     ap.add_argument("--coeff", choices=("f32", "f16"), default="f32")
     ap.add_argument("--lr", type=float, default=3e-5)
+    ap.add_argument("--lrs", default="", help="arms: each lr trains from θ on the same data for its share of the budget; "
+                                              "every arm but the last is a snapshot (charged the arms before it)")
     ap.add_argument("--beta1", type=float, default=0.9)
     ap.add_argument("--beta2", type=float, default=0.95)
     ap.add_argument("--warmup", type=int, default=20)
@@ -185,96 +187,111 @@ def main() -> int:
         t0 = time.perf_counter()
         fitter = Fitter(d, gen, a.seed, shapes, a.coeff, W.device)
         info |= {"d": d, "fit_setup_s": round(time.perf_counter() - t0, 1)}
-    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
+    lrs = [float(x) for x in a.lrs.split(",")] if a.lrs else [a.lr]
+    budget = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET
+    steps = []
     if a.mode == "fit":
-        steps_setup = [{"op": "extra", "flops": fitter.setup_flops}]
-        n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - 4 * fitter.solve_flops - fitter.setup_flops)
-                      // per_step)
+        steps.append({"op": "extra", "flops": fitter.setup_flops})
+        budget -= fitter.setup_flops + (2 * len(lrs) + 2) * fitter.solve_flops
+    n_steps = int(budget / len(lrs) // per_step)
     if a.max_steps:
         n_steps = min(n_steps, a.max_steps)
-    info |= {"steps": n_steps, "flops_per_step": per_step, "extra_per_step": extra}
+    info |= {"arms": lrs, "steps_per_arm": n_steps, "flops_per_step": per_step, "extra_per_step": extra}
     print(json.dumps(info), flush=True)
 
-    if a.mode == "subspace":
-        alpha = torch.zeros(d, device=prepare.DEVICE)
-        m1, m2 = torch.zeros_like(alpha), torch.zeros_like(alpha)
-    else:
-        opt = torch.optim.AdamW(views, lr=a.lr, betas=(a.beta1, a.beta2), weight_decay=0.0)
-    steps, snaps = (list(steps_setup) if a.mode == "fit" else []), []
-    marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
-    ema, t_loop, timed = None, None, False
-    step = 0
-    while step < n_steps:
-        if step == 5:
-            if prepare.DEVICE.startswith("cuda"):
-                torch.cuda.synchronize()
-            t_loop = time.perf_counter()
-        if step == 25 and t_loop is not None and not timed:
-            if prepare.DEVICE.startswith("cuda"):
-                torch.cuda.synchronize()
-            per = (time.perf_counter() - t_loop) / 20
-            left = a.time_cap - (time.perf_counter() - t_start)
-            fit_steps = step + int(left / per)
-            if fit_steps < n_steps:
-                print(json.dumps({"time_cut": {"from": n_steps, "to": fit_steps, "s_per_step": round(per, 4)}}), flush=True)
-                n_steps = fit_steps
-                marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
-            timed = True
-        frac = schedule(step, n_steps, a.warmup)
+    snaps, arms = [], []
+    for k, lr in enumerate(lrs):
+        last = k == len(lrs) - 1
+        arm_steps = n_steps
+        data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
+        with torch.no_grad():
+            W.copy_(theta0)
         if a.mode == "subspace":
-            with torch.no_grad():
-                torch.add(theta0, (alpha.to(Z.dtype) @ Z).float(), out=W)
+            alpha = torch.zeros(d, device=prepare.DEVICE)
+            m1, m2 = torch.zeros_like(alpha), torch.zeros_like(alpha)
         else:
-            for g in opt.param_groups:
-                g["lr"] = a.lr * frac
-        rows = data.next(a.batch)
-        total = 0.0
-        for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
-            loss = loss_of(fwd, x) * (len(x) / a.batch)
-            loss.backward()
-            total += float(loss.detach())
-        steps.append({"op": "train", "tokens": tokens})
-        if a.mode == "subspace":
-            with torch.no_grad():
-                g = torch.cat([v.grad.reshape(-1) for v in views])
-                for v in views:
-                    v.grad = None
-                ga = (Z @ g.to(Z.dtype)).float()
-                m1.mul_(a.beta1).add_(ga, alpha=1 - a.beta1)
-                m2.mul_(a.beta2).addcmul_(ga, ga, value=1 - a.beta2)
-                mh = m1 / (1 - a.beta1 ** (step + 1))
-                vh = m2 / (1 - a.beta2 ** (step + 1))
-                alpha.add_(mh / (vh.sqrt() + 1e-12), alpha=-a.lr * frac)
-            steps.append({"op": "extra", "flops": extra})
-        else:
-            opt.step()
-            opt.zero_grad(set_to_none=True)
-        ema = total if ema is None else 0.98 * ema + 0.02 * total
-        step += 1
-        if step % 50 == 0 or step == n_steps:
-            row = {"step": step, "loss": round(total, 4), "loss_ema": round(ema, 4), "s": round(time.perf_counter() - t_start, 1)}
-            if a.mode == "subspace":
-                row["alpha_rms"] = float(alpha.pow(2).mean().sqrt())
-            else:
-                row["delta_rms"] = float((W.detach() - theta0).pow(2).mean().sqrt())
-            print(json.dumps(row), flush=True)
-        if step in marks:
-            if a.mode == "subspace":
-                snaps.append((prepare.encode_seedlog(names, a.seed, (-alpha).tolist(), a.coeff), len(steps)))
-            else:
-                steps.append({"op": "extra", "flops": fitter.solve_flops})
-                c, _ = fitter.solve(W.detach() - theta0)
-                snaps.append((prepare.encode_seedlog(names, a.seed, c, a.coeff), len(steps)))
+            opt = torch.optim.AdamW(views, lr=lr, betas=(a.beta1, a.beta2), weight_decay=0.0)
 
+        def marks_of(n: int) -> set[int]:
+            return ({round(n * j / 4) for j in (1, 2, 3)} if len(lrs) == 1 else {round(n / 2)}) - {0}
+
+        def coefficients() -> list[float]:
+            if a.mode == "subspace":
+                return [prepare.quantize_coefficient(-x, a.coeff) for x in alpha.tolist()]
+            steps.append({"op": "extra", "flops": fitter.solve_flops})
+            c, res = fitter.solve(W.detach() - theta0)
+            print(json.dumps({"arm": k, "fit_residual": res}), flush=True)
+            return c
+
+        marks = marks_of(arm_steps)
+        first = len(steps)
+        ema, t_loop = None, None
+        step = 0
+        while step < arm_steps:
+            if k == 0 and step in (5, 25) and prepare.DEVICE.startswith("cuda"):
+                torch.cuda.synchronize()
+            if k == 0 and step == 5:
+                t_loop = time.perf_counter()
+            if k == 0 and step == 25 and t_loop is not None:
+                per_s = (time.perf_counter() - t_loop) / 20
+                left = a.time_cap - (time.perf_counter() - t_start) - 25 * len(lrs)
+                fit_steps = (step + int(left / per_s)) // len(lrs)
+                if fit_steps < arm_steps:
+                    print(json.dumps({"time_cut": {"from": arm_steps, "to": fit_steps, "s_per_step": round(per_s, 4)}}),
+                          flush=True)
+                    arm_steps = n_steps = max(fit_steps, step + 1)
+                    marks = marks_of(arm_steps)
+            frac = schedule(step, arm_steps, a.warmup)
+            if a.mode == "subspace":
+                with torch.no_grad():
+                    torch.add(theta0, (alpha.to(Z.dtype) @ Z).float(), out=W)
+            else:
+                for g in opt.param_groups:
+                    g["lr"] = lr * frac
+            rows = data.next(a.batch)
+            total = 0.0
+            for i in range(0, a.batch, a.micro):
+                x = rows[i: i + a.micro]
+                loss = loss_of(fwd, x) * (len(x) / a.batch)
+                loss.backward()
+                total += float(loss.detach())
+            steps.append({"op": "train", "tokens": tokens})
+            if a.mode == "subspace":
+                with torch.no_grad():
+                    g = torch.cat([v.grad.reshape(-1) for v in views])
+                    for v in views:
+                        v.grad = None
+                    ga = (Z @ g.to(Z.dtype)).float()
+                    m1.mul_(a.beta1).add_(ga, alpha=1 - a.beta1)
+                    m2.mul_(a.beta2).addcmul_(ga, ga, value=1 - a.beta2)
+                    mh = m1 / (1 - a.beta1 ** (step + 1))
+                    vh = m2 / (1 - a.beta2 ** (step + 1))
+                    alpha.add_(mh / (vh.sqrt() + 1e-12), alpha=-lr * frac)
+                steps.append({"op": "extra", "flops": extra})
+            else:
+                opt.step()
+                opt.zero_grad(set_to_none=True)
+            ema = total if ema is None else 0.98 * ema + 0.02 * total
+            step += 1
+            if step % 50 == 0 or step == arm_steps:
+                row = {"arm": k, "lr": lr, "step": step, "loss": round(total, 4), "loss_ema": round(ema, 4),
+                       "s": round(time.perf_counter() - t_start, 1)}
+                if a.mode == "subspace":
+                    row["alpha_rms"] = float(alpha.pow(2).mean().sqrt())
+                else:
+                    row["delta_rms"] = float((W.detach() - theta0).pow(2).mean().sqrt())
+                print(json.dumps(row), flush=True)
+            if step in marks or (step == arm_steps and not last):
+                snaps.append((prepare.encode_seedlog(names, a.seed, coefficients(), a.coeff), len(steps)))
+                arms.append({"arm": k, "lr": lr, "step": step, "snapshot": len(snaps) - 1,
+                             "own_flops": prepare.train_flops(rec, trainable, steps[first:])["flops"]})
+
+    coeffs = coefficients()
+    arms.append({"arm": len(lrs) - 1, "lr": lrs[-1], "step": arm_steps, "snapshot": None,
+                 "own_flops": prepare.train_flops(rec, trainable, steps[first:])["flops"]})
     if a.mode == "subspace":
-        coeffs = [prepare.quantize_coefficient(-x, a.coeff) for x in alpha.tolist()]
         with torch.no_grad():
             torch.add(theta0, (alpha.to(Z.dtype) @ Z).float(), out=W)
-    else:
-        steps.append({"op": "extra", "flops": fitter.solve_flops})
-        coeffs, res = fitter.solve(W.detach() - theta0)
-        print(json.dumps({"fit_residual": res}), flush=True)
     blob = prepare.encode_seedlog(names, a.seed, coeffs, a.coeff)
     model = prepare.decode(theta, blob)
     with torch.no_grad():
@@ -282,9 +299,9 @@ def main() -> int:
         want = W.detach() - theta0
         err = float((got - theta0 - want).norm() / want.norm().clamp_min(1e-30))
     print(json.dumps({"E_bytes": len(blob), "decoded_vs_trained_rel_err": err, "delta_rms": float(want.pow(2).mean().sqrt()),
-                      "s": round(time.perf_counter() - t_start, 1)}), flush=True)
+                      "arms": arms, "s": round(time.perf_counter() - t_start, 1)}), flush=True)
     prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=names,
-                   notes={"method": f"seed-subspace/{a.mode}", "args": vars(a), "steps": n_steps, "d": d, "S_parameters": P},
+                   notes={"method": f"seed-subspace/{a.mode}", "args": vars(a), "d": d, "S_parameters": P, "arms": arms},
                    snapshots=snaps)
     return 0
 
