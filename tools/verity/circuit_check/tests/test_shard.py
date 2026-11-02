@@ -547,11 +547,16 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
     paths = [(k, p) for g in written["groups"] for k, ps in g.items() for p in ps]
     assert len(paths) == len(set(paths)) and set(paths) >= {("files", _pin("SynTop_v1")), ("files", _pin("SynOther_v1"))}
     # a module the process loaded before its checks, whose source `syn.check`'s `inspect` lookup asks for as torch's import
-    # asks for every loaded module's: in a tree with the records alone, `loaded` holds it, and the binding's own set doesn't
+    # asks for every loaded module's: in a tree with the records alone, `loaded` holds it, and the binding's own set doesn't.
+    # It is first imported after the registries' inputs are taken, in a recording no target holds, as making another
+    # binding's roots imports what only that binding reads (one imported before them is the registries')
     shutil.copytree(root / "reads", pre / "reads")
     (pre / "synpre").mkdir()
     (pre / "synpre/__init__.py").write_text("")
-    first = _run_units(pre, _reads_run("_core_roots").replace("rep = cli.run(", "import synpre\nrep = cli.run(", 1))
+    late = ("_inputs = cli.CC.registry_inputs\n\n\ndef _then(root):\n    got = _inputs(root)\n"
+            "    with cli.CC.recording(merge=False):\n        import synpre  # noqa: F401\n    return got\n\n\n"
+            "cli.CC.registry_inputs = _then\nrep = cli.run(")
+    first = _run_units(pre, _reads_run("_core_roots").replace("rep = cli.run(", late, 1))
     own, u = first["reads"]["bindings"]["_core_roots"], first["undeclared"]["_core_roots"]
     assert (own["files"], own["listed"]) == (mine["files"], mine["listed"]) and "files" not in u, (own, u)
     assert "synpre/__init__.py" in u["loaded"] and "synpre/__init__.py" not in own["probes"], (own, u)
