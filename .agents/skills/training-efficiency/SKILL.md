@@ -5,8 +5,7 @@ description: >
   loss to a target ℓ*, honestly and under a policy (c, k), scored in training formalism v1's terms (Fit, Slowdown,
   Security; |C| in Boolean gates; ρ, p = |C|/H, S = W*/H). Explains the covert_witness harness (launch.py, the pin, an
   island shipped alone, --island, --arms), the boards (an island's BOARD.md, merge_board.py's digest, DIGEST, FINAL and
-  LOOPHOLE lines), scoring (honest = least compute of any method by a complete schedule, checkpoints as labelled upper
-  bounds), and the coordinator's side: one pin per campaign, 45-minute checkpoints, nodes and leases (CW_NODES, --node,
+  LOOPHOLE lines), scoring (honest = least compute of any method at any checkpoint, W* over the same checkpoints), and the coordinator's side: one pin per campaign, 45-minute checkpoints, nodes and leases (CW_NODES, --node,
   drain_s, the evictor, research keep) and final reruns on the sealed set. Use when launching, joining or coordinating a
   search direction, scoring or reporting an honest or covert record, merging the board, or planning a campaign's pin,
   nodes and finals.
@@ -81,17 +80,14 @@ to work in a search, and the rules no code enforces yet.
   Slowdown. u(x) and a are the best values a witness shows (an encoding or activation code the red team exhibits),
   labelled upper bounds, never measured truth. Δ is Fit's quantity and u(1) Slowdown's: they agree only when every
   token's path reads the whole update, so they are separate columns.
-- **Honest.** H(ℓ*) is the least |C| over every valid record, of any method or direction (a covert one at its |C|), that
-  reaches ℓ* by a complete schedule; each branch end of cooldowns forked from one trunk is a complete schedule. W*(ℓ*) is
-  the least |C|·ρ over the same records, so S = W*/H ≥ 1 by construction: a ratio below 1 is a scoring bug, never a
-  covert advantage. A column of the reference directions alone may stand beside it as context. The table is
-  `python -m te_core.frontier --formalism` (W*, H and S per target and (c, k) cell), the plots
+- **Honest.** H(ℓ*) is the least |C| over every checkpoint of every valid record, of any method or direction (a covert
+  one at its |C|), that reaches ℓ*: a checkpoint is a model someone reached, and the sealed final reruns guard against
+  picking noise. W*(ℓ*) is the least |C|·ρ over the same checkpoints, so S = W*/H ≥ 1 by construction: a ratio below 1
+  is a scoring bug, never a covert advantage. A column of the reference directions alone may stand beside it as
+  context. The table is `python -m te_core.frontier --formalism` (W*, H and S per target and (c, k) cell), the plots
   `python -m te_core.plots --out DIR`.
-- **Checkpoints.** A mid-schedule checkpoint stands only where no complete schedule reaches ℓ*, labelled "upper bound
-  (checkpoint)".
-- **Aim complete schedules at each target.** The honest side, and any direction whose record may set W*, runs short
-  complete schedules sized to end at each ℓ* (say 0.5%, 1% and 2% below the start's loss), never one long run read at its
-  checkpoints.
+- **Aim short complete schedules at each target.** A schedule sized to end at ℓ* (say 0.5%, 1% and 2% below the start's
+  loss) usually reaches it for about half the compute of a checkpoint inside one long run, so both sides run them.
 - **A reported W* is the best attack known**, an upper bound (`.agents/skills/friction/SKILL.md`), and H the best
   method known, so S is no bound: a record found later moves it either way (one that lowers H alone raises S, one that
   lowers W* alone lowers it). Report S with the records that set it.
