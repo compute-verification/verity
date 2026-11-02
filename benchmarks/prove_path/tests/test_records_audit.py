@@ -429,23 +429,33 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
 
 
-def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False) -> SimpleNamespace:
+def _v2(*entries: dict) -> SimpleNamespace:
+    """Core's registration (`R`) registering ``entries`` beside the window's ports (its ``registered``, v2), as a committer
+    registers a window's own values."""
+    return SimpleNamespace(KINDS=R.KINDS, FORMAT=R.FORMAT_V2, digest=R.digest,
+                           record=lambda *a, **kw: R.record(*a, **kw, registered=entries))
+
+
+def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False, window: str = RUN) -> SimpleNamespace:
     """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (coordinate u row u % 4),
-    committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead, committed
-    under its run root and registered in its ``activations``, as `prove_path.py window-commit` commits the scan's state."""
+    committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead, registered
+    afresh in its registration's ``registered`` (v2) under the domain R7 derives (the population Program's digest, the
+    value, its shape and the window's open root, ``window``), as `prove_path.py window-commit` registers the scan's
+    state."""
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
-    value = REG.Registered.commit("test/model", name, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN if own else None)
     read = IF.Read(TID, "wrow", name, 0, (n // 4, 4), 0, (0, K // 2))
-    win = IF.Window(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,))), RUN,
-                    D.parse_law(LAW), cap, registered={name: value})
+    circuit = IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,)))
+    program = program_digest(circuit.program()[0]) if own else "test/model"
+    value = REG.Registered.commit(program, name, rows.tolist(), schema=REG.SCHEMA_V2, window=window if own else None)
+    win = IF.Window(circuit, RUN, D.parse_law(LAW), cap, registered={name: value})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
-    entry = {"program": "test/model", "values": {name: value.entry()}}
-    win.write(win.close(), d, {"label": "test", **({"activations": entry} if own else {})}, registrar=R)
-    return SimpleNamespace(dir=d, value=value, pin=entry)
+    entry = {"program": program, "values": {name: value.entry()}}
+    win.write(win.close(), d, {"label": "test"}, registrar=_v2(value.entry()) if own else R)
+    return SimpleNamespace(dir=d, value=value, pin=entry, program=program)
 
 
 def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_free_inputs(tmp_path, capsys):
@@ -502,19 +512,24 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     registration, the Program the audit sampled (the one the registration names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
-    Refused by name: a window that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no
-    Program or another than the registration names, and an answer committing to another registration."""
+    Refused by name: a window that registers no scan state, or reads it under a v1 registration, which registers none, or
+    registers it twice; a registration whose state root isn't the one its window records, or another registration than
+    the audit's; a circuit the registration doesn't bind; an audit that wrote no Program or another than the registration
+    names."""
     got = _registered(tmp_path / "w", name=RA.TIED, own=True)
     audit = _audited(got.dir, tmp_path / "a")
     rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
+    assert rec["format"] == R.FORMAT_V2 and rec["registered"] == [got.value.entry()] and rec["program"] == got.program
     p = RA.period(got.dir, audit, {})
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     assert p["free"] == 8 * per_unit - 8 * 8 * K and p["steps"] == 0
     assert p["registration"] == rec and p["answer"] == SI.answer(audit, rec) and p["answer"]["verdict"] == "accept"
     assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == R.digest(rec)
-    ties, untied = RA.window_pins(rec["window"], doc)
-    assert ties == {} and list(untied) == [RA.TIED]
-    audited = RA.declared_count(doc, 0, pins=RA.pin_roots(untied), roots=RA.window_roots(rec["window"]), untied=set(untied))
+    ties, untied = RA.window_entries(rec, doc, RA.window_values(doc, {}))
+    assert ties == {} and untied == {RA.TIED: got.value.entry()}
+    roots = RA.registration_roots(rec)
+    assert roots == {RA.TIED: got.value.root.hex()} == rec["window"]["registered_roots"]
+    audited = RA.declared_count(doc, 0, pins=RA.pin_roots(untied), roots=roots, untied=set(untied))
     assert audited["free"] == 8 * per_unit and audited["untied"] == [RA.TIED]
     capsys.readouterr()
     assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json")]) == 0
@@ -524,9 +539,13 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {})["answer"]
     assert refused["verdict"] == "reject" and refused["commitment"] == R.digest(rec)
 
-    other = _registered(tmp_path / "x")
-    unbound = tmp_path / "u"
-    shutil.copytree(got.dir, unbound)
+    other, v1 = _registered(tmp_path / "x", own=True), _registered(tmp_path / "v1", name=RA.TIED)
+    unbound, rerooted, moved, twice = tmp_path / "u", tmp_path / "rr", tmp_path / "m", tmp_path / "t"
+    entry = {**got.value.entry(), "root": "cd" * 64}
+    for d, r in ((unbound, rec), (rerooted, {**rec, "registered": [entry]}), (twice, {**rec, "registered": [entry] * 2}),
+                 (moved, {**rec, "registered": [entry], "window": {**rec["window"], "registered_roots": {RA.TIED: "cd" * 64}}})):
+        shutil.copytree(got.dir, d)
+        (d / "registration.json").write_text(json.dumps(r))
     (unbound / "circuit.json").write_text(json.dumps({**doc, "name": "other"}))
     bare, renamed = tmp_path / "b", tmp_path / "n"
     for d in (bare, renamed):
@@ -534,7 +553,11 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     (bare / "window" / "program.json").unlink()
     (renamed / "window" / "program.json").write_text(json.dumps({**p["program"], "name": "other"}))
     for window, audited_by, why in [
-            (other.dir, _audited(other.dir, tmp_path / "xa"), "commits no verity/certifier/scan-state/v1 its circuit reads"),
+            (other.dir, _audited(other.dir, tmp_path / "xa"), "registers no verity/certifier/scan-state/v1 its circuit reads"),
+            (v1.dir, _audited(v1.dir, tmp_path / "v1a"), "registers it 0 times, not once with its root"),
+            (twice, audit, "registers it 2 times"),
+            (rerooted, audit, r"records two roots for \['verity/certifier/scan-state/v1'\]"),
+            (moved, audit, "commits to another registration than the window's"),
             (unbound, audit, "is not the circuit record the registration binds"),
             (got.dir, bare, "wrote no Program"),
             (got.dir, renamed, "isn't the one the registration names"),
@@ -563,19 +586,18 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
     outs = np.split(got, np.cumsum([count // 2 for _o, count in IF.layout(fn).outs])[:-1], axis=1)
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
-    value = REG.Registered.commit("test/model", RA.TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
     read = IF.Read(TID, "wrow", RA.TIED, 0, (n // 4, 4), 0, (0, K // 2))
-    registered = IF.Registered({RA.TIED: 4 * K // 2}, reads=(read,))
-    win = IF.Window(IF.Circuit("test", ((COORD, n), (fn, shell)), registered=registered), RUN, D.parse_law(LAW), cap,
-                    registered={RA.TIED: value})
+    circuit = IF.Circuit("test", ((COORD, n), (fn, shell)), registered=IF.Registered({RA.TIED: 4 * K // 2}, reads=(read,)))
+    value = REG.Registered.commit(program_digest(circuit.program()[0]), RA.TIED, rows.tolist(), schema=REG.SCHEMA_V2,
+                                  window=RUN)
+    win = IF.Window(circuit, RUN, D.parse_law(LAW), cap, registered={RA.TIED: value})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
     win.record(fn, [state], [np.ascontiguousarray(o) for o in outs])
     assert win.mismatches() == {}
-    entry = {"program": "test/model", "values": {RA.TIED: value.entry()}}
-    win.write(win.close(), d, {"label": "test", "activations": entry}, registrar=R)
+    win.write(win.close(), d, {"label": "test"}, registrar=_v2(value.entry()))
     return SimpleNamespace(dir=d, shell=fn)
 
 
@@ -647,21 +669,41 @@ def test_an_input_only_window_value_is_free_in_the_count_and_named():
     assert "untied" not in before
 
 
-def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_ties():
-    """`window_pins`: the per-window values the circuit reads are the registration's entries, each held to a domain binding
-    the window's run root, split into ties (pinned) and the untied (read only by input ports, counted free); one it
-    doesn't read is neither, and one committed under another run, or naming another value, is refused."""
+def test_the_windows_own_values_are_the_registered_parameters_no_pin_holds_at_their_reads_row_width():
+    """`window_values`: the circuit's registered parameters the verifier pinned none of, each at the one row width its
+    reads name, its leaves and the v2 row format, what R7 expects registered; refused where reads name it at two widths,
+    its leaves aren't whole rows, or no read names it."""
+    circuit = _crafted(TIE + INPUT_ONLY, PARAMS)
+    assert RA.window_values(circuit, {"y"}) == {"e": {"words": 32, "leaves": 32 * 32, "schema": REG.SCHEMA_V2}}
+    assert RA.window_values(circuit, {"y", "e"}) == {} == RA.window_values({"templates": [[TID, 1]], "wires": []}, ())
+    for doc, why in ((circuit, r"'y'.*read at \[1, 32\] words a row"),
+                     (_crafted(INPUT_ONLY, {"e": 32 * 32 + 1}), r"'e'.*\[32\] words a row, not one width its 1025 leaves"),
+                     (_crafted(INPUT_ONLY, {"e": 32 * 32, "z": 32}), r"'z'.*read at \[\] words")):
+        with pytest.raises(ValueError, match=f"didn't pin registered parameter {why}"):
+            RA.window_values(doc, ())
+
+
+def test_the_windows_own_values_are_its_registrations_entries_pinned_only_when_they_are_ties():
+    """`window_entries`: each of the window's own values is its v2 registration's one ``registered`` entry of it, split
+    into ties (pinned) and the untied (read only by input ports, counted free); one registered no times (a v1
+    registration), twice or with no root is refused. `registration_roots` adds each entry's root to the window's, and
+    refuses an entry whose root isn't the window's for the same value."""
     rows = [[1, 2], [3, 4]]
     mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "y", "e")}
-    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    rec = {"window": {"run": RUN, "registered_roots": {"w": "cd" * 64}}, "registered": list(mine.values())}
     circuit = _crafted(TIE + INPUT_ONLY, PARAMS)
-    assert RA.window_pins(w, circuit) == ({"y": mine["y"]}, {"e": mine["e"]})
-    assert RA.window_pins(w, {}) == ({}, {}) and RA.window_pins({"run": RUN}, circuit) == ({}, {})
-    elsewhere = REG.Registered.commit("test/model", "y", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
-    for bad in ({**w, "run": "cd" * 64}, {**w, "activations": {"program": "test/model", "values": {"y": elsewhere}}},
-                {**w, "activations": {"program": "test/model", "values": {"y": mine["x"]}}}):
-        with pytest.raises(ValueError, match="another value or a domain"):
-            RA.window_pins(bad, circuit)
+    assert RA.window_entries(rec, circuit, ["y", "e"]) == ({"y": mine["y"]}, {"e": mine["e"]})
+    assert RA.window_entries(rec, circuit, ()) == ({}, {}) == RA.window_entries({"window": {}}, circuit, ())
+    for bad, why in (({"window": rec["window"]}, "registers it 0 times"), ({**rec, "registered": None}, "registers it 0 times"),
+                     ({**rec, "registered": [mine["e"], mine["e"]]}, "registers it 2 times"),
+                     ({**rec, "registered": [{**mine["e"], "root": None}]}, "registers it 1 times, not once with its root")):
+        with pytest.raises(ValueError, match=f"didn't pin registered parameter 'e', and the registration {why}"):
+            RA.window_entries(bad, circuit, ["e"])
+    assert RA.registration_roots(rec) == {"w": "cd" * 64, **{v: e["root"] for v, e in mine.items()}}
+    with pytest.raises(ValueError, match=r"records two roots for \['w'\]"):
+        RA.registration_roots({**rec, "registered": [{"value": "w", "root": "ab" * 64}]})
+    with pytest.raises(ValueError, match="hex digits"):
+        RA.registration_roots({**rec, "registered": [{"value": "e", "root": "zz"}]})
 
 
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
