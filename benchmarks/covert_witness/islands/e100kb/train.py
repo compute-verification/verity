@@ -27,14 +27,16 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 - initialization: `--init` gauss (A ~ N(0, 1/d_in), B = 0), orth (A orthonormal rows), grad (A the top-r right singular
   vectors of the targets' full gradient over `--init-batches` batches, B = 0; the pass and the weight gradients are logged);
 - optimizer: AdamW with `--b-lr-mult` (LoRA+), `--opt riemann` (each factor's gradient preconditioned by the other's Gram,
-  Zhang and Pilanci 2024), `--beta2`, `--wd`;
+  Zhang and Pilanci 2024), `--opt muon` (A and B by Muon at `--lr`: Nesterov momentum, one fp32 buffer per value,
+  orthogonalized by 5 Newton–Schulz steps, its matmuls counted as extra FLOPs; gains and magnitudes stay on AdamW),
+  `--beta2`, `--wd`;
 - schedule: `--schedule` linear (warmup, linear decay to 0), wsd (`--cooldown` fraction), cosine; `--batch`;
 - data: `--fresh` skips the windows the start trained on (its seed-0 order's prefix).
 
 The run plans its steps for the harness (`hooks.plan`) and encodes E in the middle of each of `--snaps` + 1 shares of them
 (the default 19: each 5%), so each of the harness's 5% checkpoints scores one. The record's notes carry `delta_grad`: the
-trainable values and the bits of their gradient, of AdamW's state (m and v, fp32) and of the fp32 latent factors and
-magnitudes that a straight-through run keeps beside the stored codes.
+trainable values and the bits of their gradient, of the optimizer's state (AdamW's m and v, or Muon's buffer, fp32) and of
+the fp32 latent factors and magnitudes that a straight-through run keeps beside the stored codes.
 
     python launch.py CLASS START --island e1mb --node NODE --note TEXT -- --class CLASS [--targets all] [--rank 0] ...
 """
@@ -282,13 +284,14 @@ def ranks_for(theta, targets: list[str], rank: int, rank_map: dict[str, int]) ->
     return {n: r for n, r in out.items() if r > 0}
 
 
-def delta_grad(trained: list[torch.Tensor], latent: int) -> dict:
-    """Δ_grad: each trained value's fp32 gradient and AdamW's fp32 m and v, plus the `latent` fp32 values a
-    straight-through run keeps beside the codes E stores."""
-    n = sum(p.numel() for p in trained)
-    bits = 32 * n + 64 * n + 32 * latent
-    return {"trainable": n, "grad_bits": 32 * n, "adam_bits": 64 * n, "latent_bits": 32 * latent, "bits": bits,
-            "bytes": bits // 8}
+def delta_grad(adam: list[torch.Tensor], muon: list[torch.Tensor], latent: int) -> dict:
+    """Δ_grad: each trained value's fp32 gradient and its optimizer's fp32 state (AdamW's m and v, Muon's one buffer),
+    plus the `latent` fp32 values a straight-through run keeps beside the codes E stores."""
+    na, nm = sum(p.numel() for p in adam), sum(p.numel() for p in muon)
+    n = na + nm
+    bits = 32 * n + 64 * na + 32 * nm + 32 * latent
+    return {"trainable": n, "grad_bits": 32 * n, "adam_bits": 64 * na, "muon_bits": 32 * nm, "latent_bits": 32 * latent,
+            "bits": bits, "bytes": bits // 8}
 
 
 def lr_factor(step: int, n_steps: int, a) -> float:
@@ -365,6 +368,40 @@ def riemann_precondition(ads: dict, delta: float) -> int:
     return flops
 
 
+def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
+    a, b, c = 3.4445, -4.7750, 2.0315
+    x = g.bfloat16()
+    tall = x.shape[0] > x.shape[1]
+    if tall:
+        x = x.T
+    x = x / (x.norm() + 1e-7)
+    for _ in range(steps):
+        s = x @ x.T
+        x = a * x + (b * s + c * s @ s) @ x
+    return (x.T if tall else x).to(g.dtype)
+
+
+def ns_flops(shape: tuple[int, int], steps: int = 5) -> int:
+    m, n = min(shape), max(shape)
+    return steps * (4 * m * m * n + 2 * m ** 3)
+
+
+class Muon(torch.optim.Optimizer):
+    def __init__(self, params, lr: float, momentum: float = 0.95):
+        super().__init__(params, {"lr": lr, "momentum": momentum})
+
+    @torch.no_grad()
+    def step(self):
+        for g in self.param_groups:
+            for p in g["params"]:
+                if p.grad is None:
+                    continue
+                st = self.state.setdefault(p, {"buf": torch.zeros_like(p)})
+                buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
+                u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
+                p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
@@ -391,7 +428,7 @@ def main() -> int:
     ap.add_argument("--init", default="gauss", choices=("gauss", "orth", "grad"))
     ap.add_argument("--init-batches", type=int, default=4)
     ap.add_argument("--scale", default="rs", choices=("rs", "one"), help="rs: s = sqrt(d_in / r); one: s = 1")
-    ap.add_argument("--opt", default="adamw", choices=("adamw", "riemann"))
+    ap.add_argument("--opt", default="adamw", choices=("adamw", "riemann", "muon"))
     ap.add_argument("--riemann-delta", type=float, default=1e-2)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--b-lr-mult", type=float, default=1.0)
@@ -412,6 +449,8 @@ def main() -> int:
     a.format = a.format or ("lora" if not a.bits else "lora2" if a.bits in prepare.LORA2_BITS else "quant")
     if a.dora and (a.format != "lora2" or a.dtype != "f16"):
         raise SystemExit(f"{KLASS}: --dora needs --format lora2 (CWLORA2 holds the magnitudes) and --dtype f16")
+    if a.opt == "muon" and a.wd:
+        raise SystemExit(f"{KLASS}: --opt muon takes no --wd")
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
@@ -480,31 +519,36 @@ def main() -> int:
     for ad in ads.values():
         ad.refresh(mag_dtype)
     fwd = torch.compile(net)
-    groups = [{"params": [ad.A for ad in ads.values()], "lr": a.lr, "weight_decay": a.wd},
-              {"params": [ad.B for ad in ads.values()], "lr": a.lr * a.b_lr_mult, "weight_decay": a.wd},
-              {"params": [ad.m for ad in ads.values() if ad.m is not None], "lr": a.mag_lr, "weight_decay": 0.0},
-              {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}]
-    groups = [grp for grp in groups if grp["params"]]
-    opt = torch.optim.AdamW(groups, betas=(0.9, a.beta2), fused=prepare.DEVICE.startswith("cuda"))
+    factors = [{"params": [ad.A for ad in ads.values()], "lr": a.lr, "weight_decay": a.wd},
+               {"params": [ad.B for ad in ads.values()], "lr": a.lr * a.b_lr_mult, "weight_decay": a.wd}]
+    rest = [{"params": [ad.m for ad in ads.values() if ad.m is not None], "lr": a.mag_lr, "weight_decay": 0.0},
+            {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}]
+    muon = [grp for grp in factors if grp["params"]] if a.opt == "muon" else []
+    adam = [grp for grp in (rest if a.opt == "muon" else factors + rest) if grp["params"]]
+    opts = ([Muon(muon, lr=a.lr)] if muon else []) + (
+        [torch.optim.AdamW(adam, betas=(0.9, a.beta2), fused=prepare.DEVICE.startswith("cuda"))] if adam else [])
+    extra = sum(ns_flops(tuple(p.shape)) for grp in muon for p in grp["params"])
     trainable = {"full": norms, "adapters": ranks}
-    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
+    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - spent) // per_step)
     # mid-share, so a rounded step never puts two encodes in one harness window and none in the next
     marks = {round(n_steps * (k + 0.5) / (a.snaps + 1)) for k in range(a.snaps + 1)}
     hooks.plan(n_steps)
-    trained = [p for grp in opt.param_groups for p in grp["params"]]
-    dgrad = delta_grad(trained, sum(ad.latents() for ad in ads.values()))
-    print(json.dumps({"class": a.klass, "format": a.format, "steps": n_steps, "rank": rank,
+    trained = [p for grp in muon + adam for p in grp["params"]]
+    dgrad = delta_grad([p for grp in adam for p in grp["params"]], [p for grp in muon for p in grp["params"]],
+                       sum(ad.latents() for ad in ads.values()))
+    print(json.dumps({"class": a.klass, "format": a.format, "opt": a.opt, "steps": n_steps, "rank": rank,
                       "ranks": sorted(set(ranks.values())), "rank_sum": sum(ranks.values()), "targets": len(ranks),
                       "norms": len(norms), "E_bytes": size, "delta_grad": dgrad, "flops_per_step": per_step,
-                      "init_flops": spent, "windows": len(data.order)}), flush=True)
+                      "extra_per_step": extra, "init_flops": spent, "windows": len(data.order)}), flush=True)
     t0 = time.perf_counter()
-    lrs = [grp["lr"] for grp in opt.param_groups]
+    groups = [grp for opt in opts for grp in opt.param_groups]
+    lrs = [grp["lr"] for grp in groups]
     ema = None
     for step in range(n_steps):
         frac = lr_factor(step, n_steps, a)
-        for grp, lr in zip(opt.param_groups, lrs):
+        for grp, lr in zip(groups, lrs):
             grp["lr"] = lr * frac
         rows = data.next(a.batch)
         total = 0.0
@@ -519,8 +563,11 @@ def main() -> int:
         torch.nn.utils.clip_grad_norm_(trained, 1.0)
         if a.opt == "riemann":
             steps.append({"op": "extra", "flops": riemann_precondition(ads, a.riemann_delta)})
-        opt.step()
-        opt.zero_grad(set_to_none=True)
+        if extra:
+            steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+        for opt in opts:
+            opt.step()
+            opt.zero_grad(set_to_none=True)
         for ad in ads.values():
             ad.refresh(mag_dtype)
         ema = total if ema is None else 0.98 * ema + 0.02 * total
