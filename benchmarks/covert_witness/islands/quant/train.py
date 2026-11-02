@@ -8,8 +8,9 @@ Modes:
   `--variants` quantizes the update Δ = W − θ;
 - `qat`: every trained matrix's weight is θ + Q(V) in each step's forward, Q a sign, ternary or k-bit quantizer (scaled
   by the mean |V| of a tensor, row or group) of a latent delta V that only the optimizer touches, through a
-  straight-through gradient; so every step's weights, and the trained model, are exactly a CWQUAN1 code. `--qat fp`
-  trains the weights unquantized, as ptq does;
+  straight-through gradient; so every step's weights, and the trained model, are exactly a CWQUAN1 code. `--qat sparse`
+  is ternary on the `--qat-keep` share of each group with the largest |V| (scaled by their mean |V|), the rest zero.
+  `--qat fp` trains the weights unquantized, as ptq does;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
 `--arms` (qat, qlora) packs settings into one candidate: each arm trains from θ on the same data order with an equal
@@ -17,7 +18,8 @@ share of the budget, in its own 5%s of the run, so a later arm's checkpoints are
 
 With `--emit quan` (it needs prepare.encode_quant, which writes qformat.encode's bytes), every quantized checkpoint and
 the submission are CWQUAN1; with `--emit full` (the default) they are the model through `encode_full`, and the record's
-notes give its CWQUAN1 size, checked to rebuild that model bit for bit. The step count is a multiple of the
+notes give its CWQUAN1 size, checked to rebuild that model bit for bit. `--xz 9e` re-encodes the submitted CWQUAN1 at xz
+preset 9e (`qformat.recompress`; the checkpoints stay prepare.encode_quant's preset 1). The step count is a multiple of the
 harness's 20 checkpoints (`hooks.plan`). In ptq the harness scores the fp model after each 5% (`hooks.output`), and right
 after it the program encodes one variant of the same weights, which the harness scores as that 5%'s checkpoint: the
 variants cycle back from the last 5% (`--variants`' non-fp ones, the first at 100%), and the notes' `buckets` say which
@@ -85,7 +87,7 @@ class Schedule:
 
 
 #: what an arm may set (`--arms`); the rest is the run's
-ARM_KEYS = {"qat", "qat_group", "qat_mult", "muon_lr", "adam_lr", "warmup", "data_seed", "targets", "rank", "qbits", "pow2",
+ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "muon_lr", "adam_lr", "warmup", "data_seed", "targets", "rank", "qbits", "pow2",
             "norms", "lr", "norm_lr", "seed"}
 
 
@@ -221,17 +223,25 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
     return sorted(n for n in params if any(re.search(p, n) for p in pats))
 
 
-QAT_SCHEME = re.compile(r"sign|tern|rtn(\d)")
+QAT_SCHEME = re.compile(r"sign|tern|sparse|rtn(\d)")
 #: a qat arm that trains the weights unquantized; its checkpoints encode `--variants` of them, as ptq's do
 QAT_FP = "fp"
 
 
 @torch.no_grad()
-def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float) -> qf.QArray:
+def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float, keep: float = 1.0) -> qf.QArray:
     """Q(V) for QAT: a scale of `mult` times the group's mean |V| (f16), then sign, ternary (round(V/s) in -1..1) or k-bit
-    round to nearest; a group of zeros quantizes to zeros."""
+    round to nearest; a group of zeros quantizes to zeros. `sparse`: sign(V) on the ceil(keep · group) entries of largest
+    |V| (ties at the threshold kept, zeros never), at `mult` times their mean |V|."""
     g = v.numel() if group < 0 else qf.groups_of(v, group)
     vg = v.reshape(-1, g)
+    if scheme == "sparse":
+        a = vg.abs()
+        n_keep = min(g, max(1, math.ceil(keep * g)))
+        kept = (a >= a.kthvalue(g - n_keep + 1, dim=1, keepdim=True).values) & (a > 0)
+        s = qf._f16(mult * (a * kept).sum(1) / kept.sum(1).clamp(min=1))
+        k = torch.where(kept, torch.where(vg >= 0, 2, 0), 1).to(torch.uint8)
+        return qf.QArray(torch.tensor([-1.0, 0.0, 1.0, 0.0], dtype=torch.float16), s, k.view(-1), 2, g, tuple(v.shape))
     s = qf._f16(mult * vg.abs().mean(1))
     sf = s.float()
     if scheme == "sign":
@@ -488,6 +498,9 @@ def main() -> int:
                                                   "--variants, as ptq's do)")
     ap.add_argument("--qat-group", type=int, default=-1, help="qat: -1 one scale per tensor, 0 per row, else G entries")
     ap.add_argument("--qat-mult", type=float, default=1.0, help="qat: the scale over the group's mean |V|")
+    ap.add_argument("--qat-keep", type=float, default=0.05, help="qat sparse: the share of each group kept (nonzero)")
+    ap.add_argument("--xz", choices=("1", "9e"), default="1",
+                    help="--emit quan: the submitted E's xz preset (9e: qformat.recompress; checkpoints stay preset 1)")
     ap.add_argument("--declare", action="store_true",
                     help="qat: declare each step's weights as one CWQUAN1 code from θ (prepare.declare_step), for the "
                          "harness to credit; needs prepare.decode to read CWQUAN1. Put fp arms last: their steps aren't "
@@ -574,7 +587,7 @@ def main() -> int:
         @torch.no_grad()
         def materialize(x=x, latent=latent, qarrays=qarrays, quantized=quantized) -> None:
             for n in quantized:
-                q = qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult)
+                q = qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult, x.qat_keep)
                 qarrays[n] = q
                 params[n].data.copy_((theta_dev[n].float() + q.value()).to(theta_dev[n].dtype))
 
@@ -677,6 +690,9 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
         entries = {n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
         entries |= {n: {"kind": "full", "t": t} for n, t in r["rest"].items()}
         qblob = (encode_quan if a.emit == "quan" else qf.encode)(entries, theta)
+        xz1_bytes = len(qblob)
+        if a.xz == "9e":
+            qblob = qf.recompress(qblob)
         rebuilt = qf.decode(theta, qblob, dev)
         trained = {n: (theta[n].to(dev).float() + q.value()).to(theta[n].dtype).cpu() for n, q in qarrays.items()}
         trained |= {n: t.to(theta[n].dtype) for n, t in r["rest"].items()}
@@ -687,7 +703,8 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
         nonzero = sum(float((q.codebook.float()[q.codes.long().cpu()] != 0).float().sum()) for q in qarrays.values())
         notes.append(variant_note(f"qat-{r['x'].qat}", qblob, len(qblob), h_bits, ok, 0.0, n_params, t1, arm=r["k"],
                                   spec=getattr(r["x"], "arm", ""), steps=r["steps"], final_loss_ema=r["loss"],
-                                  nonzero_share=nonzero / max(1, q_n), where="submission" if r is best else "arm"))
+                                  nonzero_share=nonzero / max(1, q_n), xz=a.xz, q_bytes_xz1=xz1_bytes,
+                                  where="submission" if r is best else "arm"))
         if r is best:
             blob = qblob if a.emit == "quan" else prepare.encode_full(trained)
         del rebuilt, trained

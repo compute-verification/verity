@@ -1,6 +1,5 @@
-"""CWQUAN1: an update as low-bit codes, entropy coded. A proposed fourth format for `prepare.decode` (a decoder change goes
-through the toolsmith); until it lands, the quant island submits the same model through `encode_full` and records this
-encoding's size beside it, checked to rebuild that model bit for bit.
+"""CWQUAN1: an update as low-bit codes, entropy coded, the reference codec of `prepare.decode`'s quant format
+(`prepare.encode_quant` writes `encode`'s bytes, which train.py checks before it relies on it).
 
     E = b"CWQUAN1\\n" + xz(inner),   inner = 4-byte header length, a JSON header, then each array's bytes in order
 
@@ -13,7 +12,8 @@ The header lists one entry per changed tensor of θ, each one of:
 - `full`: the tensor itself, in θ's dtype.
 
 Codes are `bits` wide (1 to 8), packed little-endian within a byte stream (te_core's `pack_bits` order). 8·|E| counts every
-byte: the header, the codebooks, the scales and the codes, after the entropy coder (xz, no check).
+byte: the header, the codebooks, the scales and the codes, after the entropy coder (xz, no check). The encoders write xz
+preset 1; the decoders read any one xz stream, so `recompress` (preset 9e) changes |E| and nothing it decodes to.
 """
 from __future__ import annotations
 
@@ -28,6 +28,8 @@ import torch
 
 MAGIC = b"CWQUAN1\n"
 XZ = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE, "preset": 1}
+XZ9 = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE,
+       "filters": [{"id": lzma.FILTER_LZMA2, "preset": 9 | lzma.PRESET_EXTREME}]}
 
 
 @dataclass
@@ -109,6 +111,13 @@ def encode(entries: dict[str, dict], theta: dict[str, torch.Tensor]) -> bytes:
     h = json.dumps({"t": header}, separators=(",", ":")).encode()
     inner = struct.pack("<I", len(h)) + h + b"".join(parts)
     return MAGIC + lzma.compress(inner, **XZ)
+
+
+def recompress(blob: bytes) -> bytes:
+    """The same CWQUAN1 payload under xz preset 9e (sparse codes: ~1.2x their order-0 entropy against preset 1's ~1.5x)."""
+    if blob[:8] != MAGIC:
+        raise ValueError("E: not CWQUAN1")
+    return MAGIC + lzma.compress(lzma.decompress(bytes(blob[8:]), format=lzma.FORMAT_XZ), **XZ9)
 
 
 # ---- decode ------------------------------------------------------------------------------------------------------------

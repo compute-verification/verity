@@ -51,6 +51,20 @@ def test_round_trips() -> None:
     assert float(zero.value().abs().sum()) == 0.0
 
 
+def test_recompress() -> None:
+    """Preset 9e holds the same payload in fewer bytes on sparse codes, and both decoders read it."""
+    th = theta()
+    g = torch.Generator().manual_seed(2)
+    delta = {k: torch.randn(v.shape, generator=g) * (torch.rand(v.shape, generator=g) < 0.03) for k, v in th.items()}
+    blob = qf.encode({k: {"kind": "delta", "q": qf.ternary(d, 0.5, 0)} for k, d in delta.items()}, th)
+    small = qf.recompress(blob)
+    assert len(small) < len(blob), (len(small), len(blob))
+    got, want = qf.decode(th, small), qf.decode(th, blob)
+    assert all(prepare.same_bits(got[k], want[k]) for k in th)
+    got = prepare.decode(th, small, device="cpu")
+    assert all(prepare.same_bits(got[k], want[k]) for k in th)
+
+
 def test_refuses() -> None:
     th = theta()
     blob = qf.encode({"embed": {"kind": "delta", "q": qf.sign(torch.ones(50, 128))}}, th)
@@ -64,5 +78,6 @@ def test_refuses() -> None:
 
 if __name__ == "__main__":
     test_round_trips()
+    test_recompress()
     test_refuses()
     print("ok")
