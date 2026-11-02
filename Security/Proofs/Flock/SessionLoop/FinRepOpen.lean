@@ -79,7 +79,7 @@ at the workers' values (`Hm96.swViewR_eq`), and the pads columns and salts read 
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_padCols {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt)
-    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) :
+    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1) :
     (T.swExe w v ω ys).ch = (T.viewExe w ω ys).ch ∧ (T.swExe w v ω ys).cm = (T.viewExe w ω ys).cm ∧
       (T.swExe w v ω ys).saltsP = (T.viewExe w ω ys).saltsP := by
   have e1 : T.swExe w v ω ys = T.tab.toBase (T.hm96.onVals.viewR (w, v) ω ys) :=
@@ -195,7 +195,7 @@ base the tape gives it, so its switched view is the view at those values (`Hm96.
 def FinRows (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape) (ops : List (Msg × Msg))
     (j : Fin (Masked.jOf x)) : Prop :=
   ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt (finS.wt x w j, vs x w ν (finCoins x ops) j)
-    (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1
+    (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1
 
 open FlockSoundness.Discharge in
 /-- **Where its rows hold, the views' pads columns and salts are the honest views'**: table `i`'s rep `r` source from

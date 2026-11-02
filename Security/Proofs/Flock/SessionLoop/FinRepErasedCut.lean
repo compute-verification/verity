@@ -162,7 +162,7 @@ theorem finRepErased_step_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _r
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     (hrows : ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
       (finS.wt x w j, vs x w ν (finCoins x ops) j)
-      (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1)
+      (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     {schs : Array (_root_.Flock.Schedule × ℕ)}
     (hs : (FlockComplete.schedsPZk (FlockDeploy.tabsOf (Masked.stsOf x)) : V _) = .ok schs)
@@ -307,7 +307,7 @@ theorem finRepErased_of_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _roo
     (hRows : ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops →
       ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
         (finS.wt x w j, vs x w ν (finCoins x ops) j)
-        (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1)
+        (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1)
     (hPiop : FinPiop vs L₀ src wk x w) (hFc : FinFc vs L₀ src wk x w) :
     FinRepErased vs L₀ src (realOf src) wk x w := by
   intro ν t κ m₀ ρ₀ ops hF s0 spec hsx schs hs cms hcms

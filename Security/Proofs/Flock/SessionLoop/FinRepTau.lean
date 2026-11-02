@@ -43,7 +43,7 @@ the real view keeps the view's `τ` and changes the leaves alone. -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_tau {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt)
-    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) :
+    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1) :
     (T.swExe w v ω ys).tau = (T.tab.toBase (T.tab.onVals.view (w, v) ω)).tau := by
   have e1 : T.swExe w v ω ys = T.tab.toBase (T.hm96.onVals.viewR (w, v) ω ys) :=
     congrArg T.tab.toBase
@@ -72,7 +72,7 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (xs : Array _root_.Flock.Claim) (hxsz : xs.size = spec.points * (stAt x j).regions.size)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
