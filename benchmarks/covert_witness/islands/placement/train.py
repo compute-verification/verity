@@ -35,6 +35,7 @@ import torch.nn.functional as F
 import prepare
 
 EOT = prepare.EOT["gpt2"]
+T_START = time.perf_counter()
 
 
 def names_matching(params: dict, pattern: str | None, L: int) -> list[str]:
@@ -101,6 +102,9 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     ap.add_argument("--max-steps", type=int, default=0, help="a CPU smoke's cap")
+    ap.add_argument("--time-cap", type=float, default=900.0,
+                    help="seconds since train.py started by which the step loop must end, under GPU_SECONDS_CAP with room "
+                         "for loading, compiling and the submission; fewer steps when step 10-40's rate says so (0: none)")
     a = ap.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = True
     dev = prepare.DEVICE
@@ -204,7 +208,19 @@ def main() -> int:
                       "extra_per_step": extra}), flush=True)
     t0 = time.perf_counter()
     lrs = [grp["lr"] for grp in opt.param_groups]
-    for step in range(n_steps):
+    step = 0
+    while step < n_steps:
+        if step in (10, 40) and dev.startswith("cuda"):
+            torch.cuda.synchronize()
+        if step == 10:
+            t10 = time.perf_counter()
+        if step == 40 and a.time_cap:
+            left = a.time_cap - (time.perf_counter() - T_START)
+            fit = max(step + 1, step + int(left / ((time.perf_counter() - t10) / 30)))
+            if fit < n_steps:
+                print(json.dumps({"steps": fit, "was": n_steps, "why": f"time cap {a.time_cap} s"}), flush=True)
+                n_steps = fit
+                marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
         frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
         for grp, lr in zip(opt.param_groups, lrs):
             grp["lr"] = lr * frac
@@ -226,6 +242,7 @@ def main() -> int:
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
             snaps.append((encode(fmt, a.dtype, factors, embed_factor, params, theta, full), len(steps)))
+        step += 1
     blob = encode(fmt, a.dtype, factors, embed_factor, params, theta, full)
     model = prepare.decode(theta, blob)
     source = Path(__file__).read_bytes()
