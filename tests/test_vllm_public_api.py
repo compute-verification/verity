@@ -56,6 +56,9 @@ PUBLIC = {
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
+    "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
+                                              "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
+                                              "benchmarks time and gate",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
