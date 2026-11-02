@@ -1,7 +1,7 @@
 """The review landing onto `checked` (drive.toml's `land_into`: `main` holds only tested commits).  A
 landing fast-forwards `checked`, never `main`; `main` is fast-forwarded only to a commit of `checked` whose after-landing run
 passed every step on the merge gate; a red run moves nothing on `main`, and its culprit is reverted on `checked`.  A job off
-the gate (ci.toml's `gate = false`: circuit-check) runs in that run and reverts its culprit, but holds no promotion."""
+the gate (drive's policy, policy.toml's `off_gate`: circuit-check) runs in that run and reverts its culprit, but holds no promotion."""
 from __future__ import annotations
 
 import json
@@ -10,11 +10,11 @@ import pytest
 
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, TAIL
 from research.queue import DriveFlags, QueueError
-from test_drive_review import CI_TOML, Review, _main, _move_main, _owning, _subject
+from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _subject
 from test_queue import World, _git
 from test_queue_drive import _failed_run, _steps_run
 
-#: the steps `main` waits for under `CI_TOML`
+#: the steps `main` waits for under `GATED_TREE`
 GATED = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL and s != "circuit-check"]
 
 
@@ -128,8 +128,8 @@ def test_main_follows_no_baseline_that_passed_fewer_steps(world, monkeypatch):
 
 
 def _gated(world: World, monkeypatch) -> Review:
-    """A review landing onto `checked` in a tree whose ci.toml takes circuit-check off the merge gate."""
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    """A review landing onto `checked` in a tree whose drive policy takes circuit-check off the merge gate."""
+    _move_main(world, GATED_TREE)
     return Review(world, monkeypatch, land_into="checked")
 
 
@@ -255,9 +255,7 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
     ring nor launch again."""
     from research.drive import BEHIND_EVERY_S, BEHIND_S
 
-    off = ("circuit-check", "ratchet-gate")
-    _move_main(world, {"tools/verity/check/ci.toml": 'schema = "ci/v0"\n' + "".join(
-        f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' + ('gate = false\n' if s in off else "") for s in AFTER_LANDING)})
+    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'})
     h = Review(world, monkeypatch, land_into="checked")
     h.d.after_landing_shards, h.d.after_landing_no_cache = 3, True
     h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
