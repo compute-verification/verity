@@ -46,18 +46,22 @@
   ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
   `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
   ``network-period check``'s own on its case (`decide_period`; `block_entry`).
-* **The warden path** (``--job``'s ``path``, `WARDEN`): every step reads an active warden's own run (the gate's
-  ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's, whose input is
-  refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the warden's own offline check on its witness
-  and holds the public ``certificates.jsonl`` to the certified lines (`warden_chain.certificates`; no clock
-  certificate: the warden signs none). ``endpoint`` binds the endpoint's own advice to the certified I/O read off the
-  warden's cells (`warden_endpoint`); where the endpoint's records stay on the served node, that node runs it
-  (`served_endpoint`, `served_session.py endpoint`) and the chain reads its report. N2 is `n2_zk.py prove
-  --warden-run`'s, on the warden link; the I/O tie is
+* **The network certifier path** (``--job``'s ``path``, `WARDEN`): every step reads an active network certifier's own
+  run (the gate's ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's,
+  whose input is refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
+  offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
+  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). ``endpoint`` binds the
+  endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
+  endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
+  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the I/O tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
-  --warden-run`'s. Each is held to the warden run the certificates step read (`on_warden`), every one is required,
-  and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
+  --warden-run`'s. Each is held to the network certifier run the certificates step read (`on_warden`), every one is
+  required, and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
   endpoint report).
+* **The coins** (`coins_step`, required on every path): each round's coin source from the drivers' summaries, a
+  session of the auditor's challenger for each scan round and each member of a sampled N2 period (`round_coins`),
+  none for a round that reads no coin (Selection All); refused when a scan round has no session or a session's
+  evidence doesn't hold. ``open`` names the coins that aren't the challenger's: every Flock session's.
 * **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
   δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`), computed
   by `leak_bounds`: one machine is one link, and 1,000 machines are the sum over as many links.
@@ -124,9 +128,10 @@ STUBBED = (
     "network certifier's own cells as one device, so there are no warden rows and the scan isn't run",
     "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
-#: the warden path (``--job``'s ``path``): every step reads an active warden's own run (`warden_chain`)
+#: the network certifier path (``--job``'s ``path``): every step reads an active network certifier's own run
+#: (`warden_chain`)
 WARDEN = "warden"
-#: what a report on the warden path stands on that isn't the chain's own
+#: what a report on the network certifier path stands on that isn't the chain's own
 WARDEN_STUBBED = (
     "the endpoint's advice is bound to the warden's certified I/O and rebuilt from it in the clear at the auditor, "
     "and the output tie to the Commit's port isn't proved",
@@ -138,6 +143,8 @@ WARDEN_SERVED_STUBBED = (
     "the endpoint's advice is bound to the warden's certified I/O and rebuilt from it in the clear on the served node, "
     "the prover's, so the chain's endpoint step is the prover's report of that check, and the output tie to the "
     "Commit's port isn't proved", WARDEN_STUBBED[1])
+#: a round that reads no coin (`n2_zk.NO_COIN`'s)
+NO_COIN = "selection all: no coin, no session"
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: the scan's rounds whose window is accepted (scan_zk.ROUNDS): the toy block's is proved like the honest one's
@@ -346,19 +353,19 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 
 
 def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for a warden run (`served_endpoint`), on the certified I/O read off its cells
-    (`warden_chain.io`)."""
+    """The endpoint's own advice for a network certifier run (`served_endpoint`), on the certified I/O read off its
+    cells (`warden_chain.io`)."""
     import warden_chain as WC
 
     return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
 
 
 def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for the warden run of ``dep`` (its ``deployment.json``), as network-e2e's
+    """The endpoint's own advice for the network certifier run of ``dep`` (its ``deployment.json``), as network-e2e's
     `endpoint_advice` makes it for a certifier rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
-    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the warden's bucket unless an index is there, then
-    ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the warden's execution phases, with
-    the model's EOS ids ``eos`` (a warden run records none)."""
+    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network certifier's bucket unless an index is there,
+    then ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the network certifier's
+    execution phases, with the model's EOS ids ``eos`` (a network certifier run records none)."""
     import subprocess
 
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
@@ -384,7 +391,7 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
 
 
 def warden_endpoint_step(e: dict | None) -> dict:
-    """`warden_endpoint`'s report: accepted when the warden's certified I/O reads whole off its cells and the
+    """`warden_endpoint`'s report: accepted when the network certifier's certified I/O reads whole off its cells and the
     endpoint's own advice is bound to it and rebuilt from it, in the clear."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
@@ -424,9 +431,9 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 
 def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
-    """A warden-path step held to the warden run the certificates step read (``run_id``): refused by name
-    (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no warden run), and when it is another
-    warden run's."""
+    """A network-certifier-path step held to the network certifier run the certificates step read (``run_id``): refused
+    by name (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network certifier run),
+    and when it is another network certifier run's."""
     from warden_chain import PROXY
 
     if doc is None or step.get("verdict") in ("not run", "not given"):
@@ -507,7 +514,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
             "negatives": {k: "escaped the draw" if v["escaped_the_draw"] else v["network_accepted"] is False
                           for k, v in members.items() if k != "honest"},
-            "challenger": s.get("challenger"),
+            "challenger": (s.get("coins") or {}).get("challenger"),
             "clocks": s.get("clocks") or {"source": "declared", "by": "plan.json's syncs (n2_zk); the certificates step "
                                                                       "found them equal to the signed ones: "
                                                                       f"{certs_doc.get('signed_are_declared')}"},
@@ -545,6 +552,37 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
             "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
                                                                     f"stratified:{k}" if k else s.get("law") or "all"),
             "in_the_clear": CLEAR["scan"]}
+
+
+def coins_step(scan: dict | None, n2: dict | None, tie: dict | None, job: dict) -> dict:
+    """Each round's coin source, from the drivers' summaries' ``coins``: a scan round's and a sampled N2 member's
+    session of the auditor's challenger (`round_coins`), or none (Selection All: N2 at every window, the tie).
+    Accepted when every scan round the summary ran, and a sampled N2 period (the job's ``n2_sampled``), has a session,
+    no two rounds share a session's root, and every session held (`round_coins.RoundSession.held`'s ``ok``); ``open``
+    names the coins that aren't the challenger's, every Flock session's (`round_coins.FLOCK`)."""
+    rounds: dict[str, dict] = {}
+    for step, doc in (("scan", scan), ("n2", n2)):
+        for name, r in (((doc or {}).get("coins") or {}).get("rounds") or {}).items():
+            rounds[f"{step}/{name}"] = {k: r.get(k) for k in ("source", "root", "session", "coins_reason", "error",
+                                                               "read_bytes", "negatives_refused", "ok", "draw")
+                                        if k in r}
+    if tie is not None:
+        rounds["tie"] = {"source": None, "draw": (tie.get("coins") or {}).get("draw") or NO_COIN}
+    missing = [f"scan/{n}" for n in (scan or {}).get("rounds") or {} if f"scan/{n}" not in rounds]
+    if job.get("n2_sampled"):
+        members = [k for k in rounds if k.startswith("n2/")]
+        missing += [k for k in members if not rounds[k].get("source")] if members else ["n2 (sampled)"]
+    bad = {k: v.get("coins_reason") or v.get("error") or "the session's evidence doesn't hold"
+           for k, v in rounds.items() if v.get("source") and not v.get("ok")}
+    first: dict[str, str] = {}
+    for k, v in rounds.items():
+        if v.get("root") and first.setdefault(v["root"], k) != k:
+            bad.setdefault(k, f"its session's root is {first[v['root']]}'s: each round draws on a session of its own")
+    why = "; ".join([*(f"{k}: no challenger session" for k in missing), *(f"{k}: {v}" for k, v in bad.items())])
+    flock = next((d["coins"]["flock"] for d in (scan, n2, tie) if ((d or {}).get("coins") or {}).get("flock")), None)
+    return {"verdict": "refused" if why else "accepted", "why": why or None, "challenger": job.get("challenger"),
+            "rounds": rounds, "open": [f"every Flock session's coins (scan, N2, tie): {flock['by']}"] if flock else [],
+            "in_the_clear": "the sessions' evidence: the challenger's key, ledger, pins and released coins, public"}
 
 
 def scan_exit(s: dict | None, job: dict) -> str | None:
@@ -673,7 +711,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                 "no carry across windows: each window's terms stand alone"]}
 
 
-# --- leak: K per monitoring period, on the warden run ------------------------------------------------------------------
+# --- leak: K per monitoring period, on the network certifier run ------------------------------------------------------
 
 #: what a monitoring period's count runs over, each machine one link: one link (`leak_bounds.per_link`), the census's
 #: reference datacenter (`leak_bounds.datacenter`) and the world (`leak_bounds.world`)
@@ -792,9 +830,9 @@ def leak_markdown(doc: dict) -> str:
 
 
 def merged_n2(paths: list[str] | None) -> dict | None:
-    """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each run's draw on its own
-    challenger session, every one of the same population and K): one summary, its members and sampled draws their
-    union, ``ok`` only when every run's is, and each run's challenger session kept."""
+    """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each member's draw on its own
+    challenger session, every one of the same population and K): one summary, its members, sampled draws and
+    members' sessions their union, ``ok`` only when every run's is."""
     docs = [d for d in map(_json, [paths] if isinstance(paths, str) else paths or []) if d]
     if len(docs) < 2:
         return docs[0] if docs else None
@@ -803,14 +841,15 @@ def merged_n2(paths: list[str] | None) -> dict | None:
         raise SystemExit(f"--n2: the runs' draws differ: {sorted(draws)}")
     return {**docs[0], "members": {k: v for d in docs for k, v in (d.get("members") or {}).items()},
             "sampled": {k: v for d in docs for k, v in (d.get("sampled") or {}).items()},
-            "challenger": [d.get("challenger") for d in docs], "ok": all(d.get("ok") is True for d in docs),
-            "runs": len(docs)}
+            "coins": {**(docs[0].get("coins") or {}),
+                      "rounds": {k: v for d in docs for k, v in ((d.get("coins") or {}).get("rounds") or {}).items()}},
+            "ok": all(d.get("ok") is True for d in docs), "runs": len(docs)}
 
 
 def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[str]:
     """What a certifier-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
-    what served them when their ``request.json`` says (demo_chain.sh's); a warden-path report's, `WARDEN_STUBBED`, or
-    `WARDEN_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
+    what served them when their ``request.json`` says (demo_chain.sh's); a network-certifier-path report's,
+    `WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
     if job.get("path") == WARDEN:
         return list(WARDEN_SERVED_STUBBED if (endpoint or {}).get("at") == SERVED_NODE else WARDEN_STUBBED)
     if job.get("path") != CERTIFIER_ONLY:
@@ -940,9 +979,10 @@ def report(a) -> dict:
     scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
             else scan_step(_json(a.scan), a.warden_run, job))
     certificates = {k: v for k, v in cert.items() if k != "rows"}
-    tie = None
+    tie, tie_doc = None, _json(getattr(a, "tie", None)) if warden else None
+    coins = coins_step(None if certifier_only else _json(a.scan), merged, tie_doc, job)
     if warden:
-        run_id, tie_doc = cert.get("warden_run"), _json(getattr(a, "tie", None))
+        run_id = cert.get("warden_run")
         certificates = on_warden(certificates, _json(a.certs), run_id, "the certificates step's input")
         endpoint = on_warden(endpoint, _json(a.endpoint), run_id, "the endpoint's report")
         n2 = on_warden(n2, merged, run_id, "N2's summary") | {
@@ -959,10 +999,11 @@ def report(a) -> dict:
                                     "binary": job.get("lean"), "in_the_clear": CLEAR["lean"],
                                     "n2_windows_proved": ((n2.get("members") or {}).get("honest") or {}).get(
                                         "lean_proved"),
-                                    "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}}}
-    required = (("custody", "certificates", "endpoint", "tie", "n2", "scan") if warden else
+                                    "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}},
+             "coins": coins}
+    required = (("custody", "certificates", "endpoint", "tie", "n2", "scan", "coins") if warden else
                 ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()),
-                 *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",))))
+                 *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",)), "coins"))
     accepted = (all(steps[k].get("verdict") == "accepted" for k in required)
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
     rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
@@ -995,7 +1036,7 @@ def markdown(r: dict) -> str:
     if r.get("stubbed"):
         lines += ["Stubbed:", *[f"- {x}" for x in r["stubbed"]], ""]
     lines += ["| step | verdict | ε at δ | in the clear |", "|---|---|---|---|"]
-    shown = [k for k in ("custody", "certificates", "endpoint", "tie", "n2", "scan", "lean") if k in s]
+    shown = [k for k in ("custody", "certificates", "endpoint", "tie", "n2", "scan", "lean", "coins") if k in s]
     for k in shown:
         e = s[k].get("eps_at_delta") or {}
         eps = (f"{e['law']}, {e['drawn']} of {e['units']}: incorrect ≤ {e['incorrect_at_delta']}" if e else "")
@@ -1008,7 +1049,12 @@ def markdown(r: dict) -> str:
                                                                 f"certified I/O {ep.get('io')}"))
     if s.get("tie", {}).get("tie"):
         notes.append(f"- tie: link-windows tied by member {s['tie']['tie']}")
-    lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
+    c = s.get("coins") or {}
+    coins = [f"- {k}: " + (f"{v['source']}, session {v.get('session')}, {'held' if v.get('ok') else 'NOT held'}"
+                           if v.get("source") else str(v.get("draw"))) for k, v in (c.get("rounds") or {}).items()]
+    lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "",
+              f"## Coins (the challenger: {c.get('challenger')})", "", *coins, *[f"- open: {x}" for x in c.get("open") or []],
+              "", "## D1", ""]
     d = r["d1"]
     lines += [f"- {d['theorem']}; {d['sum']}", f"- windows {d['windows']}, all accepted {d['all_accepted']}",
               f"- Σ ε_w = {d['sum_eps']}"]
@@ -1042,21 +1088,21 @@ def main(argv=None) -> int:
     v = sub.add_parser("certs", help="the client's kept certificates and clock certificates, verified")
     which = v.add_mutually_exclusive_group(required=True)
     which.add_argument("--run", type=Path, help="the certifier rehearsal's honest directory")
-    which.add_argument("--warden-run", type=Path, help="the warden path: an active warden's run (warden_chain)")
+    which.add_argument("--warden-run", type=Path, help="the network certifier path: an active network certifier's run (warden_chain)")
     v.add_argument("--client", type=Path, help="the client's kept files (default --run)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
     e = sub.add_parser("endpoint",
-                       help="the warden path: the endpoint's own advice bound to the warden's certified I/O")
+                       help="the network certifier path: the endpoint's own advice bound to the network certifier's certified I/O")
     e.add_argument("--warden-run", required=True, type=Path)
     e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (network-e2e chain.ENDPOINT)")
     e.add_argument("--eos", required=True,
-                   help="the model's EOS token ids, comma-separated (a warden run records none)")
+                   help="the model's EOS token ids, comma-separated (a network certifier run records none)")
     e.add_argument("--out", required=True, type=Path)
     r = sub.add_parser("report", help="one report over the steps' outputs")
     for f in ("custody", "certs", "endpoint", "scan", "job"):
         r.add_argument(f"--{f}")
-    r.add_argument("--tie", help="the warden path: n2_tie_zk.py prove --class warden's summary")
+    r.add_argument("--tie", help="the network certifier path: n2_tie_zk.py prove --class warden's summary")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
     r.add_argument("--warden-run")
@@ -1068,8 +1114,8 @@ def main(argv=None) -> int:
                                          "chain and re-decided by network-period check")
     r.add_argument("--server", help="the node the block ran on (the block record's server)")
     r.add_argument("--out", required=True, type=Path)
-    k = sub.add_parser("leak", help="K per monitoring period on the warden run, for the scan's class and sample")
-    k.add_argument("--warden-run", required=True, type=Path, help="the fetched warden gate run (its end.json)")
+    k = sub.add_parser("leak", help="K per monitoring period on the network certifier run, for the scan's class and sample")
+    k.add_argument("--warden-run", required=True, type=Path, help="the fetched network certifier gate run (its end.json)")
     k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
     k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
