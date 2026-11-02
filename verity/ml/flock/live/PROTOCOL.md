@@ -781,10 +781,7 @@ tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`). The other bytes it relea
 named hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`) and
 the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and the tables' side (`Tables`, `Complete`,
 `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) is a premise. Until those are proved, the ZK server is not yet proved
-zero-knowledge. The workers it covers are pad-blind (`Loop.blind`): of the tape they are handed the nonce and what the
-device's level-0 commitment reads of each table's cell (`Loop.Seen`: its mask slot, the lanes' paddings with the extra
-lanes, level 0's salts), and of the verifier's answers only the coins they carry. The frame's start still hands the
-device its samples (below), so the deployed device is not one yet.
+zero-knowledge.
 
 The frame's protocol, which the loop steps on its own requests (`Frame.Req`) and `flock-firewall frame` serves on its
 standard input (`tests/test_firewall_frame.py`):
