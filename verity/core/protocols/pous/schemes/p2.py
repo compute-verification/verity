@@ -54,10 +54,11 @@ leaves and challenge derivation), not with the expander.
   twice `Δ + RTT` on the allowed hardware, a CPU or GPU core with cooperation within one chiplet.  `call_ns` stands for
   it, half the fastest such root (`ROOT_CALL_NS`), and the certificate allows no such call within the deadline.  The
   spec caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS`.
-- At `k ≥ 320` challenges the run protocol takes `wide320_certificate` for `2^19` to `2^27` blocks:
-  `Pous.SecurityProofs.ObligationWide320`, P2's ring-model audit window of 320 reads, the state at most `⌊ρ·|C|⌋` at
-  each, passed with probability at most `2^-20` (`(1 − 0.043)^320 + 320·2^-137`), from `P2RingRoundSecureWide`. It
-  bounds the window at the store's snapshot, not the composed check, for which `periodHeldAt` holds at 105 reads only.
+- `wide320_certificate` is `Pous.SecurityProofs.ObligationWide320` for `2^19` to `2^27` blocks: P2's ring-model
+  audit window of 320 reads, the state at most `⌊ρ·|C|⌋` at each, passed with probability at most `2^-20`
+  (`(1 − 0.043)^320 + 320·2^-137`), from `P2RingRoundSecureWide`. It bounds the window at the store's snapshot, not
+  the composed check, for which `periodHeldAt` holds at 105 reads only. No run takes it: at `k ≥ 320` the run
+  protocol keeps the 105-read certificates' `1% + 2^-128`.
 - A shared mask with linear tweaks is model M2, which is not covered; the keys here are per block.
 - Neither codec is ever the default.  Its profile says so plainly (`EXPERIMENTAL`).
 """
@@ -517,7 +518,7 @@ def wide320_certificate(params: P2Params) -> Certificate | None:
     `CERT_WIDE_BLOCKS`, in any number of segments: a window of `CERT_K_WIDE320` reads at the store's snapshot, the state
     at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, read at `N` = the store's
     blocks, under `WIDE_CLAIMS`. `delta` is `2^-20 − 2^-128`, so that `delta + 2^eps_log2` is the statement's `2^-20`.
-    The run protocol takes it at `k ≥ CERT_K_WIDE320` (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    The run protocol doesn't take it (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
     lo, hi = CERT_WIDE_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None

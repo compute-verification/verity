@@ -170,7 +170,9 @@ does it release the rest of the hold to `out/`. A find fails the run (exit 3), a
 by its path alone. A file equal to one of the gate's public files (by sha256, so a gate's published bundle and its
 members aren't scanned) is no find, nor is a piece those files hold, as they are or with their JSON written again. The
 false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
-counts and digests; the one there excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. The
+counts and digests. Its entries excuse the stall probe's cgroup counters and cgroup path in the runner's own records,
+and, by key path in the witness file (`keys`), the certifier's own CPU list wherever an indented list of integers
+repeats it and its ticker's stalls in `out/certs.json`, which `warden_serve.check` publishes. The
 guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
