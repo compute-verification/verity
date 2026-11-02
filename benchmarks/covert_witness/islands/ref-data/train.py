@@ -7,6 +7,10 @@ with warmup and `--final-frac`, EMA (`--ema-frac`) chosen against raw weights on
 forwards), snapshots at `--snap-at`, and `--forks` cooldown branches (`--fork-len` of the steps before each, the rate linearly
 toward 0 on windows after the plan, snapshotted, then rolled back; their passes stay in the step log).
 
+What trains (default every tensor): `--freeze-embed`, `--freeze-norms`, `--top-blocks K` (only the top K blocks' matrices
+and gains and the final norm, the embedding frozen, so the backward stops below block L-K) and `--block-lr-decay D` (block
+i at D^(L-1-i) of its rate). `--class` is the Delta bin the submission declares (default reference).
+
 Data (all off by default: TrainData's stream permuted by `--data-seed`, the seed's):
 
 - `--windows random|fresh|seen`: the 1024-token windows drawn. `fresh` drops the windows the start read (its provenance's
@@ -25,13 +29,14 @@ since it reads windows by id rather than through `TrainData.next`, it marks its 
 (`hooks.step()`): each chunk of θ's scoring pass, each training step with its snapshots and forks, and the final
 validation and submit.
 
-    launch.py reference m100 --note "MECHANISM ..." -- [--mat-lr 0.004] [--windows fresh] [--score-len 64 --keep 0.75 ...]
+    launch.py reference m100 --island ref-data --note "MECHANISM ..." -- [--mat-lr 0.004] [--top-blocks 2] [--windows fresh]
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import re
 import time
 from pathlib import Path
 
@@ -155,6 +160,13 @@ def main() -> int:
     ap.add_argument("--ns-steps", type=int, default=5)
     ap.add_argument("--freeze-embed", action="store_true")
     ap.add_argument("--freeze-norms", action="store_true")
+    ap.add_argument("--top-blocks", type=int, default=0,
+                    help="train only the top K blocks (matrices and gains) and the final norm; the embedding and the "
+                         "blocks below stay frozen, so the backward stops below block L-K (0: every block)")
+    ap.add_argument("--block-lr-decay", type=float, default=1.0,
+                    help="block i's matrices and gains train at D^(L-1-i) times their rate (the top block at 1)")
+    ap.add_argument("--class", dest="klass", choices=sorted(prepare.CLASSES), default=KLASS,
+                    help="the Delta bin the submission declares (the launch's CLASS)")
     ap.add_argument("--clip", type=float, default=1.0)
     ap.add_argument("--sched", choices=("linear", "wsd", "cosine", "const"), default="linear")
     ap.add_argument("--warmup", type=float, default=50, help="steps, or a fraction of the steps when below 1")
@@ -197,23 +209,42 @@ def main() -> int:
     for p in params.values():
         p.data = p.data.float()
     embed = "embed" if rec["config"]["family"] == "lf" else "model.embed_tokens.weight"
-    mats = [n for n, p in params.items() if p.ndim == 2 and n != embed]
-    norms = [n for n, p in params.items() if p.ndim == 1]
-    trained = mats + ([] if a.freeze_embed else [embed]) + ([] if a.freeze_norms else norms)
+    n_layer = rec["config"]["n_layer"]
+    if (a.top_blocks or a.block_lr_decay != 1.0) and rec["config"]["family"] != "lf":
+        raise SystemExit("train: --top-blocks and --block-lr-decay name lf blocks (blocks.N.*)")
+    if not 0 <= a.top_blocks <= n_layer:
+        raise SystemExit(f"train: --top-blocks must lie in [0, {n_layer}]")
+
+    def block_of(n: str) -> int | None:
+        m = re.match(r"blocks\.(\d+)\.", n)
+        return int(m[1]) if m else None
+
+    low = n_layer - a.top_blocks if a.top_blocks else 0
+    mats = [n for n, p in params.items() if p.ndim == 2 and n != embed and (block_of(n) or 0) >= low]
+    norms = [n for n, p in params.items() if p.ndim == 1 and (block_of(n) is None or block_of(n) >= low)]
+    trained = mats + ([] if a.freeze_embed or a.top_blocks else [embed]) + ([] if a.freeze_norms else norms)
     for n, p in params.items():
         p.requires_grad_(n in trained)
+
+    def by_rate(names: list[str], lr: float) -> list[dict]:
+        """Param groups of `names`, block i's at lr * D^(L-1-i) (the final norm and the embedding at lr)."""
+        rate = {}
+        for n in names:
+            b = block_of(n)
+            rate.setdefault(lr * a.block_lr_decay ** (n_layer - 1 - b) if b is not None else lr, []).append(params[n])
+        return [{"params": ps, "lr": r, "base_lr": r} for r, ps in rate.items()]
+
     opts = []
     adam_groups = []
     if a.mat_opt == "muon":
-        opts.append(Muon([params[n] for n in mats], lr=a.mat_lr, momentum=a.momentum, nesterov=not a.no_nesterov,
+        opts.append(Muon(by_rate(mats, a.mat_lr), lr=a.mat_lr, momentum=a.momentum, nesterov=not a.no_nesterov,
                          wd=a.wd, scale=a.muon_scale, ns_steps=a.ns_steps))
-        opts[0].param_groups[0]["base_lr"] = a.mat_lr
     else:
-        adam_groups.append({"params": [params[n] for n in mats], "lr": a.mat_lr, "base_lr": a.mat_lr, "weight_decay": a.wd})
-    if not a.freeze_embed:
+        adam_groups += [g | {"weight_decay": a.wd} for g in by_rate(mats, a.mat_lr)]
+    if embed in trained:
         adam_groups.append({"params": [params[embed]], "lr": a.embed_lr, "base_lr": a.embed_lr, "weight_decay": a.embed_wd})
     if not a.freeze_norms:
-        adam_groups.append({"params": [params[n] for n in norms], "lr": a.norm_lr, "base_lr": a.norm_lr, "weight_decay": 0.0})
+        adam_groups += [g | {"weight_decay": 0.0} for g in by_rate(norms, a.norm_lr)]
     if adam_groups:
         opts.append(torch.optim.AdamW(adam_groups, betas=(a.beta1, a.beta2), fused=dev == "cuda"))
     trainable = {"full": sorted(trained)}
@@ -439,7 +470,7 @@ def main() -> int:
         model = vinfo.pop("model", None) or model_of(params, theta, trained)
         final = {"step": n_steps, "weights": which, **vinfo}
         print(json.dumps({"final": final, "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        prepare.submit(out, a.start, KLASS, prepare.encode_full(model), {**theta, **model}, trainable, steps,
+        prepare.submit(out, a.start, a.klass, prepare.encode_full(model), {**theta, **model}, trainable, steps,
                        changed=sorted(trained), notes={"direction": "ref-data", "args": vars(a), "steps": n_steps,
                                                        "data": info, "snapshots": snap_log, "final": final})
     return 0
