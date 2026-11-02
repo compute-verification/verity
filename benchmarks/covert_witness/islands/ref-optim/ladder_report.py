@@ -32,21 +32,30 @@ REFERENCES = [
      "sources": ["github.com/ctxnn1 build-nanogpt FineWeb-Edu run: val 3.031",
                  "Anjaneyalu build-nanogpt reproduction: val 2.990 (OpenAI's GPT-2 124M 3.262 on the same val)",
                  "tao-hpu nanoGPT FineWeb-Edu: val 3.02", "Xerneas3318 GPT-2 124M FineWeb-Edu 10B: val 3.10"]},
-    {"what": "GPT-2 124M on FineWeb-Edu, 300M tokens (same recipe)", "n": GPT2_124M_NON_EMBEDDING, "tokens": 0.3e9,
+    {"what": "GPT-2 124M on FineWeb-Edu, 300M tokens into the same 10B-token cosine run (not annealed, so a loose bound)",
+     "n": GPT2_124M_NON_EMBEDDING, "tokens": 0.3e9,
      "loss": [3.65, 3.65], "sources": ["tao-hpu nanoGPT FineWeb-Edu: val 3.65 at 300M tokens"]},
 ]
 
 
 def load_runs(dirs: list[Path]) -> dict[str, dict]:
-    """Each size's latest run: its summary, curve, count and registered starts."""
+    """Each size's latest run: its summary, curve, count and registered starts. A run still going (or between phases)
+    has no ladder.json, or an older one than its curve.json: its evaluations so far are read from curve.json."""
     out = {}
     for d in dirs:
-        run = json.loads((d / "ladder.json").read_text())
+        count = json.loads((d / "count.json").read_text())
+        run = json.loads((d / "ladder.json").read_text()) if (d / "ladder.json").is_file() else None
+        curve = json.loads((d / "curve.json").read_text()) if (d / "curve.json").is_file() else []
+        top = None if run is None else f"{run['size']['name']}-t{run['plan']['top']['tpp']:g}"
+        complete = run is not None and top in run["done"] and len(run["evals"]) >= len(curve)
+        if not complete:
+            run = {"size": count["size"], "non_embedding_params": count["non_embedding_params"], "evals": curve,
+                   "wall_s": None, "world": None} | ({k: run[k] for k in ("wall_s", "world")} if run else {})
         size = run["size"]["name"]
         starts = {p.parent.name: json.loads(p.read_text()) for p in sorted((d / "starts").glob("*/start.json"))}
         prev = out.get(size)
         if prev is None or len(run["evals"]) >= len(prev["run"]["evals"]):
-            out[size] = {"dir": str(d), "run": run, "count": json.loads((d / "count.json").read_text()), "starts": starts}
+            out[size] = {"dir": str(d), "run": run, "count": count, "starts": starts, "complete": complete}
     return out
 
 
@@ -76,7 +85,10 @@ def envelope(points: list[dict], key: str = "bpb") -> list[str]:
     return out
 
 
-def fit(points: list[dict]) -> dict:
+def fit(points: list[dict]) -> dict | None:
+    """None with no more points than the law's five parameters, or no fit with A, B >= 0."""
+    if len(points) <= 5:
+        return None
     n = np.array([p["non_embedding_params"] for p in points], dtype=float)
     d = np.array([p["tokens"] for p in points], dtype=float)
     y = np.array([p["nats_per_token"] for p in points], dtype=float)
@@ -91,6 +103,8 @@ def fit(points: list[dict]) -> dict:
             err = float((((x @ coef) - y) / y) ** 2 @ np.ones_like(y))
             if best is None or err < best[0]:
                 best = (err, al, be, coef)
+    if best is None:
+        return None
     err, al, be, (e, a, b) = best
     return {"E": float(e), "A": float(a), "alpha": float(al), "B": float(b), "beta": float(be),
             "rms_rel_pct": 100 * math.sqrt(err / len(y)), "points": len(y)}
@@ -103,21 +117,24 @@ def predict(f: dict, n: float, d: float) -> float:
 def report(runs: dict[str, dict]) -> dict:
     annealed, main = f_points(runs)
     full = fit(annealed)
+    largest = max((p["non_embedding_params"] for p in annealed), default=0)
     refs = []
     for r in REFERENCES:
+        if full is None:
+            refs.append(r | {"fit_predicts": None, "pct_over_published_max": None, "verdict": "no fit yet"})
+            continue
         pred = predict(full, r["n"], r["tokens"])
         worse = 100 * (pred - r["loss"][1]) / r["loss"][1]
-        refs.append(r | {"fit_predicts": pred, "pct_over_published_max": worse,
+        refs.append(r | {"fit_predicts": pred, "pct_over_published_max": worse, "extrapolated": r["n"] > largest,
                          "verdict": "consistent" if worse <= FLAG_PCT else "FLAG: the ladder's fit is weaker than published"})
     starts = []
     for size, r in runs.items():
         for name, rec in r["starts"].items():
             prov = rec["provenance"]
             p = next(q for q in annealed if q["branch"] == name)
-            rest = [q for q in annealed if q["branch"] != name]
-            loo = fit(rest)
-            pred = predict(loo, p["non_embedding_params"], p["tokens"])
-            off = 100 * (p["nats_per_token"] - pred) / pred
+            loo = fit([q for q in annealed if q["branch"] != name])
+            pred = predict(loo, p["non_embedding_params"], p["tokens"]) if loo else None
+            off = 100 * (p["nats_per_token"] - pred) / pred if loo else None
             parts = prov["data"]["parts"]
             starts.append({
                 "name": name, "digest": rec["digest"], "size": rec["config"], "non_embedding_params": prov["non_embedding_params"],
@@ -127,14 +144,15 @@ def report(runs: dict[str, dict]) -> dict:
                 "data": {"windows": prov["data"]["windows"], "parts": [q["index"] for q in parts],
                          "files": [parts[0]["file"], parts[-1]["file"]], "held_out_left_out": prov["data"]["held_out"]},
                 "loo_fit_predicts": pred, "pct_vs_loo_fit": off,
-                "verdict": "consistent" if abs(off) <= FLAG_PCT else f"FLAG: {off:+.1f}% against the fit without it",
+                "verdict": "no fit yet" if off is None else (
+                    "consistent" if abs(off) <= FLAG_PCT else f"FLAG: {off:+.1f}% against the fit without it"),
                 "run": prov.get("run"), "commit": prov.get("commit")})
     starts.sort(key=lambda s: (s["non_embedding_params"], s["tokens_per_param"]))
     return {"schema": "te-ladder/report/v1", "flag_pct": FLAG_PCT, "starts": starts, "fit": full, "references": refs,
             "F": {"rule": "every annealed branch end of every size: C0 MACs (te_core's counter, steps x one step) against "
                           "held-out loss on covert_witness's search pool",
                   "annealed": annealed, "envelope_bpb": envelope(annealed), "main_run": main},
-            "runs": {s: {"dir": r["dir"], "wall_s": r["run"]["wall_s"], "world": r["run"]["world"],
+            "runs": {s: {"dir": r["dir"], "complete": r["complete"], "wall_s": r["run"]["wall_s"], "world": r["run"]["world"],
                          "macs_per_step": r["count"]["macs_per_step"],
                          "two_macs_over_analytic": r["count"]["two_macs_over_analytic"]} for s, r in runs.items()}}
 
@@ -150,13 +168,19 @@ def main(argv=None) -> int:
     (a.out / "F.json").write_text(json.dumps({"schema": "te-ladder/F/v1", **rep["F"], "fit": rep["fit"]}, indent=1) + "\n")
     print(f"{'start':10} {'N_ne':>11} {'tpp':>6} {'bpb':>7} {'nats':>6} {'C0 MACs':>10}  verdict")
     for s in rep["starts"]:
+        off = "" if s["verdict"] != "consistent" else f" ({s['pct_vs_loo_fit']:+.2f}%)"
         print(f"{s['name']:10} {s['non_embedding_params']:>11,} {s['tokens_per_param']:>6g} {s['bpb']:7.4f} "
-              f"{s['nats_per_token']:6.3f} {s['c0_macs']:10.3e}  {s['verdict']} ({s['pct_vs_loo_fit']:+.2f}%)")
-    f = rep["fit"]
-    print(f"fit: L = {f['E']:.3f} + {f['A']:.4g} N^-{f['alpha']:.3f} + {f['B']:.4g} D^-{f['beta']:.3f}, "
-          f"rms {f['rms_rel_pct']:.2f}% over {f['points']} points")
+              f"{s['nats_per_token']:6.3f} {s['c0_macs']:10.3e}  {s['verdict']}{off}")
+    if f := rep["fit"]:
+        print(f"fit: L = {f['E']:.3f} + {f['A']:.4g} N^-{f['alpha']:.3f} + {f['B']:.4g} D^-{f['beta']:.3f}, "
+              f"rms {f['rms_rel_pct']:.2f}% over {f['points']} points")
     for r in rep["references"]:
-        print(f"reference: {r['what']}: published {r['loss']}, fit {r['fit_predicts']:.3f} ({r['verdict']})")
+        got = "" if r["fit_predicts"] is None else f", fit {r['fit_predicts']:.3f}" + (
+            " (extrapolated past the largest size)" if r["extrapolated"] else "")
+        print(f"reference: {r['what']}: published {r['loss']}{got} ({r['verdict']})")
+    for s, r in rep["runs"].items():
+        if not r["complete"]:
+            print(f"run {s}: still going ({r['dir']})")
     return 0
 
 
