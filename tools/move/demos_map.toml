@@ -1,0 +1,55 @@
+# The demos move (`python3 tools/move/rename.py --map tools/move/demos_map.toml`): `examples/` is `demos/`, with
+# `tests/test_demos.py` and `verity_cli.demos`, and every path, pathlib join and module name that names them follows. The
+# command (`verity demo`), each demo's `demo.toml` and the prose are an ordinary change.
+#
+# "examples" alone is a word of its own across the tree (a JSON key, a list of failing cases, the handle registry's sample
+# posts, `datacenter.examples`), so no rule renames it alone. The [[words_in]] rules rename the directory wherever a path or
+# a pathlib join names it, whatever is below it, so a file that lands under it later, or comes with a branch carried across
+# the move, moves too. [words] renames the two files that move by name, and names each of the directory's paths today:
+# `move_check` reads a map's [words], not its [[words_in]], and certifies a file they alone rewrite, a form it doesn't read
+# as a moved path included (`${REPLAY:-$ROOT/examples/h200/replay.py}`). The rules for [words] are `rename_map.toml`'s.
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and this map, changelogs, research's recorded moves),
+# `move_check`'s toy repositories, and the datacenter's own `tests/test_examples.py`, which stays.
+exclude = [
+    "tools/move/**",
+    "**/CHANGELOG.md",
+    "tools/research/src/research/store/moves.json",
+    "tools/verity/check/tests/test_move_check.py",
+    "benchmarks/datacenter/tests/test_examples.py",
+]
+
+[keep]
+# another site's path
+strings = ["developers.cloudflare.com/r2/examples/"]
+
+[words]
+"tests/test_examples.py" = "tests/test_demos.py"
+"verity_cli/examples.py" = "verity_cli/demos.py"
+"verity_cli.examples" = "verity_cli.demos"
+"verity_cli import examples" = "verity_cli import demos"
+"examples/dither_full_util" = "demos/dither_full_util"
+"examples/h200" = "demos/h200"
+"examples/lifecycle" = "demos/lifecycle"
+"examples/onsite_served" = "demos/onsite_served"
+"examples/vllm" = "demos/vllm"
+"examples/README.md" = "demos/README.md"
+"examples/" = "demos/"
+
+[[words_in]]
+files = ["*"]
+[words_in.words]
+"examples/" = "demos/"
+
+[[words_in]]
+files = ["*.py"]
+[words_in.words]
+'"examples" /' = '"demos" /'
+'/ "examples"' = '/ "demos"'
+
+# the one quoted word that the CLI's runner and the boundaries test name it by
+[[words_in]]
+files = ["tools/verity/cli/verity_cli/__init__.py", "tests/test_boundaries.py"]
+[words_in.words]
+'"examples"' = '"demos"'
