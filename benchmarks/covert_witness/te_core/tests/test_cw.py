@@ -140,6 +140,28 @@ def test_a_run_reads_its_own_outputs_and_no_other_runs(cw_root, monkeypatch, how
         assert rc == 0 and rec["invalid"] == []
 
 
+def test_a_narrowed_heads_saving_is_read_op_by_op():
+    """The 13:42Z floor rule on a sampled head (V, d = 1000, 16; 64 token rows a call): the head's slice and its input
+    gradient are credited; the full head, a narrow adapter, a block matrix and a weight gradient over the token rows
+    aren't; the credit stops at the analytic head."""
+    from te_core.cw import accounted_over, narrowed_head
+
+    V, d, R = 1000, 16, 64
+    ops = {f"fwd theta mm [[{R}, {d}], [{d}, 100]]": [10, 10 * R * d * 100],  # the sampled head: 100 of V rows
+           f"bwd grad mm [[{R}, 100], [100, {d}]]": [10, 10 * R * 100 * d],  # its input gradient
+           f"fwd theta mm [[{R}, {d}], [{d}, {V}]]": [1, R * d * V],  # the whole head
+           f"fwd updated mm [[{R}, {d}], [{d}, 4]]": [10, 10 * R * d * 4],  # a rank-4 adapter
+           f"fwd theta mm [[{R}, {d}], [{d}, 64]]": [10, 10 * R * d * 64],  # a block matrix (64, 16)
+           f"bwd grad mm [[64, {R}], [{R}, {d}]]": [10, 10 * 64 * R * d]}  # its weight gradient
+    got = narrowed_head(ops, (V, d), {(64, d)}, {"train": 10 * R})
+    assert sorted(c["head_rows"] for c in got["credited"]) == [100, 100]
+    assert got["saved_by_phase"] == {"fwd": 10 * R * d * 900, "bwd": 10 * R * d * 900}
+    assert got["saved_macs"] == 2 * 10 * R * d * 900
+    capped = narrowed_head(ops, (V, d), {(64, d)}, {"train": R})  # one call's tokens: the head's own work is the cap
+    assert capped["saved_macs"] == 2 * R * V * d
+    assert accounted_over(48.0, 100.0, 13) == 48.0 / 74.0 and accounted_over(1.0, 10.0, 5) is None
+
+
 def test_a_recast_copy_of_theta_is_theta_and_a_lossy_one_is_not():
     torch.manual_seed(0)
     theta = {"w": torch.randn(8, 8), "emb": torch.randn(10, 8)}

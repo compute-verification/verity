@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import os
 import re
 import resource
@@ -251,6 +252,50 @@ class CWPlan:
             return 0
         base, suffixes = unframe(enc)
         return sum(self.p.rebuild_macs(self.theta, b) for b in [*([base] if base else []), *suffixes])
+
+
+HEAD_GEMMS = ("mm", "addmm", "bmm", "matmul", "linear", "baddbmm")
+
+
+def narrowed_head(ops: dict, head: tuple[int, int], weights, tokens: dict) -> dict:
+    """The analytic head work a narrowed head doesn't do, read op by op from a count (`ops`, `ledger._macs_log`'s: "phase
+    class op shapes" -> [calls, MACs]), for the coordinator's 13:42Z floor rule: a record under the floor is scored when
+    the counted op table accounts for the gap. `head` is the head's weight (rows, d); `weights` every other weight's shape;
+    `tokens` the meter's ({"train": n, "forward": n}).
+
+    A forward GEMM row [R, d] x [d, n] is the head on n of its rows when d < n < rows and (d, n) is no other weight's
+    shape, and a backward row [R, n] x [n, d] is its input gradient when such a forward row has the same R and n: the
+    whole head would add (rows - n)/n of either's MACs at the same token rows. Shapes can't tell such a slice from an
+    n-wide matrix the program adds, so every row credited is listed, and the credit is at most the analytic head's own
+    forward and input-gradient work."""
+    rows, d = head
+    other = {s for w in weights for s in (tuple(w), tuple(w)[::-1])}
+    gemms = []
+    for key, (calls, macs) in ops.items():
+        phase, _, op, shapes = key.split(" ", 3)
+        try:
+            (a, b), (b2, c) = [tuple(s[-2:]) for s in json.loads(shapes)[-2:]]
+        except (ValueError, TypeError):
+            continue
+        if op in HEAD_GEMMS and b == b2:
+            gemms.append((phase, a, b, c, key, calls, macs))
+    fwd = {(a, c) for phase, a, b, c, *_ in gemms if phase == "fwd" and b == d and d < c < rows and (d, c) not in other}
+    saved, credited = {"fwd": 0, "bwd": 0}, []
+    for phase, a, b, c, key, calls, macs in gemms:
+        n = c if phase == "fwd" and b == d else b if phase == "bwd" and c == d else None
+        if n and (a, n) in fwd:
+            s = macs * (rows - n) // n
+            saved[phase] += s
+            credited.append({"op": key, "calls": calls, "macs": macs, "head_rows": n, "saved_macs": s})
+    cap = {"fwd": (tokens.get("train", 0) + tokens.get("forward", 0)) * rows * d, "bwd": tokens.get("train", 0) * rows * d}
+    total = sum(min(saved[k], cap[k]) for k in saved)
+    return {"saved_macs": total, "saved_by_phase": saved, "cap_macs": cap, "credited": credited}
+
+
+def accounted_over(counted_flops: float, analytic_flops: float, saved_macs: int) -> float | None:
+    """The harness's count over the run's own steps once a narrowed head's saving is taken out of the estimate."""
+    rest = analytic_flops - 2 * saved_macs
+    return counted_flops / rest if rest > 0 else None
 
 
 def score_run(prepare, rec: dict, run_dir: Path, theta: dict[str, torch.Tensor], start: dict,
