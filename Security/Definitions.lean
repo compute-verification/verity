@@ -28,7 +28,7 @@ import Definitions.NetworkCertifier.RecordRows
 import Definitions.NetworkCertifier.Period
 import Definitions.Accounting.Sheets
 import Definitions.Accounting
-import Definitions.Population
+import Definitions.SampledProofs
 import Definitions.Claims
 import Definitions.Claims.IndexedTapes
 import Definitions.Claims.Recursion

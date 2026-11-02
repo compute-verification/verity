@@ -12,7 +12,7 @@ the session's outcome and its record, the registry (`Registry`: one live registr
 `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
 receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
-`Security/Properties/RemoteAudit.lean`.
+`Security/Properties/Accounting/Remote.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 is the verifier of record: it decides each registration, event and window, an accepted session's record is the one
@@ -76,7 +76,7 @@ group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is
-`Security/Properties/RemoteAudit/Line.lean`'s `LineHeld`.
+`Security/Properties/Accounting/Remote/Line.lean`'s `LineHeld`.
 
 ## Replay
 

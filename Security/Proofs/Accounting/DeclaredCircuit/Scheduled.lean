@@ -1,6 +1,6 @@
 import Proofs.Accounting.DeclaredCircuit.Requirement
 import Properties.Accounting.DeclaredCircuit
-import Proofs.Properties.RemoteAudit.Schedule
+import Proofs.Properties.Accounting.Remote.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap, proved

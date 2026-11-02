@@ -516,7 +516,7 @@ KNOWN: dict[str, str] = {
         "homonym, the boundary's gates in a program: rename (network-accounting)",
     "Security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "Security/Definitions/Population/DrawPressure.lean::Population.Exfil.Draw":
+    "Security/Definitions/SampledProofs/DrawPressure.lean::Population.Exfil.Draw":
         "duplicate of `Verity.Draw`: becomes it (k of n units, without replacement) (lean)",
     "Security/Definitions/Pous/Game/Oracle.lean::Pous.Prog":
         "homonym, PoUS's parallel oracle program: rename (memory-accounting)",
@@ -609,9 +609,9 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.TC.Relation.Witness`: becomes it (soundness)",
     "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
         "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
-    "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
+    "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
-    "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
+    "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
     # benchmarks/
     "benchmarks/bandwidth/gpu.py::Commitment":
