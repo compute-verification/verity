@@ -494,6 +494,113 @@ theorem goes_opens (hF : Facts s) (hf : Fits s tables h) {j p : Nat} (hp : p ≤
     obtain ⟨w, parent, pos, c⟩ := x
     exact ⟨w, parent, pos, c, h.label e.1, hx, by simp [hx]⟩
 
+theorem pre_le (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArray} (hy : ys.length = rowCount s) {j : Nat}
+    (hj : j ≤ s.rounds.size) : (pre s h j).length ≤ ys.length := by
+  have := length_pre_le s h j (s.rounds.size - j)
+  rw [show j + (s.rounds.size - j) = s.rounds.size by omega] at this
+  rw [hy, ← length_honestRows hs hf]
+  exact this
+
+theorem caps_fit {r : HonestRound} (hi : ∀ a ∈ r.items, FirewallWire.ItemFits a) : ∀ c ∈ capsOf r, isCap c = true := by
+  intro c hc
+  obtain ⟨a, ha, hca⟩ := List.mem_flatMap.mp hc
+  have := hi a ha
+  cases a <;> simp only [FirewallWire.itemCaps, List.mem_singleton, List.not_mem_nil] at hca
+  all_goals first
+    | (subst hca; exact this.2.2)
+    | (subst hca; exact this.2)
+
+/-- **Round `j`** from the loop's invariant, its stream opened. -/
+theorem goes_round (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArray} (hy : ys.length = rowCount s)
+    {j : Nat} (hj : j < s.rounds.size) {st : State} (hA : At s h ys j (j + 2) st) :
+    ∃ t, Goes s ((honestRound s h j).map putReq) st t ∧ At s h ys (j + 1) (j + 2) t := by
+  have hF := facts_of hs
+  obtain ⟨⟨stream, k, n, tops, level0, commits⟩, hsp, hpin, -, hmem⟩ := hF.rounds j hj
+  have hR := hf.rounds j hj
+  unfold RoundOK at hR
+  rw [hsp] at hR
+  obtain ⟨hfits, hfirst, hlev, hcopy, htops, hcom, hopened⟩ := hR
+  obtain rfl := k_eq hF hj hsp
+  have hreq : honestRound s h j = [.round stream (putRound (h.round j).items (h.round j).kind n) n] := by
+    unfold honestRound
+    rw [hsp]
+  have hcop : copiesOf s j = level0 := by
+    unfold copiesOf
+    rw [hsp]
+    rfl
+  obtain ⟨e, he, hes⟩ := List.mem_map.mp hmem
+  have hx : (s.streams.find? (·.1 == stream)).isSome := List.find?_isSome.mpr ⟨e, he, by simp [hes]⟩
+  obtain ⟨e', he'⟩ := Option.isSome_iff_exists.mp hx
+  have he'1 : e'.1 = stream := by simpa using List.find?_some he'
+  have hpar : parentOf s stream = e'.2.1 := by
+    unfold parentOf
+    rw [he']
+    rfl
+  have hfind : st.streams.find? (·.1 == stream) = some (stream, parentOf s stream, cnt s j stream) := by
+    rw [hA.streams]
+    exact find_F hopened
+  have hround := run_round s stream (putRound (h.round j).items (h.round j).kind n) n
+    (sp := { caps := (capsOf (h.round j)).toArray, free := (freeOf (h.round j)).toArray, n := n })
+    hA.finished hfind (FirewallWire.split_putRound hfits) rfl
+    (fun hb => by
+      have hb' := hb
+      simp only [Bool.and_eq_true, beq_iff_eq] at hb'
+      have hroot : Rooted s stream := by
+        rcases (hF.each e' (List.mem_of_find?_eq_some he')).1 with hne | hr
+        · exact absurd (hpar ▸ hb'.2) hne
+        · rwa [he'1] at hr
+      obtain ⟨c, hc⟩ := Option.isSome_iff_exists.mp (rootOf_isSome hF hf hroot)
+      refine ⟨c, ?_, ?_⟩
+      · rw [List.getElem?_toArray, ← List.head?_eq_getElem?, hfirst hb, hc]
+      · rw [hA.roots]
+        exact hc)
+    (by rw [hA.rounds, hcop, List.size_toArray]; exact hlev)
+    (by rw [hA.rounds, hcop, hA.roots, List.toList_toArray]; exact hcopy)
+    (by rw [List.toList_toArray]; exact caps_fit hfits.1)
+    (by
+      rw [hA.rounds, hcop, hsp, List.toList_toArray, htops, hcom])
+    (by
+      rw [hA.rounds, hcop, List.toList_toArray, htops, hcom]
+      exact hpin)
+    hA.linked (fun _ => hx)
+    (by
+      rw [hA.salts, List.length_drop, hA.rounds, List.toList_toArray]
+      have h1 := pre_le hs hf hy (j := j + 1) (by omega)
+      rw [pre_succ, List.length_append] at h1
+      unfold roundRows at h1
+      rw [List.length_append] at h1
+      dsimp only
+      omega)
+  obtain ⟨⟨⟩, t, hrun, x, tops', bcs, rfl, ⟨e0, hx0, he0⟩, htops', hbcs⟩ := hround
+  have hdec := FirewallWire.decode_putReq (hf.roundsFit j _ (by rw [hreq]; exact List.mem_singleton_self _))
+  rw [hreq, List.map_singleton]
+  refine ⟨_, goes_one hdec hrun, ?_⟩
+  obtain ⟨a, tops0, rest, hsent, htn⟩ := hA.names
+  refine ⟨hA.hello, hA.committed, hA.linked, hA.finished, hA.roots, by simp [hA.rounds], ?_, ?_, ?_, ?_⟩
+  · show st.streams.map _ = _
+    rw [hA.streams, List.map_map]
+    refine List.map_congr_left fun m _ => ?_
+    simp only [Function.comp, F]
+    rw [cnt_succ s hj hsp m]
+    by_cases hm : m = stream
+    · subst hm
+      simp
+    · simp [hm, Ne.symm hm]
+  · show (st.salts.drop _).drop _ = _
+    rw [hA.salts, List.drop_drop, List.drop_drop, pre_succ, List.length_append, hA.rounds, List.toList_toArray]
+    unfold roundRows
+    rw [List.length_append]
+  · refine ⟨a, tops0, rest ++ e0 ++ [.round stream tops' (copiesOf s st.rounds) bcs n], ?_, htn⟩
+    rw [Array.toList_push, hx0, hsent]
+    simp
+  · rw [FirewallRun.holesOf_push]
+    unfold FirewallRun.holesOf
+    rw [hx0, List.flatMap_append, he0, List.append_nil]
+    show FirewallRun.holesOf st.sent ++ (tops'.flatten ++ bcs) = _
+    rw [hA.holes, htops', hbcs, hA.salts, pre_succ, cs_append, hA.rounds, List.toList_toArray]
+    unfold roundRows
+    rw [cs_append, List.drop_drop]
+
 end
 
 /-- **The firewall finishes on the honest worker's requests**: at salts `ys`, as many as the schedule's rows, it
