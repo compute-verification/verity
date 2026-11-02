@@ -26,6 +26,7 @@ import json
 import math
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -698,6 +699,102 @@ def append_board(lines: list[str]) -> None:
     raise SystemExit("scorer: board push failed five times")
 
 
+# ---- final scoring: reruns of an entry at fresh seeds, scored on the final set ----------------------------------------
+
+FINAL = STATE / "final"
+FINAL_SRC = Path(os.environ.get("TE_FINAL_SRC", "/tmp/scorer/final-src"))
+FINAL_SH = Path(__file__).resolve().parent / "final.sh"
+FINAL_NODE = os.environ.get("TE_FINAL_NODE", "vy-nebius-2")
+FINAL_SEEDS = (101, 102, 103)
+REPO = Path(__file__).resolve().parents[3]
+RUNS = Path.home() / ".research" / "runs"
+
+
+def source_at(commit: str) -> Path:
+    """A clean detached checkout of `commit` to ship (`research run --source`); only covert_witness and the research package
+    the machine runs (the tree's own, as for a candidate) are checked out."""
+    if not (FINAL_SRC / ".git").exists():
+        subprocess.run(["git", "-C", str(REPO), "worktree", "add", "-q", "--no-checkout", "--detach", str(FINAL_SRC), commit],
+                       check=True)
+        subprocess.run(["git", "-C", str(FINAL_SRC), "sparse-checkout", "set", "--no-cone", "/benchmarks/covert_witness/",
+                        "/tools/research/"], check=True)
+    subprocess.run(["git", "-C", str(FINAL_SRC), "checkout", "-q", "--detach", commit], check=True)
+    if subprocess.run(["git", "-C", str(FINAL_SRC), "status", "--porcelain"], capture_output=True, text=True).stdout.strip():
+        raise SystemExit(f"scorer: {FINAL_SRC} is not clean at {commit}")
+    return FINAL_SRC
+
+
+def final_run(commit: str, args: list[str], what: dict, dry_run: bool = False) -> dict:
+    src = source_at(commit)
+    argv = ["research", "run", "--on", FINAL_NODE, "--project", "verity", "--source", str(src), "--cwd", "source",
+            "--pool", "gpu", "--as", "training", "--pool-wait", "7200", "--timeout", "45m", "--declared-output", "out/*",
+            "--send", str(FINAL_SH), "--", "bash", "-c", 'bash "$RESEARCH_RUN_DIR/inputs/final.sh" ' + shlex.join(args)]
+    row = what | {"commit": commit, "args": args, "at": now(), "argv": argv, "run": ""}
+    if not dry_run:
+        # the launcher is this tree's research package: the VM's install predates pools a node keeps of its own (gpu)
+        env = os.environ | {"PYTHONPATH": str(REPO / "tools" / "research" / "src")}
+        r = subprocess.run([sys.executable, "-m", "research", *argv[1:]], capture_output=True, text=True, cwd=REPO, env=env)
+        m = re.search(r"run (r\d{8}-\d{6}-[0-9a-f]{4}) launched", r.stdout + r.stderr)
+        row |= {"run": m[1] if m else "", "rc": r.returncode, "err": "" if m else (r.stdout + r.stderr)[-800:]}
+        FINAL.mkdir(parents=True, exist_ok=True)
+        with (FINAL / "launches.jsonl").open("a") as f:
+            f.write(json.dumps(row) + "\n")
+    return row
+
+
+def seed_args(row: dict, seed: int) -> list[str]:
+    """The seed flags the entry's script takes (its witness's recorded args), set to `seed`."""
+    have = row.get("train_args") or {}
+    return [x for k, flag in (("seed", "--seed"), ("data_seed", "--data-seed")) if k in have for x in (flag, str(seed))]
+
+
+def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False) -> list[dict]:
+    rows = {x["id"]: x for x in (json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip())}
+    out = []
+    for i in ids:
+        x = next((r for k, r in rows.items() if k.removeprefix("art:").startswith(i.removeprefix("art:"))), None)
+        if x is None or x["source"] != "launch.py" or not x.get("commit"):
+            raise SystemExit(f"scorer: {i} is not a launch.py record with a commit")
+        for seed in seeds:
+            args = [x["class"], x["start"], *shlex.split(x.get("args") or ""), *seed_args(x, seed)]
+            out.append(final_run(x["commit"], args, {"kind": "rerun", "id": x["id"], "seed": seed}, dry_run))
+    return out
+
+
+def final_collect() -> list[dict]:
+    """Every launched final run's state and, once it ended, its scores (from the run's out/)."""
+    path = FINAL / "launches.jsonl"
+    launches = [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
+    out = []
+    for la in launches:
+        run = la.get("run")
+        if not run:
+            continue
+        subprocess.run(["research", "fetch", run], capture_output=True, text=True, cwd=REPO)
+        st = (json.loads((RUNS / run / "status.json").read_text()).get("state")
+              if (RUNS / run / "status.json").exists() else "unknown")
+        row = {k: la.get(k) for k in ("kind", "id", "seed", "run", "commit", "args")} | {"state": st}
+        if st in ("done", "failed", "cancelled", "refused", "timeout", "lost"):
+            o = RUNS / run / "out"
+            if not o.is_dir():
+                subprocess.run(["research", "fetch", run, "--all"], capture_output=True, text=True, cwd=REPO)
+            for f in sorted(o.glob("*.json")) if o.is_dir() else []:
+                d = json.loads(f.read_text())
+                if f.name.startswith("witness."):
+                    sp = f.name.split(".")[1]
+                    row[sp] = {"valid": d.get("valid"), "bpb": (d.get("score") or {}).get("bpb"), "curve": d.get("curve"),
+                               "train_flops": (d.get("train") or {}).get("flops"), "E_bytes": (d.get("E") or {}).get("bytes"),
+                               "phi": (d.get("structure") or {}).get("phi"),
+                               "failed_checks": sorted(k for k, v in (d.get("checks") or {}).items() if v is not True)}
+                elif f.name.startswith("start."):
+                    _, s, sp, _ = f.name.split(".")
+                    row.setdefault("starts", {}).setdefault(s, {})[sp] = (d.get("score") or {}).get("bpb")
+        out.append(row)
+    FINAL.mkdir(parents=True, exist_ok=True)
+    (FINAL / "results.jsonl").write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in out))
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -712,7 +809,25 @@ def main(argv=None) -> int:
     p = sub.add_parser("post", help="append one line to the board and push")
     p.add_argument("tag")
     p.add_argument("text")
+    f = sub.add_parser("final", help="final-set reruns: starts, launch IDS, collect")
+    f.add_argument("what", choices=("starts", "launch", "collect"))
+    f.add_argument("ids", nargs="*", help="launch: record ids (12-hex prefixes); starts: start names")
+    f.add_argument("--commit", default=None, help="starts: the commit to run in (default: HEAD's fixed side)")
+    f.add_argument("--seeds", default=",".join(map(str, FINAL_SEEDS)))
+    f.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
+    if a.cmd == "final":
+        if a.what == "starts":
+            commit = a.commit or subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True,
+                                                text=True, check=True).stdout.strip()
+            res = [final_run(commit, ["--starts", *(a.ids or STARTS)], {"kind": "starts"}, a.dry_run)]
+        elif a.what == "launch":
+            res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run)
+        else:
+            res = final_collect()
+        for r in res:
+            print(json.dumps({k: v for k, v in r.items() if k != "argv"} if not a.dry_run else r))
+        return 0
     if a.cmd == "post":
         append_board([f"{datetime.now(timezone.utc).strftime('%H:%MZ')} scorer [{a.tag}] {a.text}"])
         return 0
