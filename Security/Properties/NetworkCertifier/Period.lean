@@ -82,7 +82,8 @@ def PeriodWindowClocked (p : Params) (l : ClockLink) (earlier : Array ByteArray)
 /-- **One-stage v2 accepted link-window `w`'s proof** on the blobs `bs`: under the auditor's parameters for the clock
 link `l` with the link-window's own port, its served domain, and the period's earlier link-windows' registrations `log`
 after the auditor's (`windowParams`), v2's check accepts the window record `reg` under its digest
-(`Flock.WindowRecord.digest`) and the evidence the link-window shows, with a profile of one level of one unit drawn `subset:1`, that one unit drawn. -/
+(`Flock.WindowRecord.digest`) and the evidence the link-window shows, with a profile of one level of one unit drawn
+`subset:1`, that one unit drawn. -/
 def PeriodWindowV2 (p : Params) (l : ClockLink) (log : Array Json) (w : Nat) (reg : Json) (x : Window)
     (bs : Core.Blobs) : Prop :=
   ∃ clock salts ev, x.shown = .clock clock salts ev ∧
@@ -148,8 +149,9 @@ def PeriodRowsRegistered (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) 
     PeriodRowsChecked p s sd w .egress re ∧ holds reg ri = true ∧ holds reg re = true
 
 /-- The rows-form link-window was proved: the one-stage answer it shows is for its window record's digest
-(`Flock.WindowRecord.digest`) and accepted, with a public output holding a `bound` and a profile of one level drawn `subset:k` or stratified, of the
-scan's `2T` units under the schedule `s` (the ingress and the egress rows, `T` each). -/
+(`Flock.WindowRecord.digest`) and accepted, with a public output holding a `bound` and a profile of one level drawn
+`subset:k` or stratified, of the scan's `2T` units under the schedule `s` (the ingress and the egress rows, `T`
+each). -/
 def PeriodRowsProved (s : Schedule) (reg : Json) (x : Window) : Prop :=
   ∃ rs a, x.shown = .rows rs a ∧ a.protocol = oneStage ∧
     (∃ d, Flock.WindowRecord.digest reg = .ok d ∧ (a.digest == some d) = true) ∧
