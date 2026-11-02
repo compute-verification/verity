@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameOuter
 public import Proofs.Flock.Claims.ZK.FramePoints
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The frame's rank check along a rep's requests (`FrameUnrefused`'s rank fault, at the frame)

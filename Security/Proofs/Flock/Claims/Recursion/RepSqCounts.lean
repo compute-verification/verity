@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.NextRFits
 public import Proofs.Flock.Soundness.Refine.Seam
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # A rep's coin counts: the frames' squeezes are the schedule's

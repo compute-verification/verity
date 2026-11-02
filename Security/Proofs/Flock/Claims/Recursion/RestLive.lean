@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.RestReadR
 public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+import all Lean.Data.Json.Basic
 
 /-!
 # `DecLive`: the reader's record reads as custody's

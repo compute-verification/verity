@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.NextRSession
 public import Proofs.Flock.Claims.DeployTables
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest rows fit a message

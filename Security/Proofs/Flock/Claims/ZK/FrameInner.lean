@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.ZK.FramePass
 public import Proofs.Flock.Claims.ZK.FrameLoop
 public import Proofs.Flock.Claims.ZK.FrameProg
 public import Proofs.Flock.Soundness.Refine.Arith
+import all Init.Data.String.Defs
 
 /-!
 # What the frame takes at the inner proof's rounds

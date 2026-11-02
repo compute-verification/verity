@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FramePlan
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The rep's own table against the placeholder's

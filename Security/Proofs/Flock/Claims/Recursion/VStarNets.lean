@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.Recursion.VStarTraceOk
 public import Proofs.Flock.VBridge.Family.Names
 public import Std.Data.String.ToNat
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
+import all Init.Data.List.SplitOn.Basic
 
 /-!
 # A staged part's circuit has three nets (`nets_three`)

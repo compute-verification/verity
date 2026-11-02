@@ -4,6 +4,9 @@ public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
 public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 public import Proofs.Flock.Claims.Complete.Zk.ProverOk
 public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The honest masked rep proof fits its shape

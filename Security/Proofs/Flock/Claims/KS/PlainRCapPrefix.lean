@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.KS.PlainRCaps
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
 public import Proofs.Flock.Claims.Recursion.NextRHonest
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The cap two accepted runs of `VR rd` absorb, from the rows before its round

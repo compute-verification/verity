@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Recursion.NextRFits
 public import Proofs.Flock.Claims.Recursion.NextShaDec
 public import Proofs.Flock.Claims.KS.PlainDrawJRun
+import all Lean.Data.Json.Basic
 
 /-!
 # The decided record's rep streams: the reader's frames, through the substitutions

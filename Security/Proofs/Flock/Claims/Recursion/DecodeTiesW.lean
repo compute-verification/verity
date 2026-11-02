@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Recursion.DecodeTiesVals
 public import Proofs.Flock.C3.Reps.SentKeys
 public import Proofs.Flock.VBridge.Family.Runs
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import all Init.Data.Array.Basic
 
 /-!
 # A w that holds the rounds' values decodes to the proof

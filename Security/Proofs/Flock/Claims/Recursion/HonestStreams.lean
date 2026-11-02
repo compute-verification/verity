@@ -8,6 +8,7 @@ public import Proofs.Flock.Claims.Complete.Json.Goals
 public import Proofs.Flock.Claims.Complete.ZkTables.Table
 public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
 public import Flock.With.Deployed
+import all Init.Data.Array.Basic
 
 /-!
 # The reader's streams at the honest run are the honest record's
