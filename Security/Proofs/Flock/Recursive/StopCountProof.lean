@@ -1088,4 +1088,119 @@ theorem Inv.ofRun (M : String → ℕ → ℕ) (steps : List Step) : Inv M (run 
     | cons st rest ih => intro σ h; exact ih _ (h.next st)
   exact this steps _ (Inv.init M)
 
+/-! ## The stop, read off the invariant -/
+
+theorem recStop_none {σ : St} {s : String}
+    (h : (List.finRange (nOf σ s)).find? (fun q : Fin (nOf σ s) => decide (σ.sent s q < M s q)) = none) :
+    recStop M σ s = none := by
+  rw [recStop, h]
+
+theorem recStop_some {σ : St} {s : String} {q : Fin (nOf σ s)}
+    (h : (List.finRange (nOf σ s)).find? (fun q : Fin (nOf σ s) => decide (σ.sent s q < M s q)) = some q) :
+    recStop M σ s = some ⟨q, ⟨min (σ.sent s q) (M s q), Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩⟩ := by
+  rw [recStop, h]
+
+/-- **What reached the auditor is the cut at the stop**: every message of each statement before the first one short of
+its count, what reached it of that one, and nothing after it or past the session's statements. -/
+theorem Inv.sent_cutAt {σ : St} (hI : Inv M σ) (s : String) (p : ℕ) :
+    σ.sent s p = cutAt (fun p : Fin (nOf σ s) => M s p) (recStop M σ s) p := by
+  unfold cutAt
+  split
+  · rename_i hp
+    cases hf : (List.finRange (nOf σ s)).find? (fun q : Fin (nOf σ s) => decide (σ.sent s q < M s q)) with
+    | none =>
+      rw [recStop_none hf]
+      have := List.find?_eq_none.mp hf ⟨p, hp⟩ (List.mem_finRange _)
+      simp only [decide_eq_true_eq, Nat.not_lt] at this
+      exact Nat.le_antisymm (hI.le s p) this
+    | some q =>
+      rw [recStop_some hf]
+      obtain ⟨hq, i, hi, hiq, hmin⟩ := List.find?_eq_some_iff_getElem.mp hf
+      have hlt : σ.sent s q < M s q := of_decide_eq_true hq
+      have hiv : i = q.val := by
+        rw [List.getElem_finRange] at hiq
+        rw [← hiq]
+        rfl
+      show σ.sent s p = if p < q.val then M s p else if p = q.val then min (σ.sent s q) (M s q) else 0
+      by_cases hpq : p < q.val
+      · simp only [hpq, ↓reduceIte]
+        have := hmin p (by omega)
+        simp only [List.getElem_finRange, Fin.val_cast, Bool.not_eq_true', decide_eq_false_iff_not,
+          Nat.not_lt] at this
+        exact Nat.le_antisymm (hI.le s p) this
+      · simp only [hpq, ↓reduceIte]
+        by_cases hpe : p = q.val
+        · simp only [hpe, ↓reduceIte]
+          exact (Nat.min_eq_left (Nat.le_of_lt hlt)).symm
+        · simp only [hpe, ↓reduceIte]
+          refine Classical.byContradiction fun hne => ?_
+          have := hI.pre s q p (by omega) hne
+          omega
+  · rename_i hp
+    exact hI.past s p (Nat.le_of_not_lt hp)
+
+/-- **A session that stops has a statement not released**: if every statement of `s` was released, every message of
+every statement reached the auditor. -/
+theorem Inv.runsThrough {σ : St} (hI : Inv M σ) (s : String) : recStop M σ s = none ∨ unreleasedOf σ s = true := by
+  cases ho : openOf σ.evs s with
+  | none =>
+    left
+    apply recStop_none
+    apply List.find?_eq_none.mpr
+    intro x _
+    have := x.isLt
+    have := nOf_none ho
+    omega
+  | some o =>
+    cases hn : nextOf σ.evs o with
+    | some i => right; simp [unreleasedOf, ho, hn]
+    | none =>
+      left
+      have hall := nextOf_none hn
+      rw [openOf_session ho] at hall
+      have key : ∀ p, p < o.parts.size + 1 → σ.sent s p = M s p := by
+        intro p hp
+        cases p with
+        | zero =>
+          obtain ⟨-, -, hf, -⟩ := hI.rel s _ (hall 0 (hI.parts s o ho).1)
+          exact hI.fin s hf
+        | succ j =>
+          have hj : j < o.parts.size := by omega
+          obtain ⟨o', ho', -, j', hj', hx', hm⟩ := hI.rel s _ (hall j hj)
+          rw [ho] at ho'
+          cases ho'
+          have := (hI.parts s o ho).2 j' j hj' hj hx'
+          subst this
+          exact hm
+      apply recStop_none
+      apply List.find?_eq_none.mpr
+      intro x _
+      have hx : x.val < o.parts.size + 1 := by
+        have := x.isLt
+        have := nOf_some ho
+        omega
+      simp [key x hx]
+
+/-- **Proofs leave at their release time** where the session is scheduled. -/
+theorem Inv.leftSched {σ : St} (hI : Inv M σ) (s : String) (j : ℕ) :
+    schedOf σ s = none ∨ σ.left s (j + 1) = none ∨ σ.left s (j + 1) = releaseMs (schedOf σ s) j := by
+  cases hl : σ.left s (j + 1) with
+  | none => exact Or.inr (Or.inl rfl)
+  | some t =>
+    obtain ⟨o, ho, hr⟩ := hI.leftAt s j t hl
+    have hsch : schedOf σ s = o.release := by simp [schedOf, ho]
+    rw [hsch]
+    rcases hr with hr | hr
+    · exact Or.inl hr
+    · exact Or.inr (Or.inr hr.symm)
+
 end Flock.StopCount
+
+namespace Flock.SecurityProofs
+
+/-- **A recursive session's view is cut at its stop**: every run keeps the invariant, which reads off the stop. -/
+theorem RecStopsOfRun : Flock.Guarantees.RecStopsOfRun := fun M steps s =>
+  have hI := StopCount.Inv.ofRun M steps
+  ⟨hI.sent_cutAt s, hI.admLe s, hI.runsThrough s, hI.leftSched s⟩
+
+end Flock.SecurityProofs
