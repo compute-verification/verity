@@ -32,6 +32,7 @@
   "Proofs.Properties.CertifierNetwork.Runs",
   "Proofs.Properties.Identity",
   "Proofs.Properties.Evaluate",
+  "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.NetworkScan",
@@ -64,13 +65,13 @@
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
+  "Proofs.Properties.Pous.WipeSigned",
+  "Proofs.Properties.Challenger",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Remote",
-  "Proofs.Properties.Remote.Honest",
-  "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger"
+  "Proofs.Properties.Remote.Honest"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
