@@ -971,6 +971,12 @@ def official_src() -> Path:
     return OFFICIAL_SRC
 
 
+def listed_nodes() -> list[str]:
+    """The nodes the harness's nodes.txt lists (TE_BRANCH's head), in order."""
+    path = official_src() / "benchmarks" / "covert_witness" / "nodes.txt"
+    return [ln.split()[0] for ln in path.read_text().splitlines() if ln.split("#", 1)[0].strip()]
+
+
 def tool_env() -> dict:
     return os.environ | {"PATH": f"{SHIM}:{os.environ.get('PATH', '')}",
                          "CW_NODES": str(OFFICIAL_SRC / "benchmarks" / "covert_witness" / "nodes.txt")}
@@ -1006,6 +1012,9 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
         ents = {x["id"]: x for x in entries(rows)}
         cands = [{"id": p["id"], "output_sha256": ents[p["id"]]["output_sha256"], "node": ents[p["id"]].get("node")}
                  for p in pr["new"] if ents.get(p["id"], {}).get("output_sha256")]
+        listed = listed_nodes()
+        pending = {c["id"]: c.get("node") for c in cands if (c.get("node") or listed[0]) not in listed}
+        cands = [c for c in cands if c["id"] not in pending]
         bits = (sealed_bits(cands) if cands else {}) if append else None
         why = {p["id"]: p["reasons"] for p in pr["new"]}
         if bits is None and pr["new"]:
@@ -1017,13 +1026,17 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
             if yes:
                 lines.append(f"{hhmm} scorer [PROMOTED] " + ", ".join(f"{short(i)} ({'; '.join(why[i])})" for i in yes)
                              + f"; promoted by the sealed promotion set ({', '.join(runs)}).")
-            no = [i for i in why if i not in yes]
+            no = [i for i in why if i not in yes and i not in pending]
             if no:
                 lines.append(f"{hhmm} scorer [DIGEST] promotion candidates the sealed set did not promote: " + ", ".join(
                     f"{short(i)} ({'no sealed value' if (bits.get(i) or {}).get('promote') is None else 'gain not held'})"
                     for i in no) + ".")
+            if pending:
+                lines.append(f"{hhmm} scorer [DIGEST] promotion candidates not yet decided: " + ", ".join(
+                    f"{short(i)} ({'; '.join(why[i])}; its value is on {n}, which the harness's nodes.txt doesn't list, "
+                    f"so promote.py can't run there)" for i, n in pending.items()) + "; candidates again next hour.")
             pr["new"] = [p for p in pr["new"] if p["id"] in yes]
-            pr["decided"] = {i: bits.get(i) for i in why}
+            pr["decided"] = {i: bits.get(i) for i in why if i not in pending}
         old = set(json.loads((STATE / "rescreens.json").read_text())) if (STATE / "rescreens.json").exists() else set()
         rs = [x for x in pr["rescreens"] if x["id"] not in old]
         if rs:
@@ -1324,8 +1337,7 @@ def final_plan(deadline: str = "15:20", seeds=FINAL_SEEDS) -> dict:
     order = sorted(named, key=lambda e: (-sets.get(e[0]["id"], 0), e[2], e[1]))
     extra = [(x, "(table)", 9) for x in rows if sets.get(x["id"]) and x["id"] not in {y["id"] for y, _, _ in named}
              and x["source"] == "launch.py"]
-    nodes = [ln.split()[0] for ln in (official_src() / "benchmarks" / "covert_witness" / "nodes.txt").read_text().splitlines()
-             if ln.strip() and not ln.startswith("#") and "pool=" in ln]
+    nodes = listed_nodes()
     t0 = datetime.now(timezone.utc)
     end = t0.replace(hour=int(deadline[:2]), minute=int(deadline[3:]), second=0, microsecond=0)
     free = [0.0] * (GPUS_PER_NODE * len(nodes))
