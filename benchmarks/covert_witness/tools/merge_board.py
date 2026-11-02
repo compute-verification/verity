@@ -7,9 +7,9 @@
 
 Each search agent appends entries, one line each, `HH:MMZ <agent> [TAG] text (record ids)`, to
 `benchmarks/covert_witness/islands/<island>/BOARD.md` on its own branch, `cursor/te-<island>-NNNN`. This fetches every
-`cursor/te-*` branch and the integration branch, and reads each `BOARD.md` or `board.md` under `benchmarks/covert_witness/`
-on each, the digest branch's own `benchmarks/covert_witness/BOARD.md` among them (where the coordinator may write its
-lines). The digest is that file again: its text through `## Entries`, then every entry once, oldest first, under a
+`cursor/te-*` branch, the integrator's `cursor/covert-witness-*` while there is one, and the integration branch, and
+reads each `BOARD.md` or `board.md` under `benchmarks/covert_witness/` on each, the digest branch's own
+`benchmarks/covert_witness/BOARD.md` among them (where the coordinator may write its lines). The digest is that file again: its text through `## Entries`, then every entry once, oldest first, under a
 `### YYYY-MM-DD` heading per UTC day, then the sections after its entries. An entry's day is the last one on which its
 HH:MM is at most two hours after the commit that added the line to its board (its author time, from `git blame`), so a
 search that runs past midnight stays in order and an entry stamped a little ahead of its commit keeps its day; the
@@ -37,6 +37,8 @@ BOARDS = "benchmarks/covert_witness"
 DIGEST = f"{BOARDS}/BOARD.md"
 ENTRIES = "## Entries"
 ENTRY = re.compile(r"^(\d{2}):(\d{2})Z ")
+#: the search agents' branches, and the integrator's own while it has one (a glob that matches nothing fetches nothing)
+BRANCHES = ("cursor/te-*", "cursor/covert-witness-*")
 #: how far an entry's HH:MM may run ahead of the commit that added it
 AHEAD = timedelta(hours=2)
 #: the digest's text when the digest branch doesn't exist yet
@@ -110,7 +112,8 @@ def push(repo: Path, remote: str, branch: str, base: str, text: str, message: st
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--remote", default="origin")
-    ap.add_argument("--branches", default="cursor/te-*", help="the search agents' branches, a glob (default %(default)s)")
+    ap.add_argument("--branches", nargs="+", default=list(BRANCHES), metavar="GLOB",
+                    help="the branches whose boards are read, as globs (default: %(default)s)")
     ap.add_argument("--integration", default="cursor/training-efficiency-4207", help="the lane's branch (default %(default)s)")
     ap.add_argument("--digest", default="cursor/te-digest-4207", help="the digest's branch (default %(default)s)")
     ap.add_argument("--repo", type=Path, default=HERE, help="a checkout of the repository (default: this file's)")
@@ -120,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     a.repo = Path(git(a.repo, "rev-parse", "--show-toplevel").strip())
 
-    names = [a.branches, a.integration] + ([] if fnmatch.fnmatchcase(a.digest, a.branches) else [a.digest])
+    names = [*a.branches, a.integration] + ([] if any(fnmatch.fnmatchcase(a.digest, g) for g in a.branches) else [a.digest])
     if not a.no_fetch:
         git(a.repo, "fetch", "-q", a.remote, *(f"+refs/heads/{b}:refs/remotes/{a.remote}/{b}" for b in names))
     refs = git(a.repo, "for-each-ref", "--format=%(refname)", *(f"refs/remotes/{a.remote}/{b}" for b in names)).split()

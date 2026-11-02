@@ -1,5 +1,6 @@
-"""merge_board on a toy remote: every search branch's board and the integration branch's merge into the digest once
-each, in time order across midnight, with the digest's own text and lines kept, and `--push` commits a change once."""
+"""merge_board on a toy remote: every search branch's board, the integrator's and the integration branch's merge into
+the digest once each, in time order across midnight, with the digest's own text and lines kept, and `--push` commits a
+change once."""
 from __future__ import annotations
 
 import os
@@ -18,6 +19,7 @@ MERGED = f"""{HEAD}
 
 ### 2026-11-02
 19:58Z integrator [TOOL] pinned
+20:10Z integrator [TOOL] on the integrator's branch alone
 20:30Z coordinator [DIGEST] written in the digest
 23:50Z alpha [FINDING] before midnight
 
@@ -61,6 +63,8 @@ def clone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     append(LANE, f"{ISLANDS}/integrator/BOARD.md", "# The integrator's board\n\n19:58Z integrator [TOOL] pinned\n",
            "2026-11-02T20:00:00Z")
+    append("cursor/covert-witness-4207", f"{ISLANDS}/integrator/BOARD.md",
+           "20:10Z integrator [TOOL] on the integrator's branch alone\n", "2026-11-02T20:15:00Z")
     append(DIGEST, "benchmarks/covert_witness/BOARD.md",
            f"{HEAD}\n19:58Z integrator [TOOL] pinned\n20:30Z coordinator [DIGEST] written in the digest\n\n{TAIL}\n",
            "2026-11-02T21:00:00Z")
