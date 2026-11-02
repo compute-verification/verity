@@ -11,7 +11,10 @@ name its setting. The launcher runs `islands/reference/train.py`, a symlink to t
 - EMA of the weights (`--ema-frac f`: the average's horizon is f of the steps so far); at each snapshot and at the end the
   raw or EMA weights are submitted, whichever has the lower loss on training-stream windows the run never trains on (each
   such forward is logged and priced);
-- snapshots at `--snap-at` fractions of the steps, for the FLOPs-to-target curve.
+- snapshots at `--snap-at` fractions of the steps, for the FLOPs-to-target curve; `--forks` adds cooldown branches: at each
+  given fraction a branch of `--fork-len` times the steps so far decays the rate linearly toward 0, is snapshotted, and the
+  run returns to the weights and optimizer state it forked from (the branch's passes stay in the step log, so every later
+  point pays for it).
 
 E is the trained tensors in full (`prepare.encode_full`). This file is the island's one editable file; prepare.py, evaluate.py,
 guard.py and candidate.sh are fixed (README.md, the program).
@@ -125,6 +128,8 @@ def main() -> int:
     ap.add_argument("--ema-frac", type=float, default=0.0)
     ap.add_argument("--val-rows", type=int, default=64, help="held-back training-stream windows per validation")
     ap.add_argument("--snap-at", default="0.25,0.5,0.75", help="fractions of the steps (comma-separated; empty: none)")
+    ap.add_argument("--forks", default="", help="fractions of the steps where a cooldown branch forks (comma-separated)")
+    ap.add_argument("--fork-len", type=float, default=0.15, help="a branch's steps, as a fraction of the steps before it")
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     ap.add_argument("--no-compile", action="store_true")
     a = ap.parse_args()
@@ -160,10 +165,19 @@ def main() -> int:
     extra = sum(ns_flops(tuple(params[n].shape), a.ns_steps) for n in mats) if a.mat_opt == "muon" else 0
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
     snap_at = [float(x) for x in a.snap_at.split(",") if x.strip()]
+    fork_at = [float(x) for x in a.forks.split(",") if x.strip()]
     val_tokens = a.val_rows * prepare.EVAL_CTX
-    n_val = (len(snap_at) + 1) * (2 if a.ema_frac else 1) if a.val_rows else 0
+    n_val = ((len(snap_at) + 1) * (2 if a.ema_frac else 1) + len(fork_at)) if a.val_rows else 0
     val_flops = n_val * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": val_tokens}])["flops"]
-    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - val_flops) // per_step)
+    room = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - val_flops
+
+    def fork_lens(n: int) -> dict[int, int]:
+        return {max(1, round(n * f)): max(1, round(a.fork_len * n * f)) for f in fork_at if 0 < f < 1}
+
+    n_steps = int(room // (per_step * (1 + a.fork_len * sum(fork_at))))
+    while n_steps > 1 and (n_steps + sum(fork_lens(n_steps).values())) * per_step > room:
+        n_steps -= 1
+    forks = fork_lens(n_steps)
 
     if a.fresh:
         prov = rec["provenance"]
@@ -174,7 +188,7 @@ def main() -> int:
     else:
         data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     val_idx = data.order[len(data.order) - a.val_rows:] if a.val_rows else None
-    if val_idx is not None and data.at + n_steps * a.batch > len(data.order) - a.val_rows:
+    if val_idx is not None and data.at + (n_steps + sum(forks.values())) * a.batch > len(data.order) - a.val_rows:
         raise SystemExit("train: the training windows would reach the validation windows")
 
     def loss_of(x: torch.Tensor) -> torch.Tensor:
@@ -225,12 +239,12 @@ def main() -> int:
     marks = {max(1, round(n_steps * f)) for f in snap_at if 0 < f < 1}
     out = Path(a.out)
     snap_log = []
-    print(json.dumps({"steps": n_steps, "flops_per_step": per_step, "tokens_per_step": tokens, "val_flops": val_flops,
-                      "trained": len(trained), "data_at": data.at}), flush=True)
+    print(json.dumps({"steps": n_steps, "forks": forks, "flops_per_step": per_step, "tokens_per_step": tokens,
+                      "val_flops": val_flops, "trained": len(trained), "data_at": data.at}), flush=True)
     t0 = time.perf_counter()
     trained_params = [params[n] for n in trained]
-    for step in range(n_steps):
-        m = lr_mult(step, n_steps, a)
+
+    def train_step(m: float) -> float:
         for o in opts:
             for g in o.param_groups:
                 g["lr"] = g["base_lr"] * m
@@ -248,28 +262,57 @@ def main() -> int:
         steps.append({"op": "train", "tokens": tokens})
         if extra:
             steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+        return float(loss.detach()) * a.batch / len(x)
+
+    def snapshot(model: dict, entry: dict) -> None:
+        d = out / "snap" / f"{len(snap_log):03d}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "E.bin").write_bytes(prepare.encode_full(model))
+        (d / "meta.json").write_text(json.dumps({"steps_prefix": len(steps)}) + "\n")
+        snap_log.append(entry)
+        print(json.dumps({"snapshot": len(snap_log) - 1, **entry}), flush=True)
+
+    @torch.no_grad()
+    def fork(step: int, k: int) -> None:
+        """A cooldown branch: k steps from the current rate linearly toward 0, snapshot, then back to where it forked."""
+        saved = [p.detach().clone() for p in trained_params]
+        states = [{p: {n: (v.clone() if torch.is_tensor(v) else v) for n, v in st.items()} for p, st in o.state.items()}
+                  for o in opts]
+        m0 = lr_mult(step - 1, n_steps, a)
+        with torch.enable_grad():
+            for j in range(k):
+                train_step(m0 * (k - j) / k)
+        entry = {"step": step, "fork_steps": k, "weights": "fork"}
+        if a.val_rows:
+            entry["val_raw"] = validate()
+        snapshot(model_of(params, theta, trained), entry)
+        for p, s in zip(trained_params, saved):
+            p.copy_(s)
+        for o, st in zip(opts, states):
+            o.state.clear()
+            o.state.update(st)
+
+    for step in range(n_steps):
+        m = lr_mult(step, n_steps, a)
+        loss = train_step(m)
         if ema is not None:
             beta = 1 - 1 / max(1.0, a.ema_frac * (step + 1))
             torch._foreach_lerp_(ema, [p.detach() for p in plist], 1 - beta)
         if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x), "lr_mult": round(m, 4),
+            print(json.dumps({"step": step + 1, "loss": loss, "lr_mult": round(m, 4),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
             which, info = choose()
             model = info.pop("model", None) or model_of(params, theta, trained)
-            i = len(snap_log)
-            d = out / "snap" / f"{i:03d}"
-            d.mkdir(parents=True, exist_ok=True)
-            (d / "E.bin").write_bytes(prepare.encode_full(model))
-            (d / "meta.json").write_text(json.dumps({"steps_prefix": len(steps)}) + "\n")
-            snap_log.append({"step": step + 1, "weights": which, **info})
-            print(json.dumps({"snapshot": i, **snap_log[-1]}), flush=True)
+            snapshot(model, {"step": step + 1, "weights": which, **info})
+        if step + 1 in forks:
+            fork(step + 1, forks[step + 1])
     which, info = choose()
     model = info.pop("model", None) or model_of(params, theta, trained)
     final = {"step": n_steps, "weights": which, **info}
     print(json.dumps({"final": final, "s": round(time.perf_counter() - t0, 1)}), flush=True)
     prepare.submit(out, a.start, KLASS, prepare.encode_full(model), {**theta, **model}, trainable, steps,
-                   changed=sorted(trained), notes={"direction": "ref-optim", "args": vars(a), "steps": n_steps,
+                   changed=sorted(trained), notes={"direction": "ref-optim", "args": vars(a), "steps": n_steps, "forks": forks,
                                                    "snapshots": snap_log, "final": final})
     return 0
 
