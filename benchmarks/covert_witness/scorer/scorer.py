@@ -1505,7 +1505,8 @@ def _append_board(lines: list[str]) -> None:
 
 # ---- final scoring: each FINAL entry's island rerun at fresh seeds in final mode, under the harness's head -------------
 
-FINAL = STATE / "final"
+FINAL = Path(os.environ.get("TE_FINAL_DIR", STATE / "final"))
+NIGHT_START = os.environ.get("TE_NIGHT_START", "2026-11-02T08:30:00Z")
 FINAL_SRC = Path(os.environ.get("TE_FINAL_SRC", "/tmp/scorer/final-src"))
 FINAL_SEEDS = (101, 102, 103)
 RUNS = Path.home() / ".research" / "runs"
@@ -1651,20 +1652,28 @@ FINAL_LINE = re.compile(r"^(\d\d:\d\dZ) (\S+) \[FINAL\] (.*)$")
 
 
 def final_entries() -> dict[str, dict]:
-    """Each direction's last FINAL line ({at, ids, text}): from its own board (islands/*/BOARD.md on every cursor/te-*
-    branch) and the merged board (BOARD.md on cursor/te-digest-4207), the later line winning."""
+    """Each direction's last FINAL line of the night ({at, ids, text}): from its own board (islands/*/BOARD.md on every
+    cursor/te-* branch) and the merged board (BOARD.md on cursor/te-digest-4207), the later line winning. Only lines
+    appended after NIGHT_START count (the boards are append-only, and a line's stamp has no date), and a stamp earlier
+    in the day than NIGHT_START's sorts as the next day's."""
     heads = git("ls-remote", "--heads", "origin", "cursor/te-*").split()[1::2]
     subprocess.run(["git", "-C", str(REPO), "fetch", "-q", "origin", *(f"+{h}:refs/remotes/origin/{h[11:]}" for h in heads)],
                    capture_output=True, text=True)
+    t0 = int(NIGHT_START[11:13]) * 60 + int(NIGHT_START[14:16])
+    order = lambda at: (lambda m: m + 1440 * (m < t0))(int(at[:2]) * 60 + int(at[3:5]))
     out: dict[str, dict] = {}
     for h in heads:
         ref = f"origin/{h[11:]}"
         paths = [p for p in git("ls-tree", "-r", "--name-only", ref, "--", "benchmarks/covert_witness").splitlines()
                  if p.endswith("BOARD.md") and (p.startswith(f"{ISLANDS}/") or ref == "origin/cursor/te-digest-4207")]
         for p in paths:
-            for ln in git("show", f"{ref}:{p}").splitlines():
+            base = git("log", "-1", "--format=%H", f"--before={NIGHT_START}", ref, "--", p)
+            was = subprocess.run(["git", "-C", str(REPO), "show", f"{base}:{p}"], capture_output=True, text=True,
+                                 check=False).stdout if base else ""
+            old = len(was.splitlines())
+            for ln in git("show", f"{ref}:{p}").splitlines()[old:]:
                 m = FINAL_LINE.match(ln.strip())
-                if m and (m[2] not in out or m[1] >= out[m[2]]["at"]):
+                if m and (m[2] not in out or order(m[1]) >= order(out[m[2]]["at"])):
                     out[m[2]] = {"at": m[1], "text": m[3], "board": f"{h[11:]}:{p}", "ids": list(dict.fromkeys(
                         re.findall(r"\b(r\d{8}-\d{6}-[0-9a-f]{4}|(?<=art:)[0-9a-f]{12,64}|[0-9a-f]{12,64})\b", m[3])))}
     return out
