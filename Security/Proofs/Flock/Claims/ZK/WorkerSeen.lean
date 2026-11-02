@@ -106,6 +106,39 @@ theorem fixAmt_spec (T : Table F K W Salt Seed D Hi VL) (hpads : T.PadsOnto) (r 
       = fun k => ∑ i, T.Ch r k i * d i :=
   Function.invFun_eq (hpads r _)
 
+omit [CharP F 2] in
+/-- `padShift` reads `p`'s clear values at its own mask slot and level 0's hiding alone. -/
+theorem onVals_padShift_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (q : W × T.Vals)
+    (u : T.Mask) (V : T.Vis) (h : ∀ r, v r w u V = v' r w u V) :
+    T.onVals.padShift (w, v) q u V = T.onVals.padShift (w, v') q u V := by
+  have h' : ∀ r, T.onVals.vals r (w, v) u V = T.onVals.vals r (w, v') u V := h
+  funext r
+  simp only [padShift, h']
+
+/-- Whether the rows hold reads the clear values at the mask slot and level 0's hiding alone. -/
+theorem onVals_rowsAt_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (u : T.Mask) (V : T.Vis)
+    (h : ∀ r, v r w u V = v' r w u V) : T.onVals.RowsAt (w, v) u V ↔ T.onVals.RowsAt (w, v') u V := by
+  unfold RowsAt
+  refine forall_congr' fun ω => imp_congr_right fun hu => imp_congr_right fun hV => ?_
+  subst hu hV
+  rw [T.onVals_view_congr w v v' ω h]
+
+omit [CharP F 2] in
+theorem onVals_shift_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (q : W × T.Vals)
+    (ω : T.Rand) (h : ∀ r, v r w ω.1 ω.2.1 = v' r w ω.1 ω.2.1) :
+    T.onVals.shift (w, v) q ω = T.onVals.shift (w, v') q ω := by
+  unfold shift
+  rw [T.onVals_padShift_congr w v v' q ω.1 ω.2.1 h]
+
+/-- **The switched pre-final view reads the clear values at its own mask slot and level 0's hiding alone.** -/
+theorem swPre_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (ω : T.Rand)
+    (h : ∀ r, v r w ω.1 ω.2.1 = v' r w ω.1 ω.2.1) : T.swPre w v ω = T.swPre w v' ω := by
+  have hc := T.onVals_rowsAt_congr w v v' ω.1 ω.2.1 h
+  unfold swPre
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
+  · rw [ite_eq_left hr, ite_eq_left (hc.1 hr), T.onVals_preView_congr w v v' ω h]
+  · rw [ite_eq_right hr, ite_eq_right (mt hc.2 hr), T.onVals_shift_congr w v v' _ ω h]
+
 variable [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi]
 
 set_option smartUnfolding false in
@@ -173,6 +206,22 @@ theorem swView_fix (T : Table F K W Salt Seed D Hi VL) (hW : ∀ r, Function.Bij
     rw [T.fixE_of_not_rows w c ω hr]
     exact T.toBase_view w _
 
+set_option smartUnfolding false in
+/-- **The switched pre-final view at constant values is the honest one at the moved randomness**, which keeps every
+salt and seed. -/
+theorem swPre_fix (T : Table F K W Salt Seed D Hi VL) (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2)
+    (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w)
+    (c : Fin 2 → Fin T.nE → F) (ω : T.Rand) :
+    T.swPre w (T.constVals c) ω = T.preView w (T.fixE w c ω) := by
+  have h := T.swView_fix hW hpads hβ w hreg hinner c ω
+  by_cases hr : T.onVals.RowsAt (w, T.constVals c) ω.1 ω.2.1
+  · simp only [swView, hr, ↓reduceIte] at h
+    simp only [swPre, hr, ↓reduceIte, preView]
+    rw [← h]
+    rfl
+  · simp only [swPre, hr, ↓reduceIte]
+    rw [T.fixE_of_not_rows w c ω hr]
+
 /-- **What a worker sees of a table's randomness** before its algebraic phase: the mask slot, level 0's hiding, and
 level 0's salts at the opened positions and at the others. -/
 abbrev Seen (T : Table F K W Salt Seed D Hi VL) : Type :=
@@ -218,6 +267,33 @@ theorem swDig_inl_fix (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) 
     M.onVals.swDig (w, T.constVals c) (w, T.vals) ω (.inl q) = M.dig w (T.fixE w c ω) (.inl q) := by
   unfold Hm96.swDig
   split_ifs <;> rfl
+
+omit [CharP F 2] [AddCommGroup Salt] [AddCommGroup Hi] in
+/-- The hidden leaves' digests read no clear value. -/
+theorem Hm96.onVals_dig_congr {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (w : W) (v v' : T.Vals)
+    (ω : T.Rand) : M.onVals.dig (w, v) ω = M.onVals.dig (w, v') ω := by
+  funext i
+  rcases i with q | ⟨r, k⟩ <;> rfl
+
+omit [AddCommGroup B] [AddCommGroup Salt] [AddCommGroup Hi] in
+theorem onVals_viewWith_congr (T : Table F K W Salt (B × Salt) D Hi VL) (w : W) (v v' : T.Vals) (ω : T.Rand)
+    (L : T.Hid → D) (h : ∀ r, v r w ω.1 ω.2.1 = v' r w ω.1 ω.2.1) :
+    T.onVals.viewWith (w, v) ω L = T.onVals.viewWith (w, v') ω L := by
+  simp only [viewWith, T.onVals_view_congr w v v' ω h]
+
+omit [AddCommGroup Salt] [AddCommGroup Hi] in
+/-- **The switched view with real leaves reads the clear values at its own mask slot and level 0's hiding alone.** -/
+theorem Hm96.swViewR_congr {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (w : W) (v v' : T.Vals)
+    (ω : T.Rand) (ys : T.Hid → Salt) (h : ∀ r, v r w ω.1 ω.2.1 = v' r w ω.1 ω.2.1) :
+    M.onVals.swViewR (w, v) (w, T.vals) ω ys = M.onVals.swViewR (w, v') (w, T.vals) ω ys := by
+  have hc := T.onVals_rowsAt_congr w v v' ω.1 ω.2.1 h
+  rw [Hm96.swViewR_eq M.onVals (w, v) (w, T.vals) ω ys, Hm96.swViewR_eq M.onVals (w, v') (w, T.vals) ω ys]
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
+  · rw [ite_eq_left hr, ite_eq_left (hc.1 hr)]
+    unfold Hm96.viewR
+    rw [M.onVals_dig_congr w v v' ω]
+    exact T.onVals_viewWith_congr w v v' ω _ h
+  · rw [ite_eq_right hr, ite_eq_right (mt hc.2 hr), T.onVals_shift_congr w v v' _ ω h]
 
 /-- **The honest view with level 0's hidden leaves real and the pads trees' ideal**: real hm96 leaves of level 0's
 columns under the salts `ys`, ideal leaves of the seeds `ωu.2` in the pads trees. -/
