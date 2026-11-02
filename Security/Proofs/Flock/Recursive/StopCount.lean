@@ -1,7 +1,5 @@
-import Mathlib.Algebra.BigOperators.Fin
 import Firewall.Release
 import Proofs.Flock.Recursive.StopLeak
-import Proofs.Flock.Claims.ZK.Server
 
 /-!
 # A recursive session's stops, counted from the firewall's rules
@@ -9,7 +7,7 @@ import Proofs.Flock.Claims.ZK.Server
 `StopLeak`'s `prCoin_cut_le` bounds what a view released at a stop leaks by the number of stops, and `RecStops M` counts
 a recursive session's, `1 + Σ_p (M p + 1)`. This file states that the firewall's rules (`Firewall.Record`,
 `Firewall.Release`, run as `Firewall.Loop` and `rec_live` run them) release a recursive session's view cut at one of
-`RecStops M`, and a stream's views at one of `Claims.ZKServer.Pattern`'s, which `stream_leak` counts.
+`RecStops M`: the stop `recStop` that the run reached, read off what reached the auditor.
 
 **The run** (`StopCount.run`) is a list of steps, each one op on the record's events by the code's own function, in any
 order: each op holds `record.lock` while it reads the record and appends to it, and one outer session at a time holds
@@ -26,12 +24,13 @@ not read the record) leaves the slot, and the next `slot` records its stop.
 The model reads the record as its events: every op reads back the events the firewall wrote (`Record.read` refuses any
 line that is not `Event.line` of the event it parses to).
 
-* `RecStopsOfRun`: at every run and every recursive session it opened, what reached the auditor of each statement is
-  `cutAt r` for one `r : RecStops M`, nothing of any other statement, and each statement's proofs left at its release
-  time where the session is scheduled.
-* `StreamStopsOfRun`: at every run, `n` recursive sessions with the same statements' message counts `m` reached the
-  auditor as one `Pattern n (Σ_p (m p + 1)) B` decodes them, `B` the sessions with a statement not released
-  (`unreleased`).
+* `RecStopsOfRun`: at every run and every recursive session `s`, what reached the auditor of each statement of `s` is
+  `cutAt (recStop …)`'s, nothing of any other statement; `s` runs through (`recStop … = none`) unless a statement of it
+  was not released (`unreleasedOf`); and each statement's proofs left at its release time where `s` is scheduled.
+* `recCut`, `recReleased`: the whole view, one part a statement, cut at a stop by a cut of one statement's part
+  (`cutP`, at how many of its messages are kept), and the view the run released, each statement's part cut at what
+  reached the auditor of it. `recReleased … = recCut … (recStop …) …` is `RecStopsOfRun`'s first conjunct read at the
+  view.
 -/
 
 namespace Flock.StopCount
@@ -167,43 +166,66 @@ def cutAt {n : ℕ} (M : Fin n → ℕ) (r : Flock.SecurityProofs.RecStops M) (p
     | some ⟨q, k⟩ => if p < q.val then M ⟨p, h⟩ else if p = q.val then k.val else 0
   else 0
 
-/-- The sessions among `os` with a statement not released. -/
-def unreleased {n : ℕ} (evs : Events) (os : Fin n → Open) : ℕ :=
-  (Finset.univ.filter fun i => (nextOf evs (os i)).isSome).card
+/-- How many statements the recursive session `s` has in `σ`, its inner session's included: none if never opened. -/
+def nOf (σ : St) (s : String) : ℕ := ((openOf σ.evs s).map fun o => o.parts.size + 1).getD 0
 
-/-- Session `i`'s stop in the pattern `π`: none where it runs through, else its form, `RecStops m`'s stops numbered by
-`finSigmaFinEquiv`. -/
-def patternStop {n k B : ℕ} (m : Fin k → ℕ) (π : Claims.ZKServer.Pattern n (∑ p, (m p + 1)) B) (i : Fin n) :
-    Flock.SecurityProofs.RecStops m :=
-  (π.1 i).map finSigmaFinEquiv.symm
+/-- The release schedule `s` was opened with, if any. -/
+def schedOf (σ : St) (s : String) : Option Core.Firewall.Schedule := (openOf σ.evs s).bind (·.release)
+
+/-- Whether `s` was opened and a statement of it is not released. -/
+def unreleasedOf (σ : St) (s : String) : Bool :=
+  match openOf σ.evs s with
+  | some o => (nextOf σ.evs o).isSome
+  | none => false
+
+/-- **Where `s` stopped in `σ`**, read off what reached the auditor: its first statement `q` of which fewer than its
+`M s q` messages did, after the `k` that did; none if every message of every statement did. -/
+def recStop (M : String → ℕ → ℕ) (σ : St) (s : String) :
+    Flock.SecurityProofs.RecStops (fun p : Fin (nOf σ s) => M s p) :=
+  match (List.finRange (nOf σ s)).find? (fun q => decide (σ.sent s q < M s q)) with
+  | none => none
+  | some q => some ⟨q, ⟨min (σ.sent s q) (M s q), Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩⟩
+
+/-- **The whole view cut at the stop `r`**: statement `p`'s part `v p` cut by `cutP p`, at how many of its messages are
+kept, `cutAt r p`. -/
+def recCut {n : ℕ} (M : Fin n → ℕ) {V : Fin n → Type} (cutP : (p : Fin n) → ℕ → V p → V p)
+    (r : Flock.SecurityProofs.RecStops M) (v : (p : Fin n) → V p) : (p : Fin n) → V p :=
+  fun p => cutP p (cutAt M r p) (v p)
+
+/-- **The view the run `σ` released of `s`**: statement `p`'s part of the whole view `v` cut by `cutP p` at how many of
+its messages reached the auditor. -/
+def recReleased (σ : St) (s : String) {V : Fin (nOf σ s) → Type} (cutP : (p : Fin (nOf σ s)) → ℕ → V p → V p)
+    (v : (p : Fin (nOf σ s)) → V p) : (p : Fin (nOf σ s)) → V p :=
+  fun p => cutP p (σ.sent s p) (v p)
 
 end Flock.StopCount
 
 namespace Flock.Guarantees
 
-/-- **A recursive session's view is cut at one of its stops.** At every run (`StopCount.run`: the firewall's ops in any
-order, at each statement's message count `M s p`) and every recursive session `s` it opened as `o`, there is a stop
-`r : RecStops`, at `o`'s statements' counts, such that what reached the auditor of each statement of `s` is `cutAt r`'s,
-nothing of any other, and each statement `j` whose proofs left did so at its release time (`releaseMs`) where `o` is
-scheduled. -/
+/-- **A recursive session's view is cut at its stop.** At every run (`StopCount.run`: the firewall's ops in any order,
+at each statement's message count `M s p`) and every recursive session `s`: what reached the auditor of each statement
+of `s` is what `cutAt` keeps at the stop the run reached (`recStop`), nothing of any statement past `s`'s; `s` runs
+through unless a statement of it was not released; and where `s` is scheduled, each statement `j` whose proofs left did
+so at its release time (`releaseMs`). -/
 def RecStopsOfRun : Prop :=
-  ∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) (s : String) (o : Core.Firewall.Open),
-    Core.Firewall.openOf (StopCount.run M steps).evs s = some o →
-    ∃ r : Flock.SecurityProofs.RecStops (fun p : Fin (o.parts.size + 1) => M s p),
-      (∀ p, (StopCount.run M steps).sent s p = StopCount.cutAt _ r p) ∧
-      ∀ j t, (StopCount.run M steps).left s (j + 1) = some t → o.release.isSome →
-        Core.Firewall.releaseMs o.release j = some t
-
-/-- **A stream's views are cut at one stop pattern.** At every run and `n` recursive sessions `ss` it opened as `os`,
-each with `k` statements, the inner session's included, of message counts `m`, there is a pattern of at most
-`unreleased` stops, the sessions with a statement not released, at which what reached the auditor of each session is
-`cutAt` its stop's. -/
-def StreamStopsOfRun : Prop :=
-  ∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) {n k : ℕ} (m : Fin k → ℕ) (ss : Fin n → String)
-    (os : Fin n → Core.Firewall.Open),
-    (∀ i, Core.Firewall.openOf (StopCount.run M steps).evs (ss i) = some (os i)) → (∀ i, (os i).parts.size + 1 = k) →
-    (∀ i (p : Fin k), M (ss i) p = m p) →
-    ∃ π : Claims.ZKServer.Pattern n (∑ p, (m p + 1)) (StopCount.unreleased (StopCount.run M steps).evs os),
-      ∀ i p, (StopCount.run M steps).sent (ss i) p = StopCount.cutAt m (StopCount.patternStop m π i) p
+  ∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) (s : String),
+    (∀ p, (StopCount.run M steps).sent s p =
+      StopCount.cutAt _ (StopCount.recStop M (StopCount.run M steps) s) p) ∧
+    (StopCount.recStop M (StopCount.run M steps) s = none ∨ StopCount.unreleasedOf (StopCount.run M steps) s = true) ∧
+    ∀ j, StopCount.schedOf (StopCount.run M steps) s = none ∨ (StopCount.run M steps).left s (j + 1) = none ∨
+      (StopCount.run M steps).left s (j + 1) = Core.Firewall.releaseMs (StopCount.schedOf (StopCount.run M steps) s) j
 
 end Flock.Guarantees
+
+namespace Flock.StopCount
+
+/-- **The released view is the whole view cut at the run's stop**, at every cut of one statement's part. -/
+theorem recReleased_eq (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ → ℕ) (steps : List Step) (s : String)
+    {V : Fin (nOf (run M steps) s) → Type} (cutP : (p : Fin (nOf (run M steps) s)) → ℕ → V p → V p)
+    (v : (p : Fin (nOf (run M steps) s)) → V p) :
+    recReleased (run M steps) s cutP v = recCut (fun p => M s p) cutP (recStop M (run M steps) s) v :=
+  funext fun p => by
+    unfold recReleased recCut
+    rw [(h M steps s).1 p]
+
+end Flock.StopCount
