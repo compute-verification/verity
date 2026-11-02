@@ -30,7 +30,7 @@ assumption for every IU of at most `Γ` gates and uses it only for IUs that read
 honest training: an IU that runs a transformer's first attention layer and first MLP at many positions reads the
 embeddings and attention weights once, and then computes the MLP's inputs at every position itself.
 
-Every bound through a containment, total or partial (`PartialContainment`), also rests on `BaselineRegistered`
+Every bound through a containment, total or partial (`PartialContainment`), also rests on `ThetaRegistered`
 (`Definitions/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the baseline `θ` hold rather than about
 any circuit.
 -/
@@ -67,7 +67,7 @@ def ActivationsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_
 /-- **Incompressibility of weights and activations, in support form**: `ActivationsIncompressible` restated over what
 values determine rather than over wiring. For every IU `R` and every set `T` of its gates whose charge (`Chain.charge`,
 `b_w` per weight entry and `b_a` per input entry of which `T` holds a product, other than one linked to an entry whole in
-`R`) is at most `K`, the gates of `T` take at least `2^charge` distinct values over the runs of `D` with the baseline at
+`R`) is at most `K`, the gates of `T` take at least `2^charge` distinct values over the runs of `D` with θ at
 its committed values `θv`.
 
 Wiring cannot falsify it: a weight held in a constant gate, or rebuilt from a narrower wire, has the support it has.
@@ -114,7 +114,7 @@ def PartialSumsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_
 determine rather than over wiring. For every division `P` of `D` into IUs of at most `Γ` gates, each reading at most `K`
 bits of novel information, the partial sums passed between IUs can be charged to the IUs that receive them, `s u` to IU
 `u`, so that an entry whose products lie in `m` IUs is charged at least `m − 1` in total, and the gates of each IU take
-at least `2^(b_w · #(weight entries it uses) + b_a · s u)` distinct values over the runs of `D` with the baseline at its
+at least `2^(b_w · #(weight entries it uses) + b_a · s u)` distinct values over the runs of `D` with θ at its
 committed values `θv`.
 
 Like `ActivationsSupport`, wiring cannot falsify it, and `b_w` and `b_a` are rates in bits of support per entry, below an

@@ -1,4 +1,4 @@
-"""stage_tile.py COMMIT_DIR PARAMS UNIT OUT: unit UNIT of a served window as one C-Flock --zk unit, on the committer's rows.
+"""stage_tile.py COMMIT_DIR PARAMS UNIT OUT: unit UNIT of a served window as one Flock --zk unit, on the committer's rows.
 
 The unit is `Pc8TileSide{K=4096,TM=1,TN=1,DEV=sm120}`: A row i (fp8-pi, role X, row-seg) and B row j (fp8-pi, role W, v2)
 of the window's entry the unit falls in (`pouw.window.tile_at` of ``advice.json``: a call's kept rows, or the filler's

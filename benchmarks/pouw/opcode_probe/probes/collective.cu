@@ -1,5 +1,5 @@
 // The warp collectives' rates on sm_120 and sm_90, for the coverage table's REDUX and VOTE rows (machine_model/data/
-// cover/rows.toml, CMP-166). Joint points: rows.jsonl only, no census line. Each warp runs 8 independent chains, every
+// cover/rows.toml). Joint points: rows.jsonl only, no census line. Each warp runs 8 independent chains, every
 // collective's input the last one's output mixed with the lane id: a REDUX's chain is a move out of its uniform register
 // and an add (CHAIN_*), a ballot's a LOP3 (so its mixes hold Q + 8).
 //   redux_add, redux_min, redux_xor   REDUX.SUM, .MIN, .XOR of 32 words into a uniform register

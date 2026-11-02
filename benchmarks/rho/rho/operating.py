@@ -7,12 +7,12 @@ the registry).
   dark leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
 * **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark leaves only through
   the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
-  certified egress is the declared circuit's output, fixed by its registered inputs), from one location or from every
+  certified egress is the registered circuit's output, fixed by its registered inputs), from one location or from every
   location at once. Remotely nothing bounds it (0 s).
-* **Faulty outputs** (`faulty.*`): a block the sampled proofs let go unchecked returns outputs the adversary chose, in
-  certified egress, in either regime. Each faulty step carries `step_bits` and is drawn with chance `q`, and a drawn one
-  ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it carries before the
-  first detection, except with chance `δ`, and the chance of detection moving each reference.
+* **Incorrect outputs** (`incorrect.*`): a block the sampled proofs let go unchecked returns outputs the adversary
+  chose, in certified egress, in either regime. Each incorrect step carries `step_bits` and is sampled with chance
+  `q`, and a drawn one ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it
+  carries before the first detection, except with chance `δ`, and the chance of detection moving each reference.
 """
 
 from __future__ import annotations
@@ -60,15 +60,15 @@ def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
 
 
 @dataclass(frozen=True)
-class Faulty:
-    """The faulty-outputs channel: `identities` identities, each ended by its first drawn faulty step."""
+class Incorrect:
+    """The incorrect-outputs channel: `identities` identities, each ended by its first drawn incorrect step."""
 
     #: the sampled proofs' draw rate per step (1 where every unit is proved)
     q: float
     delta: float
-    #: the output bits a faulty step chooses
+    #: the output bits an incorrect step chooses
     step_bits: float
-    #: steps in a class drawn at a floor of one
+    #: steps in a class sampled at a floor of one
     floor_steps: float
     identities: float = 1.0
 
@@ -89,25 +89,25 @@ class Row:
     capacity: float
     #: the chance of detection, by exfiltration reference
     detect: Mapping[str, float]
-    #: the draw rate per step and the reporting confidence it was taken at
+    #: the sample rate per step and the reporting confidence it was taken at
     q: float = 0.0
     delta: float = math.nan
 
 
-def faulty(registry: Registry, scenario: Scenario) -> Row:
-    """The faulty-outputs row at the regime's identities, at the reporting confidence `faulty.delta`. A sampled regime
-    draws at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit (`q = 1`);
-    unmonitored, nothing detects it."""
+def incorrect(registry: Registry, scenario: Scenario) -> Row:
+    """The incorrect-outputs row at the regime's identities, at the reporting confidence `incorrect.delta`. A sampled
+    regime draws at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit
+    (`q = 1`); unmonitored, nothing detects it."""
     refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
     d = getattr(_inner(scenario.regime), "detection", None)
-    delta = registry["faulty.delta"]
+    delta = registry["incorrect.delta"]
     if d is None:
-        return Row("faulty outputs", math.inf, dict.fromkeys(refs, 0.0), 0.0, delta)
+        return Row("incorrect outputs", math.inf, dict.fromkeys(refs, 0.0), 0.0, delta)
     if d.sampled:
-        f = Faulty(d.q(), delta, d.step_bits, d.floor_steps, d.identities)
+        f = Incorrect(d.q(), delta, d.step_bits, d.floor_steps, d.identities)
     else:
-        f = Faulty(1.0, delta, registry["faulty.step_bits"], registry["faulty.floor_steps"], d.identities)
-    return Row("faulty outputs", f.capacity, {n: f.detect(b) for n, b in refs.items()}, f.q, delta)
+        f = Incorrect(1.0, delta, registry["incorrect.step_bits"], registry["incorrect.floor_steps"], d.identities)
+    return Row("incorrect outputs", f.capacity, {n: f.detect(b) for n, b in refs.items()}, f.q, delta)
 
 
 def points(registry: Registry, result: Result) -> list[Point]:

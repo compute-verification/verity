@@ -8,7 +8,7 @@ and checked against the reference evaluator on synthetic inputs lifted through t
   port) through `ir_lower.lower_gates`, so a primitive without a piece names itself.
 * **Synthetic inputs.**  Drawn where they are a flat Definition's parameters, never at the unit: a unit's inputs are interior values
   (a softmax's max, sum and probabilities are correlated).  `synthetic_words` draws every parameter leaf uniformly from a counter
-  stream; since circuits are total, every word is a valid input.  The flat Definition is evaluated on each draw (`Activation.evaluate`)
+  stream; since circuits are total, every word is a valid input.  The flat Definition is evaluated on each sample (`Activation.evaluate`)
   and every unit's boundary values are sliced out of the transcript.
 * **Partitions.**  Any query `partition_object` evaluates, or an owner function over each Call's `CallGraph`.  `blocks` and `scatter`
   are deliberately odd ones, for testing that nothing downstream depends on `Q_word`: contiguous runs of computing gates in

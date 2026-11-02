@@ -5,8 +5,8 @@ A *registered value* is a root parameter of the program, read row by row: row `r
 `r * words`, in the parameter's leaf order, each leaf `word_bits` bits (16 or 32: the parameter's leaf width rounded up
 to whole u16 words, `width`). Each row is committed as the circuit statement commits that port's row
 (`hm96-sha512/row/v1`): its u16 words (`row_words`: each leaf `word_bits / 16` words, low first, zero-padded to whole
-SHA-512 chunks of 64 words, as a C-Flock port row and its `values` row are laid out), `x = SHA-512(sha512_row_prefix(ROLE_X,
-16, n) || row)` over those `n` words u16 LE, a 192-byte salt `y` drawn from the operating system once, at registration,
+SHA-512 chunks of 64 words, as a Flock port row and its `values` row are laid out), `x = SHA-512(sha512_row_prefix(ROLE_X,
+16, n) || row)` over those `n` words u16 LE, a 192-byte salt `y` sampled from the operating system once, at registration,
 `b || c = hm96.SHA512.commit_string(default_key, x, y)`, and the frame-v3-sha512 leaf `row_leaf(D, r,
 hm96.SHA512.tree_leaf(default_key, b || c), "hm96-sha512/row/v1")`. The value's root is the frame-v3-sha512 root over its
 rows, under the domain `D` (`domain`): `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes
@@ -42,7 +42,7 @@ registered root and each instance's position against its own read map (`reads_fi
 all from its own program but the root); a statement that commits a registered row under fresh salts has no path and is
 refused.
 
-A *supplied value* is a registered value the verifier fills itself, from what it holds before the draw: each row is the
+A *supplied value* is a registered value the verifier fills itself, from what it holds before the sample: each row is the
 bytes of its sources in order, each source a root the record names (`{"port": P}`, the `roots` entry of port P;
 `{"value": V}`, the `registered` entry of value V, never a supplied value's), bytes of its own (`{"bytes": hex}`), a
 position (`{"position": "K"}`: K, a decimal below the record's population, after every proof block of the log's earlier
@@ -89,7 +89,7 @@ READS_FROM = "reads_from"
 SCHEMA = SCHEMA_HM96_SHA512_ROW
 SCHEMA_V2 = SCHEMA_HM96_SHA512_ROW_V2
 SCHEMA_SEG = SCHEMA_HM96_SHA512_ROW_SEG
-#: a registered value's row formats, each a C-Flock port's (`Flock.Registered.SCHEMAS`)
+#: a registered value's row formats, each a Flock port's (`Flock.Registered.SCHEMAS`)
 SCHEMAS = (SCHEMA, SCHEMA_V2, SCHEMA_SEG)
 #: the reads-file key a value of another format than `SCHEMA` adds
 SCHEMA_KEY = "row_schema"
@@ -155,7 +155,7 @@ def window_root(window: str | None) -> str | None:
 def domain(program: str, value: str, words: int, leaves: int, word_bits: int = WORD_BITS,
            window: str | None = None, produced: str | None = None, session: str | None = None) -> CommitmentDomain:
     """`window`: the window's open root, for a per-window value (none for a value held across windows). `produced`: the
-    registration's digest, for a value produced after its draw (`one_stage.produced`), which binds it in the window's
+    registration's digest, for a value produced after its sample (`one_stage.produced`), which binds it in the window's
     place. `session`: the window's session, for a value whose root the window's open root contains, which so can't bind
     that root, in the window's place."""
     if sum(x is not None for x in (window, produced, session)) > 1:
@@ -270,10 +270,10 @@ class Registered:
     def commit(cls, program: str, value: str, rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None,
                word_bits: int = WORD_BITS, schema: str = SCHEMA, window: str | None = None,
                produced: str | None = None, session: str | None = None) -> "Registered":
-        """`salts`: one per row, drawn once (default: fresh from the operating system) and never used for any other row.
+        """`salts`: one per row, sampled once (default: fresh from the operating system) and never used for any other row.
         `word_bits`: every leaf's width (the verifier's `width` of the parameter). `schema`: the row format of the port
         that reads it (`SCHEMAS`). `window`: the window's open root, for a per-window value; `produced`: the registration's
-        digest, for a value produced after its draw; `session`: the window's session, for a value its open root contains
+        digest, for a value produced after its sample; `session`: the window's session, for a value its open root contains
         (`domain`)."""
         rows = tuple(tuple(int(w) for w in r) for r in rows)
         words = len(rows[0]) if rows else 0

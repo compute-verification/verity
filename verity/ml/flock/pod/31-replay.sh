@@ -8,7 +8,7 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); RD=${RESEARCH_RUN_DIR:-/tmp/flock-replay}; O=$RD/out; W=/workspace/verify-flock-pure; mkdir -p $O $W
-REL=${REL:-bf16-hopper}; PER=${PER:-8192}; TAG=${TAG:-sessions}; BIN=${BIN:-flock-pure-gpu}; SCHEME=${SCHEME:-frame-v3}; LEAF=${LEAF:-blake3}; TB=$([ $BIN = flock-vllm-v1 ] && echo vllm || echo pure); NEG=${NEG-p3-8192/sessions-s0}; O=$O/$TAG; mkdir -p $O
+REL=${REL:-bf16-hopper}; PER=${PER:-8192}; TAG=${TAG:-sessions}; BIN=${BIN:-flock-pure-gpu}; LEAF=${LEAF:-blake3}; TB=pure; NEG=${NEG-p3-8192/sessions-s0}; O=$O/$TAG; mkdir -p $O
 MODE=build GPU=0 bash verity/ml/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env
 [ $BIN = flock-pure-gpu ] || (cd /workspace/flock-gpu-link/flock && cargo build --release -p flock-live --bin $BIN) >> $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
@@ -44,13 +44,13 @@ NET=$W/net-$REL.txt; python3 -c "from verity_flock import lowering; open('$NET',
 echo "$PIN  $NET" | sha256sum -c | tee $O/netlist.check || exit 1
 cmp $NET $S/net-$REL.txt && echo "netlist equals the verifier pod's" | tee -a $O/netlist.check
 SETDIR=; if [ -n "${SET:-}" ]; then SETDIR=$W/set-${SET%.tgz}; rm -rf $SETDIR; mkdir -p $SETDIR; tar xzf $RD/inputs/$SET -C $SETDIR || exit 5; fi
-python3 - "$REL" "$PER" "$S" "$W/inst-$TAG" "$TH" "$SCHEME" "$LEAF" "$SETDIR" "${YMODEL:-}" "${K:-0}" <<'PY' | tee $O/instances.txt
+python3 - "$REL" "$PER" "$S" "$W/inst-$TAG" "$TH" "$LEAF" "$SETDIR" "${YMODEL:-}" "${K:-0}" <<'PY' | tee $O/instances.txt
 import sys, json
 from argparse import Namespace
 from pathlib import Path
 from verity_flock import bench
-rel, per, s, out, procs, scheme, leaf = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), int(sys.argv[5]), sys.argv[6], sys.argv[7]
-a = Namespace(relation=rel, procs=procs, cache=None, scheme=scheme, leaf=leaf, set=sys.argv[8], y_model=bool(sys.argv[9]), k=int(sys.argv[10]))
+rel, per, s, out, procs, leaf = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), int(sys.argv[5]), sys.argv[6]
+a = Namespace(relation=rel, procs=procs, cache=None, leaf=leaf, set=sys.argv[7], y_model=bool(sys.argv[8]), k=int(sys.argv[9]))
 for d in sorted(s.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):
     total = int(d.name.split("-")[1])
     for j, (lo, hi) in enumerate(bench.subbatches(total, per)):

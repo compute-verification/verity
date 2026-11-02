@@ -126,7 +126,7 @@ def _templates(doc: Mapping[str, Any], layouts: Mapping[str, Any]) -> dict[str, 
 
 
 def _disjoint(rects: Sequence[tuple[tuple[str, str], int, int, int, int]], what: str) -> None:
-    """Refuse two rectangles (units × rows) of one port that meet."""
+    """Refuse two rectangles (proof blocks × rows) of one port that meet."""
     by: dict[tuple[str, str], list[tuple[int, int, int, int]]] = {}
     for key, a, b, r0, r1 in rects:
         by.setdefault(key, []).append((a, b, r0, r1))

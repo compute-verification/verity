@@ -5,17 +5,18 @@ set_option maxRecDepth 20000
 /-!
 # The host's assembly
 
-At a leaf below `2^H`, `Issuer.certify` signs a record whose head `prepare` makes, and its certificate carries what the
-check reads: the key's identifier, the record's link-window, the head's digest under the record's salt, and a signature
-`Lms.verify` accepts over the certificate message (`certify_ok`, `verify_facts`). So with a leaf for each record, a
-head for each and 64-byte salts, `certifyAll` issues one certificate per record, in order (`certifyAll_ok`).
+At a leaf below `2^H`, `Issuer.certify` signs a complete record whose head `prepare` makes, and its certificate carries
+what the check reads: the key's identifier, the record's link-window, the head's digest under the record's salt, and a
+signature `Lms.verify` accepts over the certificate message (`certify_ok`, `verify_facts`). So with a leaf for each
+record, a head with no status for each (so each is complete, `complete_of_head`) and 64-byte salts, `certifyAll`
+issues one certificate per record, in order (`certifyAll_ok`).
 -/
 
 namespace Properties.CertifierNetwork.Proofs
 
 open _root_.CertifierDevice
 open Properties.CertifierDevice (ValidKey)
-open Properties.CertifierDevice.Proofs.Issuer (verify_cert prepare_spec)
+open Properties.CertifierDevice.Proofs.Issuer (verify_cert prepare_spec prepare_head)
 
 /-- What a certificate that verifies carries: the key's identifier, and a signature over its message. -/
 theorem verify_facts {head : NetworkCheck.RecordHead} {salt kid : ByteArray} {l : String} {d : NetworkCheck.Direction}
@@ -41,10 +42,11 @@ theorem verify_facts {head : NetworkCheck.RecordHead} {salt kid : ByteArray} {l 
       rw [h6]
   · cases h
 
-/-- **At a leaf below `2^H`**, `certify` signs a prepared record, and the certificate verifies. -/
+/-- **At a leaf below `2^H`**, `certify` signs a prepared complete record, and the certificate verifies. -/
 theorem certify_ok {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {r : Record} {d : NetworkCheck.Direction}
     {g : Params} {pd : ByteArray} {head : NetworkCheck.RecordHead} {dg m : ByteArray}
-    (hprep : i.prepare salt r d g pd true = .ok (head, dg, m)) {q : Nat} (hq : q < 2 ^ i.key.params.H) :
+    (hprep : i.prepare salt r d g pd true = .ok (head, dg, m)) (hst : r.status = .complete) {q : Nat}
+    (hq : q < 2 ^ i.key.params.H) :
     ∃ sig : Lms.Signature,
       i.certify salt (.ok q) r d g pd = .ok (i, some ⟨head, salt, ⟨i.key.I, r.link, d, r.window, dg, sig.encode⟩⟩) ∧
       CertifiedRecord.verify ⟨head, salt, ⟨i.key.I, r.link, d, r.window, dg, sig.encode⟩⟩ i.key.params
@@ -53,7 +55,19 @@ theorem certify_ok {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {r : Re
   refine ⟨sig, ?_, hv⟩
   unfold Issuer.certify Issuer.finish
   rw [hprep]
-  simp only [bind, Except.bind, hs, pure, Except.pure]
+  simp only [bind, Except.bind, hs, hst, Status.reason?, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, pure,
+    Except.pure]
+
+/-- A record `prepare` makes the head of, where that head is `record_head`'s with no status, is complete. -/
+theorem complete_of_head {i : Issuer} {salt : ByteArray} {r : Record} {d : NetworkCheck.Direction} {g : Params}
+    {pd : ByteArray} {head : NetworkCheck.RecordHead} {dg m : ByteArray}
+    (hh : NetworkCheck.recordHead r.link d r.window r.grid none g pd true = .ok head)
+    (hprep : i.prepare salt r d g pd true = .ok (head, dg, m)) : r.status = .complete := by
+  have h2 := (recordHead_fields (prepare_head hprep)).2.2.2.2.2.2.2.1
+  rw [(recordHead_fields hh).2.2.2.2.2.2.2.1] at h2
+  cases hs : r.status with
+  | complete => rfl
+  | notEstablished x => simp [hs, Status.reason?] at h2
 
 /-- **A refused start signs nothing.** `certifyWith` hands a start of the session that the signer's state refuses (one it
 has already started, `Core.World.start`) to `finish` as a refused reservation: no certificate, and the link-window is
@@ -103,7 +117,7 @@ theorem certifyAll_ok {c : Config} {i : Issuer} (hk : ValidKey i.key) :
   | r :: rs, next, salts, hn, hp => by
     obtain ⟨pd, hpd, head, dg, m, hh, hprep⟩ := hp 0 (by simp) r rfl
     have hq : next < 2 ^ i.key.params.H := by simp only [List.length_cons] at hn; omega
-    obtain ⟨sig, hc, hv⟩ := certify_ok hk hprep hq
+    obtain ⟨sig, hc, hv⟩ := certify_ok hk hprep (complete_of_head hh hprep) hq
     have hres : reserve i next = .ok next := by simp [reserve, hq]
     have hadv : advance i next = next + 1 := by simp [advance, hq]
     obtain ⟨crs, hcrs, hall⟩ := certifyAll_ok hk rs (next + 1) (fun n => salts (n + 1))

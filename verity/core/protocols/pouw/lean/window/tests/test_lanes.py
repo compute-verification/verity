@@ -3,7 +3,7 @@ shared harness (`verity_difftest`): each port's fields to `h1zy.statement_ports`
 signatures), each port's row to `pouw.leaf_lanes`' (`reads`, `known`), each known port's row to `leaf_lanes.known_rows`
 (its words, and each field's bits where Lean's layout puts it), and the unit's input wires (`wires?`, `wireOf?`) to
 the circuits C-Flock lowers the statements to (`class_statement.unit_lowering` on `h1zy.statement_rows`, and the circuit
-file's META as `UnitStager` writes it, as #3131's h1_lanes stages them).
+file's META as `UnitStager` writes it, as h1_lanes stages them).
 
 The drawn inputs are tiles on and off a leaf's (R / 4 and C / 8 powers of two, at least two lanes), K on and off the
 32-wide step, lane indices in and out of range, paths that are and aren't a statement's and wires in, between and past
@@ -14,7 +14,7 @@ lane (whose 8-bit admit row C-Flock refuses), and with `VERITY_POUW_WINDOW_LOWER
 served lane at K = 448.
 
 A J10-R leaf's statements (`j10r_lane_ports`, `j10r_combine_ports`: `PouwH1LaneZy_v2`, `PouwH1LaneZyChunk_v2` and
-`PouwH1Combine_v2` over `PouwH1Tile_v5`, as `leaf_lanes` reads them with ``j10r``) are drawn the same way at
+`PouwH1Combine_v2` over `PouwH1Tile_v5`, as `leaf_lanes` reads them with ``j10r``) are sampled the same way at
 n = `weights.chunks`(K), chunk indices in and out of range, and fixed at the served leaf in 1, 2, 4 and 16 chunks (K = 448,
 4096, 8192, 16384 and 65536) and the sidecar's in 2, every statement; the combine's lowering at 8 × 16, K = 448 and 8192.
 """
@@ -177,7 +177,7 @@ _LOWERINGS: dict[tuple, Any] = {}
 def _lowering(x: dict, stage: bool = False) -> tuple[Any, dict | None]:
     """C-Flock's lowering of ``x``'s statement (`class_statement.unit_lowering` on `h1zy.statement_rows`) and, with
     ``stage``, its circuit file's META (`UnitStager`: each input row ``hm96-sha512/row/v2`` of its bits, ``ok`` one v2 row,
-    as #3131's h1_lanes stages them); a reject where C-Flock refuses a row that isn't whole u16 words. Each is built once
+    as h1_lanes stages them); a reject where C-Flock refuses a row that isn't whole u16 words. Each is built once
     (a lane's lowering is about 2M ANDs), a staged one serving an unstaged ask."""
     key = (x["r"], x["c"], x["k"], x.get("lane"), x.get("n"), x.get("chunk"))
     got = _LOWERINGS.get(key)
@@ -272,7 +272,7 @@ def _tiles_k(k: int) -> bool:
 
 def _j10r_leaf(rng: random.Random) -> dict:
     """A leaf as `_leaf` draws it, or at a served J10-R K, with ``n`` its lanes' chunks: `weights.chunks`(K) at every K a
-    leaf's tile takes (a K there that `chunks` refuses is drawn again), any small n at one it doesn't."""
+    leaf's tile takes (a K there that `chunks` refuses is sampled again), any small n at one it doesn't."""
     while True:
         x = _leaf(rng)
         if rng.random() < 0.5:
@@ -379,7 +379,7 @@ def test_the_leaves(r: int, c: int, k: int, server) -> None:
 @pytest.mark.parametrize("r,c,k", SERVED, ids=lambda v: str(v))
 def test_the_served_rows_are_proved_rows(r: int, c: int, k: int, server) -> None:
     """At the served leaf every input row of the 33 statements, in Lean's layout, is whole 16-bit words (C-Flock's
-    `unit_lowering`; the Lean verifier's v2 rule takes a row of any length, #3148), and the combine has a row that
+    `unit_lowering`; the Lean verifier's v2 rule takes a row of any length), and the combine has a row that
     compresses before its last SHA-512 block, at least 112 bytes (C-Flock's, `h1zy.LEAST_K`), so a proof can take every
     statement."""
     lanes = H.Layout(r, c, k).lanes

@@ -212,8 +212,8 @@ def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_
 
 def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatch, capsys):
     """The per-server bound at W63 (`onsite-w63`): 91.1 kbit/s a server over a 32-bucket link-window, intake 0.0282 at
-    the reference policy, labelled the honest-δ form with a faulty ingress unit's 356,592 bits excluded (and 0 when
-    every ingress unit is drawn), line rate beside it; the reference itself at `intake · α Φ`, 3.23 Mbit/s."""
+    the reference policy, labelled the honest-δ form with an incorrect ingress unit's 356,592 bits excluded (and 0 when
+    every ingress unit is sampled), line rate beside it; the reference itself at `intake · α Φ`, 3.23 Mbit/s."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
 
@@ -225,8 +225,8 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     text = capsys.readouterr().out
     assert ("**Certified ingress:** 9.11e+04 bit/s into a location, intake 0.0282 × α Φ: 1 × each server's declared "
             "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the warden "
-            "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (a faulty ingress unit's "
-            "3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
+            "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
+            "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
     assert "line rate, 4.8e+12 bit/s, is its upper end until Lean proves that bound" in text
     assert text.count("Certified") == 1
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]

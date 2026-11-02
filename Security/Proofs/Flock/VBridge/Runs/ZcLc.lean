@@ -12,7 +12,7 @@ transcript's coins: `r`, `z`, `ρ = rhoOf`, the residual rounds' coins, and from
 rounds ending at the comb the rep holds (`decoded`, which at a holo shape adds w's `h`); `zclc_of_residuals` is it at a
 plain shape, where that comb is `d.comb`.
 
-`rows_coins` is what makes the two meet: the points `verifierRows` returns (`info`, read by `Coins.ofRounds` from the
+`rows_coins` is what makes the two meet: the points `verifierRows` returns (`info`, read by `CoinSource.ofRounds` from the
 rounds' coins) are those coins (rec_algebra.py:587–617, `RecAlgebra.zerocheck` and `RecAlgebra.lincheck`).
 -/
 
@@ -38,9 +38,9 @@ theorem map_range_get (n : ℕ) (f : ℕ → F128) {i : ℕ} (hi : i < n) : ((Ar
 /-! ## The coins `verifierRows` reads -/
 
 theorem coin_of_round {R : Array Round} {k n : ℕ} {c : Array F128} (hne : NoEmpty (R.map (·.coins)))
-    (h : (Coins.ofRounds (R.map (·.coins))).round k n = .ok c) : (R[k]!).coins = c ∧ c.size = n := by
+    (h : (CoinSource.ofRounds (R.map (·.coins))).round k n = .ok c) : (R[k]!).coins = c ∧ c.size = n := by
   have h' : (R.map (·.coins))[k]? = some c ∧ c.size = n := by
-    simp only [Coins.ofRounds, filter_noEmpty hne] at h
+    simp only [CoinSource.ofRounds, filter_noEmpty hne] at h
     split at h
     next r hr =>
       split at h
@@ -54,12 +54,12 @@ theorem coin_of_round {R : Array Round} {k n : ℕ} {c : Array F128} (hne : NoEm
   rw [getElem!_pos R k hk, ← he, Array.getElem_map]
 
 theorem coins_at {R : Array Round} {k k' n : ℕ} {c : Array F128} (hne : NoEmpty (R.map (·.coins)))
-    (h : (Coins.ofRounds (R.map (·.coins))).round k n = .ok c) (hk : k = k') : (R[k']!).coins = c := by
+    (h : (CoinSource.ofRounds (R.map (·.coins))).round k n = .ok c) (hk : k = k') : (R[k']!).coins = c := by
   subst hk
   exact (coin_of_round hne h).1
 
 theorem coin_one {R : Array Round} {k k' : ℕ} {c : Array F128} (hne : NoEmpty (R.map (·.coins)))
-    (h : (Coins.ofRounds (R.map (·.coins))).round k 1 = .ok c) (hk : k = k') :
+    (h : (CoinSource.ofRounds (R.map (·.coins))).round k 1 = .ok c) (hk : k = k') :
     (R[k']!).coins.getD 0 0 = c[0]! := by
   subst hk
   obtain ⟨hc, hn⟩ := coin_of_round hne h
@@ -70,18 +70,18 @@ theorem coin_one {R : Array Round} {k k' : ℕ} {c : Array F128} (hne : NoEmpty 
 theorem run_of_rows {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb v : Array F128}
     {info : Info Lin} {kappa : Array (Array (Array F128))}
     (h : verifierRows sh rounds extras comb = .ok (v, info, kappa)) :
-    ∃ lins k, run sh (symbolic sh) extras 0 (Coins.ofRounds rounds) = .ok ((lins, info), k) := by
+    ∃ lins k, run sh (symbolic sh) extras 0 (CoinSource.ofRounds rounds) = .ok ((lins, info), k) := by
   unfold verifierRows at h
-  cases hr : run sh (symbolic sh) extras 0 (Coins.ofRounds rounds) with
+  cases hr : run sh (symbolic sh) extras 0 (CoinSource.ofRounds rounds) with
   | error e =>
-    have hl : residualLins sh (Coins.ofRounds rounds) extras = .error e := by
-      show Prod.fst <$> run sh (symbolic sh) extras 0 (Coins.ofRounds rounds) = _
+    have hl : residualLins sh (CoinSource.ofRounds rounds) extras = .error e := by
+      show Prod.fst <$> run sh (symbolic sh) extras 0 (CoinSource.ofRounds rounds) = _
       rw [hr]; rfl
     rw [hl] at h; cases h
   | ok q =>
     obtain ⟨⟨lins, info'⟩, k⟩ := q
-    have hl : residualLins sh (Coins.ofRounds rounds) extras = .ok (lins, info') := by
-      show Prod.fst <$> run sh (symbolic sh) extras 0 (Coins.ofRounds rounds) = _
+    have hl : residualLins sh (CoinSource.ofRounds rounds) extras = .ok (lins, info') := by
+      show Prod.fst <$> run sh (symbolic sh) extras 0 (CoinSource.ofRounds rounds) = _
       rw [hr]; rfl
     rw [hl] at h
     simp only [bind, Except.bind] at h

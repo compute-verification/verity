@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``token-select-combine`` (TokenSelectCombine_v2{V,C}): the registered compiler's greedy token from
+"""Flock lowering of ``token-select-combine`` (TokenSelectCombine_v2{V,C}): the registered compiler's greedy token from
 logits[0] and the row's V-chunk partials (``dead_free.TokenSelect_v4``'s last call) as ONE unit (``ir_lower.whole``: the combine
 carries its running best across chunks, so its gate graph is no row of identical units), lowered piece by piece from the word
 Definition. Its output is the egress id, one 32-bit word.

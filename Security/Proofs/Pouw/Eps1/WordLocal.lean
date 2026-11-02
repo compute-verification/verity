@@ -3,9 +3,8 @@ import Proofs.Pouw.Eps1.Basics
 /-!
 # Theorem B in M3: a word-local program's instructions
 
-QSTAR's Theorem B (gap list E6, E7):
-a word-local program costs at least 4 instructions a word at the zero instance and at least 8 at a general (int8)
-instance.
+Theorem B: a word-local program costs at least 4 instructions a word at the zero instance and at least 8 at a general
+(int8) instance.
 
 Block `τ`'s live part `L` is its writer and the writer's ancestors inside the block. The writer's value is a function
 of `L`'s input slots and the previous segment's output (`out_determined`). On the fiber of `τ = (ℓ, i, j)`, where only

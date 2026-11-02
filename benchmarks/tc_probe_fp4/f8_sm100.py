@@ -18,7 +18,7 @@ adder-width probe), ``subnormal_operands``, ``acc_only`` (zero products, every F
 ``signed_zero``, ``enable0`` (enable_input_d = 0 with a garbage accumulator), ``chain2/4/8`` (K = 64..256 on one accumulator,
 random and binade-growing), ``specials`` (record-only: NaN/inf operands and accumulators), and for mxf8f6f4 ``scale_sweep``,
 ``scale_extremes`` (products pushed to 2^-254: the floor), ``scale_overflow`` and ``scale_random``.  ``bulk`` is the random set
-(``--bulk-scale`` 1.0 = 10^8 outputs over the kinds), drawn from its own seed after the adversarial families.
+(``--bulk-scale`` 1.0 = 10^8 outputs over the kinds), sampled from its own seed after the adversarial families.
 
 ``eval`` scores every in-domain output against ``f8_model.candidates`` (sm_120's QMMA step ``GroupSum (32,)/26/-133`` first) and
 writes ``summary.json`` (per kind and family: outputs, asserted outputs, mismatches per candidate, observed -0 / subnormal / inf

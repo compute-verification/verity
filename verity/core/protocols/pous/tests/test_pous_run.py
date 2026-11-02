@@ -10,6 +10,7 @@ import hashlib
 import pytest
 
 import pous_test_signer as ts
+from pous_fakes import Clock
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import run
 from verity.core.protocols.pous.schemes import p2 as P2
@@ -36,21 +37,13 @@ TRUSTED = (ts.public_key(b"run challenger", height=1),)
 """The verifier's list of memory-challenger keys: the default signer's."""
 
 
-class Clock:
-    def __init__(self) -> None:
-        self.now = 1_000_000
-
-    def __call__(self) -> int:
-        return self.now
-
-
 def session(*, blocks: int = Q.blocks, k: int = POINT.k, limit_ns: int = POINT.limit_ns, block_bytes: int = Q.block_bytes,
             binding: bytes = ROOT, sid: bytes = SID, spend: int = 10, respond=None, signer=None,
             log: mc.SessionLog | None = None) -> run.Session:
     signer = signer or ts.TestSigner(b"run challenger", height=1)
     tree = mc.CoinTree.draw(b"source", sid, blocks, k, key=KEY,
                             salts=[hashlib.sha512(b"salt%d" % j).digest() * 3 for j in range(k)])
-    clock = Clock()
+    clock = Clock(1_000_000)
     c = mc.MemoryChallenger(tree, signer, log=log or ts.session_log(), limit_ns=limit_ns, block_bytes=block_bytes,
                             binding=binding, clock=clock)
 
@@ -169,7 +162,7 @@ def test_check_is_the_deployed_point_under_s1s_lms():
         rows[i] = mc.block_digest(block(i, q.block_bytes))
     root = VerifierKey.from_row_digests(q, SALT, rows).root
     setup = run.Setup(q.blocks, SETUP.commitment, root, SALT)
-    signer, clock = ts.TestSigner(b"deployed challenger", height=1), Clock()
+    signer, clock = ts.TestSigner(b"deployed challenger", height=1), Clock(1_000_000)
     c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes, binding=root,
                             clock=clock)
 

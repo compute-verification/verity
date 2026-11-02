@@ -1,6 +1,6 @@
 """A window's ``cols`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the column blocks of MoeSum, the MNNVL
 all-reduce and the fused norm row's residual part (``COLS``) are consecutive chunks of at most the partition's ``chunk_cap``,
-each a member on the bit rows C-Flock's `UnitStager` stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the
+each a member on the bit rows Flock's `UnitStager` stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the
 chunks are the template's blocks read once, so that the Definition on each chunk's rows, parsed as the stager parses them, is
 the rows' committed columns, and a flipped word is not."""
 from __future__ import annotations

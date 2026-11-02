@@ -21,7 +21,7 @@ def test_one_module_per_template(family):
         assert f"{L.module_name(tid)}.py" in reg.supports(sub, "frame-v3/blake3-keyed")
 
 
-#: Templates a family proves under frame-v3/blake3-keyed besides the GEMM (C-Flock: verity/flock-ir-frame/v3; sampling under
+#: Templates a family proves under frame-v3/blake3-keyed besides the GEMM (Flock: verity/flock-ir-frame/v3; sampling under
 #: verity/flock-ir-sampling/v1).
 LOWERED = {"C-Flock": {"rope-head", "silu-mul", "silu-mul-v2", "rmsnorm-fused-cuda", "rmsnorm-triton", "attention-head",
                        "gumbel-top-p-token-select", "ingress-prompt", "token-select-chunk", "token-select-combine"}}
