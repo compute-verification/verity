@@ -46,7 +46,7 @@ theorem zk_ligeritoWith_std (ms : MerkleScheme) (h : ms.Named) (sch : Schedule) 
   rfl
 
 theorem zk_verifyRepWith_std (spec : SessionSpec) (st : Setup) (h : st.merkle.Named) (sch : Schedule) (tPad : Nat)
-    (sess : Session) (i r : Nat) (bytes : ByteArray) :
+    (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     Zk.verifyRepWith std spec st sch tPad sess i r bytes = Zk.verifyRep spec st sch tPad sess i r bytes := by
   unfold Zk.verifyRepWith Zk.verifyRep
   simp only [monadLift_self, zk_replayWith_std, ringSwitchWith_std, zk_ligeritoWith_std _ h, zk_verifyInnerWith_std]

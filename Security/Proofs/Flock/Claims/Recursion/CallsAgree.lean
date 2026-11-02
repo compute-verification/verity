@@ -106,7 +106,7 @@ theorem find?_self_of_nodup {α β : Type} [BEq β] [LawfulBEq β] (key : α →
 
 /-- **S11 pins a decoded session's streams**: with the rep streams named apart, as many streams as rep streams, and
 one found at each rep stream's name, every stream is the one found at some rep stream's name. -/
-theorem streams_pinned {spec : SessionSpec} {sess : Session} (hn : (spec.repStreams.toList.map (·.2.2)).Nodup)
+theorem streams_pinned {spec : SessionSpec} {sess : RunRecord} (hn : (spec.repStreams.toList.map (·.2.2)).Nodup)
     (hsz : sess.streams.size = spec.repStreams.size)
     (hf : ∀ x ∈ spec.repStreams.toList, ∃ s, sess.streams.find? (·.name == x.2.2) = some s) :
     ∀ s ∈ sess.streams.toList, ∃ q, ∃ hq : q < spec.repStreams.size,
@@ -175,7 +175,7 @@ theorem pubField_of {pubs : Json} {t : String} {p : ByteArray}
     exact ⟨s, hs, h⟩
 
 /-- **What `Record.decode` reads of the public words.** -/
-theorem decode_pubs {spec : SessionSpec} {text : String} {sess : Session} (h : Record.decode spec text = .ok sess) :
+theorem decode_pubs {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Record.decode spec text = .ok sess) :
     ∃ j l pubs, Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList sess.publics.toList := by
   revert sess
@@ -229,7 +229,7 @@ theorem liveOf_pubs {spec : SessionSpec} {record : String} {lv : Live} (h : live
     exact List.Forall₂.imp (fun t p h => pubField_of h) (mapM_forall₂ (by assumption))
 
 /-- **The decoded session's public words are `liveOf`'s.** -/
-theorem decode_publics {spec : SessionSpec} {text : String} {sess : Session} {lv : Live}
+theorem decode_publics {spec : SessionSpec} {text : String} {sess : RunRecord} {lv : Live}
     (hd : Record.decode spec text = .ok sess) (hl : liveOf spec text = .ok lv) : sess.publics = lv.publics := by
   obtain ⟨j, l, pubs, hp, hl1, hp1, hf⟩ := decode_pubs hd
   obtain ⟨j', l', pubs', hp', hl1', hp1', hf'⟩ := liveOf_pubs hl
@@ -264,7 +264,7 @@ theorem y_pinned {a b : Array F128} (hs : a.size = b.size) (ha : ∀ c ∈ a, c.
     (hb : ∀ c ∈ b, c.isZero = true) : a = b :=
   Array.ext hs fun _ h1 h2 => by rw [f128_zero (ha _ (Array.getElem_mem h1)), f128_zero (hb _ (Array.getElem_mem h2))]
 
-theorem lbOf_congr {spec : SessionSpec} {sess sess' : Session} (hy : sess.y = sess'.y)
+theorem lbOf_congr {spec : SessionSpec} {sess sess' : RunRecord} (hy : sess.y = sess'.y)
     (hP : sess.points = sess'.points) (hB : sess.rootB = sess'.rootB) (hF : sess.rootF = sess'.rootF) :
     lbOf spec sess = lbOf spec sess' := by
   unfold lbOf
@@ -275,7 +275,7 @@ theorem mem_dgl {spec : SessionSpec} {b p : ByteArray} : b ∈ dgl spec p ↔ sp
   split <;> simp_all
 
 /-- `H(ε)` is among a session's round calls where the digests are SHA-512 and there is a table. -/
-theorem eps_mem {spec : SessionSpec} {sess : Session} (hd : spec.sha512Digests = true) (hne : 0 < spec.tables.size)
+theorem eps_mem {spec : SessionSpec} {sess : RunRecord} (hd : spec.sha512Digests = true) (hne : 0 < spec.tables.size)
     (hf : ∀ x ∈ spec.repStreams.toList,
       ∃ s, sess.streams.find? (·.name == x.2.2) = some s ∧ 0 < s.rounds.size) :
     ByteArray.empty ∈ sess.streams.toList.flatMap (streamLog spec) := by
@@ -291,7 +291,7 @@ theorem eps_mem {spec : SessionSpec} {sess : Session} (hd : spec.sha512Digests =
 S17's digests of the files, and each table's two reps' own. -/
 theorem verdict_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} {L : Array ByteArray} (hv : verifyLogged h spec tabs record proofs = (.ok (), L)) :
-    ∃ (sess : Session) (schs : Array Schedule) (ds : List (List ByteArray)),
+    ∃ (sess : RunRecord) (schs : Array Schedule) (ds : List (List ByteArray)),
       Record.decodeWith (M := Flock.V) (Hashes.ofSha512 h) spec record = .ok sess ∧
       List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
       tabs.size = spec.tables.size ∧
@@ -319,7 +319,7 @@ theorem verdict_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs :
 decode have the same `root_B`, points and public words, and the same rounds at each rep stream: every call of the
 first is a call of the second. -/
 theorem verdict_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record record' : String}
-    {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : Session}
+    {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : RunRecord}
     (hv : verifyLogged Sha512.hash spec tabs record proofs = (.ok (), L))
     (hv' : verifyLogged Sha512.hash spec tabs record' proofs = (.ok (), L'))
     (hd : Record.decode spec record = .ok sess) (hd' : Record.decode spec record' = .ok sess')
