@@ -8,8 +8,8 @@ The program is a Python file defining `train(te)`; `te` is the `Session`. It bui
 (`te.load(model)`), declares its step count (`te.plan(n)`), wraps each training step in `with te.step():` and may
 name its output model (`te.output(fn)`, default: the registered model's weights) and write counterexample families
 (`te.family(name, plan)`). A checkpoint is taken after every 5% of the planned steps: the output model's held-out
-bits per byte from the fixed evaluator, uncounted. Tokens computed outside a step, or a run with no step, make the run
-invalid.
+bits per byte from the fixed evaluator, uncounted (`--script`: the program's E, written for a separate evaluation job,
+cw.py). Tokens computed outside a step, or a run with no step, make the run invalid.
 
 `--starts` is the integrator's registry of starts, `{name: {path, sha256, val_bpb, ctx, vocab, forward_macs_per_token}}`;
 c is `score.C_PER_FORWARD_TOKEN` times the start's `forward_macs_per_token` (measured on the registered model when the
@@ -34,6 +34,7 @@ import json
 import math
 import os
 import re
+import resource
 import runpy
 import subprocess
 import sys
@@ -348,6 +349,9 @@ class Session:
                 (fam.dir / "verified.json").write_text(json.dumps(v.to_json(), indent=1) + "\n")
                 verified.append(v.to_json())
         rec["families"] = verified
+        me = resource.getrusage(resource.RUSAGE_SELF)
+        # taken last: the evaluation job counts every CPU second of the training job's tree beyond this one as unseen
+        rec["totals"]["self_cpu_s"] = me.ru_utime + me.ru_stime
         (self.out / "run.json").write_text(json.dumps(rec) + "\n")
         return rec
 
@@ -490,7 +494,8 @@ def parse(argv=None) -> argparse.Namespace:
 
 
 def run_script(a, args: list[str]) -> dict:
-    """A standalone covert_witness train.py, unmodified, as `__main__` inside the counter (cw.py)."""
+    """A standalone covert_witness train.py, unmodified, as `__main__` inside the counter (cw.py). Its checkpoints are
+    E files for the evaluation job (`cw.score_run`); nothing is scored here."""
     from . import cw, hooks
 
     script = a.script.resolve()
@@ -504,7 +509,6 @@ def run_script(a, args: list[str]) -> dict:
                  args=args, families=a.families)
     te.budget_macs = a.budget_macs or a.budget_fraction * float(getattr(prepare, "TRAIN_FLOP_BUDGET", 0)) / 2
     adapter = cw.Adapter(te, prepare, guard_log=a.out / "guard.log", own_dirs=[a.out, te.families_root.parent])
-    te.evaluator = load_evaluator(a.evaluator) or adapter.evaluate
     guard_exits()
     adapter.install()
     hooks.ACTIVE = te

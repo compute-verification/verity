@@ -68,17 +68,19 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
   leaves U_τ for every τ above its β_t, so it costs only its own share of φ.
 - **ρ (slowdown)**: max(1, φcβ / (k(k + β))) if D ≥ k/β, else 1, for each U_τ, then the largest, at each (k, r).
 - **bpb**: the held-out bits per byte of the output model from the integrator's fixed evaluator: `val` during the search
-  (for covert_witness, a paired score on a fresh slice of its search pool, drawn after the output's digest), `test`
-  when finally scored. An evaluator returns None for a sealed split, and the record then holds no test bpb.
+  (for covert_witness, a paired score on a fresh slice of its search pool, drawn after the output's digest, by its
+  evaluation job after the training job ended), `test` when finally scored. An evaluator returns None for a sealed
+  split, and the record then holds no test bpb.
 - **l\***: a target bits per byte, the start's bpb less 0.5%, 1%, 2% or 5%.
 - **W\*(l\*)**: the least |C|·ρ over submissions with val bpb ≤ l\*.
 - **honest(l\*)**: the least |C| over the reference runs' checkpoints with val bpb ≤ l\*.
 - **Effective slowdown**: W\*(l\*) / honest(l\*).
 - **Niche**: a mechanism tag × β range × φ range × start cell (`frontier.BETA_EDGES`, `PHI_EDGES`).
 - **Elite**: a niche's submission with the least val bpb, ties going to the least |C|·ρ.
-- **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r), among the
-  runs under te_core 2.2 or later (a submission's `run_te_core`) whose ρ is priced by thresholds (ingested by 3.0 or
-  later, or with no covered step; `frontier.valid`).
+- **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r), among those
+  measured by the pinned measurement commit (covert_witness's `pin.py`, a submission's `measurement_commit`); invalid,
+  unscored, `other-version` and `duplicate-e` submissions (an E digest an earlier submission had) are left out, and so
+  is one with covered steps whose ρ wasn't priced by thresholds (`re-ingest`: ingested before 3.0) (`frontier.status`).
 - **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
   GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
   seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
@@ -86,16 +88,18 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 ## What the integrator calls
 
 covert_witness's islands run unmodified (`cw.py`): the harness wraps the fixed `prepare.load_start`,
-`TrainData.next`, `encode_*` and `submit`, and scores each E with `prepare.Scorer`, uncounted: the output's digest,
-then a fresh slice of the search pool, and the promotion set's score sealed under the digest (covert_witness's README;
-the final set only in its final mode). A batch from `TrainData.next` is token data through any op that reads it, not
-only an embedding lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The
+`TrainData.next`, `encode_*` and `submit`, and writes each checkpoint's E to `OUT/E/`, uncounted. It scores nothing:
+covert_witness's evaluation job (`cw.score_run`, run by its evaluate.py after the training job, outside that job's
+sandbox) decodes each E with `prepare.decode` and scores it with `prepare.Scorer`: the output's digest, then a fresh
+slice of the search pool, and the promotion set's score sealed under the digest (covert_witness's README; the final
+set only in its final mode). A batch from `TrainData.next` is token data through any op that reads it, not only an
+embedding lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The
 harness's own work runs with its own instance of prepare.py, on plain copies of what the program handed it, and with the
 program's torch function modes, global module hooks and profilers off, and with the `sys.path` and the modules
-prepare.py names as they were before the program ran. A program that rebinds what that work calls (`cw.watched`) makes its run invalid. So does
-one that routes work past the counter: an op outside torch's own namespaces (a custom op), a product op with no MAC
-formula, token data read out of torch (`numpy`, `tolist`, DLPack) at a value per token or more, a thread or a child
-process it starts, or a module it imports that names a route the screen refuses (`run.Imports`). From
+prepare.py names as they were before the program ran. A program that rebinds what that work calls (`cw.watched`) makes
+its run invalid. So does one that routes work past the counter: an op outside torch's own namespaces (a custom op), a
+product op with no MAC formula, token data read out of torch (`numpy`, `tolist`, DLPack) at a value per token or more, a
+thread or a child process it starts, or a module it imports that names a route the screen refuses (`run.Imports`). From
 `benchmarks/covert_witness/`:
 
 ~~~text
@@ -150,7 +154,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `score.py` | `score` (the largest ρ over the thresholds τ), `score_grid`, `checkpoints`, `w_star`, `honest`, `effective_slowdown` |
 | `ledger.py` | `Ledger` (append-only, per agent, evidence store), `ingest`, the index |
 | `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
-| `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its evaluator; `CWPlan`, the family `prepare.declare_step` writes |
+| `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its E checkpoints; `score_run`, the evaluation job's scoring of them; `CWPlan`, the family `prepare.declare_step` writes |
 | `hooks.py` | what a standalone script may call, no-ops outside the harness |
 | `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
@@ -176,15 +180,15 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
   can lower it again. A start's buffers (RoPE tables) are taken as θ's.
 - **Harness work is neither counted nor timed**: loading, encoding, decoding and evaluation run outside the dispatch
   mode and outside the steps' clocks; `totals` sums the steps' seconds and `process_*` the whole process.
-- **The held-out guard is in-process**: an audit hook refuses `prepare.UNREADABLE` (the search pool, the sealed side
-  and learning_frontier's `val.bin` and hub cache) except while the harness loads or evaluates, and other runs' outputs
-  (the run directories beside `$RESEARCH_RUN_DIR`, other candidates' scratch under `prepare.ROOT/candidates`). The
-  loaders that open files in C++ or Rust (`cw.c_readers`: `torch.from_file`, storages' `from_file`, safetensors'
-  `safe_open`) raise the hook's event first; the screen refuses their unwrapped forms (`torch._C`, a class's bases, a
-  function's closure) and the Arrow readers (pyarrow, polars, duckdb, `datasets`). A name built at run time (getattr)
-  still reaches them, so the guard needs the node's file permissions behind it (v2.2's separate training job).
-  Subprocesses are logged to `guard.log`; a thread or a process the program starts makes its run invalid, so one reading
-  during an evaluation can't land a valid run.
+- **The held-out guard is the integrator's sandbox, with an in-process hook inside it**: covert_witness's training job
+  runs in a sandbox (its `sandbox.py`) where the held-out sets, the sealed side and other runs aren't mounted at all.
+  Inside it an audit hook also refuses `prepare.UNREADABLE` (the search pool, the sealed side and learning_frontier's
+  `val.bin` and hub cache) except while the harness loads a start, and other runs' outputs (the run directories beside
+  `$RESEARCH_RUN_DIR`, other candidates' scratch under `prepare.ROOT/candidates`). The loaders that open files in C++ or
+  Rust (`cw.c_readers`: `torch.from_file`, storages' `from_file`, safetensors' `safe_open`) raise the hook's event first;
+  the screen refuses their unwrapped forms (`torch._C`, a class's bases, a function's closure) and the Arrow readers
+  (pyarrow, polars, duckdb, `datasets`). Subprocesses are logged to `guard.log`; a thread or a process the program starts
+  makes its run invalid, and the sandbox's process-tree record bounds any work outside the count.
 - **Script steps follow the data stream**: a script that fetches all its data at once is one step, which keeps every
   count but coarsens D and φ.
 - **Weight shape**: a forward activation with a weight's exact 2-D shape, in a matmul of two token-indexed operands,

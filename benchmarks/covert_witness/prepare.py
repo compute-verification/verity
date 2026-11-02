@@ -44,18 +44,32 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from sealed import SEALED, value_path
+from sealed import DATA, SEALED, value_path
 from starts_store import STARTS
 
 #: the fixed side's version, in every witness record (README.md)
 VERSION = "2.2"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
-#: the held-out sets (`data.py`): a search evaluation scores a fresh slice of the pool; the promotion and final sets are
-#: sealed (`sealed.py`)
+#: the held-out sets (`data.py`, data version `sealed.DATA`): a search evaluation scores a fresh slice of the pool; the
+#: promotion and final sets are sealed (`sealed.py`)
 SEARCH_POOL, PROMOTION, FINAL = "search-pool", "promotion", "final"
 HELD_OUT = ROOT / "heldout"
-SET_DIRS = {SEARCH_POOL: HELD_OUT / SEARCH_POOL, PROMOTION: SEALED / "heldout" / PROMOTION, FINAL: SEALED / "heldout" / FINAL}
+SET_DIRS = {SEARCH_POOL: HELD_OUT / DATA / SEARCH_POOL, PROMOTION: SEALED / "heldout" / DATA / PROMOTION,
+            FINAL: SEALED / "heldout" / DATA / FINAL}
+DATA_JSON = HELD_OUT / DATA / "data.json"
+#: each held-out set's tokens (sha256 of `<set>/<tokenizer>.bin`) as data.py built them: a set on a node that isn't
+#: these is refused, so every score of this version is on the same text
+SET_SHA256: dict[str, dict[str, str]] = {
+    SEARCH_POOL: {"gpt2": "c5b0ca00421394d48b8b99dfa345d984d978b1b0b0d46124c490e8faeb356c68"},
+    PROMOTION: {"gpt2": "85b63c4150d009927253b9c02fb7c627d10d2cdf17421e9f7deee5bef9a1610d"},
+    FINAL: {"gpt2": "3bda7a07f3ad8947f1657251f8295edcc30a92cb4e4d9520d48c760ad4a2c31f",
+            "pythia": "5d55000c17aff1bb0a0cf02327720e811e1e691076c7922c35b88351a6460b87"},
+}
+#: each start's θ digest (`digest`): the search's starts as `starts_store.json` names them, and the sealed start
+START_DIGESTS = {name: s["digest"] for name, s in json.loads(
+    (Path(__file__).resolve().parent / "starts_store.json").read_text())["starts"].items()} | {
+    "pythia160m": "e2b4a7f33b5c9578631b91ca13f59fb7a3648be4aa35e1f892b26939e8ab1681"}
 #: a search slice's GPT-2 tokens, whole windows of the pool's stream (`draw_slice`), and the promotion set's that a sealed
 #: value scores (its first windows): with the start's scores kept, a checkpoint costs about one 2^21-token evaluation
 SLICE_TOKENS = 2 ** 20
@@ -128,7 +142,10 @@ def start_dir(name: str) -> Path:
 
 
 def start_record(name: str) -> dict:
-    return json.loads((start_dir(name) / "start.json").read_text())
+    rec = json.loads((start_dir(name) / "start.json").read_text())
+    if rec["digest"] != START_DIGESTS.get(name):
+        raise SystemExit(f"prepare: start {name}'s registered digest is not prepare.START_DIGESTS's")
+    return rec
 
 
 def load_theta(name: str, check: bool = True) -> dict[str, torch.Tensor]:
@@ -999,13 +1016,10 @@ def rebuild_macs(theta: dict[str, torch.Tensor], blob: bytes) -> int:
 
 def submit(out: Path, start: str, klass: str, blob: bytes, model: dict[str, torch.Tensor], trainable: dict,
            steps: list[dict], changed: list[str], notes: dict | None = None, snapshots: list[tuple[bytes, int]] = ()) -> None:
-    """Write a submission: E.bin, model.safetensors, steps.jsonl, meta.json, and snapshots (E at a step-log prefix) for the
-    FLOPs-to-target curve."""
-    from safetensors.torch import save_file
-
+    """Write a submission: E.bin, steps.jsonl, meta.json, and snapshots (E at a step-log prefix) for the FLOPs-to-target
+    curve. `model` isn't written: the evaluation job rebuilds the model from θ and E with the fixed decoder."""
     out.mkdir(parents=True, exist_ok=True)
     (out / "E.bin").write_bytes(blob)
-    save_file({k: v.detach().cpu().contiguous() for k, v in model.items()}, str(out / "model.safetensors"))
     (out / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps))
     for i, (b, n) in enumerate(snapshots):
         d = out / "snap" / f"{i:03d}"
@@ -1026,8 +1040,11 @@ def manifest(split: str) -> dict:
 def held_out(split: str, tokenizer: str) -> tuple[np.ndarray, dict]:
     man = manifest(split)
     toks = np.fromfile(SET_DIRS[split] / f"{tokenizer}.bin", dtype=np.uint16)
-    if hashlib.sha256(toks.tobytes()).hexdigest() != man["tokenizers"][tokenizer]["sha256"]:
+    got = hashlib.sha256(toks.tobytes()).hexdigest()
+    if got != man["tokenizers"][tokenizer]["sha256"]:
         raise SystemExit(f"prepare: the {split} set's {tokenizer} tokens do not match their manifest")
+    if got != SET_SHA256.get(split, {}).get(tokenizer):
+        raise SystemExit(f"prepare: the {split} set's {tokenizer} tokens are not prepare.SET_SHA256's (data {DATA})")
     return toks, man
 
 
