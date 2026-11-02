@@ -4,15 +4,15 @@ of the block matrices (the quant island's QAT, islands/quant/train.py, rebuilt f
 Each coded matrix's weight is θ + Q(V) in every step's forward: V an fp32 latent update that only the optimizer touches
 (Muon, through a straight-through gradient), Q its code, so every checkpoint and the submission are exactly a CWQUAN1 E
 (prepare.encode_quant). Codes: `sign` (1 bit), `tern` (-1, 0, 1), `rtn{b}` (b-bit round to nearest, levels
--(2^(b-1)-1)..2^(b-1)-1), each times an f16 scale of `--mult` times the group's mean |V| (`--group`: -1 a tensor, 0 a
-row, else G entries); `fp` trains the matrix unquantized (a CWQUAN1 full entry). The norm gains at and above the lowest
+-(2^(b-1)-1)..2^(b-1)-1), each times an f16 scale of `--mult` (or the code's own, `rtn4@0.6`) times the group's mean |V|
+(`--group`: -1 a tensor, 0 a row, else G entries); `fp` trains the matrix unquantized (a CWQUAN1 full entry). The norm gains at and above the lowest
 trained block, and the final norm, train in fp32 by AdamW and are full entries; the tied embedding stays at θ.
 
 - Matrices of one shape and code are stacked, with their gradients accumulated into one buffer: the code, Muon's batched
   Newton–Schulz and the weight rebuild are a few ops a step whatever the depth (te_core's meter dispatches every aten op
   through Python, so per-matrix QAT cost ~0.3 s a step on s100).
 - `--code` maps block matrices to codes, `BLOCKS:LEAVES=CODE` comma-separated (train.py's SPEC; the first match wins;
-  unmatched matrices stay at θ), e.g. `all:all=rtn3` or `0-1:all=tern,2-5:all=rtn3`.
+  unmatched matrices stay at θ), e.g. `all:all=rtn3`, `0-1:all=tern,2-5:all=rtn3` or `all:attn=rtn4@0.7,all:mlp=rtn4@0.5`.
 - `--stages A/B/...` trains the coded matrices in turn, each stage a SPEC (`--passes` repeats the list, `--shares` splits
   the steps): a stage's latents and optimizer state exist only while it runs, and a matrix a later stage revisits
   restarts its latent from its code, so Δ_grad is the largest stage's. The rate follows one schedule over the run
@@ -53,7 +53,7 @@ import prepare
 LEAVES = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 GROUPS = {"qkv": ("wq", "wk", "wv"), "attn": ("wq", "wk", "wv", "wo"), "gu": ("w_gate", "w_up"),
           "mlp": ("w_gate", "w_up", "w_down"), "all": LEAVES}
-CODE = re.compile(r"sign|tern|rtn([2-8])|fp|-")
+CODE = re.compile(r"(?:sign|tern|rtn[2-8])(?:@\d*\.?\d+)?|fp|-")
 #: the harness's checkpoint count: with `hooks.plan`, the first E encoded in each 5% of the planned steps
 CHECKPOINTS = 20
 XZ9 = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE,
@@ -91,7 +91,7 @@ def parse_codes(spec: str, L: int) -> dict[str, str]:
     for item in filter(None, spec.split(",")):
         sel, _, code = item.rpartition("=")
         if not sel or not CODE.fullmatch(code):
-            fail(f"--code item {item!r} is not BLOCKS:LEAVES=CODE (CODE sign|tern|rtnB|fp|-)")
+            fail(f"--code item {item!r} is not BLOCKS:LEAVES=CODE (CODE sign|tern|rtnB, optionally @MULT, or fp|-)")
         for n in spec_names(sel, L):
             codes.setdefault(n, code)
     return {n: c for n, c in codes.items() if c != "-"}
@@ -331,16 +331,18 @@ class Stack:
     """The matrices of one shape and code: θ, the trained weights' gradient buffer (each matrix's .grad is a view of it,
     so backward accumulates into it), and, while a stage trains them, the latent V and Muon's buffer."""
 
-    def __init__(self, names: list[str], code: str, params: dict, theta_dev: dict, group: int):
-        self.names, self.code = names, code
+    def __init__(self, names: list[str], code: str, params: dict, theta_dev: dict, group: int, mult: float):
+        self.names = names
+        self.code, _, m = code.partition("@")
+        self.mult = float(m) if m else mult
         self.shape = tuple(params[names[0]].shape)
-        self.g = group_size(self.shape, group) if code != "fp" else 0
+        self.g = group_size(self.shape, group) if self.code != "fp" else 0
         self.theta = torch.stack([theta_dev[n] for n in names])
         self.params = [params[n] for n in names]
         self.k = self.s = None
         self.v = self.buf = self.grad = None
         self.copies = 0
-        self.coded, self.trained = code != "fp", False
+        self.coded, self.trained = self.code != "fp", False
 
     def collect(self) -> None:
         """Make the buffer hold every matrix's gradient: backward accumulates into an existing .grad in place, so this
@@ -355,9 +357,9 @@ class Stack:
                 continue
             p.grad = self.grad[i]
 
-    def begin(self, mult: float, momentum_dtype: torch.dtype) -> None:
-        """Start training: V from the current code (`mult` scales it so it requantizes to the same code), a zero momentum
-        buffer, and the gradient buffer as every matrix's .grad."""
+    def begin(self, momentum_dtype: torch.dtype) -> None:
+        """Start training: V from the current code (scaled by the stack's mult so it requantizes to the same code), a
+        zero momentum buffer, and the gradient buffer as every matrix's .grad."""
         w = torch.stack([p.detach() for p in self.params])
         if self.code == "fp":
             self.v = w.clone()
@@ -365,7 +367,7 @@ class Stack:
             d = w - self.theta
             if self.k is not None:
                 mk = self.k.abs().mean(-1, keepdim=True).clamp(min=1e-12)
-                d = (self.k * self.s / (mult * mk) if self.code != "sign" else self.k * self.s).reshape(w.shape)
+                d = (self.k * self.s / (self.mult * mk) if self.code != "sign" else self.k * self.s).reshape(w.shape)
             self.v = d.float()
         self.buf = torch.zeros_like(self.v, dtype=momentum_dtype)
         self.grad = torch.zeros_like(self.v)
@@ -388,13 +390,13 @@ class Stack:
         self.grad.zero_()
 
     @torch.no_grad()
-    def rebuild(self, mult: float) -> None:
+    def rebuild(self) -> None:
         if self.code == "fp":
             w = self.v
         elif not self.coded:
             w = self.theta + self.v
         else:
-            q, self.k, self.s = quantize(self.v, self.code, self.g, mult)
+            q, self.k, self.s = quantize(self.v, self.code, self.g, self.mult)
             w = self.theta + q
         torch._foreach_copy_(self.params, list(w.unbind(0)))
 
@@ -412,7 +414,8 @@ def main() -> int:
     ap.add_argument("--klass", required=True, choices=sorted(prepare.CLASSES))
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--code", default="all:all=rtn3", help="BLOCKS:LEAVES=CODE,... (CODE sign|tern|rtnB|fp|-)")
+    ap.add_argument("--code", default="all:all=rtn3",
+                    help="BLOCKS:LEAVES=CODE,... (CODE sign|tern|rtnB, optionally @MULT, or fp|-)")
     ap.add_argument("--group", type=int, default=0, help="entries per scale: -1 a tensor, 0 a row, else G")
     ap.add_argument("--mult", type=float, default=1.0, help="the scale over the group's mean |V|")
     ap.add_argument("--stages", default="", help="SPEC/SPEC/...: the coded matrices trained in turn (default: all at once)")
@@ -467,7 +470,7 @@ def main() -> int:
     for n in sorted(codes, key=lambda n: (block_of(n), n)):
         member = tuple(j for j, s in enumerate(base_sets) if n in s)
         groups.setdefault((tuple(params[n].shape), codes[n], member), []).append(n)
-    stacks = [Stack(ns, code, params, theta_dev, a.group) for (_, code, _), ns in groups.items()]
+    stacks = [Stack(ns, code, params, theta_dev, a.group, a.mult) for (_, code, _), ns in groups.items()]
     stack_of = {n: st for st in stacks for n in st.names}
     del theta_dev
     gains_all = sorted(n for n, p in params.items() if p.ndim == 1)
@@ -533,7 +536,7 @@ def main() -> int:
         for n in gains:
             params[n].requires_grad_(True)
         for st in active:
-            st.begin(a.mult, mdt)
+            st.begin(mdt)
         adam = torch.optim.AdamW([params[n] for n in gains], lr=a.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
                                  fused=dev.startswith("cuda")) if gains else None
         n_j, first = counts[j], g
@@ -556,7 +559,7 @@ def main() -> int:
                 for st in active:
                     if st.code != "fp":
                         st.coded = True
-                        st.rebuild(a.mult)
+                        st.rebuild()
             gs = g if a.stage_sched == "global" else step
             frac = lr_frac(gs, total if a.stage_sched == "global" else n_j, a.warmup, a.sched, a.decay_frac)
             if adam is not None:
@@ -578,7 +581,7 @@ def main() -> int:
                                            + ([ad.a, ad.b] if ad is not None else []), 1.0)
             for st in active:
                 st.muon(a.muon_lr * frac, a.momentum)
-                st.rebuild(a.mult)
+                st.rebuild()
             if adam is not None:
                 adam.step()
                 adam.zero_grad(set_to_none=True)
