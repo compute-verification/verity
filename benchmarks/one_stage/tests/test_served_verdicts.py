@@ -603,8 +603,10 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
-    same pieces composed for onsite reject on the wipe's answer."""
+    same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
+    served node, from the answer files it wrote, and the published line keeps that."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
     pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
@@ -637,6 +639,13 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     assert report["protocols"]["wipe"] == {"verdict": "dropped", "owner": "memory-accounting", "why": why}
+    where = {"host": "vy-dc-h200", "served_node": True, "from": S.COMPOSED_FROM}
+    assert report["composed_on"] == line["composed_on"] == where
+    assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == where
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    assert S.main(argv) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert line["composed_on"] == {**where, "host": "vy-auditor-2", "served_node": False}
     assert S.main([*argv, "--product", "onsite"]) == 1
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
@@ -1265,8 +1274,9 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
     under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
     or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
-    CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
-    VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
+    CASE line's protocol and verdict, each case not written by its protocol, each product's NOT_ESTABLISHED and
+    VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
+    output is OUT/composite/PRODUCT;
     and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
     served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
@@ -1307,6 +1317,9 @@ sys.exit(1)
                                  check=False, capture_output=True, text=True)
     r = run()
     assert r.returncode == 0, r.stderr
+    host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
+    on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
+          "from the parties that produced them")
     assert (out / "verdicts.txt").read_text().splitlines() == [
         "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
@@ -1314,7 +1327,8 @@ sys.exit(1)
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
         "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
-        "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
+        "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components",
+        on]
     p = d / "private" / "composite"
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
@@ -1337,7 +1351,8 @@ sys.exit(1)
     assert (out / "verdicts.txt").read_text().splitlines() == [
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
-        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components"]
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
+        on]
     assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     (d / "sampled-proofs-served" / "window").mkdir(parents=True)

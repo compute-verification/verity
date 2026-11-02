@@ -27,10 +27,11 @@
 # the node; its public output (composite.json: the composite's commitment, each case's id, params digest and commitment,
 # what is missing and each outcome; and its verdict lines), which it refuses to write when it shares bytes with any
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
-# each case not written by its protocol, and each product's NOT_ESTABLISHED and VERDICT lines, headed COMPOSITE, and
-# nothing else. Without served_case.sh or composite.py in the tree it says so and exits 1, since no product's Lean
-# answered. It makes no verdict: exit 0 when each product's Lean answered, else 1. PRODUCT=remote (`served_verdicts.sh`'s)
-# writes neither PoUS's case nor the wipe's, needs no served_case.sh, and runs remote's Lean alone.
+# each case not written by its protocol, each product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
+# (the serve dir's, so the served node's), headed COMPOSITE, and nothing else. Without served_case.sh or composite.py
+# in the tree it says so and exits 1, since no product's Lean answered. It makes no verdict: exit 0 when each product's
+# Lean answered, else 1. PRODUCT=remote (`served_verdicts.sh`'s) writes neither PoUS's case nor the wipe's, needs no
+# served_case.sh, and runs remote's Lean alone.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -124,4 +125,5 @@ EOF
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac
 done
+say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
 exit "$bad"

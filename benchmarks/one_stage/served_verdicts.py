@@ -109,7 +109,8 @@ a subprotocol: its verdict and, unless it accepted here, why; an accept here wit
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
 with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
-elsewhere, and the reason.
+elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
+is the record's node, and what it read, `COMPOSED_FROM`).
 """
 from __future__ import annotations
 
@@ -171,6 +172,9 @@ DEVELOPMENT = "development.json"
 DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
            "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
            "whose open commits its draw K, rows and weights")
+#: what `record` composes from, until it runs on an auditor-side host reading each party's own answer
+COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the party that produced it: an edit to that "
+                 "file on the node changes its row")
 #: a development piece's verdict in the ``RECORD`` line, in place of its row's ``missing``
 DEV_VERDICT = "development run, credits nothing"
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
@@ -962,8 +966,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             except (KeyError, IndexError, TypeError, ValueError, ZeroDivisionError) as e:
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
+    host = socket.gethostname()
+    where = {"host": host, "served_node": host == node, "from": COMPOSED_FROM}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
-              "servers": {k: at[k][0] for k in rows}}
+              "servers": {k: at[k][0] for k in rows}, "composed_on": where}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
                 for k, r in rows.items()}
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
@@ -972,7 +978,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                       if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
-    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere,
+    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
              **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev}
     bad = sorted(NAMES[k] for k, r in rows.items()
