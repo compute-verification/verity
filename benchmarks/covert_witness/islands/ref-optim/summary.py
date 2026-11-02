@@ -13,7 +13,8 @@ from pathlib import Path
 
 CUTS = (0.005, 0.01, 0.02, 0.05)
 RUNS = Path.home() / ".research" / "runs"
-PIN = json.loads((Path(__file__).resolve().parents[2] / "pinned.json").read_text())["commit"]
+PINNED = json.loads((Path(__file__).resolve().parents[2] / "pinned.json").read_text())
+PIN = PINNED["commit"]
 
 
 def main() -> int:
@@ -23,7 +24,8 @@ def main() -> int:
     ap.add_argument("--pin", default=PIN, help="another measurement commit (default: the pin)")
     a = ap.parse_args()
     rows = [json.loads(x) for x in a.ledger.read_text().splitlines() if x.strip()]
-    rows = [r for r in rows if r["class"] == "reference" and r.get("valid") and r.get("measurement_commit") == a.pin]
+    pins = {a.pin, *PINNED.get("same_version", [])} if a.pin == PIN else {a.pin}
+    rows = [r for r in rows if r["class"] == "reference" and r.get("valid") and r.get("measurement_commit") in pins]
     for start in sorted({r["start"] for r in rows}):
         mine, points, bases = [r for r in rows if r["start"] == start], [], []
         for r in mine:
