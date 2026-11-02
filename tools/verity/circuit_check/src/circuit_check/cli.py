@@ -57,7 +57,8 @@ from . import units as UN
 REPO = Path(__file__).resolve().parents[5]
 #: each catalog binding's read set as a task keyed on declared inputs declares it (`run`'s ``reads``, which ``--update-reads``
 #: writes here), its ``files``, ``listed`` and ``probes`` (`cache.declared`) beyond ``registries``' (`cache.registry_inputs`)
-#: when its ``registry`` is true, which then are its inputs too.  ``registries.json`` holds ``registries``; ``bindings.json``
+#: when its ``registry`` is true, which then are its inputs too, and beyond ``loaded``, the probes every binding's are
+#: (`_read_sets`).  ``registries.json`` holds ``registries``; ``loaded.json``, ``loaded``; ``bindings.json``
 #: holds each path once, in the one of its ``groups`` that exactly the bindings whose sets hold it share, and ``bindings``, by
 #: name, each one's other fields and the places of its groups as ranges (``"groups": "0-3,7"``; `grouped`, `expanded`).
 #: What its run reads of the catalog, every binding's record and the roots record (`units.plan`), comes from the records it is
@@ -865,15 +866,19 @@ def _by_binding(plan: UN.Plan, ids: list[tuple[str, str]]) -> dict[str, list[int
 
 
 def _read_sets(cache: Path, names: dict[str, list[int]], ids: list[tuple[str, str]], keys: list[dict], group: dict) -> dict:
-    """`run`'s ``reads``: ``registries`` (``group``, `cache.registry_inputs`), and in ``bindings`` each catalog binding of
-    ``names`` (with the places of its targets in ``ids`` and ``keys``) with its read set: what its targets' entries recorded
-    (`cache.recorded`), declared (`cache.declared`), beyond ``registries`` when it reads the registries; ``incomplete``, by
-    binding, its targets with no entry to take reads from (a check that raised, the tracer missed or the tree changed under).
+    """`run`'s ``reads``: ``registries`` (``group``, `cache.registry_inputs`), ``loaded``, and in ``bindings`` each catalog
+    binding of ``names`` (with the places of its targets in ``ids`` and ``keys``) with its read set: what its targets' entries
+    recorded (`cache.recorded`), declared (`cache.declared`), beyond ``registries`` when it reads the registries, and but the
+    modules whose source `inspect` looked for (``present``); ``incomplete``, by binding, its targets with no entry to take
+    reads from (a check that raised, the tracer missed or the tree changed under).  Those modules' paths, but the files a set
+    holds, are ``loaded``, every binding's: torch's import asks for the source of every module the process loaded, so which
+    a target holds is what its process loaded before it, which the run's mode and the order of its checks decide.
     And ``undeclared``: by binding, what its read set and theirs hold beyond what `READS` declares of it (`cache.undeclared`),
-    with ``unrecorded``, its targets with no entry, and ``registries``, what the registries' hold beyond theirs there, which
-    every binding's run reports: a module they import anew changes what any binding reads of them, and only a binding that
-    runs can say so."""
+    with ``loaded``, what it holds beyond ``loaded`` there, ``unrecorded``, its targets with no entry, and ``registries``, what
+    the registries' hold beyond theirs there, which every binding's run reports: a module they import anew changes what any
+    binding reads of them, and only a binding that runs can say so."""
     sets: dict[str, dict] = {}
+    loaded: dict[str, set[str]] = {}
     missing: dict[str, list[str]] = {}
     for name, idx in names.items():
         merged: dict[str, set[str]] = {}
@@ -883,7 +888,9 @@ def _read_sets(cache: Path, names: dict[str, list[int]], ids: list[tuple[str, st
                 continue
             for kind, v in got.items():
                 merged.setdefault(kind, set()).update(v)
+        present = sorted(merged.pop("present", ()))
         d = CC.declared(REPO, {k: sorted(v) for k, v in merged.items()})
+        loaded[name] = set(CC.declared(REPO, {"present": present})["probes"]) - set(_whole(d, group)["files"])
         if d["registry"]:
             d.update({k: sorted(set(d[k]) - set(group[k])) for k in CC.DECLARED})
         sets[name] = d
@@ -891,14 +898,18 @@ def _read_sets(cache: Path, names: dict[str, list[int]], ids: list[tuple[str, st
     drift = CC.undeclared(group, have["registries"])
     undeclared = {}
     for name, d in sets.items():
-        u = CC.undeclared(_whole(d, group), _whole(have["bindings"].get(name), have["registries"]))
+        was = _whole(have["bindings"].get(name), have["registries"])
+        u = CC.undeclared(_whole(d, group), was)
+        if beyond := sorted(loaded[name] - set(have["loaded"]) - set((was or {}).get("files", ()))):
+            u["loaded"] = beyond
         if name in missing:
             u["unrecorded"] = missing[name]
         if drift:
             u["registries"] = drift
         if u:
             undeclared[name] = u
-    return {"reads": {"registries": group, "bindings": sets, **({"incomplete": missing} if missing else {})},
+    return {"reads": {"registries": group, "loaded": sorted(set().union(*loaded.values())), "bindings": sets,
+                      **({"incomplete": missing} if missing else {})},
             "undeclared": undeclared}
 
 
@@ -913,7 +924,7 @@ def _reads_file() -> dict:
     """`READS`, or none declared when there is none, each binding's read set whole (`expanded`)."""
     got: dict = {}
     with CC.internal():
-        for part in ("registries.json", "bindings.json"):
+        for part in ("registries.json", "loaded.json", "bindings.json"):
             try:
                 got.update(json.loads((READS / part).read_text()))
             except FileNotFoundError:
@@ -967,10 +978,10 @@ def grouped(bindings: dict[str, dict]) -> dict:
 
 
 def expanded(got: dict) -> dict:
-    """`READS`' ``registries`` and ``bindings.json``'s (`grouped`), ``got``, as ``registries`` and each binding's read set whole:
-    its groups' paths, by kind."""
+    """`READS`' ``registries``, ``loaded`` and ``bindings.json``'s (`grouped`), ``got``, as ``registries``, ``loaded`` and each
+    binding's read set whole: its groups' paths, by kind."""
     groups = got.get("groups", [])
-    return {"registries": got.get("registries", {}),
+    return {"registries": got.get("registries", {}), "loaded": got.get("loaded", []),
             "bindings": {n: {**{k: v for k, v in d.items() if k != "groups"},
                              **{k: sorted({p for i in _places(d.get("groups", "")) for p in groups[i].get(k, ())})
                                 for k in CC.DECLARED}}
@@ -980,7 +991,8 @@ def expanded(got: dict) -> dict:
 def update_reads(rep: dict, every: bool) -> list[str]:
     """`READS` with the read set of each catalog binding ``rep`` (`run`'s, with ``reads``) has an entry of every target for; the
     others' as they were.  With ``every`` (a run of every binding) the bindings it checked alone, and, when each was complete,
-    its ``registries``; else ``registries`` as declared and as now, both.  The bindings left as they were (``incomplete``)."""
+    its ``registries`` and ``loaded``; else each as declared and as now, both.  The bindings left as they were
+    (``incomplete``)."""
     new, have = rep["reads"], _reads_file()
     incomplete = sorted(new.get("incomplete", {}))
     done = {n: d for n, d in new["bindings"].items() if n not in incomplete}
@@ -988,10 +1000,13 @@ def update_reads(rep: dict, every: bool) -> list[str]:
         bindings = {n: d for n in new["bindings"] if (d := done.get(n, have["bindings"].get(n))) is not None}
     else:
         bindings = {**have["bindings"], **done}
-    regs = new["registries"] if every and not incomplete else \
+    whole = every and not incomplete
+    regs = new["registries"] if whole else \
         {k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED}
+    loaded = new["loaded"] if whole else sorted({*have["loaded"], *new["loaded"]})
     READS.mkdir(parents=True, exist_ok=True)
-    for part, got in (("registries.json", {"registries": regs}), ("bindings.json", grouped(bindings))):
+    for part, got in (("registries.json", {"registries": regs}), ("loaded.json", {"loaded": loaded}),
+                      ("bindings.json", grouped(bindings))):
         tmp = READS / f".{part}.{os.getpid()}"
         tmp.write_text(json.dumps({"schema": READS_SCHEMA, **got}, indent=1, sort_keys=True) + "\n")
         os.replace(tmp, READS / part)
