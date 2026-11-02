@@ -384,6 +384,9 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=tmp_path / "main.txt", check=check)
     assert (doc["verdict"], doc["reasons"], doc["credited"]) == ("accept", [], False)
     assert doc["credit"]["window"] == ["budget", "the window is in no period"] and doc["check"]["rounds"] == 16
+    assert doc["SaltIsLiveCoin"] == {"met": True, "why": S.SALT_MET}
+    assert doc["AcceptedLive"] == {"met": False, "why": "credit refused the window (budget: the window is in no "
+                                                       "period), so it credited no proof"}
     assert [w for _g, w in calls] == [("fetch", SID), ("ledger",), ("pins",)] and all(g == GATE for g, _w in calls)
     (tree, ledger, pins, main, key), = seen
     assert tree == tmp_path / "pieces" / "pouw" / "session" / SID and SID in ledger and '"commit"' in pins
@@ -406,6 +409,7 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     out = capsys.readouterr().out
     assert "POUW (development run, credits nothing) " in out and got["pouw"]["verdict"] == "accept"
     assert (got["pouw"]["session"], got["pouw"]["coins"], got["pouw"]["credited"]) == (SID, None, False)
+    assert {p: got["pouw"][p]["met"] for p in S.PREMISES} == {"AcceptedLive": False, "SaltIsLiveCoin": True}
 
 
 def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_proofs_it_has(tmp_path, monkeypatch):
@@ -429,6 +433,20 @@ def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_pro
             "--live-evidence": str(lv)}
     assert got == [want] and doc["credit_inputs"] == want
     assert (doc["credit"]["window"], doc["credit"]["calls"], doc["credit"]["credit"]) == (None, [3], [3])
+    assert (doc["AcceptedLive"], doc["SaltIsLiveCoin"]) == ({"met": True, "why": S.LIVE_MET},
+                                                            {"met": True, "why": S.SALT_MET})
+
+
+def test_a_record_that_isnt_one_manifest_under_its_salt_coin_doesnt_meet_salt_is_live_coin(tmp_path, monkeypatch):
+    """Coins the challenger check accepts with a record that isn't one manifest under them: ``SaltIsLiveCoin`` isn't
+    met, and names the manifest's refusal."""
+    monkeypatch.setattr(S, "_gate_out", _gate([]))
+    got = {"ok": True, "reason": None, "manifest": "round 2's tables are not under the salt", "credit": {}}
+    doc = S.pouw(_h1_serve_dir(tmp_path), 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None,
+                 check=lambda *a: got)
+    assert doc["SaltIsLiveCoin"] == {"met": False, "why": "the window's record isn't one manifest under its salt coin: "
+                                                          "round 2's tables are not under the salt"}
+    assert doc["AcceptedLive"]["met"] is False and doc["verdict"] == "reject"
 
 
 @pytest.mark.parametrize("case", ["coins", "untied", "in-process", "no gate"])
@@ -444,6 +462,11 @@ def test_a_development_pouw_piece_rejects_what_its_checks_refuse(tmp_path, monke
     why = {"coins": "coins: session s1 is not the one the ledger opened", "untied": "ROOTS1:",
            "in-process": "coins: in-process, not the auditor host's challenger's", "no gate": "coins: ValueError: no gate"}
     assert doc["verdict"] == "reject" and doc["reasons"][0].startswith(why[case]), doc["reasons"]
+    salt = {"coins": "the challenger check refused the window's coins, its salt among them: session s1",
+            "untied": S.SALT_MET, "in-process": "the challenger check didn't run on the window: coins: in-process",
+            "no gate": "the challenger check didn't run on the window: coins: ValueError: no gate"}
+    assert doc["SaltIsLiveCoin"]["met"] is (case == "untied") and doc["SaltIsLiveCoin"]["why"].startswith(salt[case])
+    assert doc["AcceptedLive"]["met"] is False
     row = S.piece_row("work", tmp_path / "pieces")
     assert row["verdict"] == "reject" and row["reason"].startswith(why[case])
     _report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run=None)

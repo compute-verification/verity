@@ -18,7 +18,10 @@ What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
 registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
-holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap.
+holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap. More
+challenges than a certificate's `k` keep its `eps`: at `k ≥ 320` it stays `1% + 2^-128`, and
+`p2.wide320_certificate`'s `2^-20` (`ObligationWide320`, from the open conjecture `P2RingRoundSecureWide`) is no
+run's certificate.
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
