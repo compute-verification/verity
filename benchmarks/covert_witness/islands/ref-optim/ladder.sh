@@ -4,7 +4,7 @@
 # WORK (persistent) holds the checkpoint and the registered starts, so a rerun with the same flags resumes.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-P=${LADDER_PYTHON:-/workspace/jobs/venv312/bin/python}
+. "$here/pyenv.sh"
 DATA=${LADDER_DATA:-/workspace/research/scratch/te-ladder/stream}
 size=$1 batch=$2 work=$3
 shift 3

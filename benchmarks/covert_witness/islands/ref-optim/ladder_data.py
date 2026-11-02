@@ -181,16 +181,18 @@ def main() -> int:
     recs = {i: r for i in range(len(names)) if (r := done(i))}
     todo = [i for i in range(len(names)) if i not in recs]
     with ProcessPoolExecutor(max_workers=a.workers) as ex:
-        futs = {ex.submit(do_part, i, names[i], files[names[i]], a.dest, keys, a.threads): i for i in todo}
         val = None if (a.dest / "val.json").is_file() else ex.submit(
             do_part, -1, val_name, files[val_name], a.dest, keys, a.threads, VAL_TOKENS)
+        futs = [ex.submit(do_part, i, names[i], files[names[i]], a.dest, keys, a.threads) for i in todo]
+        if val is not None:
+            futs.append(val)
         for f in as_completed(futs):
             r = f.result()
-            recs[r["index"]] = r
+            if f is val:
+                (a.dest / "val.json").write_text(json.dumps(r) + "\n")
+            else:
+                recs[r["index"]] = r
             print(json.dumps({k: v for k, v in r.items() if k != "dropped"} | {"dropped": len(r["dropped"])}), flush=True)
-        if val is not None:
-            v = val.result()
-            (a.dest / "val.json").write_text(json.dumps(v) + "\n")
     v = json.loads((a.dest / "val.json").read_text())
     man = {"schema": "te-ladder/stream/v1", "dataset": {"repo": REPO, "revision": REVISION, "dir": TRAIN_DIR},
            "tokenizer": "gpt2", "format": "uint16, each document prefixed by end-of-text 50256", "eot": EOT,

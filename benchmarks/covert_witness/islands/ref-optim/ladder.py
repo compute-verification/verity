@@ -27,7 +27,6 @@ evaluation passes are not training and are not in it.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -117,6 +116,7 @@ class Stream:
         self.root, self.group, self.seed, self.ctx = root, group, seed, ctx
         self.blocks: list[tuple[list[np.memmap], np.ndarray, np.ndarray]] = []
         self.bounds = [0]
+        self.recs: dict[int, dict] = {}
 
     def part(self, i: int) -> np.memmap:
         rec_path = self.root / f"parts/{i:03d}.json"
@@ -130,7 +130,16 @@ class Stream:
         mm = np.memmap(self.root / f"parts/{i:03d}.bin", dtype=np.uint16, mode="r")
         if len(mm) != rec["tokens"]:
             raise SystemExit(f"ladder: part {i} has {len(mm)} tokens, its record {rec['tokens']}")
+        self.recs[i] = {k: rec[k] for k in ("index", "file", "file_sha256", "sha256", "tokens", "documents")} | {
+            "dropped": len(rec["dropped"])}
         return mm
+
+    def parts_read(self, n: int) -> list[dict]:
+        """The records of the parts in the blocks that windows [0, n) draw from."""
+        while self.bounds[-1] < n:
+            self.extend()
+        k = int(np.searchsorted(self.bounds, n - 1, side="right"))
+        return [self.recs[i] for i in range(k * self.group)]
 
     def extend(self) -> None:
         k = len(self.blocks)
@@ -301,10 +310,6 @@ def _clone_state(sd: dict) -> dict:
             "param_groups": [dict(g) for g in sd["param_groups"]]}
 
 
-def _sha_file(p: Path) -> str | None:
-    return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None
-
-
 class Loss(torch.nn.Module):
     def __init__(self, m: LM):
         super().__init__()
@@ -427,9 +432,10 @@ def train(a) -> int:
                     "schedule": f"linear warmup {a.warmup} steps, constant, linear to zero over the last {b['cool']} steps",
                     "optimizer": opt_card(a),
                     "data": {"stream": "ladder_data.py: FineWeb-Edu sample-100BT, GPT-2 tokens, sample-10BT 010/011/013's "
-                                       "documents left out", "manifest_sha256": _sha_file(a.data / "manifest.json"),
-                             "group": a.group, "seed": a.seed, "windows": [0, b["steps"] * a.batch],
-                             "rule": "step k reads the stream's windows [k S, (k+1) S)"},
+                                       "documents left out", "group": a.group, "seed": a.seed,
+                             "windows": [0, b["steps"] * a.batch], "rule": "step k reads the stream's windows [k S, (k+1) S)",
+                             "held_out": json.loads((a.data / "held-out.json").read_text()),
+                             "parts": stream.parts_read(b["steps"] * a.batch)},
                     "c0": {"macs": macs_step * b["steps"] if macs_step else None, "macs_per_step": macs_step,
                            "counter": "te_core.flops.Counter (ladder.py count)"},
                     "search_pool": official, "run": os.environ.get("RESEARCH_RUN_ID", ""),

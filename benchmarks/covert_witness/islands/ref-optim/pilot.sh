@@ -4,8 +4,9 @@
 # val.bin (`--eval pilot`, nothing registered), all at once, each in $OUT/NAME with its log beside it.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-P=${LADDER_PYTHON:-/workspace/jobs/venv312/bin/python}
+. "$here/pyenv.sh"
 DATA=${LADDER_DATA:-/workspace/research/scratch/te-ladder/stream}
+until [ -f "$DATA/val.json" ]; do sleep 30; done
 size=$1 batch=$2 tag=$3 configs=$here/$4
 IFS=, read -ra gpus <<< "${CUDA_VISIBLE_DEVICES:-}"
 n=${#gpus[@]}
