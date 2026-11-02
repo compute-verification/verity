@@ -26,6 +26,9 @@ ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
 #: The Glossary's second file, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
+#: The training-efficiency search's append-only boards, one per island, each pushed only by the island's own agent (the
+#: agent guard gives a branch to its first owner) and merged by @training's coordinator.
+BOARD_DIR, BOARD_MD = "benchmarks/covert_witness/islands/", "BOARD.md"
 #: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
@@ -88,6 +91,7 @@ def _tracked() -> list[str]:
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
                  and p not in ROOT_ONLY_MD
+                 and not (p.startswith(BOARD_DIR) and os.path.basename(p) == BOARD_MD)
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
                  and not p.startswith(tuple(SPLIT_DOCUMENT_DIRS))]
     assert not offenders, (
