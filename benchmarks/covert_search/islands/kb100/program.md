@@ -41,7 +41,7 @@ The seed is MeZO (zeroth-order SPSA) on the norm gains, its update kept only as 
 
 1. Edit `train.py`, commit it (the launcher runs the commit at HEAD; a dirty tree is refused).
 2. Run it: `python benchmarks/covert_search/launch.py kb100 --start m50 [--seed 0] [--hp KEY=VALUE ...] --note "what changed"`.
-   It runs one candidate on vy-nebius-2 (`research run --on vy-nebius-2 --pool research --gpus 1`), puts the run's `out/`
+   It runs one candidate on vy-nebius-2 (`research run --on vy-nebius-2 --pool research`, one GPU from gpu-lease), puts the run's `out/`
    (witness.json, blocks.jsonl) in the evidence store (`research data put --kind evidence/v1 --preserve`), appends a row
    to `results.tsv` here (untracked: start and final bits per byte, charged FLOPs, GPU-seconds, run id, art id) and prints
    it. A refusal comes back as status `refused: <reason>`.

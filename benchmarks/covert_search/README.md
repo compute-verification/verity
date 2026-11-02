@@ -10,7 +10,7 @@ karpathy/autoresearch: a fixed `prepare.py`, a fixed meter, and one editable `tr
 | `prepare.py` | fixed: the data (training stream; SEARCH = shard 013's first 2,097,153 GPT-2 tokens, the first curves' held-out text; FINAL = shard 012's, which no candidate is scored on), the registered starts, and `evaluate_bpb` |
 | `meter.py` | fixed: the block executor; refuses a violation and writes the witness |
 | `islands/<class>/train.py`, `program.md` | one island per class: the editable seed and the rules for the agent that searches it |
-| `launch.py`, `job.sh` | one candidate: `research run --on vy-nebius-2 --pool research --gpus 1`, then the evidence store and the island's `results.tsv` |
+| `launch.py`, `job.sh` | one candidate: `research run --on vy-nebius-2 --pool research` with one GPU from `gpu-lease`, then the evidence store and the island's `results.tsv` |
 | `prep_job.sh` | the integrator's one-time node jobs: retrain the dense starts, build the data, register the starts |
 | `smoke.py` | CPU, seconds: every seed completes in its class; the meter refuses an over-k carry and state outside the carry |
 

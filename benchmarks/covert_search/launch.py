@@ -4,7 +4,8 @@ store, and a row appended to the island's log (islands/<ISLAND>/results.tsv, unt
     python benchmarks/covert_search/launch.py ISLAND --start m50 [--seed 0] [--hp KEY=VALUE ...] [--note TEXT]
 
 The candidate is the commit at HEAD (research run ships it; a dirty tree is refused, so commit train.py first). Steps:
-`research run --on vy-nebius-2 --pool research --gpus 1 -- bash benchmarks/covert_search/job.sh ...`, wait for it, `research
+`research run --on vy-nebius-2 --pool research -- bash benchmarks/covert_search/job.sh ...` (job.sh takes one GPU with
+gpu-lease; the node refuses `research run --gpus`), wait for it, `research
 fetch --all`, `research data put --kind evidence/v1 --tree <run>/out --preserve`, then the log row. Prints the row as JSON.
 """
 from __future__ import annotations
@@ -52,7 +53,7 @@ def main() -> int:
     train_py = hashlib.sha256((HERE / "islands" / a.island / "train.py").read_bytes()).hexdigest()
     cls = CLASS_OF[a.island]
     extra = [x for kv in a.hp for x in ("--hp", kv)] + a.meter_arg
-    r = sh(["research", "run", "--on", NODE, "--pool", "research", "--gpus", "1", "--project", "verity", "--source", str(REPO),
+    r = sh(["research", "run", "--on", NODE, "--pool", "research", "--project", "verity", "--source", str(REPO),
             "--cwd", "source", "--timeout", a.timeout, "--wait", "--",
             "bash", "benchmarks/covert_search/job.sh", a.island, a.start, cls, str(a.seed), *extra], check=False)
     m = re.search(r"r\d{8}-\d{6}-[0-9a-f]{4}", r.stdout + r.stderr)
