@@ -17,8 +17,8 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 - schedule: `--schedule` linear (warmup, linear decay to 0), wsd (`--cooldown` fraction), cosine; `--batch`;
 - data: `--fresh` skips the windows the start trained on (its seed-0 order's prefix).
 
-The run plans its steps for the harness (`hooks.plan`) and encodes E at the end of every `--snaps` + 1 share of them (the
-default 19: each 5%), so each of the harness's 5% checkpoints scores one.
+The run plans its steps for the harness (`hooks.plan`) and encodes E in the middle of each of `--snaps` + 1 shares of them
+(the default 19: each 5%), so each of the harness's 5% checkpoints scores one.
 
     python launch.py e1mb m100 --note TEXT -- [--targets all] [--rank 0] [--norms all] [--lr 1e-3]
 """
@@ -259,7 +259,8 @@ def main() -> int:
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - spent) // per_step)
-    marks = {round(n_steps * k / (a.snaps + 1)) for k in range(1, a.snaps + 1)}
+    # mid-share, so a rounded step never puts two encodes in one harness window and none in the next
+    marks = {round(n_steps * (k + 0.5) / (a.snaps + 1)) for k in range(a.snaps + 1)}
     hooks.plan(n_steps)
     print(json.dumps({"class": KLASS, "steps": n_steps, "rank": rank, "ranks": sorted(set(ranks.values())),
                       "targets": len(ranks), "norms": len(norms), "E_bytes": size, "flops_per_step": per_step,
