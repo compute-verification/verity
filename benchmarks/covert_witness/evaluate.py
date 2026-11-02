@@ -105,6 +105,7 @@ def check(sub: Path, klass: str, timing: Path, run: Path, tree: Path, island: Pa
                 "sha256": hashlib.sha256(blob).hexdigest()}
     try:
         decoded = prepare.decode(theta, blob)
+        out["E"]["rebuild_macs"] = prepare.rebuild_macs(theta, blob)
     except (ValueError, KeyError, RuntimeError) as e:
         c["decode"] = f"failed: {e}"
         return out
@@ -171,7 +172,8 @@ def check(sub: Path, klass: str, timing: Path, run: Path, tree: Path, island: Pa
     out["start_bpb"] = r["start"]["val_bpb"]
     out["valid"] = all(v is True for v in c.values())
     out["curve"] = [{"step": cp["step"], "train_flops": 2 * cp["macs"], "e_bytes": cp.get("e_bytes"),
-                     "bpb": cp.get("val_bpb"), "source": cp.get("source")} for cp in r.get("checkpoints", [])]
+                     "bpb": cp.get("val_bpb"), "rebuild_macs": cp.get("rebuild_macs"),
+                     "source": cp.get("source")} for cp in r.get("checkpoints", [])]
     failed = {k: v for k, v in c.items() if v is not True}
     r["evaluation"] = {"by": "covert_witness/evaluate.py", "measurement_commit": out["measurement_commit"],
                        "version": prepare.VERSION, "data": prepare.DATA,
