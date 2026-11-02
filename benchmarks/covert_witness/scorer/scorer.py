@@ -238,6 +238,23 @@ def te_row(r, art: str, recorded: str, man: dict) -> dict | None:
     if not sha:
         return None
     rec = json.loads(blob(r, sha, STATE / "te" / (art.removeprefix("art:") + ".json")).read_text())
+    return te_rec_row(rec, art, recorded)
+
+
+def te_ledger_rows(known: set[str]) -> list[dict]:
+    """The te_core ledger's records on this VM (`$TE_LEDGER`, every agent's directory) that the store hasn't shown yet."""
+    root = Path(os.environ.get("TE_LEDGER", Path.home() / ".research" / "te-ledger"))
+    out = []
+    for p in sorted((root / "records").glob("*/*.json")):
+        rec = json.loads(p.read_text())
+        if rec.get("agent") != p.parent.name or rec.get("id") in known:
+            continue
+        art = p.with_suffix(".art").read_text().strip() if p.with_suffix(".art").exists() else f"te:{rec['id']}"
+        out.append(te_rec_row(rec, art, rec.get("written_at", "")))
+    return out
+
+
+def te_rec_row(rec: dict, art: str, recorded: str) -> dict:
     if rec.get("kind") != "submission":
         return {"id": art, "source": "te_core", "te_kind": rec.get("kind"), "te_id": rec.get("id"), "agent": rec.get("agent"),
                 "recorded": recorded, "body": {k: rec.get(k) for k in ("entry", "tier", "reason", "test_bpb")}}
@@ -252,6 +269,8 @@ def te_row(r, art: str, recorded: str, man: dict) -> dict | None:
         "phi": rec.get("phi"), "D": rec.get("depth"), "rho": rec.get("rho"), "beta": rec.get("beta"),
         "reference": rec.get("reference"), "tier": rec.get("tier"), "fraction": rec.get("fraction"),
         "start_bpb": rec.get("start_bpb"),
+        "families": [{"name": f.get("family"), "covers": len(f.get("covers") or []), "declared": len(f.get("declared") or [])}
+                     for f in rec.get("families") or []],
     }
 
 
@@ -279,6 +298,7 @@ def collect(since: str = SINCE) -> dict:
     with ThreadPoolExecutor(16) as ex:
         rows = list(ex.map(lambda x: cw_row(r, x[0], x[1], x[2], commits), cw))
         rows += [t for t in ex.map(lambda x: te_row(r, x[0], x[1], x[2]), te) if t]
+    rows += te_ledger_rows({x.get("te_id") for x in rows if x["source"] == "te_core"})
     recorded_runs = {x.get("run") for x in rows}
     for a in runs:
         a["agent"], a["direction"] = direction_of(commits.get(a["commit"], []), a["class"])
@@ -313,13 +333,14 @@ def index_md(rows: list[dict], runs: list[dict], starts: dict) -> str:
              ", ".join(f"{s} {starts[s]['bpb']:.4f}" for s in STARTS), "",
              "| record | agent | direction | class | mechanism note | start | launched | train FLOPs | bpb | Δ% | |E| bytes |"
              " φ | D (analytic) | valid |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    for x in rows:
-        if x["source"] != "launch.py":
-            continue
+    for x in entries(rows):
         s0 = starts.get(x["start"], {}).get("bpb")
         drop = 100 * (s0 - x["bpb"]) / s0 if s0 and x["bpb"] is not None else None
-        ann = analytic(x, starts) if x["valid"] and x["start"] in starts else None
-        D = ann["depth"] if ann else None
+        if x["source"] == "te_core":
+            D = x["D"].get("10kB/r1") if isinstance(x.get("D"), dict) else x.get("D")
+        else:
+            ann = analytic(x, starts) if x["valid"] and x["start"] in starts else None
+            D = ann["depth"] if ann else None
         lines.append(f"| `{short(x['id'])}` | {x['agent'].removeprefix('cursor/') or '—'} | {x['direction']} | {x['class']} | "
                      f"{x['note']} | {x['start']} | {x['launched'][11:16]} | {fmt(x['train_flops'])} | {fmt(x['bpb'], '.4f')} | "
                      f"{fmt(drop, '.2f')} | {fmt(x['E_bytes'], ',')} | {fmt(x['phi'], '.3f')} | {fmt(D, '.3g')} | "
@@ -541,11 +562,24 @@ def drop_of(x: dict, starts: dict) -> float | None:
     return (s0 - x["bpb"]) / s0 if s0 and isinstance(x.get("bpb"), (int, float)) else None
 
 
+def entries(rows: list[dict]) -> list[dict]:
+    """One row per candidate: a launch.py record, or a te_core run's last checkpoint (φ read at 10kB/r1)."""
+    out = [x for x in rows if x["source"] == "launch.py"]
+    last: dict[str, dict] = {}
+    for x in rows:
+        if x["source"] == "te_core" and x.get("te_kind") == "submission":
+            k = x.get("run") or x["te_id"]
+            if k not in last or (x.get("fraction") or 0) > (last[k].get("fraction") or 0):
+                last[k] = x
+    out += [x | {"phi": x["phi"].get("10kB/r1") if isinstance(x.get("phi"), dict) else x.get("phi")} for x in last.values()]
+    return sorted(out, key=lambda x: (x.get("launched") or "", x["id"]))
+
+
 def promotions(rows: list[dict], starts: dict, promoted: dict) -> dict:
     """This hour's promotions: each direction's top third by relative bpb drop, and the best of each thin cell (at most
     THIN valid records), among valid records of the search (launched from SEARCH_START) not promoted before; plus
     re-screens of mechanisms already screened."""
-    valid = [x for x in rows if x["source"] == "launch.py" and x["valid"] and drop_of(x, starts) is not None
+    valid = [x for x in entries(rows) if x["valid"] and drop_of(x, starts) is not None
              and (x["launched"] or "") >= SEARCH_START]
     new, why = [], {}
     by_dir: dict[str, list[dict]] = {}
@@ -573,7 +607,7 @@ def rescreens(rows: list[dict]) -> list[dict]:
     direction screened, or that its own direction had already swept three times."""
     seen: dict[tuple, list[dict]] = {}
     out = []
-    for x in sorted((x for x in rows if x["source"] == "launch.py"), key=lambda x: x["launched"] or ""):
+    for x in entries(rows):
         k = (x["screen"], x["class"], x["start"])
         prev = seen.setdefault(k, [])
         other = [p for p in prev if p["direction"] != x["direction"]]
@@ -588,7 +622,7 @@ def rescreens(rows: list[dict]) -> list[dict]:
 
 def empty_cells(rows: list[dict], starts: dict) -> list[str]:
     """E range x φ range x start cells no valid record fills, within the E ranges each class's cap allows."""
-    valid = [x for x in rows if x["source"] == "launch.py" and x["valid"]]
+    valid = [x for x in entries(rows) if x["valid"]]
     filled = {(e_bin(x["E_bytes"]), phi_bin(x["phi"]), x["start"]) for x in valid}
     out = []
     for s in STARTS:
@@ -631,7 +665,7 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
 
 def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     out = []
-    cw = [x for x in rows if x["source"] == "launch.py"]
+    cw = entries(rows)
     n, nv = len(cw), len([x for x in cw if x["valid"]])
     out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid). Frontier per target below: honest = least reference "
                f"FLOPs reaching l*; W*/honest per (k, r) in the order 10kB r1,r10,r100 | 100kB | 1MB, te_core rho on the "
@@ -661,25 +695,32 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     out.append(f"{hhmm} scorer [DIGEST] empty cells (|E| range x phi range, per start, |E| under 10 MB, any mechanism): " +
                "; ".join(f"{s} {len(by_start.get(s, []))}/20 empty, filled {', '.join(sorted(filled_of(rows, s))) or 'none'}"
                          for s in STARTS) + ".")
-    cred = [(x, analytic(x, starts)["credit"]) for x in cw if x["valid"] and x["start"] in starts]
+    cred = [(x, analytic(x, starts)["credit"]) for x in cw if x["source"] == "launch.py" and x["valid"] and x["start"] in starts]
     cred = [(x, c) for x, c in cred if c]
+    fam = [x for x in cw if x["source"] == "te_core" and any(f["covers"] for f in x.get("families") or [])]
     out.append(f"{hhmm} scorer [DIGEST] E credited as a T1 counterexample family (its decoder rebuilds each covered "
                f"step's weights from theta within c): " + (", ".join(
                    f"{short(x['id'])} ({x['E_format']}, {100 * c['covered_share']:.0f}% of steps, beta_t {c['beta_t']:.2g}, "
                    f"last rebuild {c['rebuild_macs_last']:.2g} MACs)" for x, c in cred) or "none")
+               + "; te_core runs with a verified family: "
+               + (", ".join(f"{short(x['id'])} ({families_of(x)})" for x in fam) or "none")
                + "; no other entry's E is credited.")
     for d in sorted({x["direction"] for x in cw}):
         out.append(f"{hhmm} scorer [DIGEST] {d}: " + direction_sentence(d, rows, starts))
     return out
 
 
+def families_of(x: dict) -> str:
+    return ", ".join(f"{f['name']} covers {f['covers']}/{f['declared']} steps" for f in x.get("families") or [])
+
+
 def filled_of(rows, s) -> set[str]:
-    return {f"{e_bin(x['E_bytes'])}/{phi_bin(x['phi'])}" for x in rows
-            if x["source"] == "launch.py" and x["valid"] and x["start"] == s and (x["E_bytes"] or 0) < 1e7}
+    return {f"{e_bin(x['E_bytes'])}/{phi_bin(x['phi'])}" for x in entries(rows)
+            if x["valid"] and x["start"] == s and (x["E_bytes"] or 0) < 1e7}
 
 
 def direction_sentence(d: str, rows: list[dict], starts: dict) -> str:
-    xs = [x for x in rows if x["source"] == "launch.py" and x["direction"] == d]
+    xs = [x for x in entries(rows) if x["direction"] == d]
     v = [x for x in xs if x["valid"] and drop_of(x, starts) is not None]
     mechs = sorted({x["mechanism"] for x in xs})
     if not v:
