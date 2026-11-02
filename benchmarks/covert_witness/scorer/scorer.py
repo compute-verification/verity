@@ -61,6 +61,9 @@ PAIRED = "4cc610c6766"
 #: alone make the frontier, honest and the finals (coordinator 12:55Z); a record names its own (witness v4)
 PIN_FILE = "benchmarks/covert_witness/pinned.json"
 COUNTED_FLOOR = 0.5  # the harness's count over the run's own step log, below which the counter missed work
+#: records under COUNTED_FLOOR whose run.json op table (each step's `by` and `shapes`) the scorer read and found to
+#: account for the gap op by op (fewer head rows, a smaller matmul), so they score (coordinator 13:42Z): {id: reason}
+FLOOR_ACCOUNTED: dict[str, str] = {}
 BOARD = Path(os.environ.get("TE_BOARD", Path(__file__).resolve().parents[1] / "islands" / "scorer" / "BOARD.md"))
 BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `HH:MMZ scorer [TAG] text (record ids)`. The "
               "coordinator merges them into benchmarks/covert_witness/BOARD.md on cursor/te-digest-4207. The scorer's lines "
@@ -425,8 +428,9 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
     harness = (w or {}).get("harness")
     notes = (w or {}).get("notes") or {}
     over = (harness or {}).get("over_train_flops")
-    if isinstance(over, (int, float)) and over < COUNTED_FLOOR:
-        bad += [f"counted: the harness counted {over:.2g}x the FLOPs of the run's own steps (floor {COUNTED_FLOOR})"]
+    if isinstance(over, (int, float)) and over < COUNTED_FLOOR and short(art) not in FLOOR_ACCOUNTED:
+        bad += [(f"counted: the harness counted {over:.2g}x the FLOPs of the run's own steps (floor {COUNTED_FLOOR}), "
+                 "and no op table read accounts for the gap (FLOOR_ACCOUNTED)")]
     changed = ((w or {}).get("changed") or {}).get("actual") or []
     layers = ((w or {}).get("structure") or {}).get("layers")
     below_top = [n for n in changed if (m := re.match(r"blocks\.(\d+)\.", n)) and layers and int(m[1]) < layers - 1]
@@ -1761,7 +1765,7 @@ def rerun_problems(r: dict) -> list[str]:
         bad.append(f"te_core's |C| {led[-1]['macs']} is not the witness's {w['macs']}")
     if any(t.get("rho") and min(t["rho"].values()) < 1 for t in led):
         bad.append("rho below 1")
-    if isinstance(w.get("over"), (int, float)) and w["over"] < COUNTED_FLOOR:
+    if isinstance(w.get("over"), (int, float)) and w["over"] < COUNTED_FLOOR and short(r.get("id") or "") not in FLOOR_ACCOUNTED:
         bad.append(f"counted {w['over']:.2g}x the run's own steps")
     return bad
 
