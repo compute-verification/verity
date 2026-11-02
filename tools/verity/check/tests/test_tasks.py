@@ -1,6 +1,7 @@
 """`tasks.py` (`verity tasks`): the task graph of a synthetic checkout, and one task run in it.  The checkout holds a copy of the
-check's tooling (this directory, `tools/verity/lean`'s jobs, and the handle registry `ci.toml`'s owners are checked against)
-beside two suites and a Lake package, and `tasks.py` runs in a process of its own there, as it runs on the repository's tree."""
+check's tooling (this directory, `tools/verity/lean`'s jobs and the task graph's contract they key with, and the handle registry
+`ci.toml`'s owners are checked against) beside two suites and a Lake package, and `tasks.py` runs in a process of its own there,
+as it runs on the repository's tree."""
 from __future__ import annotations
 
 import json
@@ -32,6 +33,9 @@ def tree(tmp_path: Path) -> Path:
     (t / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in (ROOT / "tools" / "verity" / "lean").glob("*.py"):
         shutil.copy2(f, t / "tools" / "verity" / "lean" / f.name)
+    contract = Path("tools") / "verity" / "graph" / "verity_graph" / "contract.py"
+    (t / contract).parent.mkdir(parents=True)
+    shutil.copy2(ROOT / contract, t / contract)
     registry = Path(".agents") / "skills" / "using-slack" / "registry.json"
     (t / registry).parent.mkdir(parents=True)
     shutil.copy2(ROOT / registry, t / registry)
