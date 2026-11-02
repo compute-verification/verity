@@ -14,7 +14,7 @@ The remote protocol composes two subprotocols over one commitment and accepts on
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
-remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `undecided`.
+remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
@@ -41,7 +41,7 @@ it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. T
    at each class, and the records audit (C-Flock `--zk` on the sampled proof blocks behind the Lean firewall, and the
    Lean verifier's verdict);
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
-5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `undecided` until the Lean check answers.
+5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
 
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `integrations/vllm/`; this
 directory holds what is the demo's own: its placement and its commands.

@@ -76,7 +76,7 @@ an answer that names no server isn't carried. An accepted answer whose outputs a
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written. Otherwise
 the verdict is the block record's, which is the Lean ``onsite check`` or ``remote check``'s answer; no Lean check runs
-here, so it is ``undecided``.
+here, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name ``pending``.
 The report's ``composed`` gives that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
@@ -106,6 +106,8 @@ for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interf
 
 #: the window report's format, kept from the all-protocols runner whose report it was
 REPORT_FORMAT = "verity/all-protocols-window/v1"
+#: the block record's verdict by the window report's name for it: ``-window/v1`` calls an undecided window pending
+WINDOW_VERDICT = {"undecided": "pending"}
 #: sampled proofs' owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -720,7 +722,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                  if r.get("verdict") not in ("accept", "missing") and NAMES[k] not in elsewhere)
     if bad:
         composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows
-                                   if NAMES[k] in bad) else "undecided"
+                                   if NAMES[k] in bad) else "pending"
         report["composed"] = {"protocol": REPORT_FORMAT, "verdict": composed, "reason": said(rows, at, node, built)}
         line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
@@ -729,9 +731,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra)
-    report["composed"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
-                          "reason": said(rows, at, node, built)}
-    line = {"composed": rec["composed"]["verdict"], **named, "reason": report["composed"]["reason"],
+    verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
+    report["composed"] = {"protocol": REPORT_FORMAT, "verdict": verdict, "reason": said(rows, at, node, built)}
+    line = {"composed": verdict, **named, "reason": report["composed"]["reason"],
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}

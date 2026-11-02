@@ -220,7 +220,7 @@ out = Path(a[a.index("--out") + 1])
 out.mkdir(parents=True)
 rows = {"integrity": "accept", "work": "accept", "space": "accept", "communication": "accept", "wipe": "accept"}
 rows.update(json.loads(%r))
-composed = "undecided" if "bandwidth" not in rows else "accept"
+composed = "pending" if "bandwidth" not in rows else "accept"
 (out / "verdicts.json").write_text(json.dumps({"protocols": {k: {"verdict": v} for k, v in rows.items()}}))
 print("RECORD " + json.dumps({"composed": composed, "missing": [] if "bandwidth" in rows else ["bandwidth"],
                               "node": a[a.index("--node") + 1]}))

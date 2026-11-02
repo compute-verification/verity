@@ -372,7 +372,7 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
                               check=False).returncode
 
 
-VERDICTS = {"accept": "accept", "reject": "reject", "undecided": "undecided"}
+VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
 
 
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
