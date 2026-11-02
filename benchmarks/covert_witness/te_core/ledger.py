@@ -149,6 +149,31 @@ class Ledger:
         return self.append("final", {"entry": entry, "test_bpb": float(test_bpb)})
 
 
+def start_tensors(name: str) -> dict:
+    """The start's tensors (name -> [dtype, shape]), from covert_witness's prepare (`start_record`)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import prepare
+
+    return prepare.start_record(name)["tensors"]
+
+
+def facts(record: dict, run_dir: Path, tensors: dict | None = None) -> dict:
+    """What the frontier's rules read beyond a run's price (`frontier.status`, `frontier.fork_ladder`): the program's
+    arguments (`args`); the tensors the witness saw change and the start's layers (`changed`, `layers`), when the
+    record's `witness.json` sits beside its run directory (a covert_witness record's out/); and, given the start's
+    `tensors`, the steps `cw.readout_leaks` lists (`readout_leaks`)."""
+    out = {"args": record.get("script_args")}
+    w = Path(run_dir).parent / "witness.json"
+    if w.is_file():
+        wit = json.loads(w.read_text())
+        out |= {"changed": (wit.get("changed") or {}).get("actual"), "layers": (wit.get("structure") or {}).get("layers")}
+    if tensors is not None:
+        from .cw import readout_leaks
+
+        out["readout_leaks"] = readout_leaks(record, tensors)
+    return out
+
+
 def coverage_of(families: list[dict]) -> dict[int, float]:
     """Each covered step's least β_t, from a run record's verified families."""
     out: dict[int, float] = {}
@@ -178,9 +203,12 @@ def _macs_log(record: dict, through: int | None) -> dict:
 
 
 def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, parent: str = "", run_id: str = "",
-           reference: bool = False, p: float | None = None) -> list[dict]:
-    """One submission record per checkpoint of the run in `run_dir` (its `run.json`)."""
+           reference: bool = False, p: float | None = None,
+           tensors: dict | None = None) -> list[dict]:
+    """One submission record per checkpoint of the run in `run_dir` (its `run.json`), with its `facts` (the read-outs
+    judged given the start's `tensors`)."""
     record = json.loads((Path(run_dir) / "run.json").read_text())
+    known = facts(record, run_dir, tensors)
     ev = record.get("evaluation", {})
     cov = coverage_of(record.get("families", []))
     last = record["steps"][-1]["step"] if record["steps"] else -1
@@ -209,7 +237,7 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
                                                                           "submitted", "output_sha256") if k in cp},
             "flags": record.get("flags", []), "invalid": record.get("invalid", []),
             "seconds": {k: record["totals"][k] for k in ("cpu_s", "wall_s", "gpu_s")},
-        }
+        } | known
         out.append(ledger.append("submission", body))
     return out
 
@@ -228,13 +256,17 @@ def main(argv=None) -> int:
     i.add_argument("--run-id", default="")
     i.add_argument("--reference", action="store_true")
     i.add_argument("--p", type=float, default=None, help="bits per updated value (default: the width multiplied)")
+    i.add_argument("--readouts", action="store_true",
+                   help="judge the run's read-outs (cw.readout_leaks) against the start's tensors, from prepare")
     sub.add_parser("index")
     sub.add_parser("publish")
     a = ap.parse_args(argv)
     led = Ledger(a.root, a.agent, publish=a.publish)
     if a.cmd == "ingest":
+        tensors = (start_tensors(json.loads((a.run_dir / "run.json").read_text())["start"]["name"]) if a.readouts
+                   else None)
         recs = ingest(a.run_dir, led, direction=a.direction, mechanism=a.mechanism, parent=a.parent, run_id=a.run_id,
-                      reference=a.reference, p=a.p)
+                      reference=a.reference, p=a.p, tensors=tensors)
         print(json.dumps([{"id": r["id"], "step": r["checkpoint_step"], "macs": r["macs"], "val_bpb": r["val_bpb"],
                            "rho": r["rho"]} for r in recs]))
     elif a.cmd == "index":

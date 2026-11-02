@@ -144,6 +144,11 @@ def test_mezo_run_is_rebuilt_from_its_seed_log(tmp_path, theta_file):
     (out / "run.json").write_text(json.dumps(final))
     subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1")
     assert [s["val_slice"] for s in subs] == [None] * 6
+    assert "changed" not in subs[0] and "readout_leaks" not in subs[0]
+    (out.parent / "witness.json").write_text(json.dumps({"changed": {"actual": ["embed"]}, "structure": {"layers": 2}}))
+    subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1", tensors={})
+    assert subs[0]["changed"] == ["embed"] and subs[0]["layers"] == 2 and subs[0]["readout_leaks"] == []
+    assert subs[0]["args"] == final.get("script_args")
 
 
 TOKENS_OUTSIDE = MODEL + '''
