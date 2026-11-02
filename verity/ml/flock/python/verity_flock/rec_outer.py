@@ -5,10 +5,9 @@ prover's registrations of them.
 A level's openings share one shape (its rows' lanes, ``H = depth - c`` siblings below its top of ``2^c`` nodes), so each level
 is one template, ``RecOpen{LANES, H}``, and one statement over that level's openings of both reps, in rep and query order
 (M0 proves one template per statement). Its program is `population_program` of the template over the level's openings, its
-partition that program's ``Q_template_instance`` v0. Every instance reads two fresh private rows, the opened row and its
-``aux`` (its siblings: `rec_open.pack`), and five registered rows: its coefficients ``coef`` and the position's low bits
-``dirs``, which the verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (`HmOut`). The statement has no public
-input.
+partition that program's ``Q_template_instance`` v0. Every instance reads seven registered rows: the opened row ``row`` and
+its ``aux`` (its siblings: `rec_open.pack`), its coefficients ``coef`` and the position's low bits ``dirs``, which the
+verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (§16.13). The statement has no public input.
 
 **The verifier's values** (`COEF_VALUE`, `DIRS_VALUE`). The verifier computes each opening's ``coef`` (`coefficients`) and
 ``dirs`` (`rec_open.dirs_words` of the position its own query coins give) and registers each as a value of the level's
