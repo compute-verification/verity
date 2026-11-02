@@ -15,8 +15,9 @@ window under its signed record, so a reader holds the declared syncs to the cert
 
   with ρ = p/q in lowest terms, and `salt_c` 64 fresh bytes of the certifier's own coins.
 
-  It signs that digest under the record certificate's message (`certificate_message`: the key, the certifier session,
-  the link, `egress` and the window). `CertifiedClock` is the sync, the salt and that certificate. A rehearsal's
+  It signs that digest under the record certificate's message with the role `clock` (`certificate_message`: the key,
+  the certifier session, the role, the link, `egress` and the window). `CertifiedClock` is the sync, the salt and that
+  certificate. A rehearsal's
   certifier (`certifier_serve.ServedProxy`, which hands its `CertifierProcess` each egress record with its shaper's
   sync) writes one line of its `clocks.jsonl` a window, with the opening (`certifier_serve.read_clocks`).
 - **What is public.** What the certifier signs is witness (AGENTS.md, "Auditor-trusted devices"): the sync and its
@@ -35,7 +36,9 @@ window under its signed record, so a reader holds the declared syncs to the cert
 - **Domain separation.** The record certificate of the same execution phase signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
   R), R a record digest, and the clock certificate the same over a clock digest, each digest under its own tag. So one
   opens as the other only on a SHA-512 collision, as with the network certifier's cells certificate (`warden_rows`). Nor can the
-  head check take a clock certificate as a record's: that needs a head whose record digest is the clock digest.
+  head check take a clock certificate as a record's, or the clock check a record's as a clock's: each message names its
+  role (`record` or `clock`), and the check supplies the one it reads, so the signature verifies only as the role it
+  was signed as.
 - **The read** is `certificate.SignedClocks`, under the link's own certifier key and session. It reads each window's
   sync through its opening, against the salted digest its certificate signs (`CertifiedClock.refusal`): the openings
   are the reader's own read of the certifier's output, never a public answer. Window w's sync is the sync of the
@@ -59,13 +62,14 @@ window under its signed record, so a reader holds the declared syncs to the cert
   syncs prove no more than its records do.
 - **Tests:** `tests/test_network_certifier_signed_clocks.py` covers the clock commitment; a window's sync only from
   one opening that names it and holds; each refused opening named with why (a forged signature, an altered digest, a
-  sync swapped, a wrong window, a reused salt, another key, session or link, an ingress or record certificate, a
-  record's opening, two syncs for a window); and the issuer refusing a salt an earlier signed clock took, but not one a
-  refused clock had.
+  sync swapped, a wrong window, a certificate signed as a record's, a reused salt, another key, session or link, an
+  ingress or record certificate, a record's opening, two syncs for a window); and the issuer refusing a salt an earlier
+  signed clock took, but not one a refused clock had.
   `benchmarks/network_traces/tests/test_certifier_serve.py` checks that the served proxy hands its certifier its
   shaper's syncs, and that the certifier process signs them as the inline publisher does, each under its own salt;
   `test_client_certificates.py` that the client keeps every clock certificate's public part and nothing of a sync or
-  salt, and refuses a forged signature, an altered digest, a wrong window and a reused salt by name.
+  salt, and refuses a forged signature, an altered digest, a wrong window, a reused salt and a certificate of the other
+  role by name.
 - **The Lean device** signs the same salted form: `CertifierDevice.Issuer.clock`, and `clockWith` against the world,
   which samples `salt_c` from the issuer's coins as `certifyWith` does, beside `certify` in
   `verity/core/devices/certifier/lean/CertifierDevice/Issuer.lean`. It signs `clockCommitment salt sync`

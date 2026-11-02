@@ -194,7 +194,7 @@ def honestRecord (p : Params) (d : Direction) (l : String) (w : Nat) (h : Record
 digests; and a commitment holding exactly one record of every link-window, the honest one: on egress the head
 `record_head` makes of the Program's grid under the declared syncs, on ingress a complete head settled by the deadline
 of the ingress grid and its digest, each digest under the record's salt signed by the key over its
-`certificateMessage` in the parameters' session. -/
+`certificateMessage` in the parameters' session as a record's. -/
 def HonestAccepted : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (eg ig : ByteArray),
     EvidenceFits p e → ParamsDigests p eg ig →
@@ -203,14 +203,14 @@ def HonestAccepted : Prop :=
       ∃ syncs : Fin p.windows → ClockSync, Declares link syncs ∧ ∃ (h : RecordHead) (s dg σ : ByteArray),
         recordHead l .egress w (programGrid p syncs link.frames w) none p.grid eg true = .ok h ∧ h.digest = .ok dg ∧
         recordsOf c .egress l w = [honestRecord p .egress l w h s dg σ] ∧
-        ∃ m, certificateMessage (p.key.extract 0 16) p.session l .egress w (certificateDigest s dg) = .ok m ∧
+        ∃ m, certificateMessage (p.key.extract 0 16) p.session .record l .egress w (certificateDigest s dg) = .ok m ∧
           LmsVerifies p m σ) →
     (∀ l ∈ p.ingress.toList, ∀ w < p.windows, ∃ (h : RecordHead) (s dg σ : ByteArray),
       h.buckets = (p.ingressGrid.buckets : Int) ∧
       h.allocation = (p.ingressGrid.allocation : Int) ∧ h.frameBytes = (p.ingressGrid.frameBytes : Int) ∧
       h.bucketMs = (p.ingressGrid.bucketMs : Int) ∧ h.parameters = ig ∧ h.status = none ∧ h.deadline = true ∧
       h.digest = .ok dg ∧ recordsOf c .ingress l w = [honestRecord p .ingress l w h s dg σ] ∧
-      ∃ m, certificateMessage (p.key.extract 0 16) p.session l .ingress w (certificateDigest s dg) = .ok m ∧
+      ∃ m, certificateMessage (p.key.extract 0 16) p.session .record l .ingress w (certificateDigest s dg) = .ok m ∧
         LmsVerifies p m σ) →
     protocol.Accepts p c e
 

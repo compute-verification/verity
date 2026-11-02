@@ -19,8 +19,8 @@ to open, `verify_frame` queries, record heads given field by field, signed diges
 * `manifest`, the canonical JSON `parameters_digest` hashes, and `parameters`, the digest;
 * `record_head`, the encoding and digest of `record_head` of the grid under that digest; `heads`, each given head's;
 * `digests`, each `certificate_digest` of a salt and a record digest;
-* `messages`, each `certificate_message`, sessions of 31 and 33 bytes among them, which both refuse; `nodes`, each
-  `node`.
+* `messages`, each `certificate_message` as a role named by its value, sessions of 31 and 33 bytes and roles `Role`
+  doesn't name among them, which both refuse; `nodes`, each `node`.
 -/
 
 namespace NetworkCheck.Difftest
@@ -92,9 +92,10 @@ def evaluate (j : Json) : Except String Json := do
     let #[salt, record] ← arrOf d | throw s!"not [salt, record]: {d.compress}"
     pure (← bytesOf salt, ← bytesOf record)
   let messages ← (← arrOf (← j.getObjVal? "messages")).mapM fun m => do
-    let #[i, s, l, d, w, g] ← arrOf m
-      | throw s!"not [key_id, session, link, direction, window, digest]: {m.compress}"
-    pure (← bytesOf i, ← bytesOf s, ← l.getStr?, ← Direction.ofValue (← d.getStr?), ← w.getInt?, ← bytesOf g)
+    let #[i, s, r, l, d, w, g] ← arrOf m
+      | throw s!"not [key_id, session, role, link, direction, window, digest]: {m.compress}"
+    pure (← bytesOf i, ← bytesOf s, ← r.getStr?, ← l.getStr?, ← Direction.ofValue (← d.getStr?), ← w.getInt?,
+      ← bytesOf g)
   let nodes ← (← arrOf (← j.getObjVal? "nodes")).mapM fun n => do
     let #[a, b] ← arrOf n | throw s!"not [left, right]: {n.compress}"
     pure (← bytesOf a, ← bytesOf b)
@@ -112,7 +113,8 @@ def evaluate (j : Json) : Except String Json := do
     ("record_head", headJson do recordHead link direction window grid status p (← parameters) deadline),
     ("heads", .arr (heads.map (headJson ∘ pure))),
     ("digests", .arr (digests.map fun (salt, record) => hexJson (certificateDigest salt record))),
-    ("messages", .arr (messages.map fun (i, s, l, d, w, g) => orNull hexJson (certificateMessage i s l d w g))),
+    ("messages", .arr (messages.map fun (i, s, r, l, d, w, g) =>
+      orNull hexJson (do certificateMessage i s (← NetworkCheck.Role.ofValue r) l d w g))),
     ("nodes", .arr (nodes.map fun (a, b) => hexJson (node a b)))]
 
 /-- The results' fields, in the order they are compared. -/

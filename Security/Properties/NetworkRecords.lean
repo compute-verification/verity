@@ -52,12 +52,12 @@ def Complete : Records.Published → Prop
 
 /-- `r`'s certificate is the key's (its identifier `I`), names `(d, l, w)`, signs the head's digest `dg` under the
 record's salt (`certificateDigest`), and its LMS signature verifies under the key over `certificateMessage` of them in
-the parameters' certifier session. -/
+the parameters' certifier session as a record's (`Role.record`). -/
 def CertificateVerifies (p : Params) (d : Direction) (l : String) (w : Nat) (r : Certified) (dg : ByteArray) : Prop :=
   r.head.digest = .ok dg ∧ r.certificate.digest = certificateDigest r.salt dg ∧
     r.certificate.keyId = p.key.extract 0 16 ∧ r.certificate.link = l ∧ r.certificate.direction = d ∧
     r.certificate.window = w ∧
-    ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w (certificateDigest r.salt dg) = .ok m ∧
+    ∃ m, certificateMessage (p.key.extract 0 16) p.session .record l d w (certificateDigest r.salt dg) = .ok m ∧
       LmsVerifies p m r.certificate.signature
 
 /-! ## What a committed record's digest hashes (`commitment.py`) -/

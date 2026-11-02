@@ -11,8 +11,8 @@
    "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/core/protocols/certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],
    "data": {
-    "difftest/instances.jsonl": "4842750ee211fc220e9b96bb8fb664bfdc4edbaa16d55b7da4a9c27d17ab1a34",
-    "difftest/python.jsonl": "40d5effc5ee16c70a096a1f477a1a62f546b5c7fc47144bf1a1be7d8998411a2"
+    "difftest/instances.jsonl": "4f893050e1353153a1770b22ce4a8886dfb6b7756e37e16164819190688344d2",
+    "difftest/python.jsonl": "ab8773843b60589641709c677d0967cd9edb210d367f2471a180eb8df7f7439d"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }

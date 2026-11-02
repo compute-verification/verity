@@ -17,7 +17,7 @@ import pytest
 import signers
 from verity.core.protocols.certifier import warden_rows as W
 from verity.core.protocols.certifier.active import DATA
-from verity.core.protocols.certifier.certificate import Direction, Issuer, certificate_digest
+from verity.core.protocols.certifier.certificate import Direction, Issuer, Role, certificate_digest
 from verity.core.protocols.certifier.grid import Record, Status
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import PARAMS
 from verity.core.protocols.certifier.warden import cell
@@ -47,7 +47,7 @@ def _commit(window: int, direction: Direction, session=SESSION) -> W.Cells:
 
 
 def _attest(issuer: Issuer, cells_: W.Cells):
-    return issuer.sign(cells_.link, cells_.direction, cells_.window, cells_.head.digest())
+    return issuer.sign(Role.CELLS, cells_.link, cells_.direction, cells_.window, cells_.head.digest())
 
 
 def test_the_honest_registration_reads_back(tmp_path):
@@ -97,8 +97,8 @@ def test_a_warden_certificate_over_another_digest_is_not_a_cells_certificate(tmp
     key = issuer.signer.public_key()
     doc = W.registration(c0.head, cert, PARAMS)
     record_style = certificate_digest(bytes(64), c0.head.digest())
-    cert_other = issuer.sign(LINK, Direction.EGRESS, 0, record_style)
-    assert cert_other.verify(key, SESSION) and cert_other.digest != c0.head.digest()
+    cert_other = issuer.sign(Role.CELLS, LINK, Direction.EGRESS, 0, record_style)
+    assert cert_other.verify(key, SESSION, Role.CELLS) and cert_other.digest != c0.head.digest()
     swapped = {**doc, "certificate": {"key": cert_other.key_id.hex(), "digest": cert_other.digest.hex(),
                                       "signature": cert_other.signature.hex()}}
     with pytest.raises(ValueError, match="doesn't sign its head"):

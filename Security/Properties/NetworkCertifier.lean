@@ -40,13 +40,13 @@ def LmsVerifies (p : Params) (m sig : ByteArray) : Prop :=
 
 /-- Link-window `(d, l, w)` has exactly one record `r`, and its certificate is the key's (the key's identifier `I`),
 names `(d, l, w)`, signs the head's digest `dg` under the record's salt (`certificateDigest`), and verifies under the
-key over `certificateMessage` of them in the parameters' certifier session. -/
+key over `certificateMessage` of them in the parameters' certifier session as a record's (`Role.record`). -/
 def Signs (p : Params) (c : Commitment) (d : Direction) (l : String) (w : Nat) (r : Certified) (dg : ByteArray) :
     Prop :=
   recordsOf c d l w = [r] ∧ r.head.digest = .ok dg ∧ r.certificate.digest = certificateDigest r.salt dg ∧
     r.certificate.keyId = p.key.extract 0 16 ∧ r.certificate.link = l ∧ r.certificate.direction = d ∧
     r.certificate.window = w ∧
-    ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w (certificateDigest r.salt dg) = .ok m ∧
+    ∃ m, certificateMessage (p.key.extract 0 16) p.session .record l d w (certificateDigest r.salt dg) = .ok m ∧
       LmsVerifies p m r.certificate.signature
 
 /-- `Signs`, and the signed head is complete and settled by the deadline. -/
@@ -184,10 +184,11 @@ def UndecidedPending : Prop :=
 
 What an accepted run's claims search for a SHA-512 collision (`Properties.CertifierNetwork.Runs`): the check's part. -/
 
-/-- The message a record's certificate signs in certifier session `session`, `certificateMessage` of its own fields. -/
+/-- The message a record's certificate signs in certifier session `session`, `certificateMessage` of its own fields as a
+record's. -/
 def certMessage (session : ByteArray) (r : Certified) : Option ByteArray :=
-  (certificateMessage r.certificate.keyId session r.certificate.link r.certificate.direction r.certificate.window
-    r.certificate.digest).toOption
+  (certificateMessage r.certificate.keyId session .record r.certificate.link r.certificate.direction
+    r.certificate.window r.certificate.digest).toOption
 
 /-- What SHA-512 hashes for a record head: `tagged_sha512(RECORD_TAG, encode(h))`'s input. -/
 def headStrings (h : RecordHead) : List ByteArray :=
@@ -230,8 +231,8 @@ def declared (W : Nat) (link : Link) : Fin W → ClockSync := fun v => link.sync
 salt and its certificate message, and the frame tree and head it recomputes of each egress link-window. -/
 def checkStrings (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) : List ByteArray :=
   c.records.toList.flatMap (fun r => headStrings r.head ++ saltedStrings r.salt r.head ++
-    (messageInput r.certificate.keyId p.session r.certificate.link r.certificate.direction r.certificate.window
-      r.certificate.digest).toOption.toList) ++
+    (messageInput r.certificate.keyId p.session .record r.certificate.link r.certificate.direction
+      r.certificate.window r.certificate.digest).toOption.toList) ++
   (p.egress.toList.zip e.links.toList).flatMap fun q => (List.range p.windows).flatMap fun w =>
     treeStrings p.grid (programGrid p (declared p.windows q.2) q.2.frames w) ++
       (recordHead q.1 .egress w (programGrid p (declared p.windows q.2) q.2.frames w) none p.grid eg

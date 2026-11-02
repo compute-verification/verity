@@ -13,7 +13,7 @@ from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.certificate import (
-    STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead, certificate_digest,
+    STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead, Role, certificate_digest,
     certificate_message, depth, empty, frames_root, open_frame, parameters_digest, real_frames, record_head,
     verify_frame)
 from verity.core.protocols.certifier.commitment import commit
@@ -285,7 +285,8 @@ def test_an_incomplete_record_gets_no_certificate_and_a_relayed_status_is_bound(
     assert ingress_verdicts([], 1, key) == ["no-verdict"]
     head = record_head("requests", INGRESS, 0, record.grid, record.status, P, parameters_digest(P, None))
     salt = bytes(64)
-    faulted = CertifiedRecord(head, salt, issuer.sign("requests", INGRESS, 0, certificate_digest(salt, head.digest())))
+    faulted = CertifiedRecord(head, salt, issuer.sign(Role.RECORD, "requests", INGRESS, 0,
+                                                      certificate_digest(salt, head.digest())))
     lying = CertifiedRecord(RecordHead(**{f: getattr(faulted.head, f) for f in RecordHead.__slots__}
                                        | {"status": COMPLETE}), faulted.salt, faulted.certificate)
     assert ingress_verdicts([faulted], 1, key) == ["status:dropped"]
@@ -415,29 +416,49 @@ def test_the_certificate_signs_the_record_digest_salted_by_the_certifier(tmp_pat
     twice = certify_all(Issuer(other, SESSION), honest[:1] * 2)
     assert twice[0].head == twice[1].head and twice[0].salt != twice[1].salt
     assert twice[0].certificate.digest != twice[1].certificate.digest
-    assert all(c.verify(key, SESSION) and c.certificate.verify(key, SESSION) for c in twice)
+    assert all(c.verify(key, SESSION) and c.certificate.verify(key, SESSION, Role.RECORD) for c in twice)
     swapped = CertifiedRecord(twice[0].head, twice[1].salt, twice[0].certificate)
-    assert swapped.certificate.verify(key, SESSION) and not swapped.verify(key, SESSION)
+    assert swapped.certificate.verify(key, SESSION, Role.RECORD) and not swapped.verify(key, SESSION)
     with pytest.raises(ValueError, match="64 bytes"):
         CertifiedRecord(fixed.head, bytes(63), fixed.certificate)
     with pytest.raises(ValueError, match="63 bytes"):
         Issuer(signer, SESSION, coins=lambda n: bytes(n - 1)).certify(honest[0], EGRESS, P, PARAMS)
 
 
-def test_certificate_message_binds_key_session_link_direction_window_and_digest():
-    d, s = bytes(64), SESSION
-    base = certificate_message(b"I" * 16, s, "l", EGRESS, 0, d)
-    others = [certificate_message(b"J" * 16, s, "l", EGRESS, 0, d), certificate_message(b"I" * 16, s, "m", EGRESS, 0, d),
-              certificate_message(b"I" * 16, s, "l", INGRESS, 0, d), certificate_message(b"I" * 16, s, "l", EGRESS, 1, d),
-              certificate_message(b"I" * 16, s, "l", EGRESS, 0, b"\1" + bytes(63)),
-              certificate_message(b"I" * 16, OTHER_SESSION, "l", EGRESS, 0, d)]
-    assert len(base) == 64 and len({base, *others}) == 7
-    assert base == lms.certificate_message(b"I" * 16, s, "l", "egress", 0, d)
+def test_certificate_message_binds_key_session_role_link_direction_window_and_digest():
+    d, s, I = bytes(64), SESSION, b"I" * 16
+    m = lambda I=I, s=s, role=Role.RECORD, link="l", direction=EGRESS, window=0, d=d: (  # noqa: E731
+        certificate_message(I, s, role, link, direction, window, d))
+    base = m()
+    others = [m(I=b"J" * 16), m(link="m"), m(direction=INGRESS), m(window=1), m(d=b"\1" + bytes(63)),
+              m(s=OTHER_SESSION), *(m(role=r) for r in Role if r is not Role.RECORD)]
+    assert len(base) == 64 and len({base, *others}) == 1 + len(others) == 11
+    assert base == lms.certificate_message(I, s, "record", "l", "egress", 0, d)
+    assert [r.value for r in Role] == list(lms.CERTIFICATE_ROLES)
     tag = lms.ROLES["network-certificate"].encode()
     field = lambda b: struct.pack(">Q", len(b)) + b  # noqa: E731
-    context = field(s) + field(b"l") + field(b"egress") + bytes(8)
-    assert tag == b"verity/network-certificate-message/v2"
-    assert base == hashlib.sha512(field(tag) + b"I" * 16 + field(context) + field(d)).digest()
+    for r in Role:
+        context = field(s) + field(r.value.encode()) + field(b"l") + field(b"egress") + bytes(8)
+        assert m(role=r) == hashlib.sha512(field(tag) + I + field(context) + field(d)).digest()
+    assert tag == b"verity/network-certificate-message/v3"
     for n in (31, 33):
         with pytest.raises(ValueError, match="session id is 32 bytes"):
-            certificate_message(b"I" * 16, bytes(n), "l", EGRESS, 0, d)
+            m(s=bytes(n))
+
+
+def test_a_certificate_verifies_only_as_the_role_it_was_signed_as(tmp_path):
+    """The signer names what a certificate signs (`Role`) and each check supplies the role its slot holds: one signed
+    as any role verifies as that role and is refused as each of the others, so a record's certificate can't stand for
+    a clock's or a rows head's, nor theirs for a record's. A record's certified head over a certificate the key signed
+    as any other role, of the same salted digest and link-window, is refused."""
+    signer = signers.signer(tmp_path)
+    key, issuer = signer.public_key(), Issuer(signer, SESSION)
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    record = issuer.certify(honest[0], EGRESS, P, PARAMS)
+    assert record.verify(key, SESSION)
+    c = record.certificate
+    signed = {r: issuer.sign(r, c.link, c.direction, c.window, c.digest) for r in Role}
+    for r, x in signed.items():
+        assert [x.verify(key, SESSION, other) for other in Role] == [other is r for other in Role], r
+        assert CertifiedRecord(record.head, record.salt, x).verify(key, SESSION) == (r is Role.RECORD), r
+    assert not c.verify(key, OTHER_SESSION, Role.RECORD)

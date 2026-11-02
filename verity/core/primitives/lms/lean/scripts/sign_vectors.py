@@ -58,6 +58,7 @@ def instance(seed: int) -> dict:
     for q in leaves:
         if rng.random() < 0.3:
             message = lms.certificate_message(rng.randbytes(16), rng.randbytes(lms.SESSION_BYTES),
+                                              rng.choice(lms.CERTIFICATE_ROLES),
                                               rng.choice(["responses", "requests", ""]),
                                               rng.choice(lms.DIRECTIONS), rng.randrange(2 ** 64), rng.randbytes(64))
         else:

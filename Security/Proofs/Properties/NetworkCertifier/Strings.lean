@@ -38,8 +38,8 @@ def SaltedString (salt : ByteArray) (h : RecordHead) (x : ByteArray) : Prop :=
 record's salt and its certificate message, and the head and frame tree it recomputes of each egress link-window. -/
 def CheckString (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) (x : ByteArray) : Prop :=
   (∃ r ∈ c.records.toList, HeadString r.head x ∨ SaltedString r.salt r.head x ∨
-    messageInput r.certificate.keyId p.session r.certificate.link r.certificate.direction r.certificate.window
-      r.certificate.digest = .ok x) ∨
+    messageInput r.certificate.keyId p.session .record r.certificate.link r.certificate.direction
+      r.certificate.window r.certificate.digest = .ok x) ∨
   ∃ l link, (l, link) ∈ p.egress.toList.zip e.links.toList ∧ ∃ w < p.windows,
     ∃ syncs : Fin p.windows → ClockSync, Declares link syncs ∧ (TreeString p.grid (programGrid p syncs link.frames w) x ∨
       ∃ h, recordHead l .egress w (programGrid p syncs link.frames w) none p.grid eg true = .ok h ∧ HeadString h x)

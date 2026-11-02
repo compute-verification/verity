@@ -24,7 +24,7 @@ KIND = "quick-tier/v1"
 SUITES = "tools/verity/check/suites.py"
 #: variables that would point the tier's Python at the caller's tree or environment instead of the checkout's own
 CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
-ROW_KEYS = ("name", "suite", "status", "failed_tests", "log")
+ROW_KEYS = ("name", "suite", "status", "failed_tests", "beyond_tests", "log")
 #: what check.py sets for its steps inside a recorded run (its CUSTODY_ENV and STORE_REQUIRED_ENV), never inherited
 CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
 #: what a machine's runner gives every run besides `RESEARCH_*` (remote.py), which check.py's steps don't get either
@@ -162,9 +162,10 @@ def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(
     return doc
 
 
-def judge(doc, head: str, output: str = "its output is above") -> str | None:
+def judge(doc, head: str, output: str = "its output is above", covers=None) -> str | None:
     """None when ``doc``, `tier`'s facts, show the tier passed at ``head``; else what failed, for the refusal.  ``output``: where the
-    builds' and the suites' output is."""
+    builds' and the suites' output is.  ``covers``, given a failed suite's row, says whether drive's policy allows its failure
+    (`queue.allowed`): a run whose every failed suite it covers passes."""
     if not isinstance(doc, dict) or doc.get("kind") != KIND:
         return f"it reported no {KIND} facts"
     if doc.get("error"):
@@ -189,6 +190,8 @@ def judge(doc, head: str, output: str = "its output is above") -> str | None:
     failed = [r for r in rows if isinstance(r, dict) and r.get("status") == "failed"]
     if not failed:
         return f"`suites.py` exited {rc}: the tests changed files in the checkout ({output})"
+    if covers is not None and all(covers(r) for r in failed):
+        return None
     return "; ".join(f"{r.get('name')}: {', '.join(r.get('failed_tests') or []) or 'see ' + str(r.get('log') or doc.get('logs'))}"
                      for r in failed)
 

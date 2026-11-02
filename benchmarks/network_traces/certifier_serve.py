@@ -1171,10 +1171,10 @@ def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[b
     session by `refusals` (`audit.certificate_refusals`; the chain record's `lean_audit.certificate_refusals`):
     (certificates, clock certificates, the link-windows the signer refused, refusals). A refusal names the
     certificate and what fails: another key's, another link-window's, a clock certificate that isn't egress, a
-    signature that doesn't verify over its fields in the session (forged, or a field altered, the digest it signs
-    among them), a second of its direction, or a clock certificate signing the digest an earlier window's in `seen`
-    (digest to name, which this adds to) signs: its salt was reused, under which two windows of one sync sign one
-    digest. The client holds no sync or salt, so it checks no opening. An answer that is a refusal, another window's
+    signature that doesn't verify over its fields in the session as its role, a record's or a clock's (forged, a field
+    altered, the digest it signs among them, or one served in the other's place), a second of its direction, or a clock
+    certificate signing the digest an earlier window's in `seen` (digest to name, which this adds to) signs: its salt
+    was reused, under which two windows of one sync sign one digest. The client holds no sync or salt, so it checks no opening. An answer that is a refusal, another window's
     or another session's, or not certificates, is refused whole, as is one `refusals` can't read or, under the
     Lean, one where it and its reference disagree."""
     key, session, link = read_public(deployment["certifier_key"]), deployment["session"], deployment["links"]["n2"]
@@ -1191,21 +1191,22 @@ def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[b
         held, held_clocks = refusals(key, bytes.fromhex(session), link, window, certificates, clocks, list(seen))
     except (KeyError, TypeError, ValueError, IndexError) as e:
         return [], [], [], [f"window {window}'s certificates: {e}"]
-    why = {"key": lambda c: f"another key's, not the deployment's {key.key_id.hex()[:16]}…",
-           "link-window": lambda c: f"it names {c.link} window {c.window}, not {link} window {window}",
-           "clock": lambda c: "a clock is an egress window's",
-           "signature": lambda c: "its signature doesn't verify under the deployment's key in its session",
-           "second": lambda c: "a second one of its direction",
-           "reused": lambda c: f"its signed digest is also {seen.get(c.digest, 'an earlier one')}'s, so its salt was "
-                               "reused, under which two windows of one sync sign one digest",
-           DISAGREEMENT: lambda c: "the Lean check (NetworkCheck.LinkWindow.refusals) and its reference "
-                                   "(audit.certificate_refusals) disagree on the window's certificates"}
+    why = {"key": lambda c, slot: f"another key's, not the deployment's {key.key_id.hex()[:16]}…",
+           "link-window": lambda c, slot: f"it names {c.link} window {c.window}, not {link} window {window}",
+           "clock": lambda c, slot: "a clock is an egress window's",
+           "signature": lambda c, slot: "its signature doesn't verify under the deployment's key in its session as a "
+                                     + ("clock" if slot == "clock certificate" else "record"),
+           "second": lambda c, slot: "a second one of its direction",
+           "reused": lambda c, slot: f"its signed digest is also {seen.get(c.digest, 'an earlier one')}'s, so its salt "
+                                     "was reused, under which two windows of one sync sign one digest",
+           DISAGREEMENT: lambda c, slot: "the Lean check (NetworkCheck.LinkWindow.refusals) and its reference "
+                                         "(audit.certificate_refusals) disagree on the window's certificates"}
     kept, refused = {"certificate": [], "clock certificate": []}, []
     for what, c, no in ([("certificate", c, r) for c, r in zip(certificates, held)]
                         + [("clock certificate", k, r) for k, r in zip(clocks, held_clocks)]):
         if no is not None:
             name = f"window {window}'s {c.direction.value} {what} of {c.link} (key {c.key_id.hex()[:16]}…)"
-            refused.append(f"{name}: {why[no](c)}")
+            refused.append(f"{name}: {why[no](c, what)}")
             continue
         if what == "clock certificate":
             seen[c.digest] = f"window {c.window}'s clock certificate"

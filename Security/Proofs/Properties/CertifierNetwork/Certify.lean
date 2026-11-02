@@ -22,7 +22,7 @@ open Properties.CertifierDevice.Proofs.Issuer (verify_cert prepare_spec prepare_
 theorem verify_facts {head : NetworkCheck.RecordHead} {salt kid : ByteArray} {l : String} {d : NetworkCheck.Direction}
     {w : Nat} {dg σ : ByteArray} {params : Lms.Params} {pk session : ByteArray}
     (h : CertifiedRecord.verify ⟨head, salt, ⟨kid, l, d, w, dg, σ⟩⟩ params pk session = true) :
-    kid = pk.extract 0 16 ∧ ∃ m, NetworkCheck.certificateMessage kid session l d w dg = .ok m ∧
+    kid = pk.extract 0 16 ∧ ∃ m, NetworkCheck.certificateMessage kid session .record l d w dg = .ok m ∧
       ∃ s, Lms.Signature.decode params σ = .ok s ∧ Lms.verify params pk m s = .ok true := by
   unfold CertifiedRecord.verify at h
   dsimp only at h
@@ -80,7 +80,7 @@ theorem finish_refused (i : Issuer) (salt : ByteArray) (e : String) (r : Record)
 
 /-- What the assembly issues for record `r`: a certificate of the head `record_head` makes of `r` under its grid's
 parameters digest, naming `r`'s link-window, of the key's identifier, signing the head's digest under the record's salt,
-and verifying under the key over its message. -/
+and verifying under the key over its message as a record's. -/
 structure Issued (c : Config) (i : Issuer) (r : Record) (cr : CertifiedRecord) : Prop where
   head : ∃ pd, parameters (gridOf c r) (syncSetOf c r) = .ok pd ∧
     NetworkCheck.recordHead r.link (directionOf c r) r.window r.grid none (gridOf c r) pd true = .ok cr.head
@@ -89,8 +89,8 @@ structure Issued (c : Config) (i : Issuer) (r : Record) (cr : CertifiedRecord) :
   window : cr.certificate.window = r.window
   keyId : cr.certificate.keyId = i.key.publicKey.extract 0 16
   digest : ∃ dg, cr.head.digest = .ok dg ∧ cr.certificate.digest = NetworkCheck.certificateDigest cr.salt dg
-  signs : ∃ m, NetworkCheck.certificateMessage (i.key.publicKey.extract 0 16) i.session r.link (directionOf c r)
-      r.window cr.certificate.digest = .ok m ∧
+  signs : ∃ m, NetworkCheck.certificateMessage (i.key.publicKey.extract 0 16) i.session .record r.link
+      (directionOf c r) r.window cr.certificate.digest = .ok m ∧
     ∃ s, Lms.Signature.decode i.key.params cr.certificate.signature = .ok s ∧
       Lms.verify i.key.params i.key.publicKey m s = .ok true
 

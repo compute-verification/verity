@@ -18,7 +18,7 @@ from verity.ml.crypto import lms
 from verity.ml.windows import interface as IF
 from verity.core.protocols.certifier import blocks as BK
 from verity.core.protocols.certifier import transfer_rows as TR
-from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, LmsKey
+from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, LmsKey, Role
 from verity.core.protocols.certifier.ingress_scan import SCAN_STATE
 
 import signers
@@ -82,8 +82,8 @@ class Certifier:
         for v, rows in (data or values()).items():
             tr = TR.Transfer.commit(self.link, Direction.INGRESS, BK.SESSION_WINDOW, "load", doc["program"], v, rows)
             sign = {"link": self.link, "direction": Direction.INGRESS, "window": BK.SESSION_WINDOW, **(at or {}).get(v, {})}
-            out.append(TR.registration(tr.head, self.issuer.sign(sign["link"], sign["direction"], sign["window"],
-                                                                 tr.head.digest())))
+            out.append(TR.registration(tr.head, self.issuer.sign(Role.TRANSFER, sign["link"], sign["direction"],
+                                                                 sign["window"], tr.head.digest())))
         return out
 
 
@@ -116,8 +116,8 @@ def test_a_load_of_32_bit_leaves_is_pinned_at_the_verifiers_width_alone(tiny, tm
     regs = [r for r in cert.register(doc) if r["value"] != "bias"]
     wide = TR.Transfer.commit(UPLINK, Direction.INGRESS, BK.SESSION_WINDOW, "load", doc["program"], "bias",
                               [[lo | hi << 16] for lo, hi in values()["bias"]], word_bits=32)
-    regs.append(TR.registration(wide.head, cert.issuer.sign(UPLINK, Direction.INGRESS, BK.SESSION_WINDOW,
-                                                             wide.head.digest())))
+    regs.append(TR.registration(wide.head, cert.issuer.sign(Role.TRANSFER, UPLINK, Direction.INGRESS,
+                                                             BK.SESSION_WINDOW, wide.head.digest())))
     pins = BK.pins(doc, lays, regs, UPLINK, cert.key(), {"bias": (32, TR.SCHEMA)})
     assert pins["bias"] == wide.root.hex()
     assert IF.input_count(doc, pins={**pins, SCAN_STATE: STATE_ROOT}, roots=roots(regs))["free"] == 0

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, clock_commitment
+from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, Role, clock_commitment
 from verity.core.protocols.certifier.schedule import ClockSync
 
 HERE = Path(__file__).resolve().parents[1]
@@ -122,7 +122,7 @@ def test_the_client_keeps_every_windows_certificates_verified_and_nothing_of_a_h
     certified = _lines(tmp / "run" / "certified.jsonl")
     assert len(kept) == len(certified) == 2 * windows
     assert all(set(d) == {"session", *Certificate.__slots__} and d["session"] == SESSION.hex() for d in kept)
-    assert all(cs.certificate_from_json(d).verify(key, session) for d in kept)
+    assert all(cs.certificate_from_json(d).verify(key, session, Role.RECORD) for d in kept)
     assert sorted(map(json.dumps, (d["certificate"] for d in certified))) == \
         sorted(json.dumps({f: d[f] for f in Certificate.__slots__}) for d in kept)
     text = (tmp / "client" / "certificates.jsonl").read_text()
@@ -133,7 +133,7 @@ def test_the_client_keeps_every_windows_certificates_verified_and_nothing_of_a_h
     assert all(set(d) == {"session", *Certificate.__slots__} and d["session"] == SESSION.hex() for d in clocks)
     assert [{f: d[f] for f in Certificate.__slots__} for d in clocks] == \
         [cs.certificate_json(c.certificate) for c in signed]
-    assert all(cs.certificate_from_json(d).verify(key, session) for d in clocks)
+    assert all(cs.certificate_from_json(d).verify(key, session, Role.CLOCK) for d in clocks)
     assert all(set(d) == set(Certificate.__slots__) for a in out["answers"] for d in a["clocks"])
     text = (tmp / "client" / "clocks.jsonl").read_text()
     assert not any(c.salt.hex() in text for c in signed)
@@ -181,10 +181,28 @@ def test_a_forged_or_altered_certificate_is_refused_by_name_and_not_kept(honest,
     c = answers[0][part][0]
     what = "certificate" if part == "certificates" else "clock certificate"
     refused, kept, clocks = _refusals(tmp_path, out["deployment"], answers)
+    role = "record" if part == "certificates" else "clock"
     assert refused == [f"window 0's {c['direction']} {what} of {cs.N2_LINK} (key {c['key_id'][:16]}…): its signature "
-                       "doesn't verify under the deployment's key in its session"]
+                       f"doesn't verify under the deployment's key in its session as a {role}"]
     windows = out["deployment"]["windows"]
     assert len(kept) + len(clocks) == 3 * windows - 1 and c[field] not in json.dumps([kept, clocks])
+
+
+def test_a_record_and_a_clock_certificate_served_in_each_others_place_are_refused_by_name(honest, tmp_path):
+    """Window 0's egress record certificate and its clock certificate name one key and link-window, but the certifier
+    signed each as its own role: served in each other's place, each fails the signature check as the other."""
+    _, out = honest
+    answers = json.loads(json.dumps(out["answers"]))
+    certificates, clocks_ = answers[0]["certificates"], answers[0]["clocks"]
+    i = next(i for i, c in enumerate(certificates) if c["direction"] == "egress")
+    certificates[i], clocks_[0] = clocks_[0], certificates[i]
+    refused, kept, clocks = _refusals(tmp_path, out["deployment"], answers)
+    named = lambda c, what: f"window 0's egress {what} of {cs.N2_LINK} (key {c['key_id'][:16]}…)"  # noqa: E731
+    says = "its signature doesn't verify under the deployment's key in its session as a"
+    assert refused == [f"{named(certificates[i], 'certificate')}: {says} record",
+                       f"{named(clocks_[0], 'clock certificate')}: {says} clock"]
+    assert certificates[i]["signature"] not in json.dumps([kept, clocks])
+    assert clocks_[0]["signature"] not in json.dumps([kept, clocks])
 
 
 @pytest.mark.parametrize("part", ["certificates", "clocks"])
@@ -207,7 +225,7 @@ def test_a_clock_certificate_under_a_reused_salt_is_refused_by_name(tmp_path):
     own = cs.signer(tmp_path / "key", 6)
     try:
         issuer, sync, salt = Issuer(own, SESSION), ClockSync(1, Fraction(1)), bytes(range(64))
-        reused = [issuer.sign(cs.N2_LINK, Direction.EGRESS, w, clock_commitment(salt, sync)) for w in (0, 1)]
+        reused = [issuer.sign(Role.CLOCK, cs.N2_LINK, Direction.EGRESS, w, clock_commitment(salt, sync)) for w in (0, 1)]
         fresh = [issuer.salted_clock(cs.N2_LINK, w, sync).certificate for w in (0, 1)]
         public = cs.public_json(own.public_key())
     finally:

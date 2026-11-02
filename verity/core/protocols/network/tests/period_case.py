@@ -5,7 +5,8 @@ that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and 
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates
-under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), `registration.digest`, and in the rows form
+under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), one-stage's `registration.digest` (a
+registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
 the schedule (`warden.WardenParams`) and the verifier's read of each row registration
 (`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
@@ -27,7 +28,7 @@ pinned Definition, with one member a slot) in its own audit's registration and P
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset draw at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
-the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks
+the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.BoundaryGates.Fits` asks
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
@@ -56,11 +57,12 @@ from pathlib import Path
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey, Role,
                                                             certificate_digest, clock_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -74,8 +76,8 @@ from verity.ml.definitions.registry.sampling import bit_at
 
 ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
-ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
-FORMATS = ("verity/registration/v1", "verity/registration/v2")
+ONE_STAGE = R.PROTOCOL
+FORMATS = (R.FORMAT, R.FORMAT_V2)
 #: a proof unit's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
@@ -159,15 +161,10 @@ class Scan:
 
 
 @dataclasses.dataclass(frozen=True)
-class Registration:
-    record: dict
-    digest: bytes
-
-
-@dataclasses.dataclass(frozen=True)
 class Commitment:
-    audits: list[Registration]
-    windows: list[Registration]
+    """One-stage's registration records of the audits and the link-windows, as they decode."""
+    audits: list[dict]
+    windows: list[dict]
     bytes: bytes
 
 
@@ -471,7 +468,7 @@ def _audit(a, ctx: str) -> Audit:
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
-    with a row among its parameters (the checker form) refused first. Then what `NetTiming.Layout.Fits` asks: the
+    with a row among its parameters (the checker form) refused first. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
@@ -523,22 +520,22 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not any(a[:3] == ("n", ke, 0) and T * leaves_of(be["ret_type"]) <= a[3]
                for q in _parts(defs[j["root"]]["body"]["ret"], nodes) if (a := _affine(q))):
         raise D.Reject("scan: the root doesn't return every egress leaf, so an egress gate would be one the Program "
-                       "doesn't return (NetTiming.Layout.Fits)")
+                       "doesn't return (NetTiming.BoundaryGates.Fits)")
     if not _own_returns(j)(callees[xe["fn"]]):
         raise D.Reject("scan: the egress template returns a leaf it doesn't compute (a parameter's, passed through), "
-                       "so an egress gate would be an input (NetTiming.Layout.Fits)")
+                       "so an egress gate would be an input (NetTiming.BoundaryGates.Fits)")
     ingress = [xf, *(x for x, _ in later)]
     rows = [_input_arg(x["args"][0], nodes, j) if x["args"] else None for x in ingress]
     if None in rows:
         raise D.Reject("scan: an ingress template's row is not one input node's leaves, so an ingress gate would be no "
-                       "input (NetTiming.Layout.Fits)")
+                       "input (NetTiming.BoundaryGates.Fits)")
     own_args = [*xf["args"][:1], *(a for x, _ in later for a in x["args"][:2]), *xe["args"]]
     if (len(xf["args"]) != 1 + L or any(len(x["args"]) != 2 + L for x, _ in later)
             or any(_input_arg(a, nodes, j) is None for a in own_args)):
         raise D.Reject("scan: a template's row, state or egress argument is not one input node's leaves")
     if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
         raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
-                       "depend on the ingress (NetTiming.Layout.Fits)")
+                       "depend on the ingress (NetTiming.BoundaryGates.Fits)")
     r0 = _member_ref(xf, 1, 0, 0, j)
     if r0 is None or r0[0] == "p" or r0[1] in rows or not (r0[1] < len(nodes) and _is_input(nodes[r0[1]], j)):
         raise D.Reject("scan: bucket 0's prog0 reads no input node of its own, the slot entries'")
@@ -594,17 +591,12 @@ def params(j) -> Params:
                   schedule, scan)
 
 
-def registration_digest(record: dict) -> bytes:
-    """`registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record)."""
-    return hashlib.sha512(record["format"].encode() + b"\0" + D.canonical(record).encode()).digest()
-
-
-def _registration(j, ctx: str) -> Registration:
+def _registration(j, ctx: str) -> dict:
     if not isinstance(j, dict) or not isinstance(j.get("format"), str):
         raise D.Reject(f"{ctx}: no format")
     if j["format"] not in FORMATS:
         raise D.Reject(f"{ctx}: format is not {' or '.join(FORMATS)}")
-    return Registration(j, registration_digest(j))
+    return j
 
 
 def commitment(b: bytes) -> Commitment:
@@ -676,12 +668,12 @@ class Finding(Exception):
         self.verdict, self.reason = verdict, reason
 
 
-def _certifies_on(p: Params, link: str, d: Direction, w: int, c: Certificate) -> bool:
-    return c.direction is d and c.link == link and c.window == w and c.verify(p.key, p.session)
+def _certifies_on(p: Params, role: Role, link: str, d: Direction, w: int, c: Certificate) -> bool:
+    return c.direction is d and c.link == link and c.window == w and c.verify(p.key, p.session, role)
 
 
-def _certifies(p: Params, d: Direction, w: int, c: Certificate) -> bool:
-    return _certifies_on(p, p.link, d, w, c)
+def _certifies(p: Params, role: Role, d: Direction, w: int, c: Certificate) -> bool:
+    return _certifies_on(p, role, p.link, d, w, c)
 
 
 def _clock_digest(s: ClockSync) -> bytes | None:
@@ -697,10 +689,10 @@ def clear_clocks(ss: SyncSet) -> set[bytes]:
     return {d for d in (_clock_digest(ClockSync(x, rho)) for x in ss.deltas for rho in ss.rhos) if d is not None}
 
 
-def _answered(what: str, reg: Registration, a: dict) -> tuple[dict, object]:
+def _answered(what: str, reg: dict, a: dict) -> tuple[dict, object]:
     if a["protocol"] != ONE_STAGE:
         raise Finding(REJECT, f"{what}: protocol {a['protocol']}")
-    if a["commitment"] != reg.digest.hex():
+    if a["commitment"] != R.digest(reg):
         raise Finding(REJECT, f"{what}: the answer is for another registration")
     if a["verdict"] == ACCEPT:
         try:
@@ -714,17 +706,17 @@ def served(w: int) -> dict:
     return {"kind": "served", "window": w}
 
 
-def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, reg: Registration, x: Window) -> None:
+def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, reg: dict, x: Window) -> None:
     what = f"window {w}"
     if x.clock is None:
         raise Finding(REJECT, f"{what}: registrations, not a clock certificate")
-    if not (reg.record.get("program") == p.program
-            and D.canonical(reg.record.get("window")) == D.canonical(served(w))):
+    if not (reg.get("program") == p.program
+            and D.canonical(reg.get("window")) == D.canonical(served(w))):
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 2
-            and all(_certifies(p, d, w, c) for c, d in zip(x.certificates, (EGRESS, INGRESS)))):
+            and all(_certifies(p, Role.RECORD, d, w, c) for c, d in zip(x.certificates, (EGRESS, INGRESS)))):
         raise Finding(REJECT, f"{what}: certificates")
-    if not _certifies(p, EGRESS, w, x.clock):
+    if not _certifies(p, Role.CLOCK, EGRESS, w, x.clock):
         raise Finding(REJECT, f"{what}: clock")
     if x.clock.digest in clear:
         raise Finding(REJECT, f"{what}: clock: unsalted")
@@ -744,9 +736,9 @@ def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
         raise Finding(REJECT, f"window {w}: the {d.value} rows: {e}") from None
 
 
-def _holds(reg: Registration, doc: dict) -> bool:
+def _holds(reg: dict, doc: dict) -> bool:
     """The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain."""
-    entries = [e for k in ("roots", "registered") if isinstance(reg.record.get(k), list) for e in reg.record[k]]
+    entries = [e for k in ("roots", "registered") if isinstance(reg.get(k), list) for e in reg[k]]
     return any(isinstance(e, dict) and e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
                for e in entries)
 
@@ -783,42 +775,42 @@ def _entries(j: dict, k: str) -> list[dict]:
     return [e for e in v if isinstance(e, dict)] if isinstance(v, list) else []
 
 
-def _prog(reg: Registration) -> list[dict]:
+def _prog(reg: dict) -> list[dict]:
     """The scan's registration's `scan/prog` entries (`PROG`) whose root and domain are strings."""
-    return [e for e in [*(e for e in _entries(reg.record, "roots") if e.get("port") == PROG),
-                        *(e for e in _entries(reg.record, "registered") if e.get("value") == PROG)]
+    return [e for e in [*(e for e in _entries(reg, "roots") if e.get("port") == PROG),
+                        *(e for e in _entries(reg, "registered") if e.get("value") == PROG)]
             if isinstance(e.get("root"), str) and isinstance(e.get("domain"), str)]
 
 
-def _tied_audits(audits: list[Registration], reg: Registration) -> list[int]:
+def _tied_audits(audits: list[dict], reg: dict) -> list[int]:
     """`tiedAudits`: the audits, by index, whose registration's `roots` has an output port's or an entries port's entry
     (`output_port`, `entries_port_name`) at the root and domain of the scan's registration's `scan/prog` entry
     (`PROG`)."""
     return [i for i, a in enumerate(audits)
             if any(any((output_port(q := o.get("port")) or entries_port_name(q)) and o.get("root") == e["root"]
-                       and o.get("domain") == e["domain"] for o in _entries(a.record, "roots"))
+                       and o.get("domain") == e["domain"] for o in _entries(a, "roots"))
                    for e in _prog(reg))]
 
 
-def _wired(p: Params, audits: list[Registration], reg: Registration) -> bool:
+def _wired(p: Params, audits: list[dict], reg: dict) -> bool:
     """`wired`: the scan's `scan/prog` entry is at the root and domain of an audit's entries port (`entries_port`) of
     a `SlotEntry_v1` template of that audit's own Program (`Audit.entries`), a pinned Definition (its closure digest
     one of `SLOT_ENTRY_PINS`), with one member a slot of the window."""
     s = p.schedule
     return any(n == s.window // s.every * s.lanes and d in SLOT_ENTRY_PINS
                and any(o.get("port") == entries_port(k) and o.get("root") == e["root"]
-                       and o.get("domain") == e["domain"] for e in _prog(reg) for o in _entries(r.record, "roots"))
+                       and o.get("domain") == e["domain"] for e in _prog(reg) for o in _entries(r, "roots"))
                for a, r in zip(p.audits, audits) for k, n, d in a.entries)
 
 
-def _states(reg: Registration) -> list[dict]:
+def _states(reg: dict) -> list[dict]:
     """`stateEntries`: a registration's `roots` entries whose port is `STATE` and `registered` entries whose value is
     `SCAN_STATE`."""
-    return [*(e for e in _entries(reg.record, "roots") if e.get("port") == STATE),
-            *(e for e in _entries(reg.record, "registered") if e.get("value") == SCAN_STATE)]
+    return [*(e for e in _entries(reg, "roots") if e.get("port") == STATE),
+            *(e for e in _entries(reg, "registered") if e.get("value") == SCAN_STATE)]
 
 
-def _state_tied(p: Params, audits: list[Registration], reg: Registration) -> bool:
+def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
     """`stateTied`: the scan's registration has a state entry (`_states`), every one at one root and domain, both
     strings, and an audit wired to its `prog` (`_wired`) has one, every one at that root and domain."""
     es = _states(reg)
@@ -833,12 +825,12 @@ def _state_tied(p: Params, audits: list[Registration], reg: Registration) -> boo
         for a, r in zip(p.audits, audits))
 
 
-def _prog_tied(audits: list[Registration], reg: Registration) -> bool:
+def _prog_tied(audits: list[dict], reg: dict) -> bool:
     """`progTied`: some audit is tied to the scan's `prog` (`_tied_audits`)."""
     return bool(_tied_audits(audits, reg))
 
 
-def _tied_in(audits: list[Registration], windows: list[Registration], i: int) -> bool:
+def _tied_in(audits: list[dict], windows: list[dict], i: int) -> bool:
     """`tiedIn`: some link-window's `prog` is audit `i`'s output (`_tied_audits`)."""
     return any(i in _tied_audits(audits, reg) for reg in windows)
 
@@ -848,17 +840,18 @@ def records(link: str) -> tuple[tuple[str, Direction], ...]:
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 
-def _rows_window_check(p: Params, audits: list[Registration], w: int, reg: Registration,
+def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
                        x: Window) -> tuple[Facts, int]:
     """`rowsWindowCheck`: on acceptance the scan's facts and its tied audits' free inputs, the parameters' `free` of
     each audit its `prog` is an output of (`_tied_audits`)."""
     what = f"window {w}"
     if x.registrations is None:
         raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
-    if reg.record.get("program") != p.program:
+    if reg.get("program") != p.program:
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 3
-            and all(_certifies_on(p, link, d, w, c) for c, (link, d) in zip(x.certificates, records(p.link)))):
+            and all(_certifies_on(p, Role.RECORD, link, d, w, c)
+                    for c, (link, d) in zip(x.certificates, records(p.link)))):
         raise Finding(REJECT, f"{what}: certificates (none of a window in which the network certifier refused a "
                               "connection)")
     if len(x.registrations) != 2:
@@ -894,11 +887,11 @@ def _facts(what: str, prof: dict, pub) -> Facts:
     return Facts(lv["size"], drawn, prof["delta"], bound)
 
 
-def _audit_check(i: int, audit: Audit, reg: Registration, a: dict, tied: bool = False) -> Facts:
+def _audit_check(i: int, audit: Audit, reg: dict, a: dict, tied: bool = False) -> Facts:
     """`auditCheck`: the registration names the audit's Program, the answer's units are the Program's, and one tied to
     a link-window's scan (`_tied_in`, in the rows form) has every unit drawn."""
     what = f"audit {i}"
-    if reg.record.get("program") != audit.program:
+    if reg.get("program") != audit.program:
         raise Finding(REJECT, f"{what}: registration: not its Program")
     prof, pub = _answered(what, reg, a)
     f = _facts(what, prof, pub)
@@ -1023,9 +1016,9 @@ EXPECT = {
     "honest": ACCEPT,
     "program": REJECT, "provenance": REJECT,
     "cert-swap": REJECT, "cert-count": REJECT, "cert-forged": REJECT, "cert-window": REJECT, "cert-link": REJECT,
-    "cert-session": REJECT, "cert-key": REJECT,
+    "cert-session": REJECT, "cert-key": REJECT, "cert-role": REJECT,
     "clock-ingress": REJECT, "clock-forged": REJECT, "clock-window": REJECT, "clock-session": REJECT,
-    "clock-reused": REJECT, "clock-unsalted": REJECT,
+    "clock-role": REJECT, "clock-reused": REJECT, "clock-unsalted": REJECT,
     "answer-protocol": REJECT, "answer-other": REJECT, "answer-reject": REJECT, "answer-undecided": UNDECIDED,
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
@@ -1037,9 +1030,10 @@ EXPECT = {
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
-    "rows-cert-key": REJECT, "rows-past-slots": REJECT,
+    "rows-cert-key": REJECT, "rows-cert-role": REJECT, "rows-past-slots": REJECT,
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
-    "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
+    "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-role": REJECT,
+    "rows-reg-field": REJECT,
     "rows-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
@@ -1381,7 +1375,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     key = _key(ki)
     N, W, H, toy = KEYS[ki]
     session = r.randbytes(lms.SESSION_BYTES)
-    link = r.choice(["eth0", "a", "dé"])
+    # every form binds the link in its window record's canonical JSON, whose strings are ASCII without DEL
+    link = r.choice(["eth0", "a", "d-e"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
     least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta") else 1
     least_audits = 2 if m == "state-untied" else \
@@ -1419,9 +1414,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     tied = {x["audit"] for x in ties.values()}
     signed = iter(range(1 << 30))
 
-    def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey = key, s: bytes = session) -> Certificate:
+    def sign(role: Role, link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey = key,
+             s: bytes = session) -> Certificate:
         c = Certificate(k.I, link, d, w, digest, b"")
-        return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H, c.message(s)).encode())
+        return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H,
+                                                            c.message(s, role)).encode())
 
     def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes = session) -> list[dict]:
         """Link `on`'s ingress and egress rows at window `w`, committed under schedule `s` (the period's) in session
@@ -1432,12 +1429,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             cells = WR.Cells.commit(on, d, w, [r.randbytes(WR.row_bytes(s)) for _ in range(s.window)],
                                     WR.Wiring((), r.randbytes(WR.WIRING_SALT_BYTES)), s, ses,
                                     [r.randbytes(WR.SALT_BYTES) for _ in range(s.window)])
-            out.append(WR.registration(cells.head, sign(on, d, w, cells.head.digest(), s=ses), s))
+            out.append(WR.registration(cells.head, sign(Role.CELLS, on, d, w, cells.head.digest(), s=ses), s))
         return out
 
-    def resigned(doc: dict, **kw) -> dict:
-        c = sign(doc["link"], Direction(doc["direction"]), doc["window"], bytes.fromhex(doc["certificate"]["digest"]),
-                 **kw)
+    def resigned(doc: dict, role: Role = Role.CELLS, **kw) -> dict:
+        c = sign(role, doc["link"], Direction(doc["direction"]), doc["window"],
+                 bytes.fromhex(doc["certificate"]["digest"]), **kw)
         return doc | {"certificate": {"digest": c.digest.hex(), "key": c.key_id.hex(), "signature": c.signature.hex()}}
 
     window_regs, windows, clocks = [], [], []
@@ -1461,7 +1458,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             regs = r.choice([regs[:1], regs[1:], [], regs + regs[1:]])
         elif aimed and m == "reg-swap":
             regs = regs[::-1]
-        elif aimed and m in ("reg-forged", "reg-window", "reg-link", "reg-session", "reg-key", "reg-field"):
+        elif aimed and m in ("reg-forged", "reg-window", "reg-link", "reg-session", "reg-key", "reg-role", "reg-field"):
             doc, c = regs[i], regs[i]["certificate"]
             sig, dig = bytes.fromhex(c["signature"]), bytes.fromhex(c["digest"])
             if m == "reg-forged":
@@ -1478,6 +1475,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 doc = resigned(doc, s=ses) if r.random() < 0.5 else registrations(w, ses=ses)[i]
             elif m == "reg-key":
                 doc = resigned(doc, k=_key(ki, 1, r.random() < 0.5))
+            elif m == "reg-role":
+                doc = resigned(doc, role=r.choice([x for x in Role if x is not Role.CELLS]))
             else:
                 lay = doc["layout"]
                 f = r.choice(LAYOUT_KEYS)
@@ -1488,7 +1487,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                     {"domain": r.randbytes(64).hex()}, {"parameters": r.randbytes(64).hex()},
                     {"direction": (EGRESS if i == 0 else INGRESS).value}, {"layout": lay | {f: lay[f] + 1}}])
             regs = regs[:i] + [doc] + regs[i + 1:]
-        recs = [sign(on, d, w, r.randbytes(64)) for on, d in records(link)]
+        recs = [sign(Role.RECORD, on, d, w, r.randbytes(64)) for on, d in records(link)]
         if aimed and m == "past-slots":
             recs, regs = [], []
         if aimed and m.startswith("cert-"):
@@ -1498,18 +1497,21 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "cert-swap":
                 recs = [recs[x] for x in r.choice(SWAPS)]
             elif m == "cert-fails-link":
-                recs[2] = sign(r.choice([link, f"{link}-fail", f"{link}x-fails"]), EGRESS, w, recs[2].digest)
+                recs[2] = sign(Role.RECORD, r.choice([link, f"{link}-fail", f"{link}x-fails"]), EGRESS, w,
+                               recs[2].digest)
             elif m == "cert-direction":
-                recs[j] = sign(on, INGRESS if d is EGRESS else EGRESS, w, recs[j].digest)
+                recs[j] = sign(Role.RECORD, on, INGRESS if d is EGRESS else EGRESS, w, recs[j].digest)
             elif m == "cert-forged":
                 sig = recs[j].signature
                 recs[j] = dataclasses.replace(recs[j], signature=r.choice([_flip(sig, seed), sig[:-1], b""]))
             elif m == "cert-window":
-                recs[j] = sign(on, d, w + 1, recs[j].digest)
+                recs[j] = sign(Role.RECORD, on, d, w + 1, recs[j].digest)
             elif m == "cert-session":
-                recs[j] = sign(on, d, w, recs[j].digest, s=_flip(session, seed))
+                recs[j] = sign(Role.RECORD, on, d, w, recs[j].digest, s=_flip(session, seed))
             elif m == "cert-key":
-                recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
+                recs[j] = sign(Role.RECORD, on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
+            elif m == "cert-role":
+                recs[j] = sign(r.choice([x for x in Role if x is not Role.RECORD]), on, d, w, recs[j].digest)
         entries = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
         entries.insert(r.randrange(len(entries) + 1),
                        {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
@@ -1528,7 +1530,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                "protocol": ONE_STAGE, where: entries, "window": {"kind": "stand-in", "window": w}}
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
-        digest = registration_digest(rec)
+        digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
                            r.randint(0, units), strata)
@@ -1536,7 +1538,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             if m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
-                answer["commitment"] = r.choice([r.randbytes(64), registration_digest(rec | {"population": 1})]).hex()
+                answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 1})])
             elif m == "answer-reject":
                 answer = _refused(answer, REJECT)
             elif m in ("answer-undecided", "undecided-and-reject"):
@@ -1561,10 +1563,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         elif aimed and m == "provenance":
             rec["window"] = r.choice([served(w + 1), {"kind": "batch", "window": w}, served(w) | {"run": 0}, None])
-        digest = registration_digest(rec)
-        egress = sign(link, EGRESS, w, r.randbytes(64))
-        ingress = sign(link, INGRESS, w, r.randbytes(64))
-        clock = sign(link, EGRESS, w, clock_commitment(r.randbytes(SALT_BYTES), sync))
+        digest = bytes.fromhex(R.digest(rec))
+        egress = sign(Role.RECORD, link, EGRESS, w, r.randbytes(64))
+        ingress = sign(Role.RECORD, link, INGRESS, w, r.randbytes(64))
+        clock = sign(Role.CLOCK, link, EGRESS, w, clock_commitment(r.randbytes(SALT_BYTES), sync))
         answer = _accepted(digest, program, rec["partition"], 1, 1, r.choice(["1/100", "1/1000000"]), 0)
         if aimed:
             if m == "cert-forged":
@@ -1574,31 +1576,39 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 forged = dataclasses.replace(c, signature=sig)
                 egress, ingress = (forged, ingress) if i == 0 else (egress, forged)
             elif m == "cert-window":
-                egress = sign(link, EGRESS, w + 1, egress.digest)
+                egress = sign(Role.RECORD, link, EGRESS, w + 1, egress.digest)
             elif m == "cert-link":
-                ingress = sign(link + "x", INGRESS, w, ingress.digest)
+                ingress = sign(Role.RECORD, link + "x", INGRESS, w, ingress.digest)
             elif m == "cert-session":
-                egress = sign(link, EGRESS, w, egress.digest, s=_flip(session, seed))
+                egress = sign(Role.RECORD, link, EGRESS, w, egress.digest, s=_flip(session, seed))
             elif m == "cert-key":
-                ingress = sign(link, INGRESS, w, ingress.digest, k=_key(ki, 1, r.random() < 0.5))
+                ingress = sign(Role.RECORD, link, INGRESS, w, ingress.digest, k=_key(ki, 1, r.random() < 0.5))
+            elif m == "cert-role":
+                other = r.choice([x for x in Role if x is not Role.RECORD])
+                if r.random() < 0.5:
+                    egress = sign(other, link, EGRESS, w, egress.digest)
+                else:
+                    ingress = sign(other, link, INGRESS, w, ingress.digest)
             elif m == "clock-ingress":
-                clock = sign(link, INGRESS, w, clock.digest)
+                clock = sign(Role.CLOCK, link, INGRESS, w, clock.digest)
             elif m == "clock-forged":
                 sig, dig = clock.signature, clock.digest
                 clock = r.choice([dataclasses.replace(clock, signature=s) for s in (_flip(sig, seed), sig[:-1], b"")]
                                  + [dataclasses.replace(clock, digest=d) for d in (_flip(dig, seed), dig[:-1])])
             elif m == "clock-window":
-                clock = sign(link, EGRESS, w + 1, clock.digest)
+                clock = sign(Role.CLOCK, link, EGRESS, w + 1, clock.digest)
             elif m == "clock-session":
-                clock = sign(link, EGRESS, w, clock.digest, s=_flip(session, seed))
+                clock = sign(Role.CLOCK, link, EGRESS, w, clock.digest, s=_flip(session, seed))
+            elif m == "clock-role":
+                clock = sign(r.choice([x for x in Role if x is not Role.CLOCK]), link, EGRESS, w, clock.digest)
             elif m == "clock-reused":
-                clock = sign(link, EGRESS, w, r.choice(clocks).digest)
+                clock = sign(Role.CLOCK, link, EGRESS, w, r.choice(clocks).digest)
             elif m == "clock-unsalted":
-                clock = sign(link, EGRESS, w, clock_digest(sync))
+                clock = sign(Role.CLOCK, link, EGRESS, w, clock_digest(sync))
             elif m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
-                answer["commitment"] = r.choice([r.randbytes(64), registration_digest(rec | {"population": 2})]).hex()
+                answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 2})])
             elif m == "answer-reject":
                 answer = _refused(answer, REJECT)
             elif m in ("answer-undecided", "undecided-and-reject"):
@@ -1662,7 +1672,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             else:
                 desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),),
                                                    entries, renamed))
-        digest = registration_digest(rec)
+        digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, prog, rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            r.randint(0, units), strata)
         if i == a:
@@ -1771,7 +1781,7 @@ def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
     with other parameters, another number of instances, rows not the schedule's, an input gate no template's, and each
-    negative of a check of what `NetTiming.Layout.Fits` asks (`scan_negatives`)."""
+    negative of a check of what `NetTiming.BoundaryGates.Fits` asks (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
     L, every = s["lanes"], s["every"]
@@ -1812,7 +1822,7 @@ DEEP = 2 ** 30
 
 
 def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
-    """Rows-form parameters each refused by one of `scanOf`'s checks of what `NetTiming.Layout.Fits` asks and by none
+    """Rows-form parameters each refused by one of `scanOf`'s checks of what `NetTiming.BoundaryGates.Fits` asks and by none
     before it, each one change to `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals:
     `walk`, the egress template calling a composite of `2^90` gates in three nested batches, unread, so the walk to an
     operand is past `FUEL`; `returns`, the root returning an input leaf for the last egress leaf; `computes`, the egress

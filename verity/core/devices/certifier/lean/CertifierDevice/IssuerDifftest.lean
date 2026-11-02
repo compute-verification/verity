@@ -53,10 +53,19 @@ def flip (b : ByteArray) (pos : Nat) : ByteArray :=
     let i := pos % b.size
     b.set! i (b.get! i ^^^ 1)
 
+/-- The roles in `certificate.Role`'s order. -/
+def roles : List NetworkCheck.Role := [.record, .clock, .cells, .transfer, .out]
+
+/-- The role a `resign-role` tamper signs the certificate as instead of `r`: the `pos`-th of the others, in `roles`'
+order, cyclically (`issuer_vectors.other_role`). -/
+def otherRole (r : NetworkCheck.Role) (pos : Nat) : NetworkCheck.Role :=
+  let others := roles.filter (· != r)
+  others[pos % others.length]!
+
 /-- `verify` after the tamper: the certificate's signature (a byte, or its last byte dropped), link, direction, window or
 digest changed, the head's deadline bit flipped, the record's salt or the public key's identifier or root changed, or
 the certificate checked in another session; or the certificate's link, direction, window or key identifier changed and signed again by `k` at
-leaf `q`. -/
+leaf `q`, or signed again there as another role (`otherRole`). -/
 def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session : ByteArray) :
     String × Nat → Except String Bool
   | (kind, pos) => do
@@ -65,8 +74,8 @@ def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session :
     let id := pub.extract 0 16
     let root := pub.extract 16 pub.size
     let other := if x.direction == .egress then Direction.ingress else .egress
-    let resign (y : Certificate) : Except String CertifiedRecord := do
-      let m ← NetworkCheck.certificateMessage y.keyId session y.link y.direction y.window y.digest
+    let resign (r : NetworkCheck.Role) (y : Certificate) : Except String CertifiedRecord := do
+      let m ← NetworkCheck.certificateMessage y.keyId session r y.link y.direction y.window y.digest
       pure { c with certificate := { y with signature := (← Lms.signAt k q m).encode } }
     let (c, pub, session) ← match kind with
       | "signature" => pure ({ c with certificate := { x with signature := flip x.signature pos } }, pub, session)
@@ -81,16 +90,18 @@ def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session :
       | "public-id" => pure (c, flip id pos ++ root, session)
       | "public-root" => pure (c, id ++ flip root pos, session)
       | "session" => pure (c, pub, flip session pos)
-      | "resign-link" => pure (← resign { x with link := x.link ++ "x" }, pub, session)
-      | "resign-direction" => pure (← resign { x with direction := other }, pub, session)
-      | "resign-window" => pure (← resign { x with window := x.window ^^^ 1 }, pub, session)
-      | "resign-key-id" => pure (← resign { x with keyId := flip x.keyId pos }, pub, session)
+      | "resign-link" => pure (← resign .record { x with link := x.link ++ "x" }, pub, session)
+      | "resign-direction" => pure (← resign .record { x with direction := other }, pub, session)
+      | "resign-window" => pure (← resign .record { x with window := x.window ^^^ 1 }, pub, session)
+      | "resign-key-id" => pure (← resign .record { x with keyId := flip x.keyId pos }, pub, session)
+      | "resign-role" => pure (← resign (otherRole .record pos) x, pub, session)
       | t => throw s!"no tamper {t}"
     pure (c.verify k.params pub session)
 
 /-- `ClockCertificate.verify` after the tamper: the sync's δ (one more), the salt, the certificate's signature, window,
 direction or digest changed, the public key's identifier or root changed, or the certificate checked in another
-session; or the certificate's window, direction or key identifier changed and signed again by `k` at leaf `q`. -/
+session; or the certificate's window, direction or key identifier changed and signed again by `k` at leaf `q`, or signed
+again there as another role (`otherRole`). -/
 def clockTampered (c : ClockCertificate) (k : Lms.PrivateKey) (q : Nat) (pub session : ByteArray) :
     String × Nat → Except String Bool
   | (kind, pos) => do
@@ -98,8 +109,8 @@ def clockTampered (c : ClockCertificate) (k : Lms.PrivateKey) (q : Nat) (pub ses
     let id := pub.extract 0 16
     let root := pub.extract 16 pub.size
     let other := if x.direction == .egress then Direction.ingress else .egress
-    let resign (y : Certificate) : Except String ClockCertificate := do
-      let m ← NetworkCheck.certificateMessage y.keyId session y.link y.direction y.window y.digest
+    let resign (r : NetworkCheck.Role) (y : Certificate) : Except String ClockCertificate := do
+      let m ← NetworkCheck.certificateMessage y.keyId session r y.link y.direction y.window y.digest
       pure { c with certificate := { y with signature := (← Lms.signAt k q m).encode } }
     let (c, pub, session) ← match kind with
       | "sync" => pure ({ c with sync := { c.sync with delta := c.sync.delta + 1 } }, pub, session)
@@ -111,9 +122,10 @@ def clockTampered (c : ClockCertificate) (k : Lms.PrivateKey) (q : Nat) (pub ses
       | "public-id" => pure (c, flip id pos ++ root, session)
       | "public-root" => pure (c, id ++ flip root pos, session)
       | "session" => pure (c, pub, flip session pos)
-      | "resign-window" => pure (← resign { x with window := x.window ^^^ 1 }, pub, session)
-      | "resign-direction" => pure (← resign { x with direction := other }, pub, session)
-      | "resign-key-id" => pure (← resign { x with keyId := flip x.keyId pos }, pub, session)
+      | "resign-window" => pure (← resign .clock { x with window := x.window ^^^ 1 }, pub, session)
+      | "resign-direction" => pure (← resign .clock { x with direction := other }, pub, session)
+      | "resign-key-id" => pure (← resign .clock { x with keyId := flip x.keyId pos }, pub, session)
+      | "resign-role" => pure (← resign (otherRole .clock pos) x, pub, session)
       | t => throw s!"no clock tamper {t}"
     pure (c.verify k.params pub session)
 

@@ -54,7 +54,7 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey,
-                                                         Signer, SignerRefused, _text, _u)
+                                                         Role, Signer, SignerRefused, _text, _u)
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -76,7 +76,7 @@ REFUSALS = {
     "out-rows": "the record's row count isn't the registration's",
     "out-domain": "the record's program or value isn't the verifier's, or its domain isn't the one its fields name",
     "out-digest": "the certificate doesn't sign the record's head",
-    "out-signature": "the signature doesn't verify under the key in the session for the link-window",
+    "out-signature": "the signature doesn't verify under the key in the session as the out rows' for the link-window",
 }
 _HEX64 = re.compile("[0-9a-f]{128}")
 _HEX = re.compile("(?:[0-9a-f]{2})+")
@@ -237,7 +237,7 @@ def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | 
     committed = G.Registered.commit(shape.program, shape.value, rows, salts, shape.word_bits, shape.schema)
     head = OutHead(shape.value, bytes.fromhex(committed.program), committed.words, committed.leaves, committed.word_bits,
                    committed.schema, committed.domain.domain_id, committed.root)
-    certificate = issuer.sign(link, DIRECTION, window, head.digest())
+    certificate = issuer.sign(Role.OUT, link, DIRECTION, window, head.digest())
     if certificate is None:
         raise SignerRefused(f"the certifier's signer refused the out certificate of {link} window {window}")
     return CertifiedOut(head, certificate, session, committed)
@@ -321,9 +321,9 @@ def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape,
                                        "word_bits name")
     if cert.digest != head.digest():
         raise OutRefused("out-digest", "the certificate's digest isn't the record's head's")
-    if not cert.verify(key, session):
-        raise OutRefused("out-signature", f"the signature doesn't verify under the certifier's key in the session for "
-                                          f"{link!r} window {window}")
+    if not cert.verify(key, session, Role.OUT):
+        raise OutRefused("out-signature", f"the signature doesn't verify under the certifier's key in the session as "
+                                          f"the out rows' for {link!r} window {window}")
     return head.root.hex()
 
 

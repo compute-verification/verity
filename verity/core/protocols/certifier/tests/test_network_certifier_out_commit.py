@@ -15,7 +15,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import out_commit as O
-from verity.core.protocols.certifier.certificate import Issuer, LmsKey, LmsSigner, SignerRefused
+from verity.core.protocols.certifier.certificate import Issuer, LmsKey, LmsSigner, Role, SignerRefused
 from verity.core.protocols.certifier.tests import signers as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -134,6 +134,23 @@ def test_wrong_session(signed, fresh):
     _refused("out-session", doc, key)
     doc["session"] = S.SESSION.hex()
     _refused("out-signature", doc, key)
+
+
+def test_the_head_signed_as_another_role(fresh):
+    """The out rows' head at its own link-window, signed by the certifier's key in the session as anything but out
+    rows (a record's, a clock's, cells' or a transfer's), is `out-signature`."""
+    issuer = Issuer(fresh(), S.SESSION)
+    out = O.commit_out(VALUES, shape=SHAPE, key=issuer, session=S.SESSION, window=WINDOW)
+    key = issuer.signer.public_key()
+    assert O.check_out(_record(out), key, S.SESSION, SHAPE, window=WINDOW) == out.root
+    for role in Role:
+        x = issuer.sign(role, O.LINK, O.DIRECTION, WINDOW, out.head.digest())
+        doc = _record(out)
+        doc["certificate"]["signature"] = x.signature.hex()
+        if role is Role.OUT:
+            assert O.check_out(doc, key, S.SESSION, SHAPE, window=WINDOW) == out.root
+        else:
+            _refused("out-signature", doc, key)
 
 
 def test_wrong_link_or_window(signed):

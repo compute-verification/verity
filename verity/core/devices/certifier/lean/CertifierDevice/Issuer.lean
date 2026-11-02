@@ -7,7 +7,7 @@ import Lms.Sign
 The executable form of `certificate.py`'s `Issuer`, `Certificate` and `CertifiedRecord`: a record's head (`recordHead`,
 under the grid's `parameters_digest`) and digest, that digest hidden under `salt_c`, 64 bytes of the certifier's own
 coins drawn for the record (`certificateDigest`), the message that binds the hidden digest to the key, the certifier
-session and the link-window (`certificateMessage`), and its LMS signature at a reserved leaf (`Lms.signAt`). The
+session, the certificate's role (`Role.record`) and the link-window (`certificateMessage`), and its LMS signature at a reserved leaf (`Lms.signAt`). The
 encodings are `NetworkCheck`'s and the signature `Lms`'s.
 
 Which leaf signs, and which session ids the key has started, is the signer's state (`lms.LeafState.reserve` and
@@ -25,7 +25,8 @@ sync the certifier's shaper ran the window under, hidden as a record digest is a
 `certificate.Issuer.salted_clock` signs it: the clock digest (`clockDigest`,
 `tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)`, ρ = p/q in lowest terms) under
 `salt_c`, 64 fresh bytes of the certifier's coins (`clockCommitment`, `SHA-512("verity/net-cert/v1" ‖ salt_c ‖ clock
-digest)`), under the record certificate's message for the same key, session and link-window, `egress`. The sync and the
+digest)`), under the message for the same key, session and link-window, `egress`, as the record certificate's but its
+role `Role.clock`. The sync and the
 salt are witness; only the certificate is public. The issuer signs no clock under a salt an earlier clock certificate of
 it was signed under (`clockSalts`): under one salt two windows of one sync would sign one digest, which shows their
 syncs are equal. `clockSalts` is carried beside the `Issuer` rather than in it (Python's `Issuer.clock_salts`):
@@ -36,7 +37,8 @@ started or a leaf is spent; a refused start or reservation is listed in `refused
 untaken, since nothing was signed under it. `ClockCertificate.verify` is `certificate.CertifiedClock.verify`: an egress
 certificate of the key's whose digest the sync and the salt open, signed under the key in the session. A record
 certificate signs a record digest salted and a clock certificate a clock digest, each under its own tag, so one opens as
-the other only on a SHA-512 collision.
+the other only on a SHA-512 collision; and each is signed as its own role, so one verifies as the other only on an LMS
+forgery or a SHA-512 collision of two messages' inputs.
 -/
 
 namespace CertifierDevice
@@ -115,7 +117,7 @@ def prepare (i : Issuer) (salt : ByteArray) (record : Record) (direction : Direc
   let head ← NetworkCheck.recordHead record.link direction record.window record.grid
     ((Status.reason? record.status).map reasonValue) params parameters deadline
   let digest := NetworkCheck.certificateDigest salt (← head.digest)
-  let message ← NetworkCheck.certificateMessage i.key.I i.session record.link direction record.window digest
+  let message ← NetworkCheck.certificateMessage i.key.I i.session .record record.link direction record.window digest
   pure (head, digest, message)
 
 /-- The prepared record signed at the reserved leaf, or listed in `refused` when the host refused the reservation (or the
@@ -152,7 +154,7 @@ def prepareClock (i : Issuer) (clockSalts : Array ByteArray) (salt : ByteArray) 
     throw "the certifier's coins gave an earlier clock certificate's salt again, under which two windows of one sync \
       would sign one digest, so it signs no clock under it"
   let digest ← clockCommitment salt sync
-  pure (digest, ← NetworkCheck.certificateMessage i.key.I i.session link .egress window digest)
+  pure (digest, ← NetworkCheck.certificateMessage i.key.I i.session .clock link .egress window digest)
 
 /-- The prepared clock digest signed at the reserved leaf, its salt then taken (`clockSalts`), or the link-window listed
 in `refused` when the host refused the reservation (or the session's start before it), its salt untaken. -/
@@ -206,11 +208,12 @@ def clockWith (w : Core.World Out) (i : Issuer) (clockSalts : Array ByteArray) (
   pure ({ i' with started := i.started || started matches .ok () }, clockSalts', c?)
 
 /-- `CertifiedRecord.verify` under an `LmsKey` in certifier session `session`: the certificate is signed by `publicKey`
-over its message in that session, names the head's link-window and signs the head's digest under the record's salt. -/
+over its message in that session as a record's, names the head's link-window and signs the head's digest under the
+record's salt. -/
 def CertifiedRecord.verify (c : CertifiedRecord) (params : Lms.Params) (publicKey session : ByteArray) : Bool :=
   let x := c.certificate
   let h := c.head
-  match h.digest, NetworkCheck.certificateMessage x.keyId session x.link x.direction x.window x.digest,
+  match h.digest, NetworkCheck.certificateMessage x.keyId session .record x.link x.direction x.window x.digest,
       Lms.Signature.decode params x.signature with
   | .ok d, .ok m, .ok sig =>
     x.keyId == publicKey.extract 0 16 && x.link == h.link && x.direction == h.direction && (x.window : Int) == h.window
@@ -219,11 +222,11 @@ def CertifiedRecord.verify (c : CertifiedRecord) (params : Lms.Params) (publicKe
 
 /-- `CertifiedClock.verify` under an `LmsKey` in certifier session `session`: the certificate is an egress one of the
 key's, the sync and the salt open the digest it signs (`clockCommitment`), and it is signed by `publicKey` over its
-message in that session, which binds the link and the window. -/
+message in that session as a clock's, which binds the link and the window. -/
 def ClockCertificate.verify (c : ClockCertificate) (params : Lms.Params) (publicKey session : ByteArray) : Bool :=
   let x := c.certificate
   match clockCommitment c.salt c.sync,
-      NetworkCheck.certificateMessage x.keyId session x.link x.direction x.window x.digest,
+      NetworkCheck.certificateMessage x.keyId session .clock x.link x.direction x.window x.digest,
       Lms.Signature.decode params x.signature with
   | .ok d, .ok m, .ok sig =>
     x.direction == .egress && x.keyId == publicKey.extract 0 16 && x.digest == d

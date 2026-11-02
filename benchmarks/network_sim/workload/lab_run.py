@@ -628,7 +628,8 @@ def n2_verdicts(lab: L.Lab, setup: ar.Setup, plans: dict[str, dict], published: 
         n, signed[0] = signed[0], signed[0] + 1
         salt = _seeded(b"lab-n2/salt_c/" + n.to_bytes(8, "big"), CT.SALT_BYTES)
         digest = CT.certificate_digest(salt, head.digest())
-        message = CT.certificate_message(public.key_id, session, head.link, head.direction, head.window, digest)
+        message = CT.certificate_message(public.key_id, session, CT.Role.RECORD, head.link, head.direction, head.window,
+                                         digest)
         signature = lms.sign_at(key, n, message).encode()
         return CT.CertifiedRecord(head, salt, CT.Certificate(public.key_id, head.link, head.direction, head.window,
                                                              digest, signature))
