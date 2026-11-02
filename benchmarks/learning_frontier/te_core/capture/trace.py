@@ -156,7 +156,7 @@ def _user_frame(tb) -> str | None:
     best = None
     for fs in traceback.extract_tb(tb):
         f = os.path.abspath(fs.filename)
-        if f.startswith(_TORCH_DIR) or f.startswith(_HERE) or "contextlib" in f:
+        if f.startswith(_TORCH_DIR) or os.path.dirname(f) == _HERE or "contextlib" in f:
             continue
         best = fs
     if best is None:
