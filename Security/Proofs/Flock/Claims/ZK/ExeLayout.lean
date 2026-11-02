@@ -372,6 +372,10 @@ def seenOf {N : Type} (ρ : N × (Fin Claims.Flock.zkTableCap → ExeCell)) :
     N × (Fin Claims.Flock.zkTableCap → ExeSeen) :=
   (ρ.1, fun i => exeSeen (ρ.2 i))
 
+theorem seenOf_surjective {N : Type} : Function.Surjective (seenOf (N := N)) := fun s =>
+  ⟨(s.1, fun i => (((s.2 i).1, (s.2 i).2.1, Classical.arbitrary _), ((s.2 i).2.2, Classical.arbitrary _),
+    Classical.arbitrary _)), rfl⟩
+
 /-! ## Round `0` at the executable's layout -/
 
 theorem saltBytes_size (y : ZkView.Salt) : (ZkView.saltBytes y).size = 192 := by

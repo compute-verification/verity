@@ -687,6 +687,17 @@ theorem Blind.eq_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd :
   refine hb x w ρ (σ (π ρ)) h _ s (hσ _).symm ?_
   simp only [List.map_map, Function.comp_def, hε]
 
+/-- **Every pad-blind worker is one the server runs** wherever every part is some tape's. -/
+theorem Blind.exists_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd : Msg → C} {wk : S.Worker}
+    (hb : S.Blind π rd wk) (hπ : Function.Surjective π) : ∃ bw : S.BWorker Rw C, S.lift π rd bw = wk := by
+  refine ⟨fun x w r as s => wk x w (Function.surjInv hπ r) (as.map fun a => (([] : Msg), Function.invFun rd a)) s, ?_⟩
+  funext x w ρ h s
+  show wk x w (Function.surjInv hπ (π ρ)) ((h.map fun m => rd m.2).map fun a => (([] : Msg), Function.invFun rd a)) s =
+    wk x w ρ h s
+  refine hb x w _ ρ _ h s (Function.surjInv_eq hπ (π ρ)) ?_
+  simp only [List.map_map, Function.comp_def]
+  exact List.map_congr_left fun m _ => Function.invFun_eq ⟨m.2, rfl⟩
+
 /-- **The values the server's reference reads never read its draws**: at a pad-blind worker, `srcOf` at round `j` is
 the worker's value from `x`, `w`, `π ρ` and the answers alone. -/
 theorem srcOf_lift {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) (x : Msg)
