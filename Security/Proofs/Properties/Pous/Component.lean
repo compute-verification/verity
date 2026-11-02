@@ -74,27 +74,35 @@ private theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fro
 private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canonicalJson b = .ok j) :
     ∃ s, String.fromUTF8? b = some s ∧ Flock.canon j = .ok s := by
   unfold Core.canonicalJson at h
-  cases ha : b.data.all (· < 0x7f)
-  case false =>
-    simp only [ha] at h
-    simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-  simp only [ha] at h
   cases hs : String.fromUTF8? b with
-  | none => simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+  | none =>
+    simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · cases h
+    · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
     cases hp : Lean.Json.parse s with
-    | error e => simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    | error e =>
+      simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+      split at h <;> cases h
     | ok j0 =>
       cases hc : Flock.canon j0 with
-      | error e => simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+      | error e =>
+        simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+        split at h
+        · cases h
+        · simp [throw, throwThe, MonadExceptOf.throw] at h
       | ok s' =>
         by_cases hne : s' = s
         · subst hne
           simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
-          subst h
-          exact hc
+          split at h
+          · cases h
+            exact hc
+          · simp [throw, throwThe, MonadExceptOf.throw] at h
         · simp [hs, hp, hc, hne, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+          split at h <;> cases h
 
 /-- What `exactly` accepts is in the form its encoder writes: the two have one canonical text. -/
 private theorem exactly_ok {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
@@ -902,7 +910,8 @@ private def toyRound : MemoryChallenger.Round := ⟨0, 0, 0, 0, blockDigest toyB
 private def toyOpenings : Array CoinOpening := #[toyCoins.opening 0]
 private def toySigned (pk sig : ByteArray) : SignedSession :=
   ⟨toySessionCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
-private def toySession (pk sig : ByteArray) : Run.Session := ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
+private def toySession (pk sig : ByteArray) : Run.ChallengerRecord :=
+  ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
 
 /-- `verdict`'s reasons before the rounds. -/
 private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment) :
@@ -991,7 +1000,7 @@ private theorem verdict_toy (pk sig m : ByteArray)
   exact rtail_toy
 
 private theorem checkAt_of (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray)
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray)
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord) (sid : ByteArray)
     (h1 : (pub.blocks == pt.params.blocks) = true) (h2 : (pub.salt.size == Run.SALT) = true)
     (h3 : (digests.size == pt.params.blocks * Merkle.DIGEST) = true)
     (h4 : (Merkle.root (Run.rowLeaves pt.params pub.salt digests) == some pub.root) = true)

@@ -364,12 +364,25 @@ theorem messageInput_ok {k s : ByteArray} {l : String} {d : Direction} {w : Int}
 theorem value_inj {d d' : Direction} (h : d.value.toUTF8 = d'.value.toUTF8) : d = d' := by
   cases d <;> cases d' <;> first | rfl | (exfalso; revert h; decide)
 
-/-- A certificate message's input determines its key identifier, certifier session, link (of fewer than `2^16` bytes, as
-every encodable head's is), direction, window and digest. -/
+/-- A certificate message's input is its fixed-width fields, the tag, and the link and direction, each once. -/
+theorem messageInput_size {k s : ByteArray} {l : String} {d : Direction} {w : Int} {g x : ByteArray}
+    (h : messageInput k s l d w g = .ok x) :
+    x.size = messageTag.toUTF8.size + l.toUTF8.size + d.value.toUTF8.size + 168 := by
+  obtain ⟨hg, hs, hk, wb, hwb, rfl⟩ := messageInput_ok h
+  rw [← bs_length]
+  simp only [bs_append, field_bs, List.length_append, bs_length, be64_size, uBE_size hwb, hg, hs, hk]
+  omega
+
+/-- A certificate message's input determines its key identifier, certifier session, link, direction, window and digest,
+where one of the two links has fewer than `2^16` bytes, as every encodable head's does: the input's length bounds the
+other's. -/
 theorem messageInput_inj {k k' s s' : ByteArray} {l l' : String} {d d' : Direction} {w w' : Int}
     {g g' x : ByteArray} (h : messageInput k s l d w g = .ok x) (h' : messageInput k' s' l' d' w' g' = .ok x)
-    (hl : l.toUTF8.size < 2 ^ 16) (hl' : l'.toUTF8.size < 2 ^ 16) :
+    (hl : l.toUTF8.size < 2 ^ 16) :
     k = k' ∧ s = s' ∧ l = l' ∧ d = d' ∧ w = w' ∧ g = g' := by
+  have hx := (messageInput_size h).symm.trans (messageInput_size h')
+  have hdv : d.value.toUTF8.size ≤ 7 := by cases d <;> decide
+  have hl' : l'.toUTF8.size < 2 ^ 64 := by omega
   obtain ⟨hg, hs, hk, wb, hwb, rfl⟩ := messageInput_ok h
   obtain ⟨hg', hs', hk', wb', hwb', hx⟩ := messageInput_ok h'
   have e := congrArg bs hx

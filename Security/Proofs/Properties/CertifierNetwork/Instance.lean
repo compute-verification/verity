@@ -70,7 +70,7 @@ def session : ByteArray := ⟨Array.replicate 32 0⟩
 
 def issuer : Issuer := { key := toyKey, session }
 
-def record : Record := ⟨"responses", 0, #[#[none]], .complete⟩
+def record : BlockGrid := ⟨"responses", 0, #[#[none]], .complete⟩
 
 def digest : ByteArray := ⟨Array.replicate 64 0⟩
 

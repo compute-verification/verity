@@ -38,8 +38,9 @@ driver's docstring says what it runs, what it publishes and what its verifier re
   endpoint's Commit windows as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
   check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` decides a
   period by `network-period check` and writes its accepted answer as the block record's certifier entry.
-  `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
-  runbook (below).
+  `certifier_case.py` makes a run's period case for ``verity/certifier/v0``, in the clock form or the rows form,
+  which `block_certifier.py` hands ``network-period check``. `demo_chain.sh` runs the one-H200 demo by the
+  certifier-only path, and `served_session.py` is the served session's runbook (below).
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - `tool.py`: the harness's store declarations.
