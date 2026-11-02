@@ -1646,9 +1646,9 @@ theorem readsOf_spec (P : Prog) (memo : Array Desc.Summary) (reads : Array (Arra
       (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = false)
     (fun k acc y hy => by
       obtain ⟨rs, hrs, hy⟩ := Walk.except_bind_ok hy
-      by_cases hb : (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = true
-      · rw [if_pos hb] at hy; exact absurd hy (by intro h; cases h)
-      · rw [if_neg hb] at hy
+      split at hy
+      · exact absurd hy (by intro h; cases h)
+      · rename_i hb
         simp only [pure, Except.pure, Except.ok.injEq] at hy
         exact ⟨rs, ⟨hrs, by simpa using hb⟩, hy.symm⟩) _ #[] r hr
   have hn : ((P.defs[P.root]!).body.nodes.size - 0 + 1 - 1) / 1 = nodeCount P := by

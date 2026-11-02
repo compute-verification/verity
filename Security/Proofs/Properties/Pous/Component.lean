@@ -7,6 +7,12 @@ public import Proofs.Properties.CertifierDevice.Lms
 public import Mathlib.Tactic.SplitIfs
 public import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
+import all Init.Data.String.Defs
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Control
 
 /-!
 # Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)

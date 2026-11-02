@@ -8,6 +8,7 @@ public import Proofs.Properties.Pous.WipeSigned.Run
 public import Proofs.Properties.Pous.MemoryChallenger
 public import Proofs.Properties.CertifierDevice.Lms
 public import Mathlib.Tactic.SplitIfs
+import all Init.Data.String.Defs
 
 /-!
 # Proof of `WipeSigned` (`Properties.Pous.WipeSigned`)
@@ -37,6 +38,8 @@ conclusion.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.Properties.SecurityProofs
 

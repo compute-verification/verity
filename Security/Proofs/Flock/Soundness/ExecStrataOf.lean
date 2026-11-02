@@ -20,6 +20,8 @@ on the statement's form: they follow from the verifier accepting.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockSoundness.Audit
 

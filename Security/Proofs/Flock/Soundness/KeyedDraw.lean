@@ -5,6 +5,7 @@ public import Randomness
 public import Proofs.Flock.Soundness.PlanDraw
 public import Proofs.Flock.Soundness.Audit.Window
 public import Proofs.Flock.Soundness.Audit.RegDraw
+import all Init.Data.String.Defs
 
 /-!
 # The PoUW circuit's keyed draw escapes no more often than the model's

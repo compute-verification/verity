@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.ZkDecode
 public import Proofs.Flock.Claims.DecodeFamily
 public import Proofs.Flock.Soundness.Instance
 public import Flock.Zk
+import all Init.Data.Array.Basic
 
 /-!
 # The deployed masked level-0 code, its decoder and read step

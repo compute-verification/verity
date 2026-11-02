@@ -10,6 +10,7 @@ module
 
 public import Flock.HmRow
 public import Proofs.Flock.Soundness.Discharge.Hm.Commit
+import all Init.Data.String.Defs
 
 @[expose] public section
 

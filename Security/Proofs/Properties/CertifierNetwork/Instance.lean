@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Properties.CertifierNetwork.Accepted
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.String.Defs
 
 /-!
 # The completeness statements' honest cases, instantiated
