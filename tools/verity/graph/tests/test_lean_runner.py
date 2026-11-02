@@ -1,6 +1,7 @@
 """The Lean runners on real Lean, in a toy checkout the Lean families list and the reference executor runs: the auditor's
-control package (`tools/verity/lean/tests/fixtures/control`), a package under the module system and one that doesn't
-compile. Each module compiles from its reads alone to Lake's bytes and gets its replay and its axioms; a lock passes, is
+control package (`tools/verity/lean/tests/fixtures/control`), a package under the module system, one with a `sorry` and
+an axiom in private proofs, and one that doesn't compile. Each module compiles from its reads alone to Lake's bytes and
+gets its replay and its declarations' axiom sets, an importer's taken through its import's record; a lock passes, is
 stale with the command that regenerates it, or names a root no task builds. Skipped where the fixture's toolchain isn't
 installed. Slow (`lean` for each module, `Facts.lean` compiled for each `check.py`): only real Lean shows that the setup
 file, the import artifacts and a build made of the reads are what the toolchain and the audit take."""
@@ -8,7 +9,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -42,11 +42,18 @@ MS = {
     "D.lean": "module\nimport B\ntheorem d : True := trivial\n",
     "F.lean": "import B\ntheorem f : b = b := rfl\n",
     "G.lean": "module\nimport all A\ntheorem g : privA = 2 := rfl\n",
-    "H.lean": "module\npublic import A\ntheorem h : a = 1 := by sorry\naxiom hidden : a = 1\npublic theorem h2 : a = 1 := hidden\n",
-    "Ms.lean": "import C\nimport D\nimport F\nimport G\nimport H\n",
+    "Ms.lean": "import C\nimport D\nimport F\nimport G\n",
     "lakefile.toml": 'name = "ms"\ndefaultTargets = ["Ms"]\n\n[[lean_lib]]\nname = "Ms"\n'
-                     'roots = ["A", "B", "C", "D", "F", "G", "H", "Ms"]\n',
+                     'roots = ["A", "B", "C", "D", "F", "G", "Ms"]\n',
     "lake-manifest.json": manifest("ms"),
+}
+#: a `sorry` and an axiom in proofs only `A`'s private part holds, and `B`, whose public theorem rests on them
+AX = {
+    "A.lean": "module\npublic def a : Nat := 1\ntheorem p : a = 1 := by sorry\naxiom hidden : a = 1\n"
+              "public theorem h2 : a = 1 := hidden\npublic theorem h3 : a = 1 := by sorry\n",
+    "B.lean": "module\npublic import A\npublic theorem b : a = 1 ∧ a = 1 := ⟨h2, h3⟩\n",
+    "lakefile.toml": 'name = "ax"\ndefaultTargets = ["Ax"]\n\n[[lean_lib]]\nname = "Ax"\nroots = ["A", "B"]\n',
+    "lake-manifest.json": manifest("ax"),
 }
 BAD = {"lakefile.toml": 'name = "bad"\ndefaultTargets = ["Bad"]\n\n[[lean_lib]]\nname = "Bad"\n',
        "Bad.lean": "theorem bad : 1 = 2 := rfl\n", "lake-manifest.json": manifest("bad")}
@@ -54,24 +61,24 @@ BAD = {"lakefile.toml": 'name = "bad"\ndefaultTargets = ["Bad"]\n\n[[lean_lib]]\
 
 @pytest.fixture(scope="module")
 def lean_env(tmp_path_factory) -> Path:
-    """The worker's `lean` env, shared by this file's tests, so `Replay.lean` and `Facts.lean` compile once."""
-    return tmp_path_factory.mktemp("lean-env")
+    """The check's cache, holding the worker's `lean` env, shared by this file's tests, so `Replay.lean` compiles once."""
+    return tmp_path_factory.mktemp("check-cache")
 
 
 @pytest.fixture
 def tree(tmp_path: Path, lean_env: Path, monkeypatch) -> Path:
-    """A checkout of the control package (`ctl/`), `MS` (`ms/`), `BAD` (`bad/`), the auditor and the Lean runners, which
-    the runners and the auditor read as the repository."""
+    """A checkout of the control package (`ctl/`), `MS` (`ms/`), `AX` (`ax/`), `BAD` (`bad/`), the auditor and the Lean
+    runners, which the runners and the auditor read as the repository."""
     tracked = graph.tracked(ROOT)
     files = {f: (ROOT / f).read_text() for f in (*la.tool_files(tracked), *graph.runner_sources("lean-module"),
                                                  *graph.runner_sources("lean-lock"))}
     files |= {"ctl/" + f[len(CONTROL) + 1:]: (ROOT / f).read_text() for f in tracked if f.startswith(CONTROL + "/")}
-    for pkg, fs in (("ms", MS), ("bad", BAD)):
+    for pkg, fs in (("ms", MS), ("ax", AX), ("bad", BAD)):
         files |= {f"{pkg}/{f}": text for f, text in fs.items()} | {f"{pkg}/lean-toolchain": TOOLCHAIN + "\n"}
     root = toy_tree(tmp_path / "tree", (ROOT / graph.SPEC).read_text(), files)
     for m in (module_runner, lock_runner, la):
         monkeypatch.setattr(m, "ROOT", root)
-    monkeypatch.setenv("VERITY_LEAN_ENV", str(lean_env))
+    monkeypatch.setenv("CHECK_CACHE", str(lean_env))
     return root
 
 
@@ -94,8 +101,7 @@ def lake(root: Path, pkg: str, tmp_path: Path) -> Path:
     """A copy of ``pkg`` that `lake build` built."""
     d = tmp_path / "lake" / pkg
     shutil.copytree(root / pkg, d)
-    p = subprocess.run([str(BIN / "lake"), "build"], cwd=d, capture_output=True, text=True,
-                       env={**os.environ, "PATH": f"{BIN}{os.pathsep}{os.environ['PATH']}"})
+    p = subprocess.run([str(BIN / "lake"), "build"], cwd=d, capture_output=True, text=True)
     assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
     return d
 
@@ -142,9 +148,31 @@ def test_a_module_system_package_compiles_part_by_part_to_lake_s_bytes(tree, tmp
             if o["name"] != "axioms":
                 assert artifact(tmp_path / "x", got[t["id"]], o["name"]) == lib(built, o["path"]).read_bytes(), \
                     (t["id"], o["name"])
-    h = json.loads(artifact(tmp_path / "x", got["lean-module:ms/H.lean"], "axioms"))["axioms"]
-    assert h["_private.H.0.h"] == ["sorryAx"], "a private theorem's sorry is in its axioms"
-    assert h["h2"] == ["_private.H.0.hidden"], "so is an axiom only a public theorem's unexposed proof uses"
+
+
+def test_axioms_in_private_proofs_fail_their_module_and_reach_an_importer_through_its_record(tree, tmp_path):
+    doc = only(graph.listing(tree, {"lean-module"}, listers=LISTERS), "lean-module:ax/")
+    a, b = (next(t for t in doc["tasks"] if t["id"] == f"lean-module:ax/{f}.lean") for f in "AB")
+    res = runners.execute(a, doc, tmp_path / "a")
+    assert res["status"] == "fail" and res["detail"]["axioms"] == {
+        "_private.A.0.hidden": ["_private.A.0.hidden", "h2"], "sorryAx": ["_private.A.0.p", "h3"]}, res["detail"]
+
+    def importer(reads: tuple[str, ...], name: str) -> dict:
+        """B's task reading ``reads`` of A's outputs alone (A's check skipped), and its record."""
+        work = tmp_path / name
+        for o in a["outputs"]:
+            if o["name"] in reads:
+                (work / o["path"]).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(tmp_path / "a" / o["path"], work / o["path"])
+        res = runners.execute(b | {"reads": [{"task": a["id"], "output": o} for o in reads]}, doc, work)
+        out = next(o["path"] for o in b["outputs"] if o["name"] == "axioms")
+        assert res["status"] == "fail" and res["detail"]["imports"] == 1, res
+        return json.loads((work / out).read_text())["axioms"]
+
+    assert importer(("olean", "axioms"), "public") == {"b": ["_private.A.0.hidden", "sorryAx"]}, \
+        "A's public part and its record alone: B's theorem carries the axioms A's private proofs use"
+    assert importer(("olean",), "unrecorded") == {"b": ["a", "h2", "h3"]}, \
+        "without A's record, what B uses of A's public part counts as axioms: the task fails rather than miss one"
 
 
 def test_a_module_that_does_not_compile_fails_with_lean_s_errors(tree, tmp_path):

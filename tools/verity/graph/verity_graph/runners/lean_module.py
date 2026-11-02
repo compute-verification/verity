@@ -1,25 +1,32 @@
 """lean-module's runner: compile one module with `lean` as Lake does (`lean FILE -o -i --setup --json`), from its imports'
-artifacts in the work directory alone, then kernel-replay its declarations (`tools/verity/lean/Replay.lean`) and write
-the axioms of each that uses any (`tools/verity/lean/Facts.lean`), both compiled once per toolchain and source.
-Its files are Lake's bytes but for one thing: `FILE` is the source's path in the tree, where Lake gives an absolute one
-that a module's `.olean` keeps with its warnings, so the runner's are the same on every worker.
+artifacts in the work directory alone, then kernel-replay its declarations and find the axioms each uses
+(`tools/verity/lean/Replay.lean`, compiled once per toolchain and source). Its files are Lake's bytes but for one thing:
+`FILE` is the source's path in the tree, where Lake gives an absolute one that a module's `.olean` keeps with its warnings,
+so the runner's are the same on every worker.
 
 A task gives (`families/lean_module.py`): its source (the id after `lean-module:`), its package's lakefile among its
 inputs, `vars` `module`, `package` and `options` (the module's setup file, as Lake writes it), and outputs `olean` and
-`ilean` at the module's path under one directory (`<dir>/<A>/<B>.olean` for `A.B`) and `axioms`. Its reads are the
-`.olean` files of that directory: each module there goes into the setup file's `importArts` with the parts the module
-system writes beside it that are there too (`.olean.server`, `.olean.private`, `.ir.sig`, `.ir`; `lean` writes them for a
-`module` file, so a task of one declares them as outputs). A legacy importer needs every part of each `module` it imports,
-as Lake gives them; the replay and the axioms walk import the closure from that directory at the private level, so they
-need every part of each `module` too.
+`ilean` at the module's path under one directory (`<dir>/<A>/<B>.olean` for `A.B`) and `axioms`, its declarations'
+axiom sets, under another (`<records>/<A>/<B>.json`). Its reads are `.olean` files of the first, each with the parts the
+module system writes beside it that are there too (`.olean.server`, `.olean.private`, `.ir.sig`, `.ir`; `lean` writes them
+for a `module` file, so a task of one declares them as outputs), and may be records in the second. A legacy importer
+needs every part of each `module` it imports, as Lake gives them, and `import all` the private part of the module it
+names; a `module` file's other imports serve with their public part.
+
+The replay checks every declaration of the module's own parts, private ones and proof bodies included, in an environment
+of its imports as their parts there have them (each import's own task replayed it) and of the env's modules (the
+toolchain's and the fetched packages') at the private level. A declaration's axiom set takes an imported declaration's
+from its module's record where the task read one, and otherwise walks its body as the parts have it: a theorem whose proof
+only an absent private part holds counts as an axiom, so the task fails rather than miss one. A declaration that uses an
+axiom outside `STANDARD` fails the task.
 
 The `lean` env on a worker: the toolchain of the package's `lean-toolchain` (elan's), and for a package that fetches
 packages (Mathlib, ArkLib and the rest) its `.lake/packages` at its manifest and toolchain (`lean_audit.deps_key`), made once
-per worker under `lean-env/` in the check's cache (`$VERITY_LEAN_ENV` instead): a copy of the check's warm dependencies
-(`lean_audit.WarmDeps`) when the worker has them, else what `setup.sh` makes in the package (the pinned bundle and
-Mathlib's cache). Only the compile runs the module's code, inside `sandbox.sh` where the worker has it. An env that can't
-be made, a part of it a compile misses and a crashed tool are errors; a module that doesn't compile, a declaration the
-kernel rejects and a timeout are fails."""
+per worker under `lean-env/` in the check's cache: a copy of the check's warm dependencies (`lean_audit.WarmDeps`) when the
+worker has them, else what `setup.sh` makes in the package (the pinned bundle and Mathlib's cache). Only the compile runs
+the module's code, inside `sandbox.sh` where the worker has it. An env that can't be made, a part of it a compile misses
+and a crashed tool are errors; a module that doesn't compile, a declaration the kernel rejects or whose axioms are outside
+`STANDARD`, and a timeout are fails."""
 from __future__ import annotations
 
 import fcntl
@@ -41,7 +48,9 @@ from . import Timeout, call
 
 LEAN = ROOT / "tools" / "verity" / "lean"
 #: the files of the Lean tool a task runs: inputs of every lean-module task
-TOOLS = tuple(f"tools/verity/lean/{f}" for f in ("Facts.lean", "Replay.lean", "sandbox.sh"))
+TOOLS = tuple(f"tools/verity/lean/{f}" for f in ("Replay.lean", "sandbox.sh"))
+#: the axioms a declaration may use: the Lean check's (check.py's `STANDARD`, which no lock overrides)
+STANDARD = ("Classical.choice", "Quot.sound", "propext")
 #: sandbox.sh's invocation (its header), probed as check.py's `sandboxed()` probes it: check.py isn't among a task's inputs,
 #: so the runner doesn't load it
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
@@ -53,7 +62,7 @@ class EnvError(Exception):
 
 
 def env_dir() -> Path:
-    return Path(os.environ.get("VERITY_LEAN_ENV") or la.COMMON.cache_dir() / "lean-env")
+    return la.COMMON.cache_dir() / "lean-env"
 
 
 @contextmanager
@@ -212,6 +221,14 @@ def unbuilt(errs: list[str], deps: Path | None, names: list[str]) -> bool:
     return False
 
 
+def under(path: Path, mod: str, ext: str) -> Path:
+    """The directory ``path`` holds ``mod``'s path with ``ext`` under (`<dir>/<A>/<B><ext>` for `A.B`)."""
+    rel = "/".join(mod.split(".")) + ext
+    if not path.as_posix().endswith("/" + rel):
+        raise ValueError(f"output {path} isn't at {mod}'s path {rel} in a directory")
+    return Path(path.as_posix()[: -len(rel) - 1])
+
+
 def run(task: dict, work: Path) -> dict:
     v = task["vars"]
     mod, src = v["module"], task["id"].partition(":")[2]
@@ -219,16 +236,13 @@ def run(task: dict, work: Path) -> dict:
     pkg = (ROOT / lakefile).parent
     out = {o["name"]: work / o["path"] for o in task["outputs"]}
     olean, ilean, axioms = out["olean"], out["ilean"], out["axioms"]
-    rel = "/".join(mod.split(".")) + ".olean"
-    if not olean.as_posix().endswith("/" + rel):
-        raise ValueError(f"output olean {olean} isn't at {mod}'s path {rel} in a directory")
-    lib = Path(olean.as_posix()[: -len(rel) - 1])
+    lib, records = under(olean, mod, ".olean"), under(axioms, mod, ".json")
     steps: dict[str, float] = {}
     t = time.monotonic()
     try:
         tc = toolchain(pkg, work)
         deps = packages(pkg, work)
-        replay, facts = program("Replay", tc, work), program("Facts", tc, work)
+        replay = program("Replay", tc, work)
     except (EnvError, Timeout) as e:
         return {"status": "error", "detail": {"error": f"the lean env: {type(e).__name__}: {e}"}}
     dep_libs = [str(deps / n / ".lake" / "build" / "lib" / "lean") for n in fetched(pkg)] if deps else []
@@ -258,25 +272,26 @@ def run(task: dict, work: Path) -> dict:
 
     env = {**os.environ, "LEAN_PATH": os.pathsep.join([str(lib), *dep_libs]), "LEAN_SYSROOT": str(tc),
            "LEAN_NUM_THREADS": threads}
+    imports = sorted(setup["importArts"])
     t = time.monotonic()
-    rc = call([str(replay), str(work / "replay.json"), mod], work, work, env)
+    rc = call([str(replay), str(work / "replay.json"), "--records", str(records), mod,
+               *(["--closure-reused", *imports] if imports else [])], work, work, env)
     steps["replay"] = round(time.monotonic() - t, 3)
     got = json.loads((work / "replay.json").read_text()) if (work / "replay.json").is_file() else {}
     if rc == 1 and got.get("rejected"):
         return {"status": "fail", "detail": detail | {"error": "the kernel rejected declarations", "rejected": got["rejected"]}}
-    if rc or "replayed" not in got:
+    if rc or not isinstance(got.get("declarations"), dict):
         return {"status": "error", "detail": detail | {"error": f"the replay exited {rc} without a verdict"}}
-    detail["replayed"] = got["replayed"]
-
-    config = {"roots": [mod], "meaning": [mod], "allowed": [], "pins": [], "spec": [], "premises": [], "assumptions": [],
-              "verifier": {}, "moved": [], "out": str(work / "facts.json"), "canon": str(work / "canon.jsonl")}
-    (work / "facts-config.json").write_text(json.dumps(config))
-    t = time.monotonic()
-    rc = call([str(facts), str(work / "facts-config.json")], work, work, env)
-    steps["axioms"] = round(time.monotonic() - t, 3)
-    if rc or not (work / "facts.json").is_file():
-        return {"status": "error", "detail": detail | {"error": f"Facts.lean exited {rc}"}}
-    found = json.loads((work / "facts.json").read_text())["offenders"]
-    axioms.write_text(json.dumps({"module": mod, "axioms": {o["name"]: sorted(o["axioms"]) for o in found
-                                                             if o["module"] == mod}}, indent=1, sort_keys=True) + "\n")
+    detail |= {"replayed": got["replayed"], "replay_seconds": got.get("seconds")}
+    sets = got["declarations"]
+    axioms.write_text(json.dumps({"module": mod, "axioms": sets}, indent=1, sort_keys=True) + "\n")
+    outside: dict[str, list[str]] = {}
+    for name, used in sorted(sets.items()):
+        for a in used:
+            if a not in STANDARD:
+                outside.setdefault(a, []).append(name)
+    if outside:
+        return {"status": "fail", "detail": detail | {
+            "error": f"declarations use axioms other than {', '.join(STANDARD)}",
+            "axioms": {a: names[:20] for a, names in sorted(outside.items())}}}
     return {"status": "pass", "detail": detail}
