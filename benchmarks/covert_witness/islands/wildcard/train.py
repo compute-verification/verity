@@ -305,7 +305,9 @@ def extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas)
 
 
 def train_kfac(a, net, rec, theta, params, tuned, data):
-    """One damped K-FAC step on each trained matrix from statistics gathered at θ; the gains take the plain gradient."""
+    """`--kfac-rounds` damped K-FAC steps on each trained matrix, each from statistics gathered at the current weights
+    over an equal share of the budget and line-searched; the gains take the plain gradient. Each round but the last ends
+    in a snapshot."""
     mats = [n for n in tuned if params[n].ndim == 2]
     mods = {n: net.inner.get_submodule(n.removesuffix(".weight")) for n in mats}
     stats = {n: {"A": torch.zeros(p.shape[1], p.shape[1], device=prepare.DEVICE),
@@ -321,62 +323,70 @@ def train_kfac(a, net, rec, theta, params, tuned, data):
         inputs[n] = inp[0].detach()
         out.register_hook(lambda g, n=n: grad_hook(g, n))
 
-    handles = [mods[n].register_forward_hook(lambda m, i, o, n=n: fwd_hook(m, i, o, n)) for n in mats]
     trainable = {"full": tuned}
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     moment_flops = sum(2 * tokens * (params[n].shape[0] ** 2 + params[n].shape[1] ** 2) for n in mats)
-    reserve = probe_flops(a, rec, trainable, len(a.etas) + 1)
-    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // (per_step + moment_flops))
+    rounds = a.kfac_rounds
+    reserve = rounds * probe_flops(a, rec, trainable, len(a.etas) + 1)
+    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // (per_step + moment_flops)) // rounds
     if n_steps < 1:
+        raise Skip("wildcard kfac: the budget leaves no accumulation step after the line searches' reserve")
+    steps, snaps, searches = [], [], []
+    print(json.dumps({"steps": n_steps, "rounds": rounds, "tuned": tuned, "flops_per_step": per_step,
+                      "moment_flops": moment_flops}), flush=True)
+    for rnd in range(rounds):
+        for s in stats.values():
+            s["A"].zero_()
+            s["S"].zero_()
+        handles = [mods[n].register_forward_hook(lambda m, i, o, n=n: fwd_hook(m, i, o, n)) for n in mats]
+        for step in range(n_steps):
+            with step_of():
+                rows = data.next(a.batch)
+                for i in range(0, a.batch, a.micro):
+                    x = rows[i: i + a.micro]
+                    loss = loss_of(net, x, len(x) / a.batch)
+                    loss.backward()
+                    for n in mats:
+                        h = inputs.pop(n).reshape(-1, params[n].shape[1]).float()
+                        stats[n]["A"].add_(h.T @ h)
+            steps += [{"op": "train", "tokens": tokens}, {"op": "extra", "flops": moment_flops, "what": "kfac moments"}]
+            if (step + 1) % 50 == 0:
+                print(json.dumps({"round": rnd, "step": step + 1, "loss": float(loss.detach()) * a.batch / len(x)}),
+                      flush=True)
         for h in handles:
             h.remove()
-        raise Skip("wildcard kfac: the budget leaves no accumulation step after the line search's reserve")
-    steps = []
-    print(json.dumps({"steps": n_steps, "tuned": tuned, "flops_per_step": per_step, "moment_flops": moment_flops}),
-          flush=True)
-    for step in range(n_steps):
-        with step_of():
-            rows = data.next(a.batch)
-            for i in range(0, a.batch, a.micro):
-                x = rows[i: i + a.micro]
-                loss = loss_of(net, x, len(x) / a.batch)
-                loss.backward()
-                for n in mats:
-                    h = inputs.pop(n).reshape(-1, params[n].shape[1]).float()
-                    stats[n]["A"].add_(h.T @ h)
-        steps += [{"op": "train", "tokens": tokens}, {"op": "extra", "flops": moment_flops, "what": "kfac moments"}]
-        if (step + 1) % 50 == 0:
-            print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x)}), flush=True)
-    for h in handles:
-        h.remove()
-    ntok = n_steps * tokens
-    direction, inv_flops = {}, 0
-    with torch.no_grad():
-        for n in tuned:
-            g = params[n].grad.float() / max(1, n_steps)
-            if n in stats:
-                A = stats[n]["A"] / ntok
-                S = stats[n]["S"] / max(1, n_steps)
-                A = A + a.damping * A.diagonal().mean() * torch.eye(A.shape[0], device=A.device)
-                S = S + a.damping * S.diagonal().mean() * torch.eye(S.shape[0], device=S.device)
-                d = torch.linalg.solve(S, torch.linalg.solve(A, g.T).T)
-                inv_flops += 2 * (A.shape[0] ** 3 + S.shape[0] ** 3) + 4 * g.numel() * (A.shape[0] + S.shape[0])
-            else:
-                d = g
-            direction[n] = d / (d.pow(2).mean().sqrt() + 1e-30)
-            params[n].grad = None
-    steps.append({"op": "extra", "flops": inv_flops, "what": "kfac solves"})
-    base = {n: params[n].detach().clone() for n in tuned}
+        ntok = n_steps * tokens
+        direction, inv_flops = {}, 0
+        with torch.no_grad():
+            for n in tuned:
+                g = params[n].grad.float() / max(1, n_steps)
+                if n in stats:
+                    A = stats[n]["A"] / ntok
+                    S = stats[n]["S"] / max(1, n_steps)
+                    A = A + a.damping * A.diagonal().mean() * torch.eye(A.shape[0], device=A.device)
+                    S = S + a.damping * S.diagonal().mean() * torch.eye(S.shape[0], device=S.device)
+                    d = torch.linalg.solve(S, torch.linalg.solve(A, g.T).T)
+                    inv_flops += 2 * (A.shape[0] ** 3 + S.shape[0] ** 3) + 4 * g.numel() * (A.shape[0] + S.shape[0])
+                else:
+                    d = g
+                direction[n] = d / (d.pow(2).mean().sqrt() + 1e-30)
+                params[n].grad = None
+        steps.append({"op": "extra", "flops": inv_flops, "what": "kfac solves"})
+        base = {n: params[n].detach().clone() for n in tuned}
 
-    @torch.no_grad()
-    def apply(eta):
-        for n in tuned:
-            params[n].copy_(base[n] - eta * direction[n])
+        @torch.no_grad()
+        def apply(eta):
+            for n in tuned:
+                params[n].copy_(base[n] - eta * direction[n])
 
-    best, results = line_search(a, net, data, steps, apply, [0.0] + a.etas)
-    return (prepare.encode_full(delta_of(params, theta, tuned)), trainable, steps, [],
-            {"steps": n_steps, "line_search": results, "eta": best})
+        best, results = line_search(a, net, data, steps, apply, [0.0] + a.etas)
+        searches.append({"eta": best, "line_search": results})
+        if rnd < rounds - 1:
+            with step_of():
+                snaps.append((prepare.encode_full(delta_of(params, theta, tuned)), len(steps)))
+    return (prepare.encode_full(delta_of(params, theta, tuned)), trainable, steps, snaps,
+            {"steps": n_steps * rounds, "rounds": searches})
 
 
 def train_scale(a, net, rec, theta, params, tuned, data):
@@ -638,6 +648,7 @@ def main() -> int:
     ap.add_argument("--decay-frac", type=float, default=0.2)
     ap.add_argument("--ema", type=float, default=0.0, help="snapshot and submit an EMA of the weights (decay per step)")
     ap.add_argument("--damping", type=float, default=1e-2)
+    ap.add_argument("--kfac-rounds", type=int, default=1, help="kfac: statistics-then-step rounds over equal budget shares")
     ap.add_argument("--etas", default="1e-4,3e-4,1e-3,3e-3,1e-2", help="kfac: per-element RMS step sizes searched")
     ap.add_argument("--extrapolate", default="", help="adamw/muon: α values searched for θ + α Δ after training (1 is kept)")
     ap.add_argument("--scales", default="0.9,0.95,1.05,1.1,1.2", help="scale: α values searched (1 is kept)")
