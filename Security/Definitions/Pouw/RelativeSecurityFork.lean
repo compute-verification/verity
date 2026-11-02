@@ -16,7 +16,8 @@ collision probability:
   among the verifier's SHA-512 inputs in those runs. At `k = 1` it is the binding finder; at C-Flock's `k` reruns
   it is the link finder's form (two openings of one committed leaf, both checked by the verifier);
 * an adversary's error at its finders' collision probabilities (`breakPr`);
-* the machine of functions at no cost (`funMachine`), where the nontrivial lemma's adversary lives.
+* the machine of functions at no cost (`funMachine`), where the nontrivial lemma's adversary lives, and the service
+  whose verifier accepts everything (`acceptAllService`), the nontrivial lemma's verifier.
 
 The finder's cost is the verifier's SHA-512 calls in its runs plus each run of the adversary at its worst-case time
 (`Machine.time`), so `ecr/sha-512` (`Claims.ExpectedCR`), applied to it outside the floors, reads a cost no choice of
@@ -112,5 +113,17 @@ def funMachine : Machine where
   le_time_pair_right _ _ := le_rfl
   time_fst := rfl
   time_snd := rfl
+
+/-- **The service whose verifier accepts everything**, on one round of a fair coin (`Paths Bool 1`): one commitment,
+one answer, every answer accepted at every seed, and nothing hashed. The nontrivial lemma's verifier. -/
+def acceptAllService : HashedService where
+  Seed := Paths Bool 1
+  lam := 1
+  card_seed := rfl
+  Com := Unit
+  Ans := Unit
+  Coins := Unit
+  verify _ _ _ := true
+  hashes _ _ _ := []
 
 end Pouw.RelativeSecurity

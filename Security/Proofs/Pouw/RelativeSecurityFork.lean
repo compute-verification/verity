@@ -13,7 +13,9 @@ each capped at 1), and the reading of that error through `ecr/sha-512` at budget
 It also proves the honest lemmas of the six floors per prover, on one round over one cell-block in the machine of
 functions at no cost: the honest run's one product slot computes the cell-block's target, so every error table is
 zero, the game accepts every play and no round breaks; and their nontrivial lemma, a constant adversary against a
-verifier that accepts everything.
+verifier that accepts everything. Each is proved in general (`StagedFloorPerProverHonest_at` and its siblings at every
+`sha` and `kz`, `floorPerProver_acceptAll` at every such verifier) and stated at one instance it builds, the form the
+lock's `witnesses` read.
 -/
 
 namespace Pouw.RelativeSecurity
@@ -347,8 +349,15 @@ theorem card_ojSpot : Fintype.card (Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) 
 
 end Honest
 
-theorem StagedFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloorPerProverHonest := by
-  intro sha kz
+/-- `StagedFloorPerProverHonest` at every `sha` and `kz`: the honest verifier hashes nothing. -/
+theorem StagedFloorPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
+    ∃ (S : HashedService) (e : S.Seed ≃ Paths (DStage 1 1 1 7 1 1) 1)
+      (run : RunMap funMachine S.toService 1 1 1 1 7 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
+      ServiceSoundStagedPerProver funMachine S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+        0 0 0 0 ∧
+      KScopeAffine funMachine S.toService run wRe ∧ KScopeOneSided funMachine S.toService run wRe toF2 0 ∧
+      ChargeVF3j16 funMachine S.toService run e 1 1 ∧ (∀ σ, S.verify c σ a = true) ∧
+      ∃ σ, S.verify c σ a' = false := by
   let S := honestService (Paths (DStage 1 1 1 7 1 1) 1) 8 card_dStage
   refine ⟨S, Equiv.refl _, fun _ _ _ _ => dStagedRun, (), true, false, ?_, ?_, ?_, ?_, honestService_accepts _ _ _⟩
   · intro Ω' _ M _ r
@@ -367,8 +376,20 @@ theorem StagedFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloo
     simp [dStagedRun, oneProd, Machine.charge, funMachine]
     exact Finset.card_le_one.mpr fun a _ b _ => Subsingleton.elim a b
 
-theorem OverlapFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFloorPerProverHonest := by
-  intro sha kz
+theorem StagedFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloorPerProverHonest :=
+  StagedFloorPerProverHonest_at id 1
+
+/-- `OverlapFloorPerProverHonest` at every `sha` and `kz`. -/
+theorem OverlapFloorPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
+    ∃ (S : HashedService) (e : S.Seed ≃ Paths (OSpot 1 (fun _ => 1) 1 7 (fun _ => 1) fun _ => 1) 1)
+      (run : ORunMap funMachine S.toService 1 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
+      (c : S.Com) (a a' : S.Ans),
+      ServiceSoundOverlapPerProver funMachine S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+        0 0 0 0 ∧
+      KScopeOverlapAffine funMachine S.toService run wRe ∧
+      KScopeOverlapOneSided funMachine S.toService run wRe toF2 0 ∧
+      ChargeVF3j16Overlap funMachine S.toService run e 1 1 ∧ (∀ σ, S.verify c σ a = true) ∧
+      ∃ σ, S.verify c σ a' = false := by
   let S := honestService (Paths (OSpot 1 (fun _ => 1) 1 7 (fun _ => 1) fun _ => 1) 1) 8 card_oSpot
   refine ⟨S, Equiv.refl _, fun _ _ _ _ => oRun, (), true, false, ?_, ?_, ?_, ?_, honestService_accepts _ _ _⟩
   · intro Ω' _ M _ r
@@ -394,8 +415,17 @@ theorem OverlapFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFl
     simp [oRun, oneProd, Machine.charge, funMachine]
     exact Finset.card_le_one.mpr fun a _ b _ => Subsingleton.elim a b
 
-theorem StagedFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloorJ10RPerProverHonest := by
-  intro sha kz
+theorem OverlapFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFloorPerProverHonest :=
+  OverlapFloorPerProverHonest_at id 1
+
+/-- `StagedFloorJ10RPerProverHonest` at every `sha` and `kz`. -/
+theorem StagedFloorJ10RPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
+    ∃ (S : HashedService) (e : S.Seed ≃ Paths (JStage 1 1 1 1 1) 1)
+      (run : JRunMap funMachine S.toService 1 1 1 1 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
+      ServiceSoundStagedJ10RPerProver funMachine S.toService run e sha (forkFinders S e sha 1)
+        (forkFinders S e sha kz) 0 0 0 0 ∧
+      KScopeOneSidedJ10R funMachine S.toService run ∧ ChargeVF3j16J10R funMachine S.toService run e 1 1 ∧
+      (∀ σ, S.verify c σ a = true) ∧ ∃ σ, S.verify c σ a' = false := by
   let S := honestService (Paths (JStage 1 1 1 1 1) 1) 10 card_jStage
   refine ⟨S, Equiv.refl _, fun _ _ _ _ => jStagedRun, (), true, false, ?_, ?_, ?_, honestService_accepts _ _ _⟩
   · intro Ω' _ M _ r
@@ -410,8 +440,19 @@ theorem StagedFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.Staged
     simp [jStagedRun, oneProd, Machine.charge, funMachine]
     exact Finset.card_le_one.mpr fun a _ b _ => Subsingleton.elim a b
 
-theorem OverlapFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFloorJ10RPerProverHonest := by
-  intro sha kz
+theorem StagedFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloorJ10RPerProverHonest :=
+  StagedFloorJ10RPerProverHonest_at id 1
+
+/-- `OverlapFloorJ10RPerProverHonest` at every `sha` and `kz`. -/
+theorem OverlapFloorJ10RPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
+    ∃ (S : HashedService) (e : S.Seed ≃ Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) fun _ => 1) 1)
+      (run : JORunMap funMachine S.toService 1 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
+      (c : S.Com) (a a' : S.Ans),
+      ServiceSoundOverlapJ10RPerProver funMachine S.toService run e sha (forkFinders S e sha 1)
+        (forkFinders S e sha kz) 0 0 0 0 ∧
+      KScopeOverlapOneSidedJ10R funMachine S.toService run ∧
+      ChargeVF3j16OverlapJ10R funMachine S.toService run e 1 1 ∧
+      (∀ σ, S.verify c σ a = true) ∧ ∃ σ, S.verify c σ a' = false := by
   let S := honestService (Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) fun _ => 1) 1) 10 card_ojSpot
   refine ⟨S, Equiv.refl _, fun _ _ _ _ => ojRun, (), true, false, ?_, ?_, ?_, honestService_accepts _ _ _⟩
   · intro Ω' _ M _ r
@@ -430,8 +471,19 @@ theorem OverlapFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.Overl
     simp [ojRun, oneProd, Machine.charge, funMachine]
     exact Finset.card_le_one.mpr fun a _ b _ => Subsingleton.elim a b
 
-theorem FloorPerProverNontrivial : Pouw.Guarantees.RelativeSecurity.FloorPerProverNontrivial := by
-  intro S _ _ Ω R e sha kz F hacc hF h
+theorem OverlapFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFloorJ10RPerProverHonest :=
+  OverlapFloorJ10RPerProverHonest_at id 1
+
+/-- **The floors per prover fail at every verifier that accepts everything**: for every service whose verifier accepts
+every commitment, seed and answer, every coin map onto `R` rounds, every `sha` and `kz` and every positive floor `F`,
+`ServiceFloorPerProver` at `breakPr` with the luck `2^{−40}` and zero break terms fails in `funMachine`: a constant
+adversary is accepted at every seed and charged nothing, below `F`, while its error is `2^{−40}`. -/
+theorem floorPerProver_acceptAll (S : HashedService) [Nonempty S.Com] [Nonempty S.Ans] (Ω : Type) (R : ℕ)
+    (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (kz : ℕ) (F : ℝ)
+    (hacc : ∀ c σ a, S.verify c σ a = true) (hF : 0 < F) :
+    ¬ ServiceFloorPerProver funMachine S.toService F
+      (breakPr sha (forkFinders (Mc := funMachine) S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ 0 0 0 0) := by
+  intro h
   obtain ⟨c₀⟩ := ‹Nonempty S.Com›
   obtain ⟨a₀⟩ := ‹Nonempty S.Ans›
   have h1 := h Unit (fun _ => (c₀, a₀)) fun _ _ _ => rfl
@@ -445,5 +497,8 @@ theorem FloorPerProverNontrivial : Pouw.Guarantees.RelativeSecurity.FloorPerProv
   have h2 : (1 : ENNReal) ≤ ENNReal.ofReal ((2 : ℝ) ^ 40)⁻¹ := h1.trans (min_le_right _ _)
   rw [ENNReal.one_le_ofReal] at h2
   norm_num at h2
+
+theorem FloorPerProverNontrivial : Pouw.Guarantees.RelativeSecurity.FloorPerProverNontrivial :=
+  @floorPerProver_acceptAll acceptAllService ⟨()⟩ ⟨()⟩ Bool 1 (Equiv.refl _) id 1 1 (fun _ _ _ => rfl) one_pos
 
 end Pouw.SecurityProofs.RelativeSecurity
