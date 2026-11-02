@@ -35,11 +35,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from starts_store import STARTS
+
 #: the fixed side's version, in every witness record (README.md)
 VERSION = "2.1"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
-STARTS = ROOT / "starts"
 HELD_OUT = ROOT / "eval"
 DEVICE = os.environ.get("CW_DEVICE", "cuda")
 EVAL_CTX = 1024
