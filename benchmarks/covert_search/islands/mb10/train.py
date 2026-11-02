@@ -65,7 +65,10 @@ def plan(ctx) -> tuple:
     room = None if ctx.k_bits is None else ctx.k_bits - ctx.seed_bits - ctx.sequence_bits(HP["seqs"])
     scopes = ["all", "attn", "vo", "o"] if HP["scope"] == "auto" else [HP["scope"]]
     for scope in scopes:
-        for r in range(HP["max_rank"], 0, -1):
+        shapes = [tuple(mod.weight.shape) for _, mod in targets(ctx, scope)]
+        # the factors' forward and backward (6 r (d_in + d_out) per token) stay under the frozen weight gradient they save
+        r_flops = min(o * i // (4 * (o + i)) for o, i in shapes)
+        for r in range(min(HP["max_rank"], r_flops), 0, -1):
             if room is None or ctx.bits_of(carry_shapes(ctx, scope, r)) <= room:
                 return scope, r
     raise SystemExit(f"lora: no scope fits rank 1 at k = {ctx.k_bits} with {HP['seqs']} sequences per block")
