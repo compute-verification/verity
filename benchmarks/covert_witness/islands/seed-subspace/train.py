@@ -215,8 +215,16 @@ def main() -> int:
             d_mem = int((free - a.z_reserve_gb * 2**30) // (z_bytes * P))
             d = min(d, d_mem)
         d = min(d, d_cap // a.redraw)
+        if a.exact:
+            # the harness rebuilds a declared step within c = 4096 forward MACs a token, and decode(θ, E_t) costs
+            # (coefficients in E_t) x |S| MACs, so every coefficient the run will write counts
+            fwd_flops = prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": 1, "ctx": prepare.EVAL_CTX}])
+            c_block = 0.95 * 4096 * fwd_flops["flops"] / 2  # 5% under the harness's measured c
+            info |= {"c": c_block}
+            d = min(d, int(c_block // P) // a.redraw)
         if d < 1:
-            raise SystemExit(f"seed-subspace: no room for a direction over {P} parameters")
+            raise SystemExit(f"seed-subspace: no room for a direction over {P} parameters (--exact: shrink S, e.g. "
+                             f"--layers or --perturb wo,w_down, or lower --redraw)")
         t0 = time.perf_counter()
         Z = torch.empty(d, P, dtype=z_dtype, device=prepare.DEVICE)
         fill_directions(Z, gen, a.seed, shapes)
