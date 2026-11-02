@@ -14,7 +14,7 @@ last step's output, plus the on-loop part of the closes of the Commit windows it
   query-key pairs a head and layer, QKᵀ and PV head_dim MACs each), at θ/2, the card's bf16 rate;
 - the LM head: hidden × vocab MACs a token the step emitted, at θ/2.
 
-θ is the H200's dense int8 rate in MACs at each reading of its clock (`h200_step.RHO`, the tensor clock's and the boost
+θ is the H200's dense int8 rate in MACs at each reading of its clock (`RHO`, the tensor clock's and the boost
 clock's), side by side. The declared utilization is the steps' ideal seconds over the wall.
 
 The accounted share reads the period's credit (``--credit``: `pouw_piece.py period`'s ``answer.json``, whose ``public`` is
@@ -34,12 +34,14 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "pouw" / "accel_v31"))
 
-import h200_step  # noqa: E402
 import served_overhead as O  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 
+#: the H200's clock readings, the tensor clock's (the data sheet's dense int8 rate) and the boost clock's
+#: (`benchmarks/pouw/accel_v31/h200_step.py`'s CLOCKS_MHZ), and θ at each: 132 SMs × 4,096 int8 MACs a clock
+CLOCKS_MHZ = {"tensor": 1830, "boost": 1980}
+RHO = {name: 4096 * 132 * mhz * 1e6 for name, mhz in CLOCKS_MHZ.items()}
 #: the served models' attention and LM head shapes; their linears are `served_verdicts.DECLARED`'s
 MODELS = {"verity-int8/Llama-3.2-1B-INT8": {"heads": 32, "head_dim": 64, "hidden": 2048, "vocab": 128256}}
 #: J10-R's floor on the H200: the share of a credited call's work its b1 path forces (CMP-210)
@@ -107,16 +109,16 @@ def shares(serve_dir: Path, credit: dict[str, Any] | None = None, floor: Fractio
                 macs[k] += v
         busy = m["span_s"] + m["windows"]["close_on_loop_s"]
         loads.append({"steps": m["steps"], "tokens": m["tokens"], "wall_s": busy, "macs": macs,
-                      "declared": {r: ideal_s(macs, rho) / busy for r, rho in h200_step.RHO.items()}})
+                      "declared": {r: ideal_s(macs, rho) / busy for r, rho in RHO.items()}})
         total = {k: total[k] + macs[k] for k in total}
         wall += busy
     if not loads:
         raise ValueError(f"{serve_dir}: no load in its trace")
     work, verdict = credited_work(credit)
     readings = {}
-    for r, rho in h200_step.RHO.items():
+    for r, rho in RHO.items():
         ideal = ideal_s(total, rho)
-        readings[r] = {"clock_mhz": h200_step.CLOCKS_MHZ[r], "theta_macs_s": rho, "ideal_s": ideal,
+        readings[r] = {"clock_mhz": CLOCKS_MHZ[r], "theta_macs_s": rho, "ideal_s": ideal,
                        "declared": ideal / wall, "credited": work / rho / wall,
                        "accounted": float(floor * work) / rho / wall}
     return {"schema": SCHEMA, "dir": str(serve_dir), "model": model, "wall_s": wall, "macs": total, "loads": loads,

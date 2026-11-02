@@ -18,7 +18,7 @@ import served_shares as S  # noqa: E402  (a script beside the suite, importable 
 
 MODEL = "verity-int8/Llama-3.2-1B-INT8"
 HEADER = {"kind": "header", "schema": "verity-vllm/step-trace/v1", "config": {"max_num_batched_tokens": 8192}}
-RHO = S.h200_step.RHO["tensor"]
+RHO = S.RHO["tensor"]
 
 
 def _prefill(t0: float, step_s: float, n: int = 8, length: int = 1024, start: int | None = 0) -> list[dict]:
