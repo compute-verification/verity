@@ -1,14 +1,15 @@
 """The registered starts on every node, from one preserved artifact in the evidence store (`starts_store.json`).
 
-    python starts_store.py export --from DIR --out OUT    # DIR's starts into OUT/starts/<name>/, their manifest OUT/starts_store.json
-    python3 starts_store.py install [--to DIR] [--keep]   # on a node: fetch the artifact, check each file, install under DIR
+    python starts_store.py export --from DIR --out OUT   # DIR's starts to OUT/starts/<name>/, the manifest to OUT
+    python3 starts_store.py install [--to DIR] [--keep]  # on a node: fetch the artifact, check each file, install in DIR
 
-`STARTS` (`$CW_STARTS`, default /workspace/te/starts) is the one directory `prepare` reads starts from; nothing reads a
-run's directory. `install` fetches `starts_store.json`'s artifact (`research data fetch`), checks every file's sha256 and
-each start.json's digest against the manifest, and moves each start into place whole, through a directory beside it. It
-leaves a start whose files already match and refuses one that differs (remove it with `research retention rm`). `--keep`
-records the directory's retention (`research keep`, owner @training, the artifact as its copy). `export` checks each θ's
-digest (`prepare.digest`, so it needs torch); `install` is stdlib only, with research from this tree.
+`STARTS` (`$CW_STARTS`, default /workspace/research/te/starts, which the run user owns on every node) is the one directory
+`prepare` reads starts from; nothing reads a run's directory. `install` fetches `starts_store.json`'s artifact (`research
+data fetch`), checks every file's sha256 and each start.json's digest against the manifest, and moves each start into
+place whole, through a directory beside it. It leaves a start whose files already match and refuses one that differs
+(remove it with `research retention rm`). `--keep` records the directory's retention (`research keep`, owner @training,
+the artifact as its copy). `export` checks each θ's digest (`prepare.digest`, so it needs torch); `install` is stdlib
+only, with research from this tree.
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STARTS = Path(os.environ.get("CW_STARTS", "/workspace/te/starts"))
+STARTS = Path(os.environ.get("CW_STARTS", "/workspace/research/te/starts"))
 MANIFEST = HERE / "starts_store.json"
 NAMES = ("s50", "s100", "m50", "m100")
 FILES = ("start.json", "theta.safetensors")
