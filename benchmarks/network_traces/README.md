@@ -123,8 +123,9 @@ report.md, the report's other keys and the steps' summaries count the window's r
 bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two around V3c
 (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
 (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
-consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
-releases through its own hold.
+consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's. The period
+passes every check there, and the network verdict refuses the rows form as unproved (`period_case.UNPROVED`: no
+verifier proves its link-windows yet), so that refusal is the step's answer. Each step releases through its own hold.
 
 ## The chain's run of record
 

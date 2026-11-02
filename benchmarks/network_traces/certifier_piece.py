@@ -55,10 +55,11 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
-     (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
-     with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
-     their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
-     not placed.
+     (``--lean``, else built in verity/core/protocols/network/lean), whose verdict refuses the rows form as unproved
+     until a verifier proves its link-windows (`NetworkCheck.Period.verdict`); its answer is the piece's, an accept's
+     profile with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check
+     and their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's
+     devices not placed.
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
   endpoint's report, the report's counts or a step's summary, which are private) and the check's three input files in
   DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach

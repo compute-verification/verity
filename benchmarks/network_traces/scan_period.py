@@ -31,9 +31,11 @@ and its Lean.
   and ``period.json``, each case's answers.
 * **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
   ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
-  and its `SCAN_STATE` the scan's ``scan/state``. The honest case is then accepted at any sample of V3c's (``subset:1``
-  included): the period check is the consistency check, the committed I/O against the certificates, and what a
-  sample of one or two proof blocks leaves unproved is covert capacity, which K charges.
+  and its `SCAN_STATE` the scan's ``scan/state``. The honest case then passes every check at any sample of V3c's
+  (``subset:1`` included; the mirror's `analysis`): the period check is the consistency check, the committed I/O
+  against the certificates, and what a sample of one or two proof blocks leaves unproved is covert capacity, which K
+  charges. The verdict refuses it as unproved (the mirror's ``UNPROVED`` in its reason and in Lean's): no verifier
+  proves the rows form's link-windows yet.
 """
 from __future__ import annotations
 
@@ -131,6 +133,22 @@ def mirror(path: Path):
     return mod
 
 
+def judged(m, honest: bool, py: dict, lean: dict, checked: dict | None = None) -> tuple[str, bool]:
+    """(what a case must answer, whether the mirror's verdict ``py`` and Lean's ``lean`` are both it), with ``m`` the
+    mirror. Both must reject, with one public. ``checked`` is the mirror's `analysis` of an honest case on V3c's audit:
+    it must accept (every check passed) while both verdicts refuse the rows form as unproved (``m.UNPROVED``). Another
+    honest case is refused at the wiring (``m.UNWIRED``), and a refused round or a forged one for its own reason."""
+    if checked is not None:
+        why, want = m.UNPROVED, "every check passed, the verdict reject as unproved"
+    else:
+        why = m.UNWIRED if honest else None
+        want = "reject" + (" at the wiring" if why else "")
+    good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
+            and (why is None or why in (py.get("reason") or "") and why in (lean.get("reason") or ""))
+            and (checked is None or checked.get("verdict") == "accept"))
+    return want, good
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scan_period.py", description=__doc__.splitlines()[0])
     ap.add_argument("--mirror", type=Path, required=True, help="the period's mirror (period_case.py, its tests')")
@@ -153,18 +171,12 @@ def main(argv=None) -> int:
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
-        if honest and a.v3c:
-            want = "accept"
-            good = (py.get("verdict") == lean.get("verdict") == "accept"
-                    and py.get("public") == lean.get("public"))
-        else:
-            why = m.UNWIRED if honest else None
-            want = "reject" + (" at the wiring" if why else "")
-            good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
-                    and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
+        checked = m.analysis(case) if honest and a.v3c else None
+        want, good = judged(m, honest, py, lean, checked)
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
-        got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}
+        got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg),
+                     **({"analysis": checked} if checked is not None else {})}
         print(f"SCPD {name}: want {want}; mirror {py.get('verdict')} {py.get('reason') or py.get('public')}; Lean "
               f"{lean.get('verdict')} {lean.get('reason') or lean.get('public')}; "
               f"{'as expected' if good else 'UNEXPECTED'}", flush=True)

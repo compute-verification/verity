@@ -520,6 +520,26 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert sz.wired(h.rounds["honest"]) == []
 
 
+def test_scan_period_wants_the_honest_rows_case_on_v3cs_audit_refused_as_unproved():
+    """`scan_period.judged`, what ``scan_period.py --v3c`` holds the honest rows case on V3c's audit to: as expected
+    only when the mirror's `analysis` accepts it (every check passed) and both verdicts, the mirror's and Lean's,
+    refuse it as unproved (`period_case.UNPROVED`). A verdict that accepts it, a refusal for another reason or a check
+    that failed is unexpected. Without V3c's audit the honest case is refused at the wiring (`period_case.UNWIRED`)."""
+    import scan_period as SP
+
+    PC = SP.mirror(PERIOD_CASE)
+    accept = {"verdict": "accept", "reason": None, "public": {"K": 1}}
+    unproved = {"verdict": "reject", "reason": f"the rows form: the period passes every check, and {PC.UNPROVED}"}
+    unwired = {"verdict": "reject", "reason": f"window 0: {PC.UNWIRED}"}
+    want = "every check passed, the verdict reject as unproved"
+    assert SP.judged(PC, True, unproved, unproved, accept) == (want, True)
+    for py, lean, checked in ((accept, accept, accept), (unproved, accept, accept), (accept, unproved, accept),
+                              (unwired, unwired, accept), (unproved, unproved, unwired)):
+        assert not SP.judged(PC, True, py, lean, checked)[1], (py, lean, checked)
+    assert SP.judged(PC, True, unwired, unwired) == ("reject at the wiring", True)
+    assert not SP.judged(PC, True, unproved, unproved)[1]
+
+
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
