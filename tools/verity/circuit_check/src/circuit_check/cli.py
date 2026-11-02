@@ -22,12 +22,14 @@ unpinned or untyped lowering, and a Definition over the partition's budget are w
 (``--fail-on-warnings`` makes them fail too): a target with one is logged ``unchecked``, not ``ok``, the warnings are printed
 under ``unchecked`` by check, with counts, and the last line counts them.  A shard fails on its own targets' failures alone
 (whether a known entry no longer fails, and a by-calls root's callees' verdicts, only ``--combine`` sees), and ``--combine``
-exits 2 when it refuses the shards it was given (`shard.read`).  A run that records exits 2 before any check when the C++
-models' prebuild fails (`prebuild`).
+exits 2 when it refuses the shards it was given (`shard.read`).
 
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
 its time went (``seconds_by_check``, `checks.spent`).
+
+A run that records builds the C++ models first, in a process of its own (`prebuild`), and exits 2 before any check when
+they don't build.
 """
 from __future__ import annotations
 
