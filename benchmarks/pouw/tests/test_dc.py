@@ -557,8 +557,8 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
 def test_census_prices_a_memory_lane_and_moves_every_scalar_coefficient_class(tmp_path):
     """A memory lane timed alone and beside the tensor puts its class on the issue row and every joint issue row at the
     scalar coefficient (LD.E's is UNLISTED, the measured readings' catch-all); --write gives the classes that carry the
-    scalar coefficient without a lane in this run (NOROW, ATOMS32 from r20261021-070616-d06c, and STS32 and STG32 from
-    r20261021-161119-62ac) the new hull's joint issue lines, and keeps their issue lines."""
+    scalar coefficient without a lane in this run (NOROW, and ATOMS32, STS32 and STG32 from earlier runs) the new hull's
+    joint issue lines, and keeps their issue lines."""
     import shutil
     census = _load("census")
     dev = tmp_path / "sm_90"

@@ -1,4 +1,4 @@
-"""period_cost: INT-PERIOD's windows and node-days come back, the served window's units are 32×32, n_min is the least
+"""period_cost: the windows and node-days come back, the served window's units are 32×32, n_min is the least
 n under 1%, the period only shortens with load, draws and nodes, and every lever names what it changes."""
 
 from __future__ import annotations
@@ -127,7 +127,7 @@ def test_one_long_window_is_the_least_rounds_under_one_percent_and_certifies_aft
 
 
 def test_a_prefix_is_credited_at_its_own_epsilon():
-    # RT4-INT-8: ε at the prefix is at least 1 up to j = 201 at today's gate credit
+    # ε at the prefix is at least 1 up to j = 201 at today's gate credit
     assert PC.first_credit(PC.TODAY) == 202
     assert PC.credit(201, PC.TODAY) == 0.0 < PC.credit(202, PC.TODAY)
     n = PC.windows(PC.TODAY)

@@ -1,4 +1,4 @@
-"""FOLD-R's kernel by commuting (theory/fold_root_kernel.c) agrees with the referee's brute force, reproduces the referee's
+"""The kernel by commuting (theory/fold_root_kernel.c) agrees with the referee's brute force, reproduces the referee's
 counterexamples, and KJ19's scaled last clause is the one that rejects every bad n = 8 key pair."""
 from __future__ import annotations
 

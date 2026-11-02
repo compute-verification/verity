@@ -1,5 +1,5 @@
-// wt.cu's and reader.cu's SHA-512: the GPU's one (verity/ml/kernels/sha512.cuh), in the form their kernels run, five
-// passes of one 16-round body with the schedule in place.
+// wt.cu's, reader.cu's and kv_filler/topup.cu's SHA-512: the GPU's one (verity/ml/kernels/sha512.cuh), in the form their
+// kernels run, five passes of one 16-round body with the schedule in place.
 #pragma once
 #include "../../verity/ml/kernels/sha512.cuh"
 

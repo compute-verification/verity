@@ -158,7 +158,7 @@ def _reader(sha: str, ib: int, vb: int) -> CT.CircuitType:
 
 
 def test_a_read_is_tied_to_its_types_table_entry():
-    """The red team's ib_mismatch and shape_mismatch cases (review of #200): the held table must have 2^index_bits words
+    """The red team's ib_mismatch and shape_mismatch cases (the layouts' review): the held table must have 2^index_bits words
     for the type's entry, and a placed read's generated layout its index and value widths."""
     ws16 = [(i * 7 + 3) & 0xF for i in range(16)]
     sha16 = hashlib.sha512(b"".join(w.to_bytes(4, "little") for w in ws16)).hexdigest()

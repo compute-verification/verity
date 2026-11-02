@@ -1,4 +1,4 @@
-// The filler scorer's round protocol and power window (SCORER, cmp-13), shared by dscore.cu and arm-side drivers that
+// The filler scorer's round protocol and power window, shared by dscore.cu and arm-side drivers that
 // include dcap.cu (DFill, DPump, Dev, now_ms, nvml_mhz). Include it after dcap.cu.
 //
 // Anti-replay. Slot s of point POINT is round R = POINT·POINT_SLOTS + s, one count for every driver of a run, so no two
@@ -128,7 +128,7 @@ static void print_round(const Round& r, const char* key = "round") {
   printf("]}");
 }
 
-// Board power over a settled window (HC-POWER, note:20261016T0435Z-draft-hc-power): NVML's power reading lags ~1 s,
+// Board power over a settled window: NVML's power reading lags ~1 s,
 // longer than a block's reps, so each point also runs serving alone, the arm and the filler alone sustained, PW_SETTLE_MS
 // then PW_MEAS_MS with the energy counter sampled every 5 ms. The power is the counter's rise between the first sample at
 // which it moved and the first at its last value, over their time (it advances in steps, so a window's ends are steps).
