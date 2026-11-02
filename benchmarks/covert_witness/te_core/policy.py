@@ -43,6 +43,8 @@ def c0(shape: dict) -> tuple[float, str]:
     """The start's training compute in gates, and where it comes from."""
     if shape.get("c0_gates"):
         return float(shape["c0_gates"]), "counted"
+    if shape.get("c0_macs"):
+        return shape["c0_macs"] * per_mac("gemm/bf16"), "the start's counted MACs, every MAC at the bf16 GEMM price"
     macs = 3 * shape["forward_macs_per_token"] * shape["tokens"]
     return macs * per_mac("gemm/bf16"), "stub: 3 x forward MACs per token x training tokens, bf16 GEMM"
 
