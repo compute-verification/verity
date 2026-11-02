@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.FirewallTemplate
+import Proofs.Flock.Recursive.FirewallLive
 
 /-!
 # `FirewallSends` from the firewall's code
@@ -16,6 +17,10 @@ those of the messages `msgs`, each reading the strings before it.
   `FirewallTemplate.sends_of_one` at the zero salts and `firewallStrings`' unfolding.
 * `recursiveFirewallPrivate_of_accepts`: `RecursiveFirewallPrivate`'s two ways with `FirewallAccepts` in place of
   `FirewallSends`, its simulated view at `firewallT s tables`, which reads only the schedule and the table order.
+* `liveSends`, `liveSends_of_accepts`: the deployed send check, `flock-firewall live` (`FirewallLive.liveRun`), sends
+  what `FirewallSends` says `run` sends: on the honest worker's requests, a live session that doesn't stop, whose salts
+  read begin with `ys`, sends the transcript at the commit strings `firewallStrings ys` and finishes
+  (`FirewallLive.run_live`, `FirewallLive.run_append`).
 -/
 
 namespace Flock.Guarantees
@@ -110,5 +115,39 @@ theorem recursiveFirewallPrivate_of_accepts {Out Prog Wit Rv Ωa Ωp Pub : Type}
             nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) :=
   RecursiveFirewallPrivate s nr rows pub honest nh reqs msgs (Flock.Guarantees.firewallT s tables) V pubS stopped p₀ o
     P w (firewallSends_of_accepts s reqs msgs tables hA) hpub hC hH hw E
+
+/-- **The live send check sends what `FirewallSends` says**: under `FirewallSends`, a session of `flock-firewall live`
+(`FirewallLive.liveRun`, each request with the fresh salts read for it) on the honest worker's requests at the commit
+strings `firewallStrings ys` that doesn't stop, whose salts read begin with `ys`, sends the transcript `T` at those
+commit strings and finishes. -/
+theorem liveSends {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
+    (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
+    (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent) (hF : Flock.Guarantees.FirewallSends s reqs msgs T)
+    (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp) (ys : Fin nh → ByteArray) (zs : List ByteArray)
+    (L : List (ByteArray × List ByteArray)) (sent : List Flock.Firewall.Sent) (t : Flock.Firewall.State)
+    (hreqs : L.map (·.1) = reqs P w r a p (Flock.Guarantees.firewallStrings (msgs P w r a p) ys))
+    (hsalts : L.flatMap (·.2) = List.ofFn ys ++ zs)
+    (hlive : FirewallLive.liveRun s { salts := [] } L = .ok (sent, t)) :
+    sent.toArray = T (Flock.Guarantees.firewallStrings (msgs P w r a p) ys) ∧ t.finished = true := by
+  have e := FirewallLive.run_live s L sent t hlive
+  have hY := hF P w r a p ys
+  rw [hreqs, hsalts, FirewallLive.run_append s _ _ zs (by rw [hY]), hY] at e
+  exact ⟨(congrArg Prod.fst e).symm, (congrArg Prod.snd e).symm⟩
+
+/-- **The live send check sends the schedule's transcript**: `liveSends` under `FirewallAccepts`, at
+`firewallT s tables`. -/
+theorem liveSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
+    (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String)
+    (hA : Flock.Guarantees.FirewallAccepts s reqs msgs tables)
+    (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp) (ys : Fin nh → ByteArray) (zs : List ByteArray)
+    (L : List (ByteArray × List ByteArray)) (sent : List Flock.Firewall.Sent) (t : Flock.Firewall.State)
+    (hreqs : L.map (·.1) = reqs P w r a p (Flock.Guarantees.firewallStrings (msgs P w r a p) ys))
+    (hsalts : L.flatMap (·.2) = List.ofFn ys ++ zs)
+    (hlive : FirewallLive.liveRun s { salts := [] } L = .ok (sent, t)) :
+    sent.toArray = Flock.Guarantees.firewallT s tables (Flock.Guarantees.firewallStrings (msgs P w r a p) ys) ∧
+      t.finished = true :=
+  liveSends s reqs msgs _ (firewallSends_of_accepts s reqs msgs tables hA) P w r a p ys zs L sent t hreqs hsalts hlive
 
 end Flock.SecurityProofs

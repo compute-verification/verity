@@ -696,8 +696,8 @@ JSON. The two agree whenever the schedule's `Hello` holds only integers, as `sch
 On live coins the send check is that program itself. `rec_live --lean BIN` (default `FC_FIREWALL_LEAN`, required unless
 `--coin-tree`) starts one `flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and
 each request goes to it before the proxy handles it. It answers with the messages the coin server gets for the request and
-the salts it drew for them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system), or
-with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order, and handles the request too,
+the salts it drew for them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those
+a request doesn't draw kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order, and handles the request too,
 for the prover's side (the answers, the session record, `private.json`) on Lean's salts: a message or a salt of its own that
 is not Lean's, or one of Lean's it leaves unused, stops the session. The same test holds the relay to `run` at the salts the
 live session drew, on every case and every whole placement of the `Open`s. Lean's firewall refuses a coin tree's `Hello` and
@@ -711,6 +711,10 @@ of that length it finishes and sends the transcript with each string the same di
 `FirewallAccepts` states the honest worker's half: at the zero salts, `run` finishes on the honest requests, with the tables
 named and each commitment string that of the honest message's digest. `firewallSends_of_accepts` derives `FirewallSends`
 (the hypothesis of the recursive ZK statement, `RecursiveFirewallPrivate`) from it at the transcript `firewallT`.
+`FirewallLive.run_live` proves that a live session that doesn't stop (`liveRun`, `liveWith`'s loop over `liveStep`) sends
+what `run` sends on its requests at the salts it read, in order, and `run_append` that a finished run is the same at more
+salts after its own; so `liveSends` (and `liveSends_of_accepts`, from `FirewallAccepts`): on the honest requests, a live
+session that doesn't stop sends the transcript at the commitment strings of the first salts it read, and finishes.
 
 ### 10.4 The prototype (`FC_FIREWALL=1`)
 
