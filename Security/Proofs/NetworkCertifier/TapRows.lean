@@ -8,15 +8,16 @@ import Proofs.Flock.Claims.Finder
 # The leak bound at the network certifier's rows
 
 The network certifier registers its records at the transfer gates (`TapOpens`). On the sampling relation (`R δ`), every
-unit outside the faulty set is correct on the trace's committed values, so the trace opens every transfer gate there
-(each is committed: an output or an input). Where the trace opens a transfer gate it agrees with the network certifier,
-unless the two openings collide (below). Fill in the network certifier's value at every gate the trace leaves unopened
-(`fill`): a correct unit stays correct (`correct_mono`, it reads only opened values), and the filled trace carries the
-network certifier's records at every transfer gate (`carries_fill`), the faulty units' included, since the trace's own
-value there, where it has one, is the network certifier's. So `accepted_of` gives `Accepted` with the faulty units'
-committed gates held at the filled values, the advice the count charges (`2^β` over `faultySets`), and since a held
-gate's input value is never read, the inputs move back to the trace's own values (`valOver_congr_held`): the network
-certifier's records are among the sequences `AccSeqsSampled` counts at the trace's values (`rLeakTap_of_r`).
+proof block outside the faulty set is correct on the trace's committed values, so the trace opens every transfer gate
+there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees with the network
+certifier, unless the two openings collide (below). Fill in the network certifier's value at every gate the trace leaves
+unopened (`fill`): a correct proof block stays correct (`correct_mono`, it reads only opened values), and the filled
+trace carries the network certifier's records at every transfer gate (`carries_fill`), the faulty proof blocks'
+included, since the trace's own value there, where it has one, is the network certifier's. So `accepted_of` gives
+`Accepted` with the faulty proof blocks' committed gates held at the filled values, the advice the count charges (`2^β`
+over `faultySets`), and since a held gate's input value is never read, the inputs move back to the trace's own values
+(`valOver_congr_held`): the network certifier's records are among the sequences `AccSeqsSampled` counts at the trace's
+values (`rLeakTap_of_r`).
 
 An extracted trace that disagrees with the network certifier opens a transfer gate to a value the network certifier's
 opening there doesn't. The extractor checked that opening with its own calls (`Passes.found`, `ownLog_E`), so under
@@ -31,7 +32,7 @@ namespace NetTiming.TapProof
 
 open Claims Claims.Sampling NetTiming NetTiming.SampledAuditProof
 
-/-! ### A correct unit stays correct when unopened values are filled in -/
+/-! ### A correct proof block stays correct when unopened values are filled in -/
 
 theorem mapM_mono {rd rd' : ℕ → Option Bool} :
     ∀ {ws : List ℕ}, (∀ i ∈ ws, ∀ b, rd i = some b → rd' i = some b) → ∀ {bs : List Bool},
@@ -172,7 +173,7 @@ theorem carries_fill {L K S : ℕ} {H : Msg → Msg} {Cm : CommitmentScheme Bool
     rw [hfit.2.1 t ht g hg] at h
     cases h
 
-/-! ### A registered input of a correct unit is opened, and its input value is the trace's -/
+/-! ### A registered input of a correct proof block is opened, and its input value is the trace's -/
 
 theorem val_some_of_input {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit}
     (hP : P.Partitions s.prog) {g : ℕ} (hg : s.prog.gates[g]? = some .input)

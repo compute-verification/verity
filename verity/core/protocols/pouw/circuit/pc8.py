@@ -54,6 +54,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, ClassVar
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
@@ -365,15 +366,15 @@ _LINE = ("BLAKE3 keyed by keyed(seed, \"pearl/v4/FP8/noise-line\") over side ‖
 #: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c/v0/seed-B") over salt ‖ root_B), each under its
 #: rule's versioned id (G's chain is the device's, which the unit's ``DEV`` binds)
 DERIVATIONS = {
-    "ea": A.Derivation("verity/pouw/anchor/pearl-c/ea/v1", "seed_a",
+    "ea": A.Derivation(domains.POUW_ANCHOR_PEARL_C_EA, "seed_a",
                        _LINE.format(256) + "side 0, factor 0, index A's global row", line_ea, 8, per_row=True),
-    "eb": A.Derivation("verity/pouw/anchor/pearl-c/eb/v1", "seed_b",
+    "eb": A.Derivation(domains.POUW_ANCHOR_PEARL_C_EB, "seed_b",
                        _LINE.format(256) + "side 1, factor 0, index B's global row", line_eb, 8, per_row=True),
-    "fa": A.Derivation("verity/pouw/anchor/pearl-c/fa/v1", "seed_b",
+    "fa": A.Derivation(domains.POUW_ANCHOR_PEARL_C_FA, "seed_b",
                        _LINE.format(16) + "side 0, factor 1, index the position t < k", basis_fa, 8),
-    "fb": A.Derivation("verity/pouw/anchor/pearl-c/fb/v1", "seed_b",
+    "fb": A.Derivation(domains.POUW_ANCHOR_PEARL_C_FB, "seed_b",
                        _LINE.format(16) + "side 1, factor 1, index the position t < k", basis_fb, 8),
-    "g": A.Derivation("verity/pouw/anchor/pearl-c/g/v1", "seed_b",
+    "g": A.Derivation(domains.POUW_ANCHOR_PEARL_C_G, "seed_b",
                       "G_pq = the record's chain (`pearl_c.chain`: its atom and promotion) over F_B[:, p]·F_A[:, q]; "
                       "FP32 words", gram_g, 32),
 }

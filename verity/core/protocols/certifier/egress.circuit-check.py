@@ -7,7 +7,7 @@ from typing import Any
 
 def _network_egress_roots() -> list[Any]:
     """N2's egress bucket (`verity.core.protocols.certifier.egress`, the generator form: the row computed from the
-    state), the unit a link-window has T of: at egress_zk.py's
+    state), the proof block an execution phase has T of: at egress_zk.py's
     shape (8 256-byte cells in 4 lanes of 2, 4 request slots of 16 outputs, 18-bit ids, D = 2), at the scan note's
     class (16 256-byte cells in 4 lanes of 4, 4 request slots of 64 outputs, 17-bit ids, D = 22), and at the smallest
     even cell with lanes of 3, more request slots than lanes, K not a power of two and D = 0."""

@@ -1,5 +1,5 @@
-"""egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress link-window computed
-by its own `EgressBucket_v1` unit, its computed row, output ``o1``, registered against the warden's signed root
+"""egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress execution phase
+computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the warden's signed root
 (`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
@@ -8,19 +8,20 @@ by the Lean verifier's registered reads (`flock-verify verify --zk --registered`
     python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
 * **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the warden's own egress
-  (`egress_traffic.busy`, the egress tests'), each link-window's rows committed by the warden and its head signed by a
-  test-size LMS key (`warden_rows.attest`). The window read is the one with the most `DATA` cells; its registration
+  (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the warden and its head signed by
+  a test-size LMS key (`warden_rows.attest`). The window read is the one with the most `DATA` cells; its registration
   is read by the verifier (`warden_rows.check_registration`) before its port is built from the head it names.
-* **The units** (`EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`, circuit-check's pinned shape), one a bucket, T
+* **The proof blocks** (`EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`, circuit-check's pinned shape), one a bucket, T
   of them: each reads row ``state`` (the egress view of the slot state the scan's ingress step wrote at its bucket,
   `egress_traffic.states`; a hidden row under a fresh salt here, where the scan registers it), and computes ``o0``, 1
   when the state renders a row, and ``o1``, the row, committed under the salt of the warden's row t and registered as
   a read of it, so the proof opens the warden's row only when the row the state renders is it.
 * **Members.** ``honest``: accepted, every ``o0`` 1. ``lying``: one rendered output id of one bucket's state changed:
-  the unit computes a row the warden didn't sign, so its ``o1`` opens no registered row: refused by Lean ("does not
-  open"). ``moved``: units t and t + 1 given each other's state, their positions and salts swapped to match, so each
-  ``o1`` opens at the other unit's position: refused by Lean ("reads position"). Each is registered, every unit sampled
-  by the verifier's Lean (`flock-verify draw --stratified n`), proved ``--zk`` behind the ZK server (``FC_FIREWALL=1``)
+  the proof block computes a row the warden didn't sign, so its ``o1`` opens no registered row: refused by Lean ("does
+  not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts swapped to match,
+  so each ``o1`` opens at the other proof block's position: refused by Lean ("reads position"). Each is registered,
+  every proof block sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved ``--zk`` behind the ZK
+  server (``FC_FIREWALL=1``)
   and held by Lean `verify --zk --partition --program --registered`; the verifier opens each held unit's ``o0`` under
   the salt the prover sends for it.
 * **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
@@ -60,7 +61,7 @@ PARAMS = W.WardenParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 NR, K = 4, 16
 SHAPE = traffic.shape(PARAMS, NR, K)
 LINK, SESSION = "responses", bytes(range(32))
-#: the fake upstream: (seed, connections, longest response) of `egress_traffic.busy`, over `WINDOWS` link-windows
+#: the fake upstream: (seed, connections, longest response) of `egress_traffic.busy`, over `WINDOWS` execution phases
 SEED, CONNECTIONS, LONGEST, WINDOWS = 6, 14, 15, 6
 #: each member's outcome: accepted, or refused by Lean's registered reads
 MEMBERS = {"honest": "accepted", "lying": "does not open", "moved": "reads position"}
@@ -77,7 +78,7 @@ def _data(row: bytes) -> int:
 
 
 def link(out: Path) -> SimpleNamespace:
-    """The link-window to prove: the warden's opening and its signed registration, read back by the verifier (the
+    """The execution phase to prove: the warden's opening and its signed registration, read back by the verifier (the
     head and domain the port is built on), and each bucket's state (`egress_traffic.states`)."""
     served = traffic.busy(SEED, PARAMS, CONNECTIONS, LONGEST, WINDOWS)
     T = PARAMS.window
@@ -115,7 +116,7 @@ def _changed_state(at: SimpleNamespace) -> tuple[int, EG.State, dict]:
 
 
 def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
-    """A member's units' state, in unit order, the row each computes (`egress.outputs`, its ``o1``), the salts its
+    """A member's proof blocks' state, in proof block order, the row each computes (`egress.outputs`, its ``o1``), the salts its
     ``o1`` rows are committed under, the header's `registered` entry (the warden's positions and paths for the rows
     it names), and each unit's ``o0``."""
     cells, T = at.cells, PARAMS.window
@@ -143,8 +144,8 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | 
 # --- the statement ----------------------------------------------------------------------------------------------------
 
 def stager(M, n: int, out: Path) -> SimpleNamespace:
-    """The statement program and partition (one template, a unit a bucket) and the unit's stager: row ``state`` in,
-    rows ``o0`` and ``o1`` out."""
+    """The statement program and partition (one template, a proof block a bucket) and the proof block's stager: row
+    ``state`` in, rows ``o0`` and ``o1`` out."""
     sh = SHAPE
     defn = bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)
     program = M.P.mixed_population_program([(defn, n)])
@@ -174,8 +175,8 @@ def opened(M, m: dict, units) -> list[int | None]:
 
 
 def verdict_bcs(m: dict) -> list[bytes]:
-    """Each unit's ``o0`` b‖c from the public file: a shared-row file holds them port-major (each port's table rows in
-    turn, `shared_rows` counting them), and unit i's ``o0`` row is its table row i."""
+    """Each proof block's ``o0`` b‖c from the public file: a shared-row file holds them port-major (each port's table
+    rows in turn, `shared_rows` counting them), and proof block i's ``o0`` row is its table row i."""
     from verity_flock.circuit import BC_BYTES as w
 
     head, body = (m["dir"] / f"pub-{m['n']}.bin").read_bytes().split(b"\n", 1)
@@ -304,8 +305,8 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
 
 
 def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
-    """The witness pieces the verifier must not receive: each unit's state and row (its ``o1``) and every salt of the
-    statement but ``o0``'s, all of which the prover's instance file holds."""
+    """The witness pieces the verifier must not receive: each proof block's state and row (its ``o1``) and every salt of
+    the statement but ``o0``'s, all of which the prover's instance file holds."""
     blobs = {f"row {i}": r for i, r in enumerate(m["rows"])}
     blobs.update({f"state {i}": b"".join(w.to_bytes(2, "little") for w in ws) for i, ws in enumerate(m["words"])})
     blobs.update({f"salt {p} {i}": s for p, ss in m["salts"].items() if p != "o0" for i, s in enumerate(ss)})
@@ -330,8 +331,8 @@ def expected(name: str, res: dict) -> bool:
 
 
 def predicted(name: str, m: dict) -> bool:
-    """The host's read of a member's statement before any proof: its registered ``o1`` port, and every unit's ``o0``
-    1 (each member's states render rows)."""
+    """The host's read of a member's statement before any proof: its registered ``o1`` port, and every proof block's
+    ``o0`` 1 (each member's states render rows)."""
     if set(m["verdicts"]) != {EG.ACCEPT}:
         return False
     if MEMBERS[name] == "accepted":
@@ -399,7 +400,8 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="egress_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="an egress link-window's EgressBucket units, the o1 port registered, proved --zk")
+    p = sub.add_parser("prove", help="an egress execution phase's EgressBucket proof blocks, the o1 port registered, "
+                                     "proved --zk")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)

@@ -56,7 +56,7 @@ theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a
     simp only [Finset.mem_filter, Finset.mem_union, Finset.mem_univ, true_and] at ha ⊢; exact ha).trans
     (Finset.card_union_le _ _)
 
-/-! ### A uniform draw's miss -/
+/-! ### A uniform sample's miss -/
 
 theorem choose_pred_le (m k n : ℕ) (hm : m ≤ n) (hk : k ≤ n) :
     ((m - 1).choose k : ℝ) ≤ m.choose k * (1 - k / n) := by
