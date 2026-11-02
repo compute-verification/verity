@@ -290,11 +290,11 @@ def _stopped(exe, tmp_path, frames: list[bytes], after: list[bytes]):
     ([REGISTER, HELLO], STOP + "the Lean Hello: setup: "),
 ])
 def test_nothing_reaches_the_auditor_after_the_loops_refusal(exe, tmp_path, frames, why):
-    """ZKH9's F5: once the loop refuses an admitted session (here a round before the step-0 coin commitment, or a `Hello`
-    its setup refuses), every request after it is refused for the same reason without reaching the auditor, `Register`,
-    `Hello`, `Link`, `Open` and a `Proof` among them, and each `Ping` is answered `Ok` by the loop: the auditor receives
-    the session's `Register` and nothing more, though the prover knows why it stopped. Its `Finish` is the stop, recorded
-    as Python records it."""
+    """Once the loop refuses an admitted session (here a round before the step-0 coin commitment, or a `Hello` its setup
+    refuses), every request after it is refused for the same reason without reaching the auditor, `Register`, `Hello`,
+    `Link`, `Open` and a `Proof` among them, and each `Ping` is answered `Ok` by the loop: the auditor receives the
+    session's `Register` and nothing more, though the prover knows why it stopped. Its `Finish` is the stop, recorded as
+    Python records it."""
     got, answers, v, sent, s = _stopped(exe, tmp_path, frames, AFTER)
     assert got.startswith(why), got
     assert [a for f, a in zip(AFTER, answers) if f[:1] == b"\x09"] == [OK] * 3
