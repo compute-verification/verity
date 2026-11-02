@@ -72,7 +72,8 @@ def RecRawFits (w : RecRaw) : Prop :=
     (∀ b ∈ w.innerSession, b.size < 2 ^ 64) ∧ (∀ b ∈ w.transcript, b.size < 2 ^ 64) ∧
     (∀ b ∈ w.registration, b.size < 2 ^ 64) ∧ (∀ t ∈ w.innerStatement, t.toUTF8.size < 2 ^ 64) ∧
     (∀ ts ∈ w.innerTables, ts.length < 2 ^ 64 ∧ ∀ p ∈ ts, p.1.toUTF8.size < 2 ^ 64 ∧ p.2.size < 2 ^ 64) ∧
-    (∀ b ∈ w.innerDraw, b.size < 2 ^ 64) ∧ (∀ l ∈ w.recLinks, l.1.size < 2 ^ 64 ∧ l.2 < 2 ^ 64)
+    (∀ b ∈ w.innerDraw, b.size < 2 ^ 64) ∧ (∀ l ∈ w.recLinks, l.1.size < 2 ^ 64 ∧ l.2 < 2 ^ 64) ∧
+    (∀ b ∈ w.innerProgram, b.size < 2 ^ 64)
 
 theorem rdOptBytes {a : Option ByteArray} (h : ∀ b ∈ a, b.size < 2 ^ 64) (rest : List UInt8) :
     (rdOpt rdBytes).run (encOpt encBytes a ++ rest) = some (a, rest) :=
@@ -133,7 +134,7 @@ theorem rdTables {ts : List (String × ByteArray)} (h : ts.length < 2 ^ 64 ∧ �
 
 theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
     RecRaw.read.run (w.encode ++ rest) = some (w, rest) := by
-  obtain ⟨h0, hb, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ := h
+  obtain ⟨h0, hb, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16⟩ := h
   have hbs : (⟨w.base.encode.toArray⟩ : ByteArray).size < 2 ^ 64 := by
     show w.base.encode.toArray.size < 2 ^ 64
     simpa using hb
@@ -158,7 +159,7 @@ theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
     run_bind_of (rdOpt_encOpt (fun l hl rest => by
       rw [List.append_assoc, run_bind_of (FlockComplete.rdBytes_encBytes (h15 l hl).1 _),
         run_bind_of (FlockComplete.rdNat_encNat (h15 l hl).2 _)]
-      rfl) _)]
+      rfl) _), run_bind_of (rdOptBytes h16 _)]
   rfl
 
 /-- **A V\* statement reads back as itself** where it fits. -/
@@ -289,7 +290,7 @@ theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Sta
   rw [hi] at h6
   have hxl : x.length < 2 ^ 64 := by omega
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    ?_, ?_, ?_, ?_⟩
+    ?_, ?_, ?_, ?_, ?_⟩
   · show q.base.statement.toUTF8.size < 2 ^ 64; omega
   · show q.base.circuit.size < 2 ^ 64; omega
   · show (st.pub x ms s).size < 2 ^ 64; omega
@@ -330,6 +331,7 @@ theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Sta
     constructor <;> omega
   · intro b hb; have := encOpt_le (o := r.innerRaw.draw) b hb; omega
   · show ∀ l ∈ r.w.links, _; rw [hlinks]; intro l hl; cases hl
+  · intro b hb; have := encOpt_le (o := r.innerRaw.program) b hb; omega
 
 /-- **Part `s`'s staged statement is `partRaw`'s encoding** where it fits. -/
 theorem staged_eq {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
@@ -634,7 +636,8 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
       bs.get o.draw "the inner statement's draw" = .ok drawB ∧
       h.src = .files
         { circuit := circuitB, pub := pubB, partition := o.partition, record := record,
-          form := some { statement := VStar.Recursive.INNER_STATEMENT, os := true, tables := [], draw := some drawB } } ∧
+          form := some { statement := VStar.Recursive.INNER_STATEMENT, os := true, tables := [], draw := some drawB },
+          program := some o.program } ∧
       h.bound = (do RecSetup.metaBound (← VStar.Recursive.metaOf circuitB)) ∧
       bs.get pr.transcript "rec inner transcript" = .ok trB ∧ String.fromUTF8? trB = some t ∧
       (o.registration.mapM fun d => do
@@ -693,8 +696,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
 /-- **Compiled part `j`'s recursive inputs**, as `partVerdict` hands them to its setup: the statement's tags `tags0`,
 the part's circuit `circuitB` and public file `pubB`, its partition and program (`pj`'s), its registered reads, its draw,
 the inner session held (`h`: the verifier's inner shape, check 5's source, the inner circuit's binding, the commits and
-the link points), `--rec-part j`, the bindings and the rows, with no link table: the statement the compiled inputs name
-carries none (`InnerNames.links`). -/
+the link points), `--rec-part j`, the bindings, the rows and no link table. -/
 def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) : RecIns where
@@ -824,6 +826,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
+    (hIprog : r.innerRaw.program = some o.program)
     (hIdraw : r.innerRaw.draw = (bs.get o.draw "the inner statement's draw").toOption)
     (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
     (hIreg : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
@@ -900,8 +903,8 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     rw [hPbind]
     exact hbindC
   have h4 : sourceOf (partRaw r st x ms s q) = .ok (some h.src) := by
-    simp only [sourceOf, formOf, partRaw, hpq, hIstmt, hIos, hItab, edraw, ecI, epI, erec, jsonOf_what hpqj, textOf,
-      hu, ok_bind, Option.getD_some]
+    simp only [sourceOf, formOf, partRaw, hpq, hIstmt, hIos, hItab, hIprog, edraw, ecI, epI, erec, jsonOf_what hpqj,
+      textOf, hu, ok_bind, Option.getD_some]
     rw [hsrc]
     rfl
   have hb : boundOf (partRaw r st x ms s q).innerCircuit = h.bound := by
@@ -981,6 +984,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
+    (hIprog : r.innerRaw.program = some o.program)
     (hIdraw : r.innerRaw.draw = (bs.get o.draw "the inner statement's draw").toOption)
     (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
     (hIreg : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
@@ -1000,7 +1004,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings (some h.rows)) := by
   have hfit := partRaw_fits hr hq hPform hIlinks (by rw [hSp]; exact hpub) hrec htr hrows
   rw [insO_staged hr hq hfit hPform.2.1,
-    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hIos hItab hIpart hIdraw hIshape hIreg hIlinks hPform
+    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hIos hItab hIpart hIprog hIdraw hIshape hIreg hIlinks hPform
       hPc hPpart hPprog hPreg hPbind hPdraw hSp hSr hSt hSrows]
   rfl
 

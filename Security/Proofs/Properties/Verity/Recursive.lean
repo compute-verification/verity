@@ -248,7 +248,7 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
   have hdraw := hP.draw tags0 recordB record hT hrecB hrec
   rw [if_pos hhm', hrd] at hdraw
   have hins := Part.ins_partRaw (r := xrOf o h w ri) (st := st) (x := x) (ms := ms) (s := j) hh hT hplain
-    hregC hbind hI.circuit hI.pub hI.statement hI.os hI.tables hI.partition hI.draw (hI.shape h hh)
+    hregC hbind hI.circuit hI.pub hI.statement hI.os hI.tables hI.partition hI.program hI.draw (hI.shape h hh)
     hI.registration hI.links hP.form rfl hP.partition hP.program hP.registered hP.bindings hdraw rfl hSr hSt hSrows
   obtain ⟨-, hbset, hregs, -, hfull⟩ := baseSetup_of_build (tags0 := tags0) (circuitB := q.base.circuit)
     (pubB := st.pub x ms j) (draw := some d) (partition := some po.partition) (program := some po.program)
@@ -263,11 +263,10 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
       readRegistered := rfl, registered := rfl, draw := rfl, inner := rfl, src := rfl, commits := rfl, link := rfl,
       part := rfl, bindings := rfl, rows := rfl, links := rfl }
   exact ⟨tags0, registered, bindings, recordB, record, d, spec, sts, hT, hregB, hrecB, hrec, hrd, hins,
-    recIns_setup_of_compiled hm hsp (innerHeld_links hh) hhm hbset hregs hfull hc, read_check_of_scope hm hscope,
-    hbuild⟩
+    recIns_setup_of_compiled hm hsp hhm hbset hregs hfull hc, read_check_of_scope hm hscope, hbuild⟩
 
 /-- **The staged statement sets up** where it reads back as itself and the model's recursive setup passes on its
-reading (D2's `setupO_staged_of_compiled`, at the setup's result). -/
+reading (`setupO_staged_of_compiled`, at the setup's result). -/
 theorem setupO_staged_of_setup {x : Msg} {r : XR} {st : Stage} {ms : List (Msg × Out)} {s : ℕ} {p : PartX}
     {i : RecIns} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hr : readX x = some r) (hp : r.w.parts[s]? = some p)
