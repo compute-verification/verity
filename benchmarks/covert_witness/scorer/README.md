@@ -122,7 +122,7 @@ lock, so the two never collide.
   direction's first, shortest first, then every second, then every third. It keeps the seeds that end by `--deadline` (17:00Z)
   starting at `--begin` (15:00Z) on the listed nodes' GPUs (8 a node; a rerun takes its record's GPU seconds plus 10
   minutes). `final dispatch` launches the plan in that order, recomputed each pass: a node (`--nodes`, in order: n1,
-  then n3 and n2 as their search runs free them) takes the next rerun while fewer than two of the scorer's reruns wait
+  then n3 and n2 as their search runs free them) takes the next rerun while fewer than four of the scorer's reruns wait
   there for a GPU slot (slot.py's `slot.json` not `held`), and nothing is launched that would end after `--deadline`
   (its record's GPU seconds plus 5 minutes). A `--smoke` launch checks
   the pipeline and never enters the table.

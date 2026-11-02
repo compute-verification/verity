@@ -1654,7 +1654,7 @@ def final_plan(begin: str = "15:00", deadline: str = "17:00", seeds=FINAL_SEEDS)
             "gpu_hours_planned": round(sum(free) / 3600, 1), "finals": fin, "refused": refused, "plan": plan}
 
 
-WAITING_PER_NODE = 2
+WAITING_PER_NODE = 4
 
 
 def rerun_state(run: str) -> str:
