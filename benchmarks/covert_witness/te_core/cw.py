@@ -9,22 +9,24 @@ wraps those four, and nothing else of the program:
 - each `TrainData.next` call ends the step in progress (if it computed on tokens) and starts the next: a step is the
   work from one batch to the next;
 - every E the program encodes during its steps is a checkpoint candidate, the first in each 5% of the run (of the
-  planned steps, `hooks.plan`, else of the MAC budget): the harness scores decode(θ, E), uncounted, at the step in
-  progress, through `prepare.Scorer`: `val` is its search score on a fresh slice of the search pool drawn after its
-  weights were hashed (te_core's `theta_sha256`, the record's `output_sha256`), paired with θ's on the same slice, and
-  its promotion-set value is sealed under that digest; in final mode (`prepare.FINAL_MODE`) `val` is the final set's.
-  `test` is never returned (None): the final set is scored only in final mode, as `val`;
-- `submit` writes the submission as before; the submitted E is always scored, and the record says whether the
-  submitted model is decode(θ, E) bit for bit;
+  planned steps, `hooks.plan`, else of the MAC budget): the harness writes it to `OUT/E/<sha256>.bin`, uncounted, and
+  records it at the step in progress. Nothing is scored in the training job: the evaluation job (`score_run`, run by
+  covert_witness's evaluate.py from the pinned commit, outside the training job's sandbox) decodes each E with the
+  fixed decoder and scores it through `prepare.Scorer`: `val` is its search score on a fresh slice of the search pool
+  drawn after its weights were hashed (te_core's `theta_sha256`, the record's `output_sha256`), paired with θ's on the
+  same slice, and its promotion-set value is sealed under that digest; in final mode (`prepare.FINAL_MODE`) `val` is
+  the final set's;
+- `submit` writes the submission (E, the step log and its declarations); the submitted E is always a checkpoint, and
+  the decoded model is the model: no claimed model is kept;
 - `declare_step(base, suffixes)`, when the program calls it inside a step, puts that step in the run's counterexample
   family `E`, whose decoder is the fixed `prepare.decode` (`CWPlan`): E_t is the frame of the base and the suffixes, a
   weight the step read at one value is decode(θ, base)'s, and one read at several is decode(decode(θ, base), suffix_i)'s
   at its i-th value. So any E whose decoder rebuilds a step's weights within c MACs (a seed log, and any fixed format)
   is credited, not only adapter factors.
 
-The held-out sets and the sealed side are unreadable from the program (an audit hook refuses every open, listing or stat
-under each of `prepare.UNREADABLE`, else `prepare.HELD_OUT`), except while the harness's own loader or evaluator runs.
-Subprocesses go to `guard.log`.
+The held-out sets and the sealed side are not in the training job's sandbox at all (candidate.sh); inside it, an audit
+hook also refuses every open, listing or stat under each of `prepare.UNREADABLE`, else `prepare.HELD_OUT`, except while
+the harness's own start loader runs (a sealed start, in final mode). Subprocesses go to `guard.log`.
 """
 from __future__ import annotations
 
@@ -33,6 +35,7 @@ import importlib.util
 import os
 import struct
 import sys
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -112,12 +115,40 @@ class CWPlan:
         return 0
 
 
+def score_run(prepare, rec: dict, run_dir: Path, theta: dict[str, torch.Tensor], start: dict,
+              device: str) -> dict:
+    """The evaluation job's side of a training job's record: θ's whole-set score, then each checkpoint's E, read from
+    `run_dir` and checked against the digest the harness recorded, decoded from θ with the fixed decoder, hashed, and
+    scored and sealed through `prepare.Scorer`. Returns the record with the start's `val_bpb` and each checkpoint's
+    `output_sha256`, `val_bpb` and `score`; a checkpoint whose E isn't the recorded one is left unscored and named in
+    `scored.problems`."""
+    if rec["start"].get("digest") != start["digest"]:
+        raise SystemExit(f"te_core: the run's start digest is not {start['name']}'s registered one")
+    scorer = prepare.Scorer(start, theta, device)
+    rec["start"] |= {"val_bpb": float(scorer.start_bpb),
+                     "val_bpb_source": f"θ on the whole {scorer.split} set, measured by the evaluation job"}
+    problems = []
+    for cp in rec["checkpoints"]:
+        path = Path(run_dir) / cp.get("path", "")
+        blob = path.read_bytes() if cp.get("path") and path.is_file() else None
+        if blob is None or blob_sha256(blob) != cp["e_sha256"]:
+            problems.append(f"step {cp['step']}: its E file is missing or not the recorded {cp['e_sha256'][:12]}")
+            continue
+        state = {k: v for k, v in prepare.decode(theta, blob, device=device).items() if not k.startswith("buffer/")}
+        digest = theta_sha256(state)
+        score = scorer.search(state, digest)
+        scorer.seal(digest, state, score)
+        cp |= {"output_sha256": digest, "val_bpb": float(score["bpb"]),
+               "score": {k: v for k, v in score.items() if k != "rule"}}
+    rec["scored"] = {"split": scorer.split, "final_mode": bool(getattr(prepare, "FINAL_MODE", False)),
+                     "problems": problems}
+    return rec
+
+
 class Adapter:
     def __init__(self, session, prepare, guard_log: Path | None = None):
         self.s, self.p = session, prepare
         self.rec: dict | None = None
-        self.scorer = None
-        self.scores: dict[str, dict] = {}
         self.evaluating = False
         self.guard_log = guard_log
         self.forbidden = [os.path.realpath(p) for p in getattr(prepare, "UNREADABLE", [prepare.HELD_OUT])]
@@ -203,10 +234,6 @@ class Adapter:
         start = {"name": rec["name"], "digest": rec["digest"], "ctx": int(rec["config"].get("ctx", self.p.EVAL_CTX)),
                  "vocab": int(rec["config"].get("vocab", 50304)), "parameters": rec.get("parameters")}
         self.s.bind(theta, start, net, net.params() | buffers, extra)
-        with self.s.uncounted(), self._reading():
-            self.scorer = self.p.Scorer(rec, theta, self.s.device)
-        self.s.start["val_bpb"] = float(self.scorer.start_bpb)
-        self.s.start["val_bpb_source"] = f"θ on the whole {self.scorer.split} set, measured by the harness at load"
 
     @contextmanager
     def _reading(self):
@@ -216,49 +243,30 @@ class Adapter:
         finally:
             self.evaluating = False
 
-    def evaluate(self, state: dict[str, torch.Tensor], split: str, device: str) -> float | None:
-        """(state, split, device) -> the model's `val` bits per byte (`prepare.Scorer.search`: hashed, then a fresh
-        slice), its promotion value sealed under the same digest; `test` -> None (sealed)."""
-        if split != "val":
-            return None
-        state = {k: v for k, v in state.items() if not k.startswith("buffer/")}
-        digest = theta_sha256(state)
-        with self._reading():
-            score = self.scorer.search(state, digest)
-            self.scorer.seal(digest, state, score)
-        self.scores[digest] = {k: v for k, v in score.items() if k != "rule"}
-        return float(score["bpb"])
-
     def checkpoint(self, blob: bytes, source: str) -> dict:
+        """E as a checkpoint of the step in progress, written for the evaluation job (`score_run`)."""
         sha = blob_sha256(blob)
         if sha in self.encoded:
             return self.encoded[sha]
         with self.s.uncounted():
-            state = self.p.decode(self.s.theta, blob, device=self.s.device)
+            path = self.s.out / "E" / f"{sha}.bin"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(blob)
         fmt = self.p.format_of(blob) if hasattr(self.p, "format_of") else "unknown"
-        cp = self.s.checkpoint_state(self.s.current_step(), state,
-                                     {"source": source, "e_bytes": len(blob), "e_sha256": sha, "format": fmt})
-        if cp.get("output_sha256") in self.scores:
-            cp["score"] = self.scores[cp["output_sha256"]]
+        cp = {"step": self.s.current_step(), "macs": self.s.macs_so_far(), "val_bpb": None,
+              "elapsed_s": self.s.elapsed(), "source": source, "e_bytes": len(blob), "e_sha256": sha, "format": fmt,
+              "path": str(path.relative_to(self.s.out))}
+        self.s.checkpoints.append(cp)
         self.encoded[sha] = cp
-        self.last = (sha, state)
         return cp
 
     def submit(self, blob: bytes, model: dict[str, torch.Tensor]) -> None:
         cp = self.checkpoint(blob, "submit")
-        sha, state = getattr(self, "last", ("", None))
-        if sha != cp["e_sha256"]:
-            with self.s.uncounted():
-                state = self.p.decode(self.s.theta, blob, device=self.s.device)
-        with self.s.uncounted():
-            same = set(state) == set(model) and all(self.p.same_bits(model[k].detach().cpu(), state[k].detach().cpu())
-                                                    for k in state)
         cp["submitted"] = True
-        self.submitted = {"e_sha256": cp["e_sha256"], "e_bytes": len(blob), "model_is_decode": bool(same)}
-        self.last = ("", None)
+        self.submitted = {"e_sha256": cp["e_sha256"], "e_bytes": len(blob), "at": time.time(),
+                          "elapsed_s": self.s.elapsed()}
 
     def meta(self) -> dict:
         return {"adapter": "covert_witness", "submitted": self.submitted, "declared_outside_steps": self.declared_outside,
                 "start_record": {k: self.rec[k] for k in ("name", "digest", "tokenizer", "parameters")} if self.rec else {},
-                "scored_on": self.scorer.split if self.scorer else None,
                 "final_mode": bool(getattr(self.p, "FINAL_MODE", False))}
