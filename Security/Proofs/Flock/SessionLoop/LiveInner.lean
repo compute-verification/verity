@@ -676,6 +676,7 @@ theorem ofLoop_answered_inner (T : CoinLayer.TableData)
     · exact hA
     · cases hA
   rw [ofLoop_frameAnswer_same T L₀ real x ρ (m0, r0) h1 hx hq hj, hcs, hcr, readCoins_eq x cs hq1] at hF
+  replace hF := (bind_rankStop_ok hF).1
   obtain ⟨q', rfl⟩ : ∃ q', q = q' + 1 := by
     rcases q with _ | q'
     · have := locate_zero (roundsOf spec sts) 0
