@@ -1,0 +1,742 @@
+"""A covert_witness program recorded from its start to one step, on the CPU with fake tensors: te_core 4.0's re-trace of
+a run the runtime counter measured.
+
+    python -m te_core.capture.script --script islands/CLASS/train.py --run RUN.json --step A --starts DIR \\
+        [--out FILE] -- TRAIN_ARGS...
+
+The program runs as te_core.run runs it (cw.py: prepare from the nearest directory above the script, the script as
+``__main__`` with its arguments), with every tensor a fake (a shape and a dtype, no values), until step A + 1 ends. Each
+ATen op it runs is a node of one graph (`Trace`, its ``region`` A) with its phase (``backward`` inside
+`torch.autograd.backward` or `torch.autograd.grad`, ``optimizer`` inside any `Optimizer.step`, else ``forward``) and its
+step, cut as the harness cuts a standalone program's: at each `TrainData.next` once the step in progress has read tokens
+(`te_core.flops.TOKEN_INDEX`), or at `hooks.step()`'s boundaries. prepare's start, data and output calls are stubbed:
+
+- `start_record`, `load_theta` and `load_start`: the start's record (``--starts``), θ as fakes of its tensors, the model
+  built from its config as prepare builds it;
+- `TrainData.next(n)` and `hooks.tokens(t)`: a graph input of token data, n windows of ctx + 1 tokens, as is a tensor
+  made (``torch.from_numpy``, ``as_tensor``) from the stream's own windows (`TrainData.tokens`, read through numpy);
+- the encoders run on the fakes unrecorded (E is the run's output, which its steps don't read back), so a program that
+  sizes E by encoding it (a rank or a width to fit its class's cap) sees the length it saw for a format that stores its
+  tensors raw; a compressed format's zeros compress further, and an encoder that can't run on fakes returns a stub;
+- `decode`, `same_bits`, `submit` and `declare_step`: no tensor work besides decode's copy of θ;
+- devices: prepare.DEVICE stays ``cuda``, so the program takes its GPU branches, and every tensor, generator and
+  autocast region is the CPU's; `torch.compile` returns its function; attention runs on its math backend;
+- time: a clock that moves by each recorded step's wall seconds (``--run``), so a program on a time budget plans as it
+  did.
+
+A Python number read from a tensor (`item`, `float`, `int`, `bool`, `tolist`, `numpy`) has no value: it is a fixed
+stand-in, and a float carries the nodes it was read from into the ops it reaches (``meta["te_scalar_deps"]``) through
+arithmetic, `math`'s functions and ``float(...)`` (whose calls in the program and prepare are rewritten to keep it). An op
+whose output size is set by values (``nonzero``, ``unique``, ``masked_select``, ``x[mask]``) is taken at its largest. The run is
+recorded again with ctx halved (prepare.EVAL_CTX and every window), for its token axes, or, when that changes its steps (a
+plan read off EVAL_CTX), with only the stream's windows halved (axis ``window``). `record(...)` returns step A's
+`StepGraph`; the CLI writes its structure (te_core.flops's record form) and its forward's GEMM MACs beside the record's
+forward MACs (its backward's differ by the recompute the GPU's fused attention runs and the math backend doesn't).
+"""
+from __future__ import annotations
+
+import argparse
+import ast
+import builtins
+import contextlib
+import json
+import math
+import operator
+import os
+import sys
+import time
+import types
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import torch
+import torch.utils._pytree as pytree
+from torch._subclasses.fake_tensor import FakeTensor, FakeTensorMode
+from torch.optim.optimizer import register_optimizer_step_post_hook, register_optimizer_step_pre_hook
+from torch.overrides import TorchFunctionMode
+from torch.utils._python_dispatch import TorchDispatchMode
+from torch.utils.weak import WeakTensorKeyDictionary
+
+from te_core.capture.structure import StepGraph, _shape
+from te_core.capture.trace import CaptureRefused, Trace
+from te_core.flops import TOKEN_INDEX
+
+__all__ = ["Scalar", "record"]
+
+aten = torch.ops.aten
+_ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant")
+#: the stubbed data stream's length (the corpus's order of magnitude, so a program's windows never run out)
+STREAM_TOKENS = 3 * 10 ** 9
+_NP = {torch.float32: np.float32, torch.float64: np.float64, torch.float16: np.float16, torch.int64: np.int64,
+       torch.int32: np.int32, torch.int16: np.int16, torch.int8: np.int8, torch.uint8: np.uint8, torch.bool: np.bool_}
+
+
+class _Stop(BaseException):
+    """The recorded steps are done."""
+
+
+class Scalar(float):
+    """A float read from a tensor: a stand-in value, carrying the graph nodes it was read from (`deps`)."""
+    deps: frozenset = frozenset()
+
+    def __new__(cls, v: float, deps=()):
+        o = super().__new__(cls, v)
+        o.deps = frozenset(deps)
+        return o
+
+
+def _lift(name: str):
+    f = getattr(float, name)
+
+    def op(self, *other):
+        r = f(self, *other)
+        if r is NotImplemented or not isinstance(r, float):
+            return r
+        d = set(self.deps)
+        for o in other:
+            d |= getattr(o, "deps", frozenset())
+        return Scalar(r, d)
+    return op
+
+
+for _n in ("__add__", "__radd__", "__sub__", "__rsub__", "__mul__", "__rmul__", "__truediv__", "__rtruediv__",
+           "__pow__", "__rpow__", "__floordiv__", "__rfloordiv__", "__mod__", "__rmod__", "__neg__", "__pos__", "__abs__"):
+    setattr(Scalar, _n, _lift(_n))
+
+_MATH = ("sqrt", "exp", "expm1", "log", "log1p", "log2", "log10", "pow", "fabs", "tanh", "sin", "cos", "atan2", "hypot",
+         "erf", "copysign")
+
+
+def _lift_math(f):
+    def op(*a):
+        r = f(*a)
+        d = frozenset().union(*(x.deps for x in a if isinstance(x, Scalar)))
+        return Scalar(r, d) if d and isinstance(r, float) else r
+    return op
+
+
+def _te_float(x=0.0):
+    """``float(x)`` in the recorded program and prepare (`_exec_lifted`): a Scalar, or a fake tensor's stand-in, kept."""
+    if isinstance(x, Scalar):
+        return x
+    if isinstance(x, torch.Tensor):
+        v = x.__float__()
+        return v if isinstance(v, float) else float(v)
+    return float(x)
+
+
+class _Floats(ast.NodeTransformer):
+    def visit_Call(self, node: ast.Call) -> ast.Call:
+        self.generic_visit(node)
+        if isinstance(node.func, ast.Name) and node.func.id == "float":
+            node.func = ast.copy_location(ast.Name("_te_float", ast.Load()), node.func)
+        return node
+
+
+def _exec_lifted(path: Path, ns: dict) -> None:
+    """Run the source at `path` in `ns` with each ``float(...)`` call `_te_float`'s: Python's float() returns a float
+    subclass's plain value, which drops a Scalar's deps (``float`` as a type, ``isinstance(x, float)``, is unchanged)."""
+    tree = ast.fix_missing_locations(_Floats().visit(ast.parse(path.read_text(), str(path))))
+    ns["_te_float"] = _te_float
+    exec(compile(tree, str(path), "exec"), ns)  # noqa: S102 - the recorder runs the program it records
+
+
+def _skey(t: torch.Tensor):
+    try:
+        return t.untyped_storage()._cdata
+    except (RuntimeError, NotImplementedError):
+        return ("id", id(t))
+
+
+def _cpu(x):
+    if isinstance(x, torch.device) and x.type == "cuda":
+        return torch.device("cpu")
+    if isinstance(x, str) and (x == "cuda" or x.startswith("cuda:")):
+        return "cpu"
+    return x
+
+
+class _Gen(torch.Generator):
+    """`torch.Generator` on the CPU whatever device it is asked for."""
+
+    def __new__(cls, device="cpu"):
+        return super().__new__(cls, device="cpu")
+
+    def __init__(self, device="cpu") -> None:
+        pass
+
+
+class _Autocast(torch.autocast):
+    def __init__(self, device_type: str = "cuda", *args, **kwargs) -> None:
+        super().__init__("cpu" if str(device_type).startswith("cuda") else device_type, *args, **kwargs)
+
+
+class _Recorder:
+    """The graph being recorded and the program's state the stubs read (module docstring)."""
+
+    def __init__(self, stop: int, wall: list[float]) -> None:
+        self.g = torch.fx.Graph()
+        self.root = torch.nn.Module()
+        self.tensors = WeakTensorKeyDictionary()   # tensor -> (node, its storage when mapped)
+        self.owner: dict = {}                      # storage -> the node that made it
+        self.named = WeakTensorKeyDictionary()     # tensor -> (kind, name): θ, the model's parameters and buffers
+        self.attrs: dict = {}
+        self.keep: list = []
+        self.phases = ["forward"]
+        self.step, self.stop, self.wall = -1, stop, wall
+        self.explicit = False
+        self.read_tokens = False
+        self.tok: set = set()
+        self.scalars: list[frozenset] = []
+        self.off = 0
+        self.n_read = 0
+        self.now = 1.0e6
+        self.inputs = 0
+        self.ctx = 0
+
+    # -- steps and time
+    def clock(self) -> float:
+        self.now += 1e-6
+        return self.now
+
+    def _end(self) -> None:
+        if self.step >= self.stop:
+            raise _Stop
+        if 0 <= self.step < len(self.wall):
+            self.now += float(self.wall[self.step] or 0.0)
+        self.step += 1
+        self.read_tokens = False
+
+    def boundary(self) -> None:
+        """`TrainData.next`: end the step in progress if it read tokens (te_core.run's `boundary`)."""
+        if self.explicit:
+            return
+        if self.step < 0:
+            self.step = 0
+        elif self.read_tokens:
+            self._end()
+
+    @contextlib.contextmanager
+    def explicit_step(self):
+        """`hooks.step()` (te_core.run's `explicit_step`)."""
+        if self.step >= 0 and self.read_tokens and not self.explicit:
+            self._end()
+        self.explicit = True
+        if self.step < 0:
+            self.step = 0
+        yield self.step
+        self._end()
+
+    @contextlib.contextmanager
+    def phase(self, name: str):
+        self.phases.append(name)
+        try:
+            yield
+        finally:
+            self.phases.pop()
+
+    @contextlib.contextmanager
+    def suspended(self):
+        self.off += 1
+        try:
+            yield
+        finally:
+            self.off -= 1
+
+    def dummy(self) -> float:
+        self.n_read += 1
+        return 1.0 + 1e-3 * self.n_read
+
+    # -- nodes
+    def _meta(self, n, val) -> None:
+        n.meta.update(val=val, te_phase=self.phases[-1], te_step=self.step)
+
+    def node_of(self, t: torch.Tensor):
+        sk = _skey(t)
+        e = self.tensors.get(t)
+        if e is not None and e[1] == sk:
+            return e[0]
+        own = self.owner.get(sk)
+        if own is not None:
+            n = self.g.call_function(aten.as_strided.default, (own, list(t.shape), list(t.stride()), t.storage_offset()))
+            self._meta(n, t)
+            if own in self.tok:
+                self.tok.add(n)
+        else:
+            name = f"_t{len(self.keep)}"
+            setattr(self.root, name, t)
+            n = self.g.get_attr(name)
+            self._meta(n, t)
+            info = self.named.get(t)
+            if info is not None:
+                self.attrs[name] = (info[0], info[1], ())
+            self.owner[sk] = n
+        self.tensors[t] = (n, sk)
+        self.keep.append(t)
+        return n
+
+    def token_input(self, t: torch.Tensor) -> torch.Tensor:
+        """`t` is token data: a graph input of the step in progress."""
+        n = self.g.placeholder(f"tokens_{self.inputs}")
+        self.inputs += 1
+        self._meta(n, t)
+        self.tok.add(n)
+        sk = _skey(t)
+        self.tensors[t] = (n, sk)
+        self.owner.setdefault(sk, n)
+        self.keep.append(t)
+        return t
+
+    def _bind(self, o: torch.Tensor, n) -> None:
+        sk = _skey(o)
+        self.tensors[o] = (n, sk)
+        self.owner.setdefault(sk, n)
+        self.keep.append(o)
+
+    def add(self, func, args, kwargs, out) -> None:
+        schema = func._schema
+        writes = any(a.alias_info is not None and a.alias_info.is_write for a in schema.arguments)
+        if not writes and not any(isinstance(x, torch.Tensor) for x in pytree.tree_leaves(out)):
+            return
+        def to_node(x):
+            return self.node_of(x) if isinstance(x, torch.Tensor) else float(x) if isinstance(x, Scalar) else x
+
+        a, k = pytree.tree_map(to_node, args), pytree.tree_map(to_node, kwargs)
+        n = self.g.call_function(func, tuple(a), dict(k))
+        self._meta(n, out)
+        deps = set().union(*self.scalars) if self.scalars else set()
+        if deps:
+            n.meta["te_scalar_deps"] = sorted(deps, key=lambda d: d.name)
+        ins = [x for x in pytree.tree_leaves((a, k)) if isinstance(x, torch.fx.Node)]
+        tok = any(x in self.tok for x in ins)
+        if tok:
+            self.tok.add(n)
+            if func.overloadpacket in TOKEN_INDEX:
+                idx = pytree.tree_leaves(a[:1] if func.overloadpacket is aten.bincount else a[1:])
+                if any(isinstance(x, torch.fx.Node) and x in self.tok for x in idx):
+                    self.read_tokens = True
+        if isinstance(out, (tuple, list)):
+            for i, o in enumerate(out):
+                if isinstance(o, torch.Tensor):
+                    gi = self.g.call_function(operator.getitem, (n, i))
+                    self._meta(gi, o)
+                    if tok:
+                        self.tok.add(gi)
+                    self._bind(o, gi)
+        elif isinstance(out, torch.Tensor):
+            self._bind(out, n)
+
+    def stand_in(self, t: torch.Tensor):
+        """A Python number read from `t` (module docstring)."""
+        if t.dtype == torch.bool:
+            return True
+        if t.dtype.is_floating_point or t.dtype.is_complex:
+            return Scalar(self.dummy(), (self.node_of(t),) if not self.off else ())
+        return 1
+
+
+def _dynamic(func, args, kwargs):
+    """An op whose output size is set by values, at its largest (module docstring); None if it isn't one."""
+    p = func.overloadpacket
+    x = args[0]
+    if p in (aten.nonzero, aten.argwhere):
+        return torch.empty((x.numel(), x.dim()), dtype=torch.int64, device=x.device)
+    if p is aten.masked_select:
+        n = torch.broadcast_shapes(x.shape, args[1].shape).numel()
+        return torch.empty((n,), dtype=x.dtype, device=x.device)
+    if p is aten._unique2:
+        inv = kwargs.get("return_inverse", args[2] if len(args) > 2 else False)
+        cnt = kwargs.get("return_counts", args[3] if len(args) > 3 else False)
+        return (torch.empty((x.numel(),), dtype=x.dtype, device=x.device),
+                torch.empty(x.shape if inv else (0,), dtype=torch.int64, device=x.device),
+                torch.empty((x.numel(),) if cnt else (0,), dtype=torch.int64, device=x.device))
+    if p in (aten.unique_dim, aten.unique_consecutive, aten.unique_dim_consecutive):
+        return (torch.empty_like(x), torch.empty((x.numel(),), dtype=torch.int64, device=x.device),
+                torch.empty((x.numel(),), dtype=torch.int64, device=x.device))
+    if p is aten.repeat_interleave and isinstance(x, torch.Tensor) and not x.dtype.is_floating_point and len(args) == 1:
+        return torch.empty((x.numel(),), dtype=torch.int64, device=x.device)
+    masks = [i for i in (args[1] if p is aten.index else ()) if isinstance(i, torch.Tensor) and i.dtype in (torch.bool,
+                                                                                                           torch.uint8)]
+    if masks and all(m.dim() for m in masks):
+        idx = []
+        for i in args[1]:
+            if isinstance(i, torch.Tensor) and i.dtype in (torch.bool, torch.uint8):
+                idx += [torch.zeros((i.numel(),), dtype=torch.int64, device=x.device)] * i.dim()
+            else:
+                idx.append(i)
+        return func(x, idx)
+    return None
+
+
+class _Dispatch(TorchDispatchMode):
+    def __init__(self, rec: _Recorder) -> None:
+        super().__init__()
+        self.rec = rec
+
+    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        kwargs = kwargs or {}
+        rec = self.rec
+        if func is aten._local_scalar_dense.default:
+            return rec.stand_in(args[0])
+        if func.namespace == "prim" or rec.off:
+            return func(*args, **kwargs)
+        out = _dynamic(func, args, kwargs)
+        if out is None:
+            out = func(*args, **kwargs)
+        rec.add(func, args, kwargs, out)
+        return out
+
+
+class _Function(TorchFunctionMode):
+    """Every device the CPU's, and a float read from a tensor carried into the ops it reaches (module docstring)."""
+
+    def __init__(self, rec: _Recorder) -> None:
+        super().__init__()
+        self.rec = rec
+
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        kwargs = kwargs or {}
+        if func in (torch.Tensor.cuda, torch.Tensor.pin_memory):
+            return args[0]
+        args, kwargs = pytree.tree_map(_cpu, (args, kwargs))
+        deps = frozenset().union(*(x.deps for x in pytree.tree_leaves((args, kwargs)) if isinstance(x, Scalar)))
+        if deps:
+            self.rec.scalars.append(deps)
+        try:
+            return func(*args, **kwargs)
+        finally:
+            if deps:
+                self.rec.scalars.pop()
+
+
+class _Tok(np.ndarray):
+    """Windows read from the stubbed stream, kept through numpy's functions (`np.stack`, ``astype``), so a tensor made
+    from them is token data."""
+
+    def __array_function__(self, func, types, args, kwargs):
+        out = super().__array_function__(func, types, args, kwargs)
+        return out.view(_Tok) if type(out) is np.ndarray else out
+
+
+class _Zeros:
+    """A token stream of `n` zeros, read by slices."""
+
+    def __init__(self, n: int) -> None:
+        self.n = n
+
+    def __len__(self) -> int:
+        return self.n
+
+    def __getitem__(self, s):
+        if isinstance(s, slice):
+            return np.zeros(len(range(*s.indices(self.n))), dtype=np.uint16).view(_Tok)
+        return np.uint16(0)
+
+
+@contextlib.contextmanager
+def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_only: bool = False):
+    """The stubs and patches of the module docstring, for one recording; `windows_only` divides the stream's windows by
+    `scale` and leaves prepare.EVAL_CTX."""
+    T = torch.Tensor
+    saved: list[tuple[Any, str, Any]] = []
+
+    def put(obj, name, value):
+        saved.append((obj, name, getattr(obj, name, None)))
+        setattr(obj, name, value)
+
+    def _item(self):
+        return rec.stand_in(self)
+
+    def _float(self):
+        v = rec.stand_in(self)
+        return v if isinstance(v, float) else float(v)
+
+    def _int(self):
+        return int(rec.stand_in(self))
+
+    def _bool(self):
+        return bool(rec.stand_in(self))
+
+    def _numpy(self):
+        if self.dtype not in _NP:
+            raise TypeError(f"Got unsupported ScalarType {self.dtype}")
+        return np.zeros(tuple(self.shape), dtype=_NP[self.dtype])
+
+    def _tolist(self):
+        flat = [rec.stand_in(self) for _ in range(max(self.numel(), 0))]
+        if self.dim() == 0:
+            return flat[0]
+        arr = np.empty(tuple(self.shape), dtype=object)
+        arr.reshape(-1)[:] = flat
+        return arr.tolist()
+
+    def wrapped(f, o):
+        def wrap(self, *a, **k):
+            return f(self) if isinstance(self, FakeTensor) else o(self, *a, **k)
+        return wrap
+
+    for name, f in (("item", _item), ("__float__", _float), ("__int__", _int), ("__bool__", _bool),
+                    ("__index__", _int), ("tolist", _tolist), ("numpy", _numpy), ("__array__", _numpy)):
+        put(T, name, wrapped(f, getattr(T, name)))
+
+    ab, ag = torch.autograd.backward, torch.autograd.grad
+
+    def backward(*a, **k):
+        with rec.phase("backward"):
+            return ab(*a, **k)
+
+    def grad(*a, **k):
+        with rec.phase("backward"):
+            return ag(*a, **k)
+
+    put(torch.autograd, "backward", backward)
+    put(torch.autograd, "grad", grad)
+    pre = register_optimizer_step_pre_hook(lambda *_: rec.phases.append("optimizer"))
+    post = register_optimizer_step_post_hook(lambda *_: rec.phases.pop())
+    put(torch, "compile", lambda f=None, *a, **k: f if f is not None else (lambda g: g))
+    put(torch, "Generator", _Gen)
+    put(torch, "autocast", _Autocast)
+    put(torch.amp, "autocast", _Autocast)
+    for name, value in (("synchronize", lambda *a, **k: None), ("empty_cache", lambda *a, **k: None),
+                        ("max_memory_allocated", lambda *a, **k: 0), ("memory_allocated", lambda *a, **k: 0),
+                        ("max_memory_reserved", lambda *a, **k: 0), ("reset_peak_memory_stats", lambda *a, **k: None),
+                        ("mem_get_info", lambda *a, **k: (96 << 30, 96 << 30)),
+                        ("get_device_name", lambda *a, **k: "NVIDIA RTX PRO 6000 Blackwell (recorded on CPU)")):
+        put(torch.cuda, name, value)
+    for name in ("time", "perf_counter", "monotonic"):
+        put(time, name, rec.clock)
+    put(time, "sleep", lambda s: None)
+    for name in _MATH:
+        put(math, name, _lift_math(getattr(math, name)))
+
+    def from_stream(f):
+        def make(data, *a, **k):
+            t = f(data, *a, **k)
+            return rec.token_input(t) if isinstance(data, _Tok) and isinstance(t, torch.Tensor) else t
+        return make
+
+    for name in ("from_numpy", "as_tensor", "asarray", "tensor"):
+        put(torch, name, from_stream(getattr(torch, name)))
+
+    # prepare's start, data and outputs
+    ctx = rec.ctx = int(prepare.EVAL_CTX) // scale
+    if not windows_only:
+        put(prepare, "EVAL_CTX", ctx)
+    put(prepare, "DEVICE", "cuda")
+
+    def start_record(name):
+        return json.loads((starts / f"{name}.start.json").read_text())
+
+    def theta_of(name):
+        rec_ = start_record(name)
+        with rec.suspended():
+            return {n: torch.empty(tuple(shape), dtype=getattr(torch, dt.removeprefix("torch.")))
+                    for n, (dt, shape) in rec_["tensors"].items()}
+
+    def load_theta(name, check=True):
+        th = theta_of(name)
+        for n, t in th.items():
+            rec.named[t] = ("theta", n)
+        return th
+
+    def load_start(name, device=None):
+        r = start_record(name)
+        th = load_theta(name)
+        with rec.suspended():
+            net = prepare.Net(r["config"])
+            with torch.no_grad():
+                for n, p in net.params().items():
+                    p.data = th[n].clone()
+        for n, p in net.params().items():
+            rec.named[p] = ("parameter", n)
+        for n, b in net.named_buffers():
+            rec.named[b] = ("buffer", n)
+        return net, r, th
+
+    base_td = prepare.TrainData
+
+    class TrainData:
+        def __init__(self, tokenizer, seed=1, ctx=None):
+            self.ctx = int(ctx) // scale if ctx is not None else rec.ctx
+            self.tokens = _Zeros(STREAM_TOKENS)
+            self.order = np.random.default_rng(seed).permutation((len(self.tokens) - 1) // self.ctx)
+            self.at = 0
+
+        def next(self, n, device=None):
+            rec.boundary()
+            if self.at + n > len(self.order):
+                self.at = 0
+            self.at += n
+            with rec.suspended():
+                t = torch.empty((int(n), self.ctx + 1), dtype=torch.int64)
+            return rec.token_input(t)
+
+    TrainData.__doc__ = base_td.__doc__
+    put(prepare, "start_record", start_record)
+    put(prepare, "load_theta", load_theta)
+    put(prepare, "load_start", load_start)
+    put(prepare, "TrainData", TrainData)
+    def encoder(f, name):
+        def encode(*a, **k):
+            with rec.suspended():
+                try:
+                    return f(*a, **k)
+                except Exception:  # noqa: BLE001 - an encoder that needs real values gets stand-in bytes
+                    return b"CW" + name.encode() + b"\n"
+        return encode
+
+    for name in _ENCODERS:
+        if hasattr(prepare, name):
+            put(prepare, name, encoder(getattr(prepare, name), name))
+    put(prepare, "decode", lambda theta, blob, device=None: {n: v.detach().clone() for n, v in theta.items()})
+    put(prepare, "same_bits", lambda a, b: True)
+    put(prepare, "submit", lambda *a, **k: None)
+    put(prepare, "declare_step", lambda *a, **k: None)
+
+    class _Session:
+        def plan(self, n):
+            pass
+
+        def output(self, fn):
+            pass
+
+        def explicit_step(self):
+            return rec.explicit_step()
+
+        def tokens(self, batch):
+            return rec.token_input(batch)
+
+        def family(self, name, plan, uniform=True):
+            return hooks._NoFamily()
+
+    put(hooks, "ACTIVE", _Session())
+    try:
+        yield
+    finally:
+        pre.remove()
+        post.remove()
+        for obj, name, value in reversed(saved):
+            setattr(obj, name, value)
+
+
+def _record_once(script: Path, args: list[str], starts: Path, stop: int, wall: list[float], scale: int, log,
+                 windows_only: bool = False) -> _Recorder:
+    from te_core import cw, hooks
+
+    island = script.resolve().parent
+    for m in [m for m, mod in sys.modules.items() if str(getattr(mod, "__file__", "") or "").startswith(str(island))]:
+        del sys.modules[m]
+    argv0, path0 = sys.argv, list(sys.path)
+    prepare = cw.import_prepare(script)
+    _exec_lifted(Path(prepare.__file__), prepare.__dict__)
+    rec = _Recorder(stop, wall)
+    sys.argv = [str(script), *args]
+    sys.path.insert(0, str(island))
+    main, main0 = types.ModuleType("__main__"), sys.modules.get("__main__")
+    main.__dict__.update(__file__=str(script), __builtins__=builtins)
+    fake = FakeTensorMode(allow_non_fake_inputs=True)
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+    try:
+        with _patched(rec, prepare, hooks, starts, scale, windows_only), contextlib.redirect_stdout(log), \
+                sdpa_kernel([SDPBackend.MATH]), fake, _Function(rec), _Dispatch(rec):
+            sys.modules["__main__"] = main
+            try:
+                _exec_lifted(script, main.__dict__)
+            except _Stop:
+                pass
+            except SystemExit as e:
+                if e.code not in (None, 0):
+                    raise CaptureRefused("trace", None, f"the program exited {e.code} at step {rec.step}") from e
+    finally:
+        sys.argv, sys.path[:] = argv0, path0
+        sys.modules["__main__"] = main0
+    if rec.step < stop:
+        raise CaptureRefused("trace", None, f"the program ended at step {rec.step}, before step {stop} ended")
+    return rec
+
+
+class _Graph(torch.nn.Module):
+    """A recorded graph's module: its attributes, and `graph`."""
+
+    def __init__(self, rec: _Recorder) -> None:
+        super().__init__()
+        self.__dict__["graph"] = rec.g
+        for name in [n.target for n in rec.g.nodes if n.op == "get_attr"]:
+            self.__dict__[name] = getattr(rec.root, name)
+
+
+def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list[float], step_tokens: int,
+           log=None, name: str | None = None) -> StepGraph:
+    """Step `step` of the program `script` run with `args` (module docstring), as a `StepGraph` whose tokens are
+    `step_tokens` (the record's count for that step)."""
+    log = log if log is not None else open(os.devnull, "w")
+    name = name or Path(script).parent.name
+
+    def trace(scale, windows_only=False):
+        rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only)
+        return Trace(_Graph(rec), rec.attrs, [], axis_sizes=(rec.ctx,), step_tokens={step: step_tokens}, region=step)
+
+    base = trace(1)
+    try:
+        return StepGraph.build(base, [trace(2)], ("ctx",), updated=None, name=name)
+    except CaptureRefused as e:
+        if e.reason != "batch_dependent":
+            raise
+        refused = e.with_traceback(None)
+    # a program that plans its steps from prepare.EVAL_CTX (a FLOP budget over batch x ctx tokens) runs other steps when
+    # it is halved; halving only the stream's windows keeps its plan, and holds only if every window steps A and A + 1
+    # read is one of the stream's (a program that cuts its own windows at EVAL_CTX + 1 would read them unhalved)
+    try:
+        varied = trace(2, windows_only=True)
+        g = StepGraph.build(base, [varied], ("window",), updated=None, name=name)
+    except Exception:  # noqa: BLE001 - the fallback failing for any reason leaves the first refusal standing
+        raise refused from None
+    fixed = [a.name for a, b in zip(base.gm.graph.nodes, varied.gm.graph.nodes)
+             if a.op == "placeholder" and a.name.startswith("tokens_") and int(a.meta.get("te_step", -1)) in (step, step + 1)
+             and _shape(a.meta.get("val")) == _shape(b.meta.get("val"))]
+    if fixed:
+        raise CaptureRefused("batch_dependent", None, f"{refused}; with only the stream's windows halved, its token "
+                             f"inputs {fixed[:4]} keep their shape") from None
+    return g
+
+
+def gemm_macs(g: StepGraph) -> int:
+    return sum(m.macs for m in g.matmuls)
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--script", type=Path, required=True)
+    ap.add_argument("--run", type=Path, required=True, help="the run's run.json (te_core.flops's record)")
+    ap.add_argument("--step", type=int, required=True)
+    ap.add_argument("--starts", type=Path, required=True, help="a directory of NAME.start.json")
+    ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--log", type=Path, default=None, help="the program's standard output")
+    argv = sys.argv[1:] if argv is None else argv
+    split = argv.index("--") if "--" in argv else len(argv)
+    a = ap.parse_args(argv[:split])
+    run = json.loads(a.run.read_text())
+    steps = run["steps"]
+    wall = [float(s.get("wall_s") or 0.0) for s in steps]
+    t0 = time.perf_counter()
+    with (open(a.log, "w") if a.log else open(os.devnull, "w")) as log:
+        g = record(a.script, argv[split + 1:], step=a.step, starts=a.starts, wall=wall,
+                   step_tokens=int(steps[a.step]["tokens"]), log=log)
+    by = steps[a.step].get("by") or {}
+    out = {"step": a.step, "structure": g.structure(), "gemm_macs": gemm_macs(g),
+           "recorded_gemm_macs": int(steps[a.step]["matmul_macs"]),
+           "forward_gemm_macs": g.phase_macs().get("forward", 0),
+           "recorded_forward_macs": sum(v for k, v in by.items() if k.startswith("fwd/")), "tokens": g.tokens, "axes": g.axes,
+           "updated_macs": g.updated_macs(), "dependent": g.dependent[:40], "sinks": g.sinks[:40],
+           "cut_bits": g.cut_bits, "beta": g.beta, "cut": g.cut[:12], "seconds": round(time.perf_counter() - t0, 1)}
+    text = json.dumps(out, indent=1, default=str)
+    if a.out:
+        a.out.write_text(text + "\n")
+    print(json.dumps({k: out[k] for k in ("step", "forward_gemm_macs", "recorded_forward_macs", "updated_macs", "cut_bits",
+                                          "beta", "seconds")}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
