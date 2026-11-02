@@ -1,5 +1,6 @@
 """The search's efficiency table, kept current during a night (coordinator 19:15Z, night 2): per start and target, H(l*),
-the least 2|C| over every valid v2.3 record's complete schedules (te_core 3.5.3 frontier.target, the 14:57Z rule), and
+the least 2|C| over every checkpoint of every valid v2.3 record (the coordinator's 19:50Z rule, which replaced the
+complete-schedule rule of 14:42Z and 14:57Z; te_core 3.5.3 frontier.target with every checkpoint counted as an end), and
 per Delta bin (the record's class) and per direction the least compute to the target with p = |C|/H. No rho, W* or S:
 the v1 quantities come from the analytic re-score (benchmarks/covert_witness/analysis/)."""
 import json
@@ -19,7 +20,8 @@ def night(row: dict | None) -> str:
 
 
 def best(on: list[dict], l_star: float) -> dict | None:
-    t = S.te_pin("frontier").target(on, l_star, S.KEYS, reference=lambda x: x["reference"])
+    t = S.te_pin("frontier").target([x | {"schedule_end": True} for x in on], l_star, S.KEYS,
+                                    reference=lambda x: x["reference"])
     if not t["honest"]:
         return None
     o = t["honest_of"]
@@ -41,11 +43,12 @@ def main() -> dict:
           f"`cursor/te-scorer-516a`). It covers {out['records']} valid v2.3 records (pin 11d96c1b874 and its "
           f"measurement commit), {len(n2)} of them launched in night 2 (from 19:15Z Mon).", "",
           "- **H(l\\*)** is the least training FLOPs (2|C|) over every valid v2.3 record of either night that reaches "
-          "l\\* = start × (1 − 0.5%, 1%, 2%, 5%) by a complete schedule, by te_core 3.5.3's `frontier.target`.",
+          "l\\* = start × (1 − 0.5%, 1%, 2%, 5%) at any checkpoint (the coordinator's 19:50Z rule), by te_core "
+          "3.5.3's `frontier.target`.",
           "- **Per Δ bin** (the record's class: e100kb Δ ≤ 100 kB, e1mb ≤ 1 MB, shallow, reference any Δ) the least "
-          "FLOPs to the target by a complete schedule, and p = that over H. A bin's best is an upper bound on A2's "
+          "FLOPs to the target at any checkpoint, and p = that over H. A bin's best is an upper bound on A2's "
           "curve at that Δ until the v1 Δ of each record replaces the class.",
-          "- `ub` marks a target only a mid-schedule checkpoint reaches. `n2` marks a night-2 record.",
+          "- `n2` marks a night-2 record.",
           "- **ρ, W\\* and S are not here**: they come from the v1 re-score (Fit, the Slowdown theorem's ρ as target), "
           "not the harness's retired ρ.", ""]
     for s, v in l0.items():
@@ -74,11 +77,10 @@ def main() -> dict:
             def show(c):
                 if not c:
                     return "—"
-                tag = (" n2" if next(x for x in on if x["id"] == c["id"])["night"] == "n2" else "") + (
-                    " ub" if c["bound"] else "")
+                tag = " n2" if next(x for x in on if x["id"] == c["id"])["night"] == "n2" else ""
                 return f"{c['flops']:.3g} (p {c['p']:.2f}, {S.short(c['id'])}{tag})"
             hs = (f"{cell['H']:.3g} ({S.short(h['id'])}@{h['cp']}, {cell['H_direction']}"
-                  + (" n2" if cell["H_night"] == "n2" else "") + (", ub" if h["bound"] else "") + ")") if h else "none"
+                  + (" n2" if cell["H_night"] == "n2" else "") + ")") if h else "none"
             md.append(f"| −{100 * f:g}% | {ls:.4f} | {hs} | " + " | ".join(show(cell["bins"][b]) for b in BINS) + " |")
         out["table"][s] = rows_s
         md.append("")
@@ -90,7 +92,7 @@ def main() -> dict:
             cs = [c["directions"].get(d) for c in rs]
             if any(cs):
                 md.append(f"| {s} | {d} | " + " | ".join(
-                    f"{c['flops']:.3g} (p {c['p']:.2f}{' ub' if c['bound'] else ''})" if c else "—" for c in cs) + " |")
+                    f"{c['flops']:.3g} (p {c['p']:.2f})" if c else "—" for c in cs) + " |")
     OUT.write_text("\n".join(md) + "\n")
     OUT.with_suffix(".json").write_text(json.dumps(out, indent=1, default=str) + "\n")
     return out
