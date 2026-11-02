@@ -5,7 +5,7 @@ Layout under ROOT (`--root`, default `$COVERT_ROOT` or /workspace/research/scrat
     train/<tok>/train.bin            training tokens (uint16), the only data the block executor (meter.py) reads
     heldout/<tok>/search.bin         SEARCH: fineweb-edu shard 013's first 2,097,153 GPT-2 tokens (the first curves' held-out
                                      text), the score every candidate gets
-    heldout/<tok>/final.bin          FINAL: shard 014's first 2,097,153 GPT-2 tokens, which no candidate is scored on; the
+    heldout/<tok>/final.bin          FINAL: shard 012's first 2,097,153 GPT-2 tokens, which no candidate is scored on; the
                                      integrator reads it once, on kept entries
     heldout/<tok>/*.bytes.npy        per target token, its UTF-8 byte length (end-of-text: 0)
     starts/<name>/start.json         a registered start: architecture, tokenizer, theta's file and sha256, c, the eval cap
@@ -48,7 +48,7 @@ CTX = 1024
 C_SEQS = 64                      # c is the FLOPs of one forward and backward pass over C_SEQS sequences of CTX tokens
 TOKEN_BITS = 16                  # a data token crosses a block boundary as uint16
 HELD_OUT_TOKENS = 2048 * 1024 + 1
-FINAL_SHARD = "014"
+FINAL_SHARD = "012"
 SMOL_REPO = "HuggingFaceTB/SmolLM2-135M"
 SMOL_TRAIN_TOKENS = 160_000_000  # 2.4x a 1000-block budget at 64 sequences per block
 EOT = {"gpt2": 50256, "smollm2": 0}
