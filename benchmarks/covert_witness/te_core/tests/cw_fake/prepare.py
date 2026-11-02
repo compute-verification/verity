@@ -6,6 +6,7 @@ import io
 import json
 import math
 import os
+import sys
 from pathlib import Path
 
 import torch
@@ -89,6 +90,10 @@ def format_of(blob):
     return "full" if blob[:8] == b"CWFULL1\n" else "unknown"
 
 
+def rebuild_macs(theta, blob):
+    return 0
+
+
 def same_bits(a, b):
     return a.dtype == b.dtype and a.shape == b.shape and torch.equal(a, b)
 
@@ -106,8 +111,9 @@ def evaluate_bpb(net, split, tokenizer, micro: int = 32, device: str = DEVICE):
     return {"bpb": nats / (4 * rows[:, 1:].numel()) / math.log(2)}
 
 
-#: the keys sealed in this process (the harness's audit hook outlives a run, so a test can't list SEALED after one)
-SEALED_KEYS: list[str] = []
+#: the keys sealed in this process (the harness's audit hook outlives a run, so a test can't list SEALED after one), one
+#: list for the program's instance and the harness's own (`cw.private_copy`)
+SEALED_KEYS: list[str] = getattr(sys.modules.get("prepare"), "SEALED_KEYS", [])
 
 
 class Scorer:
