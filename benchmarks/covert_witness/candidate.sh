@@ -42,18 +42,33 @@ if [ "${1:-}" = --leased ]; then
   T=$S/train
   mkdir -p "$T" "$S/root"
   meta="{\"class\": \"$klass\", \"start\": \"$start\", \"launcher\": \"covert_witness/candidate.sh\", \"node\": \"${CW_NODE:-}\", \"island\": \"$island\"}"
-  # the interpreter's prefix, base prefix and every sys.path entry outside them and /usr, none holding a held-out directory
+  # the interpreter's prefix, base prefix and every sys.path entry, and each link on the way to its binary and to its
+  # venv's home (a bind follows it), outside /usr and each other, none holding a held-out directory
   pyro=$("$P" -I -c 'import os, sys
-held = [os.path.realpath(p) for p in sys.argv[1:]]
+held = [os.path.realpath(p) for p in sys.argv[2:]]
+paths = {os.path.realpath(p) for p in (sys.prefix, sys.base_prefix, *sys.path) if p and os.path.exists(p)}
+cfg = os.path.join(sys.prefix, "pyvenv.cfg")
+todo = [sys.argv[1], *(v.strip() for k, _, v in (l.partition("=") for l in open(cfg)) if k.strip() == "home")] \
+    if os.path.isfile(cfg) else [sys.argv[1]]
+for _ in range(200):
+    if not todo:
+        break
+    x = todo.pop()
+    parts = x.split("/")
+    for i in range(2, len(parts) + 1):
+        q = "/".join(parts[:i])
+        if os.path.islink(q):
+            paths.add(q)
+            todo.append(os.path.normpath(os.path.join(os.path.dirname(q), os.readlink(q))))
 out = []
-for p in sorted({os.path.realpath(p) for p in (sys.prefix, sys.base_prefix, *sys.path) if p and os.path.exists(p)}, key=len):
+for p in sorted(paths, key=len):
     if p == "/usr" or p.startswith("/usr/") or any(p == q or p.startswith(q + "/") for q in out):
         continue
     bad = [h for h in held if h == p or h.startswith(p + "/")]
     if bad:
         sys.exit(f"candidate: {p}, on the interpreter path, holds {bad[0]}")
     out.append(p)
-print(" ".join(out))' "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
+print(" ".join(out))' "$P" "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
   ro=(--ro /usr --ro /etc)
   for p in $pyro; do ro+=(--ro "$p"); done
   ro+=(--ro "$here" --tmpfs "$here/islands" --ro "$S/island:$here/islands/$island" --ro "$STARTS" --ro "$LF/train.bin")
@@ -89,7 +104,9 @@ print(" ".join(out))' "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
     -- --start "$start" --out "$T/sub" "$@" > "$OUT/train.log" 2>&1
   rc=$?
   t1=$(date +%s.%N)
-  echo "{\"process_seconds\": $("$P" -c "print(round($t1 - $t0, 3))"), \"rc\": $rc, \"gpu\": \"$(nvidia-smi --query-gpu=name --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" 2>/dev/null | head -1)\"}" > "$S/timing.json"
+  leased=${GPU_LEASE_UUID:-}
+  gpu=$([ -n "$leased" ] && nvidia-smi --query-gpu=name --format=csv,noheader -i "${leased%%,*}" 2>/dev/null | head -1)
+  echo "{\"process_seconds\": $("$P" -c "print(round($t1 - $t0, 3))"), \"rc\": $rc, \"gpu\": \"$gpu\"}" > "$S/timing.json"
   cp "$S/timing.json" "$OUT/timing.json"
   [ -f "$S/tree.json" ] && cp "$S/tree.json" "$OUT/tree.json"
   mkdir -p "$OUT/run"
