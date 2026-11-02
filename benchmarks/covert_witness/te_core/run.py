@@ -21,7 +21,10 @@ family's `verified.json` (checked here, after training, on the run's device, fro
 `--keep-checkpoints` (tier 2), each checkpoint's weights. Torch compilation is disabled and CUDA graph replay refused:
 both run work the counter can't see. For the same reason a run is invalid when it uses an op the counter can't price
 (flops.py), reads token data out of torch, starts a thread or a process (cw.py), or imports a module that names a route
-the screen refuses (`Imports`).
+the screen refuses or that it wrote during the run (`Imports`). The screen (`screen`) refuses, in the program and in every
+module it imports outside the fixed side, the names that run code it never reads: `exec`, `eval` and `compile` (called
+or not), `runpy`, `importlib`, `__import__`, `marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and
+`sys.meta_path`; while the program runs no bytecode cache is read, so what runs is the source that was screened.
 """
 from __future__ import annotations
 
@@ -83,6 +86,19 @@ def load_theta(path: Path) -> tuple[dict[str, torch.Tensor], dict]:
 
 def file_sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+@contextmanager
+def no_function_modes():
+    """The block runs with no torch function mode and no tensor subclass's `__torch_function__`, but a mode it enters
+    itself (a `torch.device(...)` context) applies: `torch._C.DisableTorchFunction` would switch that off too."""
+    modes = [torch._C._pop_torch_function_stack() for _ in range(torch._C._len_torch_function_stack())]
+    try:
+        with torch._C.DisableTorchFunctionSubclass():
+            yield
+    finally:
+        for mode in reversed(modes):
+            torch._C._push_on_torch_function_stack(mode)
 
 
 def git_commit() -> str:
@@ -160,8 +176,7 @@ class Session:
         gc.disable()
         sys.path[:] = self.sys_path
         try:
-            with (self.counter.pause(), torch.utils._python_dispatch._disable_current_modes(),
-                  torch._C.DisableTorchFunction()):
+            with self.counter.pause(), torch.utils._python_dispatch._disable_current_modes(), no_function_modes():
                 yield
         finally:
             sys.path[:] = path
@@ -372,7 +387,12 @@ FORBIDDEN = (r"\.counter\b", r"\.pause\b", r"\buncounted\b", r"\bte_core\.(?!(ho
              "__builtins__", "__subclasses__", r"(?<![.\w])(exec|eval|compile)\s*\(", r"\bsys\.monitoring\b",
              r"(?m)^\s*from\s+sys\s+import\b.*\bmonitoring\b", r"\btorch\._C\b", r"(?m)^\s*from\s+torch\s+import\b.*\b_C\b",
              r"__bases?__", "__mro__", "__closure__", "cell_contents", r"\bpyarrow\b", r"\bpolars\b", r"\bduckdb\b",
-             r"(?m)^\s*(import|from)\s+datasets\b")
+             r"(?m)^\s*(import|from)\s+datasets\b", r"\brunpy\b", r"\bmarshal\b", r"\b_?c?pickle\b", r"\bdill\b",
+             r"\bshelve\b", r"\bzipimport\b", "FunctionType", "CodeType", "__code__", r"\bmeta_path\b",
+             r"\bpath_hooks\b", r"weights_only\s*=\s*False")
+#: names that run source or code built at run time: refused wherever the program names them, called or not (`f = exec`),
+#: except as another object's attribute (`re.compile`, `torch.compile`, `model.eval`)
+FORBIDDEN_NAMES = frozenset({"exec", "eval", "compile", "execfile", "breakpoint"})
 
 
 def _code(source: str) -> str:
@@ -391,9 +411,18 @@ def _code(source: str) -> str:
         return source
 
 
+def _names(code: str) -> set[str]:
+    """The bare names `code` uses: NAME tokens not after a `.`."""
+    try:
+        toks = list(tokenize.generate_tokens(io.StringIO(code).readline))
+    except (tokenize.TokenError, SyntaxError):
+        return set(re.findall(r"(?<![.\w])\w+", code))
+    return {t.string for i, t in enumerate(toks) if t.type == tokenize.NAME and not (i and toks[i - 1].string == ".")}
+
+
 def screen(source: str) -> list[str]:
     code = _code(source)
-    return [pat for pat in FORBIDDEN if re.search(pat, code)]
+    return [pat for pat in FORBIDDEN if re.search(pat, code)] + sorted(FORBIDDEN_NAMES & _names(code))
 
 
 TE_CORE = Path(__file__).resolve().parent
@@ -402,7 +431,9 @@ TE_CORE = Path(__file__).resolve().parent
 class Imports:
     """The modules first imported while a program runs, each screened like the program (a module beside it that names
     a refused route), unless the fixed side holds it: Python's own paths, te_core (not its tests), or the files beside
-    prepare.py (`fixed_dir`), unchanged since the run began."""
+    prepare.py (`fixed_dir`), unchanged since the run began. A module from a file written since the run began is refused:
+    its source when it ran may not be what is screened at exit. While the program runs, bytecode caches are neither read
+    nor written (`no_bytecode`), so what runs is the source that is screened."""
 
     def __init__(self, fixed_dir: Path | None = None):
         self.before = set(sys.modules)
@@ -432,13 +463,29 @@ class Imports:
             p = Path(f).resolve()
             if self._fixed(p):
                 continue
-            if p.suffix != ".py":
+            if p.is_file() and p.stat().st_mtime >= self.since:
+                bad.append(f"{name} ({p}: written during the run)")
+            elif p.suffix != ".py":
                 bad.append(f"{name} ({p.name}: native code)")
             elif not p.is_file():
                 bad.append(f"{name} ({p}: its source is gone)")
             elif hits := screen(p.read_text(errors="replace")):
                 bad.append(f"{name} names {hits}")
         return [f"modules the program imported break the program contract: {bad[:4]}"] if bad else []
+
+
+@contextmanager
+def no_bytecode():
+    """Bytecode caches unread and unwritten (an empty cache prefix), so a module imported now runs from its source."""
+    import tempfile
+
+    prefix, write = sys.pycache_prefix, sys.dont_write_bytecode
+    with tempfile.TemporaryDirectory(prefix="te-pycache-") as d:
+        sys.pycache_prefix, sys.dont_write_bytecode = d, True
+        try:
+            yield
+        finally:
+            sys.pycache_prefix, sys.dont_write_bytecode = prefix, write
 
 
 def load_program(path: Path):
@@ -519,7 +566,7 @@ def run_script(a, args: list[str]) -> dict:
     sys.path.insert(0, str(script.parent))
     imports = Imports(Path(prepare.__file__).parent)
     rc = 0
-    with te.counter:
+    with no_bytecode(), te.counter:
         adapter.start()
         try:
             runpy.run_path(str(script), run_name="__main__")
@@ -568,12 +615,13 @@ def main(argv=None) -> int:
                  families=a.families)
     guard_exits()
     imports = Imports()
-    program = load_program(a.program)
+    with no_bytecode():
+        program = load_program(a.program)
     meta = json.loads(a.meta) | {"program": a.program.name, "program_sha256": file_sha256(a.program),
                                  "commit": git_commit(), "hardware": torch.cuda.get_device_name() if
                                  torch.cuda.is_available() else "cpu", "peak_macs_per_s": a.peak_macs_per_s}
     stopped = ""
-    with te.counter:
+    with no_bytecode(), te.counter:
         try:
             program.train(te)
         except BudgetExceeded as e:

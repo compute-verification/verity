@@ -3,6 +3,7 @@ weights by value after a recast."""
 import gc
 import json
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -175,9 +176,13 @@ def test_the_screen_reads_names_not_substrings():
                 "os.fork()", "os.popen('ls')", "torch.library.custom_op", "exec('x = 1')", "eval ('1')",
                 "compile(src, 'f', 'exec')", "import builtins", "torch._C.TensorBase.numpy(t)",
                 "torch._C._VariableFunctions.from_file(p)", "from torch import nn, _C", "torch.UntypedStorage.__mro__[1]",
-                "torch.from_file.__closure__[0].cell_contents", "import pyarrow.parquet as pq", "from datasets import Dataset"):
+                "torch.from_file.__closure__[0].cell_contents", "import pyarrow.parquet as pq", "from datasets import Dataset",
+                "import runpy", "runpy.run_path(p, run_name='__main__')", "run = exec", "f = eval", "g = compile",
+                "import marshal", "pickle.loads(b)", "import dill", "types.FunctionType(code, {})", "f.__code__",
+                "sys.meta_path.append(Finder())", "torch.load(p, weights_only=False)"):
         assert te_run.screen(bad), bad
     assert te_run.screen("datasets = {}\nfrom torch import nn\ntorch.from_file(p)\n") == []
+    assert te_run.screen("mode = 'eval'\nnet.eval()\nfwd = torch.compile(net)\nsd = torch.load(p, weights_only=True)\n") == []
 
 
 def run_probe(tmp_path, monkeypatch, variant: str) -> dict:
@@ -245,7 +250,7 @@ def test_the_stream_batch_is_token_data_without_an_embedding(tmp_path, monkeypat
     ("thread", "started threads or processes"),
     pytest.param("fork", "started threads or processes",
                  marks=pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")),
-    ("sibling", "modules the program imported"),
+    ("sibling", "modules the program imported"), ("written", "written during the run"),
 ])
 def test_a_route_past_the_counter_makes_the_run_invalid(tmp_path, monkeypatch, variant, why):
     rec = run_probe(tmp_path, monkeypatch, variant)
@@ -283,6 +288,30 @@ def test_the_fixed_prepare_above_an_island_wins_and_its_modules_are_imported_fir
     sys.path.insert(0, str(island))
     assert Path(prepare.__file__) == tmp_path / "prepare.py" and prepare.load() == "fixed"
     assert Path(sys.modules["te_fixed_lazy"].__file__) == tmp_path / "te_fixed_lazy.py"
+
+
+def test_a_module_imported_while_the_program_runs_runs_from_its_source(tmp_path, monkeypatch):
+    """A bytecode cache whose header matches its source's size and mtime but not its text (one an island could ship) is
+    what Python would run; while the program runs it is never read, so the source the screen reads is what runs."""
+    import py_compile
+    from importlib.util import cache_from_source
+
+    src = tmp_path / "te_stale.py"
+    src.write_text("WHO = 'pyc'\n")
+    st = src.stat()
+    py_compile.compile(str(src), cfile=cache_from_source(str(src)))
+    src.write_text("WHO = 'src'\n")
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "te_stale", raising=False)
+    import te_stale
+
+    assert te_stale.WHO == "pyc"
+    del sys.modules["te_stale"]
+    with te_run.no_bytecode():
+        import te_stale
+    del sys.modules["te_stale"]
+    assert te_stale.WHO == "src"
 
 
 def test_the_harness_work_imports_from_the_path_it_began_with(tmp_path, monkeypatch):
@@ -338,6 +367,26 @@ def test_the_harness_work_runs_no_mode_hook_or_profiler_of_the_programs(tmp_path
         hook.remove()
     assert inside == [] and not collecting and profiling is None and restored and gc.isenabled()
     assert "mode" in seen and "hook" in seen
+
+
+def test_the_harness_work_builds_on_the_device_it_names_and_not_the_programs(tmp_path):
+    te = te_run.Session({}, tmp_path)
+    seen = []
+
+    class Mode(TorchFunctionMode):
+        def __torch_function__(self, func, types, args=(), kwargs=None):
+            seen.append(func)
+            return func(*args, **(kwargs or {}))
+
+    with torch.device("meta"), Mode():
+        with te.uncounted():
+            plain_device = torch.empty(1).device.type
+            with torch.device("meta"):
+                named = torch.empty(1).device.type, torch.nn.Linear(2, 2).weight.device.type
+            inside = list(seen)
+        after = torch.empty(1).device.type
+    assert plain_device == "cpu" and named == ("meta", "meta") and inside == [] and after == "meta" and seen
+    assert torch._C._len_torch_function_stack() == 0 and torch.empty(1).device.type == "cpu"
 
 
 

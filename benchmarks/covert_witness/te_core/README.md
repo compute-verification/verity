@@ -95,12 +95,16 @@ slice of the search pool, and the promotion set's score sealed under the digest 
 set only in its final mode). A batch from `TrainData.next` is token data through any op that reads it, not only an
 embedding lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The
 harness's own work runs with its own instance of prepare.py, on plain copies of what the program handed it, and with the
-program's torch function modes, global module hooks and profilers off, and with the `sys.path` and the modules
+program's torch function modes (a default device among them), global module hooks and profilers off, its own
+`torch.device(...)` contexts on, and with the `sys.path` and the modules
 prepare.py names as they were before the program ran. A program that rebinds what that work calls (`cw.watched`) makes
 its run invalid. So does one that routes work past the counter: an op outside torch's own namespaces (a custom op), a
 product op with no MAC formula, token data read out of torch (`numpy`, `tolist`, DLPack) at a value per token or more, a
-thread or a child process it starts, or a module it imports that names a route the screen refuses (`run.Imports`). From
-`benchmarks/covert_witness/`:
+thread or a child process it starts, or a module it imports that names a route the screen refuses or that it wrote during
+the run (`run.Imports`). The screen reads the program and every module it imports outside the fixed side, and refuses
+what would run code it never reads: `exec`, `eval` and `compile` (called or not), `runpy`, `importlib`, `__import__`,
+`marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and `sys.meta_path`; while the program runs no bytecode cache is
+read (`run.no_bytecode`). From `benchmarks/covert_witness/`:
 
 ~~~text
 python -m te_core.run --script islands/CLASS/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
