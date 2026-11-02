@@ -601,6 +601,54 @@ theorem goes_round (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArra
     unfold roundRows
     rw [cs_append, List.drop_drop]
 
+/-- **The rounds**, each after the worker's `Open`s just before it. -/
+theorem goes_rounds (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArray} (hy : ys.length = rowCount s)
+    {st : State} (hA : At s h ys 0 1 st) : ∀ j ≤ s.rounds.size, ∃ t,
+      Goes s ((List.range j).flatMap fun i => (honestOpens s h (i + 1) ++ honestRound s h i).map putReq) st t ∧
+        At s h ys j (j + 1) t
+  | 0, _ => ⟨st, rfl, hA⟩
+  | j + 1, hj => by
+    obtain ⟨t, hg, hAt⟩ := goes_rounds hs hf hy hA j (by omega)
+    have ho := goes_opens (facts_of hs) hf (p := j + 1) (by omega)
+      (fun n hn => cnt_new (facts_of hs) hf (by omega) hn) hAt.finished hAt.streams
+    obtain ⟨u, hu, hAu⟩ := goes_round hs hf hy (j := j) (st := { t with streams := (openedTo h (j + 2)).map (F s j) })
+      (by omega) ⟨hAt.hello, hAt.committed, hAt.linked, hAt.finished, hAt.roots, hAt.rounds, rfl, hAt.salts, hAt.names, hAt.holes⟩
+    refine ⟨u, ?_, hAu⟩
+    rw [List.range_succ, List.flatMap_append, List.flatMap_singleton, List.map_append]
+    exact goes_append s _ _ hg (goes_append s _ _ ho hu)
+
+theorem goes_pings (s : Schedule) : ∀ (l : List ByteArray), (∀ b ∈ l, b.size < 2 ^ 32) → ∀ st,
+    Goes s (l.map putPing) st st
+  | [], _, _ => rfl
+  | b :: l, hl, st => goes_append s [_] _ (goes_one (decode_putPing (hl b (List.mem_cons_self ..))) (run_ping s st))
+      (goes_pings s l (fun b hb => hl b (List.mem_cons_of_mem _ hb)) st)
+
+theorem goes_proofs (s : Schedule) : ∀ (l : List (String × Nat × ByteArray)),
+    (∀ p ∈ l, p.1.toUTF8.size < 2 ^ 32 ∧ p.2.1 < 2 ^ 32 ∧ p.2.2.size < 2 ^ 32) → ∀ st, st.finished = false →
+      Goes s (l.map fun p => putProof p.1 p.2.1 p.2.2) st st
+  | [], _, _, _ => rfl
+  | p :: l, hl, st, hfin => by
+    obtain ⟨h1, h2, h3⟩ := hl p (List.mem_cons_self ..)
+    exact goes_append s [_] _ (goes_one (decode_putProof h1 h2 h3) (run_proof s hfin))
+      (goes_proofs s l (fun p hp => hl p (List.mem_cons_of_mem _ hp)) st hfin)
+
+/-- Finish's pin: each stream opened, with the schedule's count of rounds. -/
+theorem finish_pin (hF : Facts s) (hf : Fits s tables h) :
+    canonForm (Json.mkObj (((openedTo h (s.rounds.size + 1)).map (F s s.rounds.size)).map fun e => (e.1, jnat e.2.2))) =
+      canonForm (Json.mkObj (s.streams.map fun e => (e.1, jnat e.2.2.2))) := by
+  have hnd : List.Pairwise (· ≠ ·) (s.streams.map (·.1)) := streams_nodup hF
+  have hno : List.Pairwise (· ≠ ·) (openedTo h (s.rounds.size + 1)) := opened_nodup hF hf
+  rw [List.map_map]
+  refine FirewallObj.canonForm_mkObj_perm (List.pairwise_map.mpr hno)
+    (List.pairwise_map.mpr (List.pairwise_map.mp hnd)) ?_
+  have e1 : (s.streams.map fun e => (e.1, jnat e.2.2.2)).map (fun e => (e.1, canonForm e.2)) =
+      (s.streams.map (·.1)).map fun n => (n, canonForm (jnat (cnt s s.rounds.size n))) := by
+    rw [List.map_map, List.map_map]
+    refine List.map_congr_left fun e he => ?_
+    simp only [Function.comp, cnt_size hF he]
+  rw [e1, List.map_map]
+  exact hf.opened.map _
+
 end
 
 /-- **The firewall finishes on the honest worker's requests**: at salts `ys`, as many as the schedule's rows, it
@@ -612,7 +660,61 @@ theorem run_honestReqs {s : Schedule} (hs : Canonical s) {tables : List String} 
       FirewallTemplate.namesOf (run s (honestReqs s h) ys).1.toList = tables ∧
       FirewallRun.holesOf (run s (honestReqs s h) ys).1 =
         List.zipWith (fun row y => Hm96.Default512.commitString (rowDigest row) y) (honestRows s h) ys := by
-  sorry
+  have hF := facts_of hs
+  obtain ⟨H, L, A, B, he, hH, hpH, hL, hpL, hsplit, hsg, hco⟩ := hF.hello
+  have hpre0 : pre s h 0 = h.roots.flatMap (fun e => topRows e.2) := List.append_nil _
+  have hl0 : (h.roots.flatMap fun e => topRows e.2).length ≤ ys.length := by
+    rw [← hpre0]
+    exact pre_le hs hf hy (Nat.zero_le _)
+  have g1 := goes_pings s h.pings hf.pings { salts := ys }
+  have g2 : Goes s [putReq .register] { salts := ys } { salts := ys } :=
+    goes_one (FirewallWire.decode_putReq (r := .register) trivial) (run_register s rfl)
+  have g3 := goes_one (FirewallWire.decode_putReq hf.hello)
+    (run_hello s he hH hpH hL hpL hsplit hsg hco hf.sigma (st := { salts := ys }) rfl rfl)
+  have g4 := goes_opens hF hf (j := 0) (p := 0) (Nat.zero_le _) (fun n _ => cnt_zero s n)
+    (st := { salts := ys, hello := true, sent := (#[] : Array Sent).push (.hello s.hello) }) rfl rfl
+  obtain ⟨⟨⟩, _, hc3, tops, rfl, htn, hth⟩ := run_commit s h.rootF h.roots
+    (st := { salts := ys, hello := true, sent := (#[] : Array Sent).push (.hello s.hello),
+             streams := (openedTo h 1).map (F s 0) })
+    rfl rfl rfl (roots_nodup hF hf) hf.caps (commit_pin hF hf) (commit_nat hF hf) hl0
+  have g5 := goes_one (FirewallWire.decode_putReq hf.commit) hc3
+  let st3 : State :=
+    { salts := ys.drop (h.roots.flatMap fun e => topRows e.2).length
+      hello := true
+      committed := true
+      roots := h.roots
+      sent := ((#[] : Array Sent).push (.hello s.hello)).push (.commit tops)
+      streams := (openedTo h 1).map (F s 0) }
+  have hlink : FirewallWire.ReqFits (.link ⟨Array.replicate (16 * s.y) 0⟩) := by
+    show (Array.replicate (16 * s.y) (0 : UInt8)).size < 2 ^ 32
+    rw [Array.size_replicate]
+    exact hf.link
+  have g6 := goes_one (FirewallWire.decode_putReq hlink) (run_link s (st := st3) rfl rfl rfl)
+  have hA0 : At s h ys 0 1 { st3 with linked := true, sent := st3.sent.push (.link s.y) } := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by rw [hpre0], ⟨_, tops, _, rfl, htn⟩,
+    by
+      show FirewallRun.holesOf ((((#[] : Array Sent).push (.hello s.hello)).push (.commit tops)).push (.link s.y)) = _
+      rw [hpre0]
+      simp only [FirewallRun.holesOf, FirewallRun.holes, Array.toList_push, List.flatMap_append, List.flatMap_cons,
+        List.flatMap_nil, List.append_nil, List.nil_append]
+      exact hth⟩
+  obtain ⟨st5, g7, hA5⟩ := goes_rounds hs hf hy hA0 s.rounds.size (Nat.le_refl _)
+  have g8 := goes_proofs s h.proofs hf.proofs st5 hA5.finished
+  have g9 := goes_one (FirewallWire.decode_putReq (r := .finish) trivial)
+    (run_finish s hA5.finished hA5.committed hA5.linked hA5.rounds (by rw [hA5.streams]; exact finish_pin hF hf))
+  have hg : Goes s (honestReqs s h) { salts := ys } _ :=
+    goes_append s _ _ (goes_append s _ _ (goes_append s _ _ (goes_append s _ _ (goes_append s _ _
+      (goes_append s _ _ g1 (goes_append s [_] [_] g2 g3)) g4) (goes_append s [_] [_] g5 g6)) g7) g8) g9
+  rw [run_of_goes hg]
+  obtain ⟨a, tops5, rest, hsent, htn5⟩ := hA5.names
+  refine ⟨rfl, ?_, ?_⟩
+  · show FirewallTemplate.namesOf (st5.sent.push _).toList = tables
+    rw [Array.toList_push, hsent]
+    show tops5.map (·.1) = tables
+    rw [htn5, hf.tables]
+  · show FirewallRun.holesOf (st5.sent.push _) = _
+    rw [FirewallRun.holesOf_push, hA5.holes]
+    simp only [FirewallRun.holes, List.append_nil]
+    rfl
 
 /-! ## The messages -/
 
