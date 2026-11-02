@@ -455,9 +455,11 @@ theorem Inv.init (M : String → ℕ → ℕ) : Inv M St.init where
   admDone _ _ h := by cases h
   leftAt _ _ _ h := by cases h
 
-/-- What carries over to `σ'` from `σ`, its record the same up to stops and its counts and times as they were. -/
+/-- What carries over to `σ'` from `σ`, its record the same up to stops and its counts as they were. -/
 theorem Inv.same {M : String → ℕ → ℕ} {σ σ' : St} (hI : Inv M σ) (he : Same σ.evs σ'.evs) (hs : σ'.sent = σ.sent)
-    (hl : σ'.left = σ.left) (hold : ∀ h, σ'.holder = some h → Holds σ' h) (admLe : ∀ s p, σ'.adm s p ≤ 1)
+    (hl : ∀ s j t, σ'.left s (j + 1) = some t → ∃ o, openOf σ.evs s = some o ∧
+      (o.release = none ∨ releaseMs o.release j = some t))
+    (hold : ∀ h, σ'.holder = some h → Holds σ' h) (admLe : ∀ s p, σ'.adm s p ≤ 1)
     (adm0 : ∀ s, σ'.adm s 0 = 0)
     (admDone : ∀ s j, σ'.adm s (j + 1) = 1 →
       (∃ h, σ'.holder = some h ∧ h.session = s ∧ h.admitted.index = j) ∨ Done σ' s j) : Inv M σ' where
@@ -478,21 +480,289 @@ theorem Inv.same {M : String → ℕ → ℕ} {σ σ' : St} (hI : Inv M σ) (he 
   adm0 := adm0
   admDone := admDone
   leftAt s j t h := by
-    rw [hl] at h
-    obtain ⟨o, ho, hr⟩ := hI.leftAt s j t h
+    obtain ⟨o, ho, hr⟩ := hl s j t h
     exact ⟨o, (he.open_ s).trans ho, hr⟩
 
-/-- A done statement stays done across a record the same up to stops, the slot's holder as it was, if the record's orphan
-stays or its session stops. -/
-theorem Done.same {σ σ' : St} {s : String} {j : ℕ} (hd : Done σ s j) (he : Same σ.evs σ'.evs)
-    (hh : σ'.holder = σ.holder)
+/-- A done statement stays done on a record that keeps the session's open, releases and stop, if the slot's orphan stays
+(the slot still free) or the session stops. -/
+theorem Done.grow {σ σ' : St} {s : String} {j : ℕ} (hd : Done σ s j)
+    (hO : ∀ o, openOf σ.evs s = some o → openOf σ'.evs s = some o)
+    (hR : ∀ x, x ∈ relOf σ.evs s → x ∈ relOf σ'.evs s)
+    (hS : (stopOf σ.evs s).isSome → (stopOf σ'.evs s).isSome)
     (ho : ∀ k p, σ.holder = none → orphan σ.evs = some (k, s, p) →
-      orphan σ'.evs = some (k, s, p) ∨ (stopOf σ'.evs s).isSome) : Done σ' s j := by
-  rcases hd with ⟨o, hO, hj, hm⟩ | hst | ⟨hn, k, p, hor⟩
-  · exact Or.inl ⟨o, (he.open_ s).trans hO, hj, (he.rel s).symm ▸ hm⟩
-  · exact Or.inr (Or.inl (he.stop s hst))
-  · rcases ho k p hn hor with h | h
-    · exact Or.inr (Or.inr ⟨hh.trans hn, k, p, h⟩)
+      (σ'.holder = none ∧ orphan σ'.evs = some (k, s, p)) ∨ (stopOf σ'.evs s).isSome) : Done σ' s j := by
+  rcases hd with ⟨o, hO', hj, hm⟩ | hst | ⟨hn, k, p, hor⟩
+  · exact Or.inl ⟨o, hO o hO', hj, hR _ hm⟩
+  · exact Or.inr (Or.inl (hS hst))
+  · rcases ho k p hn hor with ⟨hn', h⟩ | h
+    · exact Or.inr (Or.inr ⟨hn', k, p, h⟩)
     · exact Or.inr (Or.inl h)
+
+theorem Done.same {σ σ' : St} {s : String} {j : ℕ} (hd : Done σ s j) (he : Same σ.evs σ'.evs)
+    (ho : ∀ k p, σ.holder = none → orphan σ.evs = some (k, s, p) →
+      (σ'.holder = none ∧ orphan σ'.evs = some (k, s, p)) ∨ (stopOf σ'.evs s).isSome) : Done σ' s j :=
+  hd.grow (fun _ h => (he.open_ s).trans h) (fun _ h => (he.rel s).symm ▸ h) (he.stop s) ho
+
+/-- The holder stays the holder on a record that keeps its session's open, next statement, finish, stop and orphan. -/
+theorem Holds.grow {σ σ' : St} {h : Holder} (hh : Holds σ h)
+    (hO : ∀ o, openOf σ.evs h.session = some o → openOf σ'.evs h.session = some o)
+    (hN : ∀ o, nextOf σ'.evs o = nextOf σ.evs o)
+    (hF : finished σ.evs h.session = true → finished σ'.evs h.session = true)
+    (hS : stopOf σ'.evs h.session = stopOf σ.evs h.session)
+    (ho : ∀ k, orphan σ.evs = some (k, h.session, h.part) → orphan σ'.evs = some (k, h.session, h.part))
+    (ha : σ'.adm h.session h.stmt = σ.adm h.session h.stmt) : Holds σ' h := by
+  obtain ⟨o, hO', hj, hp, hn, hf, hst, hr, ⟨k, hor⟩, hadm⟩ := hh
+  exact ⟨o, hO o hO', hj, hp, (hN o).trans hn, hF hf, hS.trans hst, hr, ⟨k, ho k hor⟩, ha.trans hadm⟩
+
+theorem orphan_push_keep {evs : Events} {e : Event} {k : ℕ} {s p : String} (h : orphan evs = some (k, s, p))
+    (h1 : ∀ s p, e ≠ .slot s p) (h2 : ∀ p' w, e ≠ .stop s p' w) (h3 : e ≠ .release s p) (h4 : e ≠ .refused s p) :
+    orphan (evs.push e) = some (k, s, p) := by
+  rcases orphan_push_ne h1 h with h | ⟨p', w, h⟩ | h | h
+  · exact h
+  · exact absurd h (h2 p' w)
+  · exact absurd h h3
+  · exact absurd h h4
+
+theorem orphan_slot (evs : Events) (s part : String) : ∃ k, orphan (slot evs s part) = some (k, s, part) := by
+  rcases (slot_evs evs s part).1 with h | ⟨k, s', p', w, -, -, h⟩
+  · exact ⟨_, h ▸ orphan_push_slot _ _ _⟩
+  · exact ⟨_, h ▸ orphan_push_slot _ _ _⟩
+
+theorem bump_eq (f : String → ℕ → ℕ) (s : String) (p : ℕ) : bump f s p s p = f s p + 1 := by
+  simp [bump]
+
+theorem bump_ne {f : String → ℕ → ℕ} {s s' : String} {p p' : ℕ} (h : ¬(s' = s ∧ p' = p)) :
+    bump f s p s' p' = f s' p' := by
+  simp [bump, h]
+
+theorem put_eq {α : Type} (f : String → ℕ → α) (s : String) (p : ℕ) (a : α) : put f s p a s p = a := by
+  simp [put]
+
+theorem put_ne {α : Type} {f : String → ℕ → α} {s s' : String} {p p' : ℕ} {a : α} (h : ¬(s' = s ∧ p' = p)) :
+    put f s p a s' p' = f s' p' := by
+  simp [put, h]
+
+/-! ## Each op keeps the invariant -/
+
+variable {M : String → ℕ → ℕ}
+
+theorem Inv.wait {σ : St} (hI : Inv M σ) (s part : String) : Inv M (step M σ (.wait s part)) := by
+  show Inv M { σ with evs := σ.evs.push (.wait s part) }
+  have he := Same.pushWait σ.evs s part
+  have hor : ∀ k s' p', orphan σ.evs = some (k, s', p') →
+      orphan (σ.evs.push (.wait s part)) = some (k, s', p') := fun _ _ _ h =>
+    orphan_push_keep h (fun _ _ h => by cases h) (fun _ _ h => by cases h) (fun h => by cases h) (fun h => by cases h)
+  refine hI.same he rfl (fun s j t h => hI.leftAt s j t h) (fun h hh => ?_) hI.admLe hI.adm0 (fun s' j ha => ?_)
+  · exact (hI.hold h hh).grow (fun o h => (he.open_ _).trans h) he.nextOf (fun h => (he.fin _).trans h)
+      (stopOf_push_ne (fun _ _ _ h => by cases h) _) (fun k => hor k _ _) rfl
+  · rcases hI.admDone s' j ha with hh | hd
+    · exact Or.inl hh
+    · exact Or.inr (hd.same he fun k p hn h => Or.inl ⟨hn, hor _ _ _ h⟩)
+
+theorem Inv.pushOpened {σ : St} (hI : Inv M σ) (o' : Open) (hp : partsOk o'.parts = .ok ()) :
+    Inv M { σ with evs := σ.evs.push (.opened o') } := by
+  have hO : ∀ s o, openOf σ.evs s = some o → openOf (σ.evs.push (.opened o')) s = some o :=
+    fun _ _ h => openOf_push_some _ h
+  have hOn : ∀ s o, openOf (σ.evs.push (.opened o')) s = some o → openOf σ.evs s = some o ∨ o = o' := by
+    intro s o h
+    cases h0 : openOf σ.evs s with
+    | some o0 => rw [openOf_push_some _ h0] at h; exact Or.inl h
+    | none =>
+      right
+      simp only [openOf, Array.findSome?_push] at h h0
+      rw [h0] at h
+      simp only [Option.none_or] at h
+      cases hs : (o'.session == s)
+      · rw [hs] at h; cases h
+      · rw [hs] at h; cases h; rfl
+  have hF : ∀ s, finished (σ.evs.push (.opened o')) s = finished σ.evs s :=
+    finished_push_ne (fun _ h => by cases h)
+  have hR : ∀ s, relOf (σ.evs.push (.opened o')) s = relOf σ.evs s := relOf_push_ne (fun _ _ h => by cases h)
+  have hS : ∀ s, stopOf (σ.evs.push (.opened o')) s = stopOf σ.evs s := stopOf_push_ne (fun _ _ _ h => by cases h)
+  have hN : ∀ o, nextOf (σ.evs.push (.opened o')) o = nextOf σ.evs o := nextOf_push_ne (fun _ _ h => by cases h)
+  have hor : ∀ k s' p', orphan σ.evs = some (k, s', p') →
+      orphan (σ.evs.push (.opened o')) = some (k, s', p') := fun _ _ _ h =>
+    orphan_push_keep h (fun _ _ h => by cases h) (fun _ _ h => by cases h) (fun h => by cases h) (fun h => by cases h)
+  exact {
+    le := hI.le
+    past := fun s p h => by
+      cases h0 : openOf σ.evs s with
+      | some o =>
+        apply hI.past
+        have := nOf_some (σ := { σ with evs := σ.evs.push (.opened o') }) (hO s o h0)
+        rw [nOf_some h0]
+        omega
+      | none => exact hI.past s p (by rw [nOf_none h0]; exact Nat.zero_le _)
+    pre := hI.pre
+    fin := fun s h => hI.fin s ((hF s).symm.trans h)
+    rel := fun s x h => by
+      rw [hR] at h
+      obtain ⟨o, ho, hf, j, hj, hx, hm⟩ := hI.rel s x h
+      exact ⟨o, hO s o ho, (hF s).trans hf, j, hj, hx, hm⟩
+    parts := fun s o h => by
+      rcases hOn s o h with h | rfl
+      · exact hI.parts s o h
+      · exact partsOk_ok hp
+    hold := fun h hh => (hI.hold h hh).grow (hO _) hN (fun h => (hF _).trans h) (hS _) (fun k => hor k _ _) rfl
+    admLe := hI.admLe
+    adm0 := hI.adm0
+    admDone := fun s j ha => by
+      rcases hI.admDone s j ha with hh | hd
+      · exact Or.inl hh
+      · exact Or.inr (hd.grow (hO s) (fun x h => (hR s).symm ▸ h) (fun h => (hS s).symm ▸ h)
+          fun k p hn h => Or.inl ⟨hn, hor _ _ _ h⟩)
+    leftAt := fun s j t h => by
+      obtain ⟨o, ho, hr⟩ := hI.leftAt s j t h
+      exact ⟨o, hO s o ho, hr⟩ }
+
+theorem Inv.openRec {σ : St} (hI : Inv M σ) (stream : String) (parts : Array String) (budget : Option ℕ)
+    (release : Option Core.Firewall.Schedule) : Inv M (step M σ (.openRec stream parts budget release)) := by
+  dsimp only [step]
+  cases hp : partsOk parts with
+  | error _ => exact hI
+  | ok u =>
+    cases u
+    cases hb : budgetOk budget with
+    | error _ => exact hI
+    | ok u =>
+      cases u
+      show Inv M { σ with evs := (openSession σ.evs stream parts budget release).2 }
+      rcases openSession_evs σ.evs stream parts budget release with h | ⟨sid, h⟩
+      · rw [h]; exact hI
+      · rw [h]; exact hI.pushOpened _ hp
+
+theorem Inv.innerSend {σ : St} (hI : Inv M σ) (s : String) : Inv M (step M σ (.innerSend s)) := by
+  dsimp only [step]
+  split
+  · rename_i hg
+    rw [Bool.and_eq_true, Bool.and_eq_true] at hg
+    obtain ⟨⟨hO, hF⟩, hlt⟩ := hg
+    have hF' : finished σ.evs s = false := by simpa using hF
+    have hlt' : σ.sent s 0 < M s 0 := of_decide_eq_true hlt
+    obtain ⟨o, hO'⟩ := Option.isSome_iff_exists.mp hO
+    exact {
+      le := fun s' p => by
+        by_cases hq : s' = s ∧ p = 0
+        · obtain ⟨rfl, rfl⟩ := hq
+          show bump σ.sent s' 0 s' 0 ≤ _
+          rw [bump_eq]; exact hlt'
+        · show bump σ.sent s 0 s' p ≤ _
+          rw [bump_ne hq]; exact hI.le s' p
+      past := fun s' p h => by
+        show bump σ.sent s 0 s' p = 0
+        by_cases hq : s' = s ∧ p = 0
+        · obtain ⟨rfl, rfl⟩ := hq
+          have := nOf_some (σ := σ) hO'
+          simp only [nOf] at h this
+          omega
+        · rw [bump_ne hq]; exact hI.past s' p h
+      pre := fun s' q p hqp hne => by
+        show bump σ.sent s 0 s' q = M s' q
+        have hp0 : ¬(s' = s ∧ p = 0) := fun h => by omega
+        change bump σ.sent s 0 s' p ≠ 0 at hne
+        rw [bump_ne hp0] at hne
+        by_cases hq : s' = s ∧ q = 0
+        · obtain ⟨rfl, rfl⟩ := hq
+          have := hI.pre s' 0 p hqp hne
+          omega
+        · rw [bump_ne hq]; exact hI.pre s' q p hqp hne
+      fin := fun s' h => by
+        show bump σ.sent s 0 s' 0 = M s' 0
+        have hs : ¬(s' = s ∧ 0 = 0) := fun ⟨hs, _⟩ => by subst hs; rw [hF'] at h; cases h
+        rw [bump_ne hs]; exact hI.fin s' h
+      rel := fun s' x h => by
+        obtain ⟨o, ho, hf, j, hj, hx, hm⟩ := hI.rel s' x h
+        refine ⟨o, ho, hf, j, hj, hx, ?_⟩
+        show bump σ.sent s 0 s' (j + 1) = _
+        rw [bump_ne (fun h => by omega)]; exact hm
+      parts := hI.parts
+      hold := hI.hold
+      admLe := hI.admLe
+      adm0 := hI.adm0
+      admDone := hI.admDone
+      leftAt := hI.leftAt }
+  · exact hI
+
+theorem Inv.innerFinish {σ : St} (hI : Inv M σ) (s : String) : Inv M (step M σ (.innerFinish s)) := by
+  dsimp only [step]
+  split
+  · rename_i hg
+    rw [Bool.and_eq_true, Bool.and_eq_true] at hg
+    obtain ⟨⟨-, -⟩, heq⟩ := hg
+    have heq' : σ.sent s 0 = M s 0 := of_decide_eq_true heq
+    have hO : ∀ s' o, openOf σ.evs s' = some o → openOf (finish σ.evs s) s' = some o := fun _ _ h =>
+      openOf_push_some _ h
+    have hO' : ∀ s', openOf (finish σ.evs s) s' = openOf σ.evs s' := openOf_push_ne (fun _ h => by cases h)
+    have hR : ∀ s', relOf (finish σ.evs s) s' = relOf σ.evs s' := relOf_push_ne (fun _ _ h => by cases h)
+    have hS : ∀ s', stopOf (finish σ.evs s) s' = stopOf σ.evs s' := stopOf_push_ne (fun _ _ _ h => by cases h)
+    have hN : ∀ o, nextOf (finish σ.evs s) o = nextOf σ.evs o := nextOf_push_ne (fun _ _ h => by cases h)
+    have hF : ∀ s', finished σ.evs s' = true → finished (finish σ.evs s) s' = true := fun _ h =>
+      finished_push_true _ h
+    have hor : ∀ k s' p', orphan σ.evs = some (k, s', p') → orphan (finish σ.evs s) = some (k, s', p') :=
+      fun _ _ _ h => orphan_push_keep h (fun _ _ h => by cases h) (fun _ _ h => by cases h) (fun h => by cases h)
+        (fun h => by cases h)
+    exact {
+      le := hI.le
+      past := fun s' p h => hI.past s' p (by simpa [nOf, hO'] using h)
+      pre := hI.pre
+      fin := fun s' h => by
+        change finished (σ.evs.push (.finish s)) s' = true at h
+        rw [finished_push_finish] at h
+        by_cases hs : s = s'
+        · subst hs; exact heq'
+        · have : (s == s') = false := by simpa using hs
+          rw [this, Bool.or_false] at h
+          exact hI.fin s' h
+      rel := fun s' x h => by
+        change x ∈ relOf (finish σ.evs s) s' at h
+        rw [hR] at h
+        obtain ⟨o, ho, hf, j, hj, hx, hm⟩ := hI.rel s' x h
+        exact ⟨o, hO s' o ho, hF s' hf, j, hj, hx, hm⟩
+      parts := fun s' o h => hI.parts s' o ((hO' s').symm.trans h)
+      hold := fun h hh => (hI.hold h hh).grow (hO _) hN (hF _) (hS _) (fun k => hor k _ _) rfl
+      admLe := hI.admLe
+      adm0 := hI.adm0
+      admDone := fun s' j ha => by
+        rcases hI.admDone s' j ha with hh | hd
+        · exact Or.inl hh
+        · exact Or.inr (hd.grow (hO s') (fun x h => (hR s').symm ▸ h) (fun h => (hS s').symm ▸ h)
+            fun k p hn h => Or.inl ⟨hn, hor _ _ _ h⟩)
+      leftAt := fun s' j t h => by
+        obtain ⟨o, ho, hr⟩ := hI.leftAt s' j t h
+        exact ⟨o, hO s' o ho, hr⟩ }
+  · exact hI
+
+theorem Inv.innerStop {σ : St} (hI : Inv M σ) (s why : String) : Inv M (step M σ (.innerStop s why)) := by
+  dsimp only [step]
+  split
+  · rename_i hg
+    rw [Bool.and_eq_true] at hg
+    obtain ⟨-, hF⟩ := hg
+    have hF' : finished σ.evs s = false := by simpa using hF
+    rw [stop_evs]
+    split
+    · exact hI
+    · have he := Same.pushStop σ.evs s INNER why
+      refine hI.same he rfl (fun s j t h => hI.leftAt s j t h) (fun h hh => ?_) hI.admLe hI.adm0
+        (fun s' j ha => ?_)
+      · have hh' := hI.hold h hh
+        have hne : h.session ≠ s := by
+          intro hs
+          obtain ⟨-, -, -, -, -, hf, -⟩ := hh'
+          rw [hs, hF'] at hf
+          cases hf
+        exact hh'.grow (fun o h => (he.open_ _).trans h) he.nextOf (fun h => (he.fin _).trans h)
+          (stopOf_push_stop_ne _ _ (Ne.symm hne)) (fun k h => orphan_push_keep (e := .stop s INNER why) h
+            (fun _ _ h => by cases h) (fun _ _ h => by cases h; exact hne rfl) (fun h => by cases h)
+            (fun h => by cases h)) rfl
+      · rcases hI.admDone s' j ha with hh | hd
+        · exact Or.inl hh
+        · refine Or.inr (hd.same he fun k p hn h => ?_)
+          rcases orphan_push_ne (e := .stop s INNER why) (fun _ _ h => by cases h) h with h' | ⟨p', w, h'⟩ | h' | h'
+          · exact Or.inl ⟨hn, h'⟩
+          · cases h'; exact Or.inr (stopOf_push_stop_isSome _ _ _ _)
+          · cases h'
+          · cases h'
+  · exact hI
 
 end Flock.StopCount
