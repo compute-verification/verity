@@ -77,6 +77,18 @@ def gpt2_token_bytes():
     return enc, table
 
 
+def bytes_to_unicode() -> dict[int, str]:
+    """GPT-2's byte-level alphabet (byte -> printable character), which SmolLM2's tokenizer shares."""
+    bs = list(range(ord("!"), ord("~") + 1)) + list(range(ord("\xa1"), ord("\xac") + 1)) + list(range(ord("\xae"), ord("\xff") + 1))
+    cs, n = bs[:], 0
+    for b in range(256):
+        if b not in bs:
+            bs.append(b)
+            cs.append(256 + n)
+            n += 1
+    return dict(zip(bs, map(chr, cs)))
+
+
 def smol_revision(root: Path = ROOT) -> str:
     """The SmolLM2 revision `data` resolved and recorded; every later step reads that one."""
     f = root / "data.json"
@@ -89,13 +101,13 @@ def smol_revision(root: Path = ROOT) -> str:
 def smol_tokenizer(revision: str):
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(SMOL_REPO, revision=revision)
-    from transformers.models.gpt2.tokenization_gpt2 import bytes_to_unicode
     inv = {v: k for k, v in bytes_to_unicode().items()}
     table = np.zeros(len(tok), dtype=np.int64)
-    special = set(tok.all_special_ids)
+    special = set(tok.all_special_ids) | {i for i, t in tok.added_tokens_decoder.items() if t.special}
     for t in range(len(tok)):
         if t not in special:
-            table[t] = len(bytes(inv[ch] for ch in tok.convert_ids_to_tokens(t)))
+            piece = tok.convert_ids_to_tokens(t)
+            table[t] = sum(1 if ch in inv else len(ch.encode()) for ch in piece)
     if tok.convert_tokens_to_ids("<|endoftext|>") != EOT["smollm2"]:
         raise SystemExit("prepare: SmolLM2's end-of-text is not token 0")
     return tok, table
