@@ -106,7 +106,10 @@ def test_the_grid_spans_the_reference_shapes_in_decades():
     s = policy.shapes(SHAPE)
     w_fwd = SHAPE["forward_macs_per_token"] * per_mac("gemm/bf16")
     assert s["inference"]["c"] == w_fwd and s["inference"]["k"] == 16 + 1023 * 2 * 6 * 512 * 16
-    assert s["session"] == s["session"] | {"c": 1024 * w_fwd, "k": 1024 * 16}
+    ref = s["reference"]
+    assert (ref["c"], ref["k"]) == (4096 * w_fwd, 80_000)
+    serving = F.Measured((F.Part(1024 * w_fwd, 1024, 0.0),), 16, 512 * 16, ((0.0, 0.0), (1.0, 0.0)), 0.0)
+    assert F.at(serving, ref["c"], ref["k"])["parts"][0]["fit"]  # honest serving passes Fit at the reference policy
     assert s["server"]["c"] == pytest.approx(3 * SHAPE["forward_macs_per_token"] * SHAPE["tokens"] * per_mac("gemm/bf16"))
     assert s["server"]["k"] == SHAPE["parameters"] * 80
     g = policy.grid(SHAPE)

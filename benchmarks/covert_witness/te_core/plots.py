@@ -1,6 +1,6 @@
 """The headline plots P1-P4 (note:training-20261102T1715Z-draft-training-efficiency-experiments), from the ledger.
 
-    python -m te_core.plots --out DIR [--root LEDGER] [--pin COMMIT ...] [--policy session|inference|server|c1e14/k1e4]
+    python -m te_core.plots --out DIR [--root LEDGER] [--pin COMMIT ...] [--policy reference|inference|server|c1e14/k1e4]
                             [--drop 0.01] [--g 1] [--from-scratch F.json]
 
 Every point is scored by the training formalism (te_core.frontier's `formalism_rows`: |C| in gates, ρ at the start's
@@ -16,7 +16,7 @@ such.
 - P2: S = W*/H at the reference policy against the gain g = F(l*)/C0, one curve per start, coloured by l0 and styled
   by saturation; without F, against the drop from l0 (the axis says so).
 - P3, per start: S over the (c, k) grid at a fixed g (`--g`, with F) or drop (`--drop`), filled by decade, with the
-  start's inference-block, session and server-block shapes marked.
+  start's inference-block and server-block shapes and the reference policy marked.
 - P4, at that l* and the reference policy: p_A = |C_A|/H against s_A = ρ_A, log-log, one point per algorithm (a
   direction and mechanism, its least-|C|ρ record), iso-S diagonals, the reference directions' full training marked.
 
@@ -257,7 +257,7 @@ def p3(scored, shapes, fs: dict, g, drop: float, out: Path, stubs, pin) -> dict:
             ax.contour(lc, lk, z, levels=levels[1:-1], colors="k", linewidths=0.5)
             fig.colorbar(cf, ax=ax, label="log10 S")
         for m, s in policy.shapes(sh).items():
-            ax.plot(math.log10(s["c"]), math.log10(s["k"]), {"inference": "c^", "session": "co", "server": "cs"}[m],
+            ax.plot(math.log10(s["c"]), math.log10(s["k"]), {"inference": "c^", "reference": "co", "server": "cs"}[m],
                     mec="k", ms=8)
             ax.annotate(m, (math.log10(s["c"]), math.log10(s["k"])), fontsize=7, xytext=(4, 4),
                         textcoords="offset points")

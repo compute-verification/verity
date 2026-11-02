@@ -78,7 +78,7 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **l\***: a target bits per byte, the start's bpb less 0.5%, 1%, 2% or 5%.
 - **Complete schedule**: a run's last checkpoint, or any checkpoint of a reference direction's fork ladder (`--forks`
   with an empty `--snap-at`: each checkpoint ends a cooldown branch) (`frontier.schedule_ends`).
-- **honest(l\*)**: the least |C| over every valid submission, of any class or direction, that reaches val bpb ≤ l\* by a
+- **honest(l\*)**: the least |C| over every valid submission, of any direction, that reaches val bpb ≤ l\* by a
   complete schedule; where none does, over any checkpoint that does, an upper bound (the coordinator's 14:57Z ruling,
   `frontier.target`). The reference directions' alone (ref-optim, ref-data), the rule before, is printed as context.
 - **W\*(l\*)**: the least |C|·ρ over the same submissions as honest(l\*).
@@ -94,6 +94,18 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
   GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
   seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
+
+## The formalism's score (covert_witness v3)
+
+covert_witness v3 scores by the training formalism v1 (note:training-20261102T1817Z-report-training-formalism-v1),
+beside the theorem's ρ above, which every record still carries. |C|, c and w are Boolean gates: `gates` prices each
+counted op by the circuits' own Definitions (a bf16 GEMM MAC is `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 =
+1,480.1). Ingest writes each submission's quantities (`formalism.of_record`: per step structure its gates, token blocks,
+dependent gates and Δ_grad, read from 4.0's `cut_bits` where the record has them). `frontier --formalism` gives, per
+start, target and cell of the start's (c, k) grid (`policy`: decades from one token's inference block to the start's
+server block, with the reference policy c = 4096 w, k = 10 kB, marked), W\* = the least |C|ρ, honest = the least |C|
+of a complete schedule, and S = W\*/honest. Fit is checked; Cover's ρ is a target until Lean proves it. A quantity not
+measured yet is a stub named in the row's `labels` (`formalism.STUBS`, and `formalism.V23` for a row ingested before).
 
 ## What the integrator calls
 
@@ -117,12 +129,15 @@ what would run code it never reads: `exec`, `eval` and `compile` (called or not)
 read (`run.no_bytecode`). From `benchmarks/covert_witness/`:
 
 ~~~text
-python -m te_core.run --script islands/CLASS/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
+python -m te_core.run --script islands/NAME/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
     -- --start NAME --out SUB [--budget-fraction F] [TRAIN_ARGS...]
-python -m te_core.launch --script islands/CLASS/train.py --tier 0 --agent A --direction D --mechanism M \
+python -m te_core.launch --script islands/NAME/train.py --tier 0 --agent A --direction D --mechanism M \
     [--nodes FILE] [-- TRAIN_ARGS...]        # FILE: `vy-nebius-2 pool=gpu`
 python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M [--reference]
-python -m te_core.frontier
+python -m te_core.frontier [--formalism [--json]]     # --formalism: W*, honest and S per target and (c, k) cell
+python -m te_core.plots --out DIR [--policy reference|inference|server|c1e14/k1e4] [--drop 0.01] [--from-scratch F.json]
+python -m te_core.policy [START ...]                 # each start's reference shapes and (c, k) grid
+python -m te_core.gates [--check]                     # gates per MAC by op; --check recompiles the Definitions
 ~~~
 
 A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`; each a no-op outside the harness) for
@@ -172,11 +187,16 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
 | `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its E checkpoints; `score_run`, the evaluation job's scoring of them; `CWPlan`, the family `prepare.declare_step` writes |
 | `hooks.py` | what a standalone script may call, no-ops outside the harness |
-| `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates |
+| `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates; `--formalism`: W\*, honest and S per target and (c, k) cell |
+| `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
+| `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
+| `policy.py` | a start's reference shapes (inference block, reference policy, server block) and the (c, k) grid in decades |
+| `formalism.py` | the formalism's per-record quantities, Fit and Cover's ρ at (c, k); `of_record` (ingest's), `measure` (with labelled stubs) |
+| `plots.py` | P1-P4 of the experiments draft from the ledger, each a PNG and its numbers |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
-| `capture/` | the static count: one training step traced on fakes (`make_fx`), its \|C\|, GEMM roles and φ without running, in `flops`'s record form; its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
+| `capture/` | the static count: one training step traced on fakes (`make_fx`), its \|C\|, GEMM roles and φ without running, in `flops`'s record form; its own suite. Its op sets are `flops`'s, from `opnames` (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
 | `tests/` | a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`); `cw_fake/` is a fake `prepare` and island |
 
 ## Limits of the count
