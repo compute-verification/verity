@@ -1,7 +1,9 @@
 """circuit-check's catalog as tasks: one ``circuit-catalog`` task building every catalog binding's record (check.py's records
 step, `circuit-check --all --records-only`), one ``circuit-binding`` task per catalog binding checking that binding's targets
-from those records (`circuit-check --binding NAME`, `circuit_check.shard.binding`'s names), and one ``circuit-coverage`` task
-holding the bindings circuit-check makes to the ones listed here.
+from those records (`circuit-check --binding NAME`, `circuit_check.shard.binding`'s names) and writing their Definitions'
+failures (`failures`), one ``circuit-coverage`` task holding the bindings circuit-check makes to the ones listed here, and one
+``circuit-known`` task holding `circuit_check.known` to every binding's failures, as `circuit-check --all` holds it to the whole
+list's, from those outputs alone.
 
 Bindings are read from the binding files' syntax alone (`ast`), as circuit-check names them: each sidecar's (`*.circuit-check.py`
 under a regular package of `sidecars.PACKAGES`, named for its module as `sidecars.discover` names it) root functions
@@ -12,6 +14,7 @@ share of them narrows inside circuit-check, by its read-set cache, not here."""
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import tomllib
 from pathlib import Path
@@ -25,6 +28,11 @@ SIDECARS = f"{SOURCE}/sidecars.py"
 SUFFIX = ".circuit-check"
 CATALOG = "circuit-catalog:records"
 RECORDS = {"name": "records", "path": "out/circuit-records.tar.gz"}
+KNOWN = "circuit-known:catalog"
+#: the directory of the circuit-binding tasks' ``failures`` outputs, all of which the circuit-known task reads
+FAILURES = "out/failures"
+#: what `circuit_check.known` reads beside its entries (``known/``): its package, itself and the entry files' module
+KNOWN_READS = (f"{SOURCE}/__init__.py", f"{SOURCE}/known.py", f"{SOURCE}/entries.py")
 #: the binding circuit-check gives the registered roots, and its task's entry name
 REGISTERED = ("<registered>", "_registered")
 #: the binding of the templates `targets.py` checks at their example, those no sidecar's ``TEMPLATE_PARAMS`` names
@@ -105,6 +113,12 @@ def bindings(root: Path, files: list[str]) -> dict[str, tuple[str, str]]:
     return dict(sorted(out.items()))
 
 
+def failures(name: str) -> dict:
+    """Binding ``name``'s task's output: its Definition targets' failures, at a path of the binding's own under `FAILURES`, since
+    the circuit-known task reads every binding's into one work directory."""
+    return {"name": "failures", "path": f"{FAILURES}/{hashlib.sha256(name.encode()).hexdigest()[:16]}.json"}
+
+
 def tasks(root: Path, files: list[str]) -> list[dict]:
     ins = base(root, files)
     found = bindings(root, files)
@@ -119,5 +133,10 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
              "resources": {"cores": 1, "mem_gb": 16, "disk_gb": 2},
              "about": "the circuit-check catalog's bindings are the circuit-binding tasks'",
              "vars": {"bindings": json.dumps(sorted(found), separators=(",", ":")), "records": RECORDS["path"]}},
-            *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "reads": reads,
+            {"id": KNOWN, "kind": "circuit-known", "resources": {"cores": 1, "mem_gb": 2, "disk_gb": 1},
+             "inputs": [f for f in ins if f in KNOWN_READS or f.startswith(f"{SOURCE}/known/")],
+             "reads": [{"task": f"circuit-binding:{f}:{e}", "output": "failures"} for f, e in found.values()],
+             "about": "every circuit_check.known entry still matches a failure of a circuit-binding task's targets",
+             "vars": {"failures": FAILURES}},
+            *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "reads": reads, "outputs": [failures(name)],
                "vars": {"binding": name, "records": RECORDS["path"]}} for name, (f, e) in found.items())]
