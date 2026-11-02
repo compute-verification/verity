@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# proof_throughput's verifier point: the compiled Lean verifier (`flock-verify verify --coins os`) on every session of one prover
+# proof_throughput's verifier point: the compiled Lean verifier (`flock-verify verify --coins tree`) on every session of one prover
 # point's bundle (job.sh's out/bundle.json), each under /usr/bin/time, then the point's contract result from the prover's records
 # and these verdicts. The verifier's `--partition` is its own: derived from the workload's program and checked against the
 # digest the circuit binds (`partition`), never read from the bundle. Runs in a proofs-pool slot of vy-nebius-cpu-3 or -cpu-2,
@@ -9,12 +9,14 @@
 #     --tool verity_proof_throughput.tool:VERIFIER_POINT -- bash benchmarks/proof_throughput/verify.sh BUNDLE=art:... PROVE_RUN=r...
 # env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  BUILD_ONLY=1 (build the verifier, stop)
 #      JOBS=1 (sessions verified at once: more share the node's memory bandwidth, so the timings are one session's alone
-#      only at 1)
+#      only at 1)  COINS=tree (`--coins`, the verifier's own choice, never the bundle's: tree for a job.sh point on the
+#      challenger's coin tree, os for a bundle proved under FC_COINS=os)
 #      PT_WORK=/workspace/cache/proof-throughput (the Lean build, keyed by verity/core/service/flock's files, and the venv;
 #      the CPU nodes' /workspace is root's, its cache/ the research user's)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 [ "${BUILD_ONLY:-0}" = 1 ] || : "${BUNDLE:?BUNDLE=art:... is required}"
+COINS=${COINS:-tree}
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/ptv-$$}/out}; mkdir -p "$O"
 W=${PT_WORK:-/workspace/cache/proof-throughput}; mkdir -p "$W" || { echo "cannot make $W (PT_WORK=)" >&2; exit 1; }
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$W" --owner @proofs --expires 14d --priority low \
@@ -67,7 +69,7 @@ log "verifying $WORKLOAD B=$B: $(ls -d "$BD"/sessions/*/ | wc -l) sessions, circ
 verify_one() {   # verify_one SESSION_DIR: one VERDICT line with the session's time and peak memory
   local s=${1%/} t; t=$(mktemp "$S/time.XXXXXX")
   # shellcheck disable=SC2086
-  /usr/bin/time -f '%e %U %S %M' -o "$t" "$LEAN" verify --statement verity/flock-circuit --coins os --circuit "$BD/circuit.txt" \
+  /usr/bin/time -f '%e %U %S %M' -o "$t" "$LEAN" verify --statement verity/flock-circuit --coins "$COINS" --circuit "$BD/circuit.txt" \
     --public "$PUB" --partition "$PART" $DRAW_FLAGS --session "$s" > "$t.out" 2> "$t.err"
   local rc=$?
   "$PYBIN" -m verity_proof_throughput lean-verdict --session "$(basename "$s")" --rc $rc --time "$t" --stdout "$t.out" --stderr "$t.err"
@@ -78,7 +80,7 @@ if [ "${PROFILE:-0}" = 1 ]; then
   log "profiling $(basename "$s")"
   # shellcheck disable=SC2086
   /usr/bin/time -f '%e %U %S %M' -o "$O/profile.time" perf record -F "${PERF_HZ:-49}" --call-graph dwarf,32768 -o "$S/perf.data" \
-    "$LEAN" verify --statement verity/flock-circuit --coins os --circuit "$BD/circuit.txt" --public "$PUB" --partition "$PART" \
+    "$LEAN" verify --statement verity/flock-circuit --coins "$COINS" --circuit "$BD/circuit.txt" --public "$PUB" --partition "$PART" \
     $DRAW_FLAGS --session "$s" > "$O/profile.stdout" 2> "$O/profile.stderr"
   log "perf: exit $?, $(cat "$O/profile.time")"
   perf report -i "$S/perf.data" --no-children --sort symbol --stdio -g none --percent-limit 0.2 2>> "$O/perf.err" | head -400 > "$O/perf-self.txt"
@@ -89,7 +91,7 @@ if [ "${PROFILE:-0}" = 1 ]; then
     --stderr "$O/profile.stderr" --stdout "$O/profile.stdout" --out "${RESEARCH_RUN_DIR:-$O}/result.json" --bundle "$BUNDLE" --prove-run "${PROVE_RUN:-}"
   exit $?
 fi
-export -f verify_one; export LEAN BD PUB PART S PYBIN DRAW_FLAGS
+export -f verify_one; export LEAN BD PUB PART S PYBIN DRAW_FLAGS COINS
 ls -d "$BD"/sessions/*/ | xargs -P "${JOBS:-1}" -I{} bash -c 'verify_one {}' > "$O/lean.jsonl"
 log "Lean: $(grep -c '"accepted": true' "$O/lean.jsonl") of $(wc -l < "$O/lean.jsonl") sessions accepted"
 "$PYBIN" -m verity_proof_throughput point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --lean "$O/lean.jsonl" \
