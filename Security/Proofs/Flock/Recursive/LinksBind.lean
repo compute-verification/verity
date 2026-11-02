@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Recursion.DeployLayout
-import Proofs.Flock.Claims.Recursion.VStarBound
-import Proofs.Flock.Recursive.InnerRows
-import Proofs.Flock.Verifier.Registered
-import Proofs.Flock.Soundness.Discharge.Hm.Row
-import Flock.RecLinkPart
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.VStarBound
+public import Proofs.Flock.Recursive.InnerRows
+public import Proofs.Flock.Verifier.Registered
+public import Proofs.Flock.Soundness.Discharge.Hm.Row
+public import Flock.RecLinkPart
 
 /-!
 # The link clause at the deployment: what the link table's rows say, and the table they are
@@ -24,6 +26,8 @@ inputs. This file defines the first two at the deployment.
 `Q` holds the rows to `T`, not to a table the prover picks: two rows that open one position of the table at `T` are one,
 or SHA-512 collides (`rowOpens_binding`, from the opening's binding and the `hm96` leaf's; `linksHold_rows`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Links
 
