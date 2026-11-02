@@ -56,7 +56,8 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
   rebuilds its step's updated weights from θ bit for bit, for at most c MACs; declared imported computed values travel
   in E_t. A covert_witness script declares a step with `prepare.declare_step(base, suffixes)`: its family `E` is
   decoded by the fixed `prepare.decode` (`cw.CWPlan`), so any E whose decoder rebuilds a step's weights within c (a
-  seed log, low-rank, sparse or quantized updates in a fixed format) is credited, not only adapter factors. The
+  seed log, low-rank, sparse or quantized updates in a fixed format) is credited, not only adapter factors, each step at
+  no less than its E's `prepare.rebuild_macs`. The
   decoder may produce more weights than the step read; every weight the step read is compared against its value digest
   (`flops.KeyedDigest`, keyed from the OS when the run starts, the key in `run.json`).
 - **β_t**: a step's counterexample β, bits(E_t) over the step's updated MACs per token block.

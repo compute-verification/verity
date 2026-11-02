@@ -324,6 +324,18 @@ def test_declared_steps_are_a_family_rebuilt_by_prepares_decoder(cw_root):
     assert all(b > 0 for b in fam["beta"].values())
 
 
+def test_a_declared_steps_cost_is_at_least_prepares_rebuild_rule():
+    from types import SimpleNamespace
+
+    from te_core.cw import CWPlan, frame
+
+    theta = {"w": torch.zeros(2)}
+    priced = CWPlan(SimpleNamespace(rebuild_macs=lambda th, blob: 10 * len(blob)), theta, "cpu")
+    assert priced.cost_macs(frame(b"abc", (b"de", b"f")), {}) == 60
+    assert priced.cost_macs(frame(b"", (b"de",)), {}) == 20
+    assert CWPlan(SimpleNamespace(), theta, "cpu").cost_macs(frame(b"abc", ()), {}) == 0
+
+
 def test_a_step_that_reads_what_it_did_not_declare_fails_its_rebuild(cw_root):
     import sys
 

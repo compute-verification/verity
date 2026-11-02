@@ -221,7 +221,8 @@ def unframe(enc: bytes) -> tuple[bytes, list[bytes]]:
 class CWPlan:
     """A counterexample decoder over covert_witness's fixed formats (`prepare.decode`), in `codecs.Plan`'s interface:
     `keys` are θ's names, and `key@i` for each suffix; decode(θ, base) returns θ's dtypes, so a suffix applies to the
-    base's tensors cast to θ's dtypes (exact for an fp32 start). Its cost is what the counter sees the decode compute."""
+    base's tensors cast to θ's dtypes (exact for an fp32 start). Its cost is the larger of what the counter sees the decode
+    compute and `prepare.rebuild_macs` of the base and of each suffix (θ's shapes)."""
 
     def __init__(self, prepare, theta: dict[str, torch.Tensor], device: str):
         self.p, self.theta, self.device = prepare, theta, device
@@ -242,7 +243,10 @@ class CWPlan:
         return out
 
     def cost_macs(self, enc: bytes, bases: dict) -> int:
-        return 0
+        if not hasattr(self.p, "rebuild_macs"):
+            return 0
+        base, suffixes = unframe(enc)
+        return sum(self.p.rebuild_macs(self.theta, b) for b in [*([base] if base else []), *suffixes])
 
 
 class Adapter:
