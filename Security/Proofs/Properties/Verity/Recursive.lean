@@ -180,7 +180,7 @@ theorem sparse_of_dense {i : Flock.RecVStar.Inner} (h : VStar.Recursive.dense i 
 /-- V\*'s list has a statement at every shape it lists: its last, the top cap. -/
 theorem statements_pos {sh : Flock.RecVStar.Inner} {vs : Array VStar.Stmt}
     (hvs : Flock.RecVStar.statements sh = .ok vs) : 0 < vs.size := by
-  obtain ⟨_, -, _, _, _, _, A, C, -, -, -, -, -, -, -, K, n, -, -, hss⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, -, _, _, _, _, A, C, -, -, -, -, -, -, -, K, L, n, -, -, -, hss⟩ := FlockC3.Reps.list_ok hvs
   rw [hss]
   simp only [Array.size_append]
   first | omega | (simp; done) | (simp <;> omega)
