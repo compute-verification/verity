@@ -4,8 +4,11 @@ reference. `islands/<class>/train.py` on this branch runs `main(class)`; E alway
 Mechanisms (`--mech`):
 
 - `relora`: K pieces of rank r. Each piece is a LoRA (A ~ N(0, 1/d_in), B = 0, scale sqrt(d_in / r)) trained by AdamW
-  for its share of the steps, then merged into the fp32 running weights (its factors rounded to E's dtype, the scale folded into
-  B), and the factors and their optimizer state restart. K = 1 is plain LoRA.
+  for its share of the steps, then merged into the fp32 running weights (its factors rounded to E's dtype, the scale folded
+  into B), and the factors and their optimizer state restart. K = 1 is plain LoRA.
+- `stack`: the same K pieces kept as adapters on θ, never merged, so every base W x stays θ's (`--basis lora`: ReLoRA's
+  function; `--basis galore`: GaLore in adapter form, each piece's frozen factor the top-r singular basis of the
+  gradient at its first step).
 - `galore`: every target matrix is trained in full through a rank-r projected Adam (GaLore). The projector is the top-r
   singular basis of the gradient, refreshed K times, so each period's update is exactly P_j @ N_j, one rank-r piece.
 - `full`: AdamW (or Muon) on the target matrices; `--project-every T` projects W − θ onto its best fitting low-rank
@@ -14,13 +17,18 @@ Mechanisms (`--mech`):
   log's (`prepare.seedlog_step`), its coefficient is the backward gradient's projection on z_i, and E is only the
   coefficients (`prepare.encode_seedlog`).
 
-E for the first three is the pieces concatenated (rank K·r, `prepare.encode_lora`) when they fit the class's cap, else the
-truncated SVD of the whole update W − θ with ranks allocated across tensors greedily by singular value energy per byte
-(`--whiten`: of the update times each input's covariance root, so the energy is the output error it removes). Snapshots:
-E at each piece boundary (when it fits), and a ladder of truncations of the final update (`--ladder`, bytes), each at the
-full step log: one run maps |E| against bits per byte.
+E for the piece mechanisms is the pieces concatenated (rank K·r, `prepare.encode_lora`) when they fit the class's cap,
+else the truncated SVD of the whole update W − θ with ranks allocated across tensors greedily by singular value energy
+per byte (`--whiten`: of the update times each input's covariance root, so the energy is the output error it removes).
 
-    python guard.py islands/e1mb/train.py --start s100 --out SUB --mech galore --rank 8 --pieces 8 --lr 3e-3
+`--arms` runs several settings in one candidate, each from θ on the same data order with its share of the budget, e.g.
+`--arms lr=1e-3/lr=3e-3/lr=1e-2` (a 3-point learning-rate sweep) or `--arms pieces=1,rank=8/pieces=8,rank=1`. The harness
+scores the first E encoded in each 5% of the planned steps (`hooks.plan`), so each arm encodes E at each piece boundary
+whose 5% is still free and at its end; the arm with the least final training loss is submitted. A later arm's
+checkpoints are charged every arm before it.
+
+    python benchmarks/covert_witness/launch.py e1mb s100 --note "stack r2x4 lr sweep" -- --mech stack --rank 2 \
+        --pieces 4 --arms lr=1e-3/lr=3e-3/lr=1e-2 --budget-fraction 0.6
 """
 from __future__ import annotations
 
@@ -29,25 +37,30 @@ import hashlib
 import json
 import math
 import time
+import traceback
 from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 
 import prepare
+from te_core import hooks
 
 LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 GROUPS = {"all": LF_MATS, "out": ("wo", "w_down"), "mlp": ("w_gate", "w_up", "w_down"), "attn": ("wq", "wk", "wv", "wo")}
 DEV = prepare.DEVICE
-HEADER_MARGIN = 64
+#: the harness scores the first E encoded in each 1/CHECKPOINTS of the planned steps (its run.py's CHECKPOINTS)
+CHECKPOINTS = 20
 #: the factors' and full tensors' storage in E (`--dtype`); f16 keeps 4x bf16's mantissa for norm gains near 1
 CODE = {"name": "f16", "dtype": torch.float16}
+ARM_KEYS = {"mech": str, "lr": float, "rank": int, "pieces": int, "alpha": float, "norm_lr": float, "warmup": int, "rewarm": int,
+            "dirs": int, "targets": str, "blocks": str, "basis": str, "opt": str, "project_every": int}
 
 
 # ---- targets and byte accounting --------------------------------------------------------------------------------------
 
 def targets_of(params: dict, spec: str, blocks: str) -> list[str]:
-    leaves = set(GROUPS.get(spec, spec.split(",")))
+    leaves = set(GROUPS.get(spec, spec.split("+")))
     n_layer = 1 + max(int(n.split(".")[1]) for n in params if n.startswith("blocks."))
     lo, hi = (0, n_layer - 1) if blocks == "all" else map(int, blocks.split("-"))
     out = []
@@ -58,9 +71,17 @@ def targets_of(params: dict, spec: str, blocks: str) -> list[str]:
     return sorted(out)
 
 
-def lora_size(theta: dict, ranks: dict[str, int], norms: list[str]) -> int:
-    fac = {n: (torch.zeros(r, theta[n].shape[1]), torch.zeros(theta[n].shape[0], r), 1.0) for n, r in ranks.items() if r}
-    return len(prepare.encode_lora(fac, CODE["name"], {n: theta[n] for n in norms}))
+def lora_bytes(ranks: dict[str, int], shapes: dict[str, tuple], norm_vals: dict) -> int:
+    """len(encode_lora(...)) for these ranks, without encoding: the harness scores every E encoded during the steps."""
+    names = sorted(n for n, r in ranks.items() if r)
+    header = {"dtype": CODE["name"], "factors": [[n, int(ranks[n]), 1.0] for n in names], "full": sorted(norm_vals)}
+    entries = sum(ranks[n] * (shapes[n][0] + shapes[n][1]) for n in names) + sum(v.numel() for v in norm_vals.values())
+    return len(prepare._pack(b"CWLORA1\n", header, b"")) + entries * torch.finfo(CODE["dtype"]).bits // 8
+
+
+def seedlog_bytes(names: list[str], seed: int, steps: int) -> int:
+    header = {"names": list(names), "seed": int(seed), "steps": int(steps), "coeff": "f16"}
+    return len(prepare._pack(b"CWSEED1\n", header, b"")) + 2 * steps
 
 
 def dense(x: torch.Tensor) -> torch.Tensor:
@@ -74,44 +95,56 @@ def svd_flops(shape) -> int:
     return 4 * m * n * min(m, n) + 4 * min(m, n) ** 3
 
 
+def no_tf32_matmul(b: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
+    tf32 = torch.backends.cuda.matmul.allow_tf32
+    torch.backends.cuda.matmul.allow_tf32 = False
+    try:
+        return b.float() @ a.float()
+    finally:
+        torch.backends.cuda.matmul.allow_tf32 = tf32
+
+
 # ---- encodings --------------------------------------------------------------------------------------------------------
 
-def encode_pieces(pieces: dict[str, list], norm_vals: dict[str, torch.Tensor]) -> bytes:
+def concat_factors(pieces: dict[str, list]) -> dict:
     """Every piece of every tensor, concatenated: W' = θ + [B_1 .. B_K] @ [A_1; ..; A_K]."""
-    fac = {}
-    for n, ps in pieces.items():
-        if ps:
-            fac[n] = (torch.cat([a for a, _ in ps], 0), torch.cat([b for _, b in ps], 1), 1.0)
-    return prepare.encode_lora(fac, CODE["name"], norm_vals)
+    return {n: (torch.cat([a for a, _ in ps], 0), torch.cat([b for _, b in ps], 1), 1.0) for n, ps in pieces.items() if ps}
 
 
 class Truncator:
     """The truncated SVD of each tensor's update, and the greedy allocation of ranks to a byte budget."""
 
     def __init__(self, deltas: dict[str, torch.Tensor], whiten: dict[str, torch.Tensor] | None = None):
-        self.svd, self.cost, self.flops = {}, {}, 0
+        self.svd, self.cost, self.shapes, self.flops = {}, {}, {}, 0
         for n, d in deltas.items():
             d = d.float()
             if whiten and n in whiten:
                 L = whiten[n]
-                u, s, vh = torch.linalg.svd(d @ L, full_matrices=False)
+                # L, computed from this step's tokens, goes first: the counter takes the first token-derived operand's
+                # position with list.index, which compares tensors by value and fails when it isn't the first input
+                u, s, vh = torch.linalg.svd((L.T @ d.T).T, full_matrices=False)
                 vh = torch.linalg.solve_triangular(L, vh, upper=False, left=False)
                 self.flops += 2 * d.shape[0] * d.shape[1] ** 2 + 2 * d.shape[1] ** 2 * min(d.shape)
             else:
                 u, s, vh = torch.linalg.svd(d, full_matrices=False)
             self.svd[n] = (u, s, vh)
+            self.shapes[n] = tuple(d.shape)
             self.cost[n] = 2 * (d.shape[0] + d.shape[1])
             self.flops += svd_flops(tuple(d.shape))
         self.order = sorted(((float(s[i]) ** 2 / self.cost[n], n, i) for n, (_, s, _) in self.svd.items()
                              for i in range(len(s))), reverse=True)
 
-    def ranks(self, budget: int, base: int) -> dict[str, int]:
+    def ranks(self, budget: int, norm_vals: dict) -> dict[str, int]:
+        """The greedy allocation, then the least valuable rank dropped until the exact size fits."""
         ranks = {n: 0 for n in self.svd}
-        used = base
+        used = lora_bytes({n: 9999 for n in self.svd}, {n: (0, 0) for n in self.svd}, norm_vals)
         for _, n, _ in self.order:
             if used + self.cost[n] <= budget:
                 ranks[n] += 1
                 used += self.cost[n]
+        while lora_bytes(ranks, self.shapes, norm_vals) > budget:
+            worst = min((float(self.svd[n][1][r - 1]) ** 2 / self.cost[n], n) for n, r in ranks.items() if r)[1]
+            ranks[worst] -= 1
         return ranks
 
     def factors(self, ranks: dict[str, int]) -> dict:
@@ -122,16 +155,6 @@ class Truncator:
                 root = s[:r].sqrt()
                 out[n] = (dense(root[:, None] * vh[:r]), dense(u[:, :r] * root[None, :]), 1.0)
         return out
-
-    def encode(self, budget: int, theta: dict, norm_vals: dict) -> tuple[bytes, dict[str, int]]:
-        base = lora_size(theta, {n: 1 for n in self.svd}, list(norm_vals)) - sum(self.cost.values()) + HEADER_MARGIN
-        ranks = self.ranks(budget, base)
-        while True:
-            blob = prepare.encode_lora(self.factors(ranks), CODE["name"], norm_vals)
-            if len(blob) <= budget:
-                return blob, ranks
-            worst = min((float(self.svd[n][1][r - 1]) ** 2 / self.cost[n], n) for n, r in ranks.items() if r)[1]
-            ranks[worst] -= 1
 
 
 # ---- the training loop's shared parts ---------------------------------------------------------------------------------
@@ -156,13 +179,13 @@ def schedule(step: int, n_steps: int, warmup: int, piece_start: int = 0, rewarm:
 
 
 @torch.no_grad()
-def covariance_roots(net, fwd, data, targets: list[str], a, steps: list) -> dict[str, torch.Tensor]:
+def covariance_roots(run, a) -> dict[str, torch.Tensor]:
     """The Cholesky factor of each target's input second moment over `--whiten` batches (plus a ridge of 1e-4 of its mean
     diagonal), from forward passes of the current model."""
-    acc, count = {n: None for n in targets}, [0]
+    acc = {n: None for n in run.targets}
     handles = []
-    for n in targets:
-        mod = net.inner.get_submodule(n.removesuffix(".weight"))
+    for n in run.targets:
+        mod = run.net.inner.get_submodule(n.removesuffix(".weight"))
 
         def pre(m, inp, n=n):
             with torch.autocast(DEV.split(":")[0], enabled=False):
@@ -172,42 +195,62 @@ def covariance_roots(net, fwd, data, targets: list[str], a, steps: list) -> dict
         handles.append(mod.register_forward_pre_hook(pre))
     tokens = 0
     for _ in range(a.whiten):
-        rows = data.next(a.batch)
+        rows = run.next_batch()
         for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
             with torch.autocast(DEV.split(":")[0], dtype=torch.bfloat16):
-                net(x[:, :-1])
-        tokens += a.batch * prepare.EVAL_CTX
-        steps.append({"op": "forward", "tokens": a.batch * prepare.EVAL_CTX})
+                run.net(rows[i: i + a.micro, :-1])
+        tokens += run.tokens
+        run.steps.append({"op": "forward", "tokens": run.tokens})
     for h in handles:
         h.remove()
-    extra = sum(2 * tokens * acc[n].shape[0] ** 2 for n in targets)
-    steps.append({"op": "extra", "flops": extra, "what": "input second moments for whitened truncation"})
+    run.steps.append({"op": "extra", "flops": sum(2 * tokens * acc[n].shape[0] ** 2 for n in run.targets),
+                      "what": "input second moments for whitened truncation"})
     roots = {}
-    for n in targets:
+    for n in run.targets:
         c = acc[n] / tokens
         c = c + 1e-4 * c.diagonal().mean() * torch.eye(c.shape[0], device=c.device)
         roots[n] = torch.linalg.cholesky(c.double()).float()
     return roots
 
 
-# ---- mechanisms -------------------------------------------------------------------------------------------------------
+# ---- the run: arms, checkpoints, submission ---------------------------------------------------------------------------
 
 class Run:
-    def __init__(self, a, klass: str):
-        self.a, self.klass = a, klass
-        self.net, self.rec, self.theta = prepare.load_start(a.start)
+    def __init__(self, base, klass: str, arms: list[argparse.Namespace]):
+        self.base, self.klass, self.arms = base, klass, arms
+        self.net, self.rec, self.theta = prepare.load_start(base.start)
         self.params = self.net.params()
         for p in self.params.values():
             p.requires_grad_(False)
         self.cap = prepare.CLASSES[klass]["max_e_bytes"]
+        self.theta_dev = {n: self.theta[n].to(DEV) for n in self.params}
+        self.tokens = base.batch * prepare.EVAL_CTX
+        self.steps, self.log, self.results = [], [], []
+        self.k, self.n_total, self.used, self.handles = 0, None, set(), []
+        self.t0 = time.perf_counter()
+
+    # -- an arm's setup
+
+    def begin(self, a) -> None:
+        """θ into every tensor, the hooks of the arm before removed, and the data stream from its start."""
+        for h in self.handles:
+            h.remove()
+        self.handles = []
+        with torch.no_grad():
+            for n, p in self.params.items():
+                p.grad = None
+                p.requires_grad_(False)
+                p.data.copy_(self.theta_dev[n])
+        self.a = a
         self.targets = targets_of(self.params, a.targets, a.blocks)
         self.norms = sorted(n for n, p in self.params.items() if p.ndim == 1) if a.norms else []
-        self.theta_dev = {n: self.theta[n].to(DEV) for n in self.targets}
         self.data = prepare.TrainData(self.rec["tokenizer"], seed=a.data_seed)
-        self.steps, self.snaps, self.log = [], [], []
-        self.tokens = a.batch * prepare.EVAL_CTX
-        self.t0 = time.perf_counter()
+        self.losses = []
+        self.arm_start = self.k
+
+    def hook(self, name: str, fn) -> None:
+        mod = self.net.inner.get_submodule(name.removesuffix(".weight"))
+        self.handles.append(mod.register_forward_hook(fn))
 
     def norm_vals(self) -> dict:
         return {n: self.params[n].detach() for n in self.norms}
@@ -218,69 +261,105 @@ class Run:
         return torch.optim.AdamW([self.params[n] for n in self.norms], lr=self.a.norm_lr, betas=(0.9, 0.95),
                                  weight_decay=0.0) if self.norms else None
 
+    def shapes(self) -> dict:
+        return {n: tuple(self.params[n].shape) for n in self.targets}
+
+    # -- steps and the harness's 5% checkpoints
+
+    def plan(self, n_steps: int) -> None:
+        """The arm's step count; the first arm's plans the run: every arm takes as many batches."""
+        self.arm_end = self.arm_start + n_steps + self.a.whiten
+        if self.n_total is None:
+            self.n_total = len(self.arms) * (n_steps + self.a.whiten)
+            hooks.plan(self.n_total)
+
+    def next_batch(self) -> torch.Tensor:
+        self.k += 1
+        return self.data.next(self.a.batch)
+
+    def bucket(self, k: int | None = None) -> int:
+        return math.ceil((self.k if k is None else k) * CHECKPOINTS / self.n_total)
+
+    def free(self) -> bool:
+        """Whether an E encoded now is scored without taking the 5% the arm's final E will be encoded in."""
+        return self.bucket() not in self.used and self.bucket() != self.bucket(self.arm_end)
+
+    def encoded(self) -> None:
+        self.used.add(self.bucket())
+
     def n_steps(self, per_step: float, fixed_extra: float) -> int:
-        return int((self.a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - fixed_extra) // per_step)
+        return int((self.a.budget_fraction / len(self.arms) * prepare.TRAIN_FLOP_BUDGET - fixed_extra) // per_step)
 
     def report(self, step: int, loss: torch.Tensor, **kw) -> None:
+        self.losses.append(loss)
         if (step + 1) % 100 == 0:
-            row = {"step": step + 1, "loss": round(float(loss), 4), "s": round(time.perf_counter() - self.t0, 1), **kw}
+            row = {"arm": len(self.results), "step": step + 1, "loss": round(float(loss), 4),
+                   "s": round(time.perf_counter() - self.t0, 1), **kw}
             self.log.append(row)
             print(json.dumps(row), flush=True)
 
-    def deltas(self) -> dict[str, torch.Tensor]:
-        return {n: self.params[n].detach().float() - self.theta_dev[n].float() for n in self.targets}
+    def snapshot_pieces(self, pieces: dict) -> None:
+        if self.a.no_piece_snaps or not self.free():
+            return
+        fac = concat_factors(pieces)
+        nv = self.norm_vals()
+        if self.cap is None or lora_bytes({n: f[0].shape[0] for n, f in fac.items()}, self.shapes(), nv) <= self.cap:
+            prepare.encode_lora(fac, CODE["name"], nv)
+            self.encoded()
 
-    def finish(self, pieces: dict | None, trainable: dict, notes: dict) -> int:
-        """E: the pieces when they fit the cap, else the truncation to the cap; the ladder of truncations as snapshots."""
+    # -- an arm's E
+
+    def finish(self, pieces: dict | None, deltas, trainable: dict, notes: dict) -> None:
+        """E: the pieces when they fit the cap, else the truncation of the update (`deltas()`) to the cap, else (no cap)
+        the full tensors."""
         a, cap = self.a, self.cap
-        norm_vals = self.norm_vals()
-        concat = encode_pieces(pieces, norm_vals) if pieces else None
-        ladder = sorted({int(x) for x in a.ladder.split(",") if x} | ({cap} if cap else set()))
-        ladder = [b for b in ladder if cap is None or b <= cap]
-        need_trunc = concat is None or (cap is not None and len(concat) > cap) or ladder
-        trunc_info = []
-        blob = concat if concat is not None and (cap is None or len(concat) <= cap) else None
-        if need_trunc:
-            whiten = covariance_roots(self.net, self.net, self.data, self.targets, a, self.steps) if a.whiten else None
-            tr = Truncator(self.deltas(), whiten)
+        nv = self.norm_vals()
+        whiten = covariance_roots(self, a) if a.whiten else None
+        fac = concat_factors(pieces) if pieces else None
+        concat = lora_bytes({n: f[0].shape[0] for n, f in fac.items()}, self.shapes(), nv) if fac else None
+        trunc = None
+        if fac is not None and (cap is None or concat <= cap):
+            blob = prepare.encode_lora(fac, CODE["name"], nv)
+        elif cap is not None:
+            tr = Truncator(deltas(), whiten)
             self.steps.append({"op": "extra", "flops": tr.flops, "what": "SVD of the update for truncation"})
-            for b in ladder:
-                if concat is not None and len(concat) <= b:
-                    continue
-                tb, ranks = tr.encode(b, self.theta, norm_vals)
-                trunc_info.append({"budget": b, "bytes": len(tb), "rank_total": sum(ranks.values()),
-                                   "ranks": {n: r for n, r in ranks.items() if r}})
-                if b == cap and blob is None:
-                    blob = tb
-                else:
-                    self.snaps.append((tb, len(self.steps)))
-            if blob is None and cap is not None:
-                blob = tr.encode(cap, self.theta, norm_vals)[0]
-        if blob is None:
+            ranks = tr.ranks(cap, nv)
+            blob = prepare.encode_lora(tr.factors(ranks), CODE["name"], nv)
+            trunc = {"rank_total": sum(ranks.values()), "ranks": {n: r for n, r in ranks.items() if r}}
+        else:
             blob = prepare.encode_full({n: self.params[n].detach().to(self.theta[n].dtype)
                                         for n in self.targets + self.norms})
+        self.encoded()
+        self.close_arm(blob, trainable, {"concat_bytes": concat, "truncation": trunc, **notes})
+
+    def close_arm(self, blob: bytes, trainable: dict, notes: dict) -> None:
+        losses = torch.stack(self.losses).float().cpu()
+        tail = float(losses[-max(1, len(losses) // 10):].mean())
+        arm = {"arm": len(self.results), "args": {k: getattr(self.a, k) for k in ARM_KEYS}, "E_bytes": len(blob),
+               "E_sha256": hashlib.sha256(blob).hexdigest(), "steps": self.k - self.arm_start, "end_batch": self.k,
+               "tail_loss": round(tail, 5), **notes}
+        print(json.dumps(arm), flush=True)
+        self.results.append({"blob": blob, "trainable": trainable, "row": arm})
+
+    def submit(self) -> int:
+        best = min(self.results, key=lambda r: r["row"]["tail_loss"])
+        blob = best["blob"]
         model = prepare.decode(self.theta, blob)
         changed = sorted(n for n in self.theta if not prepare.same_bits(model[n], self.theta[n]))
         src = Path(__file__).read_bytes()
-        notes = {"direction": "lowrank-restart", "mech": a.mech, "args": vars(a), "E_bytes": len(blob),
-                 "concat_bytes": len(concat) if concat is not None else None, "truncations": trunc_info,
+        notes = {"direction": "lowrank-restart", "mech": self.base.mech, "args": vars(self.base),
+                 "submitted_arm": best["row"]["arm"], "arms": [r["row"] for r in self.results], "E_bytes": len(blob),
                  "program": "islands/lowrank-restart/lowrank_restart.py",
-                 "program_sha256": hashlib.sha256(src).hexdigest(), "train_log": self.log[-20:], **notes}
-        prepare.submit(Path(a.out), a.start, self.klass, blob, model, trainable, self.steps, changed=changed,
-                       notes=notes, snapshots=self.snaps)
-        print(json.dumps({"E_bytes": len(blob), "changed": len(changed), "snapshots": len(self.snaps),
-                          "truncations": [(t["budget"], t["bytes"], t["rank_total"]) for t in trunc_info]}), flush=True)
+                 "program_sha256": hashlib.sha256(src).hexdigest(), "train_log": self.log[-40:]}
+        prepare.submit(Path(self.base.out), self.base.start, self.klass, blob, model, best["trainable"], self.steps,
+                       changed=changed, notes=notes)
+        print(json.dumps({"submitted_arm": best["row"]["arm"], "E_bytes": len(blob), "changed": len(changed)}), flush=True)
         return 0
 
-    def snapshot_pieces(self, pieces: dict) -> None:
-        if self.a.no_piece_snaps:
-            return
-        b = encode_pieces(pieces, self.norm_vals())
-        if self.cap is None or len(b) <= self.cap:
-            self.snaps.append((b, len(self.steps)))
 
+# ---- mechanisms -------------------------------------------------------------------------------------------------------
 
-def run_relora(run: Run) -> int:
+def run_relora(run: Run) -> None:
     a, params, targets = run.a, run.params, run.targets
     r, K = a.rank, a.pieces
     nopt = run.norm_opt()
@@ -292,8 +371,7 @@ def run_relora(run: Run) -> int:
         B = torch.nn.Parameter(torch.zeros(w.shape[0], r, device=DEV))
         s = a.alpha * math.sqrt(w.shape[1] / r)
         fac[n] = (A, B, s)
-        mod = run.net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
+        run.hook(n, lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
 
     def restart():
         with torch.no_grad():
@@ -308,12 +386,12 @@ def run_relora(run: Run) -> int:
     merge = sum(2 * r * params[n].shape[0] * params[n].shape[1] for n in targets)
     trunc = sum(svd_flops(tuple(params[n].shape)) for n in targets)
     n_steps = run.n_steps(per_step, K * merge + trunc)
+    run.plan(n_steps)
     bounds = [round(n_steps * j / K) for j in range(K + 1)]
     pieces = {n: [] for n in targets}
     fwd = torch.compile(run.net) if a.compile else run.net
-    print(json.dumps({"mech": "relora", "steps": n_steps, "rank": r, "pieces": K, "targets": len(targets),
-                      "norms": len(run.norms), "piece_bytes": lora_size(run.theta, {n: r for n in targets}, []),
-                      "flops_per_step": per_step}), flush=True)
+    print(json.dumps({"mech": "relora", "arm": len(run.results), "lr": a.lr, "steps": n_steps, "rank": r, "pieces": K,
+                      "targets": len(targets), "norms": len(run.norms), "flops_per_step": per_step}), flush=True)
     opt, piece = restart(), 0
     for step in range(n_steps):
         frac = schedule(step, n_steps, a.warmup, bounds[piece], a.rewarm)
@@ -322,7 +400,7 @@ def run_relora(run: Run) -> int:
         if nopt:
             for grp in nopt.param_groups:
                 grp["lr"] = a.norm_lr * schedule(step, n_steps, a.warmup)
-        loss = loss_backward(fwd, run.data.next(a.batch), a)
+        loss = loss_backward(fwd, run.next_batch(), a)
         torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]] +
                                        [params[n] for n in run.norms], 1.0)
         opt.step()
@@ -333,28 +411,29 @@ def run_relora(run: Run) -> int:
         run.steps.append({"op": "train", "tokens": run.tokens})
         run.report(step, loss, piece=piece)
         if step + 1 == bounds[piece + 1]:
-            tf32 = torch.backends.cuda.matmul.allow_tf32
-            torch.backends.cuda.matmul.allow_tf32 = False
             with torch.no_grad():
                 for n, (A, B, s) in fac.items():
                     aq, bq = A.detach().to(CODE["dtype"]), (s * B.detach()).to(CODE["dtype"])
-                    params[n].data += bq.float() @ aq.float()
+                    params[n].data += no_tf32_matmul(bq, aq)
                     pieces[n].append((aq, bq))
-            torch.backends.cuda.matmul.allow_tf32 = tf32
             run.steps.append({"op": "extra", "flops": merge, "what": f"merge piece {piece}"})
             piece += 1
             if piece < K:
                 run.snapshot_pieces(pieces)
                 opt = restart()
-    for A, B, _ in fac.values():
-        with torch.no_grad():
+    with torch.no_grad():
+        for _, B, _ in fac.values():
             B.zero_()
-    return run.finish(pieces, trainable, {"pieces": K, "rank": r, "steps": n_steps})
+    run.finish(pieces, run_deltas(run), trainable, {"pieces": K, "rank": r, "steps": n_steps, "merged": True})
 
 
-def run_stack(run: Run) -> int:
+def run_deltas(run: Run):
+    return lambda: {n: run.params[n].detach().float() - run.theta_dev[n].float() for n in run.targets}
+
+
+def run_stack(run: Run) -> None:
     """K pieces of rank r kept as adapters on θ, never merged: every base W x stays θ's, and the forward adds the finished
-    pieces (frozen, preallocated at rank K·r) and the active one. `--basis lora`: the active piece is a LoRA (ReLoRA's
+    pieces (frozen; only those finished are multiplied, so the updated MACs grow piece by piece) and the active one. `--basis lora`: the active piece is a LoRA (ReLoRA's
     restarts without the merge, the same function). `--basis galore`: GaLore in adapter form; at each piece's first step one
     backward also takes the target matrices' gradient G, the active piece's frozen factor is G's top-r singular basis (P on
     the left when d_out <= d_in, Q on the right otherwise) and only the other factor N trains, so dL/dN = P^T G is GaLore's
@@ -363,7 +442,16 @@ def run_stack(run: Run) -> int:
     r, K, galore = a.rank, a.pieces, a.basis == "galore"
     nopt = run.norm_opt()
     g = torch.Generator(device=DEV).manual_seed(a.seed)
-    st = {}
+    st, done = {}, [0]
+
+    def forward_hook(A_all, B_all, A, B, s):
+        def fn(m, inp, out):
+            out = out + s * F.linear(F.linear(inp[0], A), B)
+            if done[0]:
+                out = out + F.linear(F.linear(inp[0], A_all[: done[0] * r]), B_all[:, : done[0] * r])
+            return out
+        return fn
+
     for n in targets:
         d_out, d_in = params[n].shape
         left = d_out <= d_in
@@ -373,9 +461,7 @@ def run_stack(run: Run) -> int:
         A = torch.nn.Parameter(torch.zeros(r, d_in, device=DEV), requires_grad=not galore or left)
         B = torch.nn.Parameter(torch.zeros(d_out, r, device=DEV), requires_grad=not galore or not left)
         st[n] = {"A_all": A_all, "B_all": B_all, "A": A, "B": B, "s": s, "left": left}
-        mod = run.net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(lambda m, inp, out, A_all=A_all, B_all=B_all, A=A, B=B, s=s:
-                                  out + F.linear(F.linear(inp[0], A_all), B_all) + s * F.linear(F.linear(inp[0], A), B))
+        run.hook(n, forward_hook(A_all, B_all, A, B, s))
     active = [p for v in st.values() for p in (v["A"], v["B"]) if p.requires_grad]
 
     def restart():
@@ -394,11 +480,12 @@ def run_stack(run: Run) -> int:
     wgrad = sum(2 * params[n].shape[0] * params[n].shape[1] for n in targets) * run.tokens if galore else 0
     svd = sum(svd_flops(tuple(params[n].shape)) for n in targets)
     n_steps = run.n_steps(per_step, K * (wgrad + (svd if galore else 0)) + svd)
+    run.plan(n_steps)
     bounds = [round(n_steps * j / K) for j in range(K + 1)]
     fwd = torch.compile(run.net) if a.compile else run.net
-    print(json.dumps({"mech": "stack", "basis": a.basis, "steps": n_steps, "rank": r, "pieces": K, "targets": len(targets),
-                      "norms": len(run.norms), "piece_bytes": lora_size(run.theta, {n: r for n in targets}, []),
-                      "flops_per_step": per_step}), flush=True)
+    print(json.dumps({"mech": "stack", "basis": a.basis, "arm": len(run.results), "lr": a.lr, "steps": n_steps, "rank": r,
+                      "pieces": K, "targets": len(targets), "norms": len(run.norms), "flops_per_step": per_step}),
+          flush=True)
 
     def pieces_so_far(j: int) -> dict:
         return {n: [(v["A_all"][: j * r].to(CODE["dtype"]), v["B_all"][:, : j * r].to(CODE["dtype"]))] if j else []
@@ -416,7 +503,7 @@ def run_stack(run: Run) -> int:
         if refresh:
             for n in targets:
                 params[n].requires_grad_(True)
-        loss = loss_backward(fwd, run.data.next(a.batch), a)
+        loss = loss_backward(fwd, run.next_batch(), a)
         if refresh:
             with torch.no_grad():
                 for n, v in st.items():
@@ -445,19 +532,12 @@ def run_stack(run: Run) -> int:
                     v["A_all"][sl] = v["A"].to(CODE["dtype"]).float()
                     v["B_all"][:, sl] = (v["s"] * v["B"]).to(CODE["dtype"]).float()
             piece += 1
+            done[0] = piece
             if piece < K:
                 run.snapshot_pieces(pieces_so_far(piece))
                 opt = restart()
-    with torch.no_grad():
-        for n, v in st.items():
-            v["A"].zero_()
-            v["B"].zero_()
-            tf32 = torch.backends.cuda.matmul.allow_tf32
-            torch.backends.cuda.matmul.allow_tf32 = False
-            params[n].data = run.theta_dev[n].float() + v["B_all"] @ v["A_all"]
-            torch.backends.cuda.matmul.allow_tf32 = tf32
-    return run.finish(pieces_so_far(K), trainable, {"pieces": K, "rank": r, "basis": a.basis, "steps": n_steps,
-                                                    "merged": False})
+    run.finish(pieces_so_far(K), lambda: {n: no_tf32_matmul(v["B_all"], v["A_all"]) for n, v in st.items()}, trainable,
+               {"pieces": K, "rank": r, "basis": a.basis, "steps": n_steps, "merged": False})
 
 
 class GaloreState:
@@ -493,7 +573,7 @@ class GaloreState:
         w.add_(self.P @ d if self.left else d @ self.P.T)
 
 
-def run_galore(run: Run) -> int:
+def run_galore(run: Run) -> None:
     a, params, targets = run.a, run.params, run.targets
     r, K = a.rank, a.pieces
     nopt = run.norm_opt()
@@ -505,16 +585,16 @@ def run_galore(run: Run) -> int:
     proj = sum(4 * r * params[n].shape[0] * params[n].shape[1] for n in targets)
     svd = sum(svd_flops(tuple(params[n].shape)) for n in targets)
     n_steps = run.n_steps(per_step + proj, (K + 1) * svd)
+    run.plan(n_steps)
     bounds = [round(n_steps * j / K) for j in range(K + 1)]
     pieces = {n: [] for n in targets}
     fwd = torch.compile(run.net) if a.compile else run.net
-    print(json.dumps({"mech": "galore", "steps": n_steps, "rank": r, "pieces": K, "targets": len(targets),
-                      "norms": len(run.norms), "piece_bytes": lora_size(run.theta, {n: r for n in targets}, []),
-                      "flops_per_step": per_step + proj}), flush=True)
+    print(json.dumps({"mech": "galore", "arm": len(run.results), "lr": a.lr, "steps": n_steps, "rank": r, "pieces": K,
+                      "targets": len(targets), "norms": len(run.norms), "flops_per_step": per_step + proj}), flush=True)
     piece = 0
     for step in range(n_steps):
         frac = schedule(step, n_steps, a.warmup, bounds[piece], a.rewarm)
-        loss = loss_backward(fwd, run.data.next(a.batch), a)
+        loss = loss_backward(fwd, run.next_batch(), a)
         torch.nn.utils.clip_grad_norm_([params[n] for n in targets + run.norms], 1.0)
         if step == bounds[piece]:
             for n in targets:
@@ -536,7 +616,7 @@ def run_galore(run: Run) -> int:
             piece += 1
             if piece < K:
                 run.snapshot_pieces(pieces)
-    return run.finish(pieces, trainable, {"pieces": K, "rank": r, "steps": n_steps})
+    run.finish(pieces, run_deltas(run), trainable, {"pieces": K, "rank": r, "steps": n_steps})
 
 
 def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
@@ -557,7 +637,7 @@ def ns_flops(shape, steps: int = 5) -> int:
     return steps * (4 * m * m * n + 2 * m ** 3)
 
 
-def run_full(run: Run) -> int:
+def run_full(run: Run) -> None:
     a, params, targets = run.a, run.params, run.targets
     nopt = run.norm_opt()
     for n in targets:
@@ -569,17 +649,18 @@ def run_full(run: Run) -> int:
     est = run.n_steps(per_step + muon_extra, svd)
     n_proj = est // a.project_every if a.project_every else 0
     n_steps = run.n_steps(per_step + muon_extra, (n_proj + 1) * svd)
+    run.plan(n_steps)
     if a.opt == "muon":
         bufs = {n: torch.zeros_like(params[n]) for n in targets}
     else:
         opt = torch.optim.AdamW([params[n] for n in targets], lr=a.lr, betas=(0.9, 0.95), weight_decay=0.0)
     fwd = torch.compile(run.net) if a.compile else run.net
-    print(json.dumps({"mech": "full", "opt": a.opt, "steps": n_steps, "targets": len(targets), "norms": len(run.norms),
-                      "project_every": a.project_every, "project_bytes": a.project_bytes or run.cap,
-                      "flops_per_step": per_step + muon_extra}), flush=True)
+    print(json.dumps({"mech": "full", "opt": a.opt, "arm": len(run.results), "lr": a.lr, "steps": n_steps,
+                      "targets": len(targets), "norms": len(run.norms), "project_every": a.project_every,
+                      "project_bytes": a.project_bytes or run.cap, "flops_per_step": per_step + muon_extra}), flush=True)
     for step in range(n_steps):
         frac = schedule(step, n_steps, a.warmup)
-        loss = loss_backward(fwd, run.data.next(a.batch), a)
+        loss = loss_backward(fwd, run.next_batch(), a)
         torch.nn.utils.clip_grad_norm_([params[n] for n in targets + run.norms], 1.0)
         if a.opt == "muon":
             with torch.no_grad():
@@ -603,19 +684,17 @@ def run_full(run: Run) -> int:
         run.steps.append({"op": "train", "tokens": run.tokens})
         run.report(step, loss)
         if a.project_every and (step + 1) % a.project_every == 0 and step + 1 < n_steps:
-            tr = Truncator(run.deltas())
-            budget = a.project_bytes or run.cap
-            ranks = tr.ranks(budget, lora_size(run.theta, {}, run.norms) + HEADER_MARGIN + 2048)
-            fac = tr.factors(ranks)
+            tr = Truncator(run_deltas(run)())
+            fac = tr.factors(tr.ranks(a.project_bytes or run.cap, run.norm_vals()))
             with torch.no_grad():
                 for n in targets:
-                    lo = (fac[n][1].to(CODE["dtype"]).float() @ fac[n][0].to(CODE["dtype"]).float()) if n in fac else 0
+                    lo = no_tf32_matmul(fac[n][1].to(CODE["dtype"]), fac[n][0].to(CODE["dtype"])) if n in fac else 0
                     params[n].data.copy_(run.theta_dev[n].float() + lo)
             run.steps.append({"op": "extra", "flops": tr.flops, "what": "rank projection"})
-    return run.finish(None, trainable, {"steps": n_steps, "opt": a.opt})
+    run.finish(None, run_deltas(run), trainable, {"steps": n_steps, "opt": a.opt})
 
 
-def run_subspace(run: Run) -> int:
+def run_subspace(run: Run) -> None:
     """Random-subspace descent with exact directional derivatives: each step one backward, then `--dirs` seed-log
     directions, each moved by c_i = lr · <G, z_i> / (|G| sqrt(P)) (quantized to f16), applied as the decoder applies it."""
     a, params = run.a, run.params
@@ -623,22 +702,22 @@ def run_subspace(run: Run) -> int:
     for n in names:
         params[n].requires_grad_(True)
     P = sum(params[n].numel() for n in names)
-    header = len(prepare.encode_seedlog(names, a.seed, [], "f16"))
-    max_dirs = ((run.cap or 10 ** 9) - header) // 2
+    max_dirs = ((run.cap or 10 ** 9) - seedlog_bytes(names, a.seed, 0)) // 2
     trainable = {"full": names}
     per_step = prepare.train_flops(run.rec, trainable, [{"op": "train", "tokens": run.tokens}])["flops"]
     dir_flops = 4 * P
     n_steps = min(run.n_steps(per_step + a.dirs * dir_flops, 0), max_dirs // a.dirs)
+    run.plan(n_steps)
     fwd = torch.compile(run.net) if a.compile else run.net
     gen = torch.Generator(device=DEV)
     masters = [params[n].data for n in names]
     coeffs: list[torch.Tensor] = []
-    print(json.dumps({"mech": "subspace", "steps": n_steps, "dirs_per_step": a.dirs, "P": P, "names": len(names),
-                      "flops_per_step": per_step + a.dirs * dir_flops}), flush=True)
+    print(json.dumps({"mech": "subspace", "arm": len(run.results), "lr": a.lr, "steps": n_steps, "dirs_per_step": a.dirs,
+                      "P": P, "names": len(names), "flops_per_step": per_step + a.dirs * dir_flops}), flush=True)
     marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
     for step in range(n_steps):
         frac = schedule(step, n_steps, a.warmup)
-        loss = loss_backward(fwd, run.data.next(a.batch), a)
+        loss = loss_backward(fwd, run.next_batch(), a)
         grads = [params[n].grad for n in names]
         gnorm = torch.sqrt(sum((g.float() ** 2).sum() for g in grads))
         with torch.no_grad():
@@ -655,19 +734,26 @@ def run_subspace(run: Run) -> int:
         run.steps += [{"op": "train", "tokens": run.tokens},
                       {"op": "extra", "flops": a.dirs * dir_flops, "what": "directional derivatives and steps"}]
         run.report(step, loss)
-        if step + 1 in marks:
-            run.snaps.append((prepare.encode_seedlog(names, a.seed, torch.stack(coeffs).tolist(), "f16"),
-                              len(run.steps)))
+        if step + 1 in marks and run.free():
+            prepare.encode_seedlog(names, a.seed, torch.stack(coeffs).tolist(), "f16")
+            run.encoded()
     blob = prepare.encode_seedlog(names, a.seed, torch.stack(coeffs).tolist(), "f16")
-    model = prepare.decode(run.theta, blob)
-    changed = sorted(n for n in run.theta if not prepare.same_bits(model[n], run.theta[n]))
-    src = Path(__file__).read_bytes()
-    prepare.submit(Path(a.out), a.start, run.klass, blob, model, trainable, run.steps, changed=changed,
-                   notes={"direction": "lowrank-restart", "mech": "subspace", "args": vars(a), "E_bytes": len(blob),
-                          "directions": len(coeffs), "steps": n_steps, "program_sha256": hashlib.sha256(src).hexdigest(),
-                          "train_log": run.log[-20:]}, snapshots=run.snaps)
-    print(json.dumps({"E_bytes": len(blob), "directions": len(coeffs), "changed": len(changed)}), flush=True)
-    return 0
+    run.encoded()
+    run.close_arm(blob, trainable, {"directions": len(coeffs), "steps": n_steps})
+
+
+def parse_arms(base: argparse.Namespace) -> list[argparse.Namespace]:
+    arms = []
+    for spec in (base.arms.split("/") if base.arms else [""]):
+        over = {}
+        for kv in filter(None, spec.split(",")):
+            k, v = kv.split("=", 1)
+            k = k.replace("-", "_")
+            if k not in ARM_KEYS:
+                raise SystemExit(f"--arms: {k!r} is not one of {sorted(ARM_KEYS)}")
+            over[k] = ARM_KEYS[k](v)
+        arms.append(argparse.Namespace(**(vars(base) | over)))
+    return arms
 
 
 def main(klass: str) -> int:
@@ -675,23 +761,23 @@ def main(klass: str) -> int:
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--mech", choices=("relora", "stack", "galore", "full", "subspace"), required=True)
+    ap.add_argument("--arms", default="", help="settings separated by '/', each key=value pairs separated by ','")
     ap.add_argument("--basis", choices=("lora", "galore"), default="lora", help="stack: the active piece's form")
-    ap.add_argument("--targets", default="all", help="all, out, mlp, attn, or leaf names (wq,wo,...)")
+    ap.add_argument("--targets", default="all", help="all, out, mlp, attn, or leaf names joined by '+' (wq+wo)")
     ap.add_argument("--blocks", default="all", help="all, or LO-HI (0-based, inclusive)")
     ap.add_argument("--rank", type=int, default=4)
     ap.add_argument("--pieces", type=int, default=1)
-    ap.add_argument("--alpha", type=float, default=1.0, help="relora: the scale's multiplier on sqrt(d_in / r)")
+    ap.add_argument("--alpha", type=float, default=1.0, help="relora/stack: the scale's multiplier on sqrt(d_in / r)")
     ap.add_argument("--norms", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--norm-lr", type=float, default=3e-4)
     ap.add_argument("--opt", choices=("adam", "muon"), default="adam")
     ap.add_argument("--warmup", type=int, default=50)
-    ap.add_argument("--rewarm", type=int, default=20, help="relora/galore: steps of warmup after each restart")
+    ap.add_argument("--rewarm", type=int, default=20, help="relora/stack/galore: steps of warmup after each restart")
     ap.add_argument("--keep-moments", action="store_true", help="galore: keep the projected moments across refreshes")
     ap.add_argument("--project-every", type=int, default=0, help="full: project W − θ to the byte budget every T steps")
     ap.add_argument("--project-bytes", type=int, default=0)
     ap.add_argument("--whiten", type=int, default=0, help="truncate by output error, from this many batches' inputs")
-    ap.add_argument("--ladder", default="", help="byte budgets for truncation snapshots of the final update")
     ap.add_argument("--no-piece-snaps", action="store_true")
     ap.add_argument("--dirs", type=int, default=64, help="subspace: directions per step")
     ap.add_argument("--dtype", choices=("f16", "bf16"), default="f16", help="E's factors and norm gains")
@@ -700,10 +786,18 @@ def main(klass: str) -> int:
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True)
-    ap.add_argument("--budget-fraction", type=float, default=0.98)
-    a = ap.parse_args()
+    ap.add_argument("--budget-fraction", type=float, default=0.98, help="of the budget, shared by the arms")
+    base = ap.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = True
-    CODE.update(name=a.dtype, dtype=prepare.DTYPES[a.dtype])
-    run = Run(a, klass)
-    return {"relora": run_relora, "stack": run_stack, "galore": run_galore, "full": run_full,
-            "subspace": run_subspace}[a.mech](run)
+    CODE.update(name=base.dtype, dtype=prepare.DTYPES[base.dtype])
+    arms = parse_arms(base)
+    run = Run(base, klass, arms)
+    mech = {"relora": run_relora, "stack": run_stack, "galore": run_galore, "full": run_full, "subspace": run_subspace}
+    try:
+        for a in arms:
+            run.begin(a)
+            mech[a.mech](run)
+        return run.submit()
+    except Exception:
+        traceback.print_exc()
+        raise
