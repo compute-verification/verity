@@ -343,6 +343,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         instances: int | None = None, served: Sequence[int] | None = None,
         session_roots: Mapping[str, str] | None = None, *, supplied: Mapping[str, Any] | None = None,
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
+        circuit_params: Mapping[str, int] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
         held: Sequence[str] | None = None, coin_source: str, coins: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
@@ -356,9 +357,11 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     (code `coins`); from the verifier, `coins` must be None. Where the two differ,
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                                         registered, supplied, pinned, binding, schemas, window_root, held),
-                       "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
+    params = _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table, registered, supplied,
+                     pinned, binding, schemas, window_root, held)
+    if circuit_params is not None:
+        params["circuit_params"] = dict(circuit_params)
+    got = lean("run", {"params": params, "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
                        "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
                        "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
                        "sessions": list(sessions), "verdicts": {k: dict(verdicts[k]) for k in sorted(verdicts)},

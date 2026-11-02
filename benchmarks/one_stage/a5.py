@@ -277,6 +277,19 @@ def output_closure(a: argparse.Namespace, population: int) -> dict[int, list[int
     return {u: outs for u in range(population)} if outs else None
 
 
+def window_copies(a: argparse.Namespace, root: bool = False) -> dict:
+    """R7's copies (`registration.check`'s) of the values the window registers afresh under its open root,
+    ``a.window_values`` (the caller's ``{value: {"words", "leaves", "schema"}}``: a window circuit's registered parameters
+    that no pin holds, its scan state): each expected registered at its row's words, in its row format, at its 16-bit
+    leaves (``circuit_params``), and with ``root`` the window's open root (``a.window_root``) beside them. Empty for a
+    window that registers none, whose record stays v1."""
+    values = getattr(a, "window_values", None) or {}
+    if not values:
+        return {}
+    return {"registered": {v: e["words"] for v, e in values.items()}, "schemas": {v: e["schema"] for v, e in values.items()},
+            "circuit_params": {v: e["leaves"] for v, e in values.items()}, **({"window_root": a.window_root} if root else {})}
+
+
 def output_refusal(a: argparse.Namespace, mine: CS.Binding, drawn_law: dict) -> dict | None:
     """Why the window's output class can't be proved at rate 1 by `output_closure`, or None: it needs a streamed work
     sample (only a work sample carries a closure), units inside the population, and no member mixing output units with
@@ -322,7 +335,8 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
         if a.coins is not None:
             coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population, mine.work_table))
-        reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table)
+        reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
+                              **window_copies(a))
         if a.coins is not None:
             coins.commit(bytes.fromhex(reg.digest))
         draw = stream.select(reg, closure=output_closure(a, mine.population))
@@ -355,7 +369,8 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
         result, told = None, {"stream": stream.digest, "accepted": False, "refused": AC._refusal(e)}
     neg = AC.verifier_negatives(
         lambda c: stream_of(a, mine, members, want, leaf_layer, c)[0],
-        lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table),
+        lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
+                             **window_copies(a)),
         stream, coins, draw, outcome, a.window_root, output_closure(a, mine.population))
     checks = (result or {}).get("checks") or {}
     record = {"source": stream.coin_source, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
@@ -407,8 +422,8 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         window = "00" * 64 if name == "coins-for-another-window" else root
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
         try:
-            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table),
-                         closure=output_closure(a, mine.population))
+            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
+                                    **window_copies(a)), closure=output_closure(a, mine.population))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, coins)
@@ -417,8 +432,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
             accepted, side = None, {"refused": refusal(e)}
         py = reason(coins, window)
         at = ((side or {}).get("step"), (side or {}).get("codes"))
-        neg[name] = {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted, "python": py,
-                     "lean": side}
+        # under another window R7 refuses the registration first: the window's own values are registered under its root
+        r7 = window != root and "R7-domain" in (((side or {}).get("refused") or {}).get("codes") or ())
+        neg[name] = {"refused": py is not None and (accepted is False and at == SELECT_COINS or accepted is None and r7),
+                     "accepted": accepted, "python": py, "lean": side}
     checks = (result or {}).get("checks") or {}
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
@@ -493,6 +510,27 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
                                                          sort_keys=True))
         v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
         out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
+    return out
+
+
+def window_negatives(a: argparse.Namespace, rec: dict, mine: CS.Binding, want: dict, leaf_layer: str | None) -> dict[str, dict]:
+    """The registration of a window that registers values of its own (`window_copies`), each altered, refused by R7: a value
+    left out (``R7-values``), registered at another row count (``R7-leaves``), or under another window's open root
+    (``R7-domain``, a root registered for another window); and the record in v1, registering none (``keys``)."""
+    copies = window_copies(a, root=True)
+    if not copies:
+        return {}
+    v, entries = min(copies["registered"]), rec.get("registered") or []
+    cases = {"window-value-left-out (R7)": ({**rec, "registered": [e for e in entries if e.get("value") != v]}, copies),
+             "window-value-at-another-row-count (R7)": (
+                 {**rec, "registered": [{**e, "leaves": e["leaves"] + 1} if e.get("value") == v else e for e in entries]}, copies),
+             "window-value-under-another-window (R7)": (rec, {**copies, "window_root": "00" * 64}),
+             "window-values-unregistered (v1)": ({k: x for k, x in rec.items() if k != "registered"}, copies)}
+    out = {}
+    for name, (r, c) in cases.items():
+        got = V.check(r, mine.program, mine.query, mine.law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=mine.work_table,
+                      **c)
+        out[name] = {"refused": not got.ok, "codes": list(got.codes)}
     return out
 
 
@@ -701,7 +739,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
-    checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table).to_json()
+    checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
+                                     **window_copies(a, root=True)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -899,15 +938,17 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         defs = [tuple(x) for x in by_template.values()]
         fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
             else P.population_program(defs[0][0], defs[0][1] - 1)
-        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
+        own = window_copies(a, root=True)
+        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **own)
         neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
         other = CS.expected_ports(replace(mine, run="00" * 32))
-        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
+        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **own)
         neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
         first = members[0]["m"].key
         flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
+        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **own)
         neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg.update(window_negatives(a, rec, mine, want, leaf_layer))
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(wiring_negatives(mine.members, publics))
