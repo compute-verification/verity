@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameBeta
 import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The frames refuse an outer coin `1` (`FrameUnrefused`'s outer fault)
