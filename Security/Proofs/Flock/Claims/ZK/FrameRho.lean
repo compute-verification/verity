@@ -560,11 +560,12 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec Transcript TMW)
 open Loop
 
-/-- **The frames refuse dependent `ρ₀, ρ₁`**: at a `Live` statement the loop serves, on a live history of `refK x`
-openings whose last coins the frame takes, table `j`'s rep `r`'s pair coins at the opened coins are independent. At
-the rep's inner round 2 (`betaSlot`) the rep's schedule so far is complete (`schedSoFar_size`'s bound), so it ended
-past independent answers at its `ρ₀, ρ₁` rounds (`schedSoFar_rho`), Ligerito's `k₀ + 2` and `k₀ + 3`, which ask two
-coins each (`repPlan_rho`), and those answers are the opened coins (`wordsAt_slot`). -/
+/-- **The frames refuse dependent `ρ₀, ρ₁`**: at a `Live` statement the loop serves, on a live history of at most
+`refK x` openings, past table `j`'s rep `r`'s `betaSlot`, whose last coins the frame takes, the rep's pair coins at the
+opened coins are independent. At the rep's inner round 2 (`betaSlot`) the rep's schedule so far is complete
+(`schedSoFar_size`'s bound), so it ended past independent answers at its `ρ₀, ρ₁` rounds (`schedSoFar_rho`),
+Ligerito's `k₀ + 2` and `k₀ + 3`, which ask two coins each (`repPlan_rho`), and those answers are the opened coins
+(`wordsAt_slot`). -/
 theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -573,10 +574,10 @@ theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
       ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length = refK x)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
     (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
     (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
-    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) :
+    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.betaSlot x j r < ops.length) :
     _root_.Flock.Zk.rhoIndependent (Masked.rhoAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
       (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r) = true := by
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
@@ -618,10 +619,15 @@ theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
   have hs1 : 1 ≤ FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) := by
     unfold FlockComplete.repStartZk; omega
   obtain ⟨s, hs⟩ : ∃ s, s = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + N + 2 := ⟨_, rfl⟩
-  have hb : s < refK x := by omega
+  have hbs : Masked.betaSlot x j r = s := by
+    unfold Masked.betaSlot
+    rw [Masked.repSlot_eq hsx hz, hs, hN]
+    omega
+  rw [hbs] at hb
   have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
   obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
-    (by rw [hlast]; simp [hl]) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
+    (by rw [hlast]; simp only [List.length_cons]; omega) hr (i := s + 2) (by omega)
+    (by simp only [List.length_cons]; omega)
   obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[s]? = some d := ⟨ops[s]'(by omega), List.getElem?_eq_getElem _⟩
   have htk : ops.take (s + 1) = ops.take s ++ [(dm, da)] := by rw [List.take_add_one, hd]; rfl
   have hh : ((m₀, ρ₀) :: ops).take (s + 2) = (m₀, ρ₀) :: (ops.take s ++ [(dm, da)]) := by
