@@ -7,8 +7,8 @@ curve. The attacker's effective cost in a class is the theorem's slowdown for th
 carries witnesses to its parameters, which the evaluator checks; nothing here meters a chain of blocks.
 
 It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate.sh`, `launch.py` and the harness
-`te_core/`, with `data.py`, `starts.py` and `model.py` behind them) and one island per class, each with one editable
-`train.py` and its program, `README.md`, for a researcher agent.
+`te_core/`, with `data.py`, `starts.py`, `starts_store.py` and `model.py` behind them) and one island per class, each with
+one editable `train.py` and its program, `README.md`, for a researcher agent.
 
 **Version**: v2.1 (`prepare.VERSION`, in every witness record). Since v2, every candidate runs inside te_core's harness,
 which counts its MACs and times its steps, and every run is ingested into te_core's ledger, which prices ρ.
@@ -36,10 +36,13 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
   documents, 9,797,536 bytes), the only set candidates are scored on; `final`, shard 012's by the same rule, never shown to
   the search. Each is tokenized by every start's tokenizer; bits per byte divides by the documents' UTF-8 bytes, so scores
   compare across tokenizers. Training streams: learning_frontier's GPT-2 shards 000-002, and shard 000 in SmolLM2's tokens.
-- **Starts** (`starts.py`, `prepare.register_smollm2`): `s50`, `s100`, `m50`, `m100`, learning_frontier's dense s and m
-  (seed 0, data order 0, its best rates) at 50% and 100% of their 8-tokens-per-parameter runs, retrained here since that
-  branch kept no final checkpoint; and `smollm2`, SmolLM2-135M at its hub revision. Each is registered as
-  `starts/<name>/theta.safetensors` with `start.json`: the digest θ (`prepare.digest`), config, tokenizer and provenance.
+- **Starts** (`starts.py`): `s50`, `s100`, `m50`, `m100`, learning_frontier's dense s and m (seed 0, data order 0, its
+  best rates) at 50% and 100% of their 8-tokens-per-parameter runs, retrained here since that branch kept no final
+  checkpoint. Each is `<name>/theta.safetensors` with `start.json` (the digest θ, `prepare.digest`; config, tokenizer and
+  provenance), and all four are one preserved artifact in the evidence store, named with every file's sha256 in
+  `starts_store.json`. Each node installs them into one fixed directory, `/workspace/research/te/starts` (`CW_STARTS`,
+  `prepare.STARTS`), with `python3 starts_store.py install --keep`, which checks every file against the manifest; no run
+  reads another run's directory.
 - **Evaluator** (`evaluate.py`, `prepare.evaluate_bpb`): bits per byte at context 1024 of decode(θ, E). The model must
   have θ's tensors, shapes and dtypes, so its parameter count, evaluation FLOPs and weight bytes read per byte (every
   parameter's bytes once per window, a lookup table in full) are the start's: no lookup table rides free.
@@ -50,7 +53,9 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
 - **Witness checker** (`evaluate.py`): θ's digest; decode(θ, E) bit-equal to the submitted model; 8·|E| bits; the
   declared changed set covers what differs, and gives φ and the lowest updated layer (`prepare.deep_share`); the declared
   trainable set covers the changed set; the harness's record is this E's and found nothing invalid, and its FLOPs and
-  seconds are within the budget; the class's caps. The analytic meter (`prepare.train_flops`, from the step log) is
+  seconds are within the budget; the class's caps. A step the island declares (`prepare.declare_step`) is a
+  counterexample family the harness checks by rebuilding sampled steps with `prepare.decode`, bit for bit, within c MACs
+  (te_core's README). The analytic meter (`prepare.train_flops`, from the step log) is
   recorded beside the harness's count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `seedlog`) and read only θ
   and E.
 - **Launcher** (`launch.py` on an agent VM, `candidate.sh` on the node): one candidate a run, `research run --on vy-nebius-2
@@ -63,8 +68,9 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
 `data.py` and `starts.py --size s|m` build the fixed side once (CPU with network; one GPU); `evaluate.py --start NAME --out F`
 scores a start. `CW_DEVICE=cpu` runs the whole path on a CPU for a smoke test.
 
-**Reads and writes**: everything lives under `/workspace/research/scratch/covert-witness` (`CW_ROOT`, kept under @training):
-`eval/` (held out), `starts/`, `train/`, `ckpt/`, and `candidates/` (each candidate's submission, removed when it ends).
+**Reads and writes**: the starts are in `/workspace/research/te/starts` (above); everything else lives under
+`/workspace/research/scratch/covert-witness` (`CW_ROOT`, kept under @training): `eval/` (held out), `train/`, `ckpt/`, and
+`candidates/` (each candidate's submission, removed when it ends).
 A candidate's run `out/` holds `run/run.json` (the harness's record, schema `te-core/run/v1`), `witness.json` (schema
 `covert-witness/witness/v2`), `timing.json`, `meta.json`, `steps.jsonl`, `E.bin` when at most 1 MB, `train.py` and its
 logs. **Backs**: no Lean guarantee or claim; its numbers are

@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import resource
 import time
 from dataclasses import dataclass, field
@@ -122,11 +123,68 @@ def _written(func, args, kwargs) -> list[torch.Tensor]:
 
 
 def digest(t: torch.Tensor) -> str:
-    """sha256 of a tensor's dtype, shape and bytes: the bit-for-bit identity a rebuild is checked against."""
+    """sha256 of a tensor's dtype, shape and bytes: θ's and an output model's identity."""
     t = t.detach().contiguous()
     h = hashlib.sha256(f"{str(t.dtype)}\0{tuple(t.shape)}\0".encode())
     h.update(t.reshape(-1).view(torch.uint8).cpu().numpy().tobytes())
     return h.hexdigest()
+
+
+def _signed(x: int) -> int:
+    x &= (1 << 64) - 1
+    return x - (1 << 64) if x >> 63 else x
+
+
+_MIX1, _MIX2, _GOLDEN = _signed(0xBF58476D1CE4E5B9), _signed(0x94D049BB133111EB), _signed(0x9E3779B97F4A7C15)
+
+
+def _mix(x: torch.Tensor) -> torch.Tensor:
+    """splitmix64's finalizer on int64 (wrapping multiplies, logical shifts)."""
+    for s, m in ((30, _MIX1), (27, _MIX2)):
+        x = (x ^ ((x >> s) & ((1 << (64 - s)) - 1))) * m
+    return x ^ ((x >> 31) & ((1 << 33) - 1))
+
+
+class KeyedDigest:
+    """The value digest a counterexample's rebuild is checked against: Σ_i w_i·k_i mod 2^64 over the tensor's 32-bit (else
+    16- or 8-bit) words w_i, k_i = splitmix64(i·φ + key) for a key drawn from the OS when the run starts, and its dtype and
+    shape mixed in. It runs on the tensor's device with one sync per step (`Counter`), so script runs keep it on. For a
+    fixed nonzero difference the chance it is missed is at most 2^-33 over the key."""
+
+    def __init__(self, key: bytes):
+        self.key = key
+        self._k = _signed(int.from_bytes(hashlib.sha256(key).digest()[:8], "little"))
+        self._keys: dict[str, torch.Tensor] = {}
+
+    def _words(self, t: torch.Tensor) -> torch.Tensor:
+        b = t.detach().contiguous().reshape(-1)
+        size = b.numel() * b.element_size()
+        b = b.view(torch.uint8) if b.dtype != torch.uint8 else b
+        word = torch.int32 if size % 4 == 0 else torch.int16 if size % 2 == 0 else torch.uint8
+        return b.view(word).to(torch.int64)
+
+    def _key_stream(self, n: int, device) -> torch.Tensor:
+        dev = str(device)
+        ks = self._keys.get(dev)
+        if ks is None or ks.numel() < n:
+            idx = torch.arange(max(n, 1 << 16), dtype=torch.int64, device=device)
+            ks = self._keys[dev] = _mix(idx * _GOLDEN + self._k)
+        return ks[:n]
+
+    def tensor(self, t: torch.Tensor) -> torch.Tensor:
+        """The digest as an int64 scalar on t's device (no sync)."""
+        with torch.no_grad():
+            w = self._words(t)
+            h = (w * self._key_stream(w.numel(), w.device)).sum()
+            meta = int.from_bytes(hashlib.sha256(f"{t.dtype}\0{tuple(t.shape)}".encode()).digest()[:8], "little")
+            return h ^ _signed(meta)
+
+    @staticmethod
+    def hex(h: int) -> str:
+        return f"{h & ((1 << 64) - 1):016x}"
+
+    def __call__(self, t: torch.Tensor) -> str:
+        return self.hex(int(self.tensor(t)))
 
 
 @dataclass(frozen=True)
@@ -178,6 +236,7 @@ class Counter(TorchDispatchMode):
         super().__init__()
         self.theta_cpu = theta or {}
         self.digests = digests
+        self.wdigest = KeyedDigest(os.urandom(16)) if digests else None
         self.clock, self.cpu_clock = clock, cpu_clock
         self.theta_ptr: dict[int, str] = {}
         self.held: dict[int, torch.Tensor] = {}
@@ -279,6 +338,7 @@ class Counter(TorchDispatchMode):
                     if actual != cached[1]:
                         self.unseen_writes.append((self.cur.index, self.theta_ptr[ptr]))
                         self.epoch[ptr] = self.epoch.get(ptr, 0) + 1
+        self._resolve(self.cur)
         self.steps.append(self.cur)
         self.cur = Step(len(self.steps))
         self._reset_tags()
@@ -388,7 +448,19 @@ class Counter(TorchDispatchMode):
                 continue
             self.used.add(ep)
             self.cur.shapes[key] = [str(t.dtype).removeprefix("torch."), list(t.shape)]
-            self.cur.weights.setdefault(key, []).append(digest(t) if self.digests else "")
+            self.cur.weights.setdefault(key, []).append(self.wdigest.tensor(t) if self.digests else "")
+
+    def _resolve(self, s: Step) -> None:
+        """A step's value digests, from device scalars to hex: one transfer per device."""
+        pending: dict = {}
+        for key, hs in s.weights.items():
+            for i, h in enumerate(hs):
+                if isinstance(h, torch.Tensor):
+                    pending.setdefault(h.device, []).append((key, i, h))
+        with torch.utils._python_dispatch._disable_current_modes():
+            for items in pending.values():
+                for (key, i, _), v in zip(items, torch.stack([h for _, _, h in items]).tolist()):
+                    s.weights[key][i] = KeyedDigest.hex(v)
 
     # -- counting
 
@@ -513,6 +585,7 @@ class Counter(TorchDispatchMode):
         structures, steps = {}, []
         tail = self.cur if self.cur is not self.setup else Step(len(self.steps))
         for s in [self.setup, *self.steps, tail]:
+            self._resolve(s)
             struct = {"updated": sorted(s.updated, key=lambda u: (u[1], u[0])),
                       "log": sorted([list(k) + v for k, v in s.log.items()])}
             sid = hashlib.sha256(json.dumps(struct, sort_keys=True).encode()).hexdigest()[:16]
@@ -538,7 +611,8 @@ class Counter(TorchDispatchMode):
                 devs[d] = devs.get(d, 0) + m
         totals["device_macs"] = devs
         return {"totals": totals, "setup": steps[0], "steps": steps[1:-1], "tail": steps[-1], "structures": structures,
-                "unseen_writes": self.unseen_writes, "new_weights": sorted(self.new_tensors)}
+                "unseen_writes": self.unseen_writes, "new_weights": sorted(self.new_tensors),
+                "digest_key": self.wdigest.key.hex() if self.wdigest else None}
 
 
 #: CPU time over GPU time above which a GPU run is flagged as doing uncounted host work
