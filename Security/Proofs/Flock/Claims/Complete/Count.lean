@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Link
 public import Proofs.Flock.Claims.Complete.CostWalk
 public import Proofs.Flock.Claims.DeployK
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest session's sends fit the verifier's rounds

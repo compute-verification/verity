@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.C3.Compose.HoloCoinTys
 public import Proofs.Flock.C3.Compose.LaterHeld
+import all Init.Data.Repr
 
 /-!
 # The map's coins and points at candidate 3

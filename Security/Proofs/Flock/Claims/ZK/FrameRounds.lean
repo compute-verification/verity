@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.ZK.SimZerocheck
 public import Proofs.Flock.Claims.ZK.FrameMask
 public import Proofs.Flock.Claims.ZK.Release
 public import Proofs.Flock.Claims.ZK.Refine
+import all Init.Data.String.Defs
 
 /-!
 # The cut's zerocheck and lincheck, round by round, and the frame's release of the device's

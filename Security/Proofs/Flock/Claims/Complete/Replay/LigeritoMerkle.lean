@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
 public import Proofs.Flock.Soundness.CompiledLock
 public import Proofs.Flock.Soundness.Refine.Ligerito
+import all Init.Data.List.Control
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Every level's Merkle opening passes at every honest rep

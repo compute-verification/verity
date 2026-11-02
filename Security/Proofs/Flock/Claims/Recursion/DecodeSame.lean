@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.Decode
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
 
 /-!
 # The honest record's checks at a value alike it

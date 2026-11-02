@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.ZK.Refine
 public import Flock.Firewall.SessionPlan
 public import Flock.Firewall.Frames
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The release at the session loop (`flock-firewall session`)

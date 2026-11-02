@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Json
+import all Init.Data.Array.Basic
 
 /-!
 # The honest session runs

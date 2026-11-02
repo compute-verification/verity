@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Ord.String
 
 /-!
 # What the masked record needs of the statement, from its setup

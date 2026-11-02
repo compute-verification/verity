@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.KS.ConflictTied
 public import Proofs.Flock.Claims.KS.Trace
 public import Proofs.Flock.Claims.Scope.Deployed
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `TableBoundθ` statement by statement

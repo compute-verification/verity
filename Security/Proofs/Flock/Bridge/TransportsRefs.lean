@@ -4,6 +4,7 @@ public import Proofs.Flock.Bridge.LeafMap
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import all Init.Data.String.Defs
 
 @[expose] public section
 

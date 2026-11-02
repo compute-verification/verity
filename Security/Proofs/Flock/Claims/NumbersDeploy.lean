@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.DeployCode
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # Flock's numbers at the deployed instances

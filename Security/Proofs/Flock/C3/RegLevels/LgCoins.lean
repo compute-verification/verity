@@ -5,6 +5,8 @@ public import Proofs.Flock.C3.RegLevels.SrcMaps
 public import Proofs.Flock.C3.RegLevels.StackedCoins
 public import Proofs.Flock.Recursive.AuditC3
 public import Proofs.Flock.Soundness.Assumptions.Inner
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # n14: R's Ligerito stage's coins, as the verifier holds R's stream

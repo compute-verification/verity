@@ -5,6 +5,8 @@ public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 public import Proofs.Flock.Soundness.Refine.Seam
 public import Proofs.Flock.VBridge.Algebra.Sizes
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Ligerito replays at every honest run, and every recorded round is consumed

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FrameOpen
+import all Init.Data.String.Defs
 
 /-!
 # Level 0's phase labels: the rounds that open and close its masked phase

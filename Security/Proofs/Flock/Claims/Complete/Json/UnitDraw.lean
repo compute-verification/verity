@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Json.Stmt
+import all Lean.Data.Json.Basic
 
 /-!
 # The session's draw at one table

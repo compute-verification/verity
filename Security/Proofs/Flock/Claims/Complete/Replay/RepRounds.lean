@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
 public import Proofs.Flock.Claims.Complete.Json.Goals
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # A returning rep's rounds are few and small

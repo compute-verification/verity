@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.C3.Compose.LaterHeldW
 public import Proofs.Flock.C3.Sparse.MsgsLayers
+import all Init.Data.Repr
 
 /-!
 # The sparse stages' coins from the inner session's records (`h2`, `h3`)

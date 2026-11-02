@@ -306,7 +306,7 @@ any words that hold the chosen ones. -/
 theorem maskRankOk_of_chosen {nbl pos0 : ℕ} (hK : pos0 * 2 ^ s + 2 ^ s ≤ 2 ^ K) (hsK : s ≤ K)
     (hD : 10 ≤ s + nbl) {P : Array (List F128)} (hP : ∀ i : Fin P.size, P[i].length = K + nbl) {words : List ℕ}
     (hw : ∀ y, word s K pos0 y ∈ words) (hγ : ∀ i, gammaOf (s := s) (K := K) nbl pos0 P i ≠ 0)
-    (hQ : RankFull fun i u => GF128.of P[i][pos s K u]!) : maskRankOk P words = true := by
+    (hQ : RankFull fun (i : Fin P.size) u => GF128.of P[i][pos s K u]!) : maskRankOk P words = true := by
   rw [maskRankOk_iff, eq_top_iff, ← (rankFull_scale_iff _ hγ _).2 hQ]
   refine AddSubgroup.closure_mono ?_
   rintro _ ⟨y, rfl⟩

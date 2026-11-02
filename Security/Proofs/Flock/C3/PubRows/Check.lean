@@ -4,6 +4,7 @@ public import Proofs.Flock.C3.PubRows.Prefix
 public import Proofs.Flock.C3.Compose.Honest
 public import Proofs.Flock.VBridge.Family.Pub
 public import Proofs.Flock.C3.Compose.RowsReg
+import all Init.Data.Array.Basic
 
 /-!
 # n1: what the verifier's check of the public rows gives

@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Bridge.Deployed
 public import Proofs.Flock.Recursive.TopRoot
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import all Init.Data.String.Defs
 
 /-!
 # Two ports with one registered root and different domains are a SHA-512 collision

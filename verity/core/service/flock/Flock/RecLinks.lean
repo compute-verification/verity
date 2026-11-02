@@ -25,6 +25,9 @@ A recursive statement carries the table's root and row count as `--rec-links`, w
 
 module
 
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Array.Basic
+
 @[expose] public section
 
 namespace Flock

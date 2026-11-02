@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Complete.Count
 public import Proofs.Flock.Claims.Complete.Zk.Link
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest masked session's sends fit the masked verifier's rounds

@@ -4,6 +4,10 @@ public import Proofs.Flock.Claims.DeployRoundsZk
 public import Proofs.Flock.Claims.DeployCode
 public import Proofs.Flock.Soundness.Discharge.Exec.Tables
 public import Flock.With.VerifyE
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `Deploy.V`'s round count is the rounds the shipped verifier reads
