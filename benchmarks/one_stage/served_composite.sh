@@ -9,7 +9,8 @@
 # (pous-run-protocol and wipe-protocol, built here; without both it writes no case), PoUS's under a lease of its own of
 # CASE_LEASE_MIN minutes (default 60) and CASE_MEM_GB GiB of host memory (default 170: its Python and its Lean each hold
 # the whole re-encoded store), all within CASE_TIMEOUT (default 90m). Then, where the tree has `served_cases.py`,
-# sampled proofs' v2 case and the registration case from the window's records audit (SERVE_DIR/v3c-w*/audit), the latter
+# sampled proofs' v2 case and the registration case from the window's records audit (SERVE_DIR/v3c-w*/audit; in a run
+# without V3c, `served_verdicts.sh`'s step 3's, SERVE_DIR/sampled-proofs-served), the latter
 # with the policy's α and Γ read off the case's own division (`--from-division`), or ALPHA and GAMMA where both are set,
 # each under SERVE_DIR/private; each CASE line's protocol and verdict go to OUT/verdicts.txt, and α and Γ, which count
 # the block's gates, stay in the case's private policy.json. Then
@@ -71,7 +72,10 @@ fi
 if [ -f benchmarks/one_stage/served_cases.py ]; then
   ag=(--from-division)
   [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
-  "$TPY" benchmarks/one_stage/served_cases.py --serve-dir "$D" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
+  where=(--serve-dir "$D")
+  compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null \
+    || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }
+  "$TPY" benchmarks/one_stage/served_cases.py "${where[@]}" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
   rc=$?
   grep -hE '^(CASE|NOT_WRITTEN) \{' "$P/served_cases.log" | "$PY" -c '
 import json, sys
