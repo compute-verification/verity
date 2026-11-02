@@ -11,8 +11,8 @@ It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate
 island per class (or per direction, `islands/<direction>/`), each with one editable `train.py` and its program,
 `README.md`, for a researcher agent.
 
-**Version**: v2.3 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v4`; the harness is te_core
-3.5.1; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
+**Version**: v2.3 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v4`; the pinned harness is
+te_core 3.5.1; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
 times its steps, and every run is ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a
 fresh slice of the search pool drawn after the weights are hashed, promotions are decided on a sealed set one bit each,
 and the final set and a final start are sealed until the scorer's final scoring. Since v2.2, one pinned commit
@@ -24,7 +24,10 @@ other runs' outputs and the C++ and Rust loaders, the screen over code it never 
 pickle, modules written during the run), ρ by thresholds, a declared step's rebuild-cost floor, the `sparse`, `lora2`
 and `quant` formats with every E's rebuild cost, and the meter's tied-embedding adapters. Its second commit changes
 only the final-score path (a final-set score has no search slice: evaluate.py and the ledger's ingest), and measures
-every search run as the first does, so the frontier counts both (`same_version`).
+every search run as the first does, so the frontier counts both (`same_version`). The pin's counter prices a
+lookup of an updated table at 0 (te_core 3.6 prices it, after the pin), so the scorer leaves out of tonight's frontier
+a record whose updated set is the tied embedding without a block below the top, as priced wrong (tied lookup)
+(coordinator 13:32Z); `te_core.frontier` doesn't, since a ledger row doesn't name the updated weights.
 
 ## Classes
 

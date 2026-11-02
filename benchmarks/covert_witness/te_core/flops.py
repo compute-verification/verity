@@ -44,7 +44,11 @@ row upstream of it in its token's pass (the cone of updated forward nodes its op
 autograd's backward produces is a weight from then on (`derived`): a gradient used as a weight, directly or through an
 out-of-place update, is updated. So is a token-derived operand shaped like a weight in a two-token-operand matmul (a
 gradient computed by hand); a forward activation that happens to have a weight's 2-D shape is counted as one too. A
-node's token rows are its token operand's rows (its elements, for integer token data), at most the step's tokens.
+node's token rows are its token operand's rows (its elements, for integer token data), at most the step's tokens. A
+forward gather (embedding, index, index_select, take, gather) of a weight with roots by token data is an updated node too,
+at its position (so a tied embedding's update reaches every layer from the lookup on): its MACs are the multiplexers the
+circuit's gather Definition spends on its result (`gather_macs`), one multiplication block (b·(x − y) + y) per word
+selected per tree level. A gather of θ's table, or by indices that aren't token data, computes nothing on the token.
 
 Tags are cleared at every step boundary, so a value carried from one step to the next is a weight from then on. Writes
 the dispatcher doesn't see (a custom kernel into a weight's memory) are caught at each step's end, when every registered
@@ -167,6 +171,50 @@ TOKEN_INDEX = {getattr(aten, n) for n in ("embedding", "_embedding_bag", "index"
                                           "index_copy", "index_copy_", "bincount") if hasattr(aten, n)}
 #: ops whose result is gathered from their first argument: their work is the result, not the whole source
 GATHERS = _ops("embedding", "index", "index_select", "take", "gather")
+
+
+#: a gather's index width and chunk as the circuit's gather Definition has them (verity's
+#: `ml/definitions/registry/boolean_gather.py`: a 32-bit token, chunks of 1024 words by its low 10 bits)
+GATHER_INDEX_BITS, GATHER_CHUNK_BITS = 32, 10
+
+
+def mux_tree(n: int, k: int) -> int:
+    """The multiplexers per word bit of `verity.ml.circuits.boolean.gather`'s tree over n words by a k-bit index: at each
+    level the words meet in pairs, one without a partner meeting the fill word."""
+    out = 0
+    for _ in range(k):
+        n = (n + n % 2) // 2
+        out += n
+    return out
+
+
+def gather_selects(n: int) -> int:
+    """The multiplexers per selected word of the circuit's gather Definition over n words: one tree over the token's 32
+    bits, or for n over a chunk, the whole chunks by the low 10 bits, the partial chunk likewise, then the chunks' words
+    by the high 22."""
+    chunk = 1 << GATHER_CHUNK_BITS
+    if n <= chunk:
+        return mux_tree(n, GATHER_INDEX_BITS)
+    full, r = divmod(n, chunk)
+    return (full * mux_tree(chunk, GATHER_CHUNK_BITS) + (mux_tree(r, GATHER_CHUNK_BITS) if r else 0)
+            + mux_tree(full + (1 if r else 0), GATHER_INDEX_BITS - GATHER_CHUNK_BITS))
+
+
+def gather_candidates(name: str, shape, arg1) -> int:
+    """How many words each element of a gather's result is selected from: the table's rows (embedding), the indexed dims
+    (index), the dim (index_select, gather), or every element (take)."""
+    shape = list(shape)
+    if name == "embedding":
+        return shape[0]
+    if name == "index":
+        return math.prod(n for n, ix in zip(shape, arg1) if ix is not None)
+    if name in ("index_select", "gather"):
+        return shape[arg1]
+    return math.prod(shape)
+
+
+def gather_macs(name: str, shape, arg1, out_numel: int) -> int:
+    return gather_selects(max(gather_candidates(name, shape, arg1), 1)) * out_numel
 
 
 def _is_view(func) -> bool:
@@ -314,7 +362,7 @@ class Tag:
     tok: bool = False
     roots: frozenset = frozenset()
     cone: frozenset = frozenset()
-    src: frozenset = frozenset()  # the data stream's batches a token value is computed from (`Counter.batch`)
+    src: frozenset = frozenset()  # the token sources a token value is computed from (`Counter._token_source`)
 
     def merge(self, other: Tag) -> Tag:
         if other is NONE:
@@ -473,6 +521,7 @@ class Counter(TorchDispatchMode):
     def _reset_tags(self) -> None:
         self.tags = WeakTensorKeyDictionary()
         self.token_seen: dict = {}
+        self.sources: set[int] = set()  # the token sources `_token_source` made (not the data stream's batches)
         self.node_rows: dict[int, int] = {}
         self.used: set[tuple[str, int]] = set()
         for t in list(self.batches.keys()):
@@ -561,8 +610,7 @@ class Counter(TorchDispatchMode):
     def tokens(self, batch: torch.Tensor) -> torch.Tensor:
         """Mark `batch` as this step's token data (an index tensor the program passes through some route other than an
         embedding lookup)."""
-        self._token_source(batch)
-        self.tags[batch] = Tag(tok=True)
+        self.tags[batch] = self._token_source(batch, Tag(tok=True))
         return batch
 
     def batch(self, t: torch.Tensor) -> torch.Tensor:
@@ -578,17 +626,28 @@ class Counter(TorchDispatchMode):
         self.n_batches += 1
         self.tags[t] = Tag(tok=True, src=frozenset((self.n_batches,)))
 
-    def _token_source(self, idx: torch.Tensor, tag: Tag = NONE) -> None:
-        if tag.src:
-            seen = self.token_seen.get(tag.src, 0)
-            if idx.numel() > seen:
-                self.cur.tokens += idx.numel() - seen
-                self.token_seen[tag.src] = idx.numel()
-            return
-        key = (_ptr(idx), idx.storage_offset(), tuple(idx.shape), idx._version)
-        if key not in self.token_seen:
-            self.token_seen[key] = idx.numel()
-            self.cur.tokens += idx.numel()
+    def _token_source(self, idx: torch.Tensor, tag: Tag) -> Tag:
+        """Count `idx`'s elements as this step's tokens, once per source at its largest read, and return its tag. A
+        batch of the data stream is its own source; any other token tensor becomes one at its first read, held in its
+        tag, so a view of it or a value computed from it is the same source, a new tensor at a freed one's address is
+        another, and so is the tensor once an op writes into it (`sources`). A θ tensor keeps θ's tag and is keyed by
+        its memory, which the counter holds."""
+        if not tag.src:
+            if _ptr(idx) in self.theta_ptr:
+                key = (_ptr(idx), idx.storage_offset(), tuple(idx.shape), idx._version)
+                if key not in self.token_seen:
+                    self.token_seen[key] = idx.numel()
+                    self.cur.tokens += idx.numel()
+                return tag
+            self.n_batches += 1
+            self.sources.add(self.n_batches)
+            tag = tag.merge(Tag(tok=True, src=frozenset((self.n_batches,))))
+            self.tags[idx] = tag
+        seen = self.token_seen.get(tag.src, 0)
+        if idx.numel() > seen:
+            self.cur.tokens += idx.numel() - seen
+            self.token_seen[tag.src] = idx.numel()
+        return tag
 
     # -- provenance
 
@@ -686,13 +745,12 @@ class Counter(TorchDispatchMode):
         written = _written(func, args, kwargs)
         persistent = {id(t) for t in written if t not in self.tags}
         tags = [self._tag(t) for t in ins]
-        if p in TOKEN_INDEX and not bwd:
-            for t, g in zip(ins, tags):
-                if g.tok and not (t.is_floating_point() or t.is_complex() or t.dtype == torch.bool):
-                    self._token_source(t, g)
         if p in EMBEDDING and not bwd:
-            self._token_source(args[1], self._tag(args[1]))
             tags = [Tag(tok=True).merge(g) if t is args[1] else g for t, g in zip(ins, tags)]
+        if p in TOKEN_INDEX and not bwd:
+            tags = [self._token_source(t, g) if g.tok and not (t.is_floating_point() or t.is_complex()
+                                                               or t.dtype == torch.bool) else g
+                    for t, g in zip(ins, tags)]
         tag = NONE
         for g in tags:
             tag = tag.merge(g)
@@ -701,6 +759,11 @@ class Counter(TorchDispatchMode):
             self.foreign_ops[str(func)] = self.foreign_ops.get(str(func), 0) + 1
         elif not macs and func.namespace == "aten" and gemm_like(p.__name__):
             self.unknown_ops[str(func)] = self.unknown_ops.get(str(func), 0) + 1
+        if (not macs and not bwd and p in GATHERS and ins and ins[0] is args[0] and tags[0].roots and not tags[0].tok
+                and any(g.tok for g in tags[1:])):
+            # an updated weight read by token data: the circuit's gather of its rows (module docstring)
+            macs, cls = gather_macs(p.__name__, args[0].shape, args[1] if len(args) > 1 else None,
+                                    sum(t.numel() for t in _tensors(out))), "elementwise"
         if not macs and not bwd and not _is_view(func):
             # token data and an updated weight combined by any op are an updated node; a gather moves its source's
             # rows without computing on them, so only its indices combine
@@ -715,9 +778,11 @@ class Counter(TorchDispatchMode):
         for t in written:
             ptr = _ptr(t)
             self.epoch[ptr] = self.epoch.get(ptr, 0) + 1
+        wrote = {id(t) for t in written}
+        rewritten = Tag(tag.tok, tag.roots, tag.cone, tag.src - self.sources)
         for t in _tensors(out) + written:
             if _ptr(t) not in self.theta_ptr and id(t) not in persistent:
-                self.tags[t] = tag
+                self.tags[t] = rewritten if id(t) in wrote else tag
         return out
 
     def _weight_shaped(self, t: torch.Tensor) -> bool:
@@ -851,11 +916,14 @@ def flags(totals: dict, peak_macs_per_s: float = 0.0) -> list[str]:
 
 
 def forward_macs_per_token(model: torch.nn.Module, ctx: int, vocab: int, device=None) -> float:
-    """The model's MACs per token for one forward pass over a `ctx`-token sequence, counted by `Counter`: the start model's
-    figure, from which the inference block's c is set."""
+    """The model's MACs per token for one forward pass over a `ctx`-token sequence, counted by `Counter` with its weights
+    as θ (so a lookup of its own table computes nothing): the start model's figure, from which the inference block's c is
+    set."""
     device = device or next(model.parameters()).device
     idx = torch.zeros(1, ctx, dtype=torch.long, device=device) % max(vocab, 1)
-    c = Counter(digests=False)
+    state = model.state_dict(keep_vars=True)
+    c = Counter({k: v.detach().cpu() for k, v in state.items()}, digests=False)
+    c.register(state)
     with torch.no_grad(), c:
         model(idx)
     return c.setup.macs / ctx

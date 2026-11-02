@@ -33,7 +33,11 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
   (`prepare.TrainData.next`) to the next.
 - **Updated blocks U**: the forward-pass MACs with a token-indexed operand and another operand that has roots, so their
   weight operand differs from θ. Backward products are left out of U: they read the same weights, so adding them halves
-  β per MAC, doubles φ and leaves φβ unchanged.
+  β per MAC, doubles φ and leaves φβ unchanged. A read of an updated weight by token data (embedding, index, gather) is
+  in U at its position, priced as the circuit's gather Definition prices it (`flops.gather_selects`: one multiplexer per
+  word selected per level of its tree, about one per row of a table): a tied embedding's update is read at the lookup,
+  so every later updated node has the lookup upstream. A lookup of θ's table is 0. `ledger ingest --lookups` adds the
+  lookups of the start's own table to a record counted before 3.6 (`annotate.with_lookups`).
 - **Inference block S**: a set of at most c MACs that imports at most k bits beyond θ. It holds only computed gates, so
   its inputs are counted in in(S) and are never its members.
 - **in(S)**: the sender form, the bits of the gates outside S that feed a gate of S plus S's own source gates: the
@@ -72,15 +76,21 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
   evaluation job after the training job ended), `test` when finally scored. An evaluator returns None for a sealed
   split, and the record then holds no test bpb.
 - **l\***: a target bits per byte, the start's bpb less 0.5%, 1%, 2% or 5%.
-- **W\*(l\*)**: the least |C|·ρ over submissions with val bpb ≤ l\*.
-- **honest(l\*)**: the least |C| over the reference runs' checkpoints with val bpb ≤ l\*.
-- **Effective slowdown**: W\*(l\*) / honest(l\*).
+- **Complete schedule**: a run's last checkpoint, or any checkpoint of a reference direction's fork ladder (`--forks`
+  with an empty `--snap-at`: each checkpoint ends a cooldown branch) (`frontier.schedule_ends`).
+- **honest(l\*)**: the least |C| over every valid submission, of any class or direction, that reaches val bpb ≤ l\* by a
+  complete schedule; where none does, over any checkpoint that does, an upper bound (the coordinator's 14:57Z ruling,
+  `frontier.target`). The reference directions' alone (ref-optim, ref-data), the rule before, is printed as context.
+- **W\*(l\*)**: the least |C|·ρ over the same submissions as honest(l\*).
+- **Effective slowdown**: W\*(l\*) / honest(l\*), ≥ 1 since ρ ≥ 1.
 - **Niche**: a mechanism tag × β range × φ range × start cell (`frontier.BETA_EDGES`, `PHI_EDGES`).
 - **Elite**: a niche's submission with the least val bpb, ties going to the least |C|·ρ.
 - **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r), among those
   measured by the pinned measurement commit (covert_witness's `pin.py`, a submission's `measurement_commit`); invalid,
   unscored, `other-version` and `duplicate-e` submissions (an E digest an earlier submission had) are left out, and so
-  is one with covered steps whose ρ wasn't priced by thresholds (`re-ingest`: ingested before 3.0) (`frontier.status`).
+  is one with covered steps whose ρ wasn't priced by thresholds (`re-ingest`: ingested before 3.0), one whose read-outs
+  `cw.readout_leaks` lists (`read-out-leak`), and one that updates the tied embedding with no block below the top
+  (`tied-lookup`) (`frontier.status`; a row ingested before 3.13 gets those facts from `frontier --facts`).
 - **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
   GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
   seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
@@ -142,7 +152,9 @@ A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`;
 4. **A run**: `python -m te_core.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --evaluator
    MODULE:FUNCTION --out OUT`, or `python -m te_core.launch ...` to put it on a node. Either one writes `OUT/run.json`.
 5. **Ingest**: `python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M --parent ID --run-id R`
-   writes one submission record per checkpoint. Reference (honest) runs add `--reference`.
+   writes one submission record per checkpoint, with the program's arguments and, beside a covert_witness record's
+   `witness.json`, the tensors it changed; `--readouts` judges its read-outs against the start's tensors. Reference
+   (honest) runs add `--reference`.
 6. **The frontier**: `python -m te_core.frontier`. Its promotion candidates (`frontier.candidates`) are promoted only
    on the sealed promotion set, one bit each: covert_witness's `promote.py --tier T`, run as the scorer.
 
