@@ -50,7 +50,9 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
 - **Witness checker** (`evaluate.py`): θ's digest; decode(θ, E) bit-equal to the submitted model; 8·|E| bits; the
   declared changed set covers what differs, and gives φ and the lowest updated layer (`prepare.deep_share`); the declared
   trainable set covers the changed set; the harness's record is this E's and found nothing invalid, and its FLOPs and
-  seconds are within the budget; the class's caps. The analytic meter (`prepare.train_flops`, from the step log) is
+  seconds are within the budget; the class's caps. A step the island declares (`prepare.declare_step`) is a
+  counterexample family the harness checks by rebuilding sampled steps with `prepare.decode`, bit for bit, within c MACs
+  (te_core's README). The analytic meter (`prepare.train_flops`, from the step log) is
   recorded beside the harness's count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `seedlog`) and read only θ
   and E.
 - **Launcher** (`launch.py` on an agent VM, `candidate.sh` on the node): one candidate a run, `research run --on vy-nebius-2

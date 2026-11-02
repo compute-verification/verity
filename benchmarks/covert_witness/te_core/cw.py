@@ -12,7 +12,12 @@ wraps those four, and nothing else of the program:
   planned steps, `hooks.plan`, else of the MAC budget): the harness scores decode(θ, E) on the held-out search set,
   uncounted, at the step in progress;
 - `submit` writes the submission as before; the submitted E is always scored, and the record says whether the
-  submitted model is decode(θ, E) bit for bit.
+  submitted model is decode(θ, E) bit for bit;
+- `declare_step(base, suffixes)`, when the program calls it inside a step, puts that step in the run's counterexample
+  family `E`, whose decoder is the fixed `prepare.decode` (`CWPlan`): E_t is the frame of the base and the suffixes, a
+  weight the step read at one value is decode(θ, base)'s, and one read at several is decode(decode(θ, base), suffix_i)'s
+  at its i-th value. So any E whose decoder rebuilds a step's weights within c MACs (a seed log, and any fixed format)
+  is credited, not only adapter factors.
 
 The held-out sets are unreadable from the program (an audit hook refuses every open, listing or stat under
 `prepare.HELD_OUT`), except while the harness's own evaluator runs. Subprocesses go to `guard.log`.
@@ -22,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import os
+import struct
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -52,6 +58,56 @@ def blob_sha256(blob: bytes) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
+FRAME = b"CWSTEP1\n"
+
+
+def frame(base: bytes, suffixes=()) -> bytes:
+    """E_t: the base blob and its suffix blobs, each length-prefixed."""
+    parts = [bytes(base), *(bytes(s) for s in suffixes)]
+    return FRAME + struct.pack(f"<I{len(parts)}Q", len(parts), *map(len, parts)) + b"".join(parts)
+
+
+def unframe(enc: bytes) -> tuple[bytes, list[bytes]]:
+    if enc[:8] != FRAME:
+        raise ValueError("E_t: not a covert_witness step frame")
+    (n,) = struct.unpack("<I", enc[8:12])
+    lens = struct.unpack(f"<{n}Q", enc[12:12 + 8 * n])
+    at, parts = 12 + 8 * n, []
+    for size in lens:
+        parts.append(enc[at:at + size])
+        at += size
+    if at != len(enc) or not parts:
+        raise ValueError("E_t: frame lengths don't add up")
+    return parts[0], parts[1:]
+
+
+class CWPlan:
+    """A counterexample decoder over covert_witness's fixed formats (`prepare.decode`), in `codecs.Plan`'s interface:
+    `keys` are θ's names, and `key@i` for each suffix; decode(θ, base) returns θ's dtypes, so a suffix applies to the
+    base's tensors cast to θ's dtypes (exact for an fp32 start). Its cost is what the counter sees the decode compute."""
+
+    def __init__(self, prepare, theta: dict[str, torch.Tensor], device: str):
+        self.p, self.theta, self.device = prepare, theta, device
+
+    def spec(self) -> dict:
+        return {"kind": "covert_witness", "decoder": "prepare.decode", "frame": FRAME.decode().strip()}
+
+    def keys(self, enc: bytes) -> list[str]:
+        _, suffixes = unframe(enc)
+        return list(self.theta) + [f"{k}@{i}" for i in range(len(suffixes)) for k in self.theta]
+
+    def decode(self, enc: bytes, bases: dict) -> dict[str, torch.Tensor]:
+        base, suffixes = unframe(enc)
+        s0 = self.p.decode(self.theta, base, device=self.device) if base else dict(self.theta)
+        out = dict(s0)
+        for i, suffix in enumerate(suffixes):
+            out |= {f"{k}@{i}": v for k, v in self.p.decode(s0, suffix, device=self.device).items()}
+        return out
+
+    def cost_macs(self, enc: bytes, bases: dict) -> int:
+        return 0
+
+
 class Adapter:
     def __init__(self, session, prepare, guard_log: Path | None = None):
         self.s, self.p = session, prepare
@@ -63,6 +119,8 @@ class Adapter:
         self.encoded: dict[str, dict] = {}
         self.buckets: set[int] = set()
         self.submitted: dict = {}
+        self.family = None
+        self.declared_outside = 0
 
     # -- installation
 
@@ -89,7 +147,19 @@ class Adapter:
         for name in ("encode_full", "encode_lora", "encode_seedlog"):
             if hasattr(p, name):
                 setattr(p, name, self._encoder(getattr(p, name)))
+        if hasattr(p, "declare_step"):
+            p.declare_step = self.declare_step
         sys.addaudithook(self._hook)
+
+    def declare_step(self, base: bytes = b"", suffixes=()) -> None:
+        """The step in progress's weights as encodings from θ (the module docstring), into the family `E`."""
+        if not self.s.in_steps():
+            self.declared_outside += 1
+            return
+        with self.s.uncounted():
+            if self.family is None:
+                self.family = self.s.family("E", CWPlan(self.p, self.s.theta, self.s.device))
+            self.family.put(self.s.current_step(), frame(base, suffixes))
 
     def _encoder(self, encode):
         def encode_(*args, **kwargs):
@@ -179,5 +249,5 @@ class Adapter:
         self.last = ("", None)
 
     def meta(self) -> dict:
-        return {"adapter": "covert_witness", "submitted": self.submitted,
+        return {"adapter": "covert_witness", "submitted": self.submitted, "declared_outside_steps": self.declared_outside,
                 "start_record": {k: self.rec[k] for k in ("name", "digest", "tokenizer", "parameters")} if self.rec else {}}

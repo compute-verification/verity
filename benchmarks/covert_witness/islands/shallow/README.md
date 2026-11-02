@@ -37,7 +37,10 @@ Keep at most two candidates of this island in flight, so the islands share the n
 - Curve: the harness scores the first E you encode in each 5% of the run, and the one you submit, as it runs; the witness
   record's `curve` is those checkpoints at the harness's FLOPs.
 - ρ: the launcher ingests the run into the te_core ledger, one submission per checkpoint with ρ from the theorem at each
-  (k, r); the scorer's W\*(l\*) is the least |C|·ρ at or below a target.
+  (k, r); the scorer's W\*(l\*) is the least |C|·ρ at or below a target. A step whose weights you declare as encodings
+  from θ (`prepare.declare_step(base, suffixes)`, its docstring) is credited as a counterexample when `prepare.decode`
+  rebuilds them bit for bit within c = 4096 x the start's forward MACs per token, which lowers ρ to about 1 for a seed
+  log or any small fixed-format update; the seed island's train.py declares every step.
 
 ## The witnesses, which evaluate.py checks
 
