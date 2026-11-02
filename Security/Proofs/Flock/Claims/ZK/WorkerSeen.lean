@@ -154,4 +154,70 @@ theorem realCore_fix (T : Table F K W Salt Seed D Hi VL) (hpads : T.PadsOnto) (h
       field_simp
       ring
 
+omit [CharP F 2] [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] in
+set_option smartUnfolding false in
+theorem toBase_psi (T : Table F K W Salt Seed D Hi VL) (κ : T.Core) : T.toBase (T.onVals.psi κ) = T.psi κ :=
+  rfl
+
+/-- **The switched view at constant values is the honest view at the moved randomness**: where `c`'s rows hold by
+`realCore_fix` (both are `psi` of their components), elsewhere because the fix map is `shift`. -/
+theorem swView_fix (T : Table F K W Salt Seed D Hi VL) (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2)
+    (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w)
+    (c : Fin 2 → Fin T.nE → F) (ω : T.Rand) :
+    T.toBase (T.onVals.swView (w, T.constVals c) (w, T.vals) ω) = T.view w (T.fixE w c ω) := by
+  by_cases hr : T.onVals.RowsAt (w, T.constVals c) ω.1 ω.2.1
+  · simp only [swView, hr, ↓reduceIte]
+    rw [← T.onVals.psi_realCore_at hW hβ (w, T.constVals c) hreg ω (hr ω rfl rfl), T.realCore_fix hpads hβ w c ω hr,
+      toBase_psi, T.psi_realCore hW hβ w hreg hinner]
+  · simp only [swView, hr, ↓reduceIte]
+    rw [T.fixE_of_not_rows w c ω hr]
+    exact T.toBase_view w _
+
+/-- **What a worker sees of a table's randomness** before its algebraic phase: the mask slot, level 0's hiding, and
+level 0's salts at the opened positions and at the others. -/
+abbrev Seen (T : Table F K W Salt Seed D Hi VL) : Type :=
+  T.Mask × T.Vis × (Fin T.nS → Salt) × (Fin T.nU → Salt)
+
+section Hm96
+
+variable {B C : Type} [AddCommGroup B]
+
+/-- What a worker sees of the randomness `ω` and the hidden leaves' salts `ys`. -/
+def seenOf (T : Table F K W Salt (B × Salt) D Hi VL) (ω : T.Rand) (ys : T.Hid → Salt) : T.Seen :=
+  (ω.1, ω.2.1, ω.2.2.2.2.2.2.1, fun q => ys (.inl q))
+
+omit [AddCommGroup Salt] [AddCommGroup Hi] [AddCommGroup B] in
+/-- The fix map keeps what the workers see. -/
+theorem seenOf_fixE (T : Table F K W Salt (B × Salt) D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand)
+    (ys : T.Hid → Salt) : T.seenOf (T.fixE w c ω) ys = T.seenOf ω ys :=
+  rfl
+
+/-- **The switched view with its hidden leaves given, at constant values**, is the honest one at the moved
+randomness. -/
+theorem swViewWith_fix (T : Table F K W Salt (B × Salt) D Hi VL)
+    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) (w : W)
+    (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand) (L : T.Hid → D) :
+    T.toBase (T.onVals.swViewWith (w, T.constVals c) (w, T.vals) ω L) = T.viewWith w (T.fixE w c ω) L := by
+  have h := T.swView_fix hW hpads hβ w hreg hinner c ω
+  by_cases hr : T.onVals.RowsAt (w, T.constVals c) ω.1 ω.2.1
+  · simp only [swView, hr, ↓reduceIte] at h
+    simp only [swViewWith, hr, ↓reduceIte, viewWith]
+    rw [← h]
+    rfl
+  · simp only [swView, hr, ↓reduceIte] at h
+    simp only [swViewWith, hr, ↓reduceIte, viewWith]
+    rw [← h]
+    rfl
+
+omit [AddCommGroup Salt] [AddCommGroup Hi] in
+/-- **The switched view's level-0 digests are the honest ones at the moved randomness**: they read the mask slot and
+level 0's hiding, which the fix map and `shift` keep. -/
+theorem swDig_inl_fix (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) (w : W) (c : Fin 2 → Fin T.nE → F)
+    (ω : T.Rand) (q : Fin T.nU) :
+    M.onVals.swDig (w, T.constVals c) (w, T.vals) ω (.inl q) = M.dig w (T.fixE w c ω) (.inl q) := by
+  unfold Hm96.swDig
+  split_ifs <;> rfl
+
+end Hm96
+
 end FlockSoundness.ZK.Table
