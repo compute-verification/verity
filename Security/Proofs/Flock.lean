@@ -17,6 +17,7 @@ import Proofs.Flock.ZeroKnowledgeHidden
 import Proofs.Flock.Masked
 import Proofs.Flock.SessionLoop
 import Proofs.Flock.SessionLoop.Fill
+import Proofs.Flock.SessionLoop.FillStop
 import Proofs.Flock.Recursive
 import Proofs.Flock.C3
 import Proofs.Flock.Claims.Complete
