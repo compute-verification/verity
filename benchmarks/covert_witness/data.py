@@ -4,17 +4,24 @@ Three held-out sets of `HuggingFaceFW/fineweb-edu` (`sample-10BT`, learning_fron
 documents in row order, whole documents until they hold the set's GPT-2 tokens, from shards no training stream reads
 (training reads 000-002):
 
-- `search-pool` (shard 013, 2^23 tokens; its first 2^21 are v2.0's search set), in `CW_ROOT/heldout/`: each search
-  evaluation scores a fresh slice of it (`prepare.draw_slice`);
+- `search-pool` (shard 013, 2^23 tokens), in `CW_ROOT/heldout/<DATA>/`: each search evaluation scores a fresh slice of
+  it (`prepare.draw_slice`);
 - `promotion` (shard 011, 2^21), sealed: it decides promotions, one bit each (`sealed.py`);
 - `final` (shard 010, 2^21), sealed: scored only in final mode (`CW_FINAL=1`), by the search's starts and the sealed start.
 
-The sealed sets are in `CW_SEALED/heldout/` (`sealed.SEALED`). Each set is tokenized by the tokenizers that score it
-(`gpt2`: tiktoken; `pythia`: Pythia-160M's, the final set only), each document prefixed by the tokenizer's end-of-text
-token, into `<set>/<tokenizer>.bin` (uint16). `<set>/manifest.json` records the documents' UTF-8 bytes, in total and per
-document (`doc_bytes`), and each tokenizer's tokens per document (`doc_tokens`), so a slice's bits per byte divide by its
-own documents' bytes and scores compare across tokenizers. The Pythia training stream is shard 000's documents in row
-order until `PYTHIA_TRAIN_TOKENS`, in `CW_ROOT/train/pythia.bin`. v2.0's sets (`CW_ROOT/eval/`) are left as they were.
+A document whose text (sha256 of its UTF-8 bytes) is also a document of training shards 000-002 is left out of every
+set (the auditor's 10:24Z finding: 21 of v2.0's 2,092 search documents were), and each set's manifest records the
+dedup: the training shards and their distinct documents, and each dropped document's row and text hash.
+
+The sealed sets are in `CW_SEALED/heldout/<DATA>/` (`sealed.SEALED`, `sealed.DATA`). Each set is tokenized by the
+tokenizers that score it (`gpt2`: tiktoken; `pythia`: Pythia-160M's, the final set only), each document prefixed by the
+tokenizer's end-of-text token, into `<set>/<tokenizer>.bin` (uint16). `<set>/manifest.json` records the documents' UTF-8
+bytes, in total and per document (`doc_bytes`), and each tokenizer's tokens per document (`doc_tokens`), so a slice's
+bits per byte divide by its own documents' bytes and scores compare across tokenizers; `prepare.SET_SHA256` pins each
+set's tokens as built here. The Pythia training stream is shard 000's documents in row order until
+`PYTHIA_TRAIN_TOKENS`, in `CW_ROOT/train/pythia.bin` (kept when it matches its record). Earlier versions' sets
+(`CW_ROOT/eval/`, v2.0; `CW_ROOT/heldout/search-pool` and `CW_SEALED/heldout/{promotion,final}`, v2.1) are left as
+they were.
 
     python data.py [--threads 32] [--manifest-out DIR]
 """
@@ -36,6 +43,8 @@ import prepare
 REPO = "HuggingFaceFW/fineweb-edu"
 REVISION = "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9"
 SHARD = "sample/10BT/{}_00000.parquet"
+#: the shards the training streams read (learning_frontier's GPT-2 stream; Pythia's is 000's)
+TRAIN_SHARDS = ("000", "001", "002")
 PYTHIA_TRAIN_SHARD = "000"
 PYTHIA_TRAIN_TOKENS = 200_000_000
 
@@ -76,6 +85,15 @@ def documents(path: Path):
         yield batch.column(0).to_pylist()
 
 
+def text_sha256(text: str) -> bytes:
+    return hashlib.sha256(text.encode("utf-8")).digest()
+
+
+def training_texts(paths: list[Path]) -> set[bytes]:
+    """The text hashes of every document of the training shards."""
+    return {text_sha256(t) for path in paths for batch in documents(path) for t in batch}
+
+
 class Tokenizers:
     def __init__(self, threads: int, pythia_revision: str):
         import tiktoken
@@ -95,13 +113,19 @@ class Tokenizers:
         return [np.asarray([prepare.EOT[which], *x], dtype=np.uint16) for x in ids]
 
 
-def build_set(name: str, spec: Set, tok: Tokenizers, path: Path, shard_sha256: str) -> dict:
-    texts, gpt2, have = [], [], 0
+def build_set(name: str, spec: Set, tok: Tokenizers, path: Path, shard_sha256: str, seen: set[bytes],
+              dedup: dict) -> dict:
+    texts, gpt2, have, row, dropped = [], [], 0, 0, []
     for batch in documents(path):
         for t, arr in zip(batch, tok.encode("gpt2", batch)):
-            texts.append(t)
-            gpt2.append(arr)
-            have += len(arr)
+            h = text_sha256(t)
+            if h in seen:
+                dropped.append({"row": row, "text_sha256": h.hex()})
+            else:
+                texts.append(t)
+                gpt2.append(arr)
+                have += len(arr)
+            row += 1
             if have >= spec.gpt2_tokens:
                 break
         if have >= spec.gpt2_tokens:
@@ -109,8 +133,9 @@ def build_set(name: str, spec: Set, tok: Tokenizers, path: Path, shard_sha256: s
     d = prepare.SET_DIRS[name]
     d.mkdir(parents=True, exist_ok=True)
     doc_bytes = [len(t.encode("utf-8")) for t in texts]
-    rec = {"schema": "covert-witness/heldout/v2", "set": name, "shard": SHARD.format(spec.shard), "shard_sha256": shard_sha256,
-           "documents": len(texts), "bytes": sum(doc_bytes), "doc_bytes": doc_bytes, "tokenizers": {}}
+    rec = {"schema": "covert-witness/heldout/v3", "set": name, "data": prepare.DATA, "shard": SHARD.format(spec.shard),
+           "shard_sha256": shard_sha256, "rows": row, "documents": len(texts), "bytes": sum(doc_bytes),
+           "dedup": dedup | {"dropped": dropped}, "doc_bytes": doc_bytes, "tokenizers": {}}
     for which in spec.tokenizers:
         arrs = gpt2 if which == "gpt2" else tok.encode(which, texts)
         np.concatenate(arrs).tofile(d / f"{which}.bin")
@@ -133,30 +158,40 @@ def main() -> int:
     expected = {f.path: f.lfs.sha256 for f in files if getattr(f, "lfs", None)}
     pythia_revision = HfApi().model_info(prepare.PYTHIA_REPO).sha
     tok = Tokenizers(a.threads, pythia_revision)
-    out = {"dataset": {"repo": REPO, "revision": REVISION}, "pythia_tokenizer": {"repo": prepare.PYTHIA_REPO,
-                                                                                "revision": pythia_revision}, "sets": {}}
+    out = {"dataset": {"repo": REPO, "revision": REVISION}, "data": prepare.DATA,
+           "pythia_tokenizer": {"repo": prepare.PYTHIA_REPO, "revision": pythia_revision}, "sets": {}}
+    train = [fetch(s, a.cache, expected) for s in TRAIN_SHARDS]
+    seen = training_texts(train)
+    dedup = {"against": [SHARD.format(s) for s in TRAIN_SHARDS], "training_documents": len(seen),
+             "rule": "a document whose text's sha256 is a training document's is left out"}
+    print(json.dumps({"dedup": dedup}), flush=True)
     for name, spec in SETS.items():
-        rec = build_set(name, spec, tok, fetch(spec.shard, a.cache, expected), expected[SHARD.format(spec.shard)])
+        rec = build_set(name, spec, tok, fetch(spec.shard, a.cache, expected), expected[SHARD.format(spec.shard)],
+                        seen, dedup)
         out["sets"][name] = {k: v for k, v in rec.items() if k != "doc_bytes"} | {
             "dir": str(prepare.SET_DIRS[name]), "tokenizers": {t: {k: v for k, v in r.items() if k != "doc_tokens"}
                                                               for t, r in rec["tokenizers"].items()}}
         print(json.dumps({name: out["sets"][name]}), flush=True)
-    path = fetch(PYTHIA_TRAIN_SHARD, a.cache, expected)
     d = prepare.ROOT / "train"
-    d.mkdir(parents=True, exist_ok=True)
-    n = 0
-    with (d / "pythia.bin.part").open("wb") as f:
-        for batch in documents(path):
-            for arr in tok.encode("pythia", batch):
-                f.write(arr.tobytes())
-                n += len(arr)
-            if n >= PYTHIA_TRAIN_TOKENS:
-                break
-    (d / "pythia.bin.part").rename(d / "pythia.bin")
-    out["pythia_train"] = {"shard": SHARD.format(PYTHIA_TRAIN_SHARD), "tokens": n, "sha256": sha256(d / "pythia.bin")}
-    (d / "pythia.json").write_text(json.dumps(out["pythia_train"], indent=1) + "\n")
-    prepare.HELD_OUT.mkdir(parents=True, exist_ok=True)
-    (prepare.HELD_OUT / "data.json").write_text(json.dumps(out, indent=1) + "\n")
+    kept = json.loads((d / "pythia.json").read_text()) if (d / "pythia.json").is_file() else None
+    if kept and (d / "pythia.bin").is_file() and sha256(d / "pythia.bin") == kept["sha256"]:
+        out["pythia_train"] = kept
+    else:
+        path = fetch(PYTHIA_TRAIN_SHARD, a.cache, expected)
+        d.mkdir(parents=True, exist_ok=True)
+        n = 0
+        with (d / "pythia.bin.part").open("wb") as f:
+            for batch in documents(path):
+                for arr in tok.encode("pythia", batch):
+                    f.write(arr.tobytes())
+                    n += len(arr)
+                if n >= PYTHIA_TRAIN_TOKENS:
+                    break
+        (d / "pythia.bin.part").rename(d / "pythia.bin")
+        out["pythia_train"] = {"shard": SHARD.format(PYTHIA_TRAIN_SHARD), "tokens": n, "sha256": sha256(d / "pythia.bin")}
+        (d / "pythia.json").write_text(json.dumps(out["pythia_train"], indent=1) + "\n")
+    prepare.DATA_JSON.parent.mkdir(parents=True, exist_ok=True)
+    prepare.DATA_JSON.write_text(json.dumps(out, indent=1) + "\n")
     if a.manifest_out:
         a.manifest_out.mkdir(parents=True, exist_ok=True)
         (a.manifest_out / "data.json").write_text(json.dumps(out, indent=1) + "\n")
