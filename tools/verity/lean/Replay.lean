@@ -25,6 +25,12 @@ finer than its modules, so a module of slow `decide` proofs is spread over the t
 tasks wait at once, each holding its environment. Unsafe and partial constants, which the kernel does not check, are in
 every one of those environments, as an import puts them, and the kernel refuses a checked declaration that mentions one.
 
+`lean` checks a module under the module system on its imports' public parts, where a theorem or a definition they don't
+expose is an axiom; with those bodies at hand the kernel can unfold its way into a computation it doesn't finish, and it
+stops on its recursion. Such a declaration is checked again as `lean` checked it: on its module's other constants and the
+constants its imports' public parts hold, each as this replay holds it (checked or imported), with the bodies those parts
+hide taken out. `OUT` names the declarations accepted that way (`on_public_imports`).
+
 A replayed module's verdict is cached under a key of its own `.olean` files and its imports', so it must depend on
 nothing else: each constant a checked declaration mentions must be declared by its module or by a module it imports,
 transitively, and a theorem two modules declare with one statement (an equation lemma each realized) is checked in both,
@@ -554,6 +560,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       IO.eprintln s!"replay: {d} (in {moduleOfDecl d}) is on a cycle of declarations that mention each other"
       return 1
   let mut tasks : Array (Name × Task (Except IO.Error Nat)) := #[]
+  let mut settled : Array (Name × Except IO.Error Nat) := #[]
   let mut took : Array (Nat × Name) := #[]
   let mut rejected : NameSet := {}
   let mut waited := 0
@@ -589,18 +596,55 @@ unsafe def main (args : List String) : IO UInt32 := do
         kenv := addImported kenv c
     while tasks.size - waited > WINDOW do
       let (d', t) := tasks[waited]!
-      match ← IO.wait t with
-      | .ok ms => took := took.push (ms, d')
-      | .error e =>
-        IO.eprintln s!"replay: the kernel rejects {d'} (in {moduleOfDecl d'}):\n{e}"
-        rejected := rejected.insert (moduleOfDecl d')
+      settled := settled.push (d', ← IO.wait t)
       waited := waited + 1
   for (d, t) in tasks.extract waited tasks.size do
-    match ← IO.wait t with
+    settled := settled.push (d, ← IO.wait t)
+  let deepRecursion ← (Kernel.Exception.deepRecursion.toMessageData {}).toString
+  let underModuleSystem : NameSet := loaded.foldl (fun s (m, _, data) => if data.isModule then s.insert m else s) {}
+  let mut deep : Std.HashMap Name (Array Name) := {}
+  for (d, r) in settled do
+    match r with
     | .ok ms => took := took.push (ms, d)
     | .error e =>
-      IO.eprintln s!"replay: the kernel rejects {d} (in {moduleOfDecl d}):\n{e}"
-      rejected := rejected.insert (moduleOfDecl d)
+      if underModuleSystem.contains (moduleOfDecl d) && (toString e).endsWith s!"\n{deepRecursion}" then
+        deep := deep.alter (moduleOfDecl d) fun ds => some ((ds.getD #[]).push d)
+      else
+        IO.eprintln s!"replay: the kernel rejects {d} (in {moduleOfDecl d}):\n{e}"
+        rejected := rejected.insert (moduleOfDecl d)
+  -- each declaration the kernel stopped on, again on the constants `lean` checked it on (`Lean.Elab.processHeaderCore`
+  -- imports a module's imports at `.exported`)
+  let mut onPublic : Array Name := #[]
+  for (m, ds) in deep do
+    let some (_, mImports, data) := loaded.find? (·.1 == m) | unreachable!
+    let view ← importModules mImports {} (level := .exported)
+    let mut venv := (← mkEmptyEnvironment).toKernelEnv
+    let mut quot : Std.HashMap Name ConstantInfo := {}
+    let mut missing : Array String := #[]
+    -- nothing taken from `view` outlives its regions: each constant is this replay's, under its own name
+    for (n, c) in view.toKernelEnv.constants.map₁ do
+      let some f := kenv.find? n | missing := missing.push (toString n); continue
+      let f : ConstantInfo := match c, f with
+        | .axiomInfo _, .thmInfo v => .axiomInfo { toConstantVal := v.toConstantVal, isUnsafe := false }
+        | .axiomInfo _, .defnInfo v => .axiomInfo { toConstantVal := v.toConstantVal, isUnsafe := v.safety == .unsafe }
+        | .axiomInfo _, .opaqueInfo v => .axiomInfo { toConstantVal := v.toConstantVal, isUnsafe := v.isUnsafe }
+        | _, f => f
+      if f matches .quotInfo _ then quot := quot.insert f.name f else venv := addImported venv f
+    view.freeRegions
+    let failed : Std.HashMap Name ConstantInfo :=
+      ds.foldl (fun h d => (members.getD d #[]).foldl (fun h c => h.insert c.name c) h) {}
+    for c in data.constants do
+      unless failed.contains c.name do venv := addImported venv ((kenv.find? c.name).getD c)
+    let r : Except IO.Error Kernel.Environment ← if !missing.isEmpty then
+        pure (.error (IO.userError s!"its imports' public parts hold {missing.size} constants this replay lacks, \
+          {missing[0]!} among them"))
+      else IO.wait (← IO.asTask do (← venv.replay quot).replay failed)
+    match r with
+    | .ok _ => onPublic := onPublic ++ ds
+    | .error e =>
+      IO.eprintln s!"replay: the kernel stops on {", ".intercalate (ds.toList.map toString)} (in {m}), and rejects them \
+        on the parts of its imports `lean` checked them on:\n{e}"
+      rejected := rejected.insert m
   if !rejected.isEmpty then
     -- every other module's declarations passed with its imports present, which is what a module's cache entry says
     IO.FS.writeFile out <| (Json.mkObj [("rejected", toJson (rejected.toArray.qsort Name.lt |>.map toString))]).compress
@@ -703,7 +747,9 @@ unsafe def main (args : List String) : IO UInt32 := do
     a theorem another module declares too, checked under a fresh name; {skipped} more are unsafe or partial: compiled code, \
     which the kernel does not check; {kept} more, of {reusedSet.size} modules that passed before, added unchecked; \
     {env.header.moduleNames.size} modules imported unchecked), as {tasks.size} declarations side by side \
-    (slowest: {", ".intercalate slowest.toList}); axioms of the own modules' bodies: {", ".intercalate names.toList}"
+    (slowest: {", ".intercalate slowest.toList}); {onPublic.size} of them, which the kernel stopped on, accepted on their \
+    imports' public parts (`lean`'s check){if onPublic.isEmpty then "" else s!": {", ".intercalate (onPublic.toList.map toString)}"}; \
+    axioms of the own modules' bodies: {", ".intercalate names.toList}"
   let tEnd ← IO.monoMsNow
   let seconds := [("load", tLoaded - t0), ("plan", tPlanned - tLoaded), ("check", tChecked - tPlanned),
     ("axioms", tEnd - tChecked)].map fun (k, ms) => (k, toJson (ms / 1000))
@@ -711,7 +757,8 @@ unsafe def main (args : List String) : IO UInt32 := do
   IO.FS.writeFile out <| (Json.mkObj <| [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
     ("second_copies", toJson renamed.size), ("closure_checked", toJson (get "--closure").size),
     ("closure_reused", toJson (get "--closure-reused").size), ("imported", toJson env.header.moduleNames.size),
-    ("axioms", toJson names), ("seconds", Json.mkObj seconds)] ++
+    ("axioms", toJson names), ("seconds", Json.mkObj seconds),
+    ("on_public_imports", toJson (onPublic.qsort Name.lt |>.map toString))] ++
     (if records.isSome then [("declarations", Json.mkObj declarations.toList)] else []) ++
     (if envIn.isSome then [("env_modules", toJson (env.header.moduleNames.map (·.toString (escape := false))))] else []) ++
     (if envOut.isSome then [("modules", toJson mods.size),

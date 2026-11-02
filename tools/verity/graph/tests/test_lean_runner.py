@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -82,6 +83,11 @@ EVIL = "module\n\nprelude\npublic import Init.Prelude\n\npublic theorem q : True
 DEP = {"lakefile.toml": 'name = "dep"\ndefaultTargets = ["Dep"]\n\n[[require]]\nname = "evil"\n'
                         'git = "https://example.invalid/evil"\n\n[[lean_lib]]\nname = "Dep"\n',
        "Dep.lean": "prelude\nimport Evil\n", "lake-manifest.json": manifest("dep", "evil")}
+#: `evil` with a definition whose public part hides its body, which takes 100000 steps of `Nat.rec` to evaluate, and a
+#: theorem the kernel checks at once where `big` is an axiom, and only by evaluating `big` where it has its body
+DEEP = {"Deep": "module\n\nprelude\npublic import Init.Prelude\n\npublic noncomputable def big : Nat :=\n"
+                "  Nat.rec (motive := fun _ => Nat → Nat) (fun acc => acc) (fun _ r acc => r (Nat.succ acc)) 100000 0\n",
+        "Evil": "module\n\nprelude\npublic import Deep\n\npublic theorem t (h : big = 100000) : id big = 100000 := h\n"}
 
 
 @pytest.fixture(scope="module")
@@ -338,19 +344,21 @@ def test_the_toolchain_s_env_passes_with_every_module_recorded_and_its_executabl
     assert "Lean.trustCompiler" in res["detail"]["toolchain_outside_standard"]
 
 
-def fetched_env(tree: Path, private: bool = True) -> Path:
+def fetched_env(tree: Path, private: bool = True, sources: dict[str, str] | None = None) -> Path:
     """`dep`'s fetched packages on this worker, as `lean_module.packages` finds them made: `evil` built by `lean` from
-    `EVIL`, with its private part or without it."""
+    ``sources`` (`Evil` from `EVIL` by default), a module at a time, with their private parts or without them."""
     home = module_runner.env_dir() / la.deps_key(tree / "dep")
     lib = home / "evil" / ".lake" / "build" / "lib" / "lean"
     shutil.rmtree(home, ignore_errors=True)
     lib.mkdir(parents=True)
-    (home / "evil" / "Evil.lean").write_text(EVIL)
-    p = subprocess.run([str(BIN / "lean"), "Evil.lean", "-o", str(lib / "Evil.olean")], cwd=home / "evil",
-                       capture_output=True, text=True)
-    assert p.returncode == 0 and (lib / "Evil.olean.private").is_file(), p.stdout + p.stderr
+    for m, text in (sources or {"Evil": EVIL}).items():
+        (home / "evil" / f"{m}.lean").write_text(text)
+        p = subprocess.run([str(BIN / "lean"), f"{m}.lean", "-o", str(lib / f"{m}.olean")], cwd=home / "evil",
+                           capture_output=True, text=True, env={**os.environ, "LEAN_PATH": str(lib)})
+        assert p.returncode == 0 and (lib / f"{m}.olean.private").is_file(), p.stdout + p.stderr
     if not private:
-        (lib / "Evil.olean.private").unlink()
+        for f in lib.glob("*.olean.private"):
+            f.unlink()
     (home / module_runner.READY).write_text(home.name + "\n")
     return home
 
@@ -370,6 +378,29 @@ def test_an_env_module_whose_private_proof_holds_a_sorry_fails_its_env(tree, tmp
     fetched_env(tree, private=False)
     res = runners.execute(task, doc, tmp_path / "public")
     assert res["status"] == "error" and any("private part" in line for line in res["detail"]["log"]), res["detail"]
+
+
+def test_a_declaration_the_kernel_stops_on_passes_on_the_imports_lean_checked_it_on_and_only_there(tree, tmp_path,
+                                                                                                    monkeypatch):
+    """On a small stack (`LEAN_STACK_SIZE_KB`) the kernel stops on `t` where `big` has its body, as it stops on CompPoly's
+    irreducibility certificates on its own; `lean` checked `t` on `Deep`'s public part, where it passes, and so does the
+    replay's second check. Where `lean` checked it with `big`'s body (`import all`), the second check stops too, and the
+    env fails."""
+    monkeypatch.setattr(env_family, "SCOPE", "imports")
+    doc = graph.task_graph(tree, "lean-env:dep", listers=LISTERS)
+    module_runner.program("Replay", module_runner.toolchain_dir(TOOLCHAIN), tmp_path)
+    fetched = {"public": DEEP, "all": DEEP | {"Evil": "module\n\nprelude\nimport all Deep\n\n"
+                                                     "set_option maxRecDepth 100000000 in\n"
+                                                     "theorem t (h : big = 100000) : id big = 100000 := h\n"}}
+    got = {}
+    for k, sources in fetched.items():
+        fetched_env(tree, sources=sources)
+        with monkeypatch.context() as m:
+            m.setenv("LEAN_STACK_SIZE_KB", "2048")
+            got[k] = runners.execute(doc["tasks"][0], doc, tmp_path / k)
+    assert got["public"]["status"] == "pass", got["public"]["detail"]
+    assert got["public"]["detail"]["rounds"][0]["on_public_imports"] == ["t"], got["public"]["detail"]["rounds"]
+    assert got["all"]["status"] == "fail" and got["all"]["detail"]["rejected"] == ["Evil"], got["all"]["detail"]
 
 
 def test_an_env_with_no_build_of_its_fetched_packages_beyond_mathlib_s_cache_is_an_error(tree, tmp_path):

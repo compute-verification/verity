@@ -5,7 +5,9 @@ and of the toolchain that `lean` finds there (`lean_module.env_modules`); under 
 module they import, transitively.
 
 Each module's declarations go to the kernel once, private ones and proof bodies included, against the modules it imports.
-Modules that can't be imported together (each of the toolchain's executables declares `main`) are replayed in rounds:
+One of a module under the module system that the kernel stops on (its recursion) is checked again on the constants
+`lean` checked it on, its imports' public parts, and a round names those (`on_public_imports`). Modules that can't be
+imported together (each of the toolchain's executables declares `main`) are replayed in rounds:
 `Replay.lean` defers a module that clashes with one before it, and the next round imports the earlier rounds' modules and
 takes their sets from their record so far.
 
@@ -154,8 +156,8 @@ def run(task: dict, work: Path) -> dict:
         rc = call(argv, work, work, env)
         got = json.loads((d / "out.json").read_text()) if (d / "out.json").is_file() else {}
         rounds.append({"modules": got.get("modules"), "replayed": got.get("replayed"), "skipped": got.get("skipped"),
-                       "imported": got.get("imported"), "seconds": round(time.monotonic() - t, 3),
-                       "replay_seconds": got.get("seconds")})
+                       "imported": got.get("imported"), "on_public_imports": got.get("on_public_imports"),
+                       "seconds": round(time.monotonic() - t, 3), "replay_seconds": got.get("seconds")})
         if rc == 1 and got.get("rejected"):
             return {"status": "fail", "detail": detail | {"error": "the kernel rejected declarations",
                                                           "rejected": got["rejected"]}}
