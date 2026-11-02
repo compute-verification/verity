@@ -5,8 +5,9 @@ import Properties.Verity.Game
 
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-circuit file is read as empty files under the netlist tags (`fileRead`); there are no device rounds, no releases, no
-commitment openings and no gates computed; the world charges nothing over an empty window (`world`); the schedule is one
+circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the honest
+prover closes the device at once, no check reads its log, and there are no commitment openings and no gates computed;
+the world charges nothing over an empty window (`world`); the schedule is one
 empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
 on its one coin. The circuit file's and the public file's digests in the parameters are both the parameters' own
 SHA-512, so the committed files pass the commit phase's check exactly when one of them is the parameters.
@@ -86,8 +87,8 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   programDigest θ := some (sha512 θ.data.toList)
   publicDigest θ := some (sha512 θ.data.toList)
   registered θ := #[θ]
-  rounds _ := []
-  coinsRead _ _ := []
+  families _ := []
+  coinsRead _ _ := none
   extract _ _ _ _ _ := 0
   finder _ _ _ _ _ := finder
   cost _ _ _ _ := 0
@@ -116,7 +117,9 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   wipe _ _ := wipe
   wipeRun θ F c _ := ofRun (play [] θ F c)
   foreignBits _ := 0
-  honest _ _ _ := ⟨(.empty, #[]), ⟨⟩⟩
+  honest θ F c :=
+    closeThen (fun log => .send (ByteArray × Array ByteArray) fun e => .ret (⟨θ, F, c, log, e.1, e.2⟩ : Exchange))
+      ⟨(.empty, #[]), ⟨⟩⟩ _ _ _
   certOf _ := ⟨0, W, 0, 0, 0⟩
   crBound _ _ _ := 0
   delta _ _ _ := δ
