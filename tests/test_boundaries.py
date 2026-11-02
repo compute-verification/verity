@@ -59,6 +59,9 @@ ALLOWED = {
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
+    # Ticks, spans and the monitoring period, stdlib only: the mirror of the code's `CoreProtocol.Period`, which a
+    # protocol's periods read rather than define.
+    "core.periods": set(),
     "core.claims": set(),
     # An auditor party's signed period roots and liveness records,
     # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
@@ -84,8 +87,10 @@ ALLOWED = {
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's. The
-    # memory challenger reports its sessions under its party's per-period root (`core.attest`).
-    "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+    # memory challenger reports its sessions under its party's per-period root (`core.attest`). The wipe's monitoring
+    # periods are the core's.
+    "core.protocols.pous": {"core.periods",
+                            "core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                             "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.

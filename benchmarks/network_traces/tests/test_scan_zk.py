@@ -1,6 +1,7 @@
-"""scan_zk's host side: the run it reads (each execution phase's rows the warden's committed ones, each egress bucket
-computing the warden's row from the view its ingress bucket wrote, w63's request 5 in request 1's slot past its egress)
-and each round's host read (`scan_zk.member`, as Lean's registered reads make it, and the references' outputs) as the
+"""scan_zk's host side: the run it reads (each execution phase's rows the network certifier's committed ones, each
+egress bucket computing the network certifier's row from the view its ingress bucket wrote, w63's request 5 in request
+1's slot past its egress) and each round's host read (`scan_zk.member`, as Lean's registered reads make it, and the
+references' outputs) as the
 round's: honest accepted with every output 1, its state and view chains wires through the registered roots
 (`scan_zk.wired`), its state tree the window state a slot's Program reads (`ingress_scan.window_state`); chain's
 ingress member refused at unit A's o1, as is any state tree that skips, repeats or alters a transition, and
@@ -67,8 +68,9 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert sz._bits(st, 0) == sz.IS.encode(sz.CLASS, sz.IS.empty(sz.CLASS)) and len(st.rows) == T
     assert first.ports["o1"]["reads"] == [1] and "sin" not in first.ports
     assert ing.ports["sin"]["reads"] == list(range(1, T - 1)) and ing.ports["o1"]["reads"] == list(range(2, T))
-    assert last.ports["sin"]["reads"] == [T - 1] and "o1" not in last.ports and "o1" not in last.bcs
-    assert last.made["o1"] == [at.chain.states[T]] and last.buckets == [T - 1]
+    assert last.ports["sin"]["reads"] == [T - 1] and last.ports["o1"]["value"] == sz.value("frame")
+    assert last.ports["o1"]["root"] != st.root.hex() and last.ports["o1"]["reads"] == [0]
+    assert last.made["o1"] == [at.chain.states[T]] and last.buckets == [T - 1] and last.framed == ["o0", "o1"]
     assert first.ports["o1"]["root"] == ing.ports["sin"]["root"] == last.ports["sin"]["root"] == st.root.hex()
     # the slot entries: lane j's tree, leaf b slot j's entry of the Programs' row at boundary b; the block a member a
     # lane (block-c<j>), its unit j·nb + b's o0 (no public word) lane j's leaf b, each lane's tree under its member's
@@ -85,7 +87,8 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     for j, (blk, tr) in enumerate(zip(blks, trs, strict=True)):
         assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports[f"prog{j}"]["root"] == first.ports[
             f"prog{j}"]["root"]
-        assert blk.ports["o0"]["reads"] == list(range(nb)) and list(blk.ports) == ["o0"]
+        assert blk.ports["o0"]["reads"] == list(range(nb)) and sorted(blk.ports) == sorted(blk.framed) == ["o0", "x"]
+        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.REG.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
         assert blk.made["o0"] == [sz._bits(tr, b) for b in range(nb)] == [u[0] for u in blk.units]
         assert blk.set_name == at.block_sets[j] and tr.binding == sz.block_binding(at.block_sets[j], nb)
     assert len(set(at.block_sets)) == len({tr.root for tr in trs}) == cls.NR
@@ -189,13 +192,49 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
         range(T + 1, G * T))
     assert (last.window, last.ports["row"]["reads"], last.ports["row"]["root"]) == (
         1, [T - 1], ing1.ports["row"]["root"])
-    assert last.ports["sin"]["reads"] == [G * T - 1] and "o1" not in last.ports
+    assert last.ports["sin"]["reads"] == [G * T - 1] and last.ports["o1"]["value"] == sz.value("frame")
     assert eg1.ports["o1"]["root"] == at.sides["egress"][1].head.root.hex() and eg1.ports["o1"][sz.REG.READS_FROM] == 3 * T
     assert [m.name for m in h.rounds["chain"] if m.refused] == sz.targets(at, "chain") == ["ingress-0"]
     assert [m.name for m in h.rounds["tampered"] if m.refused] == sz.targets(at, "tampered")
     assert [(m.name, m.buckets, m.outputs) for m in h.rounds["unread"]] == [("ingress-0", [4], [0])]
     with pytest.raises(SystemExit, match="a group is 1 or more link-windows"):
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
+
+
+def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_root(tmp_path):
+    """The verifier's registered reads name every port of every member's circuit, inputs and output rows, as Lean's
+    `Flock.Registered.checkComplete` asks of every statement of a ``--registered`` file. A port no scan tree or network
+    certifier row registration holds (each proof block's public o0, the last proof block's o1, a block member's row-seg
+    ``x``) is the member's own rows (`scan_zk.Frame`, value ``frame``): its domain the member's frame domain of the port
+    (`frame_binding` over its input set, its n proof blocks and the port's schema), each proof block's b‖c its own row
+    under the salt the stager is given, which opens the root at its position as core's mirror of Lean's read opens it
+    (`registered.verify_read`). Unread's o0 row is its 0, which the verifier opens as before."""
+    h = sz.host(tmp_path, setup=sz.TEST)
+    key, own = sz.ADV.INST.default_key, {}
+    for name, members in h.rounds.items():
+        for m in members:
+            ins, outs = sz.ports_of(sz.TEST.cls)[m.template]
+            sig = [p for p, _b in (*ins, *(() if m.template in sz.ROWS_O0 else (("o0", 16),)), *outs)]
+            assert sorted(m.ports) == sorted(m.entries) == sorted(m.salts) == sorted(sig), (name, m.name)
+            own[name, m.name] = [p for p in m.framed if m.ports[p]["value"] == sz.value("frame")]
+            for p in own[name, m.name]:
+                port = m.ports[p]
+                schema = port.get(sz.REG.SCHEMA_KEY, sz.REG.SCHEMA)
+                dom = sz.ADV.domain(sz.frame_binding(m.set_name, m.n, p, schema), m.n)
+                assert (port["domain"], port["leaves"], port["reads"], port.get(sz.REG.READS_FROM, 0)) == (
+                    dom.domain_id.hex(), m.n, list(range(m.n)), m.base)
+                assert m.entries[p]["positions"] == list(range(m.n))
+                for k in range(m.n):
+                    bits = [m.outputs[k]] if p == "o0" else m.units[k][0] if p == "x" else m.made[p][k]
+                    bc = sz.ADV.INST.commit_string(key, sz.REG.row_digest(sz._words(bits), 16, schema), m.salts[p][k])
+                    assert m.bcs[p][k] == bc and sz.REG.verify_read(
+                        dom, bytes.fromhex(port["root"]), k, bc, bytes.fromhex(m.entries[p]["paths"][k]), schema)
+    assert own == {**{(r, x): ["o0"] for r in ("honest", "chain") for x in ("first", "ingress-0", "egress-0")},
+                   ("honest", "last"): ["o0", "o1"], ("chain", "last"): ["o0", "o1"],
+                   ("tampered", "egress-0"): ["o0"], ("unread", "ingress-0"): ["o0"],
+                   **{("block", f"block-c{j}"): ["x"] for j in range(sz.TEST.cls.NR)}}
+    (u,) = h.rounds["unread"]
+    assert u.outputs == [0] and u.refused is None
 
 
 XOR8 = PrimitiveDefinition("ScanZkTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
@@ -287,8 +326,8 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
               late: tuple[int, ...] = ()) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
     warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
-    and salts), under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a
-    void run, their reasons in ``fails.records``)."""
+    and salts), under a network certifier key of its own, beside its `deployment.json`; the connections of ``late``
+    failed late (a void run, their reasons in ``fails.records``)."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -358,9 +397,9 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
 
 def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
-    passes it, and a Lean verdict's ``registered`` reports its roots) holds each warden port at the root and domain of
-    the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from the
-    run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
+    passes it, and a Lean verdict's ``registered`` reports its roots) holds each network certifier port at the root and
+    domain of the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from
+    the run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
     rows the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
     statement whose header names a port registered that the verifier's file doesn't is refused, as Lean refuses it
     (`header_refusal`, `Flock.Registered.check`)."""
@@ -462,10 +501,11 @@ def _program(G: int, T: int) -> tuple:
 
 
 def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail(tmp_path):
-    """A warden run whose warden failed a connection late (its server sent nothing: a FAIL in the egress row the
-    warden signed, its reason in ``fails.records``) is read, not refused: the scan renders the connection's END where
-    the warden wrote FAIL, that bucket alone differs from the warden's row, and the run's one round, honest, is refused
-    ("does not open") at the egress member of the FAIL's execution phase, every other member held."""
+    """A network certifier run whose network certifier failed a connection late (its server sent nothing: a FAIL in the
+    egress row the network certifier signed, its reason in ``fails.records``) is read, not refused: the scan renders the
+    connection's END where the network certifier wrote FAIL, that bucket alone differs from the network certifier's row,
+    and the run's one round, honest, is refused ("does not open") at the egress member of the FAIL's execution phase,
+    every other member held."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path / "host", published(tmp_path / "run", sz.TEST, windows=G, late=(1,)), setup=sz.TEST, group=G)
     at = h.at
@@ -492,15 +532,17 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it passes every check (`analysis`; the verdict refuses the rows form as unproved, `period_case.UNPROVED`),
-    its scan's terms read off the test class's own templates with no free inputs, and refuses the
-    forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
-    registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
-    whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
-    swapped, one lane's chunk at another root or missing, or whose roots are at its o1, no `SlotEntry_v1` template's
-    entries, and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
-    (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
-    can stand for."""
+    its scan's terms read off the test class's own templates with no free inputs, passes every check with the block's
+    audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks (``subset:1``,
+    ``subset:2``, the demo's sample: the consistency check holds at any sample), where the verdict refuses it as
+    unproved too, and refuses the forged case (a certificate's signature changed) at the certificates, the tampered
+    case (another Program's registration) at the registration, the chain case (the round's registration of the
+    Program) at its refusal, a block whose entries are at other roots by name, and at the wiring
+    (`period_case.UNWIRED`) one whose lanes' chunks are swapped, one lane's chunk at another root or missing, or whose
+    roots are at its o1, no `SlotEntry_v1` template's entries, and a block whose ``scan/state`` is a state tree that
+    skips a transition, or that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is
+    refused by name. Slow (the test class's Program, about 30 s): the period check reads the scan's templates'
+    signatures, which no stand-in can stand for."""
     import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
@@ -538,13 +580,16 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
                        for j in range(cls.NR)]
 
-    def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state) -> dict:
+    def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state,
+                    sampled: int | None = None) -> dict:
         stated = [{"port": "scan/state", **scan_state}] if scan_state else []
-        breg = R.record(block, bquery, blaw, sz.S.SCHEME,
+        law = sz.DR.parse_law(f"subset:{sampled}") if sampled else blaw
+        breg = R.record(block, bquery, law, sz.S.SCHEME,
                         [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated], {"kind": "stand-in"},
                         leaf_layer="cc" * 64)
-        bdraw = {**sz.DR.derive(block, bquery, blaw), "population": E, "units": list(range(E))}
-        brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": list(range(E))}
+        units = list(range(sampled or E))
+        bdraw = {**sz.DR.derive(block, bquery, law), "population": E, "units": units}
+        brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": units}
         return {"answer": sz.window_answer(breg, brec, sz.Fraction(1, 100), "unused"),
                 "free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "registration": breg, "steps": 0}
 
@@ -587,6 +632,14 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     out = PC.analysis(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     assert PC.UNPROVED in PC.reference(case)["reason"], PC.reference(case)
+    for k in (1, 2):
+        (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(block_audit(progs, sampled=k)))
+        sampled = SP.rows_case(run, scan, v3c=v3c)
+        got = PC.analysis(sampled)
+        assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
+            "accept", k, E), got
+        got = PC.reference(sampled)
+        assert got["verdict"] == "reject" and PC.UNPROVED in got["reason"], got
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
@@ -793,10 +846,10 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
 
 
 def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outside_the_group_is_not_read(tmp_path):
-    """A connection's reason in the warden's ``fails`` record is in the bucket of its egress `FAIL` (a void run, whose
-    execution phases the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL` is refused,
-    naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase past the
-    group is another group's, and the group is read as if it weren't there."""
+    """A connection's reason in the network certifier's ``fails`` record is in the bucket of its egress `FAIL` (a void
+    run, whose execution phases the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL`
+    is refused, naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase
+    past the group is another group's, and the group is read as if it weren't there."""
     run = published(tmp_path / "run")
     rec = WS.ar.unpack_record(WS.ar.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
@@ -829,8 +882,8 @@ def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_run
 
 
 def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
-    """Each run's root is its own (the synthetic run's registrations carry fresh salts), a warden run's is read from its
-    published registrations alone, and a group's covers each of its execution phases."""
+    """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network certifier run's is
+    read from its published registrations alone, and a group's covers each of its execution phases."""
     syn = sz.link(tmp_path / "syn")
     root = sz.window_root(syn)
     assert re.fullmatch("[0-9a-f]{128}", root) and root != sz.window_root(sz.link(tmp_path / "again"))
