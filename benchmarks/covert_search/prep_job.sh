@@ -20,7 +20,9 @@ case $1 in
     mkdir -p "$ROOT"
     research keep "$ROOT" --owner @training --expires never --priority keep \
       --regenerate "python benchmarks/covert_search/prepare.py data --lf-data $LF" --why "covert-search data and registered starts"
-    "$P" benchmarks/covert_search/prepare.py --root "$ROOT" data --lf-data "$LF" > "$OUT/data.json" || exit $?
+    # the node's venv has no pyarrow (prep.py reads parquet): a private copy, no dependencies, so the venv's numpy stays
+    [ -d "$ROOT/pydeps/pyarrow" ] || uv pip install --quiet --no-deps --python "$P" --target "$ROOT/pydeps" pyarrow || exit $?
+    PYTHONPATH="$ROOT/pydeps" "$P" benchmarks/covert_search/prepare.py --root "$ROOT" data --lf-data "$LF" > "$OUT/data.json" || exit $?
     gpu-lease 1 --wait --max-min 20 --mem-gb 32 -- "$P" benchmarks/covert_search/prepare.py --root "$ROOT" register --name smol \
       --hf HuggingFaceTB/SmolLM2-135M
     ;;
