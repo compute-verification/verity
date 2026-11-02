@@ -173,7 +173,7 @@ def test_an_audits_read_of_the_scan_state_under_a_link_windows_root_and_domain_p
             case = build("honest" if form == "clock" else "rows-honest", n, small=n % 2 == 0)
             c = PC.commitment(bytes.fromhex(case["commitment"]))
             states = [PC.state_of(reg) for reg in c.windows]
-            got = [(e["root"], e["domain"]) for reg in c.audits for e in reg.record.get("registered", [])
+            got = [(e["root"], e["domain"]) for reg in c.audits for e in reg.get("registered", [])
                    if e.get("value") == PC.SCAN_STATE]
             assert all(x in states for x in got) and (form == "rows" or not got), (form, n)
             reads += len(got)
