@@ -43,7 +43,8 @@ def main() -> int:
     logs.mkdir(parents=True, exist_ok=True)
     done = {json.loads(x)["key"] for x in state_path.read_text().splitlines() if x.strip()} if state_path.exists() else set()
     flying: dict[str, tuple[subprocess.Popen, str, Path]] = {}
-    env = dict(os.environ, PATH=f"/workspace/.venv/bin:{os.environ['PATH']}")
+    # the research CLI from the launch worktree's tools: /workspace's may predate the node's own pools (`--pool gpu`)
+    env = dict(os.environ, PATH=f"{a.queue.parent / 'bin'}:/workspace/.venv/bin:{os.environ['PATH']}")
     while True:
         for key, (proc, klass, log) in list(flying.items()):
             if proc.poll() is None:
