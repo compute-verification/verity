@@ -88,8 +88,8 @@
 #              a test's coins, never the challenger's, out/inner/tree-source.txt says which)
 #              TREE_FROM=local: the challenger started on this node beside the run (pod/challenger.sh: its key and session
 #              secret in a scratch directory none of the prover's), its records under out/inner/challenger, and
-#              out/inner/tree-held.json whether each inner session's coin tree is one its signed release log shows it
-#              sampled and opened
+#              out/inner/tree-held.json its audit (challenger_audit, Python and Lean): every inner session's coins are the
+#              ones its signed release log shows it sampled and opened; the step fails otherwise
 #      RELEASE=0 (1: the recursive session through the ZK server's release side, live PROTOCOL.md §10.5, on the state
 #              directory $DD/fw: STEP=inner, one session (WARM=0 RUNS=1), opens it with V*'s statements as its parts in
 #              rec-statements' order and RELEASE_WINDOWS_S's schedule ($DD/release.json, rec_inner.py release-parts);
@@ -316,10 +316,10 @@ hello_at() {
 # and prove_live against it under INNER_COINS; the prover's status
 proxied() {
   rm -rf $DD/inner; mkdir -p $DD/inner
-  local src=(--tree-test-os)
+  local src=(--tree-test-os) own=0
   if [ "${TREE_FROM:-}" = local ]; then
-    challenger_start $O/inner/challenger || return 1
-    src=(--tree-from $CHALLENGER --tree-secret-file $CHALLENGER_SECRET)
+    own=1; challenger_start $O/inner/challenger || return 1
+    src=(--tree-from $CHALLENGER --tree-secret-file $CHALLENGER_SECRET); TREE_FROM=local
   elif [ -n "${TREE_FROM:-}" ]; then
     src=(--tree-from $TREE_FROM ${TREE_SECRET_FILE:+--tree-secret-file $TREE_SECRET_FILE})
   fi
@@ -344,23 +344,16 @@ print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str,
   if [ $NS = 1 ] && [ -e $DD/inner/public.json ]; then
     mkdir -p $DD/inner/s0 && for f in $DD/inner/*; do case ${f##*/} in s0|schedule.json) ;; *) mv $f $DD/inner/s0/ ;; esac; done
   fi
-  # TREE_FROM=local: the challenger exits once rec_live closed its session; each session's tree is one its release log
-  # shows it sampled, and opened every round of
-  if [ "${TREE_FROM:-}" = local ]; then
+  # TREE_FROM=local: the challenger exits once rec_live closed its session; every session's coins are its tree's, as the
+  # challenger's signed release log shows it sampled and opened them, in Python and Lean (challenger_audit), the audit
+  # also in out/inner/tree-held.json
+  if [ $own = 1 ]; then
+    TREE_FROM=local
     challenger_end $O/inner/challenger; echo "challenger exit $?"
-    python3 - $O/inner/challenger/releases.jsonl $DD/inner/s*/coin_tree.json > $O/inner/tree-held.json <<'EOF' || rc=1
-import json, sys
-log = [json.loads(ln) for ln in open(sys.argv[1]) if ln.strip()]
-res = []
-for f in sys.argv[2:]:
-    root = json.load(open(f))["root"]
-    res.append({"session": f.split("/")[-2], "root": root,
-                "sampled": any(e.get("event") == "coin-tree" and e.get("root") == root for e in log),
-                "opens": sum(e.get("event") == "tree-open" and e.get("tree") == root for e in log)})
-print(json.dumps({"sessions": res, "ok": bool(res) and all(r["sampled"] and r["opens"] for r in res)}))
-sys.exit(0 if res and all(r["sampled"] and r["opens"] for r in res) else "an inner session's coin tree is none the challenger sampled")
-EOF
-    cat $O/inner/tree-held.json
+    if [ $rc = 0 ]; then
+      challenger_audit $O/inner/challenger $DD/inner/s*/session || rc=1
+      cp $O/inner/challenger/audit.json $O/inner/tree-held.json
+    fi
   fi
   return $rc
 }

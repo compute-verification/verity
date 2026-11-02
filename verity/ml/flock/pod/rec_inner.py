@@ -83,7 +83,8 @@ def _shape(out: Path, low, sub_id: str, n: int, part: dict) -> dict:
     blocks = -(-n // G)
     return {"subcircuit": sub_id, "unit": low.name, "n": n, "vus_per_block": G, "k_log": meta["k_log"],
             "units_per_vu": meta["units_per_vu"], "unit_log": meta["unit_log"], "unit_rows": low.layout.useful,
-            "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "blocks": blocks,
+            "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "unit_ands": low.layout.counts["ands"],
+            "blocks": blocks,
             "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "leaf_scheme": meta["leaf_scheme"]["id"],
             "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text), "partition_digest": P.digest(part),
             "program_sha512": part["program"], **({"registration": meta["registration"]} if "registration" in meta else {})}
