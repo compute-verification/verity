@@ -1335,7 +1335,7 @@ theorem takeAt_ok {n : ℕ} {b : Bool} {cN cP : Cfg} {p : Masker} {f : Except St
     cases b with
     | true =>
       simp only [↓reduceIte] at h
-      exact Or.inr (Or.inl ⟨hn, rfl, h⟩)
+      exact Or.inr (Or.inl ⟨hn, rfl, (bind_rankStop_ok h).1⟩)
     | false =>
       simp only [Bool.false_eq_true, ↓reduceIte] at h
       cases ha : p.answer cP cs with
@@ -1376,7 +1376,7 @@ theorem repOf_add_two {x : Msg} {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
 
 open Loop in
 /-- **At a rep's round past its first the loop's frame checks it at the state the last coins leave**: the state of
-the same rep, which released the last round. -/
+the same rep, which released the last round, past the rank stop. -/
 theorem ofLoop_frameAnswer_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -1388,8 +1388,8 @@ theorem ofLoop_frameAnswer_same (T : ZKMal.CoinLayer.TableData)
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
     (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1) :
     (ofLoop T L₀ real).frameAnswer x ρ (e0 :: h1) =
-      (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
-        (coinsAt x (e0 :: h1)) := by
+      ((progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
+        (coinsAt x (e0 :: h1)) >>= rankStop ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))) := by
   obtain ⟨q', rfl⟩ : ∃ q', q = q' + 1 := by
     rcases q with _ | q'
     · rw [locate_zero] at hj
@@ -1467,6 +1467,7 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
     · cases hA
   rw [ofLoop_frameAnswer_same T L₀ real x ρ (m0, r0) h1 hx (by rw [← hcs1, List.length_map] at hq1; exact hq1) hj,
     hcs1] at hF
+  replace hF := (bind_rankStop_ok hF).1
   have hsch : schedOf (real x w ρ) x cs = some (rsched.getD (j + 1) (.empty, 0)).1 := by
     have := schedOf_eq (real x w ρ) x cs hx hq1 (by rw [hk1]; exact hreal) (by rw [hk1, hj]; exact hrs0)
       (by rw [hj]; exact hlt)
