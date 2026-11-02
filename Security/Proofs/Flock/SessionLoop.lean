@@ -25,6 +25,7 @@ import Proofs.Flock.Claims.ZK.RepCutFw
 import Proofs.Flock.Claims.ZK.FinishSwMkAny
 import Proofs.Flock.Claims.ZK.FinishFwL0
 import Proofs.Flock.SessionLoop.FinishIsLoop
+import Proofs.Flock.SessionLoop.Phase
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
@@ -39,6 +40,13 @@ which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the l
 whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
 (`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`), and whose `FinishIs`
 holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` and `SwCausal` (`Loop.finishIs`).
+
+`SessionLoopZKDeployed` is over every worker. Its premises on the worker (`LiveRoundEq`, `FillRoundEq`) read it in the
+algebraic phase only (`Proofs.Flock.SessionLoop.Phase`): a worker that, until the algebraic phase's last coins, reads
+only the nonce, what the workers see of the statement's tables (`RefSession.seenOf`, what `vs` reads) and the answers as
+coins (`Loop.PhaseBlind`) is `Loop.phased` at an algebraic phase's worker, whatever it reads after them
+(`Loop.PhaseBlind.exists_phased`), and the premises at it are the premises at that worker as a pad-blind one
+(`Loop.liveRoundEq_phased`, `Loop.fillRoundEq_phased`).
 -/
 
 namespace Claims.ZKServer.Loop
