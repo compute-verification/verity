@@ -68,7 +68,9 @@ the prover's bytes:
 A refusal answers the prover `Resp::Refused(WHY)` and stops the session: every request after it is refused for the same
 reason without asking the auditor (`State.request`), `Ping` alone answered `Resp::Ok` by the loop, so nothing of the
 session reaches the auditor after its stop, and the auditor's connection closes at the session's end as at any other
-stop. No coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only moves frames.
+stop. No coin after a refused one reaches the prover. The session ends at its `Finish`, whatever the loop decided of it:
+once the prover has its verdict or refusal, the loop reads nothing more of the session and closes both connections, so
+no `Finish` and no proof leaves twice. `kind` and `State` are pure; `cmd` only moves frames.
 
 The release side (live PROTOCOL.md §10.5) is `core-firewall session`'s, around this loop (`run` with a `Hold`): a held
 session's `Ping`s are answered here until its first other request, which the hold admits or refuses before anything
@@ -549,7 +551,8 @@ def ownProofs (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : 
 
 /-- **A session's relay** once it reaches the auditor `a` (`serve`), from its first request `first` if the hold read it:
 each request decided and its own frame sent at its place (`State.request`, the prover's `Proof`s dropped and its `Ping`s
-answered by the loop), nothing after a stop, and with a hold the loop's proofs and `Finish` held for `Hold.barrier`.
+answered by the loop), nothing after a stop, the session ended at its `Finish` whatever its outcome, and with a hold
+the loop's proofs and `Finish` held for `Hold.barrier`.
 `phase` is where a held session stands, and `ended` why it ended if the hold has no outcome of it. -/
 def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : Nat)
     (p : Socket.Client) (hold : Option Hold) (a : Socket.Client) (first : Option ByteArray) (phase : IO.Ref Phase)
@@ -597,16 +600,13 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
           phase.set .done
           h.sent (.ok (accepts r))
           sendFrame p r
-        break
       | none =>
         match stopped with
         | some why =>
-          let (st', out) := st.refuse why
-          st := st'
           if complete then
             sendFrame a FINISH
             let some _ ← recvFrame a | ended.set "the auditor ended the session"; break
-          sendFrame p out
+          sendFrame p (refused why)
         | none =>
           for pf in held do
             sendFrame a pf
@@ -615,7 +615,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
           sendFrame a FINISH
           let some r ← recvFrame a | ended.set "the auditor ended the session"; break
           sendFrame p r
-        continue
+      break
     match kind f with
     | .error e =>
       sendFrame p (refused (st.stop.getD s!"{Coins.STOP}{e}"))
@@ -701,12 +701,12 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
       sendFrame p out
 
 /-- **One session**, the `sid`-th: the prover's connection `p`, relayed on a connection of its own to the auditor at
-`auditor` until either side closes. Each request is read whole, decided (`kind`, `State.sendHello`, `State.request`, a
-`Round` stepped through its rep's frame in `reg` at the schedule's place, `Frames.round`, a `Commit` against the tables'
-level 0 `l0s`, `Level0.commit`) and only then sent, as the loop's own frame; a `Round`'s coins, once opened
-(`State.answer`), are its frame's (`Frames.coins`) before the prover receives them, and the proofs, the loop's
-finish's (`ownProofs`), leave only once every rep's frame finished (`Frames.finish`): where one stopped, `Finish` leaves
-alone once the schedule's last opening has, and the prover is refused.
+`auditor` until either side closes or the prover has the answer to its `Finish`. Each request is read whole, decided
+(`kind`, `State.sendHello`, `State.request`, a `Round` stepped through its rep's frame in `reg` at the schedule's place,
+`Frames.round`, a `Commit` against the tables' level 0 `l0s`, `Level0.commit`) and only then sent, as the loop's own
+frame; a `Round`'s coins, once opened (`State.answer`), are its frame's (`Frames.coins`) before the prover receives
+them, and the proofs, the loop's finish's (`ownProofs`), leave only once every rep's frame finished (`Frames.finish`):
+where one stopped, `Finish` leaves alone once the schedule's last opening has, and the prover is refused.
 
 With a hold `h`, the session is admitted first (`admitted`), and only then is the auditor reached. At its `Finish` the
 hold decides (`Hold.barrier`, given the loop's own refusal and how many of its own proofs the loop has, two a table): a

@@ -757,9 +757,11 @@ stream in table order, rep 0's before rep 1's, at the coin counts the verifier's
 auditor, and so is a `Finish` before the schedule's last opening. A request it refuses is answered
 `Refused("PROVER-STOPPED: …")` and stops the session: every request after it is refused for the same reason without
 reaching the auditor, a `Ping` alone answered `Ok` by the loop, so nothing of the session reaches the auditor after its
-stop, and the auditor's connection closes at the session's end as at any other stop. The reps' frames are the loop's own, and the loop drives them
-(`Frames`): it prints `FRAMES 127.0.0.1:PORT` after its `LISTENING` line, and a connection there whose first line is
-`rep SESSION I R` starts table `I`'s rep `R`'s frame for the live session named `SESSION` (`Frames.startRep`,
+stop, and the auditor's connection closes at the session's end as at any other stop. The session ends at its `Finish`,
+whatever the loop decided of it: once the prover has its verdict or refusal the loop reads nothing more of it and closes
+both connections, so no `Finish` and no proof leaves twice. The reps' frames are the loop's own, and the loop drives
+them (`Frames`): it prints `FRAMES 127.0.0.1:PORT` after its `LISTENING` line, and a connection there whose first
+line is `rep SESSION I R` starts table `I`'s rep `R`'s frame for the live session named `SESSION` (`Frames.startRep`,
 `firewall::LoopRep::start`), at the statement's start (`Drive.start`), and is answered `ok 64` and the pads' root alone:
 the samples the loop made for the rep (the pads `h`, `μ`, their padding, `τ`'s salt and the pads tree's salts) never
 leave it. Its frame masks the rep's rounds with them, and its finish proves the rep with them (`Finish.drawsOf`). Every
@@ -1027,7 +1029,8 @@ came never reaches the auditor. A `Commit`, `Link` or `Finish` out of its place 
 on the coin server (§10.3), so it reaches the auditor as a plain stop. An outer session through the Lean session loop
 (§10.4) is fixed the same way: `Register`, `Hello`, the first rep stream's `Open`, `Commit`, `Link`, then each rep stream's
 rounds and the next one's `Open`, the proofs, `Finish`, each frame that carries no coin once, at its place; anything else
-is refused before it reaches the auditor, a `Ping` never leaves, and after a stop nothing more does. What a worker still chooses is
+is refused before it reaches the auditor, a `Ping` never leaves, and after a stop or the session's `Finish` nothing
+more does. What a worker still chooses is
 whether and where a session stops: a refusal it provokes, or a session that ends without `Finish` (a crash, a hang, a cut
 connection). The auditor sees every stop:
 - inner phase: `rec_live` writes every session it serves, with `end` `finish` or `stop` (a refusal and a session that ends
