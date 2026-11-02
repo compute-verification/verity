@@ -127,7 +127,7 @@ The run of record takes the network chain end to end on the gate's machines:
 1. The network certifier signs every record with its LMS key, on an auditor machine, never on the prover's node.
 2. It certifies each execution phase's records and signs each sampling period's clock sync (a clock certificate).
 3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
-4. The consistency proof blocks are proved by sampled Flock `--zk` and decided by the Lean verifier of record: N2's
+4. The consistency proof blocks are proved by sampled Flock `--zk` and decided by the Lean verifier: N2's
    (each execution phase's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
    reads.
 5. The verdict is the per-sampling-block acceptance that the certification period's leak bound reads.
@@ -149,7 +149,7 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.LinkWindow.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
 | endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
-| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
+| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 

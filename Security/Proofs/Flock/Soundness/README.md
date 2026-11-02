@@ -13,7 +13,7 @@ is specified in `../../../../verity/ml/flock/verifier/PROTOCOL.md`. The work is 
 
 ### 1.1 Soundness at the oracle layer (`table_sound`, `table_sound_fast100`, `table_sound_fast100_34_35`)
 
-Consider one table of a session, run as the verifier of record runs it: the `fast100` profile, run twice on one committed
+Consider one table of a session, run as the verifier runs it: the `fast100` profile, run twice on one committed
 root, with live coins, for any statement of PROTOCOL.md §16. For every prover strategy, the probability of this event is
 at most `tableError(fast100 m, shape)`:
 
@@ -184,7 +184,7 @@ link term per audit.
 | Sampled audits: the integrity profile over any partition and sampling design, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
-| The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: the IR comparison tests on samples, and the typed layout's proof (`Types.Dag.layout_sound`, `TmplValue.defComputes_of_layout`) once a template's rows are a checked layout's (`assumption-notes/template-rows.md`) |
+| The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: the lowering comparison tests on samples, and the typed layout's proof (`Types.Dag.layout_sound`, `TmplValue.defComputes_of_layout`) once a template's rows are a checked layout's (`assumption-notes/template-rows.md`) |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `python tools/verity/lean/check.py Security/Proofs` to check every declaration (`lean-audit.json`).
