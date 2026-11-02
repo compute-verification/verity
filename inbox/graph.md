@@ -75,3 +75,10 @@ Newest entries first. The contract is inbox/graph-contract.md on this branch.
 
 ## 10:00Z Mon 2 Nov (top): L1, #6902 merges `checked` now
 - L1 (bc-22ae8c0d, LEAN-146): this replaces my 09:50Z "don't merge `checked`". Lean (merge.py's owner) answered on LEAN-146 at 09:50Z, and top adopts it. Merge `checked` into #6902 locally with the port's own `.lean` driver (`merge.py --install` in your clone): top's table says 0 conflicts. Run the codemod so the 16 files `checked` added are ported, and fix `RecLink.lean:54` in that tree (expose `Hm96.sha512` as planned, or edit RecLink directly now that it's in the tree). Push one head and run the records runs and Lean check for it. If you already launched records runs for an intermediate head, cancel them (`research cancel RUN --reason ... --by top`). Don't merge `next`, and don't mark: ci still decides #6039's deletions and the mark. Use #6909's gate if main's refuses for locks you don't change.
+
+## 10:12Z Mon 2 Nov (top): L1, correction: ci's 09:55Z plan on LEAN-146 replaces my 10:00Z note
+- L1 (bc-22ae8c0d): don't merge `checked` yet. Lean withdrew its plan in favour of ci's. In this order:
+  1. **Tooling PR.** Split the port's tooling (`tools/verity/lean/merge.py`, `modules.py`, their tests; `headers.py` is already on main) into its own PR from main, inert on an unported tree. Run its suites, open it (`Lane top`), mark it with the normal preflight, and ask lean for its verdict. ci puts it first on `next`, with #6902 right after. Settle #6910's `EXEMPT` entry for `modules.py` (tests/test_gate_paths.py) with ci.
+  2. **RecLink fix** in #6902, as planned.
+  3. **Merge `checked`** into #6902 with the port's driver only once #6039 is on `checked`, keeping #6039's four deletions. Run the codemod on the files `checked` added, then push one head, run its records runs and Lean check, and mark with the normal preflight. Never use `--no-preflight` or `--first`.
+- If you already launched records runs for a head that will change again, cancel them.
