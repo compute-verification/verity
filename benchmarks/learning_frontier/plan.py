@@ -31,6 +31,8 @@ CONFIGS = (("adamw", 0.0, (1.5e-4, 5e-4, 1.5e-3)), ("muon", 0.0, (1.5e-4, 5e-4, 
            ("lora", 1e7, (5e-4, 1.5e-3, 5e-3)), ("lora", 1e8, (5e-4, 1.5e-3, 5e-3)), ("icl", 0.0, ()))
 EVALS = 20
 BATCH = 64
+#: sequences per forward pass where the whole batch doesn't fit one GPU (first curves: l at 32)
+MICRO = {"l": 32}
 
 
 def label(method: str, update_bytes: float) -> str:
@@ -81,7 +83,7 @@ def chain(size: str, fraction: float, method: str, update_bytes: float, rates: t
     each a chain of leases."""
     rates = rates or next((r for m, b, r in CONFIGS if m == method and b == update_bytes), ())
     tag = f"{size}-p{round(100 * fraction):03d}-{label(method, update_bytes)}"
-    extra = f" --update-bytes {update_bytes:g}" if method == "lora" else ""
+    extra = (f" --update-bytes {update_bytes:g}" if method == "lora" else "") + (f" --micro {MICRO[size]}" if size in MICRO else "")
     one = ('LEASED_SCRIPT=speedrun.py bash benchmarks/learning_frontier/leased.sh "$P" --data "$D" --start "$S" '
            '--start-sha256 "$H" --ckpt-root "$C" --method ' + method + extra)
     if method == "icl":
