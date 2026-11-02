@@ -13,7 +13,8 @@ valid record (the coordinator's 19:50Z rule). It writes into DIR:
 - `frontier.md` and `frontier.json`: Fit, Slowdown's ρ and Security's S = W*/H per start, target and policy cell, with
   W*'s route and its x0 and s* bounds and best-known values (te_core.frontier's `formalism_report`);
 - the five panels, each `<name>.json` (a panels-route body) and `<name>.png` drawn from it (te_core.plots), and
-  `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT;
+  `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT
+  (its one training panel is te_core.panels', which reads the ledger through `arguments` and `load`);
 - `formalism.jsonl`: each scored row's attached block and its source.
 
 The block holds the per-record quantities of covert_witness's `analysis/rescore_v1.py` where that file is present
@@ -107,8 +108,8 @@ def attach(rows: list[dict], blocks: dict[tuple, tuple[dict, str | None]]) -> tu
     return out, source
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """The ledger and analysis options `load` reads (te_core.panels takes them too)."""
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--root", type=Path, default=None, help="te_core's ledger (default $TE_LEDGER)")
     ap.add_argument("--pin", action="append", default=None, help="a measurement commit, repeated (default pin.py's)")
@@ -116,30 +117,43 @@ def main(argv=None) -> int:
     ap.add_argument("--analysis", type=Path, default=ANALYSIS, help="the per-record quantities (rescore_v1.py)")
     ap.add_argument("--scorer", type=Path, default=SCORER, help="the scorer's directory, which the analysis reads")
     ap.add_argument("--stubs", action="store_true", help="te_core.formalism's stubs for every row, no analysis")
-    ap.add_argument("--policy", default=policy.REFERENCE)
-    ap.add_argument("--drop", type=float, default=0.01)
-    ap.add_argument("--g", type=float, default=None)
-    ap.add_argument("--from-scratch", type=Path, default=None)
     ap.add_argument("--source", default=None, help="the panels' `source` (default this command and the pin)")
     ap.add_argument("--manifest", type=Path, default=policy.MANIFEST)
-    a = ap.parse_args(argv)
+    return ap
+
+
+def load(a) -> dict:
+    """The ledger's rows with the analysis's blocks attached (`attach`; the gate factors cached in `a.out`), the pin,
+    the starts' shapes, which rows to score (`keep`: those the analysis covers, None for every row) and how the
+    quantities were got (`how`)."""
     ledger = Ledger(a.root)
     rows = ledger.index()
     if a.facts:
         rows = frontier.with_facts(rows, json.loads(a.facts.read_text()))
-    pin = tuple(a.pin) if a.pin else frontier.pinned()
-    shapes = policy.starts(a.manifest)
     a.out.mkdir(parents=True, exist_ok=True)
     use = not a.stubs and a.analysis.exists()
     blocks = analysed(a.analysis, a.scorer, ledger.root, a.out / "analysis-gates.json") if use else {}
     rows, source = attach(rows, blocks)
-    keep = (lambda r: source[r["id"]] == "analysis") if use else None
+    how = str(a.analysis) if use else "stubs: " + ("--stubs" if a.stubs else f"no {a.analysis} in this checkout")
+    return {"rows": rows, "pin": tuple(a.pin) if a.pin else frontier.pinned(), "shapes": policy.starts(a.manifest),
+            "source": source, "keep": (lambda r: source[r["id"]] == "analysis") if use else None, "use": use,
+            "how": how}
+
+
+def main(argv=None) -> int:
+    ap = arguments(argparse.ArgumentParser(description=__doc__.split("\n\n")[0]))
+    ap.add_argument("--policy", default=policy.REFERENCE)
+    ap.add_argument("--drop", type=float, default=0.01)
+    ap.add_argument("--g", type=float, default=None)
+    ap.add_argument("--from-scratch", type=Path, default=None)
+    a = ap.parse_args(argv)
+    d = load(a)
+    rows, pin, shapes, source, keep, use, how = (d[k] for k in ("rows", "pin", "shapes", "source", "keep", "use", "how"))
     rep = frontier.formalism_report(rows, pin, shapes, keep)
     left_out = frontier.status(rows, pin)
     valid = [r for r in rows if r["id"] not in left_out]
     kept = [r for r in valid if keep is None or keep(r)]
     not_analysed = sorted(r["id"] for r in valid if keep is not None and not keep(r))
-    how = str(a.analysis) if use else "stubs: " + ("--stubs" if a.stubs else f"no {a.analysis} in this checkout")
     (a.out / "frontier.json").write_text(json.dumps({"pin": list(pin), "left_out": left_out, "quantities": how,
                                                      "not_analysed": not_analysed} | rep, indent=1, default=str) + "\n")
     (a.out / "frontier.md").write_text(frontier.formalism_markdown(rep) + "\n")

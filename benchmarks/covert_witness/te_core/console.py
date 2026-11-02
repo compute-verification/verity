@@ -5,9 +5,9 @@
 A body is at most `BODY_MAX` bytes (compact JSON, no NaN) and a note at most `NOTE_MAX` characters. Each panel keeps
 its first cut that fits (`CUTS`, in order, the first the whole panel) with numbers to 4 significant digits (losses 6),
 and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the uncut panel is DIR/<name>.json beside
-it. The console's one training panel is `training/frontier-branches`: te_core.plots' five panels are off it, so nothing
-here PUTs them. `put` PUTs one panel to `PANELS_URL`/<id> with a Cursor OIDC token (research.slack's `oidc_token`,
-imported only there) and returns its HTTP status.
+it. The console's one training panel is `training/frontier-branches` (te_core.panels, which PUTs it with `put`):
+te_core.plots' five panels are off it, so nothing here PUTs them. `put` PUTs one panel to `PANELS_URL`/<id> with a
+Cursor OIDC token (research.slack's `oidc_token`, imported only there) and returns its HTTP status.
 """
 from __future__ import annotations
 
