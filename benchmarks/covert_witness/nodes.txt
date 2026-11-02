@@ -1,6 +1,8 @@
 # covert_witness's nodes (launch.py, promote.py; te_core.launch.nodes): `NODE pool=GPU_POOL cpu=CPU_POOL`, one a line,
 # taken in turn; vy-dc-h200* is refused. A node is listed once its gpu pool takes training runs and `prep.sh` passed there.
 vy-nebius-2 pool=gpu cpu=research
-# Probed 2 Nov 10:18Z with `research run --on NODE`: vy-nebius-1 takes runs only through the network, proofs and
-# soundness pools; vy-nebius-3 only through check slots (slot.py), with no pools; vy-nebius-4 timed out over ssh; no
-# RunPod H100 is registered (machines.d at 10:10Z). None is listed until it has a pool training may use.
+# vy-nebius-1 and -3 take training runs only through their gpu pools (8 and 4 cores a slot), so their CPU work (prep.sh,
+# promote.py's sealed.py decide) runs there too; prep.sh passed on each at 12:27Z (r20261102-120302-3619,
+# r20261102-120324-0031), their v2.2 sets prepare.SET_SHA256's. vy-nebius-4 timed out over ssh at 10:18Z.
+vy-nebius-1 pool=gpu cpu=gpu
+vy-nebius-3 pool=gpu cpu=gpu

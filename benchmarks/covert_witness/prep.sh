@@ -5,8 +5,8 @@
 #   research run --on NODE --project verity --source . --pool CPU_POOL --as training --pool-wait 1800 --timeout 80m \
 #     --declared-output 'out/*' --send /tmp/cw-starts.tar -- bash benchmarks/covert_witness/prep.sh
 #
-# It installs the starts (from the sent tar, else the store), builds the held-out sets and Pythia's stream (data.py),
-# registers the sealed start (prepare.register_pythia) and records their retention, each step skipped when its output is
+# It installs the starts (from the sent tar, else the store), builds the held-out sets of data version `sealed.DATA` and
+# Pythia's stream (data.py; the sets checked against prepare.SET_SHA256 and left read-only), registers the sealed start (prepare.register_pythia) and records their retention, each step skipped when its output is
 # already in place, so on a prepared node it only checks (and needs no tar). The node needs learning_frontier's GPT-2
 # stream first. List the node in nodes.txt (`NODE pool=GPU_POOL cpu=CPU_POOL`) once this passes.
 set -eu
@@ -38,17 +38,26 @@ tar="${RESEARCH_RUN_DIR:-}/inputs/cw-starts.tar"
 if [ -f "$tar" ]; then python3 starts_store.py install --tar "$tar" --keep; else python3 starts_store.py install --keep; fi
 
 echo "--- held-out sets and Pythia's stream"
-if [ -f "$R/heldout/data.json" ] && [ -f "$R/train/pythia.bin" ]; then echo "built: $R/heldout/data.json"
-else "$P" data.py --threads "$(nproc)" --manifest-out "$OUT"; fi
+data_json=$(CW_DEVICE=cpu "$P" -c "import prepare; print(prepare.DATA_JSON)")
+sets=$(CW_DEVICE=cpu "$P" -c "import prepare; print(' '.join(str(d) for d in prepare.SET_DIRS.values()))")
+if [ -f "$data_json" ] && [ -f "$R/train/pythia.bin" ]; then echo "built: $data_json"
+else
+  # an earlier version's sets may have been made read-only, with their parents
+  for d in "$R/heldout" "$S/heldout" "$R/train"; do [ -d "$d" ] && chmod u+w "$d"; done
+  "$P" data.py --threads "$(nproc)" --manifest-out "$OUT"
+fi
+chmod -R a-w $sets
 CW_DEVICE=cpu "$P" - <<'EOF'
 import prepare
 for split in (prepare.SEARCH_POOL, prepare.PROMOTION, prepare.FINAL):
+    if set(prepare.manifest(split)["tokenizers"]) != set(prepare.SET_SHA256[split]):
+        raise SystemExit(f"prep: the {split} set's tokenizers are not prepare.SET_SHA256's")
     for tok in prepare.manifest(split)["tokenizers"]:
         prepare.held_out(split, tok)
 toks, man = prepare.held_out(prepare.SEARCH_POOL, "gpt2")
 if int(prepare.token_bytes("gpt2")[toks[1:]].sum()) != man["bytes"]:
     raise SystemExit("prep: the search pool's tokens' bytes are not its documents' bytes")
-print("held-out sets match their manifests")
+print("held-out sets match their manifests and prepare.SET_SHA256")
 EOF
 
 echo "--- the sealed start"
