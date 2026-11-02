@@ -18,7 +18,7 @@ bits per byte at a fixed charged budget, by editing `train.py` in this directory
 - **k** = unlimited: the most a block may import beyond theta. Counted: the carry it receives (canonical serialization: per
   tensor its name, 3 bytes, 8 per dimension, and the raw values), every sequence it takes (`ctx.sequences(n)`, 1025 tokens
   x 16 bits each), and its 64-bit seed. `ctx.bits_of(carry)` and `ctx.sequence_bits(n)` compute it; `ctx.k_bits` is k.
-- **Budget**: 1000 blocks plus the export block, 1001 c, at every start (about 6-10 GPU-minutes at m). Fixed; don't
+- **Budget**: 1000 blocks plus the export block, 1001 c, at every start (the seeds took 4-8 GPU-minutes at m50, 3-6 at s50). Fixed; don't
   pass `--budget-blocks` to compare candidates.
 - **Score**: the evaluator (`prepare.py evaluate`, its own process) loads the exported entry onto the start, refuses it if
   its forward costs more FLOPs per 1024-token window than the start's (the eval-compute cap per byte), and scores every
@@ -36,6 +36,8 @@ block's 64-bit seed; torch's global RNG is seeded from it too), `ctx.block`, `ct
 ## The seed
 
 The seed is full-parameter AdamW (`HP opt=adamw`, 64 sequences per block, exactly c). `opt=muon` switches the hidden matrices to Muon (Newton-Schulz orthogonalized momentum, AdamW on the embedding and norms); its extra matrix products are counted, so it takes `muon_seqs` = 60 sequences per block. Directions: the rate and its schedule, Muon's rate and momentum, batch per block, weight decay, warmup, and anything else a full-parameter method can do in c per block.
+
+The seed's score at m50, seed 0 (start 1.1281 SEARCH bits per byte, charged 1001 c = 4.327e16 FLOPs): AdamW 1.0832 (art:b09bab3f46ef3fa4cb6780e479f030951848b75f69ad6794c71b5f7ca8099ad7), Muon 1.0803 (art:6ac70e41062d6d957ad4b0b63663e6b48d9823378fefc381be86a50f253e7ffd); at s50 AdamW 1.1947, Muon 1.1710.
 
 ## The loop
 

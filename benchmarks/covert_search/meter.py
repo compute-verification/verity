@@ -53,7 +53,7 @@ import prepare
 from prepare import CLASSES, CTX, ROOT, TOKEN_BITS, TrainStream, build_model, flop_counter, start_info
 
 HERE = Path(__file__).resolve().parent
-BUDGET_BLOCKS = 1000             # the fixed charged budget per candidate: 1000 c (about 10 GPU-minutes at m)
+BUDGET_BLOCKS = 1000             # the fixed charged budget per candidate: 1000 c (the seeds took 4-8 GPU-minutes at m50)
 SEED_BITS = 64
 KEEP_CARRY_BITS = 8 * 16_000_000
 DTYPES = {torch.float32: 0, torch.float16: 1, torch.bfloat16: 2, torch.int64: 3, torch.int32: 4, torch.int16: 5,

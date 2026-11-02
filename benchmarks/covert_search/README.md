@@ -29,6 +29,14 @@ charged compute is blocks × c. The budget per candidate is 1000 blocks plus the
 block counts against k: the carry, at its canonical serialization; the data, at 16 bits per token; and the block's 64-bit
 seed. `meter.py`'s docstring has the rest.
 
+The registered starts (`prepare.py show` on the node):
+
+| start | parameters | c (FLOPs) | budget, 1001 c | forward per window (the eval cap) | SEARCH bits per byte |
+|---|---|---|---|---|---|
+| `s50`, `s100` | 45,029,888 | 2.0590e13 | 2.061e16 | 1.0509e11 | 1.2570, 1.1654 |
+| `m50`, `m100` | 95,269,632 | 4.3229e13 | 4.327e16 | 2.2086e11 | 1.1281, 1.0562 |
+| `smol` | 134,515,008 | 6.9115e13 | 6.918e16 | 3.4789e11 | 0.8540 |
+
 ## Running
 
 Preparation, once, by the integrator, on vy-nebius-2 (`research run --on vy-nebius-2 --pool research --source . --cwd source

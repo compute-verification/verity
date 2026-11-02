@@ -18,7 +18,7 @@ bits per byte at a fixed charged budget, by editing `train.py` in this directory
 - **k** = 10^5 bytes (8e5 bits): the most a block may import beyond theta. Counted: the carry it receives (canonical serialization: per
   tensor its name, 3 bytes, 8 per dimension, and the raw values), every sequence it takes (`ctx.sequences(n)`, 1025 tokens
   x 16 bits each), and its 64-bit seed. `ctx.bits_of(carry)` and `ctx.sequence_bits(n)` compute it; `ctx.k_bits` is k.
-- **Budget**: 1000 blocks plus the export block, 1001 c, at every start (about 6-10 GPU-minutes at m). Fixed; don't
+- **Budget**: 1000 blocks plus the export block, 1001 c, at every start (the seeds took 4-8 GPU-minutes at m50, 3-6 at s50). Fixed; don't
   pass `--budget-blocks` to compare candidates.
 - **Score**: the evaluator (`prepare.py evaluate`, its own process) loads the exported entry onto the start, refuses it if
   its forward costs more FLOPs per 1024-token window than the start's (the eval-compute cap per byte), and scores every
@@ -36,6 +36,8 @@ block's 64-bit seed; torch's global RNG is seeded from it too), `ctx.block`, `ct
 ## The seed
 
 The seed is MeZO (zeroth-order SPSA) on the norm gains, its update kept only as a seed log (32-bit seed and 32-bit projected gradient per step, rebuilt every block), 2 steps per block on 24 sequences (49 kB of data). Note that one block can't even import a full 64-sequence batch (131 kB): data and update share k. Directions: the scope (`all` perturbs every parameter; the rebuild then costs GPU time, not counted FLOPs), eps and the rate, steps per block, first-order updates of a tiny parameter set carried directly (norm gains are 13k values at m), quantized carries. A soft prompt is refused by the evaluator: prefix positions raise the forward's FLOPs per window over the start's cap.
+
+The seed's score at m50, seed 0 (start 1.1281 SEARCH bits per byte, charged 1001 c = 4.327e16 FLOPs): 1.1277 at lr 1e-2 (art:6d618e9b0ea906208bfc3aeb7c30a87b45397088979ce98228b0d1e6d03c9b12); at s50 1.2566.
 
 ## The loop
 

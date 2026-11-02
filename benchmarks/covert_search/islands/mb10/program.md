@@ -18,7 +18,7 @@ bits per byte at a fixed charged budget, by editing `train.py` in this directory
 - **k** = 10^7 bytes (8e7 bits): the most a block may import beyond theta. Counted: the carry it receives (canonical serialization: per
   tensor its name, 3 bytes, 8 per dimension, and the raw values), every sequence it takes (`ctx.sequences(n)`, 1025 tokens
   x 16 bits each), and its 64-bit seed. `ctx.bits_of(carry)` and `ctx.sequence_bits(n)` compute it; `ctx.k_bits` is k.
-- **Budget**: 1000 blocks plus the export block, 1001 c, at every start (about 6-10 GPU-minutes at m). Fixed; don't
+- **Budget**: 1000 blocks plus the export block, 1001 c, at every start (the seeds took 4-8 GPU-minutes at m50, 3-6 at s50). Fixed; don't
   pass `--budget-blocks` to compare candidates.
 - **Score**: the evaluator (`prepare.py evaluate`, its own process) loads the exported entry onto the start, refuses it if
   its forward costs more FLOPs per 1024-token window than the start's (the eval-compute cap per byte), and scores every
@@ -36,6 +36,8 @@ block's 64-bit seed; torch's global RNG is seeded from it too), `ctx.block`, `ct
 ## The seed
 
 The seed trains rank-r factor pairs on the hidden matrices with AdamW and merges them at export; `plan` picks the largest rank whose carry (factors and both AdamW moments, fp32) and 64 sequences fit under k. Directions: what the carry holds and at what precision (bf16 or 8-bit moments buy rank), which matrices, more sequences per block (the frozen weights take no weight gradient, so 64 sequences use about 2/3 of c), the rate, re-drawing or merging factors (a merged factor is still carry: the update since theta crosses every boundary), other parameterizations of a small update.
+
+The seed's score at m50, seed 0 (start 1.1281 SEARCH bits per byte, charged 1001 c = 4.327e16 FLOPs): 1.1128 (art:6c6c271f6f2a864e228ddde1cf1d2510aa3a952e749fa21ad520854ff949e9f4); at s50 1.2326.
 
 ## The loop
 

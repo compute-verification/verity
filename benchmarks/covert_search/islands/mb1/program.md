@@ -18,7 +18,7 @@ bits per byte at a fixed charged budget, by editing `train.py` in this directory
 - **k** = 10^6 bytes (8e6 bits): the most a block may import beyond theta. Counted: the carry it receives (canonical serialization: per
   tensor its name, 3 bytes, 8 per dimension, and the raw values), every sequence it takes (`ctx.sequences(n)`, 1025 tokens
   x 16 bits each), and its 64-bit seed. `ctx.bits_of(carry)` and `ctx.sequence_bits(n)` compute it; `ctx.k_bits` is k.
-- **Budget**: 1000 blocks plus the export block, 1001 c, at every start (about 6-10 GPU-minutes at m). Fixed; don't
+- **Budget**: 1000 blocks plus the export block, 1001 c, at every start (the seeds took 4-8 GPU-minutes at m50, 3-6 at s50). Fixed; don't
   pass `--budget-blocks` to compare candidates.
 - **Score**: the evaluator (`prepare.py evaluate`, its own process) loads the exported entry onto the start, refuses it if
   its forward costs more FLOPs per 1024-token window than the start's (the eval-compute cap per byte), and scores every
@@ -36,6 +36,8 @@ block's 64-bit seed; torch's global RNG is seeded from it too), `ctx.block`, `ct
 ## The seed
 
 Same seed as mb10 (copied, yours to change): `plan` narrows the scope (every hidden matrix, then attention, then v and o) until rank 1 fits, beside 64 sequences (131 kB of the 1 MB). Directions: as mb10's, plus the trade between data per block and update size, and updates that aren't low-rank factors (norm gains, biases-as-shifts, sparse or quantized deltas).
+
+The seed's score at m50, seed 0 (start 1.1281 SEARCH bits per byte, charged 1001 c = 4.327e16 FLOPs): 1.1229 (art:dc218b91a82bf4dc121ef93665f5db2091d1778dcc3a851ca206988da5c3c391); at s50 1.2453.
 
 ## The loop
 
