@@ -213,6 +213,18 @@ def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float) -> qf.QArra
     return qf.QArray(cb.to(torch.float16), s, (k + qmax).to(torch.uint8).view(-1), bits, g, tuple(v.shape))
 
 
+def check_decoder(theta: dict, name: str) -> None:
+    """Refuse `--declare` unless prepare.decode reads this island's CWQUAN1 as qformat.decode does."""
+    q = qat_quant(torch.randn(theta[name].shape, generator=torch.Generator().manual_seed(0)), "tern", -1, 1.0)
+    blob = qf.encode({name: {"kind": "delta", "q": q}}, {name: theta[name]})
+    try:
+        got = prepare.decode({name: theta[name]}, blob, device="cpu")
+    except ValueError as e:
+        raise SystemExit(f"quant: --declare needs prepare.decode to read CWQUAN1 ({e})")
+    if not prepare.same_bits(got[name].cpu(), qf.decode({name: theta[name]}, blob)[name]):
+        raise SystemExit("quant: prepare.decode reads CWQUAN1 differently from islands/quant/qformat.py")
+
+
 LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 HF_MATS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
 
@@ -429,6 +441,10 @@ def main() -> int:
                                                   "--variants, as ptq's do)")
     ap.add_argument("--qat-group", type=int, default=-1, help="qat: -1 one scale per tensor, 0 per row, else G entries")
     ap.add_argument("--qat-mult", type=float, default=1.0, help="qat: the scale over the group's mean |V|")
+    ap.add_argument("--declare", action="store_true",
+                    help="qat: declare each step's weights as one CWQUAN1 code from θ (prepare.declare_step), for the "
+                         "harness to credit; needs prepare.decode to read CWQUAN1. Put fp arms last: their steps aren't "
+                         "declared")
     ap.add_argument("--emit", choices=("full", "quan", "lora"), default="full",
                     help="E's format: encode_full, CWQUAN1, or (qlora --pow2) the bf16 lora format")
     ap.add_argument("--muon-lr", type=float, default=0.01)
@@ -457,6 +473,8 @@ def main() -> int:
         raise SystemExit("quant: ptq and qat emit full (prepare.decode reads neither lora codes nor CWQUAN1 for them)")
     if a.mode == "ptq" and len(arms) > 1:
         raise SystemExit("quant: --arms is qat's and qlora's (ptq's variants already share one training)")
+    if a.declare and a.mode != "qat":
+        raise SystemExit("quant: --declare is qat's")
     for x in arms:
         if a.mode == "qat" and x.qat != QAT_FP and not QAT_SCHEME.fullmatch(x.qat):
             raise SystemExit(f"quant: unknown qat scheme {x.qat!r}")
@@ -474,6 +492,8 @@ def main() -> int:
     embed = "embed" if rec["config"]["family"] == "lf" else "model.embed_tokens.weight"
     mats = [n for n in names if params[n].ndim == 2 and n != embed]
     rest = [n for n in names if n not in mats]
+    if a.declare:
+        check_decoder(theta, min(mats, key=lambda n: params[n].numel()))
     theta_dev = {n: theta[n].to(dev) for n in names}
     trainable = {"full": names}
     tokens = a.batch * prepare.EVAL_CTX
@@ -519,6 +539,10 @@ def main() -> int:
                 for grp in o.param_groups:
                     grp["lr"] = lr * frac
             rows = data.next(a.batch)
+            if a.declare and qarrays:
+                prepare.declare_step(qf.encode({n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
+                                               | {n: {"kind": "full", "t": params[n].detach()} for n in names
+                                                  if n not in qarrays}, theta))
             total = 0.0
             for i in range(0, a.batch, a.micro):
                 xb = rows[i: i + a.micro]
