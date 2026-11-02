@@ -5,9 +5,9 @@ import Proofs.Flock.SessionLoop.TakenVals
 
 `Loop.TakesTau` is a worker premise of `TakesVals`'s and `TakesFinalC`'s kind: at the inner proof's round 2 (the frame's
 state counts that round, and the worker's round is `τ`'s 64-byte commitment between its frame's header and `β`'s squeeze,
-the only shape `Frame.innerOwn` takes there), the commitment is the switched source's (`Masked.swSrcE`'s at the rep
-stream's table and rep), at the coins the openings open and the tape. Under `RowsOK` that commitment is the hiding leaf
-of the worker's view's `τ` under the rep's salt (`Masked.swSrcE_tauCom`).
+the only shape `Frame.innerOwn` takes there), the commitment is `vs`'s (`Loop.vsTau`, the switched source's at the rep
+stream's table and rep), at the coins the openings open and the tape. Where the rows hold that commitment is the hiding
+leaf of the worker's view's `τ` under the rep's salt (`Masked.swSrcE_tauCom`).
 
 `Loop.takesTau_valsWk`: `Loop.valsWk vs` meets it at every `vs` and every release whose `Finish` comes after the scheduled
 rounds, because `valsDev` sets round 2's commitment to `vs`'s (`Loop.setTau`); at the honest values at the session loop
@@ -28,8 +28,8 @@ namespace Loop
 /-- **The worker's `τ` commitment is the switched source's**: after every history `LiveRoundEq` reads (`0 < ops.length <
 refK x` openings, live, whose openings pass under the tape's nonce), where the frame takes the stream's coins at the
 inner proof's round 2 (`answered`, `Masker.inner`) and the worker's round `v` of rep stream `2j + r` is `τ`'s 64-byte
-commitment `w'` between its frame's header and `β`'s squeeze, `w'` is `Masked.swSrcE`'s `τ` commitment at `vs`'s values,
-at the coins the openings open and the tape. -/
+commitment `w'` between its frame's header and `β`'s squeeze, `w'` is `vs`'s `τ` commitment there (`vsTau`), at the
+coins the openings open and the tape. -/
 def TakesTau (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -45,10 +45,8 @@ def TakesTau (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     w'.size = 64 →
     v = (_root_.Flock.Transcript.header 5 0 64 ++ w' ++ _root_.Flock.Transcript.header 4 1 1).data.toList →
     L.rep x (ops.length + 1) = 2 * j.val + r.val →
-    w' = ((swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad
-        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) w
-      (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
-        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2))) t j.val).rep r.val).tauCom
+    w' = vsTau vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+      (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
 
 /-- At the inner proof's round 2 a round of that round's shape comes out of `setTau` with its commitment set. -/
 theorem setTau_inner2 {m : Masker} {t w' : ByteArray} {u : List UInt8} (hm : m.inner = some 2) (hw : w'.size = 64)
@@ -67,23 +65,9 @@ theorem inner2_inj {t t' : ByteArray} (h : (inner2 t).data.toList = (inner2 t').
   cases t'
   exact congrArg ByteArray.mk e
 
-theorem tauAt_eq (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
-    (L : LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
-    (x : Msg) (w : Flock.Wit)
-    (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
-    (h : List (Msg × Msg)) {j : Fin (jOf x)} {r : Fin 2} (hrep : L.rep x h.length = 2 * j.val + r.val) :
-    tauAt vs L x w ρ h = ((swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad
-        (h.tail.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) w
-      (vs x w ρ.1 ((CoinLayer.session Loop.loopNr Masked.dataE).pad
-        (h.tail.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2))) ρ.2 j.val).rep r.val).tauCom := by
-  have hr := r.isLt
-  unfold tauAt
-  rw [hrep, show (2 * j.val + r.val) / 2 = j.val by omega, show (2 * j.val + r.val) % 2 = r.val by omega]
-
 /-- **`valsWk` takes `vs`'s `τ` commitment**: at every `vs` and every release whose `Finish` comes after the scheduled
 rounds (`refK x < L.last x`), `valsWk vs L` meets `TakesTau`: where its round is the inner proof's round 2, `setTau`
-wrote `vs`'s commitment there (`tauAt`). -/
+wrote `vs`'s commitment there (`vsTauAt`). -/
 theorem takesTau_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -108,7 +92,7 @@ theorem takesTau_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVal
   have hs2 : v = (inner2 w').data.toList := hshape
   split at hvd
   · exact (inner2_inj (setTau_inner2 hi hw' (hvd.symm.trans hs2)).symm).trans
-      (tauAt_eq vs L x w (ν, t) ((m₀, ρ₀) :: ops) hrep)
+      (vsTauAt_eq vs L x w (ν, t) ((m₀, ρ₀) :: ops) hrep)
   · have e := congrArg List.length (hvd.symm.trans hshape)
     rw [ByteArray.toList_data_append, List.length_append, FlockSoundness.Refine.Frame.header_length,
       List.length_nil] at e
