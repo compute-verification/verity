@@ -20,6 +20,9 @@ the first step of each 5%. `--arms "lr=1e-4;lr=3e-4"` splits the budget into run
 candidate), in proportion to each arm's `share` (default 1; `share=1;share=2;share=4` sweeps run length, each arm's end
 fully decayed): no other encode shares an arm's last 5%, so every arm's end is a checkpoint; later arms' checkpoints carry
 the earlier arms' MACs; E is the arm whose last tenth of batches (each unseen when its loss is taken) had the lowest loss.
+An arm's `full=SPEC` (no spaces) trains its own full set, every arm starting from θ on the union: order such arms
+shallow to deep with nested sets (`full=t0.w_gate,t0.w_up,final;full=t0.*,final`), since a checkpoint's φ is read from
+every update through it.
 
 This file is the island's one editable file; the fixed side is README.md's list. candidate.sh runs it inside the harness:
 
@@ -135,13 +138,13 @@ def fresh_order(data, rec: dict) -> dict:
 CHECKPOINTS = 20
 ARM_KEYS = {"lr": float, "muon_lr": float, "lora_lr": float, "opt": str, "wd": float, "ema": float, "schedule": str,
             "warmup": int, "batch": int, "micro": int, "fresh": lambda v: v.lower() in ("1", "true", "on", "yes"),
-            "data_seed": int, "seed": int, "share": float}
+            "data_seed": int, "seed": int, "share": float, "full": str}
 ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd")}
 
 
 def parse_arms(a: argparse.Namespace) -> list[argparse.Namespace]:
-    """`--arms "lr=1e-4;lr=3e-4 wd=0.1"`: runs from θ in turn, each overriding only how it trains (ARM_KEYS), never what
-    is tuned, so one trainable prices every step."""
+    """`--arms "lr=1e-4;lr=3e-4 wd=0.1"`: runs from θ in turn, each overriding how it trains (ARM_KEYS) and, with
+    `full=SPEC`, which tensors it trains in full."""
     a.share = 1.0
     if not a.arms:
         return [a]
@@ -196,16 +199,22 @@ def main() -> int:
         raise SystemExit("shallow: this train.py tunes the lf starts (s50, s100, m50, m100)")
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
-    full = spec_names(rec, params, a.full if a.full is not None else default_full(a.blocks, a.parts, a.final))
+    default = a.full if a.full is not None else default_full(a.blocks, a.parts, a.final)
     adapt = [n for n in spec_names(rec, params, a.adapt) if params[n].ndim == 2]
-    if a.lora and not a.adapt:
-        adapt, full = [n for n in full if params[n].ndim == 2], [n for n in full if params[n].ndim == 1]
+    for arm in arms:
+        arm.tuned = spec_names(rec, params, arm.full if arm.full is not None else default)
+        if a.lora and not a.adapt:
+            if arm.full != a.full:
+                raise SystemExit("shallow: an arm's full= needs --adapt with --lora")
+            adapt = [n for n in arm.tuned if params[n].ndim == 2]
+            arm.tuned = [n for n in arm.tuned if params[n].ndim == 1]
+        if set(arm.tuned) & set(adapt):
+            raise SystemExit("shallow: --adapt names matrices that --full does not")
+        arm.mats = [n for n in arm.tuned if params[n].ndim == 2]
+        arm.gains = [n for n in arm.tuned if params[n].ndim == 1]
     if adapt and not a.lora:
         raise SystemExit("shallow: --adapt needs --lora R")
-    if set(full) & set(adapt) or any(params[n].ndim != 2 for n in adapt):
-        raise SystemExit("shallow: --adapt names matrices that --full does not")
-    mats = [n for n in full if params[n].ndim == 2]
-    gains = [n for n in full if params[n].ndim == 1]
+    full = sorted({n for arm in arms for n in arm.tuned})
     store = a.store if a.store != "auto" else ("bf16" if adapt else "fp32")
     for p in params.values():
         p.requires_grad_(False)
@@ -225,13 +234,15 @@ def main() -> int:
         mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
 
     trainable = {"full": full, "adapters": {n: a.lora for n in adapt}}
+    mats = [n for n in full if params[n].ndim == 2]
     store_extra = svd_flops(params, mats) if store.startswith("svd:") else 0
     c = prepare.EVAL_CTX
     budget = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - (CHECKPOINTS + len(arms)) * store_extra
     plans = []
     for arm in arms:
-        extra = sum(ns_flops(tuple(params[n].shape)) for n in mats) if mats and arm.opt == "muon" else 0
-        per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": arm.batch * c}])["flops"] + extra
+        extra = sum(ns_flops(tuple(params[n].shape)) for n in arm.mats) if arm.mats and arm.opt == "muon" else 0
+        own = {"full": arm.tuned, "adapters": trainable["adapters"]}
+        per_step = prepare.train_flops(rec, own, [{"op": "train", "tokens": arm.batch * c}])["flops"] + extra
         plans.append((per_step, extra, int(budget * arm.share / sum(x.share for x in arms) // per_step)))
     total = sum(n for _, _, n in plans)
     if hooks is not None:
@@ -249,9 +260,11 @@ def main() -> int:
     t0 = time.perf_counter()
 
     for k, arm in enumerate(arms):
+        mats, gains = arm.mats, arm.gains
         with torch.no_grad():
             for n in full:
                 params[n].copy_(theta[n].to(params[n].device, torch.float32))
+                params[n].requires_grad_(n in arm.tuned)
             gen = torch.Generator(device=prepare.DEVICE).manual_seed(arm.seed)
             for A, B, _ in factors.values():
                 A.copy_(torch.randn(A.shape, device=prepare.DEVICE, generator=gen) / math.sqrt(A.shape[1]))
@@ -273,15 +286,15 @@ def main() -> int:
         tokens = arm.batch * c
         data = prepare.TrainData(rec["tokenizer"], seed=arm.data_seed)
         fresh = fresh_order(data, rec) if arm.fresh else {"fresh": False}
-        ema = {n: params[n].detach().float().clone() for n in full} if arm.ema else None
+        ema = {n: params[n].detach().float().clone() for n in arm.tuned} if arm.ema else None
         tail_from = n_steps - max(1, n_steps // 10)
         tail = torch.zeros((), device=prepare.DEVICE)
         print(json.dumps({"arm": k, "overrides": getattr(arm, "overrides", ""), "steps": n_steps, "planned": total,
-                          "full": full, "adapt": adapt, "rank": a.lora, "store": store, "flops_per_step": per_step,
+                          "full": arm.tuned, "adapt": adapt, "rank": a.lora, "store": store, "flops_per_step": per_step,
                           "extra_per_step": extra, "fresh": fresh}), flush=True)
 
         def encode() -> bytes:
-            cur = {n: (ema[n] if ema is not None else params[n].detach()).float() for n in full}
+            cur = {n: (ema[n] if ema is not None else params[n].detach()).float() for n in arm.tuned}
             return encode_update(store, theta, cur, factors, mats, gains, params, steps)
 
         for step in range(n_steps):
@@ -305,7 +318,7 @@ def main() -> int:
                 o.zero_grad(set_to_none=True)
             if ema is not None:
                 with torch.no_grad():
-                    for n in full:
+                    for n in arm.tuned:
                         ema[n].lerp_(params[n].detach().float(), 1 - arm.ema)
             steps.append({"op": "train", "tokens": tokens})
             if extra:
@@ -320,8 +333,8 @@ def main() -> int:
             elif b not in end_buckets and not any(bucket(e) == b for e in encoded):
                 encode()
                 encoded.add(g)
-        entry = {"overrides": getattr(arm, "overrides", ""), "steps": n_steps, "last_step": g, "fresh": fresh,
-                 "tail_loss": float(tail) / (n_steps - tail_from)}
+        entry = {"overrides": getattr(arm, "overrides", ""), "full": arm.tuned, "steps": n_steps, "last_step": g,
+                 "fresh": fresh, "tail_loss": float(tail) / (n_steps - tail_from)}
         print(json.dumps({"arm": k, "last_step": g, "tail_loss": entry["tail_loss"]}), flush=True)
         report.append(entry)
         blobs.append(blob)
