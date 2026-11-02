@@ -75,7 +75,8 @@ import Proofs.Flock.Claims.Recursion.InnerSetupCount
 import Proofs.Flock.Claims.Recursion.IVStarCalls
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
-(`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
+(`Guarantees`; circuit privacy and the registered private circuit's in `Private`; what a stop leaks, the counting lemma
+and a recursive session's stops, in `StopLeak`), its zero knowledge at the operating
 system's salts (`OsSalts`), its soundness at the compiled inner
 protocol with the compile lemma open (`Compile`), the compile premise at a class whose schedule is `fast100`'s
 (`Universal`), the universal unit's class of private circuits, its descriptions read in gate order
