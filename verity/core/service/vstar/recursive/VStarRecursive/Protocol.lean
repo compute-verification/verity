@@ -22,8 +22,9 @@ verifier the auditor runs (`flock-verify verify --zk` once per V* part with that
   (`innerOk`, `RecDeploy.innerOk`); then, for each part `j`, `flock-verify verify --zk --statement verity/flock-circuit`
   with the part's `--circuit`, `--public`, `--partition`, `--program`, `--registered`, `--rec-inner`, `--rec-part j`,
   `--rec-bindings` and `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
-  `--rec-inner-partition`, `--rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os
-  --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and `--rec-inner-registration`, and one `--session`
+  `--rec-inner-partition`, `--rec-inner-program`, `--rec-inner-statement verity/flock-circuit+plain-leaves
+  --rec-inner-statement-coins os --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and
+  `--rec-inner-registration`, no link table (no `--rec-links`), and one `--session`
   (`partVerdict`, the C-Flock library calls `verifyCmd` makes on that path, as `recursion_e2e`'s lean step runs it); then
   v1's live check (`OneStage.checkLive`: at the coins `OneStage.coinsOf` reads, the challenger's when the params name
   one) on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units are the
@@ -288,7 +289,8 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   (innerOk o circuitB pubB drawB).mapError (s!"rec inner statement: Flock's plain verifier refuses it: " ++ ·)
   let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
-      form := some { statement := INNER_STATEMENT, os := true, tables := [], draw := some drawB } }
+      form := some { statement := INNER_STATEMENT, os := true, tables := [], draw := some drawB },
+      program := some o.program }
   let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
   let transcriptB ← bs.get pr.transcript "rec inner transcript"
   fits transcriptB "rec inner transcript"
@@ -338,6 +340,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     match (do
         Flock.Registered.checkProgram program registered.isSome
         Flock.RecSetup.checkInner inner recCoins h.bound
+        Flock.RecLinkPart.checkShape inner none
         Flock.RecBudget.regs inner registered
         Flock.RecBudget.statements inner
         let r ← OneStageZk.buildSessionOf parsed tags circuitB pubB coins tables count draw partition program registered
@@ -355,6 +358,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
         Flock.RecVStar.checkLinkRounds h.shape h.link
         r.2.forM (Flock.RecVStar.checkTopRows · registered (some h.link))
         r.2.forM (Flock.RecCoins.checkLink · registered (Flock.RecCoins.Source.atC3 recCoins inner recCommits) (some h.link))
+        r.2.forM (Flock.RecLinkPart.check · registered recCoins none)
         Flock.RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags false draw else .ok ()).map fun () =>

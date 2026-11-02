@@ -60,7 +60,8 @@ class Inner:
 
     def flags(self) -> list[str]:
         return ["--rec-inner-circuit", str(self.circuit), "--rec-inner-public", str(self.pub), "--rec-inner-partition",
-                str(self.partition), "--rec-inner-statement", "verity/flock-circuit+plain-leaves",
+                str(self.partition), "--rec-inner-program", str(self.program),
+                "--rec-inner-statement", "verity/flock-circuit+plain-leaves",
                 "--rec-inner-statement-coins", "os", "--rec-inner-draw", str(self.draw), "--rec-inner-session",
                 str(self.session), "--rec-inner-transcript", str(self.transcript)]
 
