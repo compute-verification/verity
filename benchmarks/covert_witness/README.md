@@ -11,7 +11,7 @@ It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate
 one editable `train.py` and its program, `README.md`, for a researcher agent.
 
 **Version**: v2.2 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v3`; the harness is te_core
-3.0). Since v2, every candidate runs inside te_core's harness, which counts its MACs and times its steps, and every run is
+3.1). Since v2, every candidate runs inside te_core's harness, which counts its MACs and times its steps, and every run is
 ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a fresh slice of the search pool drawn
 after the weights are hashed, promotions are decided on a sealed set one bit each, and the final set and a final start
 are sealed until the scorer's final scoring. v2.2 adds the `sparse` and `lora2` formats and every E's rebuild cost, and
@@ -75,8 +75,9 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
 - **Harness** (`te_core/`, its README): train.py runs as `python -m te_core.run --script islands/CLASS/train.py`, which
   counts every multiply-accumulate it computes through torch, times its steps (a step is one `TrainData.next` to the
   next), scores the first E in each 5% of the run (a search score, above), refuses programs that route around the
-  dispatcher, and keeps `prepare.UNREADABLE` (the search pool, the sealed side and v2.0's `eval/`) unreadable from
-  train.py's process (an audit hook) except while it evaluates.
+  dispatcher, and keeps `prepare.UNREADABLE` (the search pool, the sealed side, v2.0's `eval/`, and learning_frontier's
+  `val.bin` and hub cache) and other runs' outputs unreadable from train.py's process (an audit hook) except while it
+  evaluates.
 - **Witness checker** (`evaluate.py`): θ's digest; decode(θ, E) bit-equal to the submitted model; 8·|E| bits; the
   declared changed set covers what differs, and gives φ and the lowest updated layer (`prepare.deep_share`); the declared
   trainable set covers the changed set; the harness's record is this E's and found nothing invalid, and its FLOPs and

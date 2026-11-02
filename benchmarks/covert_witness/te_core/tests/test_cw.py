@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import safetensors.torch
 import torch
 from torch.overrides import TorchFunctionMode
 
@@ -70,13 +71,39 @@ def test_a_sealed_split_is_never_returned(cw_root):
     assert rec["checkpoints"] and all("test_bpb" not in cp for cp in rec["checkpoints"])
 
 
-@pytest.mark.parametrize("flag", ["--peek", "--peek-sealed"])
-def test_the_held_out_and_sealed_sets_are_unreadable_to_the_island(cw_root, flag):
+@pytest.mark.parametrize("flags", [("--peek",), ("--peek-sealed",),
+                                   *(("--peek-with", w) for w in ("from_file", "storage", "load_file", "safe_open"))],
+                         ids=lambda f: f[-1])
+def test_the_held_out_and_sealed_sets_are_unreadable_to_the_island(cw_root, flags):
+    """Also through the loaders that open their file in C++ or Rust (`cw.c_readers`), which raise no audit event."""
     (cw_root / "root" / "sealed").mkdir()
-    rc, rec = run_island(cw_root, "--steps", "2", flag)
-    assert rc == 1 and "PermissionError" in rec["error"]
+    safetensors.torch.save_file({"w": torch.zeros(2)}, cw_root / "root" / "eval" / "search" / "w.safetensors")
+    rc, rec = run_island(cw_root, "--steps", "2", *flags)
+    assert rc == 1 and "PermissionError" in rec["error"] and "held out" in rec["error"]
     assert any("PermissionError" in p for p in rec["invalid"])
     assert rec["start"]["val_bpb"] is not None
+
+
+@pytest.mark.parametrize("how, path, refused", [
+    ("read", "runs/r0/out/E.bin", True), ("move", "runs/r0/out/E.bin", True),
+    ("read", "root/candidates/e100kb.b/sub/E.bin", True),
+    ("read", "runs/r1/inputs/E.bin", False), ("read", "root/candidates/e100kb.a/sub/E.bin", False)])
+def test_a_run_reads_its_own_outputs_and_no_other_runs(cw_root, monkeypatch, how, path, refused):
+    """An earlier run's E (beside this run's `$RESEARCH_RUN_DIR`) or another candidate's scratch would hand this run
+    compute it never did; its own run directory and its own scratch (its families' parent) stay readable."""
+    for rel in ("runs/r0/out/E.bin", "root/candidates/e100kb.b/sub/E.bin", "runs/r1/inputs/E.bin",
+                "root/candidates/e100kb.a/sub/E.bin"):
+        (cw_root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (cw_root / rel).write_bytes(b"E")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(cw_root / "runs" / "r1"))
+    act = ("--peek-path", str(cw_root / path)) if how == "read" else ("--move", str(cw_root / path),
+                                                                      str(cw_root / "runs" / "r1" / "E.bin"))
+    families = cw_root / "root" / "candidates" / "e100kb.a" / "families"
+    rc, rec = run_island(cw_root, "--steps", "2", *act, harness=("--families", str(families)))
+    if refused:
+        assert rc == 1 and "another run's" in rec["error"] and (cw_root / path).exists()
+    else:
+        assert rc == 0 and rec["invalid"] == []
 
 
 def test_a_recast_copy_of_theta_is_theta_and_a_lossy_one_is_not():
@@ -113,8 +140,11 @@ def test_the_screen_reads_names_not_substrings():
     for bad in ("te.counter.paused = 1", "from te_core import flops", "import te_core.run", "torch._dynamo.reset()",
                 "with uncounted():", "sys.modules['x']", "import threading", "from concurrent import futures",
                 "os.fork()", "os.popen('ls')", "torch.library.custom_op", "exec('x = 1')", "eval ('1')",
-                "compile(src, 'f', 'exec')", "import builtins", "torch._C.TensorBase.numpy(t)"):
+                "compile(src, 'f', 'exec')", "import builtins", "torch._C.TensorBase.numpy(t)",
+                "torch._C._VariableFunctions.from_file(p)", "from torch import nn, _C", "torch.UntypedStorage.__mro__[1]",
+                "torch.from_file.__closure__[0].cell_contents", "import pyarrow.parquet as pq", "from datasets import Dataset"):
         assert te_run.screen(bad), bad
+    assert te_run.screen("datasets = {}\nfrom torch import nn\ntorch.from_file(p)\n") == []
 
 
 def run_probe(tmp_path, monkeypatch, variant: str) -> dict:

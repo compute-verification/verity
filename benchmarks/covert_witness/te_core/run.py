@@ -366,7 +366,9 @@ FORBIDDEN = (r"\.counter\b", r"\.pause\b", r"\buncounted\b", r"\bte_core\.(?!(ho
              "_posixsubprocess", r"\bthreading\b", r"\b_thread\b", r"\bconcurrent\b", r"\btorch\.library\b",
              "TensorBase", "addaudithook", r"sys\.modules", r"\bgc\b\.", "__import__", r"importlib", r"\bbuiltins\b",
              "__builtins__", "__subclasses__", r"(?<![.\w])(exec|eval|compile)\s*\(", r"\bsys\.monitoring\b",
-             r"(?m)^\s*from\s+sys\s+import\b.*\bmonitoring\b")
+             r"(?m)^\s*from\s+sys\s+import\b.*\bmonitoring\b", r"\btorch\._C\b", r"(?m)^\s*from\s+torch\s+import\b.*\b_C\b",
+             r"__bases?__", "__mro__", "__closure__", "cell_contents", r"\bpyarrow\b", r"\bpolars\b", r"\bduckdb\b",
+             r"(?m)^\s*(import|from)\s+datasets\b")
 
 
 def _code(source: str) -> str:
@@ -501,7 +503,7 @@ def run_script(a, args: list[str]) -> dict:
                  budget_s=60 * a.budget_minutes, keep_checkpoints=a.keep_checkpoints, digests=a.digests != "off",
                  args=args, families=a.families)
     te.budget_macs = a.budget_macs or a.budget_fraction * float(getattr(prepare, "TRAIN_FLOP_BUDGET", 0)) / 2
-    adapter = cw.Adapter(te, prepare, guard_log=a.out / "guard.log")
+    adapter = cw.Adapter(te, prepare, guard_log=a.out / "guard.log", own_dirs=[a.out, te.families_root.parent])
     te.evaluator = load_evaluator(a.evaluator) or adapter.evaluate
     guard_exits()
     adapter.install()

@@ -174,10 +174,15 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
   can lower it again. A start's buffers (RoPE tables) are taken as θ's.
 - **Harness work is neither counted nor timed**: loading, encoding, decoding and evaluation run outside the dispatch
   mode and outside the steps' clocks; `totals` sums the steps' seconds and `process_*` the whole process.
-- **The held-out guard is the integrator's**: an audit hook refuses `prepare.UNREADABLE` (the search pool and the
-  sealed side) except while the harness loads or evaluates. Reads in C++ (`torch.from_file`, safetensors' loaders)
-  raise no audit event, so it doesn't see them. Subprocesses are logged to `guard.log`; a thread or a process the
-  program starts makes its run invalid, so one reading during an evaluation can't land a valid run.
+- **The held-out guard is in-process**: an audit hook refuses `prepare.UNREADABLE` (the search pool, the sealed side
+  and learning_frontier's `val.bin` and hub cache) except while the harness loads or evaluates, and other runs' outputs
+  (the run directories beside `$RESEARCH_RUN_DIR`, other candidates' scratch under `prepare.ROOT/candidates`). The
+  loaders that open files in C++ or Rust (`cw.c_readers`: `torch.from_file`, storages' `from_file`, safetensors'
+  `safe_open`) raise the hook's event first; the screen refuses their unwrapped forms (`torch._C`, a class's bases, a
+  function's closure) and the Arrow readers (pyarrow, polars, duckdb, `datasets`). A name built at run time (getattr)
+  still reaches them, so the guard needs the node's file permissions behind it (v2.2's separate training job).
+  Subprocesses are logged to `guard.log`; a thread or a process the program starts makes its run invalid, so one reading
+  during an evaluation can't land a valid run.
 - **Script steps follow the data stream**: a script that fetches all its data at once is one step, which keeps every
   count but coarsens D and φ.
 - **Weight shape**: a forward activation with a weight's exact 2-D shape, in a matmul of two token-indexed operands,

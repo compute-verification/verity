@@ -58,8 +58,9 @@ SET_DIRS = {SEARCH_POOL: HELD_OUT / SEARCH_POOL, PROMOTION: SEALED / "heldout" /
 #: value scores (its first windows): with the start's scores kept, a checkpoint costs about one 2^21-token evaluation
 SLICE_TOKENS = 2 ** 20
 PROMOTION_TOKENS = 2 ** 20
-#: what a candidate's train.py may not read (the harness's audit hook): the held-out sets, the sealed side, and v2.0's sets
-UNREADABLE = (HELD_OUT, SEALED, ROOT / "eval")
+#: what a candidate's train.py may not read (the harness's audit hook): the held-out sets, the sealed side, v2.0's sets, and
+#: learning_frontier's validation stream and hub cache (the search pool's tokens, and the held-out shards' raw text)
+UNREADABLE = (HELD_OUT, SEALED, ROOT / "eval", LF_CORPUS / "val.bin", LF_CORPUS / "hf-cache")
 #: final scoring (the scorer's, after the search): the harness scores the final set, and the sealed start loads
 FINAL_MODE = os.environ.get("CW_FINAL") == "1"
 DEVICE = os.environ.get("CW_DEVICE", "cuda")

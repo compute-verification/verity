@@ -31,9 +31,12 @@ library's, or one of the harness's prepare's classes, `watched`) makes its run i
 
 The held-out sets and the sealed side are unreadable from the program (an audit hook refuses every open, listing or stat
 under each of `prepare.UNREADABLE`, else `prepare.HELD_OUT`), except while the harness's own loader or evaluator runs.
-Subprocesses go to `guard.log`. A thread or a process the program starts makes its run invalid: the counter's mode is
-per thread, and a child's work is its own. So do child processes' CPU time while the program ran, and a child still
-alive when it returns (a spawn that raises no audit event). Loading or calling native code through ctypes is a flag.
+So are other runs' outputs, where an earlier E sits: every run directory beside this one (`$RESEARCH_RUN_DIR`, the
+research runner's) and every candidate's scratch under `prepare.ROOT/candidates` but this run's. The loaders that open
+files in C++ or Rust (`c_readers`) raise the same audit event first. Subprocesses go to `guard.log`. A thread or a
+process the program starts makes its run invalid: the counter's mode is per thread, and a child's work is its own. So
+do child processes' CPU time while the program ran, and a child still alive when it returns (a spawn that raises no
+audit event). Loading or calling native code through ctypes is a flag.
 """
 from __future__ import annotations
 
@@ -55,7 +58,7 @@ from .run import theta_sha256
 ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse")
 #: the standard library modules prepare's loader, decoder and scorer call into
 STDLIB = ("hashlib", "io", "json", "math", "os", "struct", "zlib")
-PATH_EVENTS = {"open", "os.listdir", "os.scandir", "os.stat", "glob.glob", "os.chdir", "os.symlink", "os.link"}
+PATH_EVENTS = {"open", "os.listdir", "os.scandir", "os.stat", "glob.glob", "os.chdir", "os.symlink", "os.link", "os.rename"}
 #: `_posixsubprocess.fork_exec` (multiprocessing's spawn and forkserver starts) raises no audit event of its own
 FORK_EXEC = "te_core.fork_exec"
 SPAWN_EVENTS = {"subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork", "os.forkpty",
@@ -98,6 +101,40 @@ def _audit_fork_exec() -> None:
 
     fork_exec_._te_audited = True
     _posixsubprocess.fork_exec = fork_exec_
+
+
+def _opening(fn, name: str):
+    def opened(filename, *args, **kwargs):
+        sys.audit("open", filename, "r", 0)
+        return fn(filename, *args, **kwargs)
+
+    opened._te_audited = True
+    opened.__name__ = opened.__qualname__ = name
+    return opened
+
+
+def c_readers() -> list[tuple[object, str]]:
+    """The file loaders that open their file in C++ or Rust, which raises no audit event: torch's `from_file` and its
+    storages', and safetensors' `safe_open` (which `load_file` calls)."""
+    import safetensors
+    import safetensors._safetensors_rust
+    import safetensors.torch
+
+    return [(torch, "from_file"), (torch.UntypedStorage, "from_file"), (safetensors, "safe_open"),
+            (safetensors.torch, "safe_open"), (safetensors._safetensors_rust, "safe_open")]
+
+
+def audit_c_reads() -> None:
+    """Each of `c_readers` raises `open` with its path first, so the guard's audit hook sees it."""
+    for owner, name in c_readers():
+        fn = getattr(owner, name)
+        if not getattr(fn, "_te_audited", False):
+            wrapped = _opening(fn, name)
+            setattr(owner, name, staticmethod(wrapped) if isinstance(owner, type) else wrapped)
+
+
+def _under(path: str, roots: list[str]) -> bool:
+    return any(path == r or path.startswith(r + os.sep) for r in roots)
 
 
 def import_prepare(script: Path):
@@ -144,7 +181,7 @@ def watched(own) -> list[tuple[str, object, str, object]]:
     import torch.nn.functional as F
 
     roots = [torch, torch.Tensor, F, torch.linalg, np, np.random, safetensors.torch, own,
-             *map(importlib.import_module, STDLIB)]
+             *map(importlib.import_module, STDLIB), *{id(o): o for o, _ in c_readers()}.values()]
     if (tiktoken := sys.modules.get("tiktoken")) is not None:
         roots.append(tiktoken)
     fixed = Path(own.__file__).resolve().parent
@@ -209,7 +246,7 @@ class CWPlan:
 
 
 class Adapter:
-    def __init__(self, session, prepare, guard_log: Path | None = None):
+    def __init__(self, session, prepare, guard_log: Path | None = None, own_dirs=()):
         self.s, self.p = session, prepare
         self.own = private_copy(prepare)
         self.rec: dict | None = None
@@ -218,6 +255,10 @@ class Adapter:
         self.evaluating = False
         self.guard_log = guard_log
         self.forbidden = [os.path.realpath(p) for p in getattr(self.own, "UNREADABLE", [self.own.HELD_OUT])]
+        run_dir = os.environ.get("RESEARCH_RUN_DIR")
+        others = [Path(self.own.ROOT) / "candidates"] if hasattr(self.own, "ROOT") else []
+        self.others = [os.path.realpath(p) for p in others + ([Path(run_dir).parent] if run_dir else [])]
+        self.own_dirs = [os.path.realpath(p) for p in [*own_dirs, *([run_dir] if run_dir else [])]]
         self.encoded: dict[str, dict] = {}
         self.buckets: set[int] = set()
         self.submitted: dict = {}
@@ -262,6 +303,7 @@ class Adapter:
         if hasattr(p, "declare_step"):
             p.declare_step = self.declare_step
         _audit_fork_exec()
+        audit_c_reads()
         sys.addaudithook(self._hook)
         self.watch = watched(own)
 
@@ -311,8 +353,10 @@ class Adapter:
                     s = os.path.realpath(os.fsdecode(p))
                 except (TypeError, ValueError):
                     return
-                if any(s == f or s.startswith(f + os.sep) for f in self.forbidden):
+                if _under(s, self.forbidden):
                     raise PermissionError(f"te_core: {s} is held out; only the harness's evaluator reads it")
+                if _under(s, self.others) and not _under(s, self.own_dirs):
+                    raise PermissionError(f"te_core: {s} is another run's; a run reads only its own outputs")
             return
         if self.running and (event in SPAWN_EVENTS or event in THREAD_EVENTS):
             self.started[event] = self.started.get(event, 0) + 1
