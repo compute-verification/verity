@@ -17,7 +17,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CW = HERE.parents[2]
-VARIANTS = ["honest", "heldout", "fromfile", "forge", "thread", "getattr", "replay", "superset", "down", "down_ulp"]
+VARIANTS = ["honest", "heldout", "fromfile", "forge", "thread", "getattr", "replay", "superset", "down", "down_ulp", "reach"]
 #: credit.py's variants, in class reference
 CREDIT = ["dense", "declare_full", "forge_decode"]
 

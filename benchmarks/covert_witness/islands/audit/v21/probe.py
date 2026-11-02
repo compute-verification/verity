@@ -11,6 +11,7 @@ Every variant trains block 1 and the final norm of the start with AdamW on `--st
 - thread: one counted forward on the start, then the whole training in a `threading.Thread` on a second copy of the model;
 - getattr: one counted forward, then the whole training inside the harness's paused context, reached by `getattr` names;
 - replay: one counted forward, then submits an E read from `--cached` (an earlier run's) as its own;
+- reach: honest, after checking what it can open beside the held-out directory (`reach`);
 - superset: honest, declaring every tensor of θ changed;
 - down / down_ulp: trains block 1's down projection only; down_ulp also moves block 0's attention-norm gain by one ulp.
 
@@ -64,6 +65,33 @@ def read_from_file(n: int) -> tuple[np.ndarray, dict]:
     raw = t.numpy().tobytes()
     note["from_file_bytes"], note["from_file_sha256"] = len(raw), hashlib.sha256(raw).hexdigest()
     return np.frombuffer(raw, dtype=np.uint16).copy(), note
+
+
+def reach() -> dict:
+    """What the guard leaves open beside the held-out directory; nothing is changed (a mapped token is written back as
+    itself, a file opened for writing is closed unwritten)."""
+    note = {}
+    search = prepare.HELD_OUT / "search" / "gpt2.bin"
+    for key, path in (("start_record", prepare.STARTS / "s50" / "start.json"),
+                      ("start_theta", prepare.STARTS / "s50" / "theta.safetensors"),
+                      ("lf_val", prepare.LF_CORPUS / "val.bin")):
+        try:
+            open(path, "r+b").close()
+            note[f"{key}_open_for_write"] = "allowed"
+        except PermissionError as e:
+            note[f"{key}_open_for_write"] = f"refused: {e}"
+    t = torch.from_file(str(search), shared=True, size=1, dtype=torch.int16)
+    t[0] = t[0].clone()
+    note["search_set_shared_map_written"] = True
+    val = np.fromfile(prepare.LF_CORPUS / "val.bin", dtype=np.uint16)
+    head = torch.from_file(str(search), shared=False, size=len(val), dtype=torch.int16).numpy().view(np.uint16)
+    note["lf_val_tokens"], note["lf_val_is_search_prefix"] = int(len(val)), bool(np.array_equal(val, head))
+    shards = sorted(str(p.relative_to(prepare.LF_CORPUS)) for p in prepare.LF_CORPUS.rglob("01[23]_*.parquet"))
+    note["held_out_parquet_in_lf_corpus"] = shards
+    if shards:
+        with open(prepare.LF_CORPUS / shards[-1], "rb") as f:
+            note["parquet_magic"] = f.read(4).decode()
+    return note
 
 
 def windows(toks: np.ndarray, batch: int, ctx: int, gen: np.random.Generator) -> torch.Tensor:
@@ -137,6 +165,8 @@ def main() -> int:
     if v == "fromfile":
         rows, note = read_from_file(4096)
         notes |= note
+    if v == "reach":
+        notes |= reach()
     params = net.params()
     if v in ("thread", "getattr", "replay"):
         with torch.no_grad():
