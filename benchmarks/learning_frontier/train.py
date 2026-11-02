@@ -42,7 +42,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from model import CTX, SIZES, VOCAB, LM, counts
+from model import CTX, SIZES, VOCAB, LM, counts, save_theta
 
 ROOT = Path(__file__).resolve().parents[2]
 CENSUS = ROOT / "benchmarks/census/hardware.json"
@@ -85,7 +85,16 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--no-compile", action="store_true")
     ap.add_argument("--commit", default="", help="the source commit to record (default: git rev-parse HEAD)")
+    ap.add_argument("--save-theta", default="", help="fractions of the run (each a multiple of 1/--evals, e.g. 0.25,0.5,1) at "
+                                                    "which to write the weights to --out (theta-pNNN.pt, theta.json): the "
+                                                    "registered starts speedrun.py continues")
     a = ap.parse_args(argv)
+    fracs = [float(f) for f in a.save_theta.split(",") if f]
+    if any(not 0 < f <= 1 or abs(f * a.evals - round(f * a.evals)) > 1e-9 for f in fracs):
+        ap.error("--save-theta takes fractions in (0, 1], each a multiple of 1/--evals, so every start has its held-out loss")
+    if fracs and a.family != "dense":
+        ap.error("--save-theta is for --family dense")
+    a.theta_fracs = fracs
     if (a.family == "lowrank") != (a.rank > 0):
         ap.error("--rank is for --family lowrank, which needs it")
     if (a.family == "localsgd") != (a.sync > 0):
@@ -208,7 +217,7 @@ class Run:
         self.starts, self.train_verified, self.commits = 0, False, []
 
     def key(self, corpus_sha: str) -> str:
-        skip = {"out", "ckpt_root", "chunk_minutes", "device", "no_compile", "data", "commit"}
+        skip = {"out", "ckpt_root", "chunk_minutes", "device", "no_compile", "data", "commit", "save_theta", "theta_fracs"}
         spec = {k: (str(v) if isinstance(v, Path) else v) for k, v in sorted(vars(self.a).items()) if k not in skip}
         return hashlib.sha256(json.dumps([spec, corpus_sha], sort_keys=True).encode()).hexdigest()[:20]
 
@@ -356,6 +365,23 @@ def main(argv: list[str] | None = None) -> int:
         if a.device.startswith("cuda"):
             torch.cuda.synchronize()
 
+    theta_at = {max(1, round(run.n_steps * round(f * a.evals) / a.evals)): f for f in a.theta_fracs}
+    theta_index = a.out / "theta.json"
+    thetas = json.loads(theta_index.read_text()) if theta_index.exists() else []
+
+    def keep_theta(point: dict) -> None:
+        f = theta_at[run.step]
+        name = f"theta-p{round(f * 100):03d}.pt"
+        meta = {"schema": "learning-frontier/theta/v1", "size": a.size, "fraction": f, "step": run.step,
+                "n_steps": run.n_steps, "batch": a.batch, "ctx": CTX, "lr": a.lr, "seed": a.seed, "data_seed": a.data_seed,
+                "sequences_read": run.step * a.batch, "order_sha256": config["data_order"]["order_sha256"], "key": key,
+                "commit": commit, "corpus_train_sha256": manifest["train"]["sha256"],
+                "val_nats_per_byte": point["val_nats_per_byte"], "lr_at_step": point["lr"]}
+        digest = save_theta(run.model, a.out / name, meta)
+        thetas[:] = [t for t in thetas if t["file"] != name] + [meta | {"file": name, "theta_sha256": digest}]
+        theta_index.write_text(json.dumps(thetas, indent=1) + "\n")
+        print(f"train: kept {name} at step {run.step} (sha256 {digest[:16]})", flush=True)
+
     seg_t0, seg_steps, first = None, 0, run.step
     while run.step < n_steps:
         loss = run.train_step(corpus, order)
@@ -389,6 +415,8 @@ def main(argv: list[str] | None = None) -> int:
             (a.out / "curve.json").write_text(json.dumps(run.curve, indent=1) + "\n")
             print(json.dumps({k: point[k] for k in ("step", "val_nats_per_byte", "train_loss_ema", "tokens_per_second")}),
                   flush=True)
+            if run.step in theta_at:
+                keep_theta(point)
             if run.step < run.n_steps:
                 run.save(ckpt)
             if seg_t0 is not None:
