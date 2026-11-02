@@ -10,7 +10,8 @@ module may `include_str` one) and the Lean tool's files the runner runs (`runner
 `olean` and `ilean` at `out/lean/<module path>`, its `axioms` summary at `out/axioms/<module path>.json` and, for a
 `module` file, the module system's parts `lean` writes beside its `olean` (`PARTS`); `reads`, for each module of the tree
 its compile loads (`loads`), what `lean` loads of that module's build (`reads`) and its `axioms`, which the replay unions
-with the module's own. As Lean loads them and Lake keys a rebuild on them (`step`), a `module` file reads the public
+with the module's own, and the `axioms` of its package's env (`families/lean_env.py`), those of the toolchain's and the
+fetched packages' modules. As Lean loads them and Lake keys a rebuild on them (`step`), a `module` file reads the public
 `olean` of its imports and of what their `public import`s reach, the code (`ir.sig`, `ir`) of what a `meta import`
 reaches, and every part of an `import all`'s target; a legacy file reads every part of every module it imports,
 transitively.
@@ -18,10 +19,10 @@ transitively.
 Packages, input files and lock roots are read by `tools/verity/lean/module_keys.py`, and import headers by
 `tools/verity/lean/headers.py`, as the Lean build cache reads them, so a task and the cache see one module the same way. An
 import is resolved in the workspace of the module's package (it and the packages it requires by path) as `module_keys.keys`
-resolves it: a module of the toolchain or of a fetched package (Mathlib and the rest) is the `lean` env's, and one the
-workspace can't resolve (no package or two claim it, or no file holds it) is left out, so the compile fails on it. A
-header Lean refuses gives the imports read before the refusal (none, when it is cut off), and the compile fails on it too.
-The auditor's fixture packages (`lean_audit.packages` leaves them out) have no tasks."""
+resolves it: one no package there claims or holds a file of is the `lean` env's (the toolchain's or a fetched package's:
+Mathlib and the rest), and one the workspace can't resolve (no package or two claim it, or no file holds it) is left out,
+so the compile fails on it. A header Lean refuses gives the imports read before the refusal (none, when it is cut off),
+and the compile fails on it too. The auditor's fixture packages (`lean_audit.packages` leaves them out) have no tasks."""
 from __future__ import annotations
 
 import importlib.util
@@ -148,16 +149,22 @@ def modules(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
 
 
 def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str, tuple[str, str]],
-                                                   dict[str, dict[str, How]], set[str]]:
+                                                   dict[str, dict[str, How]], set[str], dict[str, frozenset[str]]]:
     """(the packages, and of the modules the check builds `modules`' entry for each, {source file: {the source file of each
-    of the tree's modules its header imports: how}} and the `module` files)."""
+    of the tree's modules its header imports: how}}, the `module` files and {source file: the env's modules its header
+    imports, `Init` among them unless it says `prelude`})."""
     pkgs, owner = modules(root, files)
     have = set(files)
 
+    def workspace(d: str) -> list[Package]:
+        return [pkgs[q] for q in pkgs[d].workspace if q in pkgs]
+
     def resolve(d: str, mod: str) -> str | None:
-        ws = [pkgs[q] for q in pkgs[d].workspace if q in pkgs]
-        found = [p.file(mod) for p in ws if p.lake.claims(mod) and p.file(mod) in have]
+        found = [p.file(mod) for p in workspace(d) if p.lake.claims(mod) and p.file(mod) in have]
         return found[0] if len(found) == 1 and found[0] in owner else None
+
+    def external(d: str, mod: str) -> bool:
+        return not any(p.lake.claims(mod) or p.file(mod) in have for p in workspace(d))
 
     def roots(d: str) -> list[str]:
         try:
@@ -167,6 +174,7 @@ def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
 
     direct: dict[str, dict[str, How]] = {}
     system: set[str] = set()
+    env: dict[str, frozenset[str]] = {}
     todo = [r for d, p in pkgs.items() for m in (*p.lake.default, *roots(d)) if (r := resolve(d, m)) is not None]
     while todo:
         if (f := todo.pop()) not in direct:
@@ -174,13 +182,17 @@ def imports(root: Path, files: list[str]) -> tuple[dict[str, Package], dict[str,
             if h is not None and h.module:
                 system.add(f)
             edges: dict[str, How] = {}
+            outside = set() if h is None or h.prelude else {"Init"}
             for i in h.imports if h else ():
                 if (r := resolve(owner[f][0], i.module)) is not None:
                     was = edges.get(r, How(False, False, False))
                     edges[r] = How(was.public or i.public, was.meta or i.meta, was.all or i.all)
+                elif external(owner[f][0], i.module):
+                    outside.add(i.module)
             direct[f] = dict(sorted(edges.items()))
+            env[f] = frozenset(outside)
             todo += direct[f]
-    return pkgs, {f: owner[f] for f in direct}, direct, system
+    return pkgs, {f: owner[f] for f in direct}, direct, system, env
 
 
 def step(level: int, how: How) -> int:
@@ -235,9 +247,11 @@ def closures(direct: dict[str, dict[str, How]]) -> dict[str, frozenset[str]]:
 
 def tasks(root: Path, files: list[str]) -> list[dict]:
     from ..runners.lean_module import TOOLS  # not at the top: the runner imports this module
+    from . import lean_env  # not at the top: it imports this module
 
-    pkgs, owner, direct, system = imports(root, files)
+    pkgs, owner, direct, system, _env = imports(root, files)
     closure = closures(direct)
+    env = {d: lean_env.task_id(e) for e, ds in lean_env.envs(root, pkgs).items() for d in ds}
     out = []
     for f in sorted(owner):
         d, mod = owner[f]
@@ -246,8 +260,9 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                     "vars": {"module": mod, "package": p.lake.name,
                              "options": json.dumps(p.options, sort_keys=True, separators=(",", ":"))},
                     "inputs": sorted({f, p.lakefile, *p.inputs, *TOOLS}),
-                    "reads": [r for g, level in sorted(loads(f, direct, system, closure[f]).items())
-                              for r in (*reads(g, level, system), {"task": task_id(g), "output": "axioms"})],
+                    "reads": [*(r for g, level in sorted(loads(f, direct, system, closure[f]).items())
+                                for r in (*reads(g, level, system), {"task": task_id(g), "output": "axioms"})),
+                              {"task": env[d], "output": "axioms"}],
                     "outputs": [{"name": n, "path": out_path(mod, n)}
                                 for n in (*(o[0] for o in OUTPUTS), *(PARTS if f in system else ()))]})
     return out

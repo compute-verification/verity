@@ -40,7 +40,7 @@ def closure(root: Path, pkg: str, pkgs: dict[str, lm.Package]) -> list[str]:
 
 
 def tasks(root: Path, files: list[str]) -> list[dict]:
-    pkgs, owner, _, system = lm.imports(root, files)
+    pkgs, owner, _, system, _ = lm.imports(root, files)
     tool = lm.la.tool_files(files)
     out = []
     for pkg in lm.la.packages(files):

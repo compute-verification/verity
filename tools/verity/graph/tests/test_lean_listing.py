@@ -1,6 +1,7 @@
-"""The lean-module and lean-lock listings on a toy checkout of Lake packages laid out as Security's are: a package whose
-`srcDir` is its parent, a requirement by path, a `proved_in`, a lock's `roots`, every import form, `module` files and the
-legacy files importing them, what each loads of its imports at each level, and the trees that make no graph."""
+"""The lean-module, lean-lock and lean-env listings on a toy checkout of Lake packages laid out as Security's are: a package
+whose `srcDir` is its parent, a requirement by path, a `proved_in`, a lock's `roots`, every import form, `module` files and
+the legacy files importing them, what each loads of its imports at each level, the envs the packages compile in, and the
+trees that make no graph."""
 from __future__ import annotations
 
 import json
@@ -10,11 +11,14 @@ import pytest
 from conftest import toy_tree
 
 from verity_graph import ROOT, graph
-from verity_graph.families import lean_lock, lean_module
+from verity_graph.families import lean_env, lean_lock, lean_module
+from verity_graph.runners.lean_env import TOOLS as ENV_TOOLS
 from verity_graph.runners.lean_module import TOOLS
 
-LISTERS = {"lean-module": lean_module.tasks, "lean-lock": lean_lock.tasks}
+LISTERS = {"lean-module": lean_module.tasks, "lean-lock": lean_lock.tasks, "lean-env": lean_env.tasks}
 TOOLCHAIN = "leanprover/lean4:v4.34.0\n"
+#: what each toy module's task reads of its env: Sec and Sec/Proofs fetch nothing and share a toolchain, so one env, Sec's
+ENV = {"task": "lean-env:Sec", "output": "axioms"}
 #: the toy's `module` files: Lean refuses a `module` importing a legacy file, so these import only each other
 MODULES = ("Sec/Definitions.lean", "Sec/Definitions/A.lean", "Sec/Proofs/B.lean", "Sec/Proofs/C.lean", "Sec/Proofs/D.lean",
            "Sec/Proofs/H.lean", "Sec/Proofs/J.lean")
@@ -22,10 +26,14 @@ MODULES = ("Sec/Definitions.lean", "Sec/Definitions/A.lean", "Sec/Proofs/B.lean"
 AT = {"public": ("olean",), "code": ("olean", "ir.sig", "ir"), "all": ("olean", *lean_module.PARTS)}
 
 
-def manifest(name: str, *paths: tuple[str, str]) -> str:
+def manifest(name: str, *paths: tuple[str, str], fetched: tuple[str, ...] = ()) -> str:
     return json.dumps({"version": "1.1.0", "packagesDir": ".lake/packages", "name": name, "lakeDir": ".lake",
-                       "packages": [{"type": "path", "scope": "", "name": n, "manifestFile": "lake-manifest.json",
-                                     "inherited": False, "dir": d, "configFile": "lakefile.toml"} for n, d in paths]})
+                       "packages": [*({"type": "git", "scope": "leanprover-community", "name": n, "rev": "0" * 40,
+                                      "url": f"https://github.com/leanprover-community/{n}", "inputRev": "v4.34.0",
+                                      "manifestFile": "lake-manifest.json", "inherited": False, "configFile": "lakefile.lean"}
+                                     for n in fetched),
+                                    *({"type": "path", "scope": "", "name": n, "manifestFile": "lake-manifest.json",
+                                       "inherited": False, "dir": d, "configFile": "lakefile.toml"} for n, d in paths)]})
 
 
 FILES = {
@@ -58,9 +66,29 @@ FILES = {
     "tools/verity/lean/tests/fixtures/ctl/Ctl.lean": "def c := 0\n",
     "tools/verity/lean/check.py": "",
     "tools/verity/check/common.py": "",
-    **{f: "" for f in TOOLS},
+    **{f: "" for f in (*TOOLS, *ENV_TOOLS)},
     f"{graph.RUNNERS}/lean_module.py": "",
     f"{graph.RUNNERS}/lean_lock.py": "",
+    f"{graph.RUNNERS}/lean_env.py": "",
+}
+#: packages on other envs than Sec's: Ext fetches Mathlib, as Ext/More does beside a requirement of Ext by path, which
+#: leaves the env Ext's; Old fetches nothing on another toolchain
+OTHER_ENVS = {
+    "Ext/lakefile.toml": 'name = "ext"\ndefaultTargets = ["Ext"]\n\n[[require]]\nname = "mathlib"\n'
+                         'git = "https://github.com/leanprover-community/mathlib"\n\n[[lean_lib]]\nname = "Ext"\n',
+    "Ext/lake-manifest.json": manifest("ext", fetched=("mathlib",)),
+    "Ext/lean-toolchain": TOOLCHAIN,
+    "Ext/Ext.lean": "import Mathlib.Data.Nat.Basic\n",
+    "Ext/More/lakefile.toml": 'name = "more"\ndefaultTargets = ["More"]\n\n[[require]]\nname = "ext"\npath = ".."\n\n'
+                              '[[require]]\nname = "mathlib"\ngit = "https://github.com/leanprover-community/mathlib"\n\n'
+                              '[[lean_lib]]\nname = "More"\n',
+    "Ext/More/lake-manifest.json": manifest("more", ("ext", ".."), fetched=("mathlib",)),
+    "Ext/More/lean-toolchain": TOOLCHAIN,
+    "Ext/More/More.lean": "import Ext\n",
+    "Old/lakefile.toml": 'name = "old"\ndefaultTargets = ["Old"]\n\n[[lean_lib]]\nname = "Old"\n',
+    "Old/lake-manifest.json": manifest("old"),
+    "Old/lean-toolchain": "leanprover/lean4:v4.33.0\n",
+    "Old/Old.lean": "def old := 0\n",
 }
 
 
@@ -82,9 +110,9 @@ def built(*files: str) -> list[dict]:
 
 def loaded(at: dict[str, str]) -> list[dict]:
     """What a module's task reads of each task of ``at`` at its level there (`AT`), in the core's order: of a `module` file
-    that level's parts, of a legacy one its `olean`, and of each its `axioms`."""
-    return ordered({"task": f"lean-module:{f}", "output": o} for f, level in at.items()
-                   for o in (*(AT[level] if f in MODULES else ("olean",)), "axioms"))
+    that level's parts, of a legacy one its `olean`, and of each its `axioms`; and its env's `axioms`."""
+    return ordered([ENV, *({"task": f"lean-module:{f}", "output": o} for f, level in at.items()
+                           for o in (*(AT[level] if f in MODULES else ("olean",)), "axioms"))])
 
 
 def test_modules_of_packages_with_a_parent_src_dir_read_their_imports_transitively(tmp_path):
@@ -110,13 +138,13 @@ def test_modules_of_packages_with_a_parent_src_dir_read_their_imports_transitive
         "a `module` file's task outputs the parts lean writes beside its olean"
     assert b["about"] == "compile and kernel-replay Sec/Proofs/B.lean" and b["env"] == "lean" and b["key"] is None
     e = ts["lean-module:Sec/Proofs/E.lean"]
-    assert e["reads"] == [], \
+    assert e["reads"] == [ENV], \
         "an import no package claims (Scratch) or no file holds (Proofs.Missing) is left for the compile to fail on"
     assert [o["name"] for o in e["outputs"]] == ["axioms", "ilean", "olean"], "a legacy file's task outputs no parts"
-    assert ts["lean-module:Sec/Proofs/D.lean"]["key"] is not None, "a module that reads nothing is keyed when listed"
-    assert ts["lean-module:Sec/Proofs/G.lean"]["reads"] == [
+    assert ts["lean-module:Sec/Proofs/D.lean"]["reads"] == [ENV], "a module that imports nothing reads its env"
+    assert ts["lean-module:Sec/Proofs/G.lean"]["reads"] == [ENV, *(
         {"task": "lean-module:Sec/Proofs/D.lean", "output": o}
-        for o in ("axioms", "ir", "ir.sig", "olean", "olean.private", "olean.server")], \
+        for o in ("axioms", "ir", "ir.sig", "olean", "olean.private", "olean.server"))], \
         "a legacy file reads every part of a `module` file it imports, as Lake gives it them, and its record"
     assert ts["lean-module:Sec/Proofs.lean"]["reads"] == loaded({f"Sec/{f}": "all" for f in (
         "Definitions.lean", "Definitions/A.lean", "Proofs/B.lean", "Proofs/C.lean", "Proofs/D.lean", "Proofs/E.lean")}), \
@@ -156,12 +184,57 @@ def test_a_lock_the_audit_refuses_is_listed_for_its_own_task_to_fail(tmp_path):
     assert len({r["task"] for r in ts["lean-lock:Sec/Proofs"]["reads"]}) == 7, "a proved_in outside the tree adds no package"
 
 
+def test_one_env_per_toolchain_and_fetched_packages_each_module_reading_its_package_s(tmp_path):
+    ts = listed(tmp_path, **OTHER_ENVS)
+    assert sorted(i for i in ts if i.startswith("lean-env:")) == ["lean-env:Ext", "lean-env:Old", "lean-env:Sec"], \
+        "Sec and Sec/Proofs fetch nothing on one toolchain, Ext/More fetches what Ext does (its requirement by path aside), " \
+        "Old has a toolchain of its own; an env is named after its first package, and the auditor's fixtures have none"
+    sec = ts["lean-env:Sec"]
+    assert sec["vars"] == {"package": "Sec", "scope": "whole"}
+    assert sec["inputs"] == sorted(["Sec/lake-manifest.json", "Sec/lean-toolchain", *ENV_TOOLS,
+                                    *graph.runner_sources("lean-env")])
+    assert sec["reads"] == [] and sec["key"] is not None, "an env reads nothing, so it is keyed when listed"
+    assert sec["outputs"] == [{"name": "axioms", "path": "out/lean-env/axioms.json"}]
+    assert sec["about"] == "make Sec's lean env and kernel-replay its modules (scope whole)" and sec["env"] == "lean"
+    assert ts["lean-env:Ext"]["inputs"][:2] == ["Ext/lake-manifest.json", "Ext/lean-toolchain"]
+    envs = {i: [r for r in t["reads"] if r["task"].startswith("lean-env:")] for i, t in ts.items()
+            if i.startswith("lean-module:")}
+    of = {"lean-module:Ext/Ext.lean": "Ext", "lean-module:Ext/More/More.lean": "Ext", "lean-module:Old/Old.lean": "Old"}
+    assert envs == {i: [{"task": f"lean-env:{of.get(i, 'Sec')}", "output": "axioms"}] for i in envs}, \
+        "each module's task reads its own package's env, once"
+    assert {"task": "lean-module:Ext/Ext.lean", "output": "axioms"} in ts["lean-module:Ext/More/More.lean"]["reads"]
+
+
+def test_the_whole_scope_keys_an_env_on_its_files_and_the_imports_scope_on_the_headers(tmp_path, monkeypatch):
+    more = {"Sec/Proofs/G.lean": "import Proofs.D\nimport Std.Data.HashMap\n"}
+    whole = listed(tmp_path / "whole", **OTHER_ENVS)
+    assert listed(tmp_path / "whole-more", **OTHER_ENVS, **more)["lean-env:Sec"] == whole["lean-env:Sec"], \
+        "in the whole scope a header that imports more of the env leaves its task as it was"
+    monkeypatch.setattr(lean_env, "SCOPE", "imports")
+    ts = listed(tmp_path / "imports", **OTHER_ENVS)
+    assert {i: json.loads(t["vars"].pop("modules")) for i, t in ts.items() if i.startswith("lean-env:")} == {
+        "lean-env:Sec": ["Init", "Init.Data.List", "Mathlib.Logic.Basic"], "lean-env:Ext": ["Init", "Mathlib.Data.Nat.Basic"],
+        "lean-env:Old": ["Init"]}, \
+        "the env's modules that the headers of the modules the check builds name, and Init but under `prelude` (Proofs.D); " \
+        "a module a package claims (Proofs.Missing) or holds (Scratch) is no env's, nor is one nothing builds (Proofs.F)"
+    assert ts["lean-env:Sec"]["vars"] == {"package": "Sec", "scope": "imports"}
+    got = listed(tmp_path / "imports-more", **OTHER_ENVS, **more)["lean-env:Sec"]
+    assert json.loads(got["vars"]["modules"]) == ["Init", "Init.Data.List", "Mathlib.Logic.Basic", "Std.Data.HashMap"]
+    assert got["key"] != whole["lean-env:Sec"]["key"]
+
+
+def test_a_scope_that_isn_t_one_makes_no_graph(tmp_path, monkeypatch):
+    monkeypatch.setattr(lean_env, "SCOPE", "closure")
+    with pytest.raises(graph.GraphError, match="SCOPE is 'closure': it is one of whole, imports"):
+        listed(tmp_path)
+
+
 @pytest.mark.slow
 def test_this_tree_s_modules_and_imports_are_those_the_lean_build_cache_keys():
     """On this checkout, whose packages no toy stands in for: the modules listed are those `module_keys.keys` keys from each
     package's default targets and lock roots, each importing what its key reads, so a task and the cache see one module
     one way."""
-    pkgs, _owner, direct, _system = lean_module.imports(ROOT, graph.tracked(ROOT))
+    pkgs, _owner, direct, _system, _env = lean_module.imports(ROOT, graph.tracked(ROOT))
     keyed = {}
     for d in pkgs:
         ks = lean_module.mk.keys(ROOT / d, lean_module.mk.policy_roots(ROOT / d))
