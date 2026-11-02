@@ -66,3 +66,13 @@ def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
     SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""
     monkeypatch.setenv("SWEEP_DIR", str(tmp_path_factory.mktemp("sweep")))
 
+
+@pytest.fixture
+def code_versions_stood_in(monkeypatch):
+    """The code versions the library stamps on what it writes (`score.code_version`, `experiment.code_version`) fixed, for a test
+    that writes a stamp but never checks it: each runs git, which the suite's read guard can't trace, and reads the whole tree."""
+    from verity_vllm.pipeline import experiment
+    from verity_vllm.program.predict import score
+    monkeypatch.setattr(score, "code_version", lambda: "0" * 16)
+    monkeypatch.setattr(experiment, "code_version", lambda repo: {"source": "git", "commit": "0" * 40, "dirty": False})
+

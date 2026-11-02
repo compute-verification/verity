@@ -15,6 +15,8 @@ from verity_vllm.records.predicted_row import FILE, PredictedRow
 
 from tests.program.predict.test_steps import _registered
 
+pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
+
 
 @pytest.mark.parametrize("n", [1, 2])
 def test_predict_row_writes_the_rows_manifest_by_the_query_path(tmp_path, monkeypatch, n):
