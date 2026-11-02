@@ -2,6 +2,10 @@ module
 
 public import Proofs.Flock.VBridge.Family.Structure
 public import Proofs.Flock.Soundness.ExecCircuit
+import all Init.Data.String.Legacy
+import all Init.Data.String.Defs
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
 
 /-!
 # The circuit file's unit name, emitted and parsed

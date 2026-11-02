@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Json.Spec
 public import Proofs.Flock.Claims.Complete.Json.Hex
 public import Proofs.Flock.Claims.Complete.Verdict
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The honest session record as a JSON value
