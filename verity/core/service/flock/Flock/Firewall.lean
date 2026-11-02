@@ -1,9 +1,11 @@
 /-
 The firewall's contract, inner phase (live PROTOCOL.md §10.3): what the firewall may send the challenger's coin server, as a
-program, so that `rec_live`'s proxy is tested against it (`flock-firewall`, `backends/flock/tests/test_firewall_agreement.py`).
+program. `rec_live` relays a live session through it (`flock-firewall live`, `liveCmd`), and its Python mirror is held to
+it (`flock-firewall`, `verity/ml/flock/tests/test_firewall_agreement.py`).
 -/
 import Lean.Data.Json
 import Flock.Hm96
+import Flock.JsonParse
 
 namespace Flock.Firewall
 
@@ -270,6 +272,16 @@ def schedule (s : Json) : V Schedule := do
   | .ok v => return v
   | .error _ => throw "not a rec/inner-transcript/v1/schedule"
 
+/-- A round's schedule entry read field by field: its stream, `k`, `n`, each fresh top's node count, its copies of a
+level-0 top and its message rows (`none` for an entry `schedule` refuses). What the firewall sends for a round is pinned
+to these, beside the canonical compare, so that what it sends is the schedule's value. -/
+def roundSpec (j : Json) : Option (String × Nat × Nat × List Nat × Nat × Nat) :=
+  Except.toOption (ε := String) do
+    let tops ← (← arr (← field j "tops")).toList.mapM fun c => match natOf? c with
+      | some v => pure v
+      | none => throw "tops"
+    return (← str j "stream", ← nat j "k", ← nat j "n", tops, ← nat j "level0", ← nat j "commits")
+
 /-! ## The firewall (`rec_live.Proxy`) -/
 
 structure State where
@@ -347,7 +359,7 @@ def step (s : Schedule) : Req → Fw Unit
   | .hello text => do
     if (← get).finished then throw "session finished"
     if (← get).hello then throw "a second Hello"
-    let v ← match Json.parse text with
+    let v ← match JsonParse.parse text with
       | .ok v => pure v
       | .error e => throw e
     let ok := match v.getObjVal? "link" with
@@ -366,6 +378,8 @@ def step (s : Schedule) : Req → Fw Unit
     if (roots.map (·.1)).eraseDups.length != roots.length then throw "FIREWALL-REFUSED: Commit names a table twice"
     let counts ← roots.mapM fun (n, v) => do return (n, jnat (← nodes v))
     pinned "Commit's roots" (Json.mkObj counts) s.roots
+    if roots.any fun (n, v) => natOf? (s.roots.getObjValD n) != some (v.size / NODE_BYTES) then
+      throw "FIREWALL-REFUSED: Commit's roots: a table's node count is not the pinned schedule's"
     let tops ← roots.mapM fun (n, v) => do return (n, ← saltedTop v)
     let st ← get
     if !st.hello || st.committed then throw "the link points are drawn once, after Hello"
@@ -408,11 +422,13 @@ def step (s : Schedule) : Req → Fw Unit
     let got := Json.mkObj [("stream", .str stream), ("k", jnat k), ("n", jnat n), ("tops", .arr topNodes.toArray),
       ("level0", jnat copies), ("commits", jnat rows.length)]
     pinned s!"round {i}" got (s.rounds.getD i .null)
+    if roundSpec (s.rounds.getD i .null) ≠ some (stream, k, n, fresh.map (·.size / NODE_BYTES), copies, rows.length) then
+      throw s!"FIREWALL-REFUSED: round {i}: not the pinned schedule's"
     let bcs ← rows.mapM salted
     if !(← get).linked then throw "a coin before the link exchange"
     if k == 0 then
-      let some (_, _, pos, _) := s.streams.find? (·.1 == stream) | throw s!"FIREWALL-REFUSED: Open {stream}"
-      send (.openStream stream parent pos)
+      let some (_, wp, pos, _) := s.streams.find? (·.1 == stream) | throw s!"FIREWALL-REFUSED: Open {stream}"
+      send (.openStream stream wp pos)
     modify fun st => { st with rounds := st.rounds + 1,
                                streams := st.streams.map fun e => if e.1 == stream then (e.1, e.2.1, e.2.2 + 1) else e }
     send (.round stream tops copies bcs n)
@@ -421,6 +437,7 @@ def step (s : Schedule) : Req → Fw Unit
     if st.finished then throw "session finished"
     if !st.committed || !st.linked then throw "Finish before the link exchange"
     pinned "Finish's rounds" (jnat st.rounds) (jnat s.rounds.size)
+    if st.rounds ≠ s.rounds.size then throw "FIREWALL-REFUSED: Finish's rounds: not the pinned schedule's"
     let got := Json.mkObj (st.streams.map fun (n, _, k) => (n, jnat k))
     let want := Json.mkObj (s.streams.map fun (n, _, _, k) => (n, jnat k))
     pinned "Finish's streams" got want
@@ -504,11 +521,83 @@ def cmd (_ : List String) : IO UInt32 := do
     let line ← stdin.getLine
     if line.isEmpty then break
     if line.all Char.isWhitespace then continue
-    let out := match Json.parse line >>= case with
+    let out := match JsonParse.parse line >>= case with
       | .ok r => r
       | .error e => Json.mkObj [("error", .str e)]
     stdout.putStrLn out.compress
     stdout.flush
   return 0
+
+/-! ## `flock-firewall live`: the firewall as a live session's send check (`rec_live --lean`) -/
+
+/-- A salt's bytes, `hm96-sha512/v1`'s. -/
+def SALT_BYTES : Nat := 192
+
+/-- A message to the coin server, as `rec_live` relays it to `CoinServer`'s methods. -/
+def sentJson : Sent → Json
+  | .hello h => Json.mkObj [("hello", h)]
+  | .commit roots => Json.mkObj [("commit", .arr (roots.map fun (n, t) => Json.arr #[.str n, hexs t]).toArray)]
+  | .link z => Json.mkObj [("link", jnat z)]
+  | .openStream st p pos => Json.mkObj [("open", .arr #[.str st, .str p, jnat pos])]
+  | .round st tops level0 rows n => Json.mkObj [("round", Json.mkObj [("stream", .str st),
+      ("tops", .arr (tops.map hexs).toArray), ("level0", jnat level0), ("commits", hexs rows), ("n", jnat n)])]
+  | .finish ok => Json.mkObj [("finish", .bool ok)]
+
+/-- One request of a live session at the state `st`, its salts those `st` holds undrawn then `fresh`: what it sends, the
+salts it drew in order and the state after it, holding the salts it didn't draw, or the refusal that stops the session.
+On a session's requests in turn from `{ salts := [] }`, each with the fresh salts read for it, this is `run`'s loop at
+those salts in order (`FirewallLive.run_live`). -/
+def liveStep (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray) :
+    Except String (List Sent × List ByteArray × State) :=
+  let pool := st.salts ++ fresh
+  match (show Fw Unit from do step s (← decode b)).run { st with salts := pool, sent := #[] } with
+  | .ok ((), st') => .ok (st'.sent.toList, pool.take (pool.length - st'.salts.length), { st' with sent := #[] })
+  | .error e => .error e
+
+/-- `flock-firewall live` at the byte source `get`: one session. Its first line is `{"schedule": …}`, answered
+`{"ok": true}`; each later line is one request in hex, answered with what the firewall sends the coin server for it and
+the salts it drew for them, `{"sent": [sentJson…], "salts": [hex…]}`, or with the refusal that stops the session,
+`{"stop": why}`, which every later line is answered with too. Every line is a request, an empty one an empty frame. A
+request's fresh salts are read from `get` before it runs, as many as it could draw (a salted row reads at least one node
+of 64 request bytes, a round's message row aside), and those it doesn't draw are the next request's first: the salts
+drawn are the first of the salts read, in order. -/
+def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
+  let stdin ← IO.getStdin
+  let stdout ← IO.getStdout
+  let out := fun (j : Json) => do
+    stdout.putStrLn j.compress
+    stdout.flush
+  let first ← stdin.getLine
+  let some s := (JsonParse.parse first >>= (field · "schedule") >>= schedule).toOption
+    | out (Json.mkObj [("error", .str "the first line is not {\"schedule\": a rec/inner-transcript/v1/schedule}")])
+      return 1
+  out (Json.mkObj [("ok", .bool true)])
+  let mut st : State := { salts := [] }
+  let mut stop : Option String := none
+  repeat
+    let line ← stdin.getLine
+    if line.isEmpty then break
+    if let some why := stop then
+      out (Json.mkObj [("stop", .str why)])
+      continue
+    match unhex line.trim with
+    | .error e =>
+      stop := some e
+      out (Json.mkObj [("stop", .str e)])
+    | .ok b =>
+      let need := b.size / NODE_BYTES + 1
+      let pool ← get (SALT_BYTES * need).toUSize
+      let fresh := (List.range need).map fun i => pool.extract (SALT_BYTES * i) (SALT_BYTES * (i + 1))
+      match liveStep s st b fresh with
+      | .ok (sent, used, st') =>
+        st := st'
+        out (Json.mkObj [("sent", .arr (sent.map sentJson).toArray), ("salts", hexs used)])
+      | .error e =>
+        stop := some e
+        out (Json.mkObj [("stop", .str e)])
+  return 0
+
+/-- `flock-firewall live` at the operating system's bytes. -/
+def liveCmd : List String → IO UInt32 := liveWith IO.getRandomBytes
 
 end Flock.Firewall
