@@ -15,7 +15,9 @@ passes. Between steps the optimizer keeps `--opt`'s state:
 
 The update Δ_t = θ_t − θ lives in `--store`: `qN` (N-bit codes into a uniform f16 codebook, an f16 scale per group,
 stochastically rounded after every step; E is the store itself as CWQUAN1 delta entries) or `bf16` (stochastic rounding;
-E codes Δ once at `--e-bits`). The trainable set's norm gains train by AdamW in fp32 with fp32 messages (counted). Every
+E codes Δ once at `--e-bits`). `--support P` trains only a fixed share P of each matrix, drawn from `--seed` (`Support`:
+entries or whole rows), so the messages, the store and an elementwise optimizer's state hold only those entries (Adafactor
+keeps its row and column factors); E codes the scattered Δ once at `--e-bits`. The trainable set's norm gains train by AdamW in fp32 with fp32 messages (counted). Every
 record's notes carry the accounting: n, the message, state and store bits, Δ_grad and Δ_t in bits, and Fit's clauses at
 k = 1 MB and 10 MB with sτ = a block's tokens × 16 bits.
 
@@ -200,6 +202,31 @@ class Tree:
         return self.stack.pop()[1]
 
 
+class Support:
+    """A fixed share of one matrix's entries, drawn from the run's seed: `entries` (uniformly, a multiple of `group`) or
+    `rows` (whole rows). Only these entries train; messages, store and elementwise optimizer state hold just them."""
+
+    def __init__(self, shape, share: float, kind: str, group: int, gen: torch.Generator):
+        self.shape, numel = tuple(shape), math.prod(shape)
+        if kind == "rows":
+            unit = group // math.gcd(shape[1], group)
+            r = min(shape[0], max(1, round(share * shape[0] / unit)) * unit)
+            rows = torch.randperm(shape[0], generator=gen, device=DEV)[:r].sort().values
+            self.idx = (rows[:, None] * shape[1] + torch.arange(shape[1], device=DEV)).reshape(-1)
+        else:
+            k = max(1, round(share * numel / group)) * group
+            self.idx = torch.randperm(numel, generator=gen, device=DEV)[:k].sort().values
+        self.k = self.idx.numel()
+
+    def gather(self, t: torch.Tensor) -> torch.Tensor:
+        return t.reshape(-1)[self.idx]
+
+    def scatter(self, v: torch.Tensor) -> torch.Tensor:
+        out = torch.zeros(math.prod(self.shape), dtype=v.dtype, device=v.device)
+        out[self.idx] = v
+        return out.reshape(self.shape)
+
+
 # ---- optimizers on the reduced gradient -------------------------------------------------------------------------------
 
 class Opt:
@@ -298,7 +325,10 @@ def main() -> int:
     ap.add_argument("--tree", choices=("heap", "leaves"), default="heap")
     ap.add_argument("--mom-bits", type=int, default=0, help="muon and sign: the momentum's bits (0 none, 32 fp32)")
     ap.add_argument("--store", default="q8", help="qN (1 <= N <= 8) or bf16")
-    ap.add_argument("--e-bits", type=int, default=8, help="a bf16 store's E: Δ coded once at N bits (0: θ + Δ in full)")
+    ap.add_argument("--e-bits", type=int, default=8,
+                    help="a bf16 store's or a sparse support's E: Δ coded once at N bits (0: θ + Δ in full, dense only)")
+    ap.add_argument("--support", type=float, default=1.0, help="the share of each matrix that trains (`Support`)")
+    ap.add_argument("--support-kind", choices=("entries", "rows"), default="entries")
     ap.add_argument("--group", type=int, default=128)
     ap.add_argument("--leaf", type=int, default=4, help="sequences of 1024 tokens a leaf block")
     ap.add_argument("--lr", type=float, required=True)
@@ -321,6 +351,9 @@ def main() -> int:
         raise SystemExit("delta_grad: --vote sends 1-bit messages; pass --msg-bits 1")
     if a.mom_bits and a.opt not in ("muon", "sign") or not (0 <= a.mom_bits <= 8 or a.mom_bits == 32):
         raise SystemExit("delta_grad: --mom-bits (0 to 8, or 32) is muon's and sign's")
+    sparse = a.support < 1
+    if sparse and (a.opt == "muon" and a.mom_bits or not 1 <= a.e_bits <= 8):
+        raise SystemExit("delta_grad: a sparse --support takes no muon momentum, and codes E at 1 <= --e-bits <= 8")
     torch.backends.cuda.matmul.allow_tf32 = True
 
     net, rec, theta = prepare.load_start(a.start)
@@ -338,14 +371,28 @@ def main() -> int:
     if any(math.prod(s) % a.group for s in shapes.values()):
         raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every target's entries")
     gen = torch.Generator(device=DEV).manual_seed(a.seed)
-    stores = {n: Store(shapes[n], a.store, a.group, gen, a.e_bits) for n in targets}
+    sup = {n: Support(shapes[n], a.support, a.support_kind, a.group, gen) for n in targets} if sparse else {}
+    trained = {n: (sup[n].k,) for n in targets} if sparse else shapes
+    dense_opt = not sparse or a.opt in ("adafactor", "muon")
+    stores = {n: Store(trained[n], a.store, a.group, gen, a.e_bits) for n in targets}
+    e_code = Code(a.e_bits, a.group, gen) if sparse else None
     msg = Vote(gen) if a.vote else Code(a.msg_bits, a.group, gen) if a.msg_bits < 32 else None
-    opt = Opt(a.opt, shapes, a.b1, a.b2, a.mom_bits, a.group, gen)
+    opt = Opt(a.opt, shapes if dense_opt else trained, a.b1, a.b2, a.mom_bits, a.group, gen)
     for n in targets + norms:
         params[n].requires_grad_(True)
     nopt = torch.optim.AdamW([params[n] for n in norms], lr=a.norm_lr, betas=(0.9, 0.95), weight_decay=0.0) \
         if norms else None
-    acct = accounting(a, shapes, sum(params[n].numel() for n in norms), opt)
+    acct = accounting(a, trained, sum(params[n].numel() for n in norms), opt)
+
+    def delta(n: str) -> torch.Tensor:
+        return sup[n].scatter(stores[n].value()) if sparse else stores[n].value()
+
+    def entry(n: str) -> dict:
+        if not sparse:
+            return stores[n].entry(theta[n])
+        codes, scales = e_code.encode(delta(n))
+        return {"kind": "delta", "q": prepare.QArray(e_code.cb, scales.cpu(), codes.reshape(-1).to(torch.uint8).cpu(),
+                                                    e_code.bits, codes.shape[1], shapes[n])}
 
     tokens = a.batch * prepare.EVAL_CTX
     leaves = a.batch // a.leaf
@@ -353,7 +400,7 @@ def main() -> int:
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     n_entries = acct["n_matrix_entries"]
     codings = 0 if msg is None else (leaves - 1 + (leaves if a.vote else 0)) if a.tree == "heap" else 2 * leaves - 1
-    extra = CODE_FLOPS * n_entries * (codings + 1) + opt.flops(shapes)
+    extra = CODE_FLOPS * n_entries * (codings + 1) + opt.flops(shapes if dense_opt else trained)
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (per_step + extra))
     hooks.plan(n_steps)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
@@ -364,7 +411,7 @@ def main() -> int:
                       "fit": acct["fit"]}), flush=True)
 
     def entries() -> dict:
-        e = {n: stores[n].entry(theta[n]) for n in targets}
+        e = {n: entry(n) for n in targets}
         e.update({n: {"kind": "full", "t": params[n].detach().to(theta[n].dtype)} for n in norms})
         return e
 
@@ -385,7 +432,7 @@ def main() -> int:
             loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
             loss.backward()
             total += loss.detach() / leaves
-            tree.push({n: params[n].grad for n in targets})
+            tree.push({n: sup[n].gather(params[n].grad) if sparse else params[n].grad for n in targets})
             for n in targets:
                 params[n].grad = None
         g = {n: t / leaves for n, t in tree.root().items()}
@@ -401,8 +448,12 @@ def main() -> int:
                     params[n].grad.mul_(f)
             opt.tick()
             for n in targets:
-                stores[n].add_(-opt.step(n, g[n], a.lr * frac))
-                params[n].data.copy_((theta_dev[n].float() + stores[n].value()).to(theta_dev[n].dtype))
+                if sparse and dense_opt:
+                    s = sup[n].gather(opt.step(n, sup[n].scatter(g[n]), a.lr * frac))
+                else:
+                    s = opt.step(n, g[n], a.lr * frac)
+                stores[n].add_(-s)
+                params[n].data.copy_((theta_dev[n].float() + delta(n)).to(theta_dev[n].dtype))
         if nopt:
             for grp in nopt.param_groups:
                 grp["lr"] = a.norm_lr * frac
