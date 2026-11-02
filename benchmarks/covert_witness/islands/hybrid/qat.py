@@ -1,0 +1,458 @@
+"""Island `hybrid`, program `qat.py`: large gains inside θ's architecture at a small update, by quantization-aware training
+of the block matrices (the quant island's QAT, islands/quant/train.py, rebuilt for speed and for mixed structures).
+
+Each coded matrix's weight is θ + Q(V) in every step's forward: V an fp32 latent update that only the optimizer touches
+(Muon, through a straight-through gradient), Q its code, so every checkpoint and the submission are exactly a CWQUAN1 E
+(prepare.encode_quant). Codes: `sign` (1 bit), `tern` (-1, 0, 1), `rtn{b}` (b-bit round to nearest, levels
+-(2^(b-1)-1)..2^(b-1)-1), each times an f16 scale of `--mult` times the group's mean |V| (`--group`: -1 a tensor, 0 a
+row, else G entries); `fp` trains the matrix unquantized (a CWQUAN1 full entry). The norm gains at and above the lowest
+trained block, and the final norm, train in fp32 by AdamW and are full entries; the tied embedding stays at θ.
+
+- Matrices of one shape and code are stacked, with their gradients accumulated into one buffer: the code, Muon's batched
+  Newton–Schulz and the weight rebuild are a few ops a step whatever the depth (te_core's meter dispatches every aten op
+  through Python, so per-matrix QAT cost ~0.3 s a step on s100).
+- `--code` maps block matrices to codes, `BLOCKS:LEAVES=CODE` comma-separated (train.py's SPEC; the first match wins;
+  unmatched matrices stay at θ), e.g. `all:all=rtn3` or `0-1:all=tern,2-5:all=rtn3`.
+- `--stages A/B/...` trains the coded matrices in turn, each stage a SPEC (`--passes` repeats the list, `--shares` splits
+  the steps): a stage's latents and optimizer state exist only while it runs, and a matrix a later stage revisits
+  restarts its latent from its code, so Δ_grad is the largest stage's. The rate follows one schedule over the run
+  (`--stage-sched global`) or restarts in each stage (`each`).
+- `--momentum-dtype bf16` keeps Muon's buffer in bf16.
+
+The notes state, per stage, the trained tensors, codes, weights and Δ_grad (latent + gradient + momentum per coded
+weight, gradient + momentum per fp weight, the gains' fp32 gradient and AdamW m and v), and the submission's Δ (|E|).
+
+    python launch.py reference s100 --island hybrid --program qat.py --note "qat: ..." -- --klass reference \
+        --code all:all=rtn3 --muon-lr 0.015
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import lzma
+import math
+import re
+import time
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from te_core import hooks
+
+import prepare
+
+LEAVES = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
+GROUPS = {"qkv": ("wq", "wk", "wv"), "attn": ("wq", "wk", "wv", "wo"), "gu": ("w_gate", "w_up"),
+          "mlp": ("w_gate", "w_up", "w_down"), "all": LEAVES}
+CODE = re.compile(r"sign|tern|rtn([2-8])|fp|-")
+#: the harness's checkpoint count: with `hooks.plan`, the first E encoded in each 5% of the planned steps
+CHECKPOINTS = 20
+XZ9 = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE,
+       "filters": [{"id": lzma.FILTER_LZMA2, "preset": 9 | lzma.PRESET_EXTREME}]}
+
+
+def fail(msg: str):
+    """Exit with `msg` also on stdout: the harness keeps a program's output, not its exit message."""
+    print(json.dumps({"error": msg}), flush=True)
+    raise SystemExit(f"hybrid qat: {msg}")
+
+
+def spec_names(spec: str, L: int) -> list[str]:
+    """train.py's SPEC: comma-separated BLOCKS:LEAVES, BLOCKS `all`, `i`, `i-j` or a negative index from the top."""
+    out = []
+    for item in filter(None, spec.split(",")):
+        blocks, _, leaves = item.partition(":")
+        if blocks == "all":
+            idx = range(L)
+        elif re.fullmatch(r"\d+-\d+", blocks):
+            lo, hi = map(int, blocks.split("-"))
+            idx = range(lo, hi + 1)
+        else:
+            idx = [int(blocks) % L]
+        names = [x for leaf in (leaves or "all").split("+") for x in GROUPS.get(leaf, (leaf,))]
+        if set(names) - set(LEAVES):
+            fail(f"unknown leaves {sorted(set(names) - set(LEAVES))}")
+        out += [f"blocks.{i}.{n}.weight" for i in idx for n in names]
+    return out
+
+
+def parse_codes(spec: str, L: int) -> dict[str, str]:
+    """`BLOCKS:LEAVES=CODE,...` -> {matrix: code}, the first match winning; `-` (or no match) keeps a matrix at θ."""
+    codes: dict[str, str] = {}
+    for item in filter(None, spec.split(",")):
+        sel, _, code = item.rpartition("=")
+        if not sel or not CODE.fullmatch(code):
+            fail(f"--code item {item!r} is not BLOCKS:LEAVES=CODE (CODE sign|tern|rtnB|fp|-)")
+        for n in spec_names(sel, L):
+            codes.setdefault(n, code)
+    return {n: c for n, c in codes.items() if c != "-"}
+
+
+def block_of(name: str) -> int | None:
+    m = re.match(r"blocks\.(\d+)\.", name)
+    return int(m.group(1)) if m else None
+
+
+def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
+    """The orthogonalized update of each matrix of a stack."""
+    a, b, c = 3.4445, -4.7750, 2.0315
+    # CPU bf16 matmuls occasionally return 2**24-sized entries here (CPU smokes only)
+    x = g.bfloat16() if g.is_cuda else g.float()
+    tall = x.shape[-2] > x.shape[-1]
+    if tall:
+        x = x.mT
+    x = x / (x.norm(dim=(-2, -1), keepdim=True) + 1e-7)
+    for _ in range(steps):
+        s = x @ x.mT
+        x = a * x + (b * s + c * s @ s) @ x
+    return (x.mT if tall else x).to(g.dtype)
+
+
+def ns_flops(shape: tuple[int, ...], steps: int = 5) -> int:
+    m, n = min(shape[-2:]), max(shape[-2:])
+    return math.prod(shape[:-2]) * steps * (4 * m * m * n + 2 * m ** 3)
+
+
+def code_bits(code: str) -> int:
+    return 1 if code == "sign" else 2 if code == "tern" else int(code[3:])
+
+
+def qmax_of(code: str) -> int:
+    return 1 if code == "tern" else 2 ** (code_bits(code) - 1) - 1
+
+
+def group_size(shape: tuple[int, int], group: int) -> int:
+    g = shape[0] * shape[1] if group < 0 else shape[1] if group == 0 else group
+    if (shape[0] * shape[1]) % g:
+        fail(f"group {g} does not divide a {shape} matrix")
+    return g
+
+
+@torch.no_grad()
+def quantize(v: torch.Tensor, code: str, g: int, mult: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Q(V) of a stack V (G x m x n) in fp32, its integer levels k (fp32, sign: -1/1) and f16-exact scales (G x groups x 1):
+    a scale of `mult` times the group's mean |V| rounded to f16, then sign, or round(V / s) clamped to ±qmax (a group of
+    zeros quantizes to zeros), so Q = k · s exactly in fp32, as CWQUAN1 decodes it."""
+    vg = v.reshape(v.shape[0], -1, g)
+    s = (mult * vg.abs().mean(-1, keepdim=True)).clamp(max=65504.0).half().float()
+    if code == "sign":
+        k = torch.where(vg >= 0, 1.0, -1.0)
+    else:
+        qm = qmax_of(code)
+        k = torch.clamp(torch.round(vg / torch.where(s > 0, s, 1.0)), -qm, qm) * (s > 0)
+    return (k * s).reshape(v.shape), k, s
+
+
+def qarray(k: torch.Tensor, s: torch.Tensor, code: str, g: int, shape: tuple[int, int]) -> prepare.QArray:
+    """One matrix's CWQUAN1 delta from its levels k (groups x g) and scales (groups x 1)."""
+    if code == "sign":
+        cb, codes = torch.tensor([-1.0, 1.0]), (k > 0)
+    else:
+        qm = qmax_of(code)
+        cb = torch.zeros(2 ** code_bits(code))
+        cb[: 2 * qm + 1] = torch.arange(-qm, qm + 1, dtype=torch.float32)
+        codes = k + qm
+    return prepare.QArray(cb.half(), s.reshape(-1).half().cpu(), codes.reshape(-1).to(torch.uint8).cpu(),
+                          code_bits(code), g, shape)
+
+
+class Schedule:
+    """The run's steps, told to the harness (`hooks.plan`), and which encode an E: the first E in each 5% of the steps
+    is a checkpoint, so each 5% gets one at its last step."""
+
+    def __init__(self, total: int):
+        self.total = total
+        hooks.plan(total)
+        self.cps = {max(0, math.ceil(total * b / CHECKPOINTS) - 1) for b in range(1, CHECKPOINTS + 1)}
+
+    def due(self, g: int) -> bool:
+        return g in self.cps or g == self.total - 1
+
+
+def lr_frac(step: int, n: int, warmup: int, sched: str, decay_frac: float) -> float:
+    w = min(1.0, (step + 1) / max(1, warmup))
+    if sched == "linear":
+        return w * (1 - step / n)
+    tail = max(1, round(decay_frac * n))
+    return w * min(1.0, (n - step) / tail)
+
+
+def fresh_order(data, rec: dict) -> dict:
+    """Drop the windows the start read from the stream's order (its provenance: default_rng(data_seed), step x batch)."""
+    prov = rec.get("provenance", {})
+    if not {"step", "batch", "data_seed"} <= set(prov):
+        return {"fresh": False, "why": "the start's provenance names no data order"}
+    n_seq = (len(data.tokens) - 1) // data.ctx
+    seen = np.random.default_rng(prov["data_seed"]).permutation(n_seq)[: prov["step"] * prov["batch"]]
+    keep = np.ones(n_seq, dtype=bool)
+    keep[seen] = False
+    before = len(data.order)
+    data.order = data.order[keep[data.order]]
+    return {"fresh": True, "windows": n_seq, "seen": int(len(seen)), "kept": int(len(data.order)), "of": before}
+
+
+class Stack:
+    """The matrices of one shape and code: θ, the trained weights' gradient buffer (each matrix's .grad is a view of it,
+    so backward accumulates into it), and, while a stage trains them, the latent V and Muon's buffer."""
+
+    def __init__(self, names: list[str], code: str, params: dict, theta_dev: dict, group: int):
+        self.names, self.code = names, code
+        self.shape = tuple(params[names[0]].shape)
+        self.g = group_size(self.shape, group) if code != "fp" else 0
+        self.theta = torch.stack([theta_dev[n] for n in names])
+        self.params = [params[n] for n in names]
+        self.k = self.s = None
+        self.v = self.buf = self.grad = None
+        self.copies = 0
+
+    def collect(self) -> None:
+        """Make the buffer hold every matrix's gradient: backward accumulates into an existing .grad in place, so this
+        copies only a gradient autograd put elsewhere (counted in the notes)."""
+        for i, p in enumerate(self.params):
+            if p.grad is None:
+                self.grad[i].zero_()
+            elif p.grad.data_ptr() != self.grad[i].data_ptr():
+                self.grad[i].copy_(p.grad)
+                self.copies += 1
+            else:
+                continue
+            p.grad = self.grad[i]
+
+    def begin(self, mult: float, momentum_dtype: torch.dtype) -> None:
+        """Start training: V from the current code (`mult` scales it so it requantizes to the same code), a zero momentum
+        buffer, and the gradient buffer as every matrix's .grad."""
+        w = torch.stack([p.detach() for p in self.params])
+        if self.code == "fp":
+            self.v = w.clone()
+        else:
+            d = w - self.theta
+            if self.k is not None:
+                mk = self.k.abs().mean(-1, keepdim=True).clamp(min=1e-12)
+                d = (self.k * self.s / (mult * mk) if self.code != "sign" else self.k * self.s).reshape(w.shape)
+            self.v = d.float()
+        self.buf = torch.zeros_like(self.v, dtype=momentum_dtype)
+        self.grad = torch.zeros_like(self.v)
+        for i, p in enumerate(self.params):
+            p.requires_grad_(True)
+            p.grad = self.grad[i]
+
+    def end(self) -> None:
+        for p in self.params:
+            p.grad = None
+            p.requires_grad_(False)
+        self.v = self.buf = self.grad = None
+
+    @torch.no_grad()
+    def muon(self, lr: float, momentum: float) -> None:
+        self.buf.mul_(momentum).add_(self.grad)
+        u = newton_schulz(self.grad.add(self.buf, alpha=momentum))
+        self.v.add_(u, alpha=-lr * max(1.0, self.shape[0] / self.shape[1]) ** 0.5)
+        self.grad.zero_()
+
+    @torch.no_grad()
+    def rebuild(self, mult: float) -> None:
+        if self.code == "fp":
+            w = self.v
+        else:
+            q, self.k, self.s = quantize(self.v, self.code, self.g, mult)
+            w = self.theta + q
+        torch._foreach_copy_(self.params, list(w.unbind(0)))
+
+    def entries(self) -> dict[str, dict]:
+        if self.code == "fp":
+            return {n: {"kind": "full", "t": p.detach()} for n, p in zip(self.names, self.params)}
+        if self.k is None:
+            return {}
+        return {n: {"kind": "delta", "q": qarray(self.k[i], self.s[i], self.code, self.g, self.shape)}
+                for i, n in enumerate(self.names)}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--klass", required=True, choices=sorted(prepare.CLASSES))
+    ap.add_argument("--start", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--code", default="all:all=rtn3", help="BLOCKS:LEAVES=CODE,... (CODE sign|tern|rtnB|fp|-)")
+    ap.add_argument("--group", type=int, default=0, help="entries per scale: -1 a tensor, 0 a row, else G")
+    ap.add_argument("--mult", type=float, default=1.0, help="the scale over the group's mean |V|")
+    ap.add_argument("--stages", default="", help="SPEC/SPEC/...: the coded matrices trained in turn (default: all at once)")
+    ap.add_argument("--shares", default="", help="the stages' shares of the steps, comma-separated (default: equal)")
+    ap.add_argument("--passes", type=int, default=1, help="repeat the stage list")
+    ap.add_argument("--stage-sched", choices=("global", "each"), default="global")
+    ap.add_argument("--muon-lr", type=float, default=0.015)
+    ap.add_argument("--momentum", type=float, default=0.95)
+    ap.add_argument("--momentum-dtype", choices=("fp32", "bf16"), default="fp32")
+    ap.add_argument("--adam-lr", type=float, default=3e-4, help="the norm gains' AdamW rate")
+    ap.add_argument("--no-gains", action="store_true", help="keep the norm gains at θ")
+    ap.add_argument("--sched", choices=("linear", "wsd"), default="linear")
+    ap.add_argument("--decay-frac", type=float, default=0.2, help="wsd: the decaying share")
+    ap.add_argument("--warmup", type=int, default=50)
+    ap.add_argument("--batch", type=int, default=64)
+    ap.add_argument("--micro", type=int, default=32)
+    ap.add_argument("--data-seed", type=int, default=1)
+    ap.add_argument("--fresh", action="store_true", help="skip the windows the start trained on")
+    ap.add_argument("--budget-fraction", type=float, default=0.98)
+    ap.add_argument("--xz", choices=("1", "9e"), default="9e", help="the submission's xz preset (checkpoints: 1)")
+    a = ap.parse_args()
+
+    t_start = time.perf_counter()
+    torch.backends.cuda.matmul.allow_tf32 = True
+    net, rec, theta = prepare.load_start(a.start)
+    dev = prepare.DEVICE
+    params = net.params()
+    L = rec["config"]["n_layer"]
+    codes = parse_codes(a.code, L)
+    if not codes:
+        fail("--code selects no matrix")
+    for p in params.values():
+        p.requires_grad_(False)
+    stage_specs = [s for s in a.stages.split("/") if s] or ["all:all"]
+    base_sets = []
+    for s in stage_specs:
+        names = sorted({n for n in spec_names(s, L) if n in codes})
+        if not names:
+            fail(f"stage {s!r} trains no coded matrix")
+        base_sets.append(names)
+    stage_sets = base_sets * a.passes
+
+    # one stack per shape, code and set of stages, so each stage trains whole stacks
+    theta_dev = {n: theta[n].to(dev) for n in codes}
+    groups: dict[tuple, list[str]] = {}
+    for n in sorted(codes, key=lambda n: (block_of(n), n)):
+        member = tuple(j for j, s in enumerate(base_sets) if n in s)
+        groups.setdefault((tuple(params[n].shape), codes[n], member), []).append(n)
+    stacks = [Stack(ns, code, params, theta_dev, a.group) for (_, code, _), ns in groups.items()]
+    stack_of = {n: st for st in stacks for n in st.names}
+    del theta_dev
+    gains_all = sorted(n for n, p in params.items() if p.ndim == 1)
+    final_norm = [n for n in gains_all if block_of(n) is None]
+
+    def gains_of(names: list[str]) -> list[str]:
+        if a.no_gains:
+            return []
+        low = min(block_of(n) for n in names)
+        return [n for n in gains_all if block_of(n) is None or block_of(n) >= low] or final_norm
+
+    tokens = a.batch * prepare.EVAL_CTX
+    per_step, ns_extra = [], []
+    for names in stage_sets:
+        tr = {"full": sorted(names + gains_of(names))}
+        per_step.append(prepare.train_flops(rec, tr, [{"op": "train", "tokens": tokens}])["flops"])
+        ns_extra.append(sum(ns_flops(tuple(params[n].shape)) for n in names))
+    shares = [float(x) for x in a.shares.split(",")] if a.shares else [1.0] * len(stage_specs)
+    if len(shares) != len(stage_specs):
+        fail("--shares needs one share per stage")
+    shares = [x / sum(shares) / a.passes for x in shares] * a.passes
+    room = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET
+    counts = [max(1, int(sh * room // (f + e))) for sh, f, e in zip(shares, per_step, ns_extra)]
+    total = sum(counts)
+    if total < CHECKPOINTS:
+        fail(f"the budget buys {total} steps, fewer than the {CHECKPOINTS} checkpoints")
+    sched = Schedule(total)
+
+    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
+    fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
+    fwd = torch.compile(net)
+    mdt = torch.bfloat16 if a.momentum_dtype == "bf16" else torch.float32
+    steps: list[dict] = []
+    stage_notes, g, ema, t0 = [], 0, None, time.perf_counter()
+    all_gains: set[str] = set()
+
+    def encode() -> bytes:
+        ent: dict[str, dict] = {}
+        for st in stacks:
+            ent |= st.entries()
+        ent |= {n: {"kind": "full", "t": params[n].detach()} for n in sorted(all_gains)}
+        return prepare.encode_quant(ent, theta)
+
+    for j, names in enumerate(stage_sets):
+        active = sorted({id(stack_of[n]): stack_of[n] for n in names}.values(), key=lambda st: st.names[0])
+        gains = gains_of(names)
+        all_gains |= set(gains)
+        for n in gains:
+            params[n].requires_grad_(True)
+        for st in active:
+            st.begin(a.mult, mdt)
+        adam = torch.optim.AdamW([params[n] for n in gains], lr=a.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
+                                 fused=dev.startswith("cuda")) if gains else None
+        n_j, first = counts[j], g
+        coded_w = sum(theta[n].numel() for n in names if codes[n] != "fp")
+        fp_w = sum(theta[n].numel() for n in names if codes[n] == "fp")
+        gain_w = sum(params[n].numel() for n in gains)
+        mom_b = 2 if mdt == torch.bfloat16 else 4
+        note = {"stage": j, "spec": (stage_specs * a.passes)[j], "steps": n_j, "flops_per_step": per_step[j] + ns_extra[j],
+                "matrices": len(names), "coded_weights": coded_w, "fp_weights": fp_w, "gains": len(gains),
+                "codes": sorted({codes[n] for n in names}),
+                "delta_grad_bytes": coded_w * (4 + 4 + mom_b) + fp_w * (4 + mom_b) + gain_w * 12,
+                "delta_grad_what": f"coded weight: fp32 latent + fp32 gradient + {a.momentum_dtype} Muon momentum; "
+                                   f"fp weight: fp32 gradient + {a.momentum_dtype} momentum; gain: fp32 gradient + AdamW "
+                                   "fp32 m and v"}
+        print(json.dumps(note), flush=True)
+        for step in range(n_j):
+            gs = g if a.stage_sched == "global" else step
+            frac = lr_frac(gs, total if a.stage_sched == "global" else n_j, a.warmup, a.sched, a.decay_frac)
+            if adam is not None:
+                for grp in adam.param_groups:
+                    grp["lr"] = a.adam_lr * frac
+            rows = data.next(a.batch)
+            loss_sum = 0.0
+            for i in range(0, a.batch, a.micro):
+                xb = rows[i: i + a.micro]
+                with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
+                    logits = fwd(xb[:, :-1])
+                loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), xb[:, 1:].reshape(-1)) * (
+                    len(xb) / a.batch)
+                loss.backward()
+                loss_sum += float(loss.detach())
+            for st in active:
+                st.collect()
+            torch.nn.utils.clip_grad_norm_([p for st in active for p in st.params] + [params[n] for n in gains], 1.0)
+            for st in active:
+                st.muon(a.muon_lr * frac, a.momentum)
+                st.rebuild(a.mult)
+            if adam is not None:
+                adam.step()
+                adam.zero_grad(set_to_none=True)
+            steps.append({"op": "train", "tokens": tokens})
+            steps.append({"op": "extra", "flops": ns_extra[j], "what": "muon newton-schulz"})
+            ema = loss_sum if ema is None else 0.98 * ema + 0.02 * loss_sum
+            if (step + 1) % 100 == 0 or step == 0:
+                print(json.dumps({"stage": j, "step": g + 1, "loss": round(loss_sum, 4), "ema": round(ema, 4),
+                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+            if sched.due(g):
+                encode()
+            g += 1
+        for st in active:
+            st.end()
+        for n in gains:
+            params[n].requires_grad_(False)
+        del adam
+        stage_notes.append(note | {"global_steps": [first, g - 1], "final_loss_ema": ema})
+
+    t_train = time.perf_counter() - t0
+    blob1 = encode()
+    blob = blob1[:8] + lzma.compress(lzma.decompress(bytes(blob1[8:]), format=lzma.FORMAT_XZ), **XZ9) \
+        if a.xz == "9e" else blob1
+    model = prepare.decode(theta, blob)
+    changed = sorted(set(codes) | all_gains)
+    bad = [n for n in changed if not prepare.same_bits(model[n].cpu(), params[n].detach().to(theta[n].dtype).cpu())]
+    if bad:
+        fail(f"E rebuilds {len(bad)} tensors differently from the trained ones: {bad[:3]}")
+    coded = sum(theta[n].numel() for n in codes if codes[n] != "fp")
+    notes = {"direction": "hybrid", "program": "qat.py", "args": vars(a), "steps": total, "stages": stage_notes,
+             "codes": {c: sum(1 for n in codes if codes[n] == c) for c in sorted(set(codes.values()))},
+             "coded_weights": coded, "E_bytes": len(blob), "E_bytes_xz1": len(blob1),
+             "bits_per_coded_weight": 8 * len(blob) / max(1, coded),
+             "delta_grad_bytes_max": max(s["delta_grad_bytes"] for s in stage_notes),
+             "embedding": "frozen at theta (the tied head is a frozen tail)", "fresh": fresh,
+             "rebuilds_bit_for_bit": True, "grad_copies": sum(st.copies for st in stacks),
+             "train_seconds": round(t_train, 1),
+             "process_seconds": round(time.perf_counter() - t_start, 1)}
+    print(json.dumps({k: v for k, v in notes.items() if k not in ("args", "stages")}), flush=True)
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, {"full": changed}, steps, changed=changed, notes=notes)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
