@@ -78,6 +78,9 @@ def target(root: Path, dest: str, is_dir: bool) -> Path:
 
 
 def bind(root: Path, src: str, dest: str, ro: bool) -> None:
+    # root may not follow a link another user owns in a sticky world-writable directory (fs.protected_symlinks; a uv
+    # Python's minor-version link in /workspace/jobs/cache/python is one), but realpath's lstat and readlink may
+    src = os.path.realpath(src)
     if not os.path.exists(src):
         raise SystemExit(f"sandbox: {src} does not exist")
     t = target(root, dest, os.path.isdir(src))
