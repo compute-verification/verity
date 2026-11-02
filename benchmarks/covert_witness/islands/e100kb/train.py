@@ -1,17 +1,29 @@
 """Islands `e1mb` and `e100kb` (direction `lowrank`): a low-rank update to the blocks' matrices, sized to the class's byte
-cap or to a smaller byte target (`--e-bytes`, for the bpb-against-|E| curve); E is the factors and any norm gains
-(`prepare.encode_lora`), and the evaluated model merges them. The same file runs in both islands and for any class:
-`--class` (default this file's directory's name) must be the class the run is launched as, a bin of Delta.
+cap or to a smaller byte target (`--e-bytes`, for the A2 curve over Delta); E is the factors and any norm gains, and the
+evaluated model merges them. The same file runs in both islands and for any class: `--class` (default this file's
+directory's name) must be the class the run is launched as, a bin of Delta.
 
 The base stays frozen and the forward adds s · B(A x) to each target's output (a hook, so the base matmuls read θ and only
 the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 
 - placement: `--targets` (all, out, attn, mlp, qkv, qv, none, or leaf names), `--layers` (all, top:N, A-B, or a list);
-- size: `--rank` (0: the largest uniform rank that fits `--e-bytes`, default the cap less 512), `--rank-map leaf=R,...`;
+- size: `--rank` (0: the largest uniform rank that fits `--e-bytes`, default the cap less 512, or 2048 for quant),
+  `--rank-map leaf=R,...`, or `--alloc grad`: each target's rank by its full gradient over `--init-batches` batches, rank
+  units taken in decreasing σ² per byte of E (σ the gradient's singular values) until E fills `--e-bytes` (|E| from an
+  affine model of the ranks fitted to exact encodes before the probe: an E encoded after compute is a checkpoint);
 - norm gains: `--norms` (none, all, final, adapted: the adapted blocks' and the final norm);
-- factor precision: `--dtype` bf16 or f16 (f16 rescales A and B to unit max and moves the factor into the scale), or
-  `--bits` 4 or 8: CWLORA2's integer factors, one f16 scale per rank component (`prepare.encode_lora2`), trained through
-  their rounding (straight-through), the gains still in `--dtype`;
+- factor precision, `--format`:
+  - lora (CWLORA1, `prepare.encode_lora`): `--dtype` bf16 or f16 factors (f16 rescales A and B to unit max and moves the
+    factor into the scale);
+  - lora2 (CWLORA2, `prepare.encode_lora2`; `--bits` 4 or 8): integer factors, one f16 scale per rank component on each
+    side, the gains in `--dtype`; `--dora` adds DoRA magnitudes, one per output row in f16 (`--dtype f16`), each row of
+    W + sBA rescaled to its magnitude;
+  - quant (CWQUAN1, `prepare.encode_quant`; `--bits` 1 to 8, `--bits-map leaf=B` or `leaf=BA:BB` and `--b-bits` for
+    mixed precision): each pair balanced (B's columns to unit RMS, those RMS moved into A's rows), A by row and B as one
+    group coded into the Lloyd–Max codebook of N(0, 1) times an f16 RMS scale; the gains as `--norm-bits` deltas from θ
+    (uniform codes at the absmax, 0: in full), xz'd;
+
+  quantized factors and magnitudes train through their rounding (straight-through, the rounding refreshed once a step);
 - initialization: `--init` gauss (A ~ N(0, 1/d_in), B = 0), orth (A orthonormal rows), grad (A the top-r right singular
   vectors of the targets' full gradient over `--init-batches` batches, B = 0; the pass and the weight gradients are logged);
 - optimizer: AdamW with `--b-lr-mult` (LoRA+), `--opt riemann` (each factor's gradient preconditioned by the other's Gram,
@@ -21,14 +33,15 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 
 The run plans its steps for the harness (`hooks.plan`) and encodes E in the middle of each of `--snaps` + 1 shares of them
 (the default 19: each 5%), so each of the harness's 5% checkpoints scores one. The record's notes carry `delta_grad`: the
-trainable values and the bits of their gradient, of AdamW's state (m and v, fp32) and of the fp32 latent factors that a
-straight-through run keeps beside the stored codes.
+trainable values and the bits of their gradient, of AdamW's state (m and v, fp32) and of the fp32 latent factors and
+magnitudes that a straight-through run keeps beside the stored codes.
 
     python launch.py CLASS START --island e1mb --node NODE --note TEXT -- --class CLASS [--targets all] [--rank 0] ...
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import re
@@ -48,6 +61,7 @@ HF_OF = {"wq": "q_proj", "wk": "k_proj", "wv": "v_proj", "wo": "o_proj", "w_gate
          "w_down": "down_proj"}
 GROUPS = {"all": set(LF_MATS), "out": {"wo", "w_down"}, "attn": {"wq", "wk", "wv", "wo"}, "mlp": {"w_gate", "w_up", "w_down"},
           "qkv": {"wq", "wk", "wv"}, "qv": {"wq", "wv"}, "none": set()}
+FORMATS = ("lora", "lora2", "quant")
 
 
 def block_of(name: str) -> int | None:
@@ -91,22 +105,181 @@ def norms_of(params: dict, spec: str, layers: set[int]) -> list[str]:
     raise SystemExit(f"{KLASS}: --norms {spec}: none, all, final or adapted")
 
 
-def e_bytes(theta, ranks: dict[str, int], norms, dtype, bits: int = 0) -> int:
-    fac = {n: (torch.zeros(r, theta[n].shape[1]), torch.zeros(theta[n].shape[0], r), 1.0) for n, r in ranks.items()}
-    full = {n: theta[n] for n in norms}
-    return len(prepare.encode_lora2(fac, bits, dtype, full=full) if bits else prepare.encode_lora(fac, dtype, full))
+@functools.lru_cache(maxsize=None)
+def codebook(bits: int, uniform: bool = False) -> torch.Tensor:
+    """The f16 codebook CWQUAN1 stores, increasing: the 2^bits-level Lloyd–Max quantizer of N(0, 1), or (uniform)
+    (k − h) / (h − 1) for k < 2h, h = 2^(bits − 1)."""
+    k = 2 ** bits
+    if uniform:
+        return ((torch.arange(k, dtype=torch.float64) - k // 2) / (k // 2 - 1)).to(torch.float16)
+    xs = torch.linspace(-8, 8, 40001, dtype=torch.float64)
+    w = torch.exp(-xs ** 2 / 2)
+    c = torch.special.ndtri((torch.arange(k, dtype=torch.float64) + 0.5) / k)
+    for _ in range(200):
+        idx = torch.bucketize(xs, (c[1:] + c[:-1]) / 2)
+        num = torch.zeros(k, dtype=torch.float64).index_add_(0, idx, xs * w)
+        c = num / torch.zeros(k, dtype=torch.float64).index_add_(0, idx, w)
+    return c.to(torch.float16)
 
 
-def adapter(A, B, s: float, bits: int):
-    """The forward hook adding s · B(A x) to a target's output; with `bits`, A and B as CWLORA2 stores them, with the
-    rounding's gradient passed straight through."""
-    def hook(m, inp, out):
-        fa, fb = A, B
-        if bits:
-            qa, qb = prepare.lora2_factors(A, B, bits)
-            fa, fb = A + (qa - A).detach(), B + (qb - B).detach()
-        return out + s * F.linear(F.linear(inp[0], fa), fb)
-    return hook
+@functools.lru_cache(maxsize=None)
+def codebook_on(bits: int, uniform: bool, device: str) -> torch.Tensor:
+    return codebook(bits, uniform).float().to(device)
+
+
+def qcodes(x: torch.Tensor, bits: int, group: int, uniform: bool = False) -> tuple[prepare.QArray, torch.Tensor]:
+    """x's entries in row-major groups of `group` as `bits`-bit codes into `codebook` times an f16 scale per group (the
+    group's RMS, or its max |x| when uniform): the QArray and the fp32 values E rebuilds from it, in x's shape."""
+    cb = codebook_on(bits, uniform, str(x.device))
+    g = x.detach().float().reshape(-1, group)
+    sc = (g.abs().amax(1) if uniform else g.pow(2).mean(1).sqrt()).to(torch.float16)
+    scf = sc.float()[:, None]
+    codes = torch.bucketize(g / torch.where(scf > 0, scf, 1.0), (cb[1:] + cb[:-1]) / 2)
+    q = prepare.QArray(codebook(bits, uniform), sc, codes.to(torch.uint8), bits, group, tuple(x.shape))
+    return q, (cb[codes] * scf).view(x.shape)
+
+
+def quant_pair(A: torch.Tensor, B: torch.Tensor, bits_a: int, bits_b: int):
+    """A (r x d_in) and B (d_out x r) as CWQUAN1 codes: B's columns over their RMS c, A's rows times c over G (the largest
+    such row's RMS), A coded by row and B as one group. Returns (Q_A, Q_B, G, A_eff, B_eff): s · B_eff A_eff is
+    s · G · Q_B Q_A, the product E rebuilds at scale s · G."""
+    A, B = A.detach().float(), B.detach().float()
+    c = B.pow(2).mean(0).sqrt()
+    c = torch.where(c > 0, c, torch.ones_like(c))
+    ac = A * c[:, None]
+    G = float(ac.pow(2).mean(1).sqrt().max()) or 1.0
+    qa, va = qcodes(ac / G, bits_a, A.shape[1])
+    qb, vb = qcodes(B / c[None, :], bits_b, B.numel())
+    return qa, qb, G, va * (G / c)[:, None], vb * c[None, :]
+
+
+class LowRank:
+    """One target's factors (fp32 latents A, B), its scale and precision, the straight-through offsets to the values E
+    stores (`refresh`), and with DoRA the magnitudes (init: W's row norms)."""
+
+    def __init__(self, w: torch.nn.Parameter, a0: torch.Tensor, s: float, bits: tuple[int, int], fmt: str, dora: bool):
+        self.w, self.s, self.bits, self.fmt = w, s, bits, fmt
+        self.A = torch.nn.Parameter(a0.float().clone())
+        self.B = torch.nn.Parameter(torch.zeros(w.shape[0], a0.shape[0], device=a0.device))
+        quantized = fmt != "lora"
+        self.dA = torch.zeros_like(self.A) if quantized else None
+        self.dB = torch.zeros_like(self.B) if quantized else None
+        self.wn2 = w.detach().float().pow(2).sum(1) if dora else None
+        self.m = torch.nn.Parameter(self.wn2.sqrt().clone()) if dora else None
+        self.dm = torch.zeros_like(self.m) if dora else None
+
+    def latents(self) -> int:
+        return (self.A.numel() + self.B.numel() if self.dA is not None else 0) + (self.m.numel() if self.m is not None else 0)
+
+    @torch.no_grad()
+    def refresh(self, mag_dtype: torch.dtype) -> None:
+        if self.fmt == "lora2":
+            fa, fb = prepare.lora2_factors(self.A, self.B, self.bits[0])
+        elif self.fmt == "quant":
+            *_, fa, fb = quant_pair(self.A, self.B, *self.bits)
+        if self.dA is not None:
+            self.dA.copy_(fa - self.A)
+            self.dB.copy_(fb - self.B)
+        if self.m is not None:
+            self.dm.copy_(self.m.to(mag_dtype).float() - self.m)
+
+    def hook(self, mod, inp, out):
+        fa = self.A if self.dA is None else self.A + self.dA
+        fb = self.B if self.dB is None else self.B + self.dB
+        y = out + self.s * F.linear(F.linear(inp[0], fa), fb)
+        if self.m is None:
+            return y
+        # each output row of W + sBA rescaled to its magnitude, the row norms and the rescale in fp32
+        with torch.autocast(prepare.DEVICE.split(":")[0], enabled=False):
+            fa32, fb32 = fa.float(), fb.float()
+            cross = (fb32 * (self.w.float() @ fa32.t())).sum(1)
+            sq = ((fb32 @ (fa32 @ fa32.t())) * fb32).sum(1)
+            n = (self.wn2 + 2 * self.s * cross + self.s ** 2 * sq).clamp_min(1e-12).sqrt()
+            return (y.float() * ((self.m + self.dm) / n)).to(y.dtype)
+
+
+def bits_of(targets: list[str], a) -> dict[str, tuple[int, int]]:
+    """Each target's (A's bits, B's bits): `--bits`, then `--b-bits` for B, then `--bits-map leaf=B` or `leaf=BA:BB`."""
+    out = {n: (a.bits, a.b_bits or a.bits) for n in targets}
+    for item in (x for x in a.bits_map.split(",") if x):
+        leaf, v = item.split("=")
+        ba, bb = (int(x) for x in v.split(":")) if ":" in v else (int(v), int(v))
+        out.update({n: (ba, bb) for n in targets if leaf_of(n) == leaf})
+    allowed = {"lora": {0}, "lora2": set(prepare.LORA2_BITS), "quant": set(range(1, 9))}[a.format]
+    for n, (ba, bb) in out.items():
+        if {ba, bb} - allowed or (a.format == "lora2" and ba != bb):
+            raise SystemExit(f"{KLASS}: {n}: bits {ba}:{bb} for --format {a.format} (lora: 0; lora2: 4 or 8 on both "
+                             "factors; quant: 1 to 8)")
+    return out
+
+
+def e_bytes(theta, spec: dict[str, tuple[int, int, int]], norms, a) -> int:
+    """|E| for ranks and bits `spec` (name -> (r, A's bits, B's bits)) and the gains `norms`. For quant, with uniformly
+    random codes and scales, which xz can't shrink, so the trained codes' E is at most about this."""
+    if a.format == "lora":
+        fac = {n: (torch.zeros(r, theta[n].shape[1]), torch.zeros(theta[n].shape[0], r), 1.0) for n, (r, _, _) in spec.items()}
+        return len(prepare.encode_lora(fac, a.dtype, {n: theta[n] for n in norms}))
+    if a.format == "lora2":
+        fac = {n: (torch.zeros(r, theta[n].shape[1]), torch.zeros(theta[n].shape[0], r), 1.0) for n, (r, _, _) in spec.items()}
+        mags = {n: torch.ones(theta[n].shape[0]) for n in spec} if a.dora else None
+        return len(prepare.encode_lora2(fac, {n: ba for n, (_, ba, _) in spec.items()}, a.dtype, magnitudes=mags,
+                                        full={n: theta[n] for n in norms}))
+    g = torch.Generator().manual_seed(0)
+
+    def rand(shape: tuple[int, ...], bits: int, group: int, uniform: bool = False) -> prepare.QArray:
+        n = math.prod(shape)
+        return prepare.QArray(codebook(bits, uniform), (torch.rand(n // group, generator=g) + 0.5).half(),
+                              torch.randint(0, 2 ** bits, (n,), generator=g, dtype=torch.uint8), bits, group, shape)
+
+    entries = {}
+    for n, (r, ba, bb) in spec.items():
+        d_out, d_in = theta[n].shape
+        # a scale whose JSON is as long as any float's
+        entries[n] = {"kind": "lora", "a": rand((r, d_in), ba, d_in), "b": rand((d_out, r), bb, d_out * r),
+                      "scale": -1.2345678901234567e-300}
+    for n in norms:
+        shape = tuple(theta[n].shape)
+        entries[n] = ({"kind": "delta", "q": rand(shape, a.norm_bits, math.prod(shape), True)} if a.norm_bits
+                      else {"kind": "full", "t": theta[n]})
+    return len(prepare.encode_quant(entries, theta))
+
+
+def unit_bytes(theta, n: str, bits: tuple[int, int], a) -> float:
+    """The bytes one more rank adds to target n's factors."""
+    d_out, d_in = theta[n].shape
+    if a.format == "lora":
+        return 2 * (d_in + d_out)
+    if a.format == "lora2":
+        return bits[0] * (d_in + d_out) / 8 + 4
+    return (bits[0] * d_in + bits[1] * d_out) / 8 + 2
+
+
+def size_model(theta, targets: list[str], bits: dict, norms: list[str], a, calib: dict[str, int]):
+    """|E| as an affine function of the ranks, from exact encodes made before any compute (the harness takes an E encoded
+    after compute as a checkpoint): the gains alone, each target's fixed bytes at rank 1, its bytes per rank, and one
+    factor matching the model to the exact |E| at the ranks `calib`."""
+    spec = lambda ranks: {n: (r, *bits[n]) for n, r in ranks.items()}
+    base = e_bytes(theta, {}, norms, a)
+    fixed = {n: e_bytes(theta, spec({n: 1}), norms, a) - base - unit_bytes(theta, n, bits[n], a) for n in targets}
+    model = lambda ranks: base + sum(fixed[n] + unit_bytes(theta, n, bits[n], a) * r for n, r in ranks.items() if r > 0)
+    k = e_bytes(theta, spec(calib), norms, a) / model(calib)
+    return lambda ranks: math.ceil(k * model(ranks))
+
+
+def fit_prefix(size, hi: int, target: int) -> int:
+    """The largest p in [0, hi] with size(p) <= target, size increasing in p."""
+    if size(hi) <= target:
+        return hi
+    lo = 0
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (mid, hi) if size(mid) <= target else (lo, mid)
+    return lo
+
+
+def ranks_for(theta, targets: list[str], rank: int, rank_map: dict[str, int]) -> dict[str, int]:
+    out = {n: min(rank_map.get(leaf_of(n), rank), *theta[n].shape) for n in targets}
+    return {n: r for n, r in out.items() if r > 0}
 
 
 def delta_grad(trained: list[torch.Tensor], latent: int) -> dict:
@@ -116,11 +289,6 @@ def delta_grad(trained: list[torch.Tensor], latent: int) -> dict:
     bits = 32 * n + 64 * n + 32 * latent
     return {"trainable": n, "grad_bits": 32 * n, "adam_bits": 64 * n, "latent_bits": 32 * latent, "bits": bits,
             "bytes": bits // 8}
-
-
-def ranks_for(targets: list[str], rank: int, rank_map: dict[str, int]) -> dict[str, int]:
-    out = {n: rank_map.get(leaf_of(n), rank) for n in targets}
-    return {n: r for n, r in out.items() if r > 0}
 
 
 def lr_factor(step: int, n_steps: int, a) -> float:
@@ -149,10 +317,10 @@ def fresh_order(data: prepare.TrainData, rec: dict) -> None:
 
 
 @torch.no_grad()
-def grad_init(net, params, ranks, data, a, steps, tokens) -> dict[str, torch.Tensor]:
-    """The top right singular vectors of each target's full gradient over `init_batches` batches (eager, before the
-    adapters exist)."""
-    for n in ranks:
+def grad_probe(net, params, names, data, a, steps, tokens) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
+    """Each target's full gradient over `init_batches` batches (eager, before the adapters exist), as its singular values
+    and right singular vectors."""
+    for n in names:
         params[n].requires_grad_(True)
     with torch.enable_grad():
         for _ in range(a.init_batches):
@@ -164,13 +332,13 @@ def grad_init(net, params, ranks, data, a, steps, tokens) -> dict[str, torch.Ten
                 loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
                 loss.backward()
             steps.append({"op": "train", "tokens": tokens})
-            steps.append({"op": "extra", "flops": sum(2 * params[n].numel() * tokens for n in ranks)})
+            steps.append({"op": "extra", "flops": sum(2 * params[n].numel() * tokens for n in names)})
     out = {}
     svd = 0
-    for n, r in ranks.items():
+    for n in names:
         g = params[n].grad.float()
-        _, _, vh = torch.linalg.svd(g, full_matrices=False)
-        out[n] = vh[:r].contiguous()
+        _, sv, vh = torch.linalg.svd(g, full_matrices=False)
+        out[n] = (sv, vh)
         svd += 4 * g.shape[0] * g.shape[1] * min(g.shape)
         params[n].requires_grad_(False)
     for p in params.values():
@@ -180,10 +348,11 @@ def grad_init(net, params, ranks, data, a, steps, tokens) -> dict[str, torch.Ten
 
 
 @torch.no_grad()
-def riemann_precondition(factors: dict, delta: float) -> int:
+def riemann_precondition(ads: dict, delta: float) -> int:
     """grad_A ← (BᵀB + δI)⁻¹ grad_A, grad_B ← grad_B (AAᵀ + δI)⁻¹; returns the matmul FLOPs spent."""
     flops = 0
-    for A, B, _ in factors.values():
+    for ad in ads.values():
+        A, B = ad.A, ad.B
         r = A.shape[0]
         eye = torch.eye(r, device=A.device)
         if A.grad is not None:
@@ -205,11 +374,20 @@ def main() -> int:
     ap.add_argument("--layers", default="all")
     ap.add_argument("--rank", type=int, default=0, help="0: the largest uniform rank that fits --e-bytes")
     ap.add_argument("--rank-map", default="", help="leaf=R,... overriding --rank per leaf (0 drops the leaf)")
-    ap.add_argument("--e-bytes", type=int, default=0, help="the byte target the rank fits (default: the class's cap less 512)")
+    ap.add_argument("--alloc", default="uniform", choices=("uniform", "grad"))
+    ap.add_argument("--e-bytes", type=int, default=0, help="the byte target the ranks fit (default: the class's cap less "
+                                                             "512, or 2048 for quant)")
     ap.add_argument("--norms", default="all")
+    ap.add_argument("--format", default="", choices=("", *FORMATS),
+                    help="default: lora for --bits 0, lora2 for 4 or 8, else quant")
     ap.add_argument("--dtype", default="bf16", choices=("bf16", "f16"))
-    ap.add_argument("--bits", type=int, default=0, choices=(0, *prepare.LORA2_BITS),
-                    help="0: CWLORA1 factors in --dtype; 4 or 8: CWLORA2 integer factors")
+    ap.add_argument("--bits", type=int, default=0, choices=range(9))
+    ap.add_argument("--b-bits", type=int, default=0, help="B's bits when not --bits (quant)")
+    ap.add_argument("--bits-map", default="", help="leaf=B or leaf=BA:BB,... overriding the bits per leaf")
+    ap.add_argument("--norm-bits", type=int, default=6, choices=(0, *range(2, 9)),
+                    help="quant: the gains as deltas at this many bits (0: in full)")
+    ap.add_argument("--dora", action="store_true", help="DoRA magnitudes (lora2, --dtype f16)")
+    ap.add_argument("--mag-lr", type=float, default=3e-4)
     ap.add_argument("--init", default="gauss", choices=("gauss", "orth", "grad"))
     ap.add_argument("--init-batches", type=int, default=4)
     ap.add_argument("--scale", default="rs", choices=("rs", "one"), help="rs: s = sqrt(d_in / r); one: s = 1")
@@ -231,58 +409,80 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     a = ap.parse_args()
+    a.format = a.format or ("lora" if not a.bits else "lora2" if a.bits in prepare.LORA2_BITS else "quant")
+    if a.dora and (a.format != "lora2" or a.dtype != "f16"):
+        raise SystemExit(f"{KLASS}: --dora needs --format lora2 (CWLORA2 holds the magnitudes) and --dtype f16")
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
     cap = prepare.CLASSES[a.klass]["max_e_bytes"]
     if not (a.e_bytes or cap):
         raise SystemExit(f"{a.klass}: an uncapped class needs --e-bytes")
-    target_bytes = a.e_bytes or (cap - 512)
+    target_bytes = a.e_bytes or (cap - (2048 if a.format == "quant" else 512))
     layers = layers_of(a.layers, rec["config"]["n_layer"])
     targets = targets_of(params, a.targets, layers)
     norms = norms_of(params, a.norms, layers)
+    bits = bits_of(targets, a)
     rank_map = {k: int(v) for k, v in (x.split("=") for x in a.rank_map.split(",") if x)}
-    rank = a.rank
-    if not rank and targets:
-        rank = 1
-        while e_bytes(theta, ranks_for(targets, rank + 1, rank_map), norms, a.dtype, a.bits) <= target_bytes:
-            rank += 1
-    ranks = ranks_for(targets, rank, rank_map)
-    size = e_bytes(theta, ranks, norms, a.dtype, a.bits)
-    if cap is not None and size > cap:
-        raise SystemExit(f"{a.klass}: ranks {sorted(set(ranks.values()))} on {len(ranks)} weights and {len(norms)} norms is "
-                         f"{size} bytes, over the cap of {cap}")
-    for p in params.values():
-        p.requires_grad_(False)
-    for n in norms:
-        params[n].data = params[n].data.float()
-        params[n].requires_grad_(True)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     if a.fresh:
         fresh_order(data, rec)
     tokens = a.batch * prepare.EVAL_CTX
     steps, snaps = [], []
+    for p in params.values():
+        p.requires_grad_(False)
+    # every exact |E| comes before the first compute: an E encoded after it is a checkpoint
+    size_of = lambda ranks: e_bytes(theta, {n: (r, *bits[n]) for n, r in ranks.items()}, norms, a)
+    rank = a.rank
+    if not rank and targets:
+        hi = max(min(theta[n].shape) for n in targets)
+        rank = max(1, fit_prefix(lambda r: size_of(ranks_for(theta, targets, r, rank_map)), hi, target_bytes))
+    ranks = ranks_for(theta, targets, rank, rank_map)
+    size = size_of(ranks)
+    model = size_model(theta, targets, bits, norms, a, ranks) if a.alloc == "grad" else None
+    probe = grad_probe(net, params, targets, data, a, steps, tokens) if a.init == "grad" or a.alloc == "grad" else {}
+    if a.alloc == "grad":
+        # rank units in decreasing σ² per byte; σ falls with the unit's index, so each target's units come in order
+        units = sorted(((float(sv[j]) ** 2 / unit_bytes(theta, n, bits[n], a), n) for n, (sv, _) in probe.items()
+                        for j in range(len(sv))), key=lambda u: -u[0])
+        order = [n for _, n in units]
+
+        def ranks_at(p: int) -> dict[str, int]:
+            out = {}
+            for n in order[:p]:
+                out[n] = out.get(n, 0) + 1
+            return out
+
+        ranks = ranks_at(fit_prefix(lambda p: model(ranks_at(p)), len(order), target_bytes))
+        rank, size = 0, model(ranks)
+    if cap is not None and size > cap:
+        raise SystemExit(f"{a.klass}: ranks {sorted(set(ranks.values()))} on {len(ranks)} weights and {len(norms)} norms "
+                         f"is {size} bytes, over the cap of {cap}")
+    for n in norms:
+        params[n].data = params[n].data.float()
+        params[n].requires_grad_(True)
     g = torch.Generator(device=prepare.DEVICE).manual_seed(a.seed)
-    init_a = grad_init(net, params, ranks, data, a, steps, tokens) if a.init == "grad" else {}
-    factors = {}
+    ads = {}
     for n, r in ranks.items():
         w = params[n]
-        if n in init_a:
-            a0 = init_a[n]
+        if a.init == "grad":
+            a0 = probe[n][1][:r].contiguous()
         elif a.init == "orth":
             q, _ = torch.linalg.qr(torch.randn(w.shape[1], r, device=prepare.DEVICE, generator=g))
             a0 = q.T.contiguous()
         else:
             a0 = torch.randn(r, w.shape[1], device=prepare.DEVICE, generator=g) / math.sqrt(w.shape[1])
-        A = torch.nn.Parameter(a0.float().clone())
-        B = torch.nn.Parameter(torch.zeros(w.shape[0], r, device=prepare.DEVICE))
         s = math.sqrt(w.shape[1] / r) if a.scale == "rs" else 1.0
-        factors[n] = (A, B, s)
-        mod = net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(adapter(A, B, s, a.bits))
+        ads[n] = LowRank(w, a0, s, bits[n], a.format, a.dora)
+        net.inner.get_submodule(n.removesuffix(".weight")).register_forward_hook(ads[n].hook)
+    del probe
+    mag_dtype = prepare.DTYPES[a.dtype]
+    for ad in ads.values():
+        ad.refresh(mag_dtype)
     fwd = torch.compile(net)
-    groups = [{"params": [A for A, _, _ in factors.values()], "lr": a.lr, "weight_decay": a.wd},
-              {"params": [B for _, B, _ in factors.values()], "lr": a.lr * a.b_lr_mult, "weight_decay": a.wd},
+    groups = [{"params": [ad.A for ad in ads.values()], "lr": a.lr, "weight_decay": a.wd},
+              {"params": [ad.B for ad in ads.values()], "lr": a.lr * a.b_lr_mult, "weight_decay": a.wd},
+              {"params": [ad.m for ad in ads.values() if ad.m is not None], "lr": a.mag_lr, "weight_decay": 0.0},
               {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}]
     groups = [grp for grp in groups if grp["params"]]
     opt = torch.optim.AdamW(groups, betas=(0.9, a.beta2), fused=prepare.DEVICE.startswith("cuda"))
@@ -294,10 +494,11 @@ def main() -> int:
     marks = {round(n_steps * (k + 0.5) / (a.snaps + 1)) for k in range(a.snaps + 1)}
     hooks.plan(n_steps)
     trained = [p for grp in opt.param_groups for p in grp["params"]]
-    dgrad = delta_grad(trained, sum(A.numel() + B.numel() for A, B, _ in factors.values()) if a.bits else 0)
-    print(json.dumps({"class": a.klass, "steps": n_steps, "rank": rank, "ranks": sorted(set(ranks.values())),
-                      "targets": len(ranks), "norms": len(norms), "E_bytes": size, "delta_grad": dgrad,
-                      "flops_per_step": per_step, "init_flops": spent, "windows": len(data.order)}), flush=True)
+    dgrad = delta_grad(trained, sum(ad.latents() for ad in ads.values()))
+    print(json.dumps({"class": a.klass, "format": a.format, "steps": n_steps, "rank": rank,
+                      "ranks": sorted(set(ranks.values())), "rank_sum": sum(ranks.values()), "targets": len(ranks),
+                      "norms": len(norms), "E_bytes": size, "delta_grad": dgrad, "flops_per_step": per_step,
+                      "init_flops": spent, "windows": len(data.order)}), flush=True)
     t0 = time.perf_counter()
     lrs = [grp["lr"] for grp in opt.param_groups]
     ema = None
@@ -317,37 +518,51 @@ def main() -> int:
         steps.append({"op": "train", "tokens": tokens})
         torch.nn.utils.clip_grad_norm_(trained, 1.0)
         if a.opt == "riemann":
-            steps.append({"op": "extra", "flops": riemann_precondition(factors, a.riemann_delta)})
+            steps.append({"op": "extra", "flops": riemann_precondition(ads, a.riemann_delta)})
         opt.step()
         opt.zero_grad(set_to_none=True)
+        for ad in ads.values():
+            ad.refresh(mag_dtype)
         ema = total if ema is None else 0.98 * ema + 0.02 * total
         if (step + 1) % 100 == 0:
             print(json.dumps({"step": step + 1, "loss": round(total, 4), "ema": round(ema, 4),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
-            snaps.append((encode(factors, params, norms, a.dtype, a.bits), len(steps)))
-    blob = encode(factors, params, norms, a.dtype, a.bits)
+            snaps.append((encode(ads, params, norms, theta, a), len(steps)))
+    blob = encode(ads, params, norms, theta, a)
     model = prepare.decode(theta, blob)
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=list(ranks) + norms,
-                   notes={"method": "lora", "direction": "lowrank", "rank": rank, "ranks": ranks, "args": vars(a),
-                          "steps": n_steps, "final_train_ema": ema, "E_bytes": len(blob), "delta_grad": dgrad},
-                   snapshots=snaps)
+                   notes={"method": "lora", "direction": "lowrank", "format": a.format, "rank": rank, "ranks": ranks,
+                          "bits": {n: list(bits[n]) for n in ranks}, "args": vars(a), "steps": n_steps,
+                          "final_train_ema": ema, "E_bytes": len(blob), "delta_grad": dgrad}, snapshots=snaps)
     return 0
 
 
-def encode(factors: dict, params: dict, norms: list[str], dtype: str, bits: int = 0) -> bytes:
-    if bits:
-        return prepare.encode_lora2({n: (A.detach().float(), B.detach().float(), s) for n, (A, B, s) in factors.items()},
-                                    bits, dtype, full={n: params[n] for n in norms})
+def encode(ads: dict, params: dict, norms: list[str], theta: dict, a) -> bytes:
+    full = {n: params[n] for n in norms}
+    if a.format == "lora2":
+        return prepare.encode_lora2({n: (ad.A.detach().float(), ad.B.detach().float(), ad.s) for n, ad in ads.items()},
+                                    {n: ad.bits[0] for n, ad in ads.items()}, a.dtype,
+                                    magnitudes={n: ad.m.detach() for n, ad in ads.items() if ad.m is not None}, full=full)
+    if a.format == "quant":
+        entries = {}
+        for n, ad in ads.items():
+            qa, qb, G, _, _ = quant_pair(ad.A, ad.B, *ad.bits)
+            entries[n] = {"kind": "lora", "a": qa, "b": qb, "scale": ad.s * G}
+        for n in norms:
+            d = params[n].detach().float() - theta[n].to(params[n].device).float()
+            entries[n] = ({"kind": "delta", "q": qcodes(d, a.norm_bits, d.numel(), uniform=True)[0]} if a.norm_bits
+                          else {"kind": "full", "t": params[n]})
+        return prepare.encode_quant(entries, theta)
     out = {}
-    for n, (A, B, s) in factors.items():
-        A, B = A.detach().float(), B.detach().float()
-        if dtype == "f16":
+    for n, ad in ads.items():
+        A, B, s = ad.A.detach().float(), ad.B.detach().float(), ad.s
+        if a.dtype == "f16":
             ma, mb = float(A.abs().max()), float(B.abs().max())
             if ma > 0 and mb > 0:
                 A, B, s = A / ma, B / mb, s * ma * mb
         out[n] = (A, B, s)
-    return prepare.encode_lora(out, dtype, {n: params[n] for n in norms})
+    return prepare.encode_lora(out, a.dtype, full)
 
 
 if __name__ == "__main__":
