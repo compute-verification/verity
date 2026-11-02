@@ -1,6 +1,6 @@
-# Flock verifier of record: specification outline
+# Flock verifier: specification outline
 
-The verifier of record is the Lean verifier, `verity/core/service/flock/` (`flock-verify`, Lean 4, no dependencies). Its
+The verifier is the Lean verifier, `verity/core/service/flock/` (`flock-verify`, Lean 4, no dependencies). Its
 definitions are the specification; this file is their outline, one section per part of the verifier, each naming the
 Lean module that holds it. The section numbers are stable, since the Lean sources and other documents cite them. Where
 the outline and the Lean differ, the Lean wins.

@@ -15,7 +15,7 @@ repository.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
-their names, and "leg", the dampener, NCI, C-Flock and the netlist are retired). Their code
+their names, and "leg", the dampener, NCI, C-Flock, the netlist, M0, IR and the verifier of record are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """
@@ -44,7 +44,7 @@ _INCORRECT_TERM = re.compile(rf"\b(?:faulty{_SEP}(?:outputs?|steps?|ingress{_SEP
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
 RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"',
-                '| "C-Flock"', '| "netlist"')
+                '| "C-Flock"', '| "netlist"', '| "M0"', '| "IR"', '| "verifier of record"')
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
@@ -57,11 +57,14 @@ DOC_TERMS = {
     "firewall": "ZK server",
     "C-Flock": "Flock (Succinct's is upstream Flock)",
     "netlist": "a private circuit, or the circuit's description",
+    "M0": "Flock's circuit prover",
+    "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
+    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
     "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
                                                              "registered compiler turns into the execution block",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
@@ -90,7 +93,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
-                       rf"|(?i:\bC-Flock\b|\bnetlists?\b)"
+                       rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
                        rf"|\bcommit{_SPACE}periods?\b")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
@@ -116,10 +119,10 @@ ALLOWED: dict[str, str] = {
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
-    "(C-Flock's circuit prover, Flock b684b12": "`benchmarks/served_units/README.md`: a queued PR on next rewrites the line "
-                                                "beside it; renamed after it lands",
     "reads Programs with C-Flock's decoder": "`verity/core/protocols/network/nci/README.md`: a queued PR on next rewrites the "
                                              "line beside it; renamed after it lands",
+    "It runs the Lean verifier of record, `remote-audit-verifier`": "`benchmarks/remote_session/README.md`: a queued PR on next "
+                                                                    "rewrites the line beside it; renamed after it lands",
 }
 
 PENDING: dict[str, str] = {
@@ -207,6 +210,8 @@ PENDING: dict[str, str] = {
     "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
     "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
+    "benchmarks/served_units/README.md": "a queued PR on next rewrites the lines that name Flock's circuit prover and its "
+                                         "verifier; the rename follows it",
 }
 
 
@@ -419,11 +424,15 @@ def test_the_doc_scan_reads_the_incorrect_terms():
 
 
 def test_the_doc_scan_reads_the_flock_terms():
-    """C-Flock and the netlist, on toy files: the stored label `C-Flock`, a `flock-netlist` tag, Flock and upstream Flock
-    stay."""
+    """C-Flock, the netlist, M0, IR and the verifier of record, on toy files: the stored label `C-Flock`, a
+    `flock-netlist` tag, an `ir` key, Flock, upstream Flock, M1, M2, an M00 and the verifier stay."""
     docs = {
         "a.md": "C-Flock's prover proves a netlist; two\nNetlists, and C-FLOCK.\n"
-                "The stored label `C-Flock`, the `verity/flock-netlist/v1` tag, Flock and upstream Flock stay.\n",
+                "M0's session, the Verity IR and two IRs; the verifier of\nrecord and two verifiers-of-record.\n"
+                "The stored label `C-Flock`, the `verity/flock-netlist/v1` tag, Flock and upstream Flock stay.\n"
+                "The `ir` key, `M0` in a span, M1, M2, an M00, a mirror and the verifier stay.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("a.md", 1, "C-Flock"), ("a.md", 1, "netlist"), ("a.md", 2, "Netlists"), ("a.md", 2, "C-FLOCK")]
+        ("a.md", 1, "C-Flock"), ("a.md", 1, "netlist"), ("a.md", 2, "Netlists"), ("a.md", 2, "C-FLOCK"),
+        ("a.md", 3, "M0"), ("a.md", 3, "IR"), ("a.md", 3, "IRs"), ("a.md", 3, "verifier of record"),
+        ("a.md", 4, "verifiers-of-record")]

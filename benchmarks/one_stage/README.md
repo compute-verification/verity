@@ -1,18 +1,18 @@
 # One-stage audit runs
 
 The one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end: serving's committed values through registration, the verifier's
-sample, Flock's circuit prover (M0) and the Lean verifier, to the audit record with its integrity profile, then the
+sample, Flock's circuit prover and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
-- `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
+- `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`).
 - `r2_population.py`: the other population every driver's and `replay.py`'s registration-partition-mismatch negative (R2)
   registers, its first template one instance short, or one over where it has a single instance.
 - `pod.sh`: the entry point on a CPU pod.
 - `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its run root, the
   commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture, committed under rows-sha512
   (`COMMIT_SCHEME` names no other: vllm-v1 is kept only to read recorded runs), its window from `verity-vllm serving-rows`
-  (with `WINDOW=served`, the in-Commit hook's), and M0 and Lean built from the run's tree. With `A5_ROW_DIR` it takes a
+  (with `WINDOW=served`, the in-Commit hook's), and the circuit prover and Lean built from the run's tree. With `A5_ROW_DIR` it takes a
   single-GPU deferred Commit's row dir and sealed bundle in place of the fixture, and with `WINDOW=served` the window its C2
   site committed (`A5_WINDOW`).
 - `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on an H200 node, from a clone of the tree
@@ -26,7 +26,7 @@ negatives.
   the sample): GLM-5.3's TP8 Commit with
   `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every unit of `SiluMul_v2{I=1536}`,
   the dense layers' 861 per rank, by `subset:512`), or by default the CPU TP stand-in
-  (`integrations/vllm/tests/pipeline/served_tp.py`). A member's whole population is one M0 statement, whose shape takes at most
+  (`integrations/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
   (172,200 routed-expert and 21,525 shared-expert units) is not a member. Each session's `circuit.txt` files and lookup tables
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
@@ -103,7 +103,7 @@ negatives.
   unproved can carry and its δ the sample's.
 - `plan_shards.py`: the sharded plan unit (`PlanShard_v1`) on a recorded remote session (vllm's `remote_session.json` and the
   remote verifier's `verifier.json`): each pass's plan cut into the store's shards, every instance held to the unit's
-  reference, each distinct one to the circuit, and one staged by `UnitStager` for its fit in M0's block. A CPU job; it
+  reference, each distinct one to the circuit, and one staged by `UnitStager` for its fit in the circuit prover's block. A CPU job; it
   builds nothing.
 - `zk_cost.sh`: Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job, or a preemptible guest job on a shared node). A6's W8A8 coordinates at K = 4096 and 14336 are
@@ -132,14 +132,14 @@ negatives.
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
-  the request Program's root Calls by Definition kind and tries one unit of each through M0 (a kind whose word units M0
+  the request Program's root Calls by Definition kind and tries one unit of each through the circuit prover (a kind whose word units it
   refuses, through its Boolean version's); `a11_slice.py` cuts the
   capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's
   units from those values, one template each, under the stratified law, proved under `--zk` and held by the Lean verifier;
   `a11_table.py` renders the per-kind table and its gap lines from the audits' summaries.
 - `a9.sh`: run A9's entry point, on the same builds. A9 is GLM-5.3's routed-expert FP8 GEMMs in the registry's Boolean
   static pair form (`boolean_fp8_moe`): `a9.py` holds one coordinate of each launch's first routed pair to the capture in
-  its word and Boolean forms, cuts an up/gate coordinate whose rows overflow M0's block into its gather and
+  its word and Boolean forms, cuts an up/gate coordinate whose rows overflow the circuit prover's block into its gather and
   block-coordinate units, and saves the units for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
   saved directory without the values stage.
 - `a10.sh`: run A10's entry point, on the same builds. A10 is A11's kinds and A9's launches on rank 0's committed values
@@ -152,9 +152,9 @@ negatives.
   deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
   ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
-  the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
+  the log2 of the circuit prover's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
   same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
-  `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
+  `m1_unit.py` builds one family's unit through the circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
 - `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
   served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
@@ -169,10 +169,10 @@ negatives.
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
   With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
 
-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
-`pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
+Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
+`pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
 inputs sent with the run; it builds `flock-circuit` and `flock-verify` once per pod, then runs the driver, whose
-`--m0-pythonpath` names that M0 tree. The drivers' checks go through the verifier of record
+`--m0-pythonpath` names that tree. The drivers' checks go through the verifier
 (`one_stage.verifier`), which builds the sampled-proofs Lean in the run's tree on its first check, hence `--cwd clone`:
 
 ~~~sh
