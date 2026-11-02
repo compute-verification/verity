@@ -72,6 +72,15 @@ theorem Runs.lift {α : Type} {x : V α} {a : α} {st : State} {Q : α → State
   subst hx
   exact ⟨a, st, rfl, h⟩
 
+/-- A `do` block's `if` with a join point `b` after it, shown once for every state `J` holds of: `st` when the `if`'s
+branch is skipped, and the branch `a` may end in it. -/
+theorem Runs.ite_jp {α : Type} {c : Prop} [Decidable c] {a b : Fw α} {st : State} {Q : α → State → Prop}
+    (J : State → Prop) (hb : ∀ t, J t → Runs b t Q) (hv : ¬c → J st)
+    (ha : c → (∀ t, J t → Runs b t Q) → Runs a st Q) : Runs (if c then a else b) st Q := by
+  by_cases h : c
+  · exact Runs.ite_pos h (ha h hb)
+  · exact Runs.ite_neg h (hb st (hv h))
+
 theorem Runs.lift_bind {α β : Type} {x : V α} {a : α} {f : α → Fw β} {st : State} {R : β → State → Prop}
     (hx : x = .ok a) (h : Runs (f a) st R) : Runs (liftM x >>= f) st R := by
   subst hx
@@ -138,8 +147,8 @@ theorem draws_mapM {α β γ : Type} (f : α → Fw β) (R : α → List (Array 
 where
   ok_bind' {δ ε : Type} (a : δ) (g : δ → V ε) : (Except.ok a : V δ) >>= g = g a := rfl
 
-theorem draws_saltedTop (top : ByteArray) : Draws (saltedTop top) (topRows top) (fun l c => l = c) := by
-  have h := draws_mapM salted (fun row => [row]) (fun c => [c]) (fun _ => ()) (fun _ => ()) (topRows top)
+theorem draws_salteds (rows : List (Array Nat)) : Draws (rows.mapM salted) rows (fun l c => l = c) := by
+  have h := draws_mapM salted (fun row => [row]) (fun c => [c]) (fun _ => ()) (fun _ => ()) rows
     (fun row _ => fun st hl => by
       obtain ⟨c, hc, hc1⟩ := draws_salted row st hl
       exact ⟨c, hc, hc1.symm, rfl⟩)
@@ -147,6 +156,9 @@ theorem draws_saltedTop (top : ByteArray) : Draws (saltedTop top) (topRows top) 
   intro st hl
   obtain ⟨l, hm, hl1, _⟩ := h st hl
   exact ⟨l, hm, by rw [← hl1, List.flatMap_singleton']⟩
+
+theorem draws_saltedTop (top : ByteArray) : Draws (saltedTop top) (topRows top) (fun l c => l = c) :=
+  draws_salteds (topRows top)
 
 /-! ## The firewall's loop -/
 
@@ -277,5 +289,110 @@ theorem run_hello (s : Schedule) {H L : FirewallObj.Tree} {A B : List ((_ : Stri
   refine Runs.ite_neg (by simp [hco]) ?_
   refine Runs.ite_neg (by simp [FirewallJson.fractional_printJson hp]) ?_
   exact Runs.lift_bind (pinned_ok (by rw [hT]; exact hcan)) (Runs.modify_bind (Runs.send rfl))
+
+/-- **Commit** of tables with distinct names, each top a whole number of nodes, their node counts the schedule's roots,
+after Hello and before any other Commit: it draws a salt for each node and sends each table's commit strings. -/
+theorem run_commit (s : Schedule) (rootF : ByteArray) (roots : List (String × ByteArray)) {st : State}
+    (hf : st.finished = false) (hh : st.hello = true) (hc : st.committed = false) (hnd : (roots.map (·.1)).Nodup)
+    (hcap : ∀ e ∈ roots, isCap e.2 = true)
+    (hpin : canonForm (Json.mkObj (roots.map fun e => (e.1, jnat (e.2.size / NODE_BYTES)))) = canonForm s.roots)
+    (hnat : ∀ e ∈ roots, natOf? (s.roots.getObjValD e.1) = some (e.2.size / NODE_BYTES))
+    (hl : (roots.flatMap fun e => topRows e.2).length ≤ st.salts.length) :
+    Runs (step s (.commit rootF roots [])) st fun _ t => ∃ tops,
+      t = { st with committed := true, roots := roots,
+                    salts := st.salts.drop (roots.flatMap fun e => topRows e.2).length,
+                    sent := st.sent.push (.commit tops) } ∧
+      tops.map (·.1) = roots.map (·.1) ∧ tops.flatMap (·.2) = cs (roots.flatMap fun e => topRows e.2) st.salts := by
+  rw [step]
+  refine Runs.get (Runs.ite_neg (by simp [hf]) ?_)
+  refine Runs.ite_neg (by simp) ?_
+  refine Runs.ite_neg (by simp [eraseDups_of_nodup hnd]) ?_
+  refine Runs.bind (Q := fun c t => c = roots.map (fun e => (e.1, jnat (e.2.size / NODE_BYTES))) ∧ t = st)
+    ⟨_, _, run_mapM_pure _ (fun e => (e.1, jnat (e.2.size / NODE_BYTES))) roots ?_ st, rfl, rfl⟩ ?_
+  · rintro ⟨n, v⟩ hv st'
+    show (liftM (nodes v) >>= fun c => Pure.pure (n, jnat c) : Fw _).run st' = _
+    rw [nodes_ok (hcap _ hv)]
+    rfl
+  rintro counts t ⟨rfl, rfl⟩
+  refine Runs.lift_bind (pinned_ok hpin) ?_
+  refine Runs.ite_neg ?_ ?_
+  · simp only [List.any_eq_true, not_exists, not_and]
+    rintro ⟨n, v⟩ hv
+    simp [hnat _ hv]
+  refine Runs.bind ((draws_mapM (α := String × ByteArray) (β := String × List ByteArray) (γ := String) _
+    (fun e => topRows e.2) (fun b => b.2) (fun b => b.1) (fun e => e.1) roots ?_).runs hl) ?_
+  · rintro ⟨n, v⟩ _ st' hl'
+    obtain ⟨l, hm, hl1⟩ := draws_saltedTop v st' hl'
+    refine ⟨(n, l), ?_, hl1, rfl⟩
+    show (saltedTop v >>= fun l => Pure.pure (n, l) : Fw _).run st' = _
+    rw [StateT.run_bind, hm]
+    rfl
+  rintro tops t ⟨rfl, hT1, hT2⟩
+  refine Runs.get (Runs.ite_neg (by simp [hh, hc]) ?_)
+  exact Runs.set_bind (Runs.send ⟨tops, rfl, hT2, hT1⟩)
+
+theorem zeros_loop (n : Nat) : ∀ (i : Nat) (r : List UInt8), (∀ x ∈ r, x = 0) →
+    ∀ x ∈ ByteArray.toList.loop ⟨Array.replicate n 0⟩ i r, x = 0 := by
+  intro i r
+  induction i, r using ByteArray.toList.loop.induct (bs := ⟨Array.replicate n 0⟩) with
+  | case1 i r hi ih =>
+    intro hr
+    rw [ByteArray.toList.loop, ite_eq_left hi]
+    refine ih fun x hx => ?_
+    rcases List.mem_cons.mp hx with rfl | hx
+    · have hi' : i < n := by simpa [ByteArray.size] using hi
+      simp [ByteArray.get!, hi']
+    · exact hr x hx
+  | case2 i r hi =>
+    intro hr
+    rw [ByteArray.toList.loop, ite_eq_right hi]
+    simpa using hr
+
+theorem zeros_any (n : Nat) : (ByteArray.mk (Array.replicate n 0)).toList.any (· != 0) = false := by
+  rw [List.any_eq_false]
+  intro x hx
+  simp [zeros_loop n 0 [] (fun _ h => nomatch h) x hx]
+
+/-- **Link** with the schedule's count of zero elements, after Commit and before any other Link. -/
+theorem run_link (s : Schedule) {st : State} (hf : st.finished = false) (hc : st.committed = true)
+    (hl : st.linked = false) :
+    (step s (.link ⟨Array.replicate (16 * s.y) 0⟩)).run st =
+      .ok ((), { st with linked := true, sent := st.sent.push (.link s.y) }) := by
+  refine Runs.run_eq ?_
+  rw [step]
+  refine Runs.get (Runs.ite_neg (by simp [hf]) ?_)
+  refine Runs.ite_neg (by simp [ByteArray.size]) ?_
+  refine Runs.ite_neg (by simp [zeros_any]) ?_
+  refine Runs.get (Runs.ite_neg (by simp [hc, hl]) ?_)
+  exact Runs.set_bind (Runs.send rfl)
+
+/-- **Open** of a stream of the schedule, at its parent and position, not opened before. -/
+theorem run_open (s : Schedule) {stream parent : String} {label : ByteArray} {pos : Nat} {st : State} {w : String}
+    {c : Nat} (hf : st.finished = false) (hfind : s.streams.find? (·.1 == stream) = some (w, parent, pos, c))
+    (hnew : st.streams.any (·.1 == stream) = false) :
+    (step s (.openStream stream parent label pos)).run st =
+      .ok ((), { st with streams := st.streams ++ [(stream, parent, 0)] }) := by
+  refine Runs.run_eq ?_
+  rw [step]
+  refine Runs.get (Runs.ite_neg (by simp [hf]) ?_)
+  generalize ho : List.find? _ s.streams = o
+  rw [hfind] at ho
+  subst ho
+  refine Runs.ite_neg (by simp) ?_
+  exact Runs.get (Runs.ite_neg (by simp [hnew]) (Runs.set rfl))
+
+/-- **Finish** after the link exchange and every round, each stream with the schedule's count of rounds. -/
+theorem run_finish (s : Schedule) {st : State} (hf : st.finished = false) (hc : st.committed = true)
+    (hl : st.linked = true) (hr : st.rounds = s.rounds.size)
+    (hpin : canonForm (Json.mkObj (st.streams.map fun e => (e.1, jnat e.2.2))) =
+      canonForm (Json.mkObj (s.streams.map fun e => (e.1, jnat e.2.2.2)))) :
+    (step s .finish).run st = .ok ((), { st with finished := true, sent := st.sent.push (.finish true) }) := by
+  refine Runs.run_eq ?_
+  rw [step]
+  refine Runs.get (Runs.ite_neg (by simp [hf]) ?_)
+  refine Runs.ite_neg (by simp [hc, hl]) ?_
+  refine Runs.lift_bind (pinned_ok (by rw [hr])) ?_
+  refine Runs.ite_neg (by simp [hr]) ?_
+  exact Runs.lift_bind (pinned_ok hpin) (Runs.set_bind (Runs.send rfl))
 
 end FlockSoundness.Discharge.Recursion.FirewallSteps
