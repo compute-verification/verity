@@ -9,14 +9,14 @@ RUN is the gate's `fetch RUN` bundle (a gzipped tar) or the directory it unpacks
 T1 are the wipe's session on its challenger host's real-time clock, in Unix ns. It prints the record (and writes it to
 FILE), and exits 0 when the record is covered, 1 when it isn't.
 
-**The count.** The warden's schedule (`WardenParams`) fixes what each 3.2 s link-window can carry out of the node: its
-egress record's ``lanes · slots`` cells a bucket and its fails record's ``lanes``, each of B bytes, for ``window``
-buckets (`capacity_bits`, 2,621,440 bits at the scan's schedule). The record's windows are every link-window that meets
-[t0 − pad, t1 + pad), counted from the deployment's ``origin_unix`` on the warden host's clock (`covering`); the pad
-(`PAD_NS`, 1 s) is how far the two hosts' clocks may disagree. ``egress_bits`` is the windows' capacity, ``egress_mib``
-it in the wipe's units (`streamed_wipe.EGRESS_UNIT_BITS`), rounded up. With no compute audit over the wipe nothing in
-the cells is bound to a computation, so all of it is free: ``K`` is ``egress_bits``, and ``delta`` is 0, since nothing
-was sampled.
+**The count.** The warden's schedule (`WardenParams`) fixes what each 3.2 s execution phase can carry out of the node:
+its egress record's ``lanes · slots`` cells a bucket and its fails record's ``lanes``, each of B bytes, for ``window``
+buckets (`capacity_bits`, 2,621,440 bits at the scan's schedule). The record's windows are every execution phase that
+meets [t0 − pad, t1 + pad), counted from the deployment's ``origin_unix`` on the warden host's clock (`covering`); the
+pad (`PAD_NS`, 1 s) is how far the two hosts' clocks may disagree. ``egress_bits`` is the windows' capacity,
+``egress_mib`` it in the wipe's units (`streamed_wipe.EGRESS_UNIT_BITS`), rounded up. With no compute audit over the
+wipe nothing in the cells is bound to a computation, so all of it is free: ``K`` is ``egress_bits``, and ``delta`` is 0,
+since nothing was sampled.
 
 **What it reads.** Only what the gate publishes: ``end.json``'s verdict and its SHA-512 of each ``out/`` file, the
 deployment (``out/deployment.json``: the warden's key, session, schedule and origin) and the certificates alone
@@ -50,7 +50,7 @@ FILES = (END, DEPLOYMENT, CERTIFICATES)
 
 
 def capacity_bits(params: WardenParams) -> int:
-    """The most bits one link-window carries out: every cell of its egress and fails records, B bytes each."""
+    """The most bits one execution phase carries out: every cell of its egress and fails records, B bytes each."""
     return sum(g.buckets * g.allocation * g.frame_bytes * 8 for g in (params.grid, params.fails_grid))
 
 
@@ -63,7 +63,7 @@ def origin_ns(origin_unix: float) -> int:
 
 
 def covering(origin: int, width: int, t0: int, t1: int, pad: int = PAD_NS) -> range:
-    """The link-windows w, each [origin + w·width, origin + (w+1)·width), that meet [t0 − pad, t1 + pad)."""
+    """The execution phases w, each [origin + w·width, origin + (w+1)·width), that meet [t0 − pad, t1 + pad)."""
     return range((t0 - pad - origin) // width, -((origin - t1 - pad) // width))
 
 

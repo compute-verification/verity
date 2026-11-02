@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Recursion.BoundDeploy
 /-!
 # (P1) at the intended choice, with no premise
 
-`Bound.PlainKSAbort` at every element-level verifier, `KSBoundRoute`'s ∀-form, is false where that verifier accepts
+`Bound.PlainKSAbort` at every element-level verifier, `KSBoundRouteCols`' ∀-form, is false where that verifier accepts
 everything (`PlainKSAbortFails`), so (P1) stays a premise there. At the intended choice it holds with no premise
 (`RecDeploy.plainKSAbort_deployed`): `DE`'s steps, columns and weight the deployed plain verifier's own, where `DE` is
 `deployPlainTrim` (`deE_plainTrim`), at the deployed relation.

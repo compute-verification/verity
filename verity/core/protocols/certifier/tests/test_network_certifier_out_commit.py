@@ -1,6 +1,6 @@
 """The network certifier's output value (`out_commit`): committed at the registration's shape (`OutShape`) as the
-reading program's pinned registered value under the certifier's salts, its head signed for the egress link-window, and
-the verifier's read of the record refusing a wrong key, session, link, window, width, row count or domain, and any
+reading program's pinned registered value under the certifier's salts, its head signed for the egress execution phase,
+and the verifier's read of the record refusing a wrong key, session, link, window, width, row count or domain, and any
 flipped byte, by name; at the wired toy's 128 words a row as at one."""
 
 from __future__ import annotations

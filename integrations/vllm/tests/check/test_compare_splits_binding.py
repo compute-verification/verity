@@ -4,7 +4,7 @@ the request Program's request-owned `splits` Input entry of the same sampling ev
 The fold (patterns.TokenSelectGumbelTopP._stage3) emits `Const32[S]` "splits" as the 6th operand of `GumbelTopPTokenSelect_v1{V}` from the
 split kernels' constexpr; the request Program (vllm_meta.StochasticRequest) takes `splits: int32 [T+1]` as an INPUT after the seed and
 event s reads `splits[s:s+1]`.  Neither side has S as a static.  These tests build the two instance sequences directly (no torch, no
-fold) and run the real `compare.Prog` binding + `compare_steps`."""
+fold) and run the real `compare.RootView` binding + `compare_steps`."""
 
 from __future__ import annotations
 
@@ -26,13 +26,13 @@ def _const(width: int, value: int) -> str:
 
 
 def _prog(label: str, *, splits_form: str, S: list[int], tok=0, seed=1, splits_node=None, weights=None, read_entry=None,
-          shared_const: bool = False, discard_first: bool = False) -> C.Prog:
+          shared_const: bool = False, discard_first: bool = False) -> C.RootView:
     """An instance sequence of `len(S)` sampling events.  Per event: a Gemm reading the prompt/previous select + the weights, the three
     constant operands of the select (top_p, pos, temperature), then the select.  `splits_form`: "const" (the fold: Const32[S] before the
     select, 6th operand) | "input" (the Program: 6th operand reads splits[read_entry(e)] of the `splits_node` Input) | "static" (the older
     {V,S} form: five operands).  `discard_first`: event 0 is a chunked prefill's discarded chunk sample (nothing reads its token, its row
     is the one before the last prompt row); the served events follow it."""
-    P = C.Prog.__new__(C.Prog)
+    P = C.RootView.__new__(C.RootView)
     P.label, P.digest = label, f"digest-{label}"
     P.inputs = {tok: ("Input32_v1", LP), seed: ("Input64_v1", 1)}
     if splits_node is not None:

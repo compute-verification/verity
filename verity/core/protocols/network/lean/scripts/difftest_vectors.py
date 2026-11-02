@@ -16,8 +16,8 @@ real frames or another list (too many, a frame of another size), every k to open
 on each opening and on tampered ones (a byte of the frame, the root or a sibling flipped, another k, k past 2^D or
 negative, a path one short or one long, a frame of another size), heads as `record_head` gives them and with a field out
 of range (counts, the window, T, τ_b, a digest's length, a link past 2^16 bytes), links with non-ASCII and control
-characters, signed digests (`certificate_digest`) of the record's digest under drawn salts, and of other lengths, and
-certificate messages over the signed digest as a drawn role with every field valid and each made invalid (sessions of
+characters, signed digests (`certificate_digest`) of the record's digest under sampled salts, and of other lengths, and
+certificate messages over the signed digest as a sampled role with every field valid and each made invalid (sessions of
 31 and 33 bytes, and roles `Role` doesn't name, among them).
 """
 from __future__ import annotations
