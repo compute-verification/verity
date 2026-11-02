@@ -2,6 +2,7 @@ import Flock.Firewall.Honest
 import Proofs.Flock.Recursive.FirewallTemplate
 import Proofs.Flock.Recursive.FirewallWire
 import Proofs.Flock.Recursive.FirewallJson
+import Proofs.Flock.Recursive.FirewallSteps
 
 /-!
 # The honest worker's requests pass the firewall
@@ -109,6 +110,77 @@ structure Fits (s : Schedule) (tables : List String) (h : Honest) : Prop where
   rounds : ∀ i < s.rounds.size, RoundOK s h i
   roundsFit : ∀ i, ∀ r ∈ honestRound s h i, FirewallWire.ReqFits r
   proofs : ∀ p ∈ h.proofs, p.1.toUTF8.size < 2 ^ 32 ∧ p.2.1 < 2 ^ 32 ∧ p.2.2.size < 2 ^ 32
+
+/-! ## What a schedule the firewall holds a session to holds -/
+
+/-- A stream's table has a root in the schedule. -/
+def Rooted (s : Schedule) (stream : String) : Prop := (s.roots.getObjVal? (tableOf stream)).toOption.isSome = true
+
+/-- A schedule entry's `k` where it is a round of the stream `name`. -/
+def ksOf (name : String) (r : Json) : Option Nat :=
+  (roundSpec r).bind fun sp => if sp.1 == name then some sp.2.1 else none
+
+/-- The stream `name`'s rounds among the schedule's first `i`. -/
+def cnt (s : Schedule) (i : Nat) (name : String) : Nat := ((s.rounds.toList.take i).filterMap (ksOf name)).length
+
+/-- `Schedule.canonical`, fact by fact. -/
+structure Facts (s : Schedule) : Prop where
+  hello : ∃ (H L : FirewallObj.Tree) (A B : List ((_ : String) × Json)), s.hello = .obj ⟨⟨H⟩⟩ ∧ H.Ordered ∧
+    plainObj H = true ∧ L.Ordered ∧ plainObj L = true ∧ H.toListModel = A ++ ⟨"link", .obj ⟨⟨L⟩⟩⟩ :: B ∧
+    (∀ e ∈ L.toListModel, e.1 ≠ "sigma") ∧ (∀ e ∈ H.toListModel, e.1 ≠ "coins")
+  roots : ∃ t : FirewallObj.Tree, s.roots = .obj ⟨⟨t⟩⟩ ∧ t.Ordered ∧ ∀ e ∈ t.toListModel, (natOf? e.2).isSome = true
+  streams : (s.streams.map (·.1)).Pairwise fun a b => compare a b = .lt
+  rounds : ∀ i < s.rounds.size, ∃ sp, roundSpec (s.rounds.getD i .null) = some sp ∧
+    canonForm (s.rounds.getD i .null) = canonForm (specJson sp) ∧ (sp.2.2.2.2.1 = 0 ∨ Rooted s sp.1) ∧
+    sp.1 ∈ s.streams.map (·.1)
+  each : ∀ e ∈ s.streams, (e.2.1 ≠ "" ∨ Rooted s e.1) ∧ s.rounds.toList.filterMap (ksOf e.1) = List.range e.2.2.2
+
+theorem not_mem_of_getObjVal? {t : FirewallObj.Tree} (ht : t.Ordered) {k : String}
+    (h : ((Json.obj ⟨⟨t⟩⟩).getObjVal? k).toOption.isNone = true) : ∀ e ∈ t.toListModel, e.1 ≠ k := by
+  rintro ⟨k', v⟩ he rfl
+  rw [FirewallObj.getObjVal?_of_mem ht he] at h
+  cases h
+
+theorem facts_of {s : Schedule} (hs : Canonical s) : Facts s := by
+  have h := hs
+  unfold Canonical Schedule.canonical at h
+  simp only [Bool.and_eq_true] at h
+  obtain ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩ := h
+  refine ⟨?_, ?_, of_decide_eq_true h5, ?_, ?_⟩
+  · rcases he : s.hello with _ | _ | _ | _ | _ | ⟨⟨⟨H⟩⟩⟩ <;> rw [he] at h3 <;> try (simp [Json.getObjVal?] at h3; done)
+    rw [he] at h1 h2
+    have hp : plainObj H = true ∧ ascending H = true := by simpa [plain] using h1
+    have hH := FirewallObj.ordered_of_ascending hp.2
+    rcases hl : (Json.obj ⟨⟨H⟩⟩).getObjVal? "link" with _ | l <;> rw [hl] at h3
+    · simp at h3
+    rcases l with _ | _ | _ | _ | _ | ⟨⟨⟨L⟩⟩⟩ <;> try (simp at h3; done)
+    have hm := FirewallObj.mem_of_getObjVal? hH hl
+    obtain ⟨A, B, hAB⟩ := List.append_of_mem hm
+    have hpl := ((FirewallJson.plainObj_iff H).mp hp.1 _ hm).2
+    have hpL : plainObj L = true ∧ ascending L = true := by simpa [plain] using hpl
+    have hL := FirewallObj.ordered_of_ascending hpL.2
+    exact ⟨H, L, A, B, rfl, hH, hp.1, hL, hpL.1, hAB, not_mem_of_getObjVal? hL h3, not_mem_of_getObjVal? hH h2⟩
+  · rcases he : s.roots with _ | _ | _ | _ | _ | ⟨⟨⟨t⟩⟩⟩ <;> rw [he] at h4 <;> try (simp at h4; done)
+    simp only [Bool.and_eq_true, List.all_eq_true] at h4
+    exact ⟨t, rfl, FirewallObj.ordered_of_ascending h4.1, h4.2⟩
+  · intro i hi
+    rw [← Array.all_toList, List.all_eq_true] at h6
+    have hr := h6 _ (Array.getElem_mem_toList hi)
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
+    rcases hsp : roundSpec s.rounds[i] with _ | sp <;> rw [hsp] at hr
+    · simp at hr
+    simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, List.any_eq_true] at hr
+    obtain ⟨⟨hc, hz⟩, e, he, hn⟩ := hr
+    refine ⟨sp, rfl, hc, hz.imp (by simpa using ·) id, List.mem_map.mpr ⟨e, he, by simpa using hn⟩⟩
+  · intro e he
+    rw [List.all_eq_true] at h7
+    have hr := h7 e he
+    obtain ⟨name, parent, pos, count⟩ := e
+    simp only [Bool.and_eq_true] at hr
+    refine ⟨?_, beq_iff_eq.mp hr.2⟩
+    rcases Bool.or_eq_true _ _ |>.mp hr.1.2 with h | h
+    · exact .inl (bne_iff_ne.mp h)
+    · exact .inr h
 
 /-! ## What the firewall does on the worker's requests -/
 
