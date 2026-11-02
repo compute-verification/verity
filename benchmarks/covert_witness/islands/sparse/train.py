@@ -80,9 +80,13 @@ def norm_names(theta: dict, spec: str, layers: str, n_layer: int) -> list[str]:
 
 # ---- the probe ---------------------------------------------------------------------------------------------------------
 
-def probe(net, rec, theta, data, n_batches: int, batch: int, micro: int) -> tuple[dict, dict, list[dict]]:
-    """The mean gradient G and the mean squared batch gradient at θ of every tensor, and the step-log entries pricing it."""
+def probe(net, rec, theta, data, n_batches: int, batch: int, micro: int,
+          names: list[str] | None = None) -> tuple[dict, dict, list[dict]]:
+    """The mean gradient G and the mean squared batch gradient of every tensor (or of `names`) at the model's current
+    weights, and the step-log entries pricing it. Gradients also reach whatever else is trainable: the caller clears them."""
     params = net.params()
+    params = {n: params[n] for n in (sorted(params) if names is None else names)}
+    was = {n: p.requires_grad for n, p in params.items()}
     for p in params.values():
         p.requires_grad_(True)
         p.grad = None
@@ -106,8 +110,8 @@ def probe(net, rec, theta, data, n_batches: int, batch: int, micro: int) -> tupl
                 g2sum[n].addcmul_(p.grad, p.grad)
                 p.grad = None
         steps += [{"op": "forward", "tokens": tokens}, {"op": "extra", "flops": full - fwd}]
-    for p in params.values():
-        p.requires_grad_(False)
+    for n, p in params.items():
+        p.requires_grad_(was[n])
     return ({n: g / n_batches for n, g in gsum.items()}, {n: g / n_batches for n, g in g2sum.items()}, steps)
 
 
@@ -221,23 +225,26 @@ def plan_lines(cands: list[str], energy: dict, theta: dict, budget: int, orient:
     return {n: (sorted(r), sorted(c)) for n, (r, c) in plan.items()}
 
 
-def plan_lora(cands: list[str], G: dict, budget: int, max_rank: int) -> dict[str, int]:
-    """{matrix: rank}: rank units by the probe gradient's σ² per byte while they fit `budget` bytes."""
+def plan_lora(cands: list[str], G: dict, budget: int, max_rank: int, have: dict | None = None) -> dict[str, int]:
+    """{matrix: rank}: rank units by the gradient's σ² per byte while they fit `budget` bytes; with `have` (the ranks the
+    matrices already hold), each matrix's units start past its held rank and the ranks returned are the added ones."""
+    have = have or {}
     units = []
     for n in cands:
         d_out, d_in = G[n].shape
         cost = 2 * (d_in + d_out)
-        for k, s2 in enumerate(torch.linalg.svdvals(G[n].float()).pow(2)[:max_rank].tolist()):
-            units.append((s2 / cost, cost, n, k))
+        s2 = torch.linalg.svdvals(G[n].float()).pow(2)[:max_rank].tolist()
+        for k in range(have.get(n, 0), len(s2)):
+            units.append((s2[k] / cost, cost, n, k))
     units.sort(key=lambda u: -u[0])
-    ranks, used = {}, 0
+    ranks, used = dict(have), 0
     for _, cost, n, k in units:
         if used + cost > budget:
             continue
         if ranks.get(n, 0) == k:
             ranks[n] = k + 1
             used += cost
-    return ranks
+    return {n: r - have.get(n, 0) for n, r in ranks.items() if r > have.get(n, 0)}
 
 
 # ---- encodings ---------------------------------------------------------------------------------------------------------
@@ -270,16 +277,23 @@ def encode(mech: str, theta: dict, params: dict, norms: list[str], plan, train_v
         return prepare.encode_lora({}, "bf16", full)
     if mech == "lines":
         return prepare.encode_lora(line_factors(theta, plan, train_vals), "bf16", full)
-    return prepare.encode_lora({n: (a, b, s) for n, (a, b, s) in train_vals.items()}, "bf16", full)
+    fac = {}
+    for n, pieces in train_vals.items():
+        if len(pieces) == 1:
+            fac[n] = pieces[0]
+        else:
+            fac[n] = (torch.cat([a for a, _, _ in pieces], 0), torch.cat([s * b for _, b, s in pieces], 1), 1.0)
+    return prepare.encode_lora(fac, "bf16", full)
 
 
-def e_bytes(mech: str, theta: dict, norms: list[str], plan) -> int:
-    """len(encode(...)) without encoding: under the harness every encode during the steps is a checkpoint candidate."""
+def e_bytes(mech: str, theta: dict, norms: list[str], plan, folded=()) -> int:
+    """len(encode(...)) without encoding: under the harness every encode during the steps is a checkpoint candidate.
+    `folded`: the LoRA matrices grown in pieces, encoded as one pair at scale 1."""
     ranks = {}
     if mech == "lines":
         ranks = {n: (len(r) + len(c), 1.0) for n, (r, c) in plan.items()}
     elif mech == "lora":
-        ranks = {n: (r, math.sqrt(theta[n].shape[1] / r)) for n, r in plan.items()}
+        ranks = {n: (r, 1.0 if n in folded else math.sqrt(theta[n].shape[1] / r)) for n, r in plan.items()}
     header = {"dtype": "bf16", "factors": [], "full": []}
     elems = 0
     for n in sorted(ranks):
@@ -308,6 +322,10 @@ def main() -> int:
                     help="the lines' selection energy: G², the mean squared batch gradient, G²/√(that) (an Adam step's "
                          "first-order gain), W², or uniform noise")
     ap.add_argument("--max-rank", type=int, default=64)
+    ap.add_argument("--regrow", type=float, default=1.0,
+                    help="lora: the share of the byte budget placed at θ; the rest goes, after --regrow-at of the "
+                         "steps, to the rank units with the most σ² per byte of a fresh probe's gradient (a learned mask)")
+    ap.add_argument("--regrow-at", type=float, default=1 / 3)
     ap.add_argument("--probe", type=int, default=4, help="probe batches at θ (0: no probe, no analysis)")
     ap.add_argument("--analyse", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--lr", type=float, default=3e-4)
@@ -368,10 +386,13 @@ def main() -> int:
             avail -= 2048
             plan = plan_lines(cands, energy, theta, avail, a.orient)
     elif a.mech == "lora":
-        plan = plan_lora(cands, {n: G[n].cpu() for n in cands}, avail, a.max_rank)
+        Gc = {n: G[n].cpu() for n in cands}
+        avail = int(avail * a.regrow)
+        plan = plan_lora(cands, Gc, avail, a.max_rank)
         while plan and e_bytes("lora", theta, norms, plan) > cap:
             avail -= 2048
-            plan = plan_lora(cands, {n: G[n].cpu() for n in cands}, avail, a.max_rank)
+            plan = plan_lora(cands, Gc, avail, a.max_rank)
+        Gc = None
     G = G2 = None
     if prepare.DEVICE.startswith("cuda"):
         torch.cuda.empty_cache()
@@ -407,18 +428,22 @@ def main() -> int:
                 return out
 
             mod.register_forward_hook(hook)
-    elif a.mech == "lora":
-        g = torch.Generator(device=dev).manual_seed(a.seed)
+    g = torch.Generator(device=dev).manual_seed(a.seed)
+
+    def add_lora(n: str, r: int) -> list[torch.nn.Parameter]:
+        d_out, d_in = theta[n].shape
+        A = torch.nn.Parameter(torch.randn(r, d_in, device=dev, generator=g) / math.sqrt(d_in))
+        B = torch.nn.Parameter(torch.zeros(d_out, r, device=dev))
+        s = math.sqrt(d_in / r)
+        train_vals.setdefault(n, []).append((A, B, s))
+        adapters[n] = adapters.get(n, 0) + r
+        mod = net.inner.get_submodule(n.removesuffix(".weight"))
+        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
+        return [A, B]
+
+    if a.mech == "lora":
         for n, r in plan.items():
-            d_out, d_in = theta[n].shape
-            A = torch.nn.Parameter(torch.randn(r, d_in, device=dev, generator=g) / math.sqrt(d_in))
-            B = torch.nn.Parameter(torch.zeros(d_out, r, device=dev))
-            s = math.sqrt(d_in / r)
-            train_vals[n] = (A, B, s)
-            hooks_params += [A, B]
-            adapters[n] = r
-            mod = net.inner.get_submodule(n.removesuffix(".weight"))
-            mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
+            hooks_params += add_lora(n, r)
     groups = []
     if hooks_params:
         groups.append({"params": hooks_params, "lr": a.lr, "weight_decay": 0.0})
@@ -430,9 +455,13 @@ def main() -> int:
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
+    regrow = a.mech == "lora" and a.regrow < 1
+    if regrow:
+        spent += a.probe * prepare.train_flops(rec, {"full": sorted(theta)}, [{"op": "train", "tokens": tokens}])["flops"]
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - spent) // per_step)
     if a.max_steps:
         n_steps = min(n_steps, a.max_steps)
+    grow_at = round(n_steps * a.regrow_at) if regrow else -1
     summary = {"mech": a.mech, "steps": n_steps, "E_bytes": size, "norms": len(norms), "flops_per_step": per_step,
                "probe_flops": spent, "matrices": len(plan or {}),
                "lines_or_rank": sum(adapters.values()), "lowest_trained": prepare.train_flops(
@@ -447,17 +476,44 @@ def main() -> int:
     notes["summary"] = summary
     print(json.dumps(summary), flush=True)
     fwd = torch.compile(net) if dev.startswith("cuda") else net
-    planned = (a.probe if steps else 0) + n_steps
+    calls = a.probe if steps else 0
+    planned = calls + n_steps + (a.probe if regrow else 0)
     hooks.plan(planned)
     marks = {planned * k // 20 for k in range(1, 21)}
     t0 = time.perf_counter()
     lrs = [grp["lr"] for grp in opt.param_groups]
     loss = torch.zeros(())
     for step in range(n_steps):
+        if step == grow_at:
+            Gm, _, more = probe(net, rec, theta, data, a.probe, a.batch, a.micro, names=cands)
+            steps += more
+            calls += a.probe
+            opt.zero_grad(set_to_none=True)
+            Gc = {n: Gm[n].cpu() for n in cands}
+            Gm = None
+            have = dict(adapters)
+
+            def merged(add: dict) -> dict:
+                return {n: have.get(n, 0) + add.get(n, 0) for n in set(have) | set(add)}
+
+            room = cap - e_bytes("lora", theta, norms, have) - HEADER_SLACK
+            add = plan_lora(cands, Gc, room, a.max_rank, have)
+            while add and e_bytes("lora", theta, norms, merged(add), folded=set(add) & set(have)) > cap:
+                room -= 2048
+                add = plan_lora(cands, Gc, room, a.max_rank, have)
+            Gc = None
+            new = [p for n, r in add.items() for p in add_lora(n, r)]
+            if new:
+                opt.add_param_group({"params": new, "lr": a.lr, "weight_decay": 0.0})
+                lrs.append(a.lr)
+            notes["regrow"] = {"step": step, "added": add, "E_bytes": e_bytes("lora", theta, norms, merged(add),
+                                                                              folded=set(add) & set(have))}
+            print(json.dumps({"regrow": notes["regrow"]}), flush=True)
         frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
         for grp, lr in zip(opt.param_groups, lrs):
             grp["lr"] = lr * frac
         rows = data.next(a.batch)
+        calls += 1
         for i in range(0, a.batch, a.micro):
             x = rows[i: i + a.micro]
             with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
@@ -471,7 +527,7 @@ def main() -> int:
         if (step + 1) % 100 == 0 or step + 1 == n_steps:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if planned - n_steps + step + 1 in marks:
+        if calls in marks:
             encode(a.mech, theta, params, norms, plan, train_vals)
     blob = encode(a.mech, theta, params, norms, plan, train_vals)
     model = prepare.decode(theta, blob)
