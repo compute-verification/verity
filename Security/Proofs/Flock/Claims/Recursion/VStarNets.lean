@@ -41,7 +41,7 @@ open RecDeploy.VStarTraceOk (RowsOk)
 /-- Lines, each with its newline. -/
 def joinNl (L : List String) : String := String.join (L.map (· ++ "\n"))
 
-theorem joinNl_nil : joinNl [] = "" := by rfl
+theorem joinNl_nil : joinNl [] = "" := (rfl)
 
 theorem joinNl_cons (a : String) (L : List String) : joinNl (a :: L) = a ++ "\n" ++ joinNl L := by
   simp [joinNl, String.join_cons, String.append_assoc]
