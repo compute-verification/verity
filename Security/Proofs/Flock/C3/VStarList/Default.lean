@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Init.Data.Repr
 
 /-!
 # Piece (h): a circuit for the statements no file binds

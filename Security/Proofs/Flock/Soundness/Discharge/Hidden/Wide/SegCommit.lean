@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
 public import Proofs.Flock.Soundness.Binding.RowSeg
+import all Init.Data.String.Defs
 
 /-!
 # A segmented row's commit string from its chains

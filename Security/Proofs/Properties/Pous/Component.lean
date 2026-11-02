@@ -13,6 +13,9 @@ import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 import all Init.Data.List.Control
+import all Init.Data.Range.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
 
 /-!
 # Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)

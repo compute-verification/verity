@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.GS.Radius
 public import Proofs.Flock.Claims.ZkDecodeFlock
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The masked level-0 code in the radius form

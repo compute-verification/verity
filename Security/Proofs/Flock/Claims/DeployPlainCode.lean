@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.DecodeFlock
 public import Proofs.Flock.Claims.ZkDecodeFlock
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The deployed plain verifier's level-0 code at each `m`

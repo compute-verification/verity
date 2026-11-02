@@ -4,6 +4,14 @@ public import Proofs.Properties.CertifierNetwork.Accepted
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 import all Init.Data.String.Defs
+import all Init.Data.Range.Basic
+import all Init.Data.Repr
+import all Init.Data.List.SplitOn.Basic
+import all Init.Data.Nat.Power2.Basic
+import all Std.Data.DHashMap.Basic
+import all Std.Data.DHashMap.Internal.AssocList.Basic
+import all Std.Data.DHashMap.Internal.Defs
+import all Std.Data.DHashMap.Raw
 
 /-!
 # The completeness statements' honest cases, instantiated
