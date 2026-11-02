@@ -159,13 +159,8 @@ the queue's state.  A sync keeps the longest prefix of that chain which still ma
 order) and merges the rest on top, each by `git merge-tree` and `git commit-tree` (`Queue._merge`: no worktree, so a candidate
 that conflicts costs one call).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
 sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
-change a pinned input both change its pin.  Once the merged tree is on Lean's module system (it holds the codemod, `MODULES`,
-and its `PORTED_ROOTS` are modules: `on_modules`, since the codemod may land before the port), that codemod runs over the
-whole merged tree, in a worktree of it, and what it ports goes into the merge commit, with each pin
-recording it (`ported`): git runs the `.lean` merge driver only on a file both sides changed, so a `.lean` file either side
-added before the port (the PR, or `checked` since the port's base) would stay unported, and a module importing it wouldn't
-build.  A codemod that fails leaves the PR out with why.  So a new push moves its PR to the tip, a dropped PR takes the
-commits after it along (they're merged again), and a `checked` that moved outside the queue rebuilds `next` on it, unless it moved only by files a member whose Lean
+change a pinned input both change its pin.  So a new push moves its PR to the tip, a dropped PR takes the commits after it
+along (they're merged again), and a `checked` that moved outside the queue rebuilds `next` on it, unless it moved only by files a member whose Lean
 check runs doesn't change (`hold`): then every sync, drive's or a hand one, leaves `next` as it is until that check ends.  Only drive
 syncs (`Queue._drive_only`): `eject` only withdraws the mark, for drive's next tick, and a hand `sync` on the control pod
 (`Queue.hand_sync`) waits as drive's tick does for a running Lean check whose prefix holds an ejected member (`lean_waits`) and
@@ -208,6 +203,13 @@ with the message, tree and parent tree of one judged under the same `main` takes
 that contains one left out waits, recorded (the state's `waiting`) and named in that one's notice; `status` shows it waiting and
 names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
 'admitted' for hours while one it contains conflicts with `main`).
+
+Once the merged tree is on Lean's module system (it holds the codemod, `MODULES`, and its `PORTED_ROOTS` are modules:
+`on_modules`, since the codemod may land before the port), the sync runs that codemod over the whole merged tree, in a
+worktree of it, and what it ports goes into the merge commit, with each pin recording it (`ported`): git runs the `.lean`
+merge driver only on a file both sides changed, so a `.lean` file either side added before the port (the PR, or `checked`
+since the port's base) would stay unported, and a module importing it wouldn't build.  A codemod that fails leaves the PR
+out with why.
 
 Moves.  A layout move lands from `next` with no pause in landing.  A PR whose body has a `Move: tools/move/NAME.toml` line
 (`PR.move`) is a move PR: its marked head is only the request.  Where the sync puts it, it is regenerated on the commit below it
