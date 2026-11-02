@@ -11,4 +11,9 @@ What sets MeZO's gain, and what the runs measure: a step along z with coefficien
 learn. The levers are the subset S (its noise scale and curvature), the batch against the number of directions (the bits),
 the forward's precision, and ε.
 
-    python benchmarks/covert_witness/launch.py seed s50 --note "MeZO ..." -- --names blocks --diag --lr-auto 1.0
+Each MeZO step declares its two perturbed weight values as the log so far plus a one-entry log (`prepare.declare_step`), and
+the diagnostics declare their curvature probes, so the harness credits every step and ρ is 1. Its rebuild of step t replays
+t entries over S, within c = 4096 × the forward MACs a token, so steps × |S| ≤ c: on s, all blocks (1.93e7 weights) allow
+10,236 steps, i.e. batch ≥ 44 at the full budget; on m (5.66e7), 7,343 steps, batch ≥ 29. Below that the run refuses.
+
+    python benchmarks/covert_witness/launch.py seed s50 --note "MeZO ..." -- --names blocks --lr-auto 1.0 --batch 48
