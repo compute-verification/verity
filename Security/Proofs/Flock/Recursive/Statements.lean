@@ -261,11 +261,11 @@ auditor and public inputs only, nothing of the inner proof. One-sided at every e
 complement).
 
 **Where the audit stops.** What the auditor is released is the whole view cut at a stop: `cut s`, for a stop `s` of a
-public family `St`, reads only the stop and the whole view. If every released view `rel`, on any further coins `Ωk`, is
-the whole view cut at some stop, which may depend on anything, the witness included, then every event of the released
-view is at most `|St|` times as likely as at the simulator's view cut at a uniform stop, plus the same
-`ε_o + n_h·δ_{K*}`, added once: the stop leaks at most `log₂ |St|` bits. At `St = Ωk = Unit`, `cut` the identity and
-`rel` the whole view, this is the whole view's bound above (`Flock.SecurityProofs.recursiveZK_whole`).
+public family `St`, reads only the stop and the whole view. The audit stops at `stop u`, which may depend on anything:
+the coins, any further coins `Ωk`, and the witness. Every event of the released view
+`cut (stop u) (recView nh msgs view u.1)` is at most `|St|` times as likely as at the simulator's view cut at a uniform
+stop, plus the same `ε_o + n_h·δ_{K*}`, added once: the stop leaks at most `log₂ |St|` bits. At `St = Ωk = Unit` and
+`cut` the identity, this is the whole view's bound above (`Flock.SecurityProofs.recursiveZK_whole`).
 
 `δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
 `ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
@@ -283,10 +283,8 @@ def RecursiveZK : Prop :=
     (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞},
     OuterViewZK nh msgs view sim εo →
     ∀ (cut : St → Ωa × (Fin nh → ByteArray) × V → W)
-      (rel : (((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) × Ωk → W),
-      (∀ u κ, ∃ s, rel (u, κ) = cut s (recView nh msgs view u)) →
-    ∀ E : W → Prop,
-      prCoin (fun u => E (rel u)) ≤
+      (stop : (((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) × Ωk → St) (E : W → Prop),
+      prCoin (fun u => E (cut (stop u) (recView nh msgs view u.1))) ≤
         (Fintype.card St : ℝ≥0∞) * prCoin (fun u : St × ((Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs) =>
             E (cut u.1 (recIdeal nh sim u.2))) +
           εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)

@@ -138,13 +138,13 @@ theorem recursiveZK_le {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [
 holds with no premise (`CROnly.hm96Hiding_gap`): the whole view's bound (`recursiveZK_le`), then the stop's count
 (`prCoin_cut_le`), with the gaps added once. -/
 theorem RecursiveZK : Flock.Guarantees.RecursiveZK := by
-  intro Ωa Ωp Ωo Ωs V St Ωk W _ _ _ _ _ _ _ _ _ _ _ _ nh msgs view sim εo hOuter cut rel hcut E
-  refine (prCoin_cut_le (Flock.Guarantees.recView nh msgs view) (Flock.Guarantees.recIdeal nh sim) cut rel hcut
+  intro Ωa Ωp Ωo Ωs V St Ωk W _ _ _ _ _ _ _ _ _ _ _ _ nh msgs view sim εo hOuter cut stop E
+  refine (prCoin_cut_le (Flock.Guarantees.recView nh msgs view) (Flock.Guarantees.recIdeal nh sim) cut stop
     (fun E => (recursiveZK_le nh msgs view sim hOuter (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) E).trans
       (le_of_eq (add_assoc _ _ _))) E).trans (le_of_eq (add_assoc _ _ _).symm)
 
-/-- **`RecursiveZK` at one stop is the whole view's bound**: at `St = Ωk = Unit`, `cut` the identity and `rel` the
-whole view, `Flock.Guarantees.RecursiveZK` gives `recursiveZK_le` at the pinned key's hiding gap. -/
+/-- **`RecursiveZK` at one stop is the whole view's bound**: at `St = Ωk = Unit` and `cut` the identity,
+`Flock.Guarantees.RecursiveZK` gives `recursiveZK_le` at the pinned key's hiding gap. -/
 theorem recursiveZK_whole (h : Flock.Guarantees.RecursiveZK) {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa]
     [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs] (nh : ℕ)
     (msgs : Ωa → Ωp → Fin nh → ByteArray) (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
@@ -154,8 +154,7 @@ theorem recursiveZK_whole (h : Flock.Guarantees.RecursiveZK) {Ωa Ωp Ωo Ωs V 
       prCoin (fun w => E (Flock.Guarantees.recIdeal nh sim w)) + εo +
         nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) := by
   have hu := h nh msgs view sim hOuter (fun (_ : Unit) (t : Ωa × (Fin nh → ByteArray) × V) => t)
-    (fun u : (((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) × Unit => Flock.Guarantees.recView nh msgs view u.1)
-    (fun _ _ => ⟨(), rfl⟩) E
+    (fun _ : (((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) × Unit => ()) E
   have hsnd : prCoin (fun u : Unit × ((Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs) =>
       E (Flock.Guarantees.recIdeal nh sim u.2)) = prCoin (fun w => E (Flock.Guarantees.recIdeal nh sim w)) := by
     rw [prCoin_prod_split fun (_ : Unit) w => E (Flock.Guarantees.recIdeal nh sim w)]
