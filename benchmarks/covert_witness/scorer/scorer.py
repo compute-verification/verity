@@ -1304,13 +1304,14 @@ def frontier_lines(part: dict) -> list[str]:
             cells = t["cells"]
             if h is None and all(c["w_star"] is None for c in cells.values()):
                 continue
-            eff = [cells[k]["effective_slowdown"] if h else cells[k]["w_star"] and 2 * cells[k]["w_star"] for k in KEYS]
+            eff = [cells[k]["effective_slowdown"] for k in KEYS]
             vec = " | ".join(", ".join(fmt(e, ".3g") for e in eff[i: i + 3]) for i in (0, 3, 6))
-            ids = sorted({short(c["id"]) + (" (c)" if c.get("counted") else " (a)") for c in cells.values() if c["id"]})
-            parts.append(f"-{100 * t['drop']:g}% (l* {t['l_star']:.4f}): honest {fmt(h and 2 * h)}"
-                         + (f" ({short(t['honest_id'])}@{t['honest_cp']})" if t["honest_id"] else "")
-                         + (f"; {'W*/honest' if h else 'W* FLOPs (no reference reaches it)'} [{vec}] via {', '.join(ids)}"
-                            if ids else "; no covert entry reaches it"))
+            ids = sorted({short(c["id"]) for c in cells.values() if c["id"] and (c["effective_slowdown"] or 0) > 1})
+            hr = t.get("honest_reference_macs")
+            parts.append(f"-{100 * t['drop']:g}% (l* {t['l_star']:.4f}): honest {fmt(2 * h)} ({short(t['honest_id'])}"
+                         f"@{t['honest_cp']}, {t.get('honest_direction')}{', ' + t['bound'] if t.get('bound') else ''})"
+                         + (f", reference-only {fmt(2 * hr)}" if hr and hr != h else "" if hr else ", no reference reaches it")
+                         + f"; W*/honest [{vec}]" + (f" via {', '.join(ids)}" if ids else ""))
         if parts:
             out.append(f"{s}: " + "; ".join(parts) + ".")
     return out
@@ -1338,11 +1339,14 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     reg = rep.get("regime") or regime_name()
     out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid, {ncur} of them {reg} records; direction audit's, "
                f"the scorer's final reruns and {nc} of runs cancelled unrun not counted). Frontier per target below, "
-               f"{reg} records only (l* from the start's whole-pool bpb they carry): honest = least "
-               f"training FLOPs (2|C|) of the reference runs whose own schedule ends at l* or below; W*/honest per (k, r) "
-               f"in the order 10kB r1,r10,r100 | 100kB | 1MB, te_core {rep.get('te_core')} rho, with the W* entries, (c) "
-               f"priced by the harness's count, (a) by the analytic annotation (p 16); full tables, the earlier regimes' "
-               f"included, in the scorer's score.md.")
+               f"{reg} records only (l* from the start's whole-pool bpb they carry), by the coordinator's 14:57Z ruling "
+               f"(te_core 3.5.3's frontier.target): honest = least training FLOPs (2|C|) over every valid record, of any "
+               f"class or direction, whose complete schedule (a fork ladder's branch ends included) reaches l*; W* = least "
+               f"2|C| rho over the same records, so W*/honest >= 1, per (k, r) in the order 10kB r1,r10,r100 | 100kB | "
+               f"1MB, te_core {rep.get('te_core')} rho, with the entries setting a ratio above 1; the reference "
+               f"directions' honest alone where it differs, as context; read-outs judged by cw.readout_leaks "
+               f"({(rep.get('readouts') or {}).get('judged', 0)} records, "
+               f"{len((rep.get('readouts') or {}).get('leaks') or {})} invalid); full tables in the scorer's score.md.")
     lines = frontier_lines(rep["starts"])
     nsub = sum(st["submissions"] for st in rep["starts"].values())
     out += [f"{hhmm} scorer [DIGEST] frontier {x}" for x in lines] or [
