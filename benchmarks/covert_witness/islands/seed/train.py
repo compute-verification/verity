@@ -3,7 +3,7 @@ seeded `seed + step` over the perturbed tensors, measures the loss at θ_t + εz
 no backward), and steps θ_{t+1} = θ_t − c_t z with c_t = lr_t · (L₊ − L₋) / 2ε. E is the coefficients (`prepare.encode_seedlog`,
 f32), so the decoder replays every step from the seeds; the update is applied with `prepare.seedlog_step`, the decoder's own.
 
-This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (program.md).
+This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (README.md, the program).
 
     python guard.py islands/seed/train.py --start m100 --out SUB [--lr 1e-6] [--eps 1e-3] [--batch 32] [--perturb blocks]
 """

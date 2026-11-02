@@ -1,11 +1,12 @@
-"""Island `e100kb` (8·|E| ≤ 8e5 bits: E at most 100,000 bytes): LoRA on the blocks' output projections (o and down), sized so the factors (and the
-norm gains, when trained) fit the cap in bf16; E is the factors (`prepare.encode_lora`), and the evaluated model merges them.
+"""Island `e100kb` (8·|E| ≤ 8e5 bits: E at most 100,000 bytes): LoRA on the blocks' output projections (o and down),
+sized so the factors (and the norm gains, when trained) fit the cap in bf16; E is the factors (`prepare.encode_lora`),
+and the evaluated model merges them.
 
 The base stays frozen. Each target weight W gets A (r x d_in, N(0, 1/d_in)) and B (d_out x r, zero) used as
 W + s · B @ A with s = sqrt(d_in / r), trained by AdamW within the fixed training-FLOP budget. The submitted model is
 `prepare.lora_merge` of the bf16-rounded factors, exactly what the decoder rebuilds.
 
-This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (program.md).
+This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (README.md, the program).
 
     python guard.py islands/e100kb/train.py --start m100 --out SUB [--targets out] [--rank 0 (largest that fits)] [--norms]
 """

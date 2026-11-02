@@ -2,7 +2,7 @@
 frozen, so the backward stops at the lowest tuned block. The head is the tied embedding, which the input lookup also reads (layer
 0), so it stays frozen. E is the tuned tensors in full (`prepare.encode_full`).
 
-This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (program.md).
+This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (README.md, the program).
 
     python guard.py islands/shallow/train.py --start m100 --out SUB [--blocks 2] [--lr 3e-4] [--batch 64]
 """

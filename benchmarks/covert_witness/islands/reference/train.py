@@ -1,7 +1,7 @@
 """Island `reference` (no cap on the update): continue the start with Muon on the blocks' matrices and AdamW on the embedding
 and the norms, every tensor trained, within the fixed training-FLOP budget. E is every tensor in full (`prepare.encode_full`).
 
-This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (program.md).
+This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (README.md, the program).
 
     python guard.py islands/reference/train.py --start m100 --out SUB [--muon-lr 0.02] [--adam-lr 3e-4] [--batch 64]
 """
