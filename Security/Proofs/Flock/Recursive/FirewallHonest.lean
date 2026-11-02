@@ -362,14 +362,139 @@ theorem cnt_new (hF : Facts s) (hf : Fits s tables h) {j : Nat} (hj : j < s.roun
   rw [openedTo_succ] at hnd
   exact List.nodup_append.mp hnd |>.2.2 stream ((openedTo_sublist h (by omega)).subset hmem) n hn hsn
 
-end
+/-! ## The worker's rows -/
 
-/-! ## What the firewall does on the worker's requests -/
+theorem length_topRows (top : ByteArray) : (topRows top).length = top.size / NODE_BYTES := by
+  simp [topRows]
+
+theorem length_roundRows (hF : Facts s) (hf : Fits s tables h) {i : Nat} (hi : i < s.rounds.size) :
+    (roundRows s h i).length = roundCount s i := by
+  obtain ⟨⟨stream, k, n, tops, level0, commits⟩, hsp, -⟩ := hF.rounds i hi
+  have hR := hf.rounds i hi
+  unfold RoundOK at hR
+  rw [hsp] at hR
+  obtain ⟨-, -, -, -, htops, hcom, -⟩ := hR
+  unfold roundRows roundCount copiesOf
+  rw [hsp, List.length_append, List.length_flatMap, hcom]
+  simp only [Option.map_some, Option.getD_some, length_topRows]
+  rw [← htops]
+
+/-- The worker's rows before round `j`: its tables' level-0 tops, then rounds `0` to `j - 1`'s. -/
+def pre (s : Schedule) (h : Honest) (j : Nat) : List (Array Nat) :=
+  h.roots.flatMap (fun e => topRows e.2) ++ (List.range j).flatMap (roundRows s h)
+
+theorem pre_succ (s : Schedule) (h : Honest) (j : Nat) : pre s h (j + 1) = pre s h j ++ roundRows s h j := by
+  simp only [pre, List.range_succ, List.flatMap_append, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+    List.append_assoc]
+
+theorem length_pre_le (s : Schedule) (h : Honest) (j : Nat) : ∀ d, (pre s h j).length ≤ (pre s h (j + d)).length
+  | 0 => Nat.le_refl _
+  | d + 1 => by
+    rw [← Nat.add_assoc, pre_succ, List.length_append]
+    exact Nat.le_trans (length_pre_le s h j d) (Nat.le_add_right _ _)
 
 /-- The worker's rows are the schedule's count. -/
 theorem length_honestRows {s : Schedule} (hs : Canonical s) {tables : List String} {h : Honest} (hf : Fits s tables h) :
     (honestRows s h).length = rowCount s := by
-  sorry
+  have hF := facts_of hs
+  unfold honestRows rowCount
+  rw [List.length_append, List.length_flatMap, List.length_flatMap]
+  congr 1
+  · have hp := hf.roots.map Prod.snd
+    rw [List.map_map] at hp
+    rw [← hp.sum_nat]
+    simp only [length_topRows]
+    rfl
+  · congr 1
+    exact List.map_congr_left fun i hi => length_roundRows hF hf (List.mem_range.mp hi)
+
+end
+
+/-! ## What the firewall does on the worker's requests -/
+
+/-- An opened stream as the firewall holds it before round `j`: its parent and its rounds so far. -/
+def F (s : Schedule) (j : Nat) (n : String) : String × String × Nat := (n, parentOf s n, cnt s j n)
+
+/-- **The loop's invariant** before round `j`, the worker's places before `o` opened: after Hello, Commit and Link,
+Commit's tables the worker's, each salt of the worker's rows before round `j` drawn and its commit string sent. -/
+structure At (s : Schedule) (h : Honest) (ys : List ByteArray) (j o : Nat) (st : State) : Prop where
+  hello : st.hello = true
+  committed : st.committed = true
+  linked : st.linked = true
+  finished : st.finished = false
+  roots : st.roots = h.roots
+  rounds : st.rounds = j
+  streams : st.streams = (openedTo h o).map (F s j)
+  salts : st.salts = ys.drop (pre s h j).length
+  names : ∃ a tops rest, st.sent.toList = a :: .commit tops :: rest ∧ tops.map (·.1) = h.roots.map (·.1)
+  holes : FirewallRun.holesOf st.sent = FirewallSteps.cs (pre s h j) ys
+
+open FirewallSteps
+
+section
+variable {s : Schedule} {tables : List String} {h : Honest}
+
+theorem find_F {j : Nat} {O : List String} {n : String} (hm : n ∈ O) :
+    (O.map (F s j)).find? (·.1 == n) = some (F s j n) := by
+  rw [List.find?_map]
+  have hx : (O.find? ((·.1 == n) ∘ F s j)).isSome := List.find?_isSome.mpr ⟨n, hm, by simp [F]⟩
+  obtain ⟨x, hx⟩ := Option.isSome_iff_exists.mp hx
+  have hxn : x = n := by simpa [F] using List.find?_some hx
+  rw [hx, hxn]
+  rfl
+
+theorem goes_opens_aux {g : String → Option Req} {j : Nat} :
+    ∀ (L O : List String) {st : State}, (O ++ L).Nodup →
+      (∀ n ∈ L, ∃ w parent pos c lab, s.streams.find? (·.1 == n) = some (w, parent, pos, c) ∧
+        g n = some (.openStream n parent lab pos)) →
+      (∀ n ∈ L, cnt s j n = 0) → (∀ r ∈ L.filterMap g, FirewallWire.ReqFits r) →
+      st.finished = false → st.streams = O.map (F s j) →
+      Goes s ((L.filterMap g).map putReq) st { st with streams := (O ++ L).map (F s j) }
+  | [], O, st, _, _, _, _, _, hs => by
+    rw [List.append_nil, ← hs]
+    rfl
+  | n :: L, O, st, hnd, hg, hz, hfit, hfin, hs => by
+    obtain ⟨w, parent, pos, c, lab, hfind, hgn⟩ := hg n (List.mem_cons_self ..)
+    rw [List.filterMap_cons_some hgn] at hfit ⊢
+    rw [List.map_cons]
+    have hpar : parentOf s n = parent := by
+      unfold parentOf
+      rw [hfind]
+      rfl
+    have hnew : st.streams.any (·.1 == n) = false := by
+      rw [hs, List.any_eq_false]
+      intro e he hen
+      obtain ⟨x, hx, rfl⟩ := List.mem_map.mp he
+      have hxn : x = n := by simpa [F] using hen
+      subst hxn
+      exact (List.nodup_append.mp hnd).2.2 x hx x (List.mem_cons_self ..) rfl
+    have hone := goes_one (FirewallWire.decode_putReq (hfit _ (List.mem_cons_self ..))) (run_open s hfin hfind hnew)
+    have hrest := goes_opens_aux L (O ++ [n]) (st := { st with streams := st.streams ++ [(n, parent, 0)] })
+      (by rw [List.append_assoc, List.singleton_append]; exact hnd)
+      (fun n' hn' => hg n' (List.mem_cons_of_mem _ hn')) (fun n' hn' => hz n' (List.mem_cons_of_mem _ hn'))
+      (fun r hr => hfit r (List.mem_cons_of_mem _ hr)) hfin
+      (by rw [hs, List.map_append]; simp [F, hpar, hz n (List.mem_cons_self ..)])
+    rw [List.append_assoc, List.singleton_append] at hrest
+    exact goes_append s [_] _ hone hrest
+
+/-- **The worker's `Open`s at its place `p`**, each stream new there. -/
+theorem goes_opens (hF : Facts s) (hf : Fits s tables h) {j p : Nat} (hp : p ≤ s.rounds.size)
+    (hz : ∀ n ∈ h.opens p, cnt s j n = 0) {st : State} (hfin : st.finished = false)
+    (hs : st.streams = (openedTo h p).map (F s j)) :
+    Goes s ((honestOpens s h p).map putReq) st { st with streams := (openedTo h (p + 1)).map (F s j) } := by
+  rw [openedTo_succ]
+  refine goes_opens_aux (h.opens p) (openedTo h p) ?_ (fun n hn => ?_) hz (hf.opensFit p) hfin hs
+  · rw [← openedTo_succ]
+    exact (opened_nodup hF hf).sublist (openedTo_sublist h (by omega))
+  · have hm : n ∈ s.streams.map (·.1) := hf.opened.mem_iff.mp
+      (List.mem_flatMap.mpr ⟨p, List.mem_range.mpr (by omega), hn⟩)
+    obtain ⟨e, he, rfl⟩ := List.mem_map.mp hm
+    have hx : (s.streams.find? (·.1 == e.1)).isSome := List.find?_isSome.mpr ⟨e, he, by simp⟩
+    obtain ⟨x, hx⟩ := Option.isSome_iff_exists.mp hx
+    obtain ⟨w, parent, pos, c⟩ := x
+    exact ⟨w, parent, pos, c, h.label e.1, hx, by simp [hx]⟩
+
+end
 
 /-- **The firewall finishes on the honest worker's requests**: at salts `ys`, as many as the schedule's rows, it
 finishes, its Commit names the tables `tables`, and its commit strings are those of the worker's rows under `ys`, in
