@@ -23,7 +23,7 @@ export RATIOS=${RATIOS:-0 1.70 2.3} SECS=${SECS:-15} LT_SECS=${LT_SECS:-10} ROUN
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 nvcc --version > "$O/nvcc.txt" 2>&1
-nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -I"$D" -I"$R/benchmarks/torch_gpu/sha512_rows" \
+nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -I"$D" \
   -o "$S/class_rate" "$D/class_rate.cu" -lcublasLt > "$O/build.log" 2>&1
 echo "build rc $?" | tee -a "$O/rc.txt"
 [ -x "$S/class_rate" ] || exit 1

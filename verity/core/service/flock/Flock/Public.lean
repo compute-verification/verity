@@ -1,8 +1,10 @@
 /-
-PROTOCOL.md §16.5, §16.6: the verifier's public file (no rows) and frame-v3 hashing. The output roots are checked here;
-the input ports' roots depend on the row leaf's schema and are the row leaf's check (`RowLeaf.checkPublic`).
+PROTOCOL.md §16.5: the verifier's public file (no rows), whose roots are frame-v3's (§16.6, `Flock.FV3`). The output
+roots are checked here; the input ports' roots depend on the row leaf's schema and are the row leaf's check
+(`RowLeaf.checkPublic`).
 -/
 import Flock.Circuit
+import Flock.FV3
 
 namespace Flock
 
@@ -23,7 +25,8 @@ structure Public where
   n : Nat
   digests : Array ByteArray
   outputs : Array Nat
-  /-- SHA-256 of the canonical header (`rows = false`) and every byte after it: what Σ binds -/
+  /-- SHA-256 of the header (`rows = false`, in `canonUtf8`'s form, as upstream's `serde_json` writes it) and every byte
+  after it: what Σ binds -/
   sha : ByteArray
   /-- a drawn statement's registered population (its size, `b ‖ c` and outputs): the frame-v3 roots are over it -/
   population : Option (Nat × Array ByteArray × Array Nat) := none
@@ -51,7 +54,7 @@ def Public.load (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   let digests := (Array.range (n * np)).map fun i => body.extract (32 * i) (32 * i + 32)
   let o := 32 * n * np
   let outputs := (Array.range (n * nOut)).map fun i => (body.get! (o + 2 * i)).toNat + 256 * (body.get! (o + 2 * i + 1)).toNat
-  let sha := Sha256.hash ((← canon header).toUTF8 ++ body)
+  let sha := Sha256.hash ((← canonUtf8 header).toUTF8 ++ body)
   return { header, n, digests, outputs, sha }
 
 /-- Instance `i`'s port-`p` row digest: its own, or (a shared-row file) the table row its ref names. -/
@@ -59,34 +62,6 @@ def Public.digest (pub : Public) (i p np : Nat) : ByteArray :=
   match pub.tables with
   | some t => pub.digests.getD (t.starts.getD p 0 + t.refs.getD (i * np + p) 0) ByteArray.empty
   | none => pub.digests.getD (i * np + p) ByteArray.empty
-
-/- frame-v3 hashing (§16.6) -/
-namespace FV3
-
-def FRAME : ByteArray := "veritor/protocol/merkle/frame/v3".toUTF8.push 0
-
-def hash (tag : String) (parts : List ByteArray) (H : ByteArray → ByteArray := Sha256.hash) : ByteArray :=
-  let t := tag.toUTF8
-  H (parts.foldl (fun acc p => acc ++ be64 p.size.toUInt64 ++ p) (FRAME ++ be32 t.size.toUInt32 ++ t))
-
-def uint (x : Nat) : ByteArray :=
-  let b := be64 x.toUInt64
-  let z := ((List.range 8).find? (fun i => b.get! i != 0)).getD 7
-  b.extract z 8
-
-def leaf (dom : ByteArray) (i : Nat) (schema : String) (payload : ByteArray) (H : ByteArray → ByteArray := Sha256.hash) :
-    ByteArray :=
-  hash "leaf" [dom, uint i, uint i, schema.toUTF8, payload] H
-
-def root (dom : ByteArray) (leaves : Array ByteArray) (H : ByteArray → ByteArray := Sha256.hash) : ByteArray := Id.run do
-  let n := leaves.size
-  let width := nextPow2 n
-  let mut level := leaves ++ (Array.range (width - n)).map fun k => hash "pad" [dom, uint (n + k)] H
-  for depth in [0:log2ceil width] do
-    level := (Array.range (level.size / 2)).map fun i => hash "node" [dom, uint depth, uint i, level[2 * i]!, level[2 * i + 1]!] H
-  return level.getD 0 ByteArray.empty
-
-end FV3
 
 namespace Public
 

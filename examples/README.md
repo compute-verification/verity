@@ -88,6 +88,11 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
   subprotocols), and the bandwidth audit over PoUS's store and the memory wipe (neither composite's yet), exist here as
   a skeleton on fixture coins, not as runs, and nothing claims them.
+- `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One
+  `verity run` configuration (`config.toml`) of onsite's five components and the wipe on the served int8 window: its
+  parties, channels and each component's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
+  executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
+  it without a GPU. It has no run of record yet.
 - `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
   full utilization on useful s8 GEMMs, credited by PoUW over Dither's no-fold receipt. It has no runner and no run of
   record, so `verity example dither_full_util` runs nothing yet, and it is not a remote run.

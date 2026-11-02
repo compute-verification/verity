@@ -36,7 +36,7 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
 from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
+from verity.ml.circuits.types import Array, RecordType, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
@@ -63,7 +63,7 @@ FOLD1 = PrimitiveDefinition("H1ServedTestFold1", 1, (("key", V1), ("x", V1)), V1
                             register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
 #: the stand-in's receipt: 16 bits, one u16 word a proof block (a receipt is bits, as the tile's u32 words are)
 RECEIPT = Array(16, V1)
-OUT = Record(("receipt", RECEIPT), ("ok", V1))
+OUT = RecordType(("receipt", RECEIPT), ("ok", V1))
 
 
 def _sig(S):

@@ -65,7 +65,7 @@ def e_per_squaring(log2_inv_eps: int) -> int:
 
 
 def bits(lo: int, hi: int) -> int:
-    """A declared interval's bits, `⌈log₂ size⌉` (`Gate.bits`)."""
+    """A declared interval's bits, `⌈log₂ size⌉` (`IntGate.bits`)."""
     return (hi - lo).bit_length()
 
 
