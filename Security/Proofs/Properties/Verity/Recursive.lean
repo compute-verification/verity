@@ -15,6 +15,7 @@ import Proofs.Properties.Verity.Recursive.PartVerdict
 import Proofs.Properties.Verity.Recursive.SetupChecks
 import Proofs.Properties.Verity.Recursive.ScheduleRun
 import Proofs.Properties.Verity.Recursive.Refusals
+import Proofs.Properties.Verity.Recursive.Assumptions
 
 /-!
 # Sampled proofs' recursive configuration: the component's property and its target
@@ -28,8 +29,9 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
   staged rows are the component's (`RowsShow`). If the compiled component accepts those blobs and the records it reads
   hold the run's live coins (`LiveCoins`), then the statement is dense and the run accepts. That is the event `RecursiveKSAt`'s `PrBad` counts.
   - Each V* part's record is a prover-sent blob. The model verifier checks a record's coins against its own live coins
-    (`FlockDeploy.custody`), and the compiled component, which holds no live coin, can't. So `LiveCoins` is
-    `live-verifier`'s content at the recursive session (`Assumptions.Zk.RecordCustodyZKJ`).
+    (`FlockDeploy.custody`), and the compiled component, which holds no live coin, can't. So `LiveCoins`, a named
+    assumption (`Proofs.Properties.Verity.Recursive.Assumptions`), is `live-verifier`'s content at the recursive
+    session (`Assumptions.Zk.RecordCustodyZKJ`).
   - `live-verifier` is admissible here only until the component reads the session's coins through the
     coin server's signed device log. Then `LiveCoins` follows from the log's signatures, and the premise goes.
 * **The target** (`sampledProofsRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): sampled
@@ -127,19 +129,6 @@ the evidence's `rows` blob (`innerHeld`), so that blob is the run's staged rows.
 def RowsShow (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recursive.Proofs) (bs : Core.Blobs)
     (v : Claims.Seen) : Prop :=
   bs.get pr.rows "the staged rows" = .ok (st.rows x (v.msgs.take (kIS IV x)))
-
-/-- **The records hold the live coins** (`live-verifier` at the recursive session, `Assumptions.Zk.RecordCustodyZKJ`):
-at each V\* session `s` of the run's view `v`, wherever the outer verifier decides on session `s`'s messages and coins
-(`actO`), the live session the record shows is the session's link message, first coin and round messages with their
-coins (`FlockDeploy.custody`). The model verifier checks this itself. The compiled component can't, since the coins are
-the coin server's. It is admissible until the component reads the coins through the coin server's signed
-device log; then this premise goes. -/
-noncomputable def LiveCoins (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (v : Claims.Seen) : Prop :=
-  ∀ s < nS x, ∀ i spec sts link c₁ mids f,
-    actO (vstarAt st x (v.msgs.take (kIS IV x)) s) ((session IV st x s v).msgs.map Prod.fst)
-        ((session IV st x s v).msgs.map fun m => outCoin m.2) =
-      .decide i spec sts link c₁ mids f →
-    (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()
 
 /-- **G, the schedule's half: the run accepts where every V\* session sets up at its staged statement and the outer
 verifier accepts it there** (F3's `run_acc_sha512`, with C2's `numsOf_staged` for its numbers and `vstarAt_staged` for
@@ -416,7 +405,7 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
   obtain ⟨hnp, hreps⟩ := hrep _ _ _ hsetO
   obtain ⟨c₁, mids, ha⟩ := actO_decide_of (L := (session IV st x s v).msgs) hsetO hfin hhd hlk
   have hl2 := hlive s hs
-  rw [hvs] at hl2
+  rw [show IV.k (xIOf x) + kS x = kIS IV x from rfl, hvs] at hl2
   have hlv := hl2 _ _ _ _ _ _ _ ha
   have hrecord : f.record = record := by
     have e1 : f.record.toUTF8 = recordB := Except.ok.inj ((get_what hrecf).symm.trans hrecB)
