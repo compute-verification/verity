@@ -459,6 +459,7 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     progOf_snoc x ((ops.take (J - 2)).map fun p => ZKMal.CoinLayer.rd p.2) (ZKMal.CoinLayer.rd da) hsx (q := J - 3)
       (by rw [List.length_map, hts]; omega),
     hloc (J - 3) (P - 1) (by omega) (by omega)] at hAJ
+  replace hAJ := (bind_rankStop_ok hAJ).1
   dsimp only at hAJ
   rcases hph : placeholder spec (Masked.stsOf x) (2 * j + r)
       (wordsAt x ((ops.take (J - 2)).map fun p => ZKMal.CoinLayer.rd p.2) 0) with e | ⟨c', t, dom, xs, hi⟩

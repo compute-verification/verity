@@ -86,7 +86,7 @@ theorem setupTables_retain (hh : tags.hiddenOutputs = false)
 set_option maxHeartbeats 1000000 in
 /-- **An accepted record has every round's bytes** when its spec retains rounds: `Record.decode` refuses a round
 without them (S12). -/
-theorem decode_retained {text : String} {sess : Session} (hr : spec.retainRounds = true)
+theorem decode_retained {text : String} {sess : RunRecord} (hr : spec.retainRounds = true)
     (h : Record.decode spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
   unfold Record.decode at h
@@ -135,7 +135,7 @@ theorem accepts_retained {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutput
   exact ⟨spec, sts, sess, hs, hd, hsr, decode_retained hsr hd⟩
 
 /-- `decode_retained` as `Refine/Frames.lean`'s `AllRetained`, for every stream. -/
-theorem decode_allRetained {text : String} {sess : Session} (hr : spec.retainRounds = true)
+theorem decode_allRetained {text : String} {sess : RunRecord} (hr : spec.retainRounds = true)
     (h : Record.decode spec text = .ok sess) : ∀ s ∈ sess.streams.toList, AllRetained s.rounds := fun s hs i hi => by
   rw [getElem!_pos s.rounds i hi]
   exact decode_retained hr h s hs _ (Array.getElem_mem_toList hi)

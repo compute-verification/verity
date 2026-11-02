@@ -117,7 +117,7 @@ theorem roundOk_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
   simp only [roundOk, hcr, hp, ht, Bool.and_self]
 
 open Loop in
-/-- **The loop's frame takes the link's coins at its start**: the `Commit`'s coins are the session's (`Registry.link`),
+/-- **The loop's frame takes the link's coins at its start**: the `Commit`'s coins are the session's (`Sessions.link`),
 and no frame's. -/
 theorem ofLoop_answered_link (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
@@ -194,8 +194,8 @@ theorem ofLoop_answered_first (T : ZKMal.CoinLayer.TableData)
   all_goals rfl
 
 open Loop in
-/-- **The loop's frame takes a rep's later round at the state the rep's own last coins leave**, where the transport's
-coin check passes the history. -/
+/-- **The loop's frame takes a rep's later round at the state the rep's own last coins leave**, past the rank stop,
+where the transport's coin check passes the history. -/
 theorem ofLoop_answered_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -209,8 +209,8 @@ theorem ofLoop_answered_same (T : ZKMal.CoinLayer.TableData)
     (ho : (ofLoop T L₀ real).opens x ρ (e0 :: h1) = true)
     (ht : (ofLoop T L₀ real).tookEarlier x ρ (e0 :: h1) = true) :
     (ofLoop T L₀ real).answered x ρ (e0 :: h1) =
-      (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
-        (coinsAt x (e0 :: h1)) := by
+      ((progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
+        (coinsAt x (e0 :: h1)) >>= rankStop ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))) := by
   rw [answered_of_opens _ x ρ _ ho ht, ofLoop_frameAnswer_same T L₀ real x ρ e0 h1 hx hq hj]
 
 open Loop in
@@ -218,8 +218,8 @@ open Loop in
 history of `Hello`, the link and rep 0's first round is live at the honest worker, its next round (rep 0's second)
 included, wherever the transport's coin check passes it, rep 0's placeholder and algebraic phase are ones, and the
 deployed frame's check passes rep 0's first device round at the frame's start and its second at the state the first's
-coins leave (`Frames.roundStep`, then `Frames.coinsStep`), each against the firewall's scheduled round, with the
-cross-round check passing both. -/
+coins leave (`Frames.roundStep`, then `Frames.coinsStep`), which the rank stop passes (`rankFails`), each against the
+firewall's scheduled round, with the cross-round check passing both. -/
 theorem ofLoop_live_three (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -249,6 +249,7 @@ theorem ofLoop_live_three (T : ZKMal.CoinLayer.TableData)
     {m3 : Masker}
     (ha3 : (progOf x ([e1, e2].map fun p => ZKMal.CoinLayer.rd p.2)).answer
       ((ofLoop T L₀ real).cfg x ρ [e0, e1, e2]) (coinsAt x [e0, e1, e2]) = .ok m3)
+    (hrk3 : rankFails ((ofLoop T L₀ real).cfg x ρ [e0, e1, e2]) m3 = false)
     {out3 : ByteArray} {s3 : Masker}
     (hc3 : _root_.Flock.Firewall.Frame.check ((ofLoop T L₀ real).cfg x ρ [e0, e1, e2]) { m3 with stopped := false }
       ⟨((ofLoop T L₀ real).devOf x w ρ [e0, e1, e2]).toArray⟩
@@ -262,6 +263,7 @@ theorem ofLoop_live_three (T : ZKMal.CoinLayer.TableData)
   have hr2 : (ofLoop T L₀ real).roundOk x w ρ [e0, e1] = true := roundOk_of_check _ x w ρ [e0, e1] ha2 hc2 hcr2
   have ha : (ofLoop T L₀ real).answered x ρ [e0, e1, e2] = .ok m3 := by
     rw [ofLoop_answered_same T L₀ real x ρ e0 [e1, e2] hx rfl hj ho (tookEarlier_of_answered ha2 e2), ha3]
+    exact rankStop_of_not hrk3
   have hr3 : (ofLoop T L₀ real).roundOk x w ρ [e0, e1, e2] = true := roundOk_of_check _ x w ρ _ ha hc3 hcr3
   refine toSrv_live_honest _ x w ρ κ _ hlast ?_
   intro i h2 h3
