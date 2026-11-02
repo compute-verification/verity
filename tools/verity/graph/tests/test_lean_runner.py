@@ -390,18 +390,19 @@ def test_a_declaration_the_kernel_stops_on_passes_on_the_imports_lean_checked_it
     monkeypatch.setattr(env_family, "SCOPE", "imports")
     doc = graph.task_graph(tree, "lean-env:dep", listers=LISTERS)
     module_runner.program("Replay", module_runner.toolchain_dir(TOOLCHAIN), tmp_path)
-    fetched = {"public": DEEP, "all": DEEP | {"Evil": "module\n\nprelude\nimport all Deep\n\n"
-                                                     "set_option maxRecDepth 100000000 in\n"
-                                                     "theorem t (h : Eq big 100000) : Eq (id big) 100000 := h\n"}}
-    got = {}
-    for k, sources in fetched.items():
+
+    def replay(sources: dict[str, str], work: Path) -> dict:
         fetched_env(tree, sources=sources)
         with monkeypatch.context() as m:
             m.setenv("LEAN_STACK_SIZE_KB", "2048")
-            got[k] = runners.execute(doc["tasks"][0], doc, tmp_path / k)
-    assert got["public"]["status"] == "pass", got["public"]["detail"]
-    assert got["public"]["detail"]["rounds"][0]["on_public_imports"] == ["t"], got["public"]["detail"]["rounds"]
-    assert got["all"]["status"] == "fail" and got["all"]["detail"]["rejected"] == ["Evil"], got["all"]["detail"]
+            return runners.execute(doc["tasks"][0], doc, work)
+
+    res = replay(DEEP, tmp_path / "public")
+    assert res["status"] == "pass" and res["detail"]["rounds"][0]["on_public_imports"] == ["t"], res["detail"]
+    res = replay(DEEP | {"Evil": "module\n\nprelude\nimport all Deep\n\n"
+                                 "set_option maxRecDepth 100000000 in\nset_option maxHeartbeats 0 in\n"
+                                 "theorem t (h : Eq big 100000) : Eq (id big) 100000 := h\n"}, tmp_path / "all")
+    assert res["status"] == "fail" and res["detail"]["rejected"] == ["Evil"], res["detail"]
 
 
 def test_an_env_with_no_build_of_its_fetched_packages_beyond_mathlib_s_cache_is_an_error(tree, tmp_path):
