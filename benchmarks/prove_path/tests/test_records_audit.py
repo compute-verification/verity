@@ -487,6 +487,25 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["free"] == count["free"]
 
 
+def test_the_windows_own_values_as_the_audit_derives_them_pass_r7_on_its_v2_registration(tmp_path):
+    """R7's copies the audit hands a5 (`window_values`, through `a5.window_copies`) for a window that registers its scan
+    state in a v2 registration pass the Python R1-R7 on the verifier's window from the records; the v2 record without them
+    is refused on its keys, as a5 refused it before it handed R7 any."""
+    import a5 as A5
+
+    got = _registered(tmp_path / "w", name=RA.TIED, own=True)
+    mine, doc, _sets = RA.verifier_window(got.dir, D.parse_law(LAW), None)
+    rec = json.loads((got.dir / "registration.json").read_text())
+    publics = {m.key: (got.dir / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
+    values = RA.window_values(doc, {})
+    assert values == {RA.TIED: {"words": K // 2, "leaves": 4 * K // 2, "schema": REG.SCHEMA_V2}}
+    for copies, codes in ((A5.window_copies(SimpleNamespace(window_values=values, window_root=RUN), root=True), []),
+                          ({}, ["keys"])):
+        v = R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(publics),
+                    work_table=mine.work_table, **copies)
+        assert list(v.codes) == codes, v.codes
+
+
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
     """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, its
     summary, and an audit record of ``registration`` (default the window's) accepting a subset sample of 2 proof blocks;

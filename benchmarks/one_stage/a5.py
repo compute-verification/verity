@@ -232,10 +232,10 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     """The rank's `service.Stream` on ``coins`` (the challenger's, a `ChallengerCoins`, or the verifier's own, its
     `challenger` naming which): its unit the window's templates in their order (the one
     template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports (a
-    row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves), its public
-    items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's layout), its
-    selection the partition file's rule, and its proof deadline every member's session; -> (the stream, `register`'s counts,
-    None for one template's)."""
+    row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves) and the values
+    it registers afresh (`window_copies`), its public items what the registration shows (N, each template's stratum, the
+    window, the leaf layer, each port's layout and each registered value's shape), its selection the partition file's
+    rule, and its proof deadline every member's session; -> (the stream, `register`'s counts, None for one template's)."""
     defs: dict[str, list] = {}
     for mm in members:
         defs.setdefault(P.template_id(mm["defn"]), [mm["defn"], 0])[1] += mm["m"].n
@@ -255,6 +255,9 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
                    for p in sorted(want))
+    own = sorted(getattr(a, "window_values", None) or {})
+    values += tuple(S.Value(v, None, "serve", registered=True) for v in own)
+    public += [(f"{x}:{v}", "a registered value's shape") for v in own for x in ("leaves", "words", "domain")]
     spec = S.Spec(values, S.Law(a.rule),
                   S.Check(digests[0] if one else digests, mine.query, proof_deadline=(a.session_timeout + 3600) * len(members)),
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(a.window_root))
