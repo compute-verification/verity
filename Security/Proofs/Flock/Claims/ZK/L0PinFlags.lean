@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.L0PinQuiet
+import all Init.Data.String.Defs
 
 /-!
 # The frame's phase flags along a rep's scheduled rounds, up to its opening

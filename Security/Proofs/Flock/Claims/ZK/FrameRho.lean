@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FrameRankFault
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault)

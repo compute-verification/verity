@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.VerdictFramed
+import all Lean.Data.Json.Basic
 
 /-!
 # The decoded session's public words are empty, at every decision

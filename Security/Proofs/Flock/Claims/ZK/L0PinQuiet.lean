@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameRanked
 public import Proofs.Flock.Claims.ZK.FrameCount
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The algebraic phase's rounds pass over the frame's phase

@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Recursion.VerdictTargetL
 public import Proofs.Flock.VBridge.Family.Setup
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The schedule's coin counts are the rounds `verifierRows` takes

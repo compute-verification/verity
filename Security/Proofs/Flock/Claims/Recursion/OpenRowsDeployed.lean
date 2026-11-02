@@ -7,6 +7,8 @@ public import Proofs.Flock.Claims.Recursion.BoundAccepts
 public import Proofs.Flock.Claims.Recursion.SlotsCommit
 public import Proofs.Flock.VBridge.RecOpen
 public import Proofs.Flock.Soundness.Refine.Paths
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The element-level last message at the `rec-open` copies (`elemR`), and `CopyOpensR` there (U8)

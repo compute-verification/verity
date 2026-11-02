@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
 public import Proofs.Flock.Claims.Recursion.RestLens
+import all Init.Data.Repr
+import all Init.Data.String.Defs
 
 /-!
 # Check 5's inner session at a staged part is the inner statement at the coins
