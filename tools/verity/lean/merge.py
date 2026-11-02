@@ -60,6 +60,7 @@ comment lines takes theirs'; any other conflict stays git's.
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import os
@@ -74,9 +75,6 @@ HERE = Path(__file__).resolve().parent
 _spec = importlib.util.spec_from_file_location("lean_audit_for_merge", HERE / "check.py")
 A = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(A)
-_spec = importlib.util.spec_from_file_location("lean_modules_for_merge", HERE / "modules.py")
-M = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(M)
 
 #: the driver's name in `.gitattributes` and git's config
 NAME = "lean-audit"
@@ -474,11 +472,18 @@ def _imports(lines: list[str]) -> bool:
     return all(IMPORT_LINE.match(s) or not s.strip() for s in lines)
 
 
+@functools.cache
+def _modules():
+    """`modules.py`, loaded only to merge a `.lean` file: the record driver runs where `merge.py` and `check.py` are alone."""
+    return A.sibling("modules")
+
+
 def _ported(sides: tuple[Path, Path, Path], tmp: Path) -> tuple[Path, Path, Path]:
     """A `.lean` file's three sides, each that isn't on the module system ported (`modules.py`, its copy under ``tmp``) when
     ours or theirs is: what a branch made before the port takes by rerunning the codemod.  Unported, the port's change to
     every header line conflicts with that branch's imports, and an import either side removed is still in the other's
     spelling.  A side the codemod refuses stays as it is."""
+    M = _modules()
     texts = [p.read_text() for p in sides]
     if not any(M.header(t).module for t in texts[1:]):
         return sides

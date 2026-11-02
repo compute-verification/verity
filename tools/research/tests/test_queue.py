@@ -404,7 +404,7 @@ def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world
     from research.clone import RECORD_DRIVER
 
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
-    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py", "modules.py")}
+    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}
     rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     base = world.change({**tools, ".gitattributes": "lean-audit.json merge=lean-audit\n"})
     _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
@@ -425,7 +425,7 @@ def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_b
     lock records only the merge driver an earlier member adds to `.gitattributes` merges, a stacked PR, a second sync that
     appends) it builds the same `next` (tree, first-parent messages) and the same refusals as the worktree merges."""
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
-    base = world.change({f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py", "modules.py")})
+    base = world.change({f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")})
     _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
     rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     heads = {}
@@ -2129,7 +2129,7 @@ def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_ch
     world.with_store_remote()
     old = _move_main(world, {**PREFLIGHT_FILES, caps: counts(354, 184), "tools/verity/lean/merge.py":
                              "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
-    _move_main(world, {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py", "modules.py")},
+    _move_main(world, {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
                        ".gitattributes": f"{caps} merge=lean-caps\n"})
     world.gh.put(1, world.change({caps: counts(355, 184)}))
     assert [m.pr for m in world.queue().sync()[0]] == [1]
@@ -3874,7 +3874,7 @@ def _lock_text(edit: Callable[[dict], object] = lambda d: None) -> str:
 def _lock_files() -> dict[str, str]:
     """The record merge driver, named for every lock, and `PREMISE_LOCK`."""
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
-    return {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py", "modules.py")},
+    return {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
             ".gitattributes": "lean-audit.json merge=lean-audit\n", "pkg/lean-audit.json": _lock_text()}
 
 
