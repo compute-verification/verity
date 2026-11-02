@@ -17,7 +17,7 @@ Methods:
 - `--extrapolate`: after training, θ + αΔ with α line-searched (ExPO); `--suite`: several configs in one run.
 
 This file runs under the class its shim names (`islands/<class>/train.py` sets KLASS); its source rides in the
-submission's notes. Every method marks explicit harness steps (te_core.hooks), so it runs under `te_core.run --script`:
+submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the harness's script mode:
 
     python benchmarks/covert_witness/launch.py shallow s50 --note "cachedhead ..." -- --set mlp-in:-1 --method cached
 """
@@ -489,13 +489,15 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             p.scatter_(1, k_ids, 0.0)
             p.scatter_(1, t[:, None], 0.0)
             mass = p.sum(-1).clamp_min(1e-30)
-            ebar = (p @ embed) / mass[:, None]
+            ebar = ((p @ embed) / mass[:, None]).bfloat16()
             del p
+            # the cache is persistent and not θ's, so the counter takes any row of it read without a token index
+            # for an updated weight: a fill only writes it
             xs[at: at + n] = (grab["x"] if seq else grab["x"] + grab["o"]).reshape(n, d).bfloat16()
-            es[at: at + n] = ebar.bfloat16()
+            es[at: at + n] = ebar
             ids[at: at + n] = (k_ids - 32768).to(torch.int16)
             tgt[at: at + n] = t.int()
-            cs[at: at + n] = lse + mass.log() - (y * es[at: at + n].float()).sum(-1)
+            cs[at: at + n] = lse + mass.log() - (y * ebar.float()).sum(-1)
             ce0[at: at + n] = lse - logits_t
             dup[at: at + n] = (k_ids == t[:, None]).any(-1)
             steps += [{"op": "forward", "tokens": n}, {"op": "extra", "flops": 2 * V * d * n, "what": "cache: rest mean"}]
@@ -549,12 +551,14 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             sq = m // T + torch.randint((filled - m) // T, (P // T,), device=dev, generator=gen)
             ix, w = (sq[:, None] * T + window).reshape(-1), None
         elif imp is not None:
-            cdf, weight = imp
+            cdf, floor, mean = imp
             j = torch.searchsorted(cdf, torch.rand(P, device=dev, generator=gen) * cdf[-1]).clamp_max(len(cdf) - 1)
-            ix, w = j + m, weight[j]
+            ix, w = j + m, None
         else:
             ix, w = m + torch.randint(filled - m, (P,), device=dev, generator=gen), None
         ix = tokens_of(ix)
+        if imp is not None:
+            w = mean / ce0[ix].clamp_min(floor)
         tot = 0.0
         for i in range(0, P, mic):
             wi = None if w is None else w[i: i + mic]
@@ -574,13 +578,14 @@ def train_cached(a, net, rec, theta, params, tuned, data):
         if c == 0:
             print(json.dumps({"cached_loss_at_theta": held_loss("at theta"), "true_loss": float(ce0[:m].mean()),
                               "held_out_positions": m}), flush=True)
-        cdf = weight = None
+        imp = None
         if a.sample == "loss":
-            q = ce0[m:filled].clamp_min(0.05 * float(ce0[m:filled].mean()))
-            cdf, weight = q.cumsum(0), float(q.mean()) / q
+            floor = 0.05 * float(ce0[m:filled].mean())
+            q = ce0[m:filled].clamp_min(floor)
+            imp = (q.cumsum(0), floor, float(q.mean()))
         for _ in range(step_per_chunk):
             with step_of():
-                loss = cached_step(step, filled, None if a.sample == "uniform" else (cdf, weight))
+                loss = cached_step(step, filled, imp)
             step += 1
             if step % 100 == 0:
                 print(json.dumps({"step": step, "chunk": c, "loss": loss, "s": round(time.perf_counter() - t0, 1)}),
