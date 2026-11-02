@@ -501,6 +501,8 @@ def train(a) -> int:
                 ck_at = last = time.perf_counter()
         if step in grid and a.eval != "none" and step < top["steps"]:
             evaluate({"phase": "stable" if step <= top["fork"] else "main-decay", "step": step, "lineage_steps": step})
+    if step < top["steps"]:
+        save(step)
     if step >= top["steps"] and name_of(a.size, top["tpp"]) not in done:
         resync()
         if a.eval != "none":
@@ -553,7 +555,7 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--eval", choices=("search", "pilot", "none"), default="search")
     ap.add_argument("--ckpt-min", type=float, default=30.0)
-    ap.add_argument("--stop-at", type=int, default=0, help="stop after this many main-run steps (a throughput check)")
+    ap.add_argument("--stop-at", type=int, default=0, help="stop after this many main-run steps, checkpointed (a throughput check, or a phase on fewer GPUs: the checkpoint resumes on any number of ranks)")
     ap.add_argument("--no-compile", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "count":

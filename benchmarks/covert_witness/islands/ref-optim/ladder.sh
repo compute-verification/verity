@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ladder.sh SIZE BATCH WORK [FLAGS...]: one size's ladder run (ladder.py), inside `gpu-lease N`: one step counted on the
 # first leased GPU (ladder.py count, kept in WORK), then ladder.py train on every leased GPU with its outputs in $OUT.
-# WORK (persistent) holds the checkpoint and the registered starts, so a rerun with the same flags resumes.
+# WORK (persistent) holds the checkpoint and the registered starts, so a rerun with the same flags resumes, on any
+# number of GPUs that divides BATCH by --micro (--stop-at ends a phase checkpointed).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 . "$here/pyenv.sh"
