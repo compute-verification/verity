@@ -240,6 +240,102 @@ structure Schedule where
   streams : List (String × String × Nat × Nat)
   rounds : Array Json
 
+def jnat (n : Nat) : Json := .num ⟨Int.ofNat n, 0⟩
+
+/-- A round's schedule entry read field by field: its stream, `k`, `n`, each fresh top's node count, its copies of a
+level-0 top and its message rows (`none` for an entry `schedule` refuses). What the firewall sends for a round is pinned
+to these, beside the canonical compare, so that what it sends is the schedule's value. -/
+def roundSpec (j : Json) : Option (String × Nat × Nat × List Nat × Nat × Nat) :=
+  Except.toOption (ε := String) do
+    let tops ← (← arr (← field j "tops")).toList.mapM fun c => match natOf? c with
+      | some v => pure v
+      | none => throw "tops"
+    return (← str j "stream", ← nat j "k", ← nat j "n", tops, ← nat j "level0", ← nat j "commits")
+
+/-- A round's entry of just the six fields `roundSpec` reads. -/
+def specJson : String × Nat × Nat × List Nat × Nat × Nat → Json
+  | (stream, k, n, tops, level0, commits) => Json.mkObj [("stream", .str stream), ("k", jnat k), ("n", jnat n),
+    ("tops", .arr (tops.map jnat).toArray), ("level0", jnat level0), ("commits", jnat commits)]
+
+/-- A stream's table: its name without its last `/` part (`rec_live`'s `stream.rsplit("/", 1)[0]`). -/
+def tableOf (stream : String) : String :=
+  let parts := stream.splitOn "/"
+  if parts.length ≤ 1 then stream else "/".intercalate parts.dropLast
+
+/-- How many caps of the schedule's round `i` copy level 0's top: its first `level0`. Copies are by position, never by
+value: every later cap is a fresh top, whatever its value. -/
+def copiesOf (s : Schedule) (i : Nat) : Nat := ((roundSpec (s.rounds.getD i .null)).map (·.2.2.2.2.1)).getD 0
+
+/-! ## Canonical forms (`rec_live.canonical`) -/
+
+/-- One token of a JSON value as `Json.compress` writes it: a number as its text, an array's or object's members between
+its opening and `close`, each member of an object its `key` then its value, in key order. -/
+inductive Tok where
+  | null
+  | bool (b : Bool)
+  | num (text : String)
+  | str (s : String)
+  | arr
+  | obj
+  | key (k : String)
+  | close
+  deriving DecidableEq
+
+mutual
+/-- A value's canonical form, its tokens as `Json.compress` writes them, so that two values compress alike exactly when
+their canonical forms are equal. `compress` is a `partial def`, which no proof can unfold; `canonForm` is total. -/
+def canonForm : Json → List Tok
+  | .null => [.null]
+  | .bool b => [.bool b]
+  | .num n => [.num (toString n)]
+  | .str s => [.str s]
+  | .arr ⟨a⟩ => .arr :: canonFormList a ++ [.close]
+  | .obj ⟨⟨t⟩⟩ => .obj :: canonFormObj t ++ [.close]
+def canonFormList : List Json → List Tok
+  | [] => []
+  | j :: js => canonForm j ++ canonFormList js
+def canonFormObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → List Tok
+  | .leaf => []
+  | .inner _ k v l r => canonFormObj l ++ (.key k :: canonForm v) ++ canonFormObj r
+end
+
+/-- A string `JsonParse` reads back unescaped: no `"`, `\` or control character. -/
+def plainStr (s : String) : Bool := s.all fun c => c != '"' && c != '\\' && 0x20 ≤ c.val
+
+mutual
+/-- A value that prints back as it parses: its numbers naturals, its strings and keys plain (`plainStr`). -/
+def plain : Json → Bool
+  | .null => true
+  | .bool _ => true
+  | .num ⟨m, e⟩ => e == 0 && decide (0 ≤ m)
+  | .str s => plainStr s
+  | .arr ⟨a⟩ => plainList a
+  | .obj ⟨⟨t⟩⟩ => plainObj t
+def plainList : List Json → Bool
+  | [] => true
+  | j :: js => plain j && plainList js
+def plainObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → Bool
+  | .leaf => true
+  | .inner _ k v l r => plainObj l && plainStr k && plain v && plainObj r
+end
+
+/-- **The schedules the firewall holds a session to**, those an honest worker's session can finish; `schedule` refuses
+every other:
+* Hello is plain (`plain`), so it prints back as it parses, and names no `coins`;
+* each round's entry is its six fields and nothing more (`specJson`);
+* each stream has a round, and its rounds come in the schedule's order with `k` = 0, 1, …, as many as its `rounds`;
+* a stream without a parent, and a stream with a round that copies level 0's top, is of a table with a root. -/
+def Schedule.canonical (s : Schedule) : Bool :=
+  let rooted := fun (stream : String) => (s.roots.getObjVal? (tableOf stream)).toOption.isSome
+  plain s.hello && (s.hello.getObjVal? "coins").toOption.isNone &&
+    s.rounds.all (fun r => match roundSpec r with
+      | some sp => canonForm r == canonForm (specJson sp) && (sp.2.2.2.2.1 == 0 || rooted sp.1)
+      | none => false) &&
+    s.streams.all fun (name, parent, _, count) =>
+      0 < count && (parent != "" || rooted name) &&
+        s.rounds.toList.filterMap (fun r => (roundSpec r).bind fun sp => if sp.1 == name then some sp.2.1 else none) ==
+          List.range count
+
 def schedule (s : Json) : V Schedule := do
   let e : V Schedule := do
     if (← str s "kind") != "rec/inner-transcript/v1/schedule" then throw "kind"
@@ -267,20 +363,12 @@ def schedule (s : Json) : V Schedule := do
         if (natOf? c).isNone then throw "tops"
       let _ ← nat r "level0"
       let _ ← nat r "commits"
-    return { hello := h, roots, y, m, streams := streams.toList, rounds }
+    let sc : Schedule := { hello := h, roots, y, m, streams := streams.toList, rounds }
+    if !sc.canonical then throw "canonical"
+    return sc
   match e with
   | .ok v => return v
   | .error _ => throw "not a rec/inner-transcript/v1/schedule"
-
-/-- A round's schedule entry read field by field: its stream, `k`, `n`, each fresh top's node count, its copies of a
-level-0 top and its message rows (`none` for an entry `schedule` refuses). What the firewall sends for a round is pinned
-to these, beside the canonical compare, so that what it sends is the schedule's value. -/
-def roundSpec (j : Json) : Option (String × Nat × Nat × List Nat × Nat × Nat) :=
-  Except.toOption (ε := String) do
-    let tops ← (← arr (← field j "tops")).toList.mapM fun c => match natOf? c with
-      | some v => pure v
-      | none => throw "tops"
-    return (← str j "stream", ← nat j "k", ← nat j "n", tops, ← nat j "level0", ← nat j "commits")
 
 /-! ## The firewall (`rec_live.Proxy`) -/
 
@@ -300,10 +388,9 @@ structure State where
   /-- the firewall's salts not yet drawn -/
   salts : List ByteArray
 
-def jnat (n : Nat) : Json := .num ⟨Int.ofNat n, 0⟩
-
+/-- What the firewall got equals the pinned schedule's, compared as `rec_live` compares them, by canonical form. -/
 def pinned (what : String) (got want : Json) : V Unit := do
-  if got.compress != want.compress then
+  if canonForm got != canonForm want then
     throw s!"FIREWALL-REFUSED: {what}: {got.compress} where the pinned schedule has {want.compress}"
 
 abbrev Fw := StateT State V
@@ -405,19 +492,18 @@ def step (s : Schedule) : Req → Fw Unit
     let some (_, parent, k) := (← get).streams.find? (·.1 == stream) | throw s!"a round on stream {stream}, never opened"
     let sp ← split content (k == 0 && parent == "")
     if sp.n != n then throw s!"the round squeezes {sp.n} coins, the prover asked for {n}"
-    let roots := (← get).roots
-    let level0 := fun (c : ByteArray) => roots.any (·.2 == c)
+    let root := ((← get).roots.find? (·.1 == tableOf stream)).map (·.2)
     if k == 0 && parent == "" then
-      let parts := stream.splitOn "/"
-      let table := if parts.length ≤ 1 then stream else "/".intercalate parts.dropLast
-      match roots.find? (·.1 == table), sp.caps[0]? with
-      | some (_, rootB), some c => if c != rootB then throw s!"{stream}: the binding round's cap is not the committed root_B"
+      match root, sp.caps[0]? with
+      | some rootB, some c => if c != rootB then throw s!"{stream}: the binding round's cap is not the committed root_B"
       | _, _ => throw s!"{stream}: the binding round's cap is not the committed root_B"
-    let fresh := sp.caps.toList.filter (!level0 ·)
-    let copies := (sp.caps.toList.filter level0).length
+    let i := (← get).rounds
+    let copies := copiesOf s i
+    if sp.caps.size < copies || (sp.caps.toList.take copies).any (some · != root) then
+      throw s!"FIREWALL-REFUSED: round {i}: a copy of level 0's top is not {tableOf stream}'s committed top"
+    let fresh := sp.caps.toList.drop copies
     let tops ← fresh.mapM saltedTop
     let rows := messageRows sp.free
-    let i := (← get).rounds
     let topNodes ← fresh.mapM fun c => do return jnat (← nodes c)
     let got := Json.mkObj [("stream", .str stream), ("k", jnat k), ("n", jnat n), ("tops", .arr topNodes.toArray),
       ("level0", jnat copies), ("commits", jnat rows.length)]

@@ -121,8 +121,7 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
              "round 1's commits": lambda s: s["rounds"][1].update(commits=0),
              "round 2's level0": lambda s: s["rounds"][2].update(level0=0),
              "round 2's level-0 copy as a top": lambda s: s["rounds"][2].update(tops=[2], level0=0),
-             "rounds": lambda s: s["rounds"].append({**s["rounds"][1], "k": 2}), "y": lambda s: s["link"].update(y=1),
-             "an extra key in a round": lambda s: s["rounds"][0].update(extra=0)}
+             "y": lambda s: s["link"].update(y=1)}
     for what, edit in edits.items():
         s = json.loads(json.dumps(SCHEDULE))
         edit(s)
@@ -158,6 +157,7 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
         "round with a domain": (6, RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _domain(b"d") + _obs([5, 6, 7]) + _sq(1, RL.KIND_SCALAR), 1)),
         "round with nine elements": (6, RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _obs(list(range(9))) + _sq(1, RL.KIND_SCALAR), 1)),
         "round on an unopened stream": (6, RL.encode_req(RL.REQ_ROUND, "circuit/rep9", _sq(1), 1)),
+        "a copy that is not level 0's top": (7, RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _label(b"flock-ligerito") + _bytes(CAP1 + CAP1) + _sq(2), 2)),
         "Prime": (7, RL.REQ_PRIME.to_bytes(1, "little") + (0).to_bytes(4, "little") + (0).to_bytes(4, "little")),
         "an unknown tag": (7, bytes([42])),
         "an empty frame": (7, b""),
@@ -293,25 +293,57 @@ def test_the_cases_reach_every_ending(lean_records):
     assert sum(1 for r in lean if r["end"] == "stop" and r["rounds"]) >= 20
 
 
+def test_copies_are_by_position_never_by_value(lean_records):
+    """A cap is a copy of level 0's top only where the schedule's round names one, whatever its value: under a schedule
+    whose round 2 has a fresh top of two nodes and no copy, the honest session's copy of level 0's top there is committed
+    as a fresh salted top and the session finishes, and a copy that is not level 0's top stops it at that round."""
+    cs, lean = lean_records
+    got = {name: rec for (name, _, _), rec in zip(cs, lean)}
+    assert (got["honest"]["rounds"][2]["level0"], got["honest"]["rounds"][2]["tops"]) == (1, [])
+    fresh = got["schedule's round 2's level-0 copy as a top edited"]
+    assert fresh["end"] == "finish" and fresh["rounds"][2]["level0"] == 0 and [len(t) for t in fresh["rounds"][2]["tops"]] == [2]
+    forged = got["forged: a copy that is not level 0's top"]
+    assert forged["end"] == "stop" and len(forged["rounds"]) == 2
+
+
+def _bad_schedules() -> list[dict]:
+    def edited(edit):
+        s = json.loads(json.dumps(SCHEDULE))
+        edit(s)
+        return s
+
+    def v0(s):
+        for r in s["rounds"]:
+            r["caps"] = r.pop("tops") + [2] * r.pop("level0")
+
+    return [edited(v0), edited(lambda s: s["rounds"][1].pop("level0")), {**SCHEDULE, "kind": "rec/inner-transcript/v0/schedule"},
+            edited(lambda s: s["rounds"][0].update(extra=0)), edited(lambda s: s["rounds"].append({**s["rounds"][1], "k": 2})),
+            edited(lambda s: s["rounds"].insert(0, s["rounds"].pop(1))), edited(lambda s: s["streams"]["circuit/rep0"].update(rounds=4)),
+            edited(lambda s: s["streams"].update({"circuit/rep1": {"parent": "", "at": 0, "rounds": 0}})),
+            edited(lambda s: s["hello"].update(coins="seed")), edited(lambda s: s["hello"].update(reps=2.5)),
+            edited(lambda s: s["hello"].update(reps=-2)), edited(lambda s: s["hello"].update(flavor='r"s'))]
+
+
 def test_a_schedule_of_another_form_is_refused(lean_runs):
-    """A schedule not of v1's form (`rec_live.check_schedule`) is refused by the proxy, `flock-firewall` and its live mode
-    before any request: v0's rounds, whose ``caps`` count level 0's copies as tops, a round without ``level0``, and v0's
-    kind."""
-    v0 = json.loads(json.dumps(SCHEDULE))
-    for r in v0["rounds"]:
-        r["caps"] = r.pop("tops") + [2] * r.pop("level0")
-    no_level0 = json.loads(json.dumps(SCHEDULE))
-    del no_level0["rounds"][1]["level0"]
-    bad = [v0, no_level0, {**SCHEDULE, "kind": "rec/inner-transcript/v0/schedule"}]
+    """A schedule not of v1's form, or one no honest session can finish (`rec_live.check_schedule`,
+    `Flock.Firewall.Schedule.canonical`), is refused by the proxy, `flock-firewall` and its live mode before any request:
+    v0's rounds, whose ``caps`` count level 0's copies as tops, a round without ``level0``, v0's kind, a round with another
+    key, a round its stream does not number next, a stream with a round count not its rounds' or with none, and a Hello
+    naming coins or with a number that is not a natural or a string holding a ``"``. Lean's firewall, which holds no
+    registered top, also refuses a stream whose table has no root."""
+    bad = _bad_schedules()
+    rootless = {**SCHEDULE, "roots": {}}
     lines = "".join(json.dumps({"schedule": s, "requests": [b.hex() for b in honest()], "salts": [x.hex() for x in SALTS]}) + "\n"
-                    for s in bad)
+                    for s in bad + [rootless])
     out = subprocess.run([str(BIN)], input=lines, capture_output=True, text=True, check=True).stdout.splitlines()
-    assert [json.loads(x) for x in out] == [{"error": "not a rec/inner-transcript/v1/schedule"}] * len(bad)
+    assert [json.loads(x) for x in out] == [{"error": "not a rec/inner-transcript/v1/schedule"}] * (len(bad) + 1)
     for s in bad:
         with pytest.raises(ValueError, match="not a rec/inner-transcript/v1/schedule"):
             RL.Proxy(RL.CoinServer(_coins), lambda: SALTS[0], schedule=s)
+    for s in bad + [rootless]:
         with pytest.raises(ValueError, match="the schedule is refused"):
             RL.LeanFirewall(BIN, s)
+    RL.Proxy(RL.CoinServer(_coins), lambda: SALTS[0], schedule=rootless)
 
 
 def test_the_relay_sends_what_run_sends_at_the_salts_it_drew(relayed):

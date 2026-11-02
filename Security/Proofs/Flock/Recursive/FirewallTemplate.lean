@@ -389,10 +389,11 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
   rw [show ({ v with salts := z } : State).roots = v.roots from rfl]
   refine H.ite_jp (fun w => w = v) (fun w hw => ?_) (fun _ => rfl) fun _ hJ => ?_
   · subst hw
-    refine H.bind (H.mapM Firewall.saltedTop blankTop (fun c => blanks (c.size / NODE_BYTES)) H.saltedTop _)
-      fun tops => H.intro fun hT => ?_
     refine H.get_like fun z => ?_
     rw [show ({ w with salts := z } : State).rounds = w.rounds from rfl]
+    refine H.ite (fun _ => H.throw_bind) fun _ => ?_
+    refine H.bind (H.mapM Firewall.saltedTop blankTop (fun c => blanks (c.size / NODE_BYTES)) H.saltedTop _)
+      fun tops => H.intro fun hT => ?_
     refine H.bind (H.mapM_like _ (fun c => ?_) _) fun _ => ?_
     · refine H.bind H.lift fun _ => H.intro fun _ => ?_
       exact H.pure fun _ h => h
@@ -429,8 +430,7 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
       · exact H.throw_bind
       refine H.bind (H.send _) fun _ => hJ _ ⟨_, rfl, ?_⟩
       simp [Array.toList_push, openT, ho, hk, blank]
-  · extract_lets (config := { underBinder := false }) parts table
-    generalize List.find? _ v.roots = o₁
+  · generalize List.find? _ v.roots = o₁ at hJ ⊢
     generalize sp.caps[0]? = o₂
     rcases o₁ with _ | ⟨w₁, rootB⟩ <;> rcases o₂ with _ | cap
     · exact H.throw_bind

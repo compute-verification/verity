@@ -280,9 +280,10 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
   obtain rfl := h
   rw [show (Ext r acc c).roots = c.roots from rfl]
   refine Grow.ite_jp Iff.rfl ?_ fun _ hJ => ?_
-  · refine Grow.bind (Grow.mapM Firewall.saltedTop Grow.saltedTop _) fun tops tops' h => ?_
+  · refine Grow.bind Grow.get fun d d' h => ?_
     obtain rfl := h
-    refine Grow.bind Grow.get fun d d' h => ?_
+    refine Grow.ite Iff.rfl (fun _ => Grow.throw_bind) fun _ => ?_
+    refine Grow.bind (Grow.mapM Firewall.saltedTop Grow.saltedTop _) fun tops tops' h => ?_
     obtain rfl := h
     refine Grow.bind (Grow.mapM _ (fun e => ?_) _) fun tn tn' h => ?_
     · refine Grow.bind Grow.lift fun k k' h => ?_
@@ -305,8 +306,7 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
       · exact Grow.throw_bind
       refine Grow.bind (Grow.send _) fun _ _ _ => ?_
       exact hJ'
-  · extract_lets (config := { underBinder := false }) parts table
-    generalize List.find? _ c.roots = o₁
+  · generalize List.find? _ c.roots = o₁ at hJ ⊢
     generalize sp.caps[0]? = o₂
     rcases o₁ with _ | ⟨w₁, rootB⟩ <;> rcases o₂ with _ | cap
     · exact Grow.throw_bind
