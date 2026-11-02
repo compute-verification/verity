@@ -103,8 +103,8 @@ def with_structures(record: dict, traced: dict[str, dict]) -> dict:
     step's tokens. Only steps whose own structure has updated MACs take it (a step before the run's first update reads
     θ only), and |C| stays the runtime count. A traced structure's `formalism` (te_core.capture.circuit.measure) gives
     its steps' σ, affected share, token factor and Δ_grad (te_core.formalism's `TRACED_STRUCTURE`), and the record's
-    `formalism` block
-    the per-token quantities of the traced structure its steps spend the most MACs in (`formalism.of_trace`)."""
+    `formalism` block the per-token quantities of the traced structure its steps spend the most MACs in
+    (`formalism.of_trace`)."""
     out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
     weight: dict[str, int] = {}
     for s in out["steps"]:
