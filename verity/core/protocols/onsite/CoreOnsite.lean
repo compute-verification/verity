@@ -52,9 +52,9 @@ and the store the P2 session audits, the root its registration names (its commit
 def store : Tie :=
   ⟨"store",
     [(PousCheck.RunProtocol.protocol.id,
-        fun b => (PousCheck.RunProtocol.decodeCommitment b).toOption.map (·.root)),
+        fun k => (PousCheck.RunProtocol.decodeCommitment k.commitment).toOption.map ([·.root])),
       (RemoteAudit.P2Protocol.protocol.id,
-        fun b => (RemoteAudit.P2Protocol.decodeCommitment b).toOption.map (·.held.reg.root))]⟩
+        fun k => (RemoteAudit.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
 def protocol : BlobProtocol := tiedSameB "verity/onsite/v0" tied [store] components
 

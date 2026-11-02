@@ -69,14 +69,14 @@ ID = R.PROTOCOL
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
-#: `Core.Remote.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
-#: remote's PoUW its window check, and both audit sampled proofs with the one-stage audit (`ID`, one-stage v1)
+#: `Core.Remote.components`): each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store,
+#: and both audit sampled proofs with the one-stage audit (`ID`, one-stage v1)
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
                          "pouw": "verity/pouw/period/v1", "sampled-proofs": ID,
                          "wipe": "verity/wipe/v0"},
-    "verity/remote/v0": {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/v1",
+    "verity/remote/v0": {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/period/v1",
                          "sampled-proofs": ID},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
