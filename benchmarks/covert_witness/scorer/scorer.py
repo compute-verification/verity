@@ -1484,6 +1484,35 @@ def seed_args(row: dict, seed: int) -> list[str]:
     return [x for k, flag in (("seed", "--seed"), ("data_seed", "--data-seed")) if k in have for x in (flag, str(seed))]
 
 
+def entry_argv(row: dict) -> list[str]:
+    """The entry's train args as its program got them. The record's `args` is the argv joined by spaces, which loses an
+    empty value (ref-optim's `--snap-at ''`) and splits one with spaces (shallow's `--arms`); a flag whose parsed value
+    (`train_args`) is a string takes that value whole, and every other flag keeps its tokens."""
+    toks, have = (row.get("args") or "").split(), row.get("train_args") or {}
+    out, i = [], 0
+    while i < len(toks):
+        t = toks[i]
+        i += 1
+        v = have.get(t[2:].replace("-", "_")) if t.startswith("--") and "=" not in t else None
+        if isinstance(v, str):
+            out += [t, v]
+            i += len(v.split())
+        else:
+            out.append(t)
+    return out
+
+
+def superseded(la: dict, rows: dict[str, dict]) -> str | None:
+    """Why a launched rerun doesn't stand for its entry: its train args aren't the entry's (`entry_argv`), as the
+    launches before entry_argv lost an empty or spaced value. Its entry is relaunched at the same seed."""
+    x = rows.get(la.get("id"))
+    if la.get("kind") != "rerun" or x is None or "--" not in (la.get("argv") or []):
+        return None
+    got = la["argv"][la["argv"].index("--") + 1:]
+    want = [*unseeded(entry_argv(x)), *seed_args(x, la["seed"] if la.get("seed") is not None else 0)]
+    return None if got == want else "its train args aren't the entry's (an empty or spaced value lost)"
+
+
 def unseeded(args: list[str]) -> list[str]:
     """`args` without the seed flags seed_args sets."""
     out, skip = [], False
@@ -1523,7 +1552,7 @@ def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node:
             argv = [sys.executable, "benchmarks/covert_witness/launch.py", x["class"], x["start"], "--direction", "scorer",
                     "--final", "--no-wait", "--note", note, "--mechanism", x["mechanism"], "--island", x["island"],
                     "--program", x["program"], *(["--node", node] if node else []),
-                    "--", *unseeded((x.get("args") or "").split()), *seed_args(x, seed)]
+                    "--", *unseeded(entry_argv(x)), *seed_args(x, seed)]
             row = {"kind": kind, "id": x["id"], "seed": seed if seed_args(x, 0) else None, "commit": commit,
                    "entry_commit": x["commit"], "harness": harness, "class": x["class"], "start": x["start"],
                    "mechanism": x["mechanism"], "note": note, "at": now(), "argv": argv, "run": ""}
@@ -1646,14 +1675,14 @@ def final_dispatch(nodes: list[str], deadline: str = "17:00", dry_run: bool = Fa
     (its record's GPU seconds plus 5 minutes from now) is not launched."""
     path = FINAL / "launches.jsonl"
     launches = [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
-    launched = {(la["id"], la["seed"]) for la in launches if la.get("kind") == "rerun" and la.get("run")}
-    waiting = {n: 0 for n in nodes}
-    for la in launches:
-        if la.get("kind") == "rerun" and la.get("run") and la.get("node") in waiting \
-                and rerun_state(la["run"]) in ("waiting", "submitted"):
-            waiting[la["node"]] += 1
     rows = {r["id"]: r for r in (json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip())
             if r["source"] == "launch.py"}
+    launches = [la for la in launches if la.get("kind") == "rerun" and la.get("run") and not superseded(la, rows)]
+    launched = {(la["id"], la["seed"]) for la in launches}
+    waiting = {n: 0 for n in nodes}
+    for la in launches:
+        if la.get("node") in waiting and rerun_state(la["run"]) in ("waiting", "submitted"):
+            waiting[la["node"]] += 1
     now_ = datetime.now(UTC)
     end = now_.replace(hour=int(deadline[:2]), minute=int(deadline[3:]), second=0, microsecond=0)
     todo = [(e["id"], s) for e in final_plan(deadline=deadline)["plan"]
@@ -1678,10 +1707,16 @@ def final_collect() -> list[dict]:
     launches = [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
     done = json.loads((FINAL / "collected.json").read_text()) if (FINAL / "collected.json").exists() else {}
     src, env = official_src(), tool_env() | {"CW_LEDGER": str(FINAL / "launcher.jsonl")}
+    rows = {r["id"]: r for r in (json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip())
+            if r["source"] == "launch.py"}
     out, te = [], ""
     for la in launches:
         run = la.get("run")
         if not run or la.get("kind") not in ("rerun", "smoke"):
+            continue
+        if why := superseded(la, rows):
+            out.append({k: la.get(k) for k in ("kind", "id", "seed", "run", "node", "start")} | {"state": "superseded",
+                                                                                                "superseded": why})
             continue
         research("fetch", run)
         st = (json.loads((RUNS / run / "status.json").read_text()).get("state")
@@ -1869,7 +1904,7 @@ def final_table(write: bool = True) -> dict:
     subs, reruns = [], []
     for r in res:
         x = rows.get(r.get("id"))
-        if r.get("kind") != "rerun" or not x:
+        if r.get("kind") != "rerun" or not x or r.get("superseded"):
             continue
         bad = rerun_problems(r)
         reruns.append({"id": r["id"], "seed": r.get("seed"), "run": r["run"], "art": r.get("art"), "state": r["state"],
@@ -1887,7 +1922,8 @@ def final_table(write: bool = True) -> dict:
     search_subs = [x for x in json.loads((STATE / "submissions.json").read_text()) if x.get("regime") == "current"]
     l0_search = {s: v for s in STARTS if (v := regime_start_bpb(search_subs, s)) is not None}
     rep = {"at": now(), "te_core": te_version(), "regime": regime_name(), "pin": pin_of(), "final": table(fin, l0), "search": table(search_subs, l0_search),
-           "final_starts": l0, "search_starts": l0_search, "reruns": reruns, "entries": sorted({x["id"] for x in fin})}
+           "final_starts": l0, "search_starts": l0_search, "reruns": reruns, "entries": sorted({x["id"] for x in fin}),
+           "superseded": [{k: r.get(k) for k in ("id", "seed", "run", "superseded")} for r in res if r.get("superseded")]}
     if write:
         FINAL.mkdir(parents=True, exist_ok=True)
         (FINAL / "table.json").write_text(json.dumps(rep, indent=1) + "\n")

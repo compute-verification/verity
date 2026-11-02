@@ -103,7 +103,10 @@ lock, so the two never collide.
 - **Final scoring** (`scorer.py final`): an entry (a valid current-regime search record) is rerun at fresh seeds (101,
   102, 103 on the `--seed` and `--data-seed` flags its train.py takes; once if it takes neither, since the harness seeds
   nothing for a `--script` run) by the harness's `launch.py CLASS START --direction scorer --final --no-wait ... --
-  TRAIN_ARGS` with `--island` and `--program` the entry's, run from `overlay`: a commit whose tree is the harness branch
+  TRAIN_ARGS` with `--island` and `--program` the entry's (TRAIN_ARGS by `entry_argv`: the record's `args` joined
+  by spaces, with each string-valued flag's value taken whole from the program's parsed `train_args`, so an empty
+  `--snap-at` or a spaced `--arms` survives; a launch whose args differ is `superseded` and relaunched at its seed),
+  run from `overlay`: a commit whose tree is the harness branch
   head's (`TE_BRANCH`) with the entry's `islands/`, its parents both. launch.py ships the pin and takes only that
   island (checked to be the entry's tree), so every rerun is measured by the pin with the entry's own island code and
   train args, and `final table` refuses one measured by any other commit. In final mode (`CW_FINAL=1`) every score is the final set's, and launch.py preserves the
