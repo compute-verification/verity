@@ -45,7 +45,8 @@ lock, so the two never collide.
   `cursor/te-core-4207`) held since 30 Oct (`fixed_side`). A record whose E (sha256) is
   an earlier record's that is current or another direction's (`replays`, as te_core.frontier reads a duplicate), or
   whose harness counted under half the FLOPs of the run's own steps (`over_train_flops` < `COUNTED_FLOOR`), is a
-  counted-compute escape and unscored (the coordinator, 10:35Z). A record whose updated set is the tied embedding with
+  counted-compute escape and unscored (the coordinator, 10:35Z), unless the scorer has read its op table and found the
+  gap accounted for op by op (`FLOOR_ACCOUNTED`, by art id; the coordinator, 13:42Z). A record whose updated set is the tied embedding with
   no block below the top (embed only, or embed and the top block) is priced wrong (tied lookup) and out of the frontier:
   v2.3's counter prices the lookup at 0 (the coordinator, 13:32Z). Otherwise the record is invalid, with the reason in
   the ledger.
@@ -92,6 +93,9 @@ lock, so the two never collide.
   best record of each thin cell, among valid current-regime records launched from 08:30Z. Each candidate's submitted
   output goes to the harness's `promote.py` (`sealed_bits`), which decides one bit per output on its node from the
   sealed promotion value; only a true bit is PROMOTED, and the DIGEST names the candidates the sealed set didn't hold.
+  A decision run that promote.py stops waiting on (research run's 20-minute cap, behind a deep gpu line) is kept in
+  `$TE_SCORER_STATE/sealed/pending.json` and read when it ends, never relaunched; its candidates are listed as not yet
+  decided until then.
   `board` without `--append` is a dry run that lists the candidates and decides nothing. Re-screens (a mechanism's note,
   less rates and seeds, on a class and start another direction screened first, or its own direction swept three times
   already) are flagged.
@@ -109,8 +113,9 @@ lock, so the two never collide.
   start bpb, beside the search set's from the current regime's records, and both frontier plots, into
   `$TE_SCORER_STATE/final/`. `final entries` reads each direction's last `[FINAL]` line (its own board on its
   `cursor/te-*` branch or the merged board; art ids or run ids). `final plan` orders the reruns (the coordinator,
-  12:55Z): the entries that set honest or W* at some target in the pin's table, shortest first, then the directions'
-  other FINAL entries in their direction's order, shortest first. It keeps the seeds that end by `--deadline` (17:00Z)
+  12:55Z): the entries that set honest or W* at some target in the pin's table, shortest first, then the first
+  `FINAL_PER_DIRECTION` (3) records each direction's FINAL line names (an art id and its run's id are one record): every
+  direction's first, shortest first, then every second, then every third. It keeps the seeds that end by `--deadline` (17:00Z)
   starting at `--begin` (15:00Z) on the listed nodes' GPUs (8 a node; a rerun takes its record's GPU seconds plus 10
   minutes). A `--smoke` launch checks
   the pipeline and never enters the table.

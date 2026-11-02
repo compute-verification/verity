@@ -1562,11 +1562,16 @@ def final_entries() -> dict[str, dict]:
     return out
 
 
+FINAL_PER_DIRECTION = 3
+
+
 def final_plan(begin: str = "15:00", deadline: str = "17:00", seeds=FINAL_SEEDS) -> dict:
     """The reruns in launch order, and which of them end by `deadline` if they start at `begin` (UTC today, or now if
     later) on the listed nodes' GPUs (coordinator 12:55Z: finals 15:00-17:00Z, ~2 h of 24 GPUs): the entries that set
     honest or W* at some target in the pin's table, shortest first, then the directions' other FINAL entries in their
-    direction's order, shortest first. A rerun's time is its record's GPU seconds plus 10 minutes."""
+    direction's order, shortest first. A direction's FINAL entries are the first FINAL_PER_DIRECTION distinct records
+    its line names (an art id and its run id are one), the rest being its notes. A rerun's time is its record's GPU
+    seconds plus 10 minutes."""
     rows = [json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip()]
     rep = json.loads((STATE / "score.json").read_text())
     sets: dict[str, int] = {}
@@ -1577,9 +1582,14 @@ def final_plan(begin: str = "15:00", deadline: str = "17:00", seeds=FINAL_SEEDS)
                     sets[i] = sets.get(i, 0) + 1
     fin, named, refused = final_entries(), [], []
     for d, f in fin.items():
-        for k, i in enumerate(f["ids"]):
+        picked: dict[str, dict | None] = {}
+        for i in f["ids"]:
             x = next((r for r in rows if r["source"] == "launch.py" and (r["id"].removeprefix("art:").startswith(i)
                                                                          or r.get("run") == i)), None)
+            if len(picked) == FINAL_PER_DIRECTION and (x["id"] if x else i) not in picked:
+                break
+            picked.setdefault(x["id"] if x else i, x)
+        for k, (i, x) in enumerate(picked.items()):
             if x is None or not x["valid"] or x.get("final") or x.get("regime") != "current":
                 refused.append({"direction": d, "id": i, "why": "no record" if x is None else "invalid" if not x["valid"]
                                 else "earlier regime" if x.get("regime") != "current" else "a final rerun"})
