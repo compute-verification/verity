@@ -635,7 +635,7 @@ def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base
 
 def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_preflighted_waits_off_next_untold(world):
     """A sync's preflights start only while they've taken under `PREFLIGHT_BUDGET_S` together: past it a PR waits off `next`,
-    with the PRs that contain it, told nothing, and a later sync preflights it."""
+    with the PRs that contain it, told nothing, and a later sync preflights it within its budget."""
     now = [0.0]
     calls: list[int] = []
 
@@ -655,8 +655,45 @@ def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_pref
     assert entries[3].why.endswith("which waits for its preflight"), entries[3].why
     state = q.load_state()
     assert state["conflicts"] == {} and state["waiting"] == {} and "waiting off it for their preflight (#2 #3)" in world.logs[-1]
+    assert state["preflight_waited"] == [2, 3]
     assert [m.pr for m in q.sync()[0]] == [1, 2] and calls == [1, 2]
     assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and calls == [1, 2, 3]
+
+
+def test_a_pr_the_preflight_budget_skipped_is_preflighted_first_next_sync_within_the_budget_and_every_pr_is_reached(world):
+    """New PRs that come before one the budget skipped, by number, would spend each sync's budget ahead of it.  Instead the PRs
+    the last sync left waiting take the budget first: while one is still to come, the others wait too, recorded for the next
+    sync, and no sync's preflights start past the budget.  So each PR is reached in turn."""
+    now = [0.0]
+    calls: list[int] = []
+    spent: list[float] = []
+
+    def half(pr, base, commit, members):
+        calls.append(pr.number)
+        now[0] += PREFLIGHT_BUDGET_S / 2
+        return None
+
+    def sync() -> tuple[list[int], dict]:
+        start = now[0]
+        members, entries = q.sync()
+        spent.append(now[0] - start)
+        return [m.pr for m in members], entries
+
+    for n in (3, 4, 5):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight, q.clock = half, lambda: now[0]
+    assert sync()[0] == [3, 4] and calls == [3, 4]
+    assert q.load_state()["preflight_waited"] == [5]
+    for n in (1, 2):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    members, entries = sync()
+    assert members == [3, 4, 5] and calls == [3, 4, 5], world.logs
+    assert entries[1].state == entries[2].state == "waiting" and "the PRs the last sync left waiting" in entries[1].why
+    assert q.load_state()["preflight_waited"] == [1, 2]
+    assert sync()[0] == [3, 4, 5, 1, 2] and calls == [3, 4, 5, 1, 2]
+    assert q.load_state()["preflight_waited"] == []
+    assert spent == [PREFLIGHT_BUDGET_S, PREFLIGHT_BUDGET_S / 2, PREFLIGHT_BUDGET_S], "no sync's preflights pass the budget"
 
 
 def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
@@ -1877,10 +1914,10 @@ FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Pa
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
 
 
-def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, **kw):
+def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, repo: Path | None = None, sync=FAKE_SYNC, **kw):
     from research.queue import Preflight
 
-    return Preflight(world.dev, str(world.origin), store or world.store, sync=FAKE_SYNC, python=sys.executable,
+    return Preflight(repo or world.dev, str(world.origin), store or world.store, sync=sync, python=sys.executable,
                      root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch, **kw)
 
 
@@ -2476,6 +2513,42 @@ def test_the_lean_step_skips_past_its_bounds_and_refuses_what_it_cannot_build(wo
         said = next(s for s in world.logs if f"preflight: #{n} at" in s)
         assert "checks skipped: " in said and "nothing refused" not in said and says in said, said
         assert said.index("checks skipped: ") < said.index(says), said
+
+
+def test_the_syncs_preflight_runs_no_environment_sync_and_no_lean_build_says_so_and_still_runs_the_invariant_tests(
+        world, monkeypatch):
+    """A sync's preflight that synced the merged tree's environment and built its Lean took about 300 s a PR against a sync's
+    120 s budget, so each sync admitted one PR.  The mark's preflight still runs both at the head; the sync's runs the cheap
+    merge-level checks alone, says what it skipped as skipped, never as nothing refused, and still refuses a merge that
+    breaks an invariant test."""
+    from research.queue import LeanBuilt, MarkOnly, ready
+
+    _lean_world(world, monkeypatch)
+    syncs = world.tmp / "syncs.txt"
+    sync = (sys.executable, "-c", f"open({str(syncs)!r}, 'a').write('synced\\n')")
+    built: list[list[str]] = []
+
+    def lean(wt, targets, left):
+        built.append(list(targets))
+        return LeanBuilt()
+
+    world.gh.put(2, h2 := world.change({"lean/a/A/Base.lean": "def foo := 1\ndef bar := 2\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, sync=sync, lean=lean)) == 0
+    assert syncs.read_text() == "synced\n" and len(built) == 1, "the mark's preflight syncs and builds"
+
+    world.gh.put(2, h2, ready=True)
+    world.gh.put(3, world.change({"BROKEN_MODULE_STRING": "", "n3.txt": "x\n"}))
+    q = world.queue()
+    q.preflight = _preflight(world, repo=q.workdir, sync=sync, lean=lean).onto
+    world.logs.clear()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 2], world.logs
+    assert syncs.read_text() == "synced\n" and len(built) == 1, "the sync's preflight neither syncs nor builds"
+    said = next(s for s in world.logs if "preflight: #2 at" in s)
+    assert "checks skipped: the merged tree's environment and Lean build (`uv sync --locked`" in said, said
+    assert "the checks that ran passed" in said and "nothing refused" not in said, said
+    assert entries[3].state == "refused" and "the invariant tests in . fail on the merged tree" in entries[3].why, entries[3].why
+    assert not any((world.tmp / "pre").iterdir()) and len(_git(q.workdir, "worktree", "list").splitlines()) == 1
 
 
 def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuses_what_none_can_and_skips_a_timeout(

@@ -12694,6 +12694,7 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll",
     "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest",
     "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial",
     "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
