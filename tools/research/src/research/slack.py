@@ -15,6 +15,8 @@ Notes are records, never messages.
                    --page FILE.md --area AREA                      # Daniel's: the ask's page and card, as `ask-daniel --page`
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg linear check|state|comment|list|audit|place|edit ... # Linear through the app, never the MCP connector (`linear -h`)
+  research msg linear audit [TEAM ...] [--lane HANDLE] [--close-strays --as HANDLE]   # findings; the flag cancels the strays
+  research msg linear link ISSUE PR [PR ...]                       # attach PRs (numbers or URLs); a PR naming the issue doesn't
   research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
   research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F   # a project update
   research msg linear project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]
@@ -1864,9 +1866,11 @@ def render_asks(rows: list[dict], now: float) -> str:
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE` (or `--worker NAME`, a
     lane's worker, which holds no handle: as LANE/NAME, ringing no one), `list TEAM [--state S]`, `audit [TEAM ...]
-    [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped), `place ISSUE PROJECT
+    [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped; `--close-strays --as HANDLE`
+    also cancels the strays, a line each on stderr), `place ISSUE PROJECT
     [--milestone M]` (`--asks [--asker NAME]`: the ledger of people's asks), `edit ISSUE [--title T] [--due D|none]
-    [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `relate ISSUE
+    [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `link ISSUE PR...` (one Linear has attached already is said
+    so, exit 0), `relate ISSUE
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
     `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]` and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
@@ -1882,9 +1886,11 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "link"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
-                         "`place` or `comment`, which have one")
+                         "`place`, `comment` or `link`, which have one")
+    if ns.close_strays and (ns.verb != "audit" or ns.asks):
+        raise SlackError("--close-strays goes with `audit` alone (not --asks): it cancels the strays that audit finds")
     try:
         brief = Path(ns.file).read_text() if ns.file else None
     except OSError as e:
@@ -1924,6 +1930,11 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             counts = linear.tally(found)
             print(json.dumps({"findings": found, "counts": counts, "unread": unread, "landing": landing}, indent=2) if ns.json
                   else render_audit(found, counts) + render_landing(landing))
+            if ns.close_strays:
+                author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, who the closing comments are from"))["handle"]
+                strays = [f for f in found if f["kind"] == "stray"]
+                print("\n".join([f"dry-run: would cancel {f['issue']}, a stray, with the comment: {linear.STRAY_NOTE}" for f in strays]
+                                if ns.dry_run else lin.close_strays(strays, author)) or "no strays to close", file=sys.stderr)
             return 1 if found else 0
         if ns.verb == "update":
             print(lin.update(need(" ".join(filter(None, [ns.target, *ns.value])), "the PROJECT (a prefix of its name)"),
@@ -1941,6 +1952,11 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 print(lin.milestone(ns.value[0], " ".join(ns.value[1:]), ns.date, brief, ns.rename, create=ns.target == "create"))
             return 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
+        if ns.verb == "link":
+            need(value, "the PRs to attach (numbers, #N or URLs)")
+            urls = [linear.pr_url(p) for p in ns.value]
+            print("\n".join([f"dry-run: would link {u} to {issue}" for u in urls] if ns.dry_run else lin.link(issue, ns.value)))
+            return 0
         if ns.verb == "relate":
             if len(ns.value) != 2:
                 raise SlackError(f"linear relate: give ISSUE {'|'.join(linear.RELATE)} OTHER")
@@ -4022,24 +4038,28 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
                       "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, and each person's "
                       "ask parked, unstaffed, slipped or asked again, with its fix; exit 1 on any; `--asks [--asker NAME]`: "
-                      "the ledger of people's asks, delivered or not), `place ISSUE PROJECT [--milestone M]` (by name "
+                      "the ledger of people's asks, delivered or not; `--close-strays --as HANDLE`: also cancel each stray "
+                      "with a comment naming the rule), `place ISSUE PROJECT [--milestone M]` (by name "
                       "prefixes), `edit ISSUE [--title T] [--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID] [--label L "
-                      "[--remove]]`, `relate ISSUE blocks|blocked-by|related|"
+                      "[--remove]]`, `link ISSUE PR...` (attach each PR, a number or URL; naming the issue in a PR attaches "
+                      "nothing), `relate ISSUE blocks|blocked-by|related|"
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`; none sends a state")
-    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone"))
-    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
-                                             "team (a handle or its key); update: the project; project, milestone: create or edit")
+    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "link", "relate", "unrelate",
+                                    "update", "project", "milestone"))
+    p.add_argument("target", nargs="?", help="state, comment, place, edit, link, relate, unrelate: the issue (INF-12); list, audit: "
+                                             "the team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
+                                            "link: the PRs (6820, #6820 or a pull URL); "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
                                             "its name; milestone: the project (one word or quoted) and the milestone's name")
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
-                   help="comment: its sender, a handle you hold (or --worker); check: the test issue's sender (default comms)")
+                   help="comment: its sender, a handle you hold (or --worker); audit --close-strays: the closing comments' "
+                        "sender; check: the test issue's sender (default comms)")
     p.add_argument("--worker", default=None, metavar="NAME",
                    help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME, "
                         "LANE the handle of the issue's team, and rings no one")
@@ -4060,6 +4080,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--asks", action="store_true", help="audit: the ledger of people's asks (an `asker:` label) instead: "
                                                        "each not delivered, and the counts")
     p.add_argument("--asker", default=None, metavar="NAME", help="audit --asks: only this person's asks (daniel)")
+    p.add_argument("--close-strays", action="store_true",
+                   help="audit: also cancel each stray it finds (an ask in another lane's team nobody took up or touched for "
+                        "48 h), with a comment from --as naming the rule; without it the audit only reports")
     p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
     p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")

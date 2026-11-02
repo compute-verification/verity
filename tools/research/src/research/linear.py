@@ -12,10 +12,11 @@ is never assigned or delegated: an issue assigned to the Cursor app starts a new
 prints it and top's hourly sweep rings each lane with its findings.  An issue tracks an ask and never answers it: a person's
 ask carries `asker:<name>` (`--asker`), is done only when its outcome exists, and `asks` reads every one, open, parked or
 recently closed, so the audit also finds those parked, unstaffed, slipped or restated (ASK_KINDS) and `research msg linear
-audit --asks` is their ledger.  `edit` changes an issue's title, due date, description
-or parent, `relate` and `unrelate` its relations, `update` posts a project update, `create_project` and `milestone` make
-projects and milestones, all through the app, so nobody writes through the Linear MCP connector, which acts as Daniel.  None
-of them sends a state. Stdlib only."""
+audit --asks` is their ledger.  `close_strays` cancels the asks the audit finds stray, and only on `research msg linear audit
+--close-strays`.  `edit` changes an issue's title, due date, description
+or parent, `relate` and `unrelate` its relations, `link` attaches its PRs, `update` posts a project update, `create_project`
+and `milestone` make projects and milestones, all through the app, so nobody writes through the Linear MCP connector, which
+acts as Daniel.  None of them sends a state. Stdlib only."""
 from __future__ import annotations
 
 import base64
@@ -37,10 +38,19 @@ TOKEN_URL = "https://api.linear.app/oauth/token"
 SCOPES = "read,write"   # always the same: a grant with other scopes revokes every live token of the app
 EARLY_S = 3600          # a cached token is refetched this long before it expires
 TITLE_MAX = 80
-OPEN_TYPES = ("triage", "unstarted", "started")                  # the audit's issues: Backlog is parked, not open work
+OPEN_TYPES = ("triage", "unstarted", "started")                  # open work: Backlog is parked
+LIVE_TYPES = (*OPEN_TYPES, "backlog")                            # not closed: what the one-tracker rules hold to a board
 TAKEN = ("Todo", "In Progress", "In Review")                     # taken up: it belongs on a board, with a date
 QUIET_H = 24                                                     # In Progress with no comment and no start for this long
 STALE_D = 7                                                      # Todo not updated or commented on for this long
+ORPHAN_H = 48                                                    # filed this long ago, it is in a project
+UNLINKED_H = 24                                                  # In Review this long, it has an attached open PR
+STRAY_H = 48                                                     # an ask in another lane's team untouched this long is closed
+FROM_LABEL = "from:"                                             # the handle that filed an ask: `from:top`
+PR_URL = "https://github.com/compute-verification/verity/pull/{}"
+PR_ARG_RE = re.compile(r"#?(\d+)|https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
+STRAY_NOTE = (f"Canceled by the Linear audit's stray rule: an ask filed in another lane's team that nobody took up (a project "
+              f"and a due date) or touched for {STRAY_H} h. If it is still wanted, its owner reopens it with a project and a date.")
 AUDIT_PAGE = 25                                                  # first: 50 with the nested fields is "Query too complex"
 AUDIT_CHILDREN = 50                                              # a parent's most recently updated children the audit reads
 LANE_LABEL = "lane:"                                             # a handle with no team of its own marks its issues so
@@ -55,7 +65,8 @@ ASKED_AGAIN_RE = re.compile(SENDER + r"asked again\b", re.I)    # a comment reco
 POSTMORTEM_RE = re.compile(SENDER + r"postmortem\b", re.I)      # a comment answering one restatement
 ASKER_RE = re.compile(r"[a-z][a-z0-9-]{0,30}")
 ASK_KINDS = ("parked", "unstaffed", "slipped", "repeated")
-AUDIT_KINDS = ("orphan", "milestone", "undated", "overdue", "quiet", "stale", "title", "landed", "lane", *ASK_KINDS)
+AUDIT_KINDS = ("orphan", "milestone", "lapsed", "undated", "overdue", "quiet", "stale", "title", "landed", "unlinked", "stray",
+               "lane", *ASK_KINDS)
 RING_TAGS_RE = re.compile(r"(?:(?:<!subteam\^[A-Z0-9]+(?:\|[^>]*)?>|<@[A-Z0-9]+(?:\|[^>]*)?>|<!(?:here|channel)>"
                           r"|@[a-z0-9][a-z0-9._-]*)[\s,:;]*)+")
 PAREN = r"(?:\s*\([^()\n]{1,30}\))?"                              # `(URGENT)`, `(sent 01:48Z)`
@@ -195,6 +206,13 @@ def asker_label(name: str) -> str:
     if not ASKER_RE.fullmatch(who):
         raise LinearError(f"asker {name!r}: give the person's first name in lower case (daniel)")
     return ASKER_LABEL + who
+
+
+def pr_url(pr: str) -> str:
+    """A PR as `link` attaches it: a number (`6820`, `#6820`) is this repository's (PR_URL), and a GitHub pull URL is kept."""
+    if not (m := PR_ARG_RE.fullmatch(pr.strip())):
+        raise LinearError(f"PR {pr!r}: give its number (6820 or #6820) or its URL (https://github.com/OWNER/REPO/pull/N)")
+    return PR_URL.format(m[1]) if m[1] else m[0]
 
 
 def _team_filter(teams: list[str]) -> dict:
@@ -502,9 +520,14 @@ class Linear:
 
     def audit(self, owners: dict[str, str] | None = None, teams: list[str] | None = None, now: float | None = None,
               waiting: Callable[[list[int]], bool] | None = None) -> list[dict]:
-        """One pass over the open issues (OPEN_TYPES), of `teams` (names or keys) or every team: each finding
-        {issue, url, title, team, lane, state, kind, fix}, by lane, issue and kind (AUDIT_KINDS):
-        - orphan: Todo, In Progress or In Review, in no project.  milestone: in a project with milestones, with none set.
+        """One pass over the issues not closed (LIVE_TYPES), of `teams` (names or keys) or every team: each finding
+        {issue, url, title, team, lane, state, kind, fix}, by lane, issue and kind (AUDIT_KINDS).  These hold in Backlog too:
+        - orphan: in no project, ORPHAN_H after it was filed.  lapsed: its milestone's target date is before today (UTC).
+        - stray: labelled `from:<handle>` in another lane's team (the team has a handle, and the issue's lane isn't that one),
+          not a person's ask, nobody took it up (it isn't started, and lacks a project or a due date) and nothing touched it
+          (an update, a comment, a child's) for STRAY_H.  `close_strays` closes these; the audit only reports them.
+        The rest hold on open issues (OPEN_TYPES):
+        - milestone: in a project with milestones, with none set.
         - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (UTC).
         - quiet: In Progress with no comment and no start for QUIET_H (the last comment's and the start's times, not updatedAt,
           which bulk edits move).  stale: Todo neither updated nor commented on for STALE_D days (a comment leaves
@@ -515,6 +538,8 @@ class Linear:
         - landed: In Progress or In Review with GitHub PRs attached, every one merged or closed, and no comment since the
           last of them closed (its metadata's closedAt; an attachment's own updatedAt never moves): a comment naming the
           piece left answers it.
+        - unlinked: In Review UNLINKED_H after it last entered In Review (its state history, else its start), with no
+          attached open PR (a draft is open), where `landed` doesn't already say so.
         - lane: its team has no handle (`owners`, team key to handle) and it has no `lane:<handle>` label.
         - and on a person's ask (`asks`), in any state, the kinds `ask_findings` names.
         `lane` is the issue's `lane:` label, else its team's handle, else NO_LANE.  A team these credentials can't see
@@ -524,18 +549,23 @@ class Linear:
         afterwards ({issue, lane, due, late_h}), for the one line the audit prints about them."""
         now, owners = self.now() if now is None else now, owners or {}
         today = datetime.fromtimestamp(now, UTC).date().isoformat()
-        f: dict = {"state": {"type": {"in": list(OPEN_TYPES)}}}
+        f: dict = {"state": {"type": {"in": list(LIVE_TYPES)}}}
         if teams:
             f["team"] = _team_filter(teams)
-        issues = self._paged("identifier title url dueDate startedAt updatedAt createdAt state { name } team { key } project { id name } "
-                             "projectMilestone { id } labels { nodes { name } } comments(first: 1, orderBy: createdAt) { nodes { createdAt } } "
+        issues = self._paged("id identifier title url dueDate startedAt updatedAt createdAt state { name type } team { key } "
+                             "project { id name } projectMilestone { id name targetDate } labels { nodes { name } } "
+                             "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } "
                              f"attachments {{ nodes {{ url sourceType metadata }} }} children(first: {AUDIT_CHILDREN}, orderBy: updatedAt) "
                              "{ nodes { updatedAt comments(first: 1, orderBy: createdAt) { nodes { createdAt } } } }", f)
         staged = {p["id"]: bool(p["projectMilestones"]["nodes"]) for p in self.projects()} if issues else {}
+        reviewed = self._entered_review([i["id"] for i in issues if i["state"]["name"] == "In Review"])
         out, self.landing = [], []
         for i in issues:
             ident, state, key, project = i["identifier"], i["state"]["name"], i["team"]["key"], i.get("project")
-            label, lane = _lane_label(i), _lane(i, owners)
+            label, lane, live = _lane_label(i), _lane(i, owners), i["state"]["type"] in OPEN_TYPES
+            sender = next((x["name"][len(FROM_LABEL):] for x in i["labels"]["nodes"] if x["name"].startswith(FROM_LABEL)), None)
+            asker = any(x["name"].startswith(ASKER_LABEL) for x in i["labels"]["nodes"])
+            ms = i.get("projectMilestone") or {}
             prs = [a["metadata"] for a in i["attachments"]["nodes"]
                    if a.get("sourceType") == "github" and "/pull/" in (a.get("url") or "") and (a.get("metadata") or {}).get("status")]
             shut = [_epoch(p.get("closedAt") or p.get("mergedAt")) for p in prs]
@@ -554,16 +584,23 @@ class Linear:
                 due = i.get("dueDate")
                 late = (now - datetime.fromisoformat(due).replace(tzinfo=UTC).timestamp()) / 3600 - 24 if due and due < today else 0
                 self.landing.append({"issue": ident, "lane": lane, "due": due, "late_h": max(late, 0)})
+            entered = reviewed.get(i["id"]) or _epoch(i.get("startedAt")) or _epoch(i["createdAt"])
+            landed = (state in ("In Progress", "In Review") and prs and all(p["status"] in ("merged", "closed") for p in prs)
+                      and not (last and closed and last > closed))
             found = {
-                "orphan": state in TAKEN and not project
-                and f"put it in its project and milestone (`research msg linear place {ident} PROJECT --milestone M`), "
-                    "or move it to Backlog",
-                "milestone": project and staged.get(project["id"]) and not i.get("projectMilestone")
+                "orphan": not project and now - _epoch(i["createdAt"]) > ORPHAN_H * 3600
+                and f"filed {(now - _epoch(i['createdAt'])) / 3600:.0f} h ago and in no project: put it in its project and "
+                    f"milestone (`research msg linear place {ident} PROJECT --milestone M`), or cancel it with a one-line reason",
+                "milestone": live and project and staged.get(project["id"]) and not ms
                 and f"set the milestone it serves (`research msg linear place {ident} \"{project['name']}\" --milestone M`)",
+                "lapsed": project and ms.get("targetDate") and ms["targetDate"] < today
+                and f"its milestone {ms.get('name')} was due {ms['targetDate']}: re-date the milestone (`research msg linear "
+                    f"milestone edit \"{project['name']}\" \"{ms.get('name')}\" --date YYYY-MM-DD`) and comment what moved it, or "
+                    f"move it on to a later milestone (`research msg linear place {ident} \"{project['name']}\" --milestone M`)",
                 "undated": state in TAKEN and not i.get("dueDate")
                 and f"set the date it lands, its milestone's at the latest (`research msg linear edit {ident} --due YYYY-MM-DD`), "
                     "or move it to Backlog",
-                "overdue": i.get("dueDate") and i["dueDate"] < today and not lands
+                "overdue": live and i.get("dueDate") and i["dueDate"] < today and not lands
                 and f"due {i['dueDate']}: land it, or set the date it will land (`research msg linear edit {ident} --due "
                     "YYYY-MM-DD`) and comment why it moved",
                 "quiet": state == "In Progress" and now - heard > QUIET_H * 3600
@@ -571,14 +608,21 @@ class Linear:
                     "its date), or move it back to Todo",
                 "stale": state == "Todo" and idle_d > STALE_D
                 and f"not updated or commented on for {idle_d:.0f} days: plan it (a date and milestone) or cancel it with a one-line reason",
-                "title": (unsigned(i["title"]) != i["title"].lstrip() or i["title"].rstrip().endswith("\u2026"))
+                "title": live and (unsigned(i["title"]) != i["title"].lstrip() or i["title"].rstrip().endswith("\u2026"))
                 and "retitle it to the deliverable, with no handle, sender, time or trailing \u2026 "
                     f"(`research msg linear edit {ident} --title T`)",
-                "landed": state in ("In Progress", "In Review") and prs and all(p["status"] in ("merged", "closed") for p in prs)
-                and not (last and closed and last > closed)
+                "landed": landed
                 and f"every attached PR is merged or closed ({nums}): move it to Done if its done-condition holds, else to "
                     f"In Progress with a comment naming the piece left (`research msg linear comment {ident} TEXT`)",
-                "lane": key not in owners and not label
+                "unlinked": state == "In Review" and not landed and all(p["status"] in ("merged", "closed") for p in prs)
+                and now - entered > UNLINKED_H * 3600
+                and f"In Review {(now - entered) / 3600:.0f} h with no open PR attached: attach it (`research msg linear link "
+                    f"{ident} PR`; a PR naming the issue doesn't attach it), or move it back to In Progress",
+                "stray": bool(sender) and key in owners and sender != lane and not asker and i["state"]["type"] != "started"
+                and not (project and i.get("dueDate")) and idle_d * 24 > STRAY_H
+                and f"filed by {sender} in {key}, not taken up (a project and a date) and untouched for {idle_d * 24:.0f} h: take it "
+                    f"up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule",
+                "lane": live and key not in owners and not label
                 and f"team {key} has no handle: add `{LANE_LABEL}<owner>`",
             }
             out += [{"issue": ident, "url": i["url"], "title": i["title"], "team": key, "lane": lane, "state": state, "kind": k,
@@ -587,6 +631,44 @@ class Linear:
         out += [f for f in ask_findings(self.asks(owners, teams, now), now) if not (f["kind"] == "slipped" and f["issue"] in waits)]
         order = {k: n for n, k in enumerate(AUDIT_KINDS)}
         return sorted(out, key=lambda x: (x["lane"], x["team"], int(x["issue"].rsplit("-", 1)[1]), order[x["kind"]]))
+
+    def _entered_review(self, ids: list[str]) -> dict[str, float]:
+        """When each of these issues (ids) last entered In Review, by its state history: one more pass, over them alone."""
+        out: dict[str, float] = {}
+        for i in self._paged("id history(first: 50, orderBy: createdAt) { nodes { createdAt toState { name } } }",
+                             {"id": {"in": ids}}) if ids else []:
+            if t := [_epoch(h["createdAt"]) for h in i["history"]["nodes"] if (h.get("toState") or {}).get("name") == "In Review"]:
+                out[i["id"]] = max(t)
+        return out
+
+    def close_strays(self, found: list[dict], sender: str) -> list[str]:
+        """Cancel the issue of each `stray` among the audit's findings, after a comment from `sender` naming the rule: a line
+        each.  Only `research msg linear audit --close-strays` calls this; the audit and the sweep only report."""
+        out = []
+        for f in (x for x in found if x["kind"] == "stray"):
+            iid = self.issue_id(f["issue"])
+            self.comment(iid, sender, STRAY_NOTE)
+            out.append(f"{f['issue']} {self.move(iid, 'canceled')}: a stray ({f['fix'].split(':')[0]})")
+        return out
+
+    def link(self, issue: str, prs: list[str]) -> list[str]:
+        """Attach each PR (`pr_url`) to the issue through Linear's GitHub integration (`attachmentLinkGitHubPR`): a line
+        each, and one Linear has attached already is said so, not refused.  A PR whose title or body names the issue isn't
+        attached by that."""
+        urls = [pr_url(p) for p in prs]
+        if not urls:
+            raise LinearError("link: give the ISSUE and at least one PR (a number or its URL)")
+        iid, out = self.issue_id(issue), []
+        for u in urls:
+            try:
+                self.gql("mutation($i: String!, $u: String!) { attachmentLinkGitHubPR(issueId: $i, url: $u) { success } }",
+                         {"i": iid, "u": u})
+                out.append(f"{issue} linked {u}")
+            except LinearError as e:
+                if "duplicate" not in str(e).lower():
+                    raise
+                out.append(f"{issue} already links {u}")
+        return out
 
     def asks(self, owners: dict[str, str] | None = None, teams: list[str] | None = None, now: float | None = None,
              days: float = ASK_RECENT_D) -> list[dict]:

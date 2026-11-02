@@ -45,8 +45,9 @@ skill).
 
 ## Issues
 
-- **One issue per deliverable**, in its owner's team, in a project and the milestone it serves. An issue in no project
-  is in Backlog or Canceled.
+- **One issue per deliverable**, in its owner's team, in a project and the milestone it serves. Within 48 h of filing,
+  every open issue, Backlog and Triage too, is in a project or canceled; the audit flags one that isn't (`orphan`), and
+  one whose milestone's date has passed (`lapsed`: re-date the milestone and comment what moved it, or move the issue on).
 - **The title is the deliverable**: a noun phrase or an imperative, whole, with no handle, sender or time. "Ring a lead
   only when it must act: run-end and worker-idle rings", not "@infra top 02:40Z, an ask for…".
 - **The description is the brief**, at most 300 words:
@@ -67,19 +68,23 @@ skill).
 | Backlog | filed and not taken on. An ask lands here, and moving it out says it was seen |
 | Todo | taken on and dated, not started |
 | In Progress | someone is working on it now |
-| In Review | every piece is in a ready PR or waits on a named verdict, and a comment says whose |
+| In Review | every piece is in an open PR attached to the issue, ready or waiting on a named verdict, and a comment says whose |
 | Done | the done-condition holds: the outcome exists. The owner closes it with one line and its evidence |
 | Canceled | dropped, with a one-line reason; a person's ask only with their yes, quoted, and `asker-ok` |
 
-- **PRs.** A PR names its issue in its body (`Part of CMP-<n>`), which attaches it in Linear. Merging a PR doesn't close
-  the issue; the owner does.
+- **PRs.** A PR names its issue in its body (`Part of CMP-<n>`), and is attached to it with `research msg linear link
+  ISSUE PR...` (a number or URL each): a key in a PR's title or body doesn't attach it. An issue In Review 24 h with no
+  open PR attached is `unlinked`. Merging a PR doesn't close the issue; the owner does.
 - **Sub-issues** split a deliverable into pieces that move separately: one per worker. A parent is In Progress while any
   child is, and Done once every child is and its own done-condition holds.
 - **Dependencies** between lanes are Linear's blocking relations (`research msg linear relate`), not prose.
 - **Asks.** `research msg ask --as ME --to @OWNER --title 'DELIVERABLE' [--parent ISSUE] --file BRIEF.md` files the
   issue in the owner's team, under the deliverable it serves (so in that project and milestone), and rings the owner.
-  The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). A
-  question that needs no issue is `research msg send --kind question` in its thread.
+  The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). An
+  ask in another lane's team that nobody took up (a project and a date) or touched for 48 h is a `stray`: the audit and
+  top's sweep only report it, and `research msg linear audit --close-strays --as ME` cancels each with a comment naming
+  the rule. A person's ask is never a stray. A question that needs no issue is `research msg send --kind question` in its
+  thread.
 - **A person's ask is answered by its outcome, never by its issue.** Whoever relays Daniel's ask files it with
   `--asker daniel` (an existing issue: `research msg linear edit ISSUE --label asker:daniel`). Within the hour it is In Progress
   with a comment naming its worker (a `bc-` id, or the lead) and the date its outcome lands; filing, dating,
@@ -94,6 +99,7 @@ skill).
   - `research msg linear state ISSUE STATE`;
   - `research msg linear place ISSUE PROJECT --milestone M`;
   - `research msg linear edit ISSUE --title T --due D`;
+  - `research msg linear link ISSUE PR...`, which attaches PRs (one attached already is said so);
   - `research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER`, and `unrelate ISSUE OTHER`;
   - `research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F`, a project update;
   - `research msg linear project create NAME --team KEY` and `milestone create|edit PROJECT NAME [--date D]`.
@@ -127,11 +133,11 @@ skill).
 
 - **On each wake:** read your inbox, and act on the issue each event names.
 - **Every few hours, and before ending a long turn:** run `research msg linear audit --lane ME` and fix what it finds.
-  Each line gives the fix: place an orphan, date it, retitle it, close a landed issue, comment on a quiet one, or cancel
-  a stale one.
+  Each line gives the fix: place an orphan, date it, retitle it, close a landed issue, attach an unlinked one's PR,
+  re-date a lapsed milestone, comment on a quiet one, or cancel a stale one.
 - **Daily and at each milestone:** post a project update on each project you lead.
 - **On a launch:** file the sub-issue first, then launch the worker named after it.
 
-top's hourly sweep (`infra/control/top_watch.py`) runs the same audit. It rings a lane with findings once every 12
-hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
+top's hourly sweep (`infra/control/top_watch.py`) runs the same audit and only reports. It rings a lane with
+findings once every 12 hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
 top reads the campaign's state from Linear, not from Slack.
