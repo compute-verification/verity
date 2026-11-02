@@ -1,15 +1,17 @@
 import Proofs.Flock.SessionLoop.LiveInnerAt
+import Proofs.Flock.SessionLoop.LiveSchedOwn
 import Proofs.Flock.SessionLoop.FinalC
 
 /-!
-# `LiveInner` at every worker, on its own histories
+# `LiveInner` at every worker taking some `vs`'s values, on its own histories
 
 `LeanRelease.liveInner_withInner` proves `LiveInner` at `withInner` from two premises over the worker, `Loop.TakesFinalC`
 and `Loop.TakesTau`: at every live history, the worker's `final_c'` and `τ` commitment are `vs`'s. Neither follows from
 `Loop.TakesVals`, `SwCausal` and `Loop.FinalCFixed` at every live history, because `live` checks the worker's values and
 not the history's messages, while the loop's finish reads its request off the history. On the deferred release's own
 runs (`ZkServer.OwnHist`) the history's messages are the frame's releases of the worker's own rounds, so the values the
-loop reads back are the worker's, and there both follow:
+loop reads back are the worker's, and there both follow from the worker taking `vs`'s values at its own histories
+(`Loop.TakesValsOwn`):
 
 * **`LeanRelease.LiveInnerOwn`**: `LiveInner`'s equation on the histories satisfying `OwnHist`, in the place
   `FinalRoundEq` and `LiveRefine` take it. `LeanRelease.liveInnerOwn_of_liveInner`: `LiveInner` gives it.
@@ -19,9 +21,10 @@ loop reads back are the worker's, and there both follow:
   accepts the request: the passed values fix it (`consWhy`'s `zerocheck c_eval`), and at another the finish computes no
   round and the frame stands in and stops the rep. `Loop.finInner` is the run, `Loop.asksPad` its coins.
 * **`LeanRelease.liveInnerOwn_withInner`**: `LiveInnerOwn` at `withInner` on the finish's rounds (`Loop.finOf`), at every
-  worker that meets `Loop.TakesVals`, for every `vs` meeting `SwCausal`, `Loop.FinalCFixed` and `Loop.RowsOK`, at
-  `SessionLoopZKDeployed`'s own premises on the statement, the tables and the loop's inputs (`Loop.realOf`,
-  `Claims.Flock.Scope`, the witness, `Loop.Serves`, `Loop.Src`). It takes neither `TakesFinalC` nor `TakesTau`.
+  worker taking some `vs`'s values at its own histories (`Loop.TakesValsOwn`), where `vs` meets `SwCausal`,
+  `Loop.FinalCFixed` and `Loop.RowsOK`; a worker taking no `vs`'s values is outside it. Its premises on the statement,
+  the tables and the loop's inputs are `SessionLoopZKDeployed`'s own (`Loop.realOf`, `Claims.Flock.Scope`, the witness,
+  `Loop.Serves`, `Loop.Src`). It takes neither `TakesFinalC` nor `TakesTau`.
   `LeanRelease.liveInnerOwn_honestVals`: at the honest values and `Loop.valsWk`, every premise over the worker and the
   values holds.
 -/
@@ -151,11 +154,11 @@ theorem liveInnerOwn_of_liveInner {vs : (CoinLayer.session Loop.loopNr Masked.da
     (hI : LiveInner vs L₀ src real wk x w) : LiveInnerOwn vs L₀ src real wk x w :=
   fun ν t κ m₀ ρ₀ ops v hpos hlt hl hok hr _ hv hin => hI ν t κ m₀ ρ₀ ops v hpos hlt hl hok hr hv hin
 
-/-- **`LiveInner` at every worker, on its own histories**: at `withInner` on the loop's finish's rounds (`Loop.finOf`, at
-`L₁`'s frame draws), at a statement in the masked scope with a witness that the loop serves, on the loop's own tables
-(`Loop.realOf`) and inputs (`Loop.Src`), `LiveInnerOwn` holds at every worker whose free words are `vs`'s
-(`Loop.TakesVals`), for every `vs` that is causal (`SwCausal`), whose `final_c` its round-1c values fix
-(`Loop.FinalCFixed`) and whose rows hold (`Loop.RowsOK`). -/
+/-- **`LiveInner` at every worker taking some `vs`'s values, on its own histories**: at `withInner` on the loop's
+finish's rounds (`Loop.finOf`, at `L₁`'s frame draws), at a statement in the masked scope with a witness that the loop
+serves, on the loop's own tables (`Loop.realOf`) and inputs (`Loop.Src`), `LiveInnerOwn` holds at every worker whose free
+words are `vs`'s at its own histories (`Loop.TakesValsOwn`), for every `vs` that is causal (`SwCausal`), whose `final_c`
+its round-1c values fix (`Loop.FinalCFixed`) and whose rows hold (`Loop.RowsOK`). -/
 theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -171,13 +174,13 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
     (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs)
     (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
-    (hV : Loop.TakesVals vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
+    (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
     (hC : Loop.FinalCFixed vs x w) (hrows : Loop.RowsOK vs x w) :
     LiveInnerOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w := by
   sorry
 
-/-- **At the honest values**: the worker that sends the scheduled rounds with them (`Loop.valsWk`) meets `TakesVals`
-(`Loop.takes_honestVals_ofLoopLink`), and they are causal at the session's causality (`RefSession.swCausal_vals`), fix
+/-- **At the honest values**: the worker that sends the scheduled rounds with them (`Loop.valsWk`) meets `TakesValsOwn`
+(`Loop.takesValsOwn_honestVals`), and they are causal at the session's causality (`RefSession.swCausal_vals`), fix
 their `final_c` (`Loop.finalCFixed_honestVals`) and hold their rows (`Loop.rowsOK_honestVals`), so
 `liveInnerOwn_withInner` holds there with no premise over the worker or the values. -/
 theorem liveInnerOwn_honestVals
@@ -199,7 +202,7 @@ theorem liveInnerOwn_honestVals
       (Loop.valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals
         (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)) x w :=
   liveInnerOwn_withInner _ L₁ src real hreal x w hR hSv hsc hSrc (RefSession.swCausal_vals _ hc) _
-    (Loop.takes_honestVals_ofLoopLink _ src real).1 (Loop.finalCFixed_honestVals x w) (Loop.rowsOK_honestVals hR)
+    (Loop.takesValsOwn_honestVals _ src real x w) (Loop.finalCFixed_honestVals x w) (Loop.rowsOK_honestVals hR)
 
 end LeanRelease
 
