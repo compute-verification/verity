@@ -496,8 +496,8 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
     the package listing every check holds.  With no `cli.READS` all of it is undeclared; once ``--update-reads`` wrote it,
     nothing is, and another binding's run written beside it keeps the first's: each of those runs makes only its own binding's
     roots, the others' are the catalog's roots record's (`units.plan`'s ``binding``).  A module the process loaded before its
-    checks, which a check's `inspect` lookup asks for, is undeclared in ``loaded`` alone, the probes every binding's set holds
-    (`cli.READS`): which modules a process loaded depends on how it runs.  A module only one target's check imports, new, is
+    checks, which a check's `inspect` lookup asks for, is undeclared in ``loaded``, the probes every binding's set holds
+    (`cli.READS`), not in the binding's own set: which modules a process loaded depends on how it runs.  A module only one target's check imports, new, is
     undeclared for that binding alone; a module the registries import anew, for every binding, until it is written."""
     from test_cache import _pin
 
@@ -525,15 +525,14 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
     paths = [(k, p) for g in written["groups"] for k, ps in g.items() for p in ps]
     assert len(paths) == len(set(paths)) and set(paths) >= {("files", _pin("SynTop_v1")), ("files", _pin("SynOther_v1"))}
     # a module the process loaded before its checks, whose source `syn.check`'s `inspect` lookup asks for as torch's import
-    # asks for every loaded module's: in a tree with the records alone, `loaded` holds it and the binding's own set is as it was
+    # asks for every loaded module's: in a tree with the records alone, `loaded` holds it, and the binding's own set doesn't
     shutil.copytree(root / "reads", pre / "reads")
     (pre / "synpre").mkdir()
     (pre / "synpre/__init__.py").write_text("")
     first = _run_units(pre, _reads_run("_core_roots").replace("rep = cli.run(", "import synpre\nrep = cli.run(", 1))
-    assert first["reads"]["bindings"]["_core_roots"] == mine, first["reads"]["bindings"]
-    assert list(first["undeclared"]) == ["_core_roots"] and set(first["undeclared"]["_core_roots"]) == {"loaded"}, \
-        first["undeclared"]
-    assert "synpre/__init__.py" in first["undeclared"]["_core_roots"]["loaded"], first["undeclared"]
+    own, u = first["reads"]["bindings"]["_core_roots"], first["undeclared"]["_core_roots"]
+    assert (own["files"], own["listed"]) == (mine["files"], mine["listed"]) and "files" not in u, (own, u)
+    assert "synpre/__init__.py" in u["loaded"] and "synpre/__init__.py" not in own["probes"], (own, u)
     (root / "synlib").mkdir()
     (root / "synlib/__init__.py").write_text("")
     (root / "synlib/helper.py").write_text("H = 1\n")
