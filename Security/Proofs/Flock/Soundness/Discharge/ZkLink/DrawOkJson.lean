@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
 public import Std.Data.TreeMap.Raw.Lemmas
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # The draw file `flock-verify draw` prints decodes to the draw it printed
