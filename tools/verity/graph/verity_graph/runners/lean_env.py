@@ -36,6 +36,9 @@ outside `lean_module.STANDARD` (an axiom it declares, `sorryAx` from a `sorry`, 
 unless it is unsafe: compiled code, which the kernel never checks and no checked declaration may mention. Lake declares
 each member of its open type families as an axiom (`family_def`, kept apart by their names), so a fetched package's code
 that uses Lake's API (a linter's executable) may use those, the toolchain's `Lake` modules' own and no others (`judge`).
+A declaration `UNPROVED` lists, one its package itself names as unproved, may use `sorryAx` and no other: a module of the
+tree that reaches it takes `sorryAx` through the record and fails, and an entry that uses `sorryAx` no more fails the env
+until it leaves the list.
 The toolchain's modules are recorded and not judged, since Init declares those axioms and the toolchain's own definitions
 use them (`Lean.reduceBool` takes `Lean.trustCompiler`): a module of the tree that reaches one takes it through the record
 and fails.
@@ -59,6 +62,10 @@ from . import lean_module as lm
 #: the files of the Lean tool a task runs, and the env's making it shares with lean-module: inputs of every lean-env task
 TOOLS = ("tools/verity/lean/Replay.lean", f"{RUNNERS}/lean_module.py")
 SCHEMA = lm.ENV_SCHEMA
+#: {a fetched package's module: its declarations that may use `sorryAx`}, each one its package lists as unproved
+#: (ArkLib's `scripts/axiom_baseline.json`)
+UNPROVED = {"ArkLib.Data.Fin.Basic": ("Fin.sumCases",),
+            "ArkLib.Data.MvPolynomial.Interpolation": ("MvPolynomial.basis",)}
 
 
 def _dump(x: object) -> str:
@@ -80,12 +87,13 @@ def write(path: Path, head: dict, files: dict[str, str], records: dict[str, dict
         f.write("}\n}\n")
 
 
-def judge(records: dict[str, dict[str, list[str]]], unsafe: dict[str, set[str]],
-          toolchain: set[str]) -> tuple[dict[str, list[str]], dict[str, int]]:
+def judge(records: dict[str, dict[str, list[str]]], unsafe: dict[str, set[str]], toolchain: set[str],
+          unproved: dict[str, tuple[str, ...]]) -> tuple[dict[str, list[str]], dict[str, int], list[str]]:
     """The axioms outside `lean_module.STANDARD` that safe declarations use, as ({axiom: the fetched packages'
-    declarations that use it}, {axiom: how many of the ``toolchain``'s modules' declarations use it}). A fetched package's
-    declaration may also use an axiom of Lake's open type families, one that a module of the toolchain's `Lake` declares
-    (its `family_def`s); one a fetched package declares, and Init's, are outside."""
+    declarations that use it}, {axiom: how many of the ``toolchain``'s modules' declarations use it}), and the declarations
+    ``unproved`` lists in a recorded module that use no `sorryAx`. A fetched package's declaration may also use an axiom of
+    Lake's open type families, one that a module of the toolchain's `Lake` declares (its `family_def`s); one a fetched
+    package declares, and Init's, are outside. One ``unproved`` lists may also use `sorryAx`."""
     lake = {c for m in toolchain if m.partition(".")[0] == "Lake" for c, s in records[m].items() if c in s}
     outside: dict[str, list[str]] = {}
     unjudged: dict[str, int] = {}
@@ -96,9 +104,10 @@ def judge(records: dict[str, dict[str, list[str]]], unsafe: dict[str, set[str]],
                     continue
                 if m in toolchain:
                     unjudged[a] = unjudged.get(a, 0) + 1
-                elif a not in lake:
+                elif a not in lake and not (a == "sorryAx" and c in unproved.get(m, ())):
                     outside.setdefault(a, []).append(c)
-    return outside, unjudged
+    stale = sorted(c for m, cs in unproved.items() if m in records for c in cs if "sorryAx" not in records[m].get(c, ()))
+    return outside, unjudged, stale
 
 
 def _tail(work: Path, since: int, n: int = 20) -> list[str]:
@@ -192,13 +201,18 @@ def run(task: dict, work: Path) -> dict:
     steps["digests"] = round(time.monotonic() - t, 3)
     out.parent.mkdir(parents=True, exist_ok=True)
     write(out, head, files, records)
-    outside, unjudged = judge(records, unsafe, {m for m in records if m in found and found[m].is_relative_to(libs[-1])})
+    outside, unjudged, stale = judge(records, unsafe,
+                                     {m for m in records if m in found and found[m].is_relative_to(libs[-1])}, UNPROVED)
     detail |= {"modules": len(records), "constants": sum(map(len, records.values())),
                "replayed": sum(r["replayed"] or 0 for r in rounds), "deferred": sorted(later),
-               "record_bytes": out.stat().st_size, "toolchain_outside_standard": unjudged}
+               "record_bytes": out.stat().st_size, "toolchain_outside_standard": unjudged,
+               "unproved": sorted(c for m, cs in UNPROVED.items() if m in records for c in cs if c not in stale)}
     if outside:
         return {"status": "fail", "detail": detail | {
             "error": f"declarations of fetched packages use axioms other than {', '.join(lm.STANDARD)}",
             "axioms": {a: names[:20] for a, names in sorted(outside.items())},
             "declarations": {a: len(names) for a, names in sorted(outside.items())}}}
+    if stale:
+        return {"status": "fail", "detail": detail | {"stale": stale, "error": (
+            f"`lean_env.UNPROVED` lists {', '.join(stale)}, which use no `sorryAx` now: remove them from it")}}
     return {"status": "pass", "detail": detail}

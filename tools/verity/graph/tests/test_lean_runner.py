@@ -376,6 +376,15 @@ def test_an_env_module_whose_private_proof_holds_a_sorry_fails_its_env(tree, tmp
     assert set(body["axioms"]) == {"Evil", "Init.Prelude"}
     assert body["sets"][body["axioms"]["Evil"]["q"]] == ["sorryAx"], "an importer of `q` takes its `sorry` from the record"
 
+    monkeypatch.setattr(env_runner, "UNPROVED", {"Evil": ("q",)})
+    res = runners.execute(task, doc, tmp_path / "unproved")
+    assert res["status"] == "pass" and res["detail"]["unproved"] == ["q"], res["detail"]
+    body = json.loads((tmp_path / "unproved" / env_family.AXIOMS).read_text())
+    assert body["sets"][body["axioms"]["Evil"]["q"]] == ["sorryAx"], "listed, `q` still carries its `sorry` to importers"
+    monkeypatch.setattr(env_runner, "UNPROVED", {"Evil": ("q", "p")})
+    res = runners.execute(task, doc, tmp_path / "stale")
+    assert res["status"] == "fail" and res["detail"]["stale"] == ["p"], res["detail"]
+
     fetched_env(tree, private=False)
     res = runners.execute(task, doc, tmp_path / "public")
     assert res["status"] == "error" and any("private part" in line for line in res["detail"]["log"]), res["detail"]
@@ -422,10 +431,21 @@ def test_a_fetched_declaration_may_use_lake_s_family_axioms_and_no_axiom_a_fetch
         "runLinter": {"lint": ["Lake.DataType.bool", "propext"], "main": ["sorryAx"]},
         "Evil": {"q": ["sorryAx"], "r": ["Lake.DataType.bool", "Lean.ofReduceBool"], "s": ["Lake.DataType.fake"]},
     }
-    outside, unjudged = env_runner.judge(records, {"runLinter": {"main"}}, {"Lake.Build.Data", "Init.Prelude", "Init.Core"})
+    outside, unjudged, stale = env_runner.judge(records, {"runLinter": {"main"}},
+                                                {"Lake.Build.Data", "Init.Prelude", "Init.Core"}, {})
     assert outside == {"Lake.DataType.fake": ["s", "Lake.DataType.fake"], "Lean.ofReduceBool": ["r"], "sorryAx": ["q"]}, \
         "Lake's own family axioms pass; one a fetched module declares (under Lake's names too) and Init's fail"
     assert unjudged == {"Lake.DataType.bool": 2, "Lean.trustCompiler": 1, "sorryAx": 1}
+    assert stale == []
+
+
+def test_a_fetched_declaration_unproved_lists_may_use_sorry_and_no_other_axiom_and_an_entry_without_one_is_stale():
+    records = {"Pkg.A": {"a": ["sorryAx"], "b": ["Lean.ofReduceBool", "sorryAx"], "c": ["sorryAx"], "d": ["propext"]},
+               "Pkg.B": {"a": ["sorryAx"]}}
+    outside, _, stale = env_runner.judge(records, {}, set(), {"Pkg.A": ("a", "b", "d", "e"), "Pkg.Elsewhere": ("f",)})
+    assert outside == {"Lean.ofReduceBool": ["b"], "sorryAx": ["c", "a"]}, \
+        "a listed declaration may use `sorryAx` alone, and only in the module listed"
+    assert stale == ["d", "e"], "a listed declaration of a recorded module that uses no `sorryAx` (or is gone) is stale"
 
 
 def test_a_module_task_refuses_an_env_record_of_another_env_or_of_other_bytes_than_its_worker_s(tree, tmp_path, envs):
