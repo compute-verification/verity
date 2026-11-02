@@ -4,6 +4,7 @@
     python scorer.py score                    # STATE/score.json and score.md: ρ per (k, r), W*(l*), honest(l*), W*/honest
     python scorer.py board [--promote] [--digest] [--append]   # this hour's PROMOTED and DIGEST lines (--append pushes them)
     python scorer.py post TAG TEXT            # one line onto the scorer's board (islands/scorer/BOARD.md), pushed
+    python scorer.py final launch ID...|collect|table   # FINAL entries rerun in final mode (launch.py --final), the table
 
 STATE is `$TE_SCORER_STATE` (default ~/.research/te-scorer); everything in it is derived from the evidence store and
 rebuilt by `collect`. Records are the evidence/v1 artifacts whose meta has `covert_witness.class` (launch.py's), and the
@@ -51,10 +52,12 @@ SINCE = os.environ.get("TE_SCORER_SINCE", "2026-11-02T06:30:00Z")
 SEARCH_START = "2026-11-02T08:30:00Z"  # the board's opening: earlier records are the integrator's seed smokes
 TE_CORE = Path(os.environ.get("TE_CORE_PATH", Path(__file__).resolve().parents[1]))
 TE_CURRENT = Path(os.environ.get("TE_CURRENT", "/tmp/scorer/te-core"))  # a worktree of this repository, any branch
-TE_BRANCH = os.environ.get("TE_BRANCH", "cursor/covert-witness-4207")  # te_core as the nodes run it (launch.py's)
-#: te_core versions whose val bpb is the paired score on a fresh slice of the search pool (te_core 2.2, witness v3), each
-#: against its start's whole-pool bpb; earlier records' fixed-set scores don't compare with them
-TE_REGIME = tuple(os.environ.get("TE_REGIME", "2.2").split(","))
+TE_BRANCH = os.environ.get("TE_BRANCH", "cursor/covert-witness-4207")  # the harness's tools (launch.py, promote.py)
+#: te_core 2.2's commit on the harness's branch: from it a checkpoint's val bpb is the paired score on a fresh slice of the
+#: search pool (its record's val_slice), against the start's whole-pool bpb (witness v3's score.start_bpb). Version
+#: numbers don't mark it (te-core-4207's 2.8 predates it), so the scorer reads the record's own fields
+PAIRED = "4cc610c6766"
+REGIME = "te_core 2.2+ (paired slices)"
 COUNTED_FLOOR = 0.5  # the harness's count over the run's own step log, below which the counter missed work
 BOARD = Path(os.environ.get("TE_BOARD", Path(__file__).resolve().parents[1] / "islands" / "scorer" / "BOARD.md"))
 BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `HH:MMZ scorer [TAG] text (record ids)`. The "
@@ -284,11 +287,24 @@ def fixed_side(commit: str, official: set) -> list[str]:
 
 
 def te_current() -> str:
-    """TE_CURRENT checked out at TE_BRANCH's head, the te_core every harness record is re-ingested with: an agent's
-    branch can carry its own te_core, so its ledger records are listed and never scored."""
+    """TE_CURRENT checked out at the official branch head with the highest te_core VERSION among those holding PAIRED, the
+    te_core every harness record is re-ingested with (a pricing fix re-prices every record): an agent's branch can carry
+    its own te_core, so its ledger records are listed and never scored."""
     g = ["git", "-C", str(TE_CURRENT)]
-    subprocess.run(g + ["fetch", "-q", "origin", TE_BRANCH], capture_output=True, text=True)
-    subprocess.run(g + ["checkout", "-q", "--detach", "FETCH_HEAD"], capture_output=True, text=True, check=True)
+    subprocess.run(g + ["fetch", "-q", "origin", *(f"+refs/heads/{b}:refs/remotes/origin/{b}" for b in OFFICIAL)],
+                   capture_output=True, text=True)
+    best = None
+    for b in OFFICIAL:
+        if subprocess.run(g + ["merge-base", "--is-ancestor", PAIRED, f"origin/{b}"], capture_output=True).returncode:
+            continue
+        init = subprocess.run(g + ["show", f"origin/{b}:benchmarks/covert_witness/te_core/__init__.py"],
+                              capture_output=True, text=True).stdout
+        v = re.search(r'^VERSION = "([\d.]+)"', init, re.M)
+        if v and (best is None or tuple(map(int, v[1].split("."))) > best[0]):
+            best = (tuple(map(int, v[1].split("."))), b)
+    if best is None:
+        raise SystemExit(f"scorer: no official branch holds te_core's paired slices ({PAIRED})")
+    subprocess.run(g + ["checkout", "-q", "--detach", f"origin/{best[1]}"], capture_output=True, text=True, check=True)
     return subprocess.run(g + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
 
 
@@ -383,8 +399,8 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
         "e_sha256": e_digest(r, files, d, harness), "final": bool(cw.get("final")),
         "te_core": (harness or {}).get("te_core"), "harness_version": (w or {}).get("version"),
         "start_bpb": (w or {}).get("score", {}).get("start_bpb"),
-        "regime": "current" if (harness or {}).get("te_core") in TE_REGIME and (w or {}).get("score", {}).get(
-            "start_bpb") is not None else "earlier",
+        "regime": "current" if (w or {}).get("score", {}).get("start_bpb") is not None and derived
+        and all(t.get("val_slice") for t in derived) else "earlier",
     }
 
 
@@ -449,7 +465,7 @@ def te_rec_row(rec: dict, art: str, recorded: str) -> dict:
         "failed_checks": rec.get("invalid", []), "train_flops": 2 * rec["macs"], "macs": rec["macs"],
         "bpb": rec.get("val_bpb"), "test_bpb": rec.get("final_bpb"), "E_bytes": (rec.get("output") or {}).get("e_bytes"),
         "output_sha256": (rec.get("output") or {}).get("output_sha256"), "submitted": (rec.get("output") or {}).get("submitted"),
-        "node": rec.get("node"), "run_te_core": rec.get("run_te_core"),
+        "node": rec.get("node"), "run_te_core": rec.get("run_te_core"), "val_slice": rec.get("val_slice"),
         "phi": rec.get("phi"), "D": rec.get("depth"), "rho": rec.get("rho"), "beta": rec.get("beta"),
         "reference": rec.get("reference"), "tier": rec.get("tier"), "fraction": rec.get("fraction"),
         "start_bpb": rec.get("start_bpb"),
@@ -766,7 +782,7 @@ def score(write: bool = True) -> dict:
     starts = json.loads((STATE / "starts.json").read_text())
     subs = submissions(rows, starts)
     col = STATE / "collect.json"
-    rep = {"at": now(), "te_core": TE_CORE_VERSION, "regime": TE_REGIME,
+    rep = {"at": now(), "te_core": TE_CORE_VERSION, "regime": REGIME,
            "te_core_commit": json.loads(col.read_text()).get("te_core_commit", "") if col.exists() else "",
            "annotation": "the harness's count for witness v2 records, analytic for witness v1 (module docstring)",
            "p_bits": P_BITS, "c_per_forward_token": C_PER_FORWARD_TOKEN, "starts": {}, "earlier": {},
@@ -785,8 +801,8 @@ def score(write: bool = True) -> dict:
 
 def score_md(rep: dict) -> str:
     lines = [f"# Scores, {rep['at']} (te_core {rep['te_core']}; {rep['annotation']}; p = {rep['p_bits']})", ""]
-    for name, part in (("te_core " + "/".join(rep["regime"]) + " records (paired slice scores against the start's whole "
-                        "search-pool bpb)", rep["starts"]),
+    for name, part in ((rep["regime"] + " records (paired slice scores against the start's whole search-pool bpb)",
+                        rep["starts"]),
                        ("earlier records (the fixed search set; not comparable with the above)", rep.get("earlier", {}))):
         lines += [f"# {name}", ""]
         lines += start_md(part)
@@ -1068,10 +1084,10 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     n, nv = len(cw), len([x for x in cw if x["valid"]])
     nc = len([x for x in rows if x["source"] == "launch.py" and x.get("cancelled")])
     ncur = len([x for x in current(cw) if x["valid"]])
-    reg = "/".join(rep.get("regime", TE_REGIME))
-    out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid, {ncur} of them te_core {reg} records; direction audit's, "
-               f"the scorer's final reruns and {nc} of runs cancelled unrun not counted). Frontier per target below, te_core "
-               f"{reg} records only (paired slice scores, l* from the start's whole-pool bpb they carry): honest = least "
+    reg = rep.get("regime") if isinstance(rep.get("regime"), str) else REGIME
+    out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid, {ncur} of them {reg} records; direction audit's, "
+               f"the scorer's final reruns and {nc} of runs cancelled unrun not counted). Frontier per target below, "
+               f"{reg} records only (l* from the start's whole-pool bpb they carry): honest = least "
                f"training FLOPs (2|C|) of the reference directions (ref-*) reaching l*; W*/honest per (k, r) in the order "
                f"10kB r1,r10,r100 | 100kB | 1MB, te_core rho, with the W* entries, (c) priced by the harness's count, (a) "
                f"by the analytic annotation (p 16); full tables, the earlier records' included, in the scorer's score.md.")
@@ -1079,9 +1095,9 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     nsub = sum(st["submissions"] for st in rep["starts"].values())
     out += [f"{hhmm} scorer [DIGEST] frontier {x}" for x in lines] or [
         f"{hhmm} scorer [DIGEST] frontier: "
-        + (f"the te_core {reg} records' {nsub} checkpoints reach no target yet. " if nsub else
-           f"no te_core {reg} record yet. ")
-        + f"The earlier records' (fixed search set, te_core before {reg}; not comparable, and out of the final table): "
+        + (f"the {reg} records' {nsub} checkpoints reach no target yet. " if nsub else
+           f"no {reg} record yet. ")
+        + "The earlier records' (the fixed search set; not comparable, and out of the final table): "
         + (" ".join(frontier_lines(rep.get("earlier", {}))) or "none")]
     if pr["new"]:
         out.append(f"{hhmm} scorer [DIGEST] newly promoted: " + ", ".join(short(p["id"]) for p in pr["new"]) + ".")
@@ -1144,7 +1160,7 @@ def direction_sentence(d: str, rows: list[dict], starts: dict) -> str:
     if not v:
         return f"{len(xs)} records, none valid yet ({', '.join(mechs)})."
     best = max(current(v) or v, key=lambda x: drop_of(x, starts))
-    return (f"{len(xs)} records, {len(v)} valid ({len(current(v))} te_core {'/'.join(TE_REGIME)}), {len(mechs)} mechanisms "
+    return (f"{len(xs)} records, {len(v)} valid ({len(current(v))} {REGIME}), {len(mechs)} mechanisms "
             f"({', '.join(mechs)}); best{'' if best.get('regime') == 'current' else ' (earlier regime)'} "
             f"{short(best['id'])} '{best['note']}' on {best['start']}: {best['bpb']:.4f} bpb "
             f"({100 * drop_of(best, starts):+.2f}% from the start) at {best['train_flops']:.3g} FLOPs, |E| "
@@ -1169,19 +1185,40 @@ def append_board(lines: list[str]) -> None:
     raise SystemExit("scorer: board push failed five times")
 
 
-# ---- final scoring: reruns of an entry at fresh seeds, scored on the final set ----------------------------------------
+# ---- final scoring: each FINAL entry's island rerun at fresh seeds in final mode, under the harness's head -------------
 
 FINAL = STATE / "final"
 FINAL_SRC = Path(os.environ.get("TE_FINAL_SRC", "/tmp/scorer/final-src"))
-FINAL_SH = Path(__file__).resolve().parent / "final.sh"
-FINAL_NODES = tuple(os.environ.get("TE_FINAL_NODES", "vy-nebius-2").split(","))
 FINAL_SEEDS = (101, 102, 103)
 RUNS = Path.home() / ".research" / "runs"
+ENDED = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
+ISLANDS = "benchmarks/covert_witness/islands"
+
+
+def git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
+    return subprocess.run(["git", "-C", str(REPO), *args], capture_output=True, text=True, check=True, env=env,
+                          input=stdin).stdout.strip()
+
+
+def overlay(commit: str, harness: str) -> str:
+    """The commit a FINAL entry reruns from: `harness`'s tree (the fixed side every final rerun is measured by) with
+    islands/ as the entry's `commit` holds it, its parents both. Dated, so the same pair gives the same commit."""
+    if tree(commit) is None:
+        raise SystemExit(f"scorer: commit {commit[:10]} not found")
+    FINAL.mkdir(parents=True, exist_ok=True)
+    env = os.environ | {"GIT_INDEX_FILE": str(FINAL / "overlay.index"), "GIT_AUTHOR_DATE": "2026-11-02T14:30:00Z",
+                        "GIT_COMMITTER_DATE": "2026-11-02T14:30:00Z"}
+    git("read-tree", harness, env=env)
+    git("update-index", "--force-remove", "--stdin", env=env, stdin=git("ls-files", "--", ISLANDS, env=env) + "\n")
+    git("read-tree", f"--prefix={ISLANDS}/", f"{commit}:{ISLANDS}", env=env)
+    t = git("write-tree", env=env)
+    return git("commit-tree", t, "-p", harness, "-p", commit, "-m",
+               f"scorer final: {harness[:10]}'s fixed side with {commit[:10]}'s islands/", env=env)
 
 
 def source_at(commit: str) -> Path:
-    """A clean detached checkout of `commit` to ship (`research run --source`); only covert_witness and the research package
-    the machine runs (the tree's own, as for a candidate) are checked out."""
+    """A clean detached checkout of `commit` for launch.py, which ships its own checkout's HEAD (`git archive`); only
+    covert_witness and the research package are checked out."""
     if not (FINAL_SRC / ".git").exists():
         subprocess.run(["git", "-C", str(REPO), "worktree", "add", "-q", "--no-checkout", "--detach", str(FINAL_SRC), commit],
                        check=True)
@@ -1199,81 +1236,106 @@ def research(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-m", "research", *args], capture_output=True, text=True, cwd=REPO, env=env)
 
 
-def final_run(commit: str, args: list[str], what: dict, dry_run: bool = False, node: str = FINAL_NODES[0]) -> dict:
-    src = source_at(commit)
-    argv = ["research", "run", "--on", node, "--project", "verity", "--source", str(src), "--cwd", "source",
-            "--pool", "gpu", "--as", "training", "--pool-wait", "7200", "--timeout", "120m", "--declared-output", "out/*",
-            "--send", str(FINAL_SH), "--", "bash", "-c", 'bash "$RESEARCH_RUN_DIR/inputs/final.sh" ' + shlex.join(args)]
-    row = what | {"commit": commit, "args": args, "at": now(), "argv": argv, "run": "", "node": node}
-    if not dry_run:
-        r = research(*argv[1:])
-        m = re.search(r"run (r\d{8}-\d{6}-[0-9a-f]{4}) launched", r.stdout + r.stderr)
-        row |= {"run": m[1] if m else "", "rc": r.returncode, "err": "" if m else (r.stdout + r.stderr)[-800:]}
-        FINAL.mkdir(parents=True, exist_ok=True)
-        with (FINAL / "launches.jsonl").open("a") as f:
-            f.write(json.dumps(row) + "\n")
-    return row
-
-
 def seed_args(row: dict, seed: int) -> list[str]:
-    """The seed flags the entry's script takes (its witness's recorded args), set to `seed`."""
+    """The seed flags the entry's train.py takes (its witness's recorded args), set to `seed`: the harness seeds nothing
+    for a --script run, so an entry without them is rerun once."""
     have = row.get("train_args") or {}
     return [x for k, flag in (("seed", "--seed"), ("data_seed", "--data-seed")) if k in have for x in (flag, str(seed))]
 
 
-def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False) -> list[dict]:
-    rows = {x["id"]: x for x in (json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip())}
+def unseeded(args: list[str]) -> list[str]:
+    """`args` without the seed flags seed_args sets."""
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a in ("--seed", "--data-seed"):
+            skip = True
+        elif not a.startswith(("--seed=", "--data-seed=")):
+            out.append(a)
+    return out
+
+
+def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node: str | None = None) -> list[dict]:
+    """launch.py --final --no-wait for each seed of each entry (a valid search record of the current regime), from the
+    overlay of its island on the harness's head; one line each into FINAL/launches.jsonl."""
+    rows = [json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip()]
+    harness = subprocess.run(["git", "-C", str(official_src()), "rev-parse", "HEAD"], capture_output=True, text=True,
+                             check=True).stdout.strip()
     out = []
     for i in ids:
-        x = next((r for k, r in rows.items() if k.removeprefix("art:").startswith(i.removeprefix("art:"))), None)
-        if x is None or x["source"] != "launch.py" or not x.get("commit"):
-            raise SystemExit(f"scorer: {i} is not a launch.py record with a commit")
-        for seed in seeds:
-            args = ["--seed", str(seed), "--direction", re.sub(r"[^a-z0-9_-]", "-", x["direction"].lower()) or "scorer-final",
-                    "--mechanism", x["mechanism"], *(["--reference"] if is_reference(x) else []), x["class"], x["start"],
-                    *shlex.split(x.get("args") or ""), *seed_args(x, seed)]
-            out.append(final_run(x["commit"], args, {"kind": "rerun", "id": x["id"], "seed": seed}, dry_run,
-                                 FINAL_NODES[len(out) % len(FINAL_NODES)]))
+        x = next((r for r in rows if r["source"] == "launch.py" and r["id"].removeprefix("art:").startswith(
+            i.removeprefix("art:"))), None)
+        if x is None or not x["valid"] or x.get("final") or x.get("regime") != "current" or not x.get("commit"):
+            raise SystemExit(f"scorer: {i} is not a valid {REGIME} search record of launch.py's")
+        commit = overlay(x["commit"], harness)
+        src = source_at(commit)
+        for seed in seeds if seed_args(x, 0) else seeds[:1]:
+            note = f"final {short(x['id'])} seed {seed}" if seed_args(x, 0) else f"final {short(x['id'])} (no seed flag)"
+            argv = [sys.executable, "benchmarks/covert_witness/launch.py", x["class"], x["start"], "--direction", "scorer",
+                    "--final", "--no-wait", "--note", note, "--mechanism", x["mechanism"], *(["--node", node] if node else []),
+                    "--", *unseeded(shlex.split(x.get("args") or "")), *seed_args(x, seed)]
+            row = {"kind": "rerun", "id": x["id"], "seed": seed if seed_args(x, 0) else None, "commit": commit,
+                   "entry_commit": x["commit"], "harness": harness, "class": x["class"], "start": x["start"],
+                   "mechanism": x["mechanism"], "note": note, "at": now(), "argv": argv, "run": ""}
+            if not dry_run:
+                p = subprocess.run(argv, cwd=src, env=tool_env() | {"CW_LEDGER": str(FINAL / "launcher.jsonl")},
+                                   capture_output=True, text=True)
+                m = next((json.loads(l) for l in p.stdout.splitlines() if l.startswith('{"run"')), None)
+                row |= {"run": m["run"] if m else "", "node": m["node"] if m else "", "rc": p.returncode,
+                        "err": "" if m else (p.stdout + p.stderr)[-800:]}
+                with (FINAL / "launches.jsonl").open("a") as f:
+                    f.write(json.dumps(row) + "\n")
+            out.append(row)
     return out
 
 
 def final_collect() -> list[dict]:
-    """Every launched final run's state and, once it ended, its scores (from the run's out/)."""
+    """Every launched rerun's state; once it ended, its record put by launch.py --collect (meta final: true, not ingested
+    into the search's ledger), its witness (every score the final set's) and te_core's submissions from its run.json."""
     path = FINAL / "launches.jsonl"
     launches = [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
+    done = json.loads((FINAL / "collected.json").read_text()) if (FINAL / "collected.json").exists() else {}
+    src, env = official_src(), tool_env() | {"CW_LEDGER": str(FINAL / "launcher.jsonl")}
     out, te = [], ""
     for la in launches:
         run = la.get("run")
         if not run:
             continue
-        on = ["--on", la["node"]] if la.get("node") else []
-        research("fetch", run, *on)
+        research("fetch", run)
         st = (json.loads((RUNS / run / "status.json").read_text()).get("state")
               if (RUNS / run / "status.json").exists() else "unknown")
-        row = {k: la.get(k) for k in ("kind", "id", "seed", "run", "commit", "args")} | {"state": st}
-        if st in ("done", "failed", "cancelled", "refused", "timeout", "lost"):
+        row = {k: la.get(k) for k in ("kind", "id", "seed", "run", "node", "commit", "entry_commit", "harness", "start")} | {
+            "state": st}
+        if st in ENDED:
+            if run not in done:
+                p = subprocess.run([sys.executable, "benchmarks/covert_witness/launch.py", la["class"], la["start"],
+                                    "--direction", "scorer", "--final", "--collect", run, "--note", la["note"],
+                                    "--mechanism", la["mechanism"]], cwd=src, env=env, capture_output=True, text=True)
+                put = next((json.loads(l) for l in p.stdout.splitlines() if l.startswith('{"run"')), None)
+                done[run] = put["art"] if put else ""
+                FINAL.mkdir(parents=True, exist_ok=True)
+                (FINAL / "collected.json").write_text(json.dumps(done, indent=1) + "\n")
+            row["art"] = done[run]
             o = RUNS / run / "out"
             if not o.is_dir():
-                research("fetch", run, "--all", *on)
-            for f in sorted(o.glob("*.json")) if o.is_dir() else []:
-                d = json.loads(f.read_text())
-                if f.name.startswith("witness."):
-                    sp = f.name.split(".")[1]
-                    row[sp] = {"valid": d.get("valid"), "bpb": (d.get("score") or {}).get("bpb"), "curve": d.get("curve"),
-                               "train_flops": (d.get("train") or {}).get("flops"),
-                               "tokens": (d.get("train") or {}).get("tokens"), "E_bytes": (d.get("E") or {}).get("bytes"),
-                               "E_format": (d.get("E") or {}).get("format"), "phi": (d.get("structure") or {}).get("phi"),
-                               "steps": (d.get("notes") or {}).get("steps"), "gpu_seconds": d.get("gpu_seconds"),
-                               "failed_checks": sorted(k for k, v in (d.get("checks") or {}).items() if v is not True)}
-                elif f.name.startswith("start."):
-                    _, s, sp, _ = f.name.split(".")
-                    row.setdefault("starts", {}).setdefault(s, {})[sp] = (d.get("score") or {}).get("bpb")
+                research("fetch", run, "--all")
+            w = json.loads((o / "witness.json").read_text()) if (o / "witness.json").exists() else None
+            if w:
+                sc = w.get("score") or {}
+                row["witness"] = {"valid": w.get("valid"), "split": sc.get("split"), "bpb": sc.get("bpb"),
+                                  "start_bpb": sc.get("start_bpb"), "E_bytes": (w.get("E") or {}).get("bytes"),
+                                  "e_sha256": ((w.get("harness") or {}).get("submitted") or {}).get("e_sha256"),
+                                  "phi": ((w.get("structure_actual") or w.get("structure") or {}).get("phi")),
+                                  "macs": (w.get("harness") or {}).get("macs"), "te_core": (w.get("harness") or {}).get(
+                                      "te_core"), "gpu_seconds": w.get("gpu_seconds"),
+                                  "over": (w.get("harness") or {}).get("over_train_flops"),
+                                  "failed_checks": sorted(k for k, v in (w.get("checks") or {}).items() if v is not True)}
             if (o / "run" / "run.json").exists():
                 te = te or te_current()
-                a = la.get("args") or []
-                m = a[a.index("--mechanism") + 1] if "--mechanism" in a[:-1] else ""
-                recs = te_ingest(o / "run", FINAL / "ingest" / te[:12] / run, m, run)
-                row["ledger"] = [] if isinstance(recs, str) else [te_rec_row(x, "", "") | {"derived": True} for x in recs]
+                recs = te_ingest(o / "run", FINAL / "ingest" / te[:12] / run, la["mechanism"], run)
+                row["ledger"] = [] if isinstance(recs, str) else [te_rec_row(x, f"{run}#{x['checkpoint_step']}", "")
+                                                                   for x in recs]
                 row["ingest_error"] = recs if isinstance(recs, str) else None
         out.append(row)
     FINAL.mkdir(parents=True, exist_ok=True)
@@ -1321,8 +1383,8 @@ def table(subs: list[dict], l0: dict[str, float]) -> dict:
 
 
 def table_md(tab: dict, split: str, seeds: str) -> str:
-    lines = [f"W* and the effective slowdown W*/honest on the {split} set (te_core {TE_CORE_VERSION} ρ on the scorer's analytic "
-             f"annotation, p = {P_BITS}; FLOPs = 2 MACs; {seeds})", ""]
+    lines = [f"W* and the effective slowdown W*/honest on the {split} set ({REGIME} records, te_core's ρ on the harness's "
+             f"count; FLOPs = 2 MACs; {seeds})", ""]
     for s, st in tab.items():
         lines += [f"### {s} (start {st['start_bpb']:.4f} bpb)", "",
                   "| target | l* | honest FLOPs (entry) | k | W* r1 | W* r10 | W* r100 | W*/honest r1 | r10 | r100 | W* entries |",
@@ -1391,37 +1453,55 @@ def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None
     plt.close(fig)
 
 
+def rerun_problems(r: dict) -> list[str]:
+    """Why a rerun's checkpoints don't enter the final table: the checks a search record passes, on the final split."""
+    w, led = r.get("witness"), r.get("ledger") or []
+    if r.get("state") != "done":
+        return [f"run {r.get('state')}"]
+    if not w:
+        return ["no witness"]
+    bad = list(w["failed_checks"]) + ([] if w["valid"] else ["witness invalid"])
+    bad += [] if w["split"] == "final" else [f"scored on the {w['split']} split, not the final set"]
+    bad += [] if isinstance(w["start_bpb"], (int, float)) else ["no start bpb"]
+    if r.get("ingest_error") or not led:
+        return bad + [r.get("ingest_error") or "no te_core submission"]
+    if abs(led[-1]["macs"] - (w["macs"] or -1)) > 1e-9 * led[-1]["macs"]:
+        bad.append(f"te_core's |C| {led[-1]['macs']} is not the witness's {w['macs']}")
+    if any(t.get("rho") and min(t["rho"].values()) < 1 for t in led):
+        bad.append("rho below 1")
+    if isinstance(w.get("over"), (int, float)) and w["over"] < COUNTED_FLOOR:
+        bad.append(f"counted {w['over']:.2g}x the run's own steps")
+    return bad
+
+
 def final_table(write: bool = True) -> dict:
-    """The final-set table and plot from the reruns, beside the search-set ones from every record."""
+    """The final-set table and plot from the reruns, each checkpoint priced by te_core from the rerun's run.json and
+    scored on the final set against the final set's start bpb the reruns carry (the median per start), beside the
+    search-set table of the current regime's records."""
     rows = {x["id"]: x for x in (json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip())}
-    starts = json.loads((STATE / "starts.json").read_text())
     res = [json.loads(l) for l in (FINAL / "results.jsonl").read_text().splitlines() if l.strip()] \
         if (FINAL / "results.jsonl").exists() else []
-    l0 = {}
+    subs, reruns = [], []
     for r in res:
-        for s, v in (r.get("starts") or {}).items():
-            if v.get("final") is not None:
-                l0.setdefault(s, v["final"])
-    subs = []
-    for r in res:
-        x, w = rows.get(r.get("id")), r.get("final")
-        if r.get("kind") != "rerun" or not x or not w or not w.get("valid"):
+        x = rows.get(r.get("id"))
+        if r.get("kind") != "rerun" or not x:
             continue
-        if r.get("ledger"):
-            # the harness's tier-2 checkpoints, each scored on the final set (final_bpb) and priced by its count
-            rec = x | {"run": r["run"], "counted": True}
-            led = [t | {"run": r["run"], "valid": not t["failed_checks"], "bpb": t["test_bpb"], "direction": x["direction"]}
-                   for t in r["ledger"] if t.get("test_bpb") is not None]
-            subs += [s | {"seed": r["seed"]} for s in submissions([rec, *led], starts)]
+        bad = rerun_problems(r)
+        reruns.append({"id": r["id"], "seed": r.get("seed"), "run": r["run"], "art": r.get("art"), "state": r["state"],
+                       "bpb": (r.get("witness") or {}).get("bpb"), "problems": bad})
+        if bad:
             continue
-        rr = x | {k: w[k] for k in ("train_flops", "tokens", "curve", "E_bytes", "phi") if w.get(k) is not None} | {
-            "steps": w.get("steps") or x.get("steps")}
-        subs += [s | {"seed": r["seed"]} for s in submissions([rr], starts)]
+        subs += [{"id": x["id"], "run": r["run"], "seed": r.get("seed"), "cp": round(t.get("fraction") or 0, 3),
+                  "start": x["start"], "macs": t["macs"], "val_bpb": t["bpb"], "rho": t["rho"], "phi": t["phi"],
+                  "depth": t["D"], "reference": is_reference(x), "direction": x["direction"], "counted": True,
+                  "E_bytes": t.get("E_bytes"), "start_bpb": r["witness"]["start_bpb"]}
+                 for t in r["ledger"] if t.get("te_kind") == "submission" and t.get("rho") and t.get("valid")]
+    l0 = {s: v for s in STARTS if (v := regime_start_bpb(subs, s)) is not None}
     fin = seed_mean(subs)
-    search_subs = json.loads((STATE / "submissions.json").read_text())
-    l0_search = {s: starts[s]["bpb"] for s in STARTS}
-    rep = {"at": now(), "te_core": TE_CORE_VERSION, "final": table(fin, l0), "search": table(search_subs, l0_search),
-           "final_starts": l0, "reruns": len(subs), "entries": sorted({x["id"] for x in fin})}
+    search_subs = [x for x in json.loads((STATE / "submissions.json").read_text()) if x.get("regime") == "current"]
+    l0_search = {s: v for s in STARTS if (v := regime_start_bpb(search_subs, s)) is not None}
+    rep = {"at": now(), "te_core": TE_CORE_VERSION, "regime": REGIME, "final": table(fin, l0), "search": table(search_subs, l0_search),
+           "final_starts": l0, "search_starts": l0_search, "reruns": reruns, "entries": sorted({x["id"] for x in fin})}
     if write:
         FINAL.mkdir(parents=True, exist_ok=True)
         (FINAL / "table.json").write_text(json.dumps(rep, indent=1) + "\n")
@@ -1447,20 +1527,16 @@ def main(argv=None) -> int:
     p = sub.add_parser("post", help="append one line to the board and push")
     p.add_argument("tag")
     p.add_argument("text")
-    f = sub.add_parser("final", help="final-set reruns: starts, launch IDS, collect")
-    f.add_argument("what", choices=("starts", "launch", "collect", "table"))
-    f.add_argument("ids", nargs="*", help="launch: record ids (12-hex prefixes); starts: start names")
-    f.add_argument("--commit", default=None, help="starts: the commit to run in (default: HEAD's fixed side)")
+    f = sub.add_parser("final", help="final-set reruns (launch.py --final): launch IDS, collect, table")
+    f.add_argument("what", choices=("launch", "collect", "table"))
+    f.add_argument("ids", nargs="*", help="launch: record ids (12-hex prefixes)")
     f.add_argument("--seeds", default=",".join(map(str, FINAL_SEEDS)))
+    f.add_argument("--node", default=None, help="launch: one of nodes.txt's nodes (default: launch.py's turn)")
     f.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "final":
-        if a.what == "starts":
-            commit = a.commit or subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True,
-                                                text=True, check=True).stdout.strip()
-            res = [final_run(commit, ["--starts", *(a.ids or STARTS)], {"kind": "starts"}, a.dry_run)]
-        elif a.what == "launch":
-            res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run)
+        if a.what == "launch":
+            res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run, a.node)
         elif a.what == "table":
             final_table()
             print((FINAL / "table.md").read_text())

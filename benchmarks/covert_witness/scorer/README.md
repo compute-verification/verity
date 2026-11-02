@@ -10,19 +10,15 @@ python scorer.py collect                               # new manifests -> index.
 python scorer.py score                                 # score.json, score.md, submissions.json
 python scorer.py board --promote --digest [--append]   # this hour's PROMOTED and DIGEST lines (--append pushes them)
 python scorer.py post TAG TEXT                         # one line onto islands/scorer/BOARD.md, pushed
-python scorer.py final starts|launch ID...|collect     # final-set reruns (below)
+python scorer.py final launch ID... [--seeds 101,102,103] [--node N] [--dry-run]
+python scorer.py final collect|table                   # final-set reruns (below)
 ~~~
-
-- **Final scoring** (`final.sh`, `scorer.py final`): an entry is rerun at fresh seeds (101, 102, 103 on the `--seed` and
-  `--data-seed` flags its script takes) by `research run --source` of its own commit, `final.sh` sent with the run, so
-  the island, the fixed side and the train args are the ones its record names. `final.sh` trains as `candidate.sh` does
-  and scores the submission (and its curve) on the search and the final set; `final starts` scores the starts on both.
-  `final collect` reads each ended run's `out/` into `$TE_SCORER_STATE/final/results.jsonl`.
 
 - **Records**: evidence/v1 artifacts with `meta.covert_witness.class` (launch.py's, one per candidate) and te_core
   ledger records (`meta.schema` te-core/submission/v1), written since `TE_SCORER_SINCE`. The start registry's bpbs and
   tensors come from launch.py's start-scores record. A record's agent is the `cursor/te-<direction>-4207` branch holding
-  its commit (`candidate.json`), else its run's commit, else the direction its meta names, else its class.
+  its commit (`candidate.json`), else its run's commit, else the direction its meta names, else its class. The index
+  names each record's witness schema and version and its harness's te_core.
 - **Who is scored**: honest(l*) reads the reference directions (`ref-*`, and the harness's reference smoke), whatever
   the class; W* reads every other direction's records, a reference-class one included. The measurement auditor's records
   (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
@@ -30,20 +26,33 @@ python scorer.py final starts|launch ID...|collect     # final-set reruns (below
   `run/run.json` must be the node's (`custody_problems`: the hashes of `out/witness.json` and `out/run/run.json` in the
   run-record the node's runner publishes, the attempt's `outputs.run_record`), and every fixed-side file at its commit
   (`benchmarks/covert_witness` outside `islands/`, `scorer/` and docs) must be one the harness's branches
-  (`cursor/covert-witness-4207`, `cursor/te-core-4207`) held since 30 Oct (`fixed_side`). Otherwise the record is
-  invalid, with the reason in the ledger.
+  (`cursor/covert-witness-4207`, `cursor/te-core-4207`) held since 30 Oct (`fixed_side`). A record whose E (sha256) is
+  an earlier record's (`replays`), or whose harness counted under half the FLOPs of the run's own steps
+  (`over_train_flops` < `COUNTED_FLOOR`), is a counted-compute escape and unscored (the coordinator, 10:35Z). Otherwise
+  the record is invalid, with the reason in the ledger.
+- **Regime**: from te_core 2.2 (`PAIRED`, on `cursor/covert-witness-4207`) a checkpoint's val bpb is the paired score on
+  a fresh slice of the search pool (its submission's `val_slice`), against the start's whole-pool bpb (witness v3's
+  `score.start_bpb`). A record with both is in the current regime, and only those make the frontier, the promotions,
+  the cells and the final table, each against the start bpb its records carry (the median); earlier records (the fixed
+  search set) are scored apart, in `score.md`'s second half. Version numbers don't mark the regime:
+  `cursor/te-core-4207`'s te_core 2.8 predates it.
 - **ρ**: te_core's (`TE_CORE_PATH`, its `score.score_grid`, `w_star`, `honest`, `effective_slowdown`, `frontier.TARGETS`).
-  A record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by the harness's count: `collect`
-  ingests the node's `run.json` with te_core at `cursor/te-core-4207`'s head (`TE_CURRENT`, a worktree it checks out),
-  one submission per checkpoint with |C|, U, D, φ and ρ, and refuses the record if te_core's |C| isn't the witness's or a
-  ρ is below 1; its entry takes |C|, φ and D from the last checkpoint. The te_core records agents publish themselves are
-  listed and never scored; a final rerun is re-ingested the same way. A witness v1 record has no te_core count, so its annotation is
-  analytic (`scorer.analytic`): U is every forward multiplication whose weight operand is trained (a fully trained
-  tensor's matmul or norm gain, both factors of an adapter; a frozen W·x is θ's, except in a run that merges its pieces,
-  `notes.mech` relora with `notes.pieces` > 1, whose targets are full for the whole run), a node's upstream is the updated
-  MACs per token of the nodes before it in (layer, stage) order, |C| is the training FLOPs over 2, p = 16 and c = 4096
-  times the start's forward MACs per token (weight matmuls, norm gains and 2·d·ctx attention MACs a layer). Each curve
-  point is a submission (its prefix of the run). Scores and digests mark each W* entry (c) counted or (a) analytic.
+  A record made inside te_core's harness (witness v2/v3, covert_witness v2.1) is priced by the harness's count: `collect`
+  ingests the node's `run.json` with the te_core of the official branch with the highest VERSION that holds `PAIRED`
+  (`te_current`, a worktree at `TE_CURRENT`), so a pricing fix re-prices every record. One submission per checkpoint
+  carries |C|, U, D, φ and ρ, and the record is refused if te_core's |C| isn't the witness's or a ρ is below 1. Its
+  entry takes |C|, φ and D from the last checkpoint. The te_core records agents publish themselves are listed and never
+  scored. A witness v1 record has no te_core count, so its annotation is analytic (`scorer.analytic`):
+  - U is every forward multiplication whose weight operand is trained: a fully trained tensor's matmul or norm gain, and
+    both factors of an adapter. A frozen W·x is θ's, except in a run that merges its pieces (`notes.mech` relora with
+    `notes.pieces` > 1), whose targets are full for the whole run.
+  - A node's upstream is the updated MACs per token of the nodes before it in (layer, stage) order.
+  - |C| is the training FLOPs over 2, p = 16, and c = 4096 times the start's forward MACs per token (weight matmuls, norm
+    gains and 2·d·ctx attention MACs a layer).
+  - The declared trainable set is checked by the witness to cover every changed tensor, so U, φ and D are never
+    understated, but the step log's tokens are self-reported.
+  - Each curve point is a submission (its prefix of the run). Scores and digests mark each W* entry (c) counted or (a)
+    analytic.
 - **Counterexample credit** (`scorer.credit`, witness v1 only; v2's families are the harness's, verified by
   `prepare.declare_step`): an E whose decoder rebuilds a step's updated weights from θ within c is a T1 family for that
   step. A seed log (`E.format` seedlog) with one coefficient a step (MeZO) is one: its prefix E_t rebuilds step t in
@@ -52,7 +61,24 @@ python scorer.py final starts|launch ID...|collect     # final-set reruns (below
   than steps (a trained subspace, read from E's header), adapter and full E's, and a piece run's snapshots show no step
   rebuilt bit for bit and get none; an adapter's ρ is low because its φ is.
 - **Cells**: mechanism (the note's first word) x |E| range (decades from 10 kB) x φ range (te_core's `PHI_EDGES`, on
-  te_core's φ for a v2 record, else the witness's φ over the tensors that actually changed) x start. A cell is thin at two valid records or fewer.
-- **Promotions** (hourly): each direction's top third by relative bpb drop from its start, and the best record of each
-  thin cell, among valid records launched from 08:30Z; re-screens (a mechanism's note, less rates and seeds, on a class
-  and start another direction screened first, or its own direction swept three times already) are flagged.
+  te_core's φ for a v2 record, else the witness's φ over the tensors that actually changed) x start. A cell is thin at two
+  valid records or fewer.
+- **Promotions** (hourly): the candidates are each direction's top third by relative bpb drop from its start, and the
+  best record of each thin cell, among valid current-regime records launched from 08:30Z. Each candidate's submitted
+  output goes to the harness's `promote.py` (`sealed_bits`), which decides one bit per output on its node from the
+  sealed promotion value; only a true bit is PROMOTED, and the DIGEST names the candidates the sealed set didn't hold.
+  `board` without `--append` is a dry run that lists the candidates and decides nothing. Re-screens (a mechanism's note,
+  less rates and seeds, on a class and start another direction screened first, or its own direction swept three times
+  already) are flagged.
+- **Final scoring** (`scorer.py final`): an entry (a valid current-regime search record) is rerun at fresh seeds (101,
+  102, 103 on the `--seed` and `--data-seed` flags its train.py takes; once if it takes neither, since the harness seeds
+  nothing for a `--script` run) by the harness's `launch.py CLASS START --direction scorer --final --no-wait ... --
+  TRAIN_ARGS`. The rerun ships `overlay`: a commit whose tree is the harness branch head's (`TE_BRANCH`) with the entry's
+  `islands/`, its parents both. So every rerun is measured by one fixed side, the harness's latest, with the entry's own
+  island code and train args. In final mode (`CW_FINAL=1`) every score is the final set's, and launch.py preserves the
+  record with meta `final: true` and ingests it into no ledger. `final collect` runs `launch.py --collect` once per ended
+  run and reads its witness and te_core's submissions from its `run.json`. `final table` refuses a rerun that isn't
+  done, valid, scored on the final split, priced at the witness's |C|, ρ ≥ 1 and over the counter floor. It averages the
+  seeds per checkpoint and writes the table of W* and W*/honest per start, target, k and r, against the final set's
+  start bpb, beside the search set's from the current regime's records, and both frontier plots, into
+  `$TE_SCORER_STATE/final/`.
