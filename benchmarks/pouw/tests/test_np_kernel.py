@@ -2,7 +2,7 @@
 tags, lane-coin A' and coins (and a control whose padding rows have none is rejected), the fold's window, exact at
 `serving.LEAD_FOLD_BOUND` and at no other bound, the lead serving verity_int8's own y at Llama-3.2-1B's linears (and
 83d82109a8's fold caught there), G's rejection draw, ssn.cu's check holding served outputs to verity_int8's epilogue within
-the same bound, gate.py's GateRecord from a run's out directory, and the recorded one (gate.json)."""
+the same bound, gate.py's GateRecord from a run's out directory, and the recorded one (gate.json) against this tree."""
 
 from __future__ import annotations
 
@@ -16,8 +16,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.serving import (LEAD_FOLD_BOUND, POUW_V2, SERIAL, GateRecord, lead_variant,
-                                                 variant_refusals)
+from verity.core.protocols.pouw.serving import LEAD_FOLD_BOUND, POUW_V2, SERIAL, variant_refusals
 
 HERE = Path(__file__).resolve().parents[1] / "np_kernel"
 
@@ -232,12 +231,15 @@ def test_write_records_no_refused_gate(tmp_path):
     assert G.main([str(out), "--run", "r-test", "--write"], root, rec) == 1 and not rec.exists()
 
 
-def test_the_recorded_gate_admits_the_lead_its_digest_names():
-    """gate.json against itself (its sources are other suites' files: `gate.py --recorded` holds it to the tree)."""
+def test_the_recorded_gate_admits_the_lead_this_tree_names():
+    """gate.json against this tree (`gate.py --recorded`): the variant its listed sources name here is the one it gated, so
+    a change to any of them (some are other suites' files, declared in this suite's inputs) fails here until the gate is
+    rerun."""
     rec = json.loads(G.RECORD.read_text())
-    v = lead_variant(rec["source_sha256"], rec["binary_sha256"], "np-kernel")
-    g = GateRecord(**{**rec["gate"], "shapes": tuple(tuple(s) for s in rec["gate"]["shapes"])})
-    assert rec["variant"] == v.id == g.variant
+    v, g = G.recorded()
+    assert rec["variant"] == v.id == g.variant, (
+        f"gate.json gated {rec['variant']}, but this tree's sources name {v.id}: rerun run.sh (CHECK=1) on an H200, then "
+        "gate.py OUT --run RUN --write")
     assert variant_refusals(v, POUW_V2, SERIAL.name, SERVED, g) == [], (
         "gate.json no longer admits the lead: rerun run.sh (CHECK=1) on an H200, then gate.py OUT --run RUN --write")
 
