@@ -372,7 +372,7 @@ class Linear:
         UTC) in the team's active projects, the earliest; a tie goes to the one earlier in its project's ladder, then to the
         project first by name.  {id, name, targetDate, sortOrder, project: {id, name}}, or None when no active project of
         the team has one (an undated milestone has no place on the ladder)."""
-        q = ('query($id: String!) { team(id: $id) { projects(first: 100, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
+        q = ('query($id: String!) { team(id: $id) { projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
              "{ nodes { id name projectMilestones(first: 50) { nodes { id name targetDate sortOrder } } } } } }")
         today = datetime.fromtimestamp(self.now(), UTC).date().isoformat()
         ms = [{**m, "project": {"id": p["id"], "name": p["name"]}} for p in self.gql(q, {"id": team_id})["team"]["projects"]["nodes"]
@@ -388,7 +388,7 @@ class Linear:
 
     def projects(self) -> list[dict]:
         """The active projects (not completed or canceled), each with its milestones: {id, name, projectMilestones}."""
-        q = ('{ projects(first: 100, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
+        q = ('{ projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
              "{ nodes { id name projectMilestones(first: 50) { nodes { id name } } } } }")
         return self.gql(q)["projects"]["nodes"]
 
