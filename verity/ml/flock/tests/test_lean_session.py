@@ -4,10 +4,10 @@ connection to the auditor. Here a scripted auditor stands on the far side. What 
 every frame that leaves the loop's own encoding (a `Proof` dropped, a frame it does not serve refused), the `Hello`
 that leaves the Lean one at the auditor's sample (at the fixture's statement, `test_lean_hello.py`'s recorded `Hello` at
 the loop's nonce) and never the prover's, `Hello`'s answer and every coin checked, each request leaving once at its place
-in the honest prover's order, a `Ping` answered by the loop and never leaving, and every request after a refusal refused
-without reaching the auditor. The loop starts the reps' frames on a port of its
-own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s firewalled sessions through it
-are the end-to-end check (live PROTOCOL.md §10.4)."""
+in the honest prover's order, a `Ping` answered by the loop and never leaving, every request after a refusal refused
+without reaching the auditor, and nothing of a session read after its `Finish`. The loop starts the reps' frames on a
+port of its own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s firewalled
+sessions through it are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
 import json
@@ -52,6 +52,7 @@ def _read(s: socket.socket) -> bytes | None:
 
 
 REGISTER = b"\x0a"
+FINISH = b"\x06"
 COMMIT = b"\x07" + _bytes(b"") + struct.pack("<I", 0) + struct.pack("<I", 0)
 
 
@@ -142,6 +143,14 @@ class Loop:
 def call(s: socket.socket, f: bytes) -> bytes | None:
     s.sendall(_bytes(f))
     return _read(s)
+
+
+def closed(s: socket.socket, f: bytes) -> bool:
+    """Whether the loop has ended the session on `s`: `f` gets no answer, the connection closed."""
+    try:
+        return call(s, f) is None
+    except (BrokenPipeError, ConnectionResetError):
+        return True
 
 
 def plain(f: bytes) -> bytes:
@@ -238,9 +247,25 @@ def test_a_finish_before_the_commitment_never_leaves(loop):
     auditor, lp = loop
     s = lp.connect()
     call(s, REGISTER)
-    assert reason(call(s, b"\x06")) == STOP + "a Finish before the step-0 coin commitment"
+    assert reason(call(s, FINISH)) == STOP + "a Finish before the step-0 coin commitment"
     s.close()
     assert auditor.got[0] == [REGISTER]
+
+
+def test_a_session_ends_at_its_finish(loop):
+    """A session ends at its `Finish`, whatever the loop decided of it (here a refusal): the loop reads nothing more of
+    it, so a second `Finish`, a `Ping` and a `Register` after it get no answer, and nothing more of the session reaches
+    the auditor. The loop serves the next session as before."""
+    auditor, lp = loop
+    s = lp.connect()
+    call(s, REGISTER)
+    assert reason(call(s, FINISH)) == STOP + "a Finish before the step-0 coin commitment"
+    assert closed(s, FINISH) and closed(s, ping(b"p")) and closed(s, REGISTER)
+    s.close()
+    t = lp.connect()
+    assert call(t, REGISTER) == draw("null")
+    t.close()
+    assert auditor.got == [[REGISTER], [REGISTER]]
 
 
 def test_a_draw_that_is_not_json(junk):
@@ -614,16 +639,17 @@ def test_a_round_before_the_commitment_never_leaves(zk):
 @pytest.mark.slow
 def test_a_finish_before_the_last_opening_never_leaves(zk):
     """`Finish` leaves only after the schedule's last opening: one right after `Hello`'s answer is refused without reaching
-    the auditor, and so is every coin after it."""
+    the auditor, and ends the session, so a second `Finish` and a `Commit` after it get no answer and nothing more
+    reaches the auditor."""
     auditor = Auditor(lambda f: {10: draw("null"), 1: _answer()}[f[0]])
     lp = Loop(auditor, _args(zk, "pub-16.bin"))
     s = lp.connect()
     call(s, REGISTER)
     _name(call(s, hello("")))
-    why = reason(call(s, b"\x06"))
+    why = reason(call(s, FINISH))
     assert why.startswith(STOP + "a Finish after 0 openings, where the schedule's are "), why
     assert int(why.rsplit(" ", 1)[1]) == len(_schedule(_args(zk, "pub-16.bin"), "null"))
-    assert reason(call(s, COMMIT)) == why
+    assert closed(s, FINISH) and closed(s, COMMIT)
     s.close()
     lp.close()
     assert [f[0] for f in auditor.got[0]] == [10, 1]
