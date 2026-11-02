@@ -79,17 +79,21 @@ def _shape_macs(func, args) -> int:
 
 
 SHAPE_OPS = {aten.mm, aten._int_mm, aten.addmm, aten.bmm, aten.baddbmm, aten.addbmm, aten.dot, aten.vdot, aten.mv, aten.addmv}
-ELEMENTWISE = {aten.mul, aten.mul_, aten.addcmul, aten.addcmul_, aten.addcdiv, aten.addcdiv_, aten.lerp, aten.lerp_,
-               aten._foreach_mul, aten._foreach_mul_, aten._foreach_addcmul, aten._foreach_addcmul_,
-               aten._foreach_addcdiv, aten._foreach_addcdiv_, aten._foreach_lerp, aten._foreach_lerp_}
-SCALED = {aten.add, aten.add_, aten.sub, aten.sub_, aten._foreach_add, aten._foreach_add_, aten._foreach_sub,
-          aten._foreach_sub_}
+#: The non-GEMM op sets by aten name, which te_core.capture's static count (`capture.structure`) reads too.
+ELEMENTWISE_NAMES = frozenset({"mul", "mul_", "addcmul", "addcmul_", "addcdiv", "addcdiv_", "lerp", "lerp_", "_foreach_mul",
+                               "_foreach_mul_", "_foreach_addcmul", "_foreach_addcmul_", "_foreach_addcdiv",
+                               "_foreach_addcdiv_", "_foreach_lerp", "_foreach_lerp_"})
+#: counted as elementwise multiplications only with a scale (`alpha` other than 1)
+SCALED_NAMES = frozenset({"add", "add_", "sub", "sub_", "_foreach_add", "_foreach_add_", "_foreach_sub", "_foreach_sub_"})
 #: fused optimizer steps, at the multiplications per parameter their unfused forms make
-FUSED_OPTIMIZERS = {getattr(aten, n): k for n, k in (("_fused_adam_", 7), ("_fused_adamw_", 8), ("_fused_sgd_", 2),
-                                                      ("_fused_adagrad_", 4)) if hasattr(aten, n)}
-LINALG = {getattr(aten, n) for n in ("_linalg_eigh", "linalg_eigh", "_linalg_svd", "linalg_svd", "linalg_qr",
-                                     "linalg_cholesky_ex", "linalg_inv_ex", "_linalg_solve_ex", "linalg_solve_triangular",
-                                     "linalg_lu_factor_ex", "cholesky_solve", "triangular_solve") if hasattr(aten, n)}
+FUSED_OPTIMIZER_MACS = {"_fused_adam_": 7, "_fused_adamw_": 8, "_fused_sgd_": 2, "_fused_adagrad_": 4}
+LINALG_NAMES = frozenset({"_linalg_eigh", "linalg_eigh", "_linalg_svd", "linalg_svd", "linalg_qr", "linalg_cholesky_ex",
+                          "linalg_inv_ex", "_linalg_solve_ex", "linalg_solve_triangular", "linalg_lu_factor_ex",
+                          "cholesky_solve", "triangular_solve"})
+ELEMENTWISE = {getattr(aten, n) for n in ELEMENTWISE_NAMES}
+SCALED = {getattr(aten, n) for n in SCALED_NAMES}
+FUSED_OPTIMIZERS = {getattr(aten, n): k for n, k in FUSED_OPTIMIZER_MACS.items() if hasattr(aten, n)}
+LINALG = {getattr(aten, n) for n in LINALG_NAMES if hasattr(aten, n)}
 FACTORY = {getattr(aten, n) for n in ("randn", "rand", "randint", "randperm", "zeros", "ones", "full", "empty",
                                       "empty_strided", "arange", "linspace", "eye", "scalar_tensor", "normal",
                                       "zeros_like", "ones_like", "empty_like", "full_like", "randn_like", "rand_like")
