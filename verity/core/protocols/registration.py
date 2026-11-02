@@ -4,13 +4,17 @@ this module to the Lean (`composition/tests/test_registration_difftest.py`).
 
 A deployment's registration is one append-only log of entries, each naming the head of the log before it (`previous`):
 the digest of the log's last entry, or its composite's genesis when the log is empty, so the head names the whole log.
-An entry is one of two formats:
+An entry is one of three formats:
 
 * `verity/registration/hardware/v1`: the cards, locations and links it adds to the site (`Site`);
 * `verity/registration/information/v1`: its items, each registered once in the log (`item_key`): θ, each registered
   value by its committed root, and the builder B (its digest, its advice's format and its public cap ℓ on one
   declaration's advice, in bits). Registration registers the site, θ and B, not the circuit B builds; a subprotocol's
   Program and parameters, and the proof system, are that protocol's public verifier parameters.
+* `verity/registration/declaration/v1`: a day's circuit (`Declaration`): the day, by its index among the monitoring
+  period's days, its program's digest and its block Definitions by descriptor key. The prover declares one circuit a
+  day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`), and each
+  window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
 
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys
@@ -21,7 +25,7 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
 fails (`REFUSALS`, in order). A component reads its view of an accepted log (`View`): the site, θ's values
-(`View.value`) and the builder, at the head. Decoding takes exactly what the encoders write and raises `Malformed`
+(`View.value`), the builder and the days' declared circuits (`View.declared`), at the head. Decoding takes exactly what the encoders write and raises `Malformed`
 otherwise; registration is ASCII-only without DEL, and a log or parameters holding any other character is `Malformed` as
 `ascii` before any digest is taken.
 """
@@ -38,6 +42,7 @@ from verity.core.wire import canonical
 
 HARDWARE = "verity/registration/hardware/v1"
 INFORMATION = "verity/registration/information/v1"
+DECLARATION = "verity/registration/declaration/v1"
 CARD = "verity/registration/card/v1"
 GENESIS = "verity/registration/genesis/v1"
 PROTOCOL = "verity/registration/log/v1"
@@ -55,7 +60,7 @@ LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifi
 """The pairs of kinds a link may join, in either order."""
 AUDITOR_KINDS = ("certifier", "challenger")
 REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "card-digest", "figures", "capacity", "owner",
-            "uncertified", "challenger-reach", "duplicate-information")
+            "uncertified", "challenger-reach", "duplicate-information", "duplicate-declaration")
 OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
 """The operand classes of a tensor-core multiply-add, `DeviceFigures`' `OperandClass`: int8 operands drawn uniformly
 over `[-128, 127]`, `[-2, 1]`, `[0, 3]` or `[0, 15]`, or the one value 0."""
@@ -153,13 +158,27 @@ def item_key(item: Mapping[str, Any]) -> str:
 
 
 @dataclass(frozen=True)
+class Declaration:
+    """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's days,
+    its program's SHA-512 as hex, and its block Definitions by descriptor key."""
+
+    day: int
+    program: str
+    blocks: tuple[str, ...] = ()
+
+    def to_json(self) -> dict[str, Any]:
+        return {"blocks": list(self.blocks), "day": self.day, "program": self.program}
+
+
+@dataclass(frozen=True)
 class Entry:
     previous: str
-    body: Hardware | Information
+    body: Hardware | Information | Declaration
 
     @property
     def format(self) -> str:
-        return HARDWARE if isinstance(self.body, Hardware) else INFORMATION
+        return (HARDWARE if isinstance(self.body, Hardware) else DECLARATION if isinstance(self.body, Declaration)
+                else INFORMATION)
 
     def to_json(self) -> dict[str, Any]:
         b = self.body
@@ -167,6 +186,8 @@ class Entry:
             return {"cards": [k.to_json() for k in b.cards], "format": HARDWARE,
                     "links": [k.to_json() for k in b.links], "locs": [x.to_json() for x in b.locs],
                     "previous": self.previous}
+        if isinstance(b, Declaration):
+            return {**b.to_json(), "format": DECLARATION, "previous": self.previous}
         return {"format": INFORMATION, "items": [dict(i) for i in b.items], "previous": self.previous}
 
     def digest(self) -> str:
@@ -183,7 +204,7 @@ def head(composite: str, log: Sequence[Entry]) -> str:
     return log[-1].digest() if log else genesis(composite)
 
 
-def chain(composite: str, bodies: Sequence[Hardware | Information]) -> list[Entry]:
+def chain(composite: str, bodies: Sequence[Hardware | Information | Declaration]) -> list[Entry]:
     """The log of `bodies` in order, each entry following the head of the log before it."""
     log: list[Entry] = []
     for b in bodies:
@@ -314,7 +335,12 @@ def entry_of(j: Any) -> Entry:
         _exactly(j, ["format", "items", "previous"], "an information entry")
         previous = _hex64(j["previous"], "previous")
         return Entry(previous, Information(tuple(item_of(i) for i in _list(j["items"], "items"))))
-    raise Malformed(f"an entry: format {fmt} is not one of [{HARDWARE}, {INFORMATION}]")
+    if fmt == DECLARATION:
+        _exactly(j, ["blocks", "day", "format", "previous", "program"], "a declaration")
+        previous = _hex64(j["previous"], "previous")
+        blocks = tuple(_str(b, "a declaration's block") for b in _list(j["blocks"], "blocks"))
+        return Entry(previous, Declaration(_nat(j["day"], "day"), _hex64(j["program"], "program"), blocks))
+    raise Malformed(f"an entry: format {fmt} is not one of [{HARDWARE}, {INFORMATION}, {DECLARATION}]")
 
 
 def log_of(j: Any) -> tuple[str, list[Entry]]:
@@ -459,28 +485,34 @@ def hardware_refusal(auditor: Auditor, composite: str, site: Site, h: Hardware) 
 
 @dataclass(frozen=True)
 class State:
-    """The log so far, folded: its site, its information items in order, its head and its length."""
+    """The log so far, folded: its site, its information items in order, its head, its length and its declarations in
+    order."""
 
     site: Site
     items: tuple[Mapping[str, Any], ...]
     head: str
     entries: int
+    declared: tuple[Declaration, ...] = ()
 
     def refusal(self, auditor: Auditor, composite: str, e: Entry) -> str | None:
         if e.previous != self.head:
             return "previous"
         if isinstance(e.body, Hardware):
             return hardware_refusal(auditor, composite, self.site, e.body)
+        if isinstance(e.body, Declaration):
+            return "duplicate-declaration" if any(d.day == e.body.day for d in self.declared) else None
         return None if _nodup([item_key(i) for i in self.items + e.body.items]) else "duplicate-information"
 
     def add(self, e: Entry) -> State:
         if isinstance(e.body, Hardware):
             return replace(self, site=self.site.add(e.body), head=e.digest(), entries=self.entries + 1)
+        if isinstance(e.body, Declaration):
+            return replace(self, declared=self.declared + (e.body,), head=e.digest(), entries=self.entries + 1)
         return replace(self, items=self.items + e.body.items, head=e.digest(), entries=self.entries + 1)
 
     def view(self) -> View:
         return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
-                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head)
+                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head, self.declared)
 
 
 def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
@@ -495,19 +527,27 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 
 @dataclass(frozen=True)
 class View:
-    """What a component reads of an accepted log, at its head: the site, θ's registered values in order, the builder."""
+    """What a component reads of an accepted log, at its head: the site, θ's registered values in order, the builder,
+    and the days' declared circuits in order."""
 
     site: Site
     theta: tuple[dict[str, Any], ...]
     builder: dict[str, Any] | None
     head: str
+    declarations: tuple[Declaration, ...] = ()
 
     def value(self, name: str) -> dict[str, Any] | None:
         """θ's registered value `name`."""
         return next((t for t in self.theta if t["value"] == name), None)
 
+    def declared(self, day: int) -> Declaration | None:
+        """Day `day`'s declared circuit, the one declaration of the day in an accepted log; None when it declares none.
+        A window of that day runs its program."""
+        return next((d for d in self.declarations if d.day == day), None)
+
     def to_json(self) -> dict[str, Any]:
-        return {"builder": self.builder, "head": self.head, "site": self.site.to_json(), "theta": list(self.theta)}
+        return {"builder": self.builder, "declarations": [d.to_json() for d in self.declarations], "head": self.head,
+                "site": self.site.to_json(), "theta": list(self.theta)}
 
 
 # --- the core protocol ------------------------------------------------------------------------------------------------
