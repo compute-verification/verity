@@ -2633,6 +2633,22 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Compose.G": {
+   "honest": ["Pouw.SecurityProofs.Lead.Witness.G_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Witness.G_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Tail.G_tail": {
+   "honest": ["Pouw.SecurityProofs.Lead.Witness.G_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Network.networkFwd": {
+   "honest": ["Pouw.SecurityProofs.Lead.Witness.networkLlama_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Network.networkLlama": {
+   "honest": ["Pouw.SecurityProofs.Lead.Witness.networkLlama_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
   }
  },
  "unwitnessed": {
@@ -10654,12 +10670,6 @@
    "assumptions": [],
    "type_hash": "a25a0d349dece0eb803b7b1f243ff11c00028325aa1f36f6a57f0b74f23b79dd"
   },
-  "Pouw.SecurityProofs.Lead.Compose.honest": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Lead.Compose.honest : Pouw.Guarantees.Lead.Honest"],
-   "assumptions": [],
-   "type_hash": "b44fbfc2a9544eeaf5e6e5105c97fc7b0255f1af6df1fe17234a09ec85514584"
-  },
   "Pouw.SecurityProofs.Lead.Network.networkFwd": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Network.networkFwd : Pouw.Guarantees.Lead.NetworkFwd"],
@@ -10719,6 +10729,24 @@
    "signature": ["Pouw.SecurityProofs.Lead.Tail.tailAt : Pouw.Guarantees.Lead.TailAt"],
    "assumptions": [],
    "type_hash": "51ed57ae366e0ea3430be448aad4630668f855ab33eaa1b1cc2c495c5638fa02"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.G_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.G_nontrivial": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial": {
+   "owner": "@compute-research"
   },
   "Pouw.SecurityProofs.NCP.BiasU8Iff": {
    "owner": "@compute-accounting",
@@ -13662,8 +13690,7 @@
    "Pouw.SecurityProofs.Writes.SsnServedDistinct": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean), for the 4- and 5-lane layouts as the definitions state them; it reads no function of the code, so it has no acceptance to take. That the served kernel commits exactly these words is completeness. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
    "Pouw.SecurityProofs.Writes.SsnServedShift": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean): no two differ by a constant and none is a free value plus one, the hypotheses of carrier separation. It reads no function of the code, so it has no acceptance to take. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
    "Pouw.SecurityProofs.Lead.Compose.G": "frozen (no-function,hash): The lead's work bound over every strategy the node can run on a call (the strategy model of Definitions.Pouw.Lead.Model, priced on MH100w), not over a Lean function of the code, so it has no acceptance to take; its other branch is a SHA-512 collision with the honest commitment's messages (Pouw.Lead.Break).",
-   "Pouw.SecurityProofs.Lead.Compose.honest": "completeness: G's honest lemma: at every admitted call of the lead (Layout.Admits), some certifier running certCode meets CertifierCoins, and at the deployed commitment (l1wCommit: a call's A instance in 1 KiB segments and its forward's words instance), its form classifier and the certifier's coin stream (certStream), the nominal W1 table and a set of strategies holding an honest one, accepted at every coin value, meet every premise of G, so G's hypotheses are not vacuous at the deployed instance; for every A of at most 2^64 bytes and every forward of at most 2^64 words leaves.",
-   "Pouw.SecurityProofs.Lead.Statement.nontrivial": "completeness: G's nontrivial lemma: at the three points the honest work exceeds the gap, and a strategy that does nothing does no priced work, exchanges nothing and hashes nothing, so G's conclusion fails for a verifier that accepts everything.",
+   "Pouw.SecurityProofs.Lead.Statement.nontrivial": "completeness: what makes G say something, which G's nontrivial witness (Witness.G_nontrivial) reads: at the three points the honest work exceeds the gap, and a strategy that does nothing does no priced work, exchanges nothing and hashes nothing.",
    "Pouw.SecurityProofs.Lead.Statement.gapAt": "lemma: the gap's share of served stock at T 512 x 64, T 512 x 512 and T 8,192 for every call of n >= 512 and K >= 2,048, an evaluation of the defined function Pouw.Lead.gapServed, not a property of a Lean function of the code.",
    "Pouw.SecurityProofs.Lead.Statement.gapAll": "lemma: the gap's share of served stock at every call the verifier admits is at most the closed form Pouw.Lead.gapBound, an evaluation of the defined functions Pouw.Lead.gapServed and Pouw.Lead.gapBound, not a property of a Lean function of the code.",
    "Pouw.SecurityProofs.Lead.Network.networkFwd": "lemma: a forward's network term from its bits, over the forward model of Definitions.Pouw.Lead.Forward under SerialForwards, not a property of a Lean function of the code.",
@@ -13672,7 +13699,7 @@
    "Pouw.SecurityProofs.Lead.Tail.G_tail": "frozen (no-function,hash): G's tail form under G's premises: the share of the certifier's entropy values at whose coins a strategy the node can run is accepted, hashes no SHA-512 collision with the honest commitment's messages and works below the honest work less the fixed gap is at most etaLead; over the strategy model of Definitions.Pouw.Lead.Model, not a Lean function of the code, so it has no acceptance to take.",
    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt": "lemma: the tail's fixed gap as a share of served stock at T 512 x 64, T 512 x 512, T 8,192 and decode for every call of n, K >= 4,096, an evaluation of the defined function Pouw.Lead.gapFixedServed, not a property of a Lean function of the code.",
    "Pouw.SecurityProofs.Lead.Tail.tailAt": "lemma: etaLead at the three points and decode for calls of n, K >= 4,096 and at most 2^30 tiles, an evaluation of the defined functions Pouw.Lead.tableTail and Pouw.Lead.coinTail, not a property of a Lean function of the code.",
-   "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": "completeness: G_tail's nontrivial lemma: at the three points the honest work exceeds the fixed gap and etaLead < 1, so a strategy that does nothing falls in G_tail's event at every entropy value and its conclusion fails for a verifier that accepts everything.",
+   "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": "completeness: what makes G_tail say something, which G_tail's nontrivial witness (Witness.G_tail_nontrivial) reads: at the three points the honest work exceeds the fixed gap, and etaLead < 1 at calls of at most 2^30 tiles.",
    "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their seconds summed, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance.",
    "Pouw.SecurityProofs.Dither.WorkMoment": "frozen (verdict): as WorkSound, before its Markov step: the per-replica moment over a quantified service verdict, which FleetSound pools (CMP-152, CMP-136).",
