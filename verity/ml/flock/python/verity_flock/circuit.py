@@ -58,8 +58,10 @@ import hashlib
 import itertools
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 import numpy as np
 
@@ -594,7 +596,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
             v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None,
             leaf_scheme: dict | None = None, extra_meta: dict | None = None, tail=None, layout: str | None = None,
-            pinned_outputs: tuple = ()) -> str:
+            pinned_outputs: tuple = (), out: BinaryIO | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -633,7 +635,12 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
     META ``template`` its lines and ``layout`` the mode, in place of the ``CIRCUIT unit`` section and the flat META
     ``template``. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
-    the unit's range and ``unit_log`` are that net's slot. A unit class's ``definition`` has no templated form."""
+    the unit's range and ``unit_log`` are that net's slot. A unit class's ``definition`` has no templated form.
+
+    ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
+    (the format line and META) are returned. The unit's netlist goes from `ir_lower.netlist_pieces` into the file and into
+    ``unit_sha256`` a piece at a time; a flat statement's META, which ``unit_sha256`` precedes, is written with stand-ins of
+    its digests' lengths and rewritten in place once the netlist is."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -748,8 +755,12 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
     out_net_ports = _ret_ports(tail.stages[-1], tail.slotted_rets) if U.tail_rets else []
     programs = program_digests(sub, statics)
-    unit = tmpl_text if hasattr(low, "template") else _expanded(low.layout, low.name)
-    unit_sha256 = low.sha256_of(unit)
+    if hasattr(low, "template") or out is None:
+        unit = tmpl_text if hasattr(low, "template") else _expanded(low.layout, low.name)
+        unit_sha256 = low.sha256_of(unit)
+    else:
+        unit = None
+        unit_sha256 = "0" * 64 if template is None else _write_netlist(low)[0]
     stage_texts = [_expanded(lay, f"{low.name}/tail/stage{i}") for i, lay in enumerate(stages)]
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
              "params": {"unit_sha256": unit_sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
@@ -779,16 +790,101 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         if clash := sorted(set(extra_meta) & set(meta)):
             raise ValueError(f"extra_meta: {clash} are META's own keys")
         meta.update(extra_meta)
-    meta_json = [json.dumps(meta, sort_keys=True, separators=(",", ":"))]
-    if template is not None:
-        a, b = meta_json[0].split(json.dumps(_SPLICE))
-        meta_json = [a, json.dumps(tmpl_text.splitlines(), separators=(",", ":")), b]
-    texts = [] if template is not None else [("unit", unit)]
-    texts += [(SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
-              (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
+
+    def serialized() -> list[str]:
+        meta_json = [json.dumps(meta, sort_keys=True, separators=(",", ":"))]
+        if template is not None:
+            a, b = meta_json[0].split(json.dumps(_SPLICE))
+            meta_json = [a, json.dumps(tmpl_text.splitlines(), separators=(",", ":")), b]
+        return meta_json
+
+    meta_json = serialized()
+    head = f"{meta['format']} {low.name}\nMETA "
+    texts = [(SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
+             (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
     texts += [(f"stage{i}", t) for i, t in enumerate(stage_texts)]
-    return "".join([f"{meta['format']} {low.name}\nMETA ", *meta_json, "\n",
-                    *(s for nm, t in texts for s in (f"CIRCUIT {nm} {t.count(chr(10))}\n", t))])
+    sections = lambda texts: (s for nm, t in texts for s in (f"CIRCUIT {nm} {t.count(chr(10))}\n", t))  # noqa: E731
+    if out is None:
+        return "".join([head, *meta_json, "\n", *sections(([] if template is not None else [("unit", unit)]) + texts)])
+    _put(out, head)
+    at = out.tell()
+    for s in [*meta_json, "\n"]:
+        _put(out, s)
+    if template is None:
+        lines = 1 + low.layout.useful
+        _put(out, f"CIRCUIT unit {lines}\n")
+        unit_sha256, got = _write_netlist(low, out)
+        if got != lines:
+            raise AssertionError(f"{low.name}: the unit's netlist has {got} lines, not the {lines} its section names")
+        stand_in = "".join(meta_json).encode()
+        cover["params"]["unit_sha256"] = meta["unit_sha256"] = unit_sha256
+        if not partition:
+            meta["partition"]["digest"] = partition_digest(cover)
+        meta_json = serialized()
+        if len(b := "".join(meta_json).encode()) != len(stand_in):
+            raise AssertionError(f"{low.name}: META is {len(b)} bytes, its stand-in {len(stand_in)}")
+        end = out.tell()
+        out.seek(at)
+        out.write(b)
+        out.seek(end)
+    for s in sections(texts):
+        _put(out, s)
+    return "".join([head, *meta_json, "\n"])
+
+
+def compose_to(path: Path, low: IL.Lowering, sub, **kw) -> dict:
+    """`compose`'s circuit (``kw`` its keywords) written to ``path`` as it is composed (its ``out``), never held whole, and read
+    once more for its digests: ``head`` (its format line and META, which `meta_of` reads), ``sha512`` its pin (:func:`digest`),
+    ``class`` (:func:`class_digest`) and ``bytes``. The file is at ``path`` only once it is whole."""
+    path = Path(path)
+    part = path.with_name(f".{path.name}.part")
+    try:
+        with open(part, "wb") as f:
+            head = compose(low, sub, out=f, **kw)
+        got = {"head": head, **_file_digests(part, head), "bytes": part.stat().st_size}
+        os.replace(part, path)
+    finally:
+        part.unlink(missing_ok=True)
+    return got
+
+
+def _put(out: BinaryIO | None, s: str, h=None) -> None:
+    """``s`` written to ``out`` as UTF-8 and hashed into ``h``, each where given, :data:`_HASH_CHUNK` characters at a time."""
+    for k in range(0, len(s), _HASH_CHUNK):
+        b = s[k:k + _HASH_CHUNK].encode()
+        if h is not None:
+            h.update(b)
+        if out is not None:
+            out.write(b)
+
+
+def _write_netlist(low: IL.Lowering, out: BinaryIO | None = None) -> tuple[str, int]:
+    """The unit's netlist (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.netlist_pieces`), each piece hashed and
+    written to ``out`` where given, and dropped before the next is rendered: its ``unit_sha256`` (`Lowering.sha256_after`) and
+    its lines."""
+    h, lines = hashlib.sha256(), 0
+    for piece in IL.netlist_pieces(low.layout, low.name):
+        _put(out, piece, h)
+        lines += piece.count("\n")
+        del piece
+    return low.sha256_after(h), lines
+
+
+def _file_digests(path: Path, head: str) -> dict:
+    """The circuit file's pin and class (:func:`digest` and :func:`class_digest` of its text) in one pass over its bytes,
+    ``head`` its format line and META (`compose`'s with ``out``)."""
+    i = head.index("\n") + 1
+    meta = {k: v for k, v in json.loads(head[i + 5:-1]).items() if k not in BINDING_KEYS}
+    h_file, h_class = hashlib.sha512(), _sha512(itertools.chain([head[:i], "META "], _COMPACT.iterencode(meta)))
+    skip, at = len(head.encode()) - 1, 0     # the class reads the file from the newline that ends META
+    with open(path, "rb") as f, ThreadPoolExecutor(1) as pool:
+        while b := f.read(_HASH_CHUNK):
+            job = pool.submit(h_file.update, b)
+            if at + len(b) > skip:
+                h_class.update(memoryview(b)[max(0, skip - at):])
+            at += len(b)
+            job.result()
+    return {"sha512": h_file.hexdigest(), "class": h_class.hexdigest()}
 
 
 def _expanded(lay: IL.LoweredUnit, name: str) -> str:
@@ -985,7 +1081,7 @@ def public_file(head: dict, public: bytes) -> bytes:
     return line.encode() + b"\n" + public
 
 
-def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
+def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
           public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None,
@@ -1026,9 +1122,12 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     (``--identifier F``).
 
     ``digests`` and ``meta``: ``text``'s (:func:`digest`, :func:`class_digest`; :func:`meta_of`), from a caller that writes many
-    statements of one circuit (`class_statement.UnitStager`); else computed here."""
+    statements of one circuit (`class_statement.UnitStager`), whose ``text`` may then be None (a circuit it never holds);
+    else computed here."""
     from verity.ml.circuits.codec import jcs_domain_error
 
+    if text is None and (digests is None or meta is None):
+        raise ValueError("write: without the circuit's text, give its digests and META")
     if identifier is not None:
         bad = jcs_domain_error(identifier, "identifier") if isinstance(identifier, dict) else "identifier: not a JSON object"
         if bad:
