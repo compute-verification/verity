@@ -125,7 +125,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Sequence
 
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
                                         sha512_row_seg_word_digest, sha512_row_v2_digest)
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
@@ -151,13 +151,15 @@ CAP_CHUNKS = 2
 #: a cap-rows or cap-chunks row's words, its elements then zeros: one whole SHA-512 block
 CAP_ROW_WORDS = 64
 #: each row's schema id, which a registration domain binds with the row's word count (`ROW_WORDS`, at depth k) and role
-SCHEMAS = {"bf16": "pouw/row-bf16/v1", "fp32": "pouw/row-fp32/v1", "nvfp4-p": "pouw/row-nvfp4-p/v1",
-           "fp8-p": "pouw/row-fp8-p/v1", "fp8-pi": "pouw/row-fp8-pi/v1", "ok": "pouw/row-ok/v1", "tile": "pouw/tile-h0/v1", "sd": "pouw/row-sd/v1",
-           "cap-word": "pouw/cap-word/v1", "cap-flags": "pouw/cap-flags/v1", "cap-rows": "pouw/cap-rows/v1",
-           "cap-chunks": "pouw/cap-chunks/v1", "cap-sums": "pouw/cap-sums/v1",
-           "pc8-head": "pouw/row-pc8-head/v1", "pc8-carry": "pouw/row-pc8-carry/v1", "fp8-codes": "pouw/row-fp8-codes/v1",
-           "pc4-head": "pouw/row-pc4-head/v1", "pc4-carry": "pouw/row-pc4-carry/v1",
-           "nvfp4-codes": "pouw/row-nvfp4-codes/v1"}
+SCHEMAS = {"bf16": domains.POUW_ROW_BF16, "fp32": domains.POUW_ROW_FP32, "nvfp4-p": domains.POUW_ROW_NVFP4_P,
+           "fp8-p": domains.POUW_ROW_FP8_P, "fp8-pi": domains.POUW_ROW_FP8_PI, "ok": domains.POUW_ROW_OK,
+           "tile": domains.POUW_TILE_H0, "sd": domains.POUW_ROW_SD,
+           "cap-word": domains.POUW_CAP_WORD, "cap-flags": domains.POUW_CAP_FLAGS, "cap-rows": domains.POUW_CAP_ROWS,
+           "cap-chunks": domains.POUW_CAP_CHUNKS, "cap-sums": domains.POUW_CAP_SUMS,
+           "pc8-head": domains.POUW_ROW_PC8_HEAD, "pc8-carry": domains.POUW_ROW_PC8_CARRY,
+           "fp8-codes": domains.POUW_ROW_FP8_CODES,
+           "pc4-head": domains.POUW_ROW_PC4_HEAD, "pc4-carry": domains.POUW_ROW_PC4_CARRY,
+           "nvfp4-codes": domains.POUW_ROW_NVFP4_CODES}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "fp8-pi": lambda k: k // 2 + P_WORDS + INDEX_WORDS, "ok": lambda k: 1, "tile": lambda k: 16, "sd": lambda k: k // 16,
              "cap-word": lambda k: 4, "cap-flags": lambda k: -(-k // 512) + 5, "cap-rows": lambda k: CAP_ROW_WORDS,

@@ -11,7 +11,9 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 * `checks`: `audit_record`'s checks, each with Python's detail: the draw's and the proved units' always, and the receipt's,
   the served draw's, the sessions' roots' and the registered roots' when they fail;
 * `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
-  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input. Python writes `delta` as a float: here it is the double nearest
+  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input. `checks` and `ownRegistered` run linear in the
+  registration's roots: each is compiled as its form on `lastRoots`, a hash map of `byPort` (`checks_eq_checksFast`,
+  `ownRegistered_eq_ownRegisteredFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
   the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every law
   (`Bound.boundOf`).
 -/
@@ -20,6 +22,7 @@ import SampledProofs.Draw
 import SampledProofs.PyJson
 import Flock.WindowRecord
 import CoreProtocol.Profile
+import Std.Data.HashMap
 
 namespace SampledProofs.Record
 
@@ -120,6 +123,100 @@ def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Arra
         ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
   return out
 
+/-- `byPort` as a hash map, port to its last root. -/
+def lastRoots (rec : Json) : Std.HashMap String Json :=
+  (match getD rec "roots" with | .arr rs => rs | _ => #[]).foldl (fun (m : Std.HashMap String Json) r => match getD r "port" with
+    | .str p => m.insert p r
+    | _ => m) {}
+
+theorem find?_byPort (rec : Json) (p : String) :
+    (byPort rec).find? (·.1 == p) = (lastRoots rec)[p]?.map (p, ·) := by
+  unfold byPort lastRoots
+  generalize (match getD rec "roots" with | .arr rs => rs | _ => #[]) = rs
+  rw [← Array.foldl_toList, ← Array.foldl_toList]
+  suffices h : ∀ (l : List Json) (acc : Array (String × Json)) (m : Std.HashMap String Json),
+      acc.find? (·.1 == p) = m[p]?.map (p, ·) →
+      (l.foldl (fun (acc : Array (String × Json)) r => match getD r "port" with
+        | .str p => (acc.filter fun (q : String × Json) => q.1 != p).push (p, r) | _ => acc) acc).find? (·.1 == p)
+        = (l.foldl (fun (m : Std.HashMap String Json) r => match getD r "port" with
+          | .str p => m.insert p r | _ => m) m)[p]?.map (p, ·) from
+    h _ _ _ (by simp)
+  intro l
+  induction l with
+  | nil => intro acc m h; simpa using h
+  | cons r l ih =>
+    intro acc m h
+    simp only [List.foldl_cons]
+    apply ih
+    split
+    · rename_i q _
+      rw [Array.find?_push, Array.find?_filter, Std.HashMap.getElem?_insert]
+      by_cases hq : q = p
+      · subst hq
+        have : (fun (a : String × Json) => decide ((a.1 != q) = true ∧ (a.1 == q) = true)) = fun _ => false := by
+          funext a; by_cases ha : a.1 = q <;> simp [ha]
+        have none : acc.find? (fun _ => false) = none := by simp
+        rw [this, none]; simp
+      · have : (fun (a : String × Json) => decide ((a.1 != q) = true ∧ (a.1 == p) = true)) = (·.1 == p) := by
+          funext a; by_cases ha : a.1 = p
+          · simp [ha, Ne.symm hq]
+          · simp [ha]
+        rw [this, h]; simp [hq]
+    · exact h
+
+theorem contains_byPort (rec : Json) (v : String) :
+    ((byPort rec).map (·.1)).contains v = (lastRoots rec).contains v := by
+  rw [Array.contains_map, Std.HashMap.contains_eq_isSome_getElem?, ← Option.isSome_map (f := (v, ·)), ← find?_byPort,
+    Array.isSome_find?]
+  congr 1; funext a; exact BEq.comm
+
+/-- `ownRegistered`, each value's test a hash lookup. -/
+def ownRegisteredFast (rec : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
+  let ports := lastRoots rec
+  let values := (registeredRoots rec).map (·.1)
+  opened.map (·.filter fun (v, _) => ports.contains v || values.contains v)
+
+@[csimp] theorem ownRegistered_eq_ownRegisteredFast : @ownRegistered = @ownRegisteredFast := by
+  funext rec opened
+  simp only [ownRegistered, ownRegisteredFast, Array.contains_append, contains_byPort]
+
+/-- `checks`, each session root's registered root a hash lookup. -/
+def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json)
+    (digest : String) (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
+    (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
+  let mut out := #[("draw", Draw.checkDrawFull draw (getD reg "population") law),
+    ("proved", Draw.checkProvedFull draw provedUnits instances)]
+  if !jeq (getD receipt "registration") (Json.str digest) then
+    out := out.push ("receipt", failed "receipt" (obj [("receipt", getD receipt "registration")]))
+  if let some s := served then
+    if sortedInts s != sortedInts units then
+      out := out.push ("served", failed "served" (obj [("served", intsJson ((sortedInts s).extract 0 16)),
+        ("drawn", intsJson (units.extract 0 16))]))
+  if let some roots := sessionRoots then
+    let registered := lastRoots reg
+    let wrong := sortStrings (roots.filterMap fun (p, r) =>
+      match registered[p]?.map (p, ·) with
+      | some (_, x) => if jeq (getD x "root") r then none else some p
+      | none => some p)
+    if roots.isEmpty || !wrong.isEmpty then
+      out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
+  if (field? reg "registered").isSome || sessionRegistered.isSome then
+    let want := registeredRoots reg
+    let opened := sessionRegistered.getD #[]
+    if !sameDict opened want then
+      let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with
+        | some (_, o) => if jeq o r then none else some v
+        | none => some v
+      out := out.push ("registered", failed "registered" (obj [
+        ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
+        ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
+        ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
+  return out
+
+@[csimp] theorem checks_eq_checksFast : @checks = @checksFast := by
+  funext reg receipt draw law units provedUnits instances digest served sessionRoots sessionRegistered
+  simp only [checks, checksFast, find?_byPort]
+
 /-- The profile's draw of the law a draw names (`audit.profile`): a work law is the stratified law at its sizes. -/
 def profileDraw (law : Json) : Option Core.Draw :=
   match getD law "law" with
@@ -149,12 +246,9 @@ def floatJson (r : Core.Ratio) : V Json := do
 /-- `SHA-512` of Python's `canonical_json`, hex. -/
 def pySha512 (j : Json) : V String := do return sha512Hex (← PyJson.canonical j).toUTF8
 
-/-- A record's canonical JSON is Python's `canonical_json`: `Flock.canon` writes it, and it holds only characters below
-0x7f, where the two write every string alike. -/
-def pyCanonical (rec : Json) : Bool :=
-  match Flock.canon rec with
-  | .ok s => s.toList.all fun c => c.toNat < 0x7f
-  | .error _ => false
+/-- A record's canonical JSON is Python's `canonical_json`: `Flock.canon` writes it, which it does for every record whose
+numbers are integers, escaping every string as `canonical_json` does. -/
+def pyCanonical (rec : Json) : Bool := (Flock.canon rec).toOption.isSome
 
 structure Input where
   registration : Json
@@ -189,7 +283,7 @@ def inputOf (j : Json) : V Input := do
   need (keys? j == some INPUT_KEYS) s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}"
   let reg := getD j "registration"
   need (reg matches .obj _) "the registration is not an object"
-  need (pyCanonical reg) "the registration holds a number that is not an integer, or a character from 0x7f on"
+  need (pyCanonical reg) "the registration holds a number that is not an integer"
   for k in ["anchors", "law", "partition", "population", "program", "protocol", "query", "roots", "scheme"] do
     need (field? reg k).isSome s!"the registration has no {k}"
   need (int? (getD reg "population")).isSome "the registration's population is not an integer"
@@ -311,7 +405,7 @@ def record (i : Input) : V Json := do
 /-! ## `Flock.canon` is `canonical_json` on records `pyCanonical` admits
 
 On such a record the two encoders write the same bytes, so the window record's digest is `SHA-512(format || 0 ||
-canonical_json(record))`; a character from 0x7f on, or a fraction, is where they part. -/
+canonical_json(record))`; a fraction is where they part. -/
 
 private def sameCanon (j : Json) : Bool :=
   let py := (PyJson.canonical j).toOption
@@ -325,8 +419,7 @@ private def PRINTABLE : String := String.ofList ((List.range 0x7f).map Char.ofNa
 #guard sameCanon (parsed "{\"format\":\"verity/registration/v2\",\"protocol\":\"verity/sampled-proofs/one-stage/v1\",\"program\":\"ab01\",\"roots\":[{\"port\":\"x\",\"root\":\"00ff\",\"leaves\":4,\"domain\":\"11\"}],\"window\":{\"kind\":\"served\",\"stream\":\"aa\",\"prover\":\"bb\"},\"previous\":null,\"law\":{\"law\":\"bernoulli\",\"p\":\"1/3\"},\"population\":12,\"anchors\":[],\"registered\":[{\"value\":\"W\",\"root\":\"cc\",\"leaves\":2,\"words\":4,\"domain\":\"dd\",\"word_bits\":32}],\"leaf_layer\":null,\"neg\":-5,\"t\":true,\"e\":{}}")
 #guard sameCanon (parsed "{\"format\":\"verity/registration/v1\",\"b\":1,\"B\":2,\"ab\":3,\"a\":4,\"_\":[[],[{}],0]}")
 #guard sameCanon (Json.mkObj [("format", Json.str "verity/registration/v1"), (PRINTABLE, Json.str PRINTABLE)])
-#guard !pyCanonical (Json.str "\x7f") && (Flock.canon (Json.str "\x7f")).toOption != (PyJson.canonical (Json.str "\x7f")).toOption
-#guard !pyCanonical (Json.str "dé")
+#guard sameCanon (Json.mkObj [("format", Json.str "verity/registration/v1"), ("\x7fé", Json.str "dé\x01😀")])
 #guard !pyCanonical (parsed "{\"p\":0.5}")
 
 end SampledProofs.Record

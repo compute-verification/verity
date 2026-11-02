@@ -35,14 +35,14 @@ from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_li
 
 
 def _spec_histogram(program) -> dict[str, int]:
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     h: dict[str, int] = {}
     for n in program.fn.body.nodes:
         if n.form in ("call", "primitive"):
-            k = _spec_id(n.fn)
+            k = descriptor_id(n.fn)
             h[k] = h.get(k, 0) + 1
         else:
-            k = f"{n.form}:{_spec_id(n.fn)}"
+            k = f"{n.form}:{descriptor_id(n.fn)}"
             h[k] = h.get(k, 0) + 1
     return dict(sorted(h.items(), key=lambda kv: (-kv[1], kv[0])))
 

@@ -7,7 +7,7 @@ import Definitions.Accounting.Compose
 `Accounting.PeriodRun.Sound` at `.pouw` is the joint period's PoUW guarantee: over PoUW's own coordinate of the coins,
 the audit accepts while the compute account did less than the work certificate `W` at price `p` (`PeriodRun.Holds`:
 `c.W ≤ r.work p ξ`) with probability at most its error. `r.work p ξ` is the device model's priced work: the compute
-account's ops of each class (`Accounting.Op`) over the period's window, each at its price, summed (`Schedule.work`). It
+account's ops of each class (`Accounting.OpClass`) over the period's window, each at its price, summed (`Schedule.work`). It
 counts ops, not time and not words.
 
 PoUW's per-period statements credit words. `Properties.Pouw.Period.H1CheckedCreditPeriod` bounds the probability that
@@ -15,9 +15,9 @@ the play accepts while its words fixed right fall below the check's credit (`cre
 words of the windows before the check's first refusal). The two differ in their unit and in what they are about:
 
 * A credited word is a committed word of the declared circuit (`Compose.isWord`), not an op. An H1 + fx1 tile's words
-  are its CP-W receipt words before `O′` (`Gates.roleOf` at `Gates.Site.receipt`), `2·(K/32)` a tile. Each checkpoint
+  are its CP-W receipt words before `O′` (`Gates.roleOf` at `Gates.Place.receipt`), `2·(K/32)` a tile. Each checkpoint
   binds one 32-wide `K`-segment of the tile's `R·C` products, `32·R·C` multiply-adds, and is split into two committed
-  words (`Gates.Site.parts`), so one word stands for `16·R·C` of them (`receiptWordMacs`). `PouwH1Tile_v1` (`K = 64`,
+  words (`Gates.Place.parts`), so one word stands for `16·R·C` of them (`receiptWordMacs`). `PouwH1Tile_v1` (`K = 64`,
   `R = 4`, `C = 8`) has 4 words of 512, its `64·32 = 2048` products (`core_check.TILES`' `tile_work`), all INT8
   multiply-adds on the integer tensor cores (`EXACT=GemmAccumulatorS8_v2{DOT=BlackwellS8ImmaDot32_v2}`). A circuit of
   several word kinds is priced at the fewest a word of any kind stands for (`Compose.minWordMacs`).
@@ -65,7 +65,7 @@ structure RealizesCreditedWords {ι : Type} {d : Device ι} {α : Type} [Fintype
 
 /-- **The tensor-core multiply-adds one committed receipt word stands for**, on an H1 + fx1 tile of `R` rows and `C`
 columns, at any `K`: a CP-W checkpoint binds one 32-wide `K`-segment of the tile's `R·C` products and is two committed
-words (`Gates.Site.parts`), so `32·R·C / 2`. `PouwH1Tile_v1`'s is `receiptWordMacs 4 8 = 512`; `PouwH1Tile_v5`'s and
+words (`Gates.Place.parts`), so `32·R·C / 2`. `PouwH1Tile_v1`'s is `receiptWordMacs 4 8 = 512`; `PouwH1Tile_v5`'s and
 `_v6`'s (v1 and v3 under J10-R's noise, with v1's receipt, so the same words credited) at a warp,
 `receiptWordMacs 32 32 = 16384`. -/
 def receiptWordMacs (R C : ℕ) : ℕ := 16 * R * C

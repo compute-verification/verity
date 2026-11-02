@@ -178,7 +178,7 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
   rw [z2, z3, z4, z5, z7, hs3, hdraw, hpart, hpi] at hsetup
   have hh : RecCoins.innerTags.hiddenOutputs = true := rfl
   have ht : RecCoins.innerTags.typed = false := rfl
-  have hi : RecCoins.innerTags.isTmpl = false := by first | rfl | decide
+  have hi : RecCoins.innerTags.isTmpl = false := by rfl
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okH hh hsetup with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc, -⟩
   · refine ⟨s, _, #[st], hset, fun h => ?_⟩
     obtain ⟨-, hreg, -⟩ := (show _ ∧ st.regions.size ≤ 1024 ∧ _ from hrange st (by simp))

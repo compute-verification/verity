@@ -729,7 +729,7 @@ column storage, whole lower labels as separators, meet in the middle through `Pâ
   `chainBand` and `chainDense`), encode-after-decode on arbitrary `C`, negative controls, and the flag;
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchiâ€“Preneel over band rows, and fail on the overwrite chain. The designer's state game
-  (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
+  (`pous_state_game.py`) agrees on dense and band rows;
 - the continuous audit's memory challengers against the Lean model (`test_pous_continuous_difftest.py`).
   `pous_continuous_model.py` transcribes the memory challenger of
   `Security/Definitions/Pous/Model/Continuous.lean` definition by definition (a test finds each one word for word
@@ -888,7 +888,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 The frozen statements (claims about a model, an ideal primitive or the model's memory challenger, which no Lean function
 computes) are in `Security/Definitions/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
 category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-audit results, the tagged keying's
-transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
+transfer, the column game's rows, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
 `InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
 `Security/Proofs/Pous/Statements.lean`, and `ContinuousComplete`, the memory challenger's completeness, with them.
 The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict`, and of the composed check
