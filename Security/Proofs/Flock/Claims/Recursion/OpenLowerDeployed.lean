@@ -258,11 +258,13 @@ def sideAtR (rd : Msg → Option FinalP) (x : Msg) (ms : List Msg) (q : OpenPiec
 /-! ## The level's shape, from the verifier's list -/
 
 /-- **The verifier's list at an inner shape with no RecSparse phase**: V\*'s statements at the inner shape's own
-`m`, `k_log` and claims (`statementsOf`), then the caps; candidate 3 has none (`candidate3_ok`). -/
+`m`, `k_log` and claims (`statementsOf`), then the later levels' caps, the link table's part where the inner shape
+names one (`linkStatements`) and level 0's cap; candidate 3 has none (`candidate3_ok`). -/
 theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : _root_.Flock.RecVStar.statements i = .ok ss) (hsp : i.sparse = none) :
-    ∃ A K n, VStar.statementsOf ⟨i.m, i.kLog, i.claims⟩ i.holo = .ok A ∧
-      VStar.levelCapStatements ⟨i.m, i.kLog, i.claims⟩ = .ok K ∧ ss = A ++ (K ++ #[.cap 0 n]) := by
+    ∃ A K L n, VStar.statementsOf ⟨i.m, i.kLog, i.claims⟩ i.holo = .ok A ∧
+      VStar.levelCapStatements ⟨i.m, i.kLog, i.claims⟩ = .ok K ∧ _root_.Flock.RecVStar.linkStatements i = .ok L ∧
+      ss = A ++ (K ++ L ++ #[.cap 0 n]) := by
   unfold _root_.Flock.RecVStar.statements at h
   dsimp only at h
   split at h
@@ -280,6 +282,7 @@ theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stm
   obtain ⟨t, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, hA, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, hC, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, hL, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, hK0, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨n, rfl⟩ := FlockC3.VStarList.capStatement_ok hK0
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
@@ -287,17 +290,18 @@ theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stm
   obtain ⟨u'', -, h⟩ := FlockC3.VStarList.eok_bind h
   cases h
   obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
-  exact ⟨A, K, n, hA, hK, by simp⟩
+  exact ⟨A, K, L, n, hA, hK, hL, by simp⟩
 
 /-- **A level statement of a public dense inner shape is its level's**: where the verifier's list at a public inner
 shape with no RecSparse phase has `.recOpen lv LANES HH n` at index `s`, it is V\*'s level `s` (`statements_eq`, the
-rest being inner parts and caps), at `fast100`'s schedule at the shape's `m`, over its two reps' queries. -/
+rest being inner parts, caps and the link table's part), at `fast100`'s schedule at the shape's `m`, over its two reps'
+queries. -/
 theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : _root_.Flock.RecVStar.statements i = .ok ss) (hsp : i.sparse = none) (hh : i.holo = false)
     {s lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
     ∃ sch, fast100 i.m = some sch ∧ lv = s ∧ LANES = 2 ^ (sch.levels[s]!).lanes ∧
       HH = (sch.levels[s]!).d - (sch.levels[s]!).cap ∧ n = 2 * (sch.levels[s]!).q := by
-  obtain ⟨A, K, n0, hA, hK, rfl⟩ := statements_dense h hsp
+  obtain ⟨A, K, L, n0, hA, hK, hL, rfl⟩ := statements_dense h hsp
   rw [hh] at hA
   obtain ⟨sch, sp, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   refine ⟨sch, FlockVBridge.Family.sched_fast100 hsch, ?_⟩
@@ -313,8 +317,7 @@ theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     rw [Array.append_assoc, Array.getElem?_append_right (Nat.le_of_not_lt h1)] at hsv
     rcases Array.mem_append.1 (Array.mem_of_getElem? hsv) with hm | hm
     · simp at hm
-    · obtain ⟨l, N, hlN⟩ := FlockC3.VStarList.caps_cap hK n0 _ hm
-      cases hlN
+    · rcases FlockC3.VStarList.tail_cases hK hL n0 _ hm with ⟨_, _, hlN⟩ | ⟨_, _, _, hlN⟩ <;> cases hlN
 
 /-- **The inner table's `m` is the inner shape's**, at a statement the reader reads: Flock's plain verifier sets the
 inner statement up as one table (`innerSetup_files`), whose `m` the setup's checks hold to the shape's
