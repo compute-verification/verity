@@ -59,8 +59,8 @@ leaves and challenge derivation), not with the expander.
   (`(1 − 0.043)^320 + 320·2^-137`) at uniform indices, from `P2RingRoundSecureWide`. The memory challenger derives its
   indices from SHA-512 (`prf/sha-512`, the premise `Hash.Assumptions.Sha512Prf`), which adds `ε_prf` at its two tests,
   so the certificate is `2^-20 + 2^-127` (`WIDE320_CLAIMS`). It bounds the window at the store's snapshot, not the
-  composed check, for which `periodHeldAt` holds at 105 reads only. No run takes it: at `k ≥ 320` the run protocol keeps
-  the 105-read certificates' `1% + 2^-128`.
+  composed check, for which `periodHeldAt` holds at 105 reads only. No run takes it: at `k ≥ 320` the run protocol
+  keeps the 105-read certificates' `1% + 2^-128`.
 - A shared mask with linear tweaks is model M2, which is not covered; the keys here are per block.
 - Neither codec is ever the default.  Its profile says so plainly (`EXPERIMENTAL`).
 """

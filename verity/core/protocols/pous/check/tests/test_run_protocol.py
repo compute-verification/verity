@@ -348,7 +348,7 @@ def test_demo_bs_certificate_agrees(certify_server) -> None:
 def test_320_reads_certify_alike(certify_server) -> None:
     """At 320 challenges, at the registered point's `2^19` labels and at Demo B's, the Lean and the Python publish
     `⌊ρ·|C|⌋` at the 105-read certificates' `1% + 2^-128` (`P2SlackFamilyUncond`, `periodHeldAt`), with no gap:
-    `ObligationWide320`'s `2^-20` is no run's certificate."""
+    `ObligationWide320`'s `2^-20 + 2^-127` is no run's certificate."""
     for line, s_bits, theorem in (
             (_certify_line(P2.POINT[:2], 1 << 16, 8, 320, period.LIMIT_NS), 8_169_621_180,
              "Pous.SecurityProofs.P2SlackFamilyUncond"),

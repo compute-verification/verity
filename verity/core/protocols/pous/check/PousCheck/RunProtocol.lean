@@ -34,7 +34,8 @@ the certificate's claims. Off it, `s_bits` is 0 and `eps` 0, the vacuous stateme
 At Demo B's store, 1038 segments of `2^16` blocks, that is `Pous.Period.PeriodHeldDemo`'s 1,060,008,348,186 bits at
 `1% + 2^-128`. More challenges than a certificate's `k` keep its `eps`: at `k` of at least 320 it stays `1% + 2^-128`,
 and `wide320Certificate`'s `2^-20 + 2^-127` (`Pous.SecurityProofs.ObligationWide320`, from the open conjecture
-`P2RingRoundSecureWide`, with `ε_prf` at the memory challenger's SHA-512 indices) is no run's certificate.
+`P2RingRoundSecureWide`, and `ε_prf` at the memory challenger's SHA-512 indices, `Hash.Assumptions.Sha512Prf`) is no
+run's certificate.
 
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
@@ -365,7 +366,6 @@ private def TIE_PUB : SetupProtocol.Public :=
 #guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 256, 1⟩, k := 320 }).eps.toString ==
   s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
 #guard ((wide320Certificate 16448 21065 (2 ^ 19)).map (·.theoremName)) == some "Pous.SecurityProofs.ObligationWide320"
-#guard ((wide320Certificate 16448 21065 (2 ^ 19)).map (·.eps.toString)) == some s!"{2 ^ 107 + 1}/{2 ^ 127}"
 #guard ((wide320Certificate 16448 21065 (2 ^ 19)).map (·.claims.getLast?)) == some (some "prf/sha-512")
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 

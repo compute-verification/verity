@@ -34,8 +34,8 @@ DIR``).
    (`served_case.pous_answer`, `period.answer`): the tie, the run's
    check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
-   105 (`p2.wide320_certificate`'s ``2^-20 + 2^-127`` is no run's certificate). The check takes about 2.3 minutes at the
-   registered point at 105 challenges or 320: the tie is its cost, not the rounds.
+   105 (`p2.wide320_certificate`'s ``2^-20 + 2^-127`` is no run's certificate). The check takes about 2.3 minutes at
+   the registered point at 105 challenges or 320: the tie is its cost, not the rounds.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
