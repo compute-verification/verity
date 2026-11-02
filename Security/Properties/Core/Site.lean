@@ -210,4 +210,42 @@ def RefusedAt : Prop :=
               (Verity.Site.ofLog (log (l.take i))) (Verity.Registration.head (digests D) (composite c) (log (l.take i)))
               (regEntry l[i]) = some (refusal r)
 
+/-! ## The witnesses' instances
+
+A log the check accepts and one it refuses, hand-built, and the checks that accept everything: what the
+guarantees' honest and nontrivial witnesses (`Proofs.Properties.Core.Site`) are stated at. -/
+
+/-- Digests that name each kind of thing by one string: the genesis is `genesis`, and every entry is `entry`. -/
+def witnessDigests : Core.Site.Registration.Digests := ⟨fun _ => "sheet", fun _ => "entry", fun _ => "genesis"⟩
+
+/-- An auditor with no data sheet, no tolerance and no device. -/
+def witnessAuditor : Core.Site.Registration.Auditor := ⟨fun _ => none, ⟨0, le_refl _⟩, fun _ => none⟩
+
+/-- The empty Site, the Site of the empty log. -/
+def emptySite : Core.Site := ⟨[], [], []⟩
+
+/-- A site entry: a site, one host in it, and the host's uplink to the outside. -/
+def hostEntry : Core.Site.Entry :=
+  { locs := [{ id := "dc", kind := .site }, { id := "h0", kind := .host, parent := some "dc" }]
+    links := [{ id := "uplink", ends := ("h0", Core.Site.outside), β := 1, latency := 1 }] }
+
+/-- The honest log's one entry: `hostEntry`, following the genesis. -/
+def honestEntry : Core.Site.Registration.Entry := .site "genesis" hostEntry
+
+/-- An entry that follows no head the witnesses' logs have. -/
+def staleEntry : Core.Site.Registration.Entry := .site "stale" {}
+
+/-- A log the check accepts: `honestEntry` alone. -/
+def honestLog : Core.Site.Registration := [honestEntry]
+
+/-- A log the check refuses at its second entry: `honestEntry`, then `staleEntry`. -/
+def staleLog : Core.Site.Registration := [honestEntry, staleEntry]
+
+/-- An entry check that accepts everything: it refuses no entry. -/
+def acceptAllRefusal (_ : Core.Site.Registration.Entry) : Option Core.Site.Registration.Refusal := none
+
+/-- A log check that accepts everything: every log, with the code's Site of it. -/
+def acceptAllCheck (l : Core.Site.Registration) : Except (Nat × Core.Site.Registration.Refusal) Core.Site :=
+  .ok (Core.Site.ofLog l)
+
 end Properties.Site
