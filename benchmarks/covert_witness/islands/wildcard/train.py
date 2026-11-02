@@ -21,6 +21,9 @@ Codes (witnesses for formalism v1's cut cost a, `adamw` / `muon`):
   in every step, then each group's coordinates on a 2^q-level grid with a bf16 scale; the gradient crosses back in the
   same code with stochastic rounding (`q2b4`: 2 bits forward, 4 back; `g64`: a scale per 64 coordinates). Training sees
   only the coded state; the evaluator scores the uncoded model, and the probe windows are scored both ways.
+- `--cut B:dq2,...`: the forward codes only the update's effect h - h_frozen at B; h_frozen, θ's residual for the same
+  tokens, comes from frozen copies of the trained blocks (the receiving side recomputes it from the token's data), and
+  its products are counted and declared as the code's.
 - `--lora-rank r --lora-fix B --z-bits q`: a rank-r update whose B is r seeded orthonormal columns, so its whole effect
   on a token is r coefficients z = A·h, handed on (and their gradient back) at q bits each. `--lora-fix A` trains only
   B over a frozen random A.
@@ -34,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
 import json
 import math
 import re
@@ -248,41 +252,85 @@ class Coded(torch.autograd.Function):
         return out.to(g.dtype), None, None, None, None, None
 
 
-CUT_RE = re.compile(r"q(\d+)(?:b(\d+))?(?:g(\d+))?")
+CUT_RE = re.compile(r"(d?)q(\d+)(?:b(\d+))?(?:g(\d+))?")
 
 
-def parse_cut(spec: str, L: int, d: int) -> list[dict]:
+def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
     """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
-    as CODE = q<forward bits>[b<backward bits>][g<group>] in a randomized-DCT basis (group d unless given)."""
+    as CODE = [d]q<forward bits>[b<backward bits>][g<group>] in a randomized-DCT basis (group d unless given). With the
+    `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at B for the same
+    tokens, which the receiving side recomputes from the token's data; it needs B above the lowest trained block `low`
+    (at or below it the effect is 0)."""
     out = []
     for part in [p.strip() for p in spec.split(",") if p.strip()]:
         where, code = part.split(":")
         m = CUT_RE.fullmatch(code)
         if not m:
-            raise SystemExit(f"wildcard: --cut code {code!r} is not q<bits>[b<bits>][g<group>]")
-        bf = int(m.group(1))
-        bb = int(m.group(2) or bf)
-        group = int(m.group(3) or d)
+            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[b<bits>][g<group>]")
+        delta = m.group(1) == "d"
+        bf = int(m.group(2))
+        bb = int(m.group(3) or bf)
+        group = int(m.group(4) or d)
         if d % group or not (1 <= bf <= 16 and 1 <= bb <= 16):
             raise SystemExit(f"wildcard: --cut {part!r}: bits 1-16 and a group dividing d = {d}")
         for b in (range(1, L + 1) if where == "all" else [int(where)]):
             if not 1 <= b <= L:
                 raise SystemExit(f"wildcard: --cut boundary {b} is not in 1..{L}")
-            out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group,
+            if delta and (low is None or not 0 <= low < b):
+                raise SystemExit(f"wildcard: --cut {b}:{code} codes h - h_frozen, which needs trained blocks only, "
+                                 f"the lowest below boundary {b} (lowest trained block: {low})")
+            out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group, "delta": delta,
                         "a_fwd_bits": code_bits(d, bf, group), "a_bwd_bits": code_bits(d, bb, group)})
     return sorted(out, key=lambda c: c["boundary"])
 
 
-def install_cuts(net, cuts: list[dict]):
+def frozen_blocks(net, theta: dict, lo: int, hi: int) -> dict:
+    """Copies of blocks lo..hi-1 holding θ's tensors exactly, without hooks or gradients (the counter takes an exact
+    copy of a θ tensor for θ's own weight, so their products are frozen work)."""
+    out = {}
+    for j in range(lo, hi):
+        blk = copy.deepcopy(net.inner.blocks[j])
+        for m in blk.modules():
+            m._forward_hooks.clear()
+            m._forward_pre_hooks.clear()
+        for pname, p in blk.named_parameters():
+            p.requires_grad_(False)
+            p.data = theta[f"blocks.{j}.{pname}"].to(p.device).clone()
+        out[j] = blk
+    return out
+
+
+def frozen_flops(rec: dict, lo: int, hi: int) -> int:
+    """Forward FLOPs per token of blocks lo..hi-1."""
+    names = tuple(f"blocks.{j}." for j in range(lo, hi))
+    mm = sum(n["flops"] for n in prepare.positions(rec) if n["param"].startswith(names))
+    return mm + (hi - lo) * prepare.attention_flops(rec, prepare.EVAL_CTX)
+
+
+def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | None = None):
     """Each boundary's code as a forward hook on the block below it (boundary B: block B - 1's output), active while
-    CUT["on"]."""
+    CUT["on"]. A delta code's hook adds h_frozen back after coding h - h_frozen; h_frozen is carried up from block
+    `low`'s input through frozen copies of blocks low.. (frozen_blocks)."""
+    by_block = {c["boundary"] - 1: c for c in cuts}
+    top = max((c["boundary"] for c in cuts if c["delta"]), default=None)
+    frozen = frozen_blocks(net, theta, low, top) if top is not None else {}
+    state = {}
     handles = []
-    for c in cuts:
-        def hook(m, inp, out, c=c):
+    for j in sorted(set(by_block) | set(frozen)):
+        def hook(m, inp, out, j=j, c=by_block.get(j)):
             if not CUT["on"]:
                 return out
-            return Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], 1000 + c["boundary"], True)
-        handles.append(net.inner.blocks[c["boundary"] - 1].register_forward_hook(hook))
+            f = None
+            if j in frozen:
+                with torch.no_grad():
+                    f = state[j + 1] = frozen[j](state.pop(j) if j > low else inp[0].detach(), inp[1], inp[2])
+            if c is None:
+                return out
+            seed = 1000 + c["boundary"]
+            if c["delta"]:
+                return f + Coded.apply(out - f, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True)
+            return Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True)
+        handles.append(net.inner.blocks[j].register_forward_hook(hook))
     return handles
 
 
@@ -380,15 +428,18 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
 
     tokens = a.batch * prepare.EVAL_CTX
     d = rec["config"]["d_model"]
-    cuts = parse_cut(a.cut, rec["config"]["n_layer"], d) if a.cut else []
     low = lowest_block(tuned)
+    cuts = parse_cut(a.cut, rec["config"]["n_layer"], d, low) if a.cut else []
     crossed = [c for c in cuts if low is not None and low < c["boundary"]]
-    code_fwd = 4 * d * d * len(cuts)
+    top_delta = max((c["boundary"] for c in cuts if c["delta"]), default=None)
+    refresh = frozen_flops(rec, low, top_delta) if top_delta is not None else 0
+    code_fwd = 4 * d * d * len(cuts) + refresh
     code_train = code_fwd + 4 * d * d * len(crossed)
     if cuts:
-        install_cuts(net, cuts)
+        install_cuts(net, cuts, theta, low)
         print(json.dumps({"cuts": cuts, "gradient_crosses": [c["boundary"] for c in crossed],
-                          "code_flops_per_token": {"forward": code_fwd, "train": code_train}}), flush=True)
+                          "code_flops_per_token": {"forward": code_fwd, "train": code_train,
+                                                   "frozen_recompute": refresh}}), flush=True)
     cut_probe = probe_rows(rec, a)[: a.cut_probe_rows] if cuts and a.cut_probe_rows else None
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
     per_step += code_train * tokens
@@ -840,7 +891,7 @@ def main() -> int:
     ap.add_argument("--lora-fix", default="", choices=("", "A", "B"),
                     help="freeze the adapters' A (random) or B (seeded orthonormal, A = 0 trained)")
     ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
-    ap.add_argument("--cut", default="", help="B:q<bits>[b<bits>][g<group>],...: block boundaries handed on coded (parse_cut)")
+    ap.add_argument("--cut", default="", help="B:[d]q<bits>[b<bits>][g<group>],...: block boundaries handed on coded (parse_cut)")
     ap.add_argument("--cut-probe-rows", type=int, default=128,
                     help="with --cut: probe windows scored coded and uncoded at theta and at the end (0: none)")
     ap.add_argument("--lr", type=float, default=1e-3)
