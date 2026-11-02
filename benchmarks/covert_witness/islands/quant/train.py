@@ -9,7 +9,8 @@ Modes:
 - `qat`: every trained matrix's weight is θ + Q(V) in each step's forward, Q a sign, ternary or k-bit quantizer (scaled
   by the mean |V| of a tensor, row or group) of a latent delta V that only the optimizer touches, through a
   straight-through gradient; so every step's weights, and the trained model, are exactly a CWQUAN1 code. `--qat sparse`
-  is ternary on the `--qat-keep` share of each group with the largest |V| (scaled by their mean |V|), the rest zero.
+  is ternary on the `--qat-keep` share of each group with the largest |V| (scaled by their mean |V|), the rest zero; a
+  sparse submission over its class's E cap is re-cut from its latent at a smaller share until it fits (`cut_to_keep`).
   `--qat fp` trains the weights unquantized, as ptq does;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
@@ -639,7 +640,8 @@ def main() -> int:
                     del model_v
             g += 1
         results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": ema, "qarrays": qarrays,
-                        "rest": {n: params[n].detach().cpu().clone() for n in names if n not in qarrays}})
+                        "rest": {n: params[n].detach().cpu().clone() for n in names if n not in qarrays},
+                        "latent": {n: v.cpu() for n, v in latent.items()} if x.qat == "sparse" else None})
         del latent, opt_of, muon, adam, opts
     t_train = time.perf_counter() - t0
     if a.mode == "qat":
@@ -668,6 +670,14 @@ def variant_note(v: str, qblob: bytes | None, q_bytes: int, h_bits: float, ok: b
     return out
 
 
+def code_blob(a, qarrays: dict, rest: dict, theta) -> tuple[bytes, int]:
+    """A QAT arm's CWQUAN1 (its codes, the rest of its trained tensors in full) at `--xz`, and its size at preset 1."""
+    entries = {n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
+    entries |= {n: {"kind": "full", "t": t} for n, t in rest.items()}
+    qblob = (encode_quan if a.emit == "quan" else qf.encode)(entries, theta)
+    return (qf.recompress(qblob) if a.xz == "9e" else qblob), len(qblob)
+
+
 def finish_qat(a, results: list[dict], theta, names, cycle, dev):
     """Each arm's CWQUAN1 note (an fp arm's: `--variants` of its final weights); the submission is the quantized arm with
     the least final training loss (any arm, if none is quantized), as encode_full, or with `--emit quan` a quantized
@@ -687,12 +697,15 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
                     blob = prepare.encode_full(m)
                 del m
             continue
-        entries = {n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
-        entries |= {n: {"kind": "full", "t": t} for n, t in r["rest"].items()}
-        qblob = (encode_quan if a.emit == "quan" else qf.encode)(entries, theta)
-        xz1_bytes = len(qblob)
-        if a.xz == "9e":
-            qblob = qf.recompress(qblob)
+        qblob, xz1_bytes = code_blob(a, qarrays, r["rest"], theta)
+        # a sparse submission over its class's cap is cut from its latent, its kept share scaled by cap / |E| (at least 3%
+        # smaller) at a time
+        cap, keep = prepare.CLASSES[a.klass]["max_e_bytes"], r["x"].qat_keep
+        while r is best and a.emit == "quan" and cap and r["latent"] and len(qblob) > cap and keep > 1e-5:
+            keep *= min(0.97, cap / len(qblob))
+            qarrays = {n: qat_quant(v.to(dev), "sparse", r["x"].qat_group, r["x"].qat_mult, keep)
+                       for n, v in r["latent"].items()}
+            qblob, xz1_bytes = code_blob(a, qarrays, r["rest"], theta)
         rebuilt = qf.decode(theta, qblob, dev)
         trained = {n: (theta[n].to(dev).float() + q.value()).to(theta[n].dtype).cpu() for n, q in qarrays.items()}
         trained |= {n: t.to(theta[n].dtype) for n, t in r["rest"].items()}
@@ -704,6 +717,7 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
         notes.append(variant_note(f"qat-{r['x'].qat}", qblob, len(qblob), h_bits, ok, 0.0, n_params, t1, arm=r["k"],
                                   spec=getattr(r["x"], "arm", ""), steps=r["steps"], final_loss_ema=r["loss"],
                                   nonzero_share=nonzero / max(1, q_n), xz=a.xz, q_bytes_xz1=xz1_bytes,
+                                  cut_to_keep=keep if keep != r["x"].qat_keep else None,
                                   where="submission" if r is best else "arm"))
         if r is best:
             blob = qblob if a.emit == "quan" else prepare.encode_full(trained)
