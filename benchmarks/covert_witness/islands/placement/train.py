@@ -13,11 +13,10 @@ for every placement, picked by regexes over θ's tensor names:
 A regex fully matches a tensor's name without `.weight`; `{top}` and `{top2}` in it name the last and second-to-last block
 indices. φ is 0 when every changed matrix sits at one (layer, stage) and the other changes are 0-FLOP gains at or after it.
 
-The meter takes the lowest trained node of an embedding adapter to be the head (its lookup node has no FLOPs), so it would
-leave the backward through every block unpriced; with gradient through the lookup this trainer logs that backward as
-`extra` FLOPs each step.
+The harness writes the first E encoded in each 5% of the run as a checkpoint (the cap search's encodes take the first),
+so the trainer encodes in the middle of every later 5% of its steps.
 
-    python guard.py islands/placement/train.py --class e100kb --start s100 --out SUB --full '.*norm' --norm-lr 3e-3
+    python launch.py e100kb s100 --note 'norms-all ...' -- --class e100kb --full '.*norm' --norm-lr 3e-3
 """
 from __future__ import annotations
 
@@ -43,24 +42,6 @@ def names_matching(params: dict, pattern: str | None, L: int) -> list[str]:
         return []
     rx = re.compile(pattern.replace("{top}", str(L - 1)).replace("{top2}", str(L - 2)))
     return sorted(n for n in params if rx.fullmatch(n.removesuffix(".weight")))
-
-
-def unpriced_per_token(rec: dict, trainable: dict) -> int:
-    """Backward FLOPs per token below the meter's lowest trained node and down to the lookup, when the embedding has an
-    adapter, plus the lookup adapter's own forward and backward (6 r d)."""
-    adapters = trainable.get("adapters", {})
-    if "embed" not in adapters:
-        return 0
-    nodes = prepare.positions(rec)
-    full = set(trainable.get("full", []))
-    trained = [(n["layer"], n["stage"]) for n in nodes
-               if n["param"] in full or (n["param"] in adapters and n["flops"])]
-    first = min(trained)
-    L = rec["config"]["n_layer"]
-    attn = prepare.attention_flops(rec, prepare.EVAL_CTX)
-    missing = sum(n["flops"] for n in nodes if (n["layer"], n["stage"]) < first)
-    missing += sum(2 * attn for layer in range(1, L + 1) if (layer, 1) < first)
-    return missing + 6 * int(adapters["embed"]) * rec["config"]["d_model"]
 
 
 def lm_logits(inner, idx: torch.Tensor, embed: torch.Tensor, head_only: bool = False) -> torch.Tensor:
@@ -102,7 +83,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     ap.add_argument("--max-steps", type=int, default=0, help="a CPU smoke's cap")
-    ap.add_argument("--time-cap", type=float, default=900.0,
+    ap.add_argument("--time-cap", type=float, default=2700.0,
                     help="seconds since train.py started by which the step loop must end, under GPU_SECONDS_CAP with room "
                          "for loading, compiling and the submission; fewer steps when step 10-40's rate says so (0: none)")
     a = ap.parse_args()
@@ -186,8 +167,7 @@ def main() -> int:
     trainable = {"full": full, "adapters": {n: rank for n in lora} | ({"embed": embed_rank} if embed_rank else {})}
     tokens = a.batch * prepare.EVAL_CTX
     head_only = a.embed_grad == "head"
-    extra = 0 if head_only else unpriced_per_token(rec, trainable) * tokens
-    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
+    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
     if a.max_steps:
         n_steps = min(n_steps, a.max_steps)
@@ -201,11 +181,11 @@ def main() -> int:
         logits_of = fwd
     trained_params = [p for grp in opt.param_groups for p in grp["params"]]
     steps, snaps = [], []
-    marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
+    marks = {round(n_steps * (k + 0.5) / 20) for k in range(1, 19)}
     print(json.dumps({"class": a.klass, "steps": n_steps, "full": full, "lora": lora, "rank": rank,
                       "embed_rank": embed_rank, "fmt": fmt, "E_bytes": size, "phi": structure["phi"],
-                      "lowest_updated_layer": structure["lowest_updated_layer"], "flops_per_step": per_step,
-                      "extra_per_step": extra}), flush=True)
+                      "lowest_updated_layer": structure["lowest_updated_layer"], "flops_per_step": per_step}),
+          flush=True)
     t0 = time.perf_counter()
     lrs = [grp["lr"] for grp in opt.param_groups]
     step = 0
@@ -220,7 +200,7 @@ def main() -> int:
             if fit < n_steps:
                 print(json.dumps({"steps": fit, "was": n_steps, "why": f"time cap {a.time_cap} s"}), flush=True)
                 n_steps = fit
-                marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
+                marks = {round(n_steps * (k + 0.5) / 20) for k in range(1, 19)}
         frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
         for grp, lr in zip(opt.param_groups, lrs):
             grp["lr"] = lr * frac
@@ -235,8 +215,6 @@ def main() -> int:
         opt.step()
         opt.zero_grad(set_to_none=True)
         steps.append({"op": "train", "tokens": tokens})
-        if extra:
-            steps.append({"op": "extra", "flops": extra})
         if (step + 1) % 100 == 0 or step + 1 == n_steps:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
