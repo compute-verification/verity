@@ -1,5 +1,11 @@
 """The fixed side of the covert-witness speedrun: the registered starts, the decoders, the training-FLOP meter, the witness
-checker, the classes' caps and `evaluate_bpb`. A candidate's `train.py` imports it and never edits it; `evaluate.py` runs it.
+checker, the classes' caps, `evaluate_bpb` and the `Scorer`. A candidate's `train.py` imports it and never edits it;
+`evaluate.py` and the harness run it.
+
+A search score (`Scorer.search`) is taken after the weights are hashed: a slice of the search pool drawn from a fresh
+coin and the digest (`draw_slice`), scored paired with the start (the start's whole-pool bpb plus the candidate's minus
+the start's on the slice). `Scorer.seal` writes the promotion set's score under the digest, which only `sealed.py`
+reads. In final mode (`CW_FINAL=1`) every score is the final set's, and the sealed start (`register_pythia`) loads.
 
 A candidate starts from a registered start θ (`load_start`), trains within its class's caps and the fixed budget, and submits
 (`submit`):
@@ -35,13 +41,26 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from sealed import SEALED, value_path
 from starts_store import STARTS
 
 #: the fixed side's version, in every witness record (README.md)
 VERSION = "2.1"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
-HELD_OUT = ROOT / "eval"
+#: the held-out sets (`data.py`): a search evaluation scores a fresh slice of the pool; the promotion and final sets are
+#: sealed (`sealed.py`)
+SEARCH_POOL, PROMOTION, FINAL = "search-pool", "promotion", "final"
+HELD_OUT = ROOT / "heldout"
+SET_DIRS = {SEARCH_POOL: HELD_OUT / SEARCH_POOL, PROMOTION: SEALED / "heldout" / PROMOTION, FINAL: SEALED / "heldout" / FINAL}
+#: a search slice's GPT-2 tokens, whole windows of the pool's stream (`draw_slice`), and the promotion set's that a sealed
+#: value scores (its first windows): with the start's scores kept, a checkpoint costs about one 2^21-token evaluation
+SLICE_TOKENS = 2 ** 20
+PROMOTION_TOKENS = 2 ** 20
+#: what a candidate's train.py may not read (the harness's audit hook): the held-out sets, the sealed side, and v2.0's sets
+UNREADABLE = (HELD_OUT, SEALED, ROOT / "eval")
+#: final scoring (the scorer's, after the search): the harness scores the final set, and the sealed start loads
+FINAL_MODE = os.environ.get("CW_FINAL") == "1"
 DEVICE = os.environ.get("CW_DEVICE", "cuda")
 EVAL_CTX = 1024
 #: about 10 GPU-minutes of m's dense AdamW at its measured 1.49e14 FLOP/s (learning_frontier, RTX PRO 6000)
@@ -61,7 +80,9 @@ CLASSES = {
 }
 MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWSEED1\n": "seedlog"}
 DTYPES = {"bf16": torch.bfloat16, "f16": torch.float16, "f32": torch.float32}
-EOT = {"gpt2": 50256, "smollm2": 0}
+EOT = {"gpt2": 50256, "pythia": 0}
+PYTHIA_REPO = "EleutherAI/pythia-160m"
+START_NAME = re.compile(r"^[a-z0-9_-]+$")
 
 
 # ---- starts ------------------------------------------------------------------------------------------------------------
@@ -76,10 +97,11 @@ def digest(theta: dict[str, torch.Tensor]) -> str:
     return h.hexdigest()
 
 
-def register_start(name: str, theta: dict[str, torch.Tensor], config: dict, tokenizer: str, provenance: dict) -> dict:
+def register_start(name: str, theta: dict[str, torch.Tensor], config: dict, tokenizer: str, provenance: dict,
+                   root: Path = STARTS) -> dict:
     from safetensors.torch import save_file
 
-    d = STARTS / name
+    d = root / name
     d.mkdir(parents=True, exist_ok=True)
     save_file({k: v.contiguous() for k, v in theta.items()}, str(d / "theta.safetensors.tmp"))
     (d / "theta.safetensors.tmp").rename(d / "theta.safetensors")
@@ -90,14 +112,24 @@ def register_start(name: str, theta: dict[str, torch.Tensor], config: dict, toke
     return rec
 
 
+def start_dir(name: str) -> Path:
+    """A registered start's directory: STARTS's, or in final mode the sealed start's."""
+    if not START_NAME.match(name):
+        raise SystemExit(f"prepare: {name!r} is not a start name")
+    for d in (STARTS, *([SEALED / "starts"] if FINAL_MODE else [])):
+        if (d / name / "start.json").is_file():
+            return d / name
+    raise SystemExit(f"prepare: no start {name} in {STARTS} (install them with `python3 starts_store.py install --keep`)")
+
+
 def start_record(name: str) -> dict:
-    return json.loads((STARTS / name / "start.json").read_text())
+    return json.loads((start_dir(name) / "start.json").read_text())
 
 
 def load_theta(name: str, check: bool = True) -> dict[str, torch.Tensor]:
     from safetensors.torch import load_file
 
-    theta = load_file(str(STARTS / name / "theta.safetensors"))
+    theta = load_file(str(start_dir(name) / "theta.safetensors"))
     if check and digest(theta) != start_record(name)["digest"]:
         raise SystemExit(f"prepare: start {name}'s weights do not match its registered digest")
     return theta
@@ -113,14 +145,15 @@ class Net(torch.nn.Module):
             from model import LM, Size
 
             self.inner = LM(Size(config["name"], config["d_model"], config["n_layer"], config["n_head"], config["d_ff"]))
-            self.prefix = "inner."
-        else:
-            from transformers import LlamaConfig, LlamaForCausalLM
+        elif config["family"] == "hf-neox":
+            from transformers import GPTNeoXConfig, GPTNeoXForCausalLM
 
-            cfg = LlamaConfig(**config["hf"])
+            cfg = GPTNeoXConfig(**config["hf"])
             cfg._attn_implementation = "sdpa"
-            self.inner = LlamaForCausalLM(cfg)
-            self.prefix = "inner."
+            self.inner = GPTNeoXForCausalLM(cfg)
+        else:
+            raise SystemExit(f"prepare: no architecture for family {config['family']!r}")
+        self.prefix = "inner."
 
     def logits(self, idx: torch.Tensor) -> torch.Tensor:
         if self.config["family"] == "lf":
@@ -155,27 +188,37 @@ def load_start(name: str, device: str = DEVICE) -> tuple[Net, dict, dict[str, to
     return net, rec, theta
 
 
-def register_smollm2(name: str = "smollm2") -> dict:
-    """SmolLM2-135M from the hub at its current revision (recorded), its weights as stored, the tied head dropped."""
+def register_pythia(name: str = "pythia160m") -> dict:
+    """The sealed start: Pythia-160M from the hub at its current revision (recorded), its weights cast to fp32 (exact),
+    the checkpoint's buffers dropped, into SEALED/starts, which loads only in final mode. It trained on the Pile, so the
+    held-out text is a domain shift for it, and its architecture (GPT-NeoX: biases, a parallel residual, an untied head)
+    is not the search's."""
     from huggingface_hub import HfApi, snapshot_download
-    from safetensors.torch import load_file
 
-    repo = "HuggingFaceTB/SmolLM2-135M"
-    sha = HfApi().model_info(repo).sha
-    d = Path(snapshot_download(repo, revision=sha, allow_patterns=["*.json", "*.safetensors"]))
+    sha = HfApi().model_info(PYTHIA_REPO).sha
+    d = Path(snapshot_download(PYTHIA_REPO, revision=sha, allow_patterns=["config.json", "*.safetensors", "*.bin"]))
     hf = json.loads((d / "config.json").read_text())
-    config = {"family": "hf-llama", "name": name, "d_model": hf["hidden_size"], "n_layer": hf["num_hidden_layers"],
+    config = {"family": "hf-neox", "name": name, "d_model": hf["hidden_size"], "n_layer": hf["num_hidden_layers"],
               "n_head": hf["num_attention_heads"], "d_ff": hf["intermediate_size"], "vocab": hf["vocab_size"],
-              "ctx": EVAL_CTX, "tied": bool(hf.get("tie_word_embeddings", True)), "hf": hf}
-    raw = load_file(str(d / "model.safetensors"))
+              "ctx": EVAL_CTX, "tied": bool(hf.get("tie_word_embeddings", False)), "hf": hf}
+    if (d / "model.safetensors").is_file():
+        from safetensors.torch import load_file
+
+        raw, source = load_file(str(d / "model.safetensors")), "model.safetensors"
+    else:
+        raw, source = torch.load(d / "pytorch_model.bin", map_location="cpu", weights_only=True), "pytorch_model.bin"
     with torch.device("cpu"):
         net = Net(config)
     names = set(net.params())
-    theta = {k: v for k, v in raw.items() if k in names}
-    if set(theta) != names:
-        raise SystemExit(f"prepare: SmolLM2's file lacks {sorted(names - set(theta))[:4]}")
-    return register_start(name, theta, config, "smollm2", {"repo": repo, "revision": sha,
-                                                           "dropped": sorted(set(raw) - names)})
+    for old, new in (("embed_out.weight", "lm_head.weight"), ("lm_head.weight", "embed_out.weight")):
+        if new in names and new not in raw and old in raw:
+            raw[new] = raw.pop(old)
+    if not names <= set(raw):
+        raise SystemExit(f"prepare: Pythia's checkpoint lacks {sorted(names - set(raw))[:4]}")
+    theta = {k: raw[k].float() for k in names}
+    return register_start(name, theta, config, "pythia", {
+        "repo": PYTHIA_REPO, "revision": sha, "file": source, "stored_dtypes": sorted({str(raw[k].dtype) for k in names}),
+        "cast": "float32 (exact)", "dropped": sorted(set(raw) - names)}, root=SEALED / "starts")
 
 
 # ---- data --------------------------------------------------------------------------------------------------------------
@@ -184,10 +227,10 @@ class TrainData:
     """The start's tokenizer's training stream cut into ctx + 1 token windows at stride ctx, permuted by `seed`.
 
     gpt2: learning_frontier's shards 000-002 (the lf starts read the first 8 tokens per parameter of its seed-0 order);
-    smollm2: shard 000's documents (`data.py`)."""
+    pythia: shard 000's documents (`data.py`)."""
 
     def __init__(self, tokenizer: str, seed: int = 1, ctx: int = EVAL_CTX):
-        path = LF_CORPUS / "train.bin" if tokenizer == "gpt2" else ROOT / "train" / "smollm2.bin"
+        path = LF_CORPUS / "train.bin" if tokenizer == "gpt2" else ROOT / "train" / f"{tokenizer}.bin"
         self.tokens = np.memmap(path, dtype=np.uint16, mode="r")
         self.ctx = ctx
         self.order = np.random.default_rng(seed).permutation((len(self.tokens) - 1) // ctx)
@@ -205,31 +248,43 @@ class TrainData:
 
 # ---- positions, φ and the training-FLOP meter ----------------------------------------------------------------------
 
-LF_STAGE = {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4, "w_down": 5}
-HF_STAGE = {"input_layernorm": 0, "self_attn.q_proj": 1, "self_attn.k_proj": 1, "self_attn.v_proj": 1, "self_attn.o_proj": 2,
-            "post_attention_layernorm": 3, "mlp.gate_proj": 4, "mlp.up_proj": 4, "mlp.down_proj": 5}
+#: per family: the lookup, the head (the lookup's name when tied), the final norm's tensors, a block tensor's name (block,
+#: module) and the modules' stages. GPT-NeoX's parallel residual feeds its MLP from the block's input, not the attention's
+#: output; its MLP is placed after the attention as in the sequential order, so its φ is an upper bound. Its head is
+#: `embed_out` in transformers 4 and `lm_head` from 5 (the start is registered under the installed one's name).
+FAMILIES = {
+    "lf": {"embed": "embed", "head": "embed", "final": r"norm", "block": r"blocks\.(\d+)\.(\w+?)(?:\.weight)?",
+           "stages": {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4,
+                      "w_down": 5}},
+    "hf-neox": {"embed": r"gpt_neox\.embed_in\.weight", "head": r"(?:embed_out|lm_head)\.weight",
+                "final": r"gpt_neox\.final_layer_norm\.(?:weight|bias)",
+                "block": r"gpt_neox\.layers\.(\d+)\.(.+)\.(?:weight|bias)",
+                "stages": {"input_layernorm": 0, "attention.query_key_value": 1, "attention.dense": 2,
+                           "post_attention_layernorm": 3, "mlp.dense_h_to_4h": 4, "mlp.dense_4h_to_h": 5}},
+}
 
 
 def positions(rec: dict) -> list[dict]:
     """Every node of the forward: {param, layer, stage, flops (forward weight-matmul FLOPs per token), d_in, d_out}."""
     L = rec["config"]["n_layer"]
-    lf = rec["config"]["family"] == "lf"
-    embed = "embed" if lf else "model.embed_tokens.weight"
-    final = "norm" if lf else "model.norm.weight"
+    fam = FAMILIES[rec["config"]["family"]]
     nodes = []
     for name, (_, shape) in rec["tensors"].items():
-        if name == embed:
-            nodes.append({"param": name, "layer": 0, "stage": 0, "flops": 0, "d_in": shape[0], "d_out": shape[1]})
-            nodes.append({"param": name, "layer": L + 1, "stage": 1, "flops": 2 * shape[0] * shape[1], "d_in": shape[1],
-                          "d_out": shape[0]})
+        is_embed, is_head = re.fullmatch(fam["embed"], name), re.fullmatch(fam["head"], name)
+        if is_embed or is_head:
+            if is_embed:
+                nodes.append({"param": name, "layer": 0, "stage": 0, "flops": 0, "d_in": shape[0], "d_out": shape[1]})
+            if is_head:
+                nodes.append({"param": name, "layer": L + 1, "stage": 1, "flops": 2 * shape[0] * shape[1],
+                              "d_in": shape[1], "d_out": shape[0]})
             continue
-        if name == final:
+        if re.fullmatch(fam["final"], name):
             nodes.append({"param": name, "layer": L + 1, "stage": 0, "flops": 0, "d_in": shape[0], "d_out": shape[0]})
             continue
-        m = re.fullmatch(r"blocks\.(\d+)\.(\w+?)(?:\.weight)?" if lf else r"model\.layers\.(\d+)\.(.+)\.weight", name)
-        if not m:
+        m = re.fullmatch(fam["block"], name)
+        if not m or m.group(2) not in fam["stages"]:
             raise SystemExit(f"prepare: {name} has no position")
-        stage = (LF_STAGE if lf else HF_STAGE)[m.group(2)]
+        stage = fam["stages"][m.group(2)]
         two_d = len(shape) == 2
         nodes.append({"param": name, "layer": int(m.group(1)) + 1, "stage": stage,
                       "flops": 2 * shape[0] * shape[1] if two_d else 0,
@@ -482,38 +537,169 @@ def submit(out: Path, start: str, klass: str, blob: bytes, model: dict[str, torc
 
 # ---- evaluation --------------------------------------------------------------------------------------------------------
 
+def manifest(split: str) -> dict:
+    return json.loads((SET_DIRS[split] / "manifest.json").read_text())
+
+
 def held_out(split: str, tokenizer: str) -> tuple[np.ndarray, dict]:
-    man = json.loads((HELD_OUT / split / "manifest.json").read_text())
-    toks = np.fromfile(HELD_OUT / split / f"{tokenizer}.bin", dtype=np.uint16)
+    man = manifest(split)
+    toks = np.fromfile(SET_DIRS[split] / f"{tokenizer}.bin", dtype=np.uint16)
     if hashlib.sha256(toks.tobytes()).hexdigest() != man["tokenizers"][tokenizer]["sha256"]:
         raise SystemExit(f"prepare: the {split} set's {tokenizer} tokens do not match their manifest")
     return toks, man
 
 
-@torch.no_grad()
-def evaluate_bpb(net: Net, split: str, tokenizer: str, micro: int = 32, device: str = DEVICE) -> dict:
-    """Bits per byte of the held-out set: windows of EVAL_CTX + 1 tokens at stride EVAL_CTX over the set's stream (the last
-    one shorter), every token after the first a target, the summed negative log-likelihood over the set's UTF-8 bytes."""
-    toks, man = held_out(split, tokenizer)
-    t = torch.from_numpy(toks.astype(np.int64))
-    n = len(t)
+def windows(n: int) -> tuple[list[int], list[int]]:
+    """The evaluation windows of a stream of n tokens, by their first token: EVAL_CTX + 1 tokens at stride EVAL_CTX, every
+    token after a window's first a target (so each token after the stream's first is a target once); the full windows,
+    and the shorter last one."""
     starts = list(range(0, n - 1, EVAL_CTX))
     full = [s for s in starts if s + EVAL_CTX + 1 <= n]
-    total = torch.zeros((), dtype=torch.float64, device=device)
+    return full, starts[len(full):]
+
+
+def token_bytes(tokenizer: str) -> np.ndarray:
+    """Each GPT-2 token id's UTF-8 bytes, end-of-text 0: GPT-2's BPE is byte-level, so a document's tokens' bytes are its
+    text's (`data.py` encodes with `encode_ordinary`)."""
+    if tokenizer != "gpt2":
+        raise SystemExit(f"prepare: token bytes are GPT-2's, not {tokenizer}'s")
+    import tiktoken
+
+    enc = tiktoken.get_encoding("gpt2")
+    out = np.array([len(enc.decode_single_token_bytes(i)) for i in range(enc.n_vocab)], dtype=np.int64)
+    out[EOT["gpt2"]] = 0
+    return out
+
+
+def draw_slice(weights_digest: str, coin: str | None = None) -> dict:
+    """A fresh slice of the search pool for weights already hashed to `weights_digest`: a live coin (16 bytes from the
+    OS, drawn now), and SLICE_TOKENS / EVAL_CTX of the pool's full windows (`windows`, by index) drawn without
+    replacement by a generator seeded with sha256(coin ‖ digest). The recorded coin (hex) and the digest reproduce it."""
+    full, _ = windows(manifest(SEARCH_POOL)["tokenizers"]["gpt2"]["tokens"])
+    raw = os.urandom(16) if coin is None else bytes.fromhex(coin)
+    seed = int.from_bytes(hashlib.sha256(raw + weights_digest.encode()).digest(), "little")
+    pick = np.random.default_rng(seed).choice(len(full), size=min(SLICE_TOKENS // EVAL_CTX, len(full)), replace=False)
+    return {"coin": raw.hex(), "weights_digest": weights_digest, "windows": sorted(int(i) for i in pick)}
+
+
+@torch.no_grad()
+def window_nats(net: Net, toks: np.ndarray, starts: list[int], micro: int = 32, device: str = DEVICE) -> np.ndarray:
+    """Each window's summed negative log-likelihood of its targets, in nats (the windows of `toks` that begin at `starts`;
+    one running past the stream's end is shorter)."""
+    t = torch.from_numpy(toks.astype(np.int64))
+    out = torch.zeros(len(starts), dtype=torch.float64, device=device)
+    full = [i for i, s in enumerate(starts) if s + EVAL_CTX + 1 <= len(t)]
     net.eval()
-    for i in range(0, len(full), micro):
-        rows = torch.stack([t[s: s + EVAL_CTX + 1] for s in full[i: i + micro]]).to(device)
+    for j in range(0, len(full), micro):
+        idx = full[j: j + micro]
+        rows = torch.stack([t[starts[i]: starts[i] + EVAL_CTX + 1] for i in idx]).to(device)
         with torch.autocast(device.split(":")[0], dtype=torch.bfloat16):
             logits = net.logits(rows[:, :-1])
-        total += F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1), reduction="sum").double()
-    for s in starts[len(full):]:
-        rows = t[s:].unsqueeze(0).to(device)
+        nll = F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1), reduction="none")
+        out[torch.tensor(idx, device=device)] = nll.view(len(idx), -1).double().sum(1)
+    for i in sorted(set(range(len(starts))) - set(full)):
+        rows = t[starts[i]:].unsqueeze(0).to(device)
         with torch.autocast(device.split(":")[0], dtype=torch.bfloat16):
             logits = net.logits(rows[:, :-1])
-        total += F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1), reduction="sum").double()
-    nats = float(total)
+        out[i] = F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1),
+                                 reduction="none").double().sum()
+    return out.cpu().numpy()
+
+
+def evaluate_bpb(net: Net, split: str, tokenizer: str, micro: int = 32, device: str = DEVICE) -> dict:
+    """Bits per byte of a held-out set: every window's negative log-likelihood (`windows`) over the documents' UTF-8
+    bytes."""
+    toks, man = held_out(split, tokenizer)
+    full, tail = windows(len(toks))
+    nats = float(window_nats(net, toks, full + tail, micro, device).sum())
     return {"split": split, "bpb": nats / man["bytes"] / math.log(2), "nats_per_byte": nats / man["bytes"],
-            "targets": n - 1, "bytes": man["bytes"], "documents": man["documents"], "tokenizer": tokenizer}
+            "targets": len(toks) - 1, "bytes": man["bytes"], "documents": man["documents"], "tokenizer": tokenizer}
+
+
+class Scorer:
+    """The fixed scores of models with one start's architecture, the start θ their pairing base. Both the harness (at
+    every checkpoint) and `evaluate.py` (the submission) score through it.
+
+    - `start_bpb`: the start's bpb on the whole search pool (in final mode, the final set), each of the pool's windows'
+      negative log-likelihood under the start kept.
+    - `search(state, digest)`: the model's search score on a fresh slice drawn after its weights were hashed to `digest`
+      (`draw_slice`), paired: start_bpb plus the model's bpb on the slice's windows less the start's on the same windows,
+      which cancels most of the slice's own difficulty. In final mode, the model's bpb on the final set.
+    - `seal(key, state, search)`: the model's and the start's bpb on the promotion set's first PROMOTION_TOKENS, with
+      `search`'s scores, written once to the sealed values (`sealed.py`) under `key`, the model's output digest; nothing
+      returns them. A no-op in final mode."""
+
+    def __init__(self, rec: dict, theta: dict[str, torch.Tensor], device: str = DEVICE):
+        self.rec, self.tok, self.device = rec, rec["tokenizer"], device
+        with torch.device(device):
+            self.base, self.net = Net(rec["config"]), Net(rec["config"])
+        self.base.load(theta)
+        self.start_promotion_bpb: float | None = None
+        self.promotion: tuple[np.ndarray, list[int], int] | None = None
+        if FINAL_MODE:
+            self.split = FINAL
+            self.start_bpb = evaluate_bpb(self.base, FINAL, self.tok, device=device)["bpb"]
+            return
+        self.split = SEARCH_POOL
+        self.pool, man = held_out(SEARCH_POOL, self.tok)
+        self.token_bytes = token_bytes(self.tok)
+        at = np.concatenate([[0], np.cumsum(self.token_bytes[self.pool])])
+        if int(at[-1] - at[1]) != man["bytes"]:
+            raise SystemExit("prepare: the search pool's tokens' bytes are not its documents' bytes")
+        self.full, tail = windows(len(self.pool))
+        nats = window_nats(self.base, self.pool, self.full + tail, device=device)
+        self.start_nats = nats[: len(self.full)]
+        self.window_bytes = np.array([at[s + EVAL_CTX + 1] - at[s + 1] for s in self.full], dtype=np.int64)
+        self.start_bpb = float(nats.sum()) / man["bytes"] / math.log(2)
+
+    def search(self, state: dict[str, torch.Tensor], weights_digest: str) -> dict:
+        self.net.load(state)
+        if FINAL_MODE:
+            return evaluate_bpb(self.net, FINAL, self.tok, device=self.device) | {"start_bpb": self.start_bpb}
+        sl = draw_slice(weights_digest)
+        pick = np.asarray(sl["windows"])
+        nbytes = int(self.window_bytes[pick].sum())
+        a = float(window_nats(self.net, self.pool, [self.full[i] for i in pick], device=self.device).sum())
+        b = float(self.start_nats[pick].sum())
+        a, b = a / nbytes / math.log(2), b / nbytes / math.log(2)
+        return {"split": "search", "bpb": self.start_bpb + a - b, "slice_bpb": a, "start_slice_bpb": b,
+                "start_bpb": self.start_bpb, "tokenizer": self.tok,
+                "slice": {"coin": sl["coin"], "weights_digest": weights_digest, "windows": len(pick), "bytes": nbytes,
+                          "targets": len(pick) * EVAL_CTX},
+                "rule": "start_bpb (the whole search pool) + slice_bpb - start_slice_bpb on the same windows; the slice "
+                        "drawn after the weights were hashed (prepare.draw_slice(weights_digest, coin) reproduces it)"}
+
+    def _promotion_bpb(self, net: Net) -> float:
+        if self.promotion is None:
+            toks, _ = held_out(PROMOTION, self.tok)
+            starts = windows(len(toks))[0][: PROMOTION_TOKENS // EVAL_CTX]
+            tb = self.token_bytes[toks]
+            self.promotion = (toks, starts, int(sum(tb[s + 1: s + EVAL_CTX + 1].sum() for s in starts)))
+        toks, starts, nbytes = self.promotion
+        return float(window_nats(net, toks, starts, device=self.device).sum()) / nbytes / math.log(2)
+
+    def seal(self, key: str, state: dict[str, torch.Tensor], search: dict) -> bool:
+        path = value_path(key)
+        if FINAL_MODE or path.exists():
+            return False
+        self.net.load(state)
+        bpb = self._promotion_bpb(self.net)
+        if self.start_promotion_bpb is None:
+            self.start_promotion_bpb = self._promotion_bpb(self.base)
+        rec = {"schema": "covert-witness/sealed-value/v1", "key": key, "start": self.rec["name"],
+               "start_digest": self.rec["digest"], "search_bpb": search["bpb"], "start_search_bpb": search["start_bpb"],
+               "promotion_bpb": bpb, "start_promotion_bpb": self.start_promotion_bpb, "salt": os.urandom(16).hex(),
+               "run": os.environ.get("RESEARCH_RUN_ID", ""), "version": VERSION}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{key}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(rec, sort_keys=True) + "\n")
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            pass
+        finally:
+            tmp.unlink()
+        return True
 
 
 def tensor_bytes(t: torch.Tensor) -> bytes:
