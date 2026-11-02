@@ -17,8 +17,8 @@ The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (`
 their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too. The training
-formalism's retired terms (`GLOSSARY.md`, Training: the older definitions, covers, (Γ, α), counted products and the
-earlier statement's bound) are the scan's `training` group: they stay under the prefixes ``TRAINING_PENDING`` names, each
+formalism's retired terms (`GLOSSARY.md`, Training: the older definitions, covers, (Γ, α), counted products, the
+earlier statement's bound, and v1's Dep and dependent share) are the scan's `training` group: they stay under the prefixes ``TRAINING_PENDING`` names, each
 with its owner, until it restates them, and the program format's input nodes and out(S) keep their names in its own docs
 (``CIRCUITS_HOME``).
 """
@@ -85,13 +85,14 @@ DOC_TERMS = {
     "(Γ, α), width(θ)": "the policy (c, k, n): |I| ≤ c and |in(I) ∖ θ| ≤ k",
     "covering bound, covering argument, covering form, (c, k) cover": "a (c, k)-partition, and the theorem Slowdown under A1",
     "multiplication block": "a token block (MAC blocks only measure the cut cost a)",
-    "counted product, updated multiplication, updated product": "Dep, every gate downstream of the update",
-    "deep share, per MAC β, r sweep": "the dependent share φ, the update profile u(x) and the bottom share x₀",
+    "counted product, updated multiplication, updated product": "the affected gates A, every gate downstream of the update",
+    "deep share, per MAC β, r sweep": "the token share σ, the update profiles u(x) and u_in(x) and the reachable share x₀",
     "slowdown lower bound, overhead lower bound, slowdown(𝒢, T_𝒢": "the slowdown ρ(C), and Security's H(ℓ*)·min ρp",
-    "necessary subcomputation": "Dep, the gates that depend on θ′",
+    "necessary subcomputation": "the affected gates A, the gates that depend on θ′",
     "pricing argument, bounding strategy, inference block yield, server block yield, straddle term":
-        "A1 and A2, and the theorems Fit, Slowdown and Security",
+        "A1, A1′ and A2, and the theorems Fit, Slowdown and Security",
     "reference training algorithm": "the honest cost H(ℓ*), the least compute of any method",
+    "Dep, dependent share": "the affected gates A; the token share σ (the training formalism v2)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -110,7 +111,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|per-MAC{_SPACE}β|r{_SPACE}sweeps?|(?:slowdown|overhead){_SPACE}lower{_SPACE}bounds?"
                        rf"|necessary{_SPACE}subcomputations?|pricing{_SPACE}arguments?|bounding{_SPACE}strateg(?:y|ies)"
                        rf"|(?:inference|server)-block{_SPACE}yields?|straddle{_SPACE}terms?"
-                       rf"|reference{_SPACE}training{_SPACE}algorithms?)\b)"
+                       rf"|reference{_SPACE}training{_SPACE}algorithms?|(?-i:Dep)|dependent{_SPACE}shares?)\b)"
                        rf"|\bout\([A-Z]\)|\(Γ,{_SPACE}?α\)|width\(θ\)|\(c,{_SPACE}?k\)-covers?\b|\bslowdown\(𝒢|\bT_𝒢)")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
@@ -448,7 +449,8 @@ def test_the_doc_scan_reads_the_formalism_terms():
                 "The deep share, per-MAC β and the r sweep; the slowdown lower bound, slowdown(𝒢, 𝒜, η) and T_𝒢.\n"
                 "A necessary subcomputation, a pricing argument, the bounding strategy, inference-block yields, the straddle\n"
                 "term and the reference training algorithm.\n"
-                "A MAC block measures a; tests cover it; a wire, a sweep over r, the `Nci.Cover` module and αΓ stay.\n",
+                "A MAC block measures a; tests cover it; a wire, a sweep over r, the `Nci.Cover` module and αΓ stay.\n"
+                "Dep and the dependent shares; a package's dep stays.\n",
         "Security/Definitions/Nci/README.md": "The covering bound.\n",
         "benchmarks/covert_witness/README.md": "Counted products.\n",
         "benchmarks/learning_frontier/te_core/README.md": "The r sweep.\n",
@@ -462,7 +464,8 @@ def test_the_doc_scan_reads_the_formalism_terms():
         ("a.md", 4, "per-MAC β"), ("a.md", 4, "r sweep"), ("a.md", 4, "slowdown lower bound"), ("a.md", 4, "slowdown(𝒢"),
         ("a.md", 4, "T_𝒢"), ("a.md", 5, "necessary subcomputation"), ("a.md", 5, "pricing argument"),
         ("a.md", 5, "bounding strategy"), ("a.md", 5, "inference-block yields"), ("a.md", 5, "straddle term"),
-        ("a.md", 6, "reference training algorithm"), ("benchmarks/nci/x.md", 1, "leg"),
+        ("a.md", 6, "reference training algorithm"), ("a.md", 8, "Dep"), ("a.md", 8, "dependent shares"),
+        ("benchmarks/nci/x.md", 1, "leg"),
         ("verity/ml/circuits/PROTOCOL.md", 1, "pricing argument")]
 
 

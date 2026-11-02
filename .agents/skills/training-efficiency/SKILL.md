@@ -2,7 +2,7 @@
 name: training-efficiency
 description: >
   How to run, or search in, a training-efficiency search in Verity: the least compute that lowers a registered start's
-  loss to a target ℓ*, honestly and under a policy (c, k), scored in training formalism v1's terms (Fit, Slowdown,
+  loss to a target ℓ*, honestly and under a policy (c, k), scored in training formalism v2's terms (Fit, Slowdown,
   Security; |C| in Boolean gates; ρ, p = |C|/H, S = W*/H). Explains the covert_witness harness (launch.py, the pin, an
   island shipped alone, --island, --arms), the boards (an island's BOARD.md, merge_board.py's digest, DIGEST, FINAL and
   LOOPHOLE lines), scoring (honest = least compute of any method at any checkpoint, W* over the same checkpoints), and the coordinator's side: one pin per campaign, 45-minute checkpoints, nodes and leases (CW_NODES, --node,
@@ -14,9 +14,9 @@ description: >
 # Training-efficiency search
 
 A search measures, from registered weights θ (a start and its loss ℓ0), the least compute that reaches a target loss ℓ*,
-honestly and under a policy's slowdown. Its question and quantities are Daniel's training formalism v1, which
+honestly and under a policy's slowdown. Its question and quantities are Daniel's training formalism v2, which
 `GLOSSARY.md` ("Training") states in the repository and which wins over the summary below; the note is
-`~/.research/notes/lanes/training/20261102T1817Z-report-training-formalism-v1.md`, with the experiments and plots it
+`~/.research/notes/lanes/training/20261102T2215Z-report-training-formalism-v2.md`, with the experiments and plots it
 feeds in `20261102T1715Z-draft-training-efficiency-experiments.md` beside it. The harness is `benchmarks/covert_witness/`
 and its counter `benchmarks/covert_witness/te_core/`: their READMEs own the commands, files and checks. This skill is how
 to work in a search, and the rules no code enforces yet.
@@ -26,22 +26,28 @@ to work in a search, and the rules no code enforces yet.
 - **Circuits.** C is a set of gates, each reading one or two values and computing a bit; θ ⊆ in(C) are the registered
   weights. A policy (c, k, n) allows blocks of at most c gates that read at most k bits beyond θ, n blocks a period, and
   the slowdown ρ(C) is the least |𝓘|·c/|C| over (c, k)-partitions 𝓘 of C.
-- **Training's annotation**: the new slow weights θ' (values gates compute) and the token blocks 𝒯. From them: Dep, the
-  gates depending on θ' (everything downstream of the update); φ = |Dep ∩ ⋃𝒯|/|C|; w, gates per token; s = c/w; τ, data
-  bits per token; a, the cut cost; u(x), the computed bits a block reads to do a share x of a token's dependent work, with
-  u(1) the per-token update and x0 the largest x with u(x) ≤ k; Δ, the bits describing θ' given θ with a decoder of at
-  most c gates; Δ_grad, the gradient and optimizer state passed between blocks.
-- **Theorems.** Fit: Δ + sτ ≤ k gives ρ = 1 for the updated model, and training it also needs 2Δ_grad + sτ ≤ k.
-  Slowdown, under A1 (cut cost): ρ ≳ φ(1 − x0)·s·a / max_x x(k − u(x)). Security, under A1 and A2 (efficiency floor):
-  reaching ℓ* covertly costs at least H(ℓ*)·min ρp, with at most nc available per period.
+- **Training's annotation**: the new slow weights θ' (values gates compute) and the token blocks 𝒯. From them: A, the
+  affected gates, those depending on θ' (everything downstream of the update), and R ⊆ A, the reachable ones a block can
+  do while computing the token from its inputs; σ, the token blocks' share of |C|; w, gates per token; s = c/w; τ, data
+  bits per token; x0 = |T ∩ R|/|T ∩ A|; s*, the most tokens' worth of unreachable work a block does; a, the cut cost;
+  u(x), the update bits a block reads to do a share x of a token's affected work (u(1) the per-token update), and
+  u_in(x), the same for the first share x in dependency order while computing the token from its inputs; Δ, the bits
+  describing θ' given θ with a decoder of d ≤ c gates; Δ_grad, the gradient and optimizer state passed between blocks;
+  t, a frozen tail's share of the affected work. Update bits are values of θ' or an encoding of it, never cut values.
+- **Theorems.** Fit: running θ' with Δ + sτ ≤ k gives ρ ≤ c/(c − d) (honest serving exactly 1), and training needs
+  three kinds of block: compute Δ + sτ ≤ k, reduction 2Δ_grad ≤ k, update application Δ + Δ_grad ≤ k. Slowdown is the
+  counting lemma at A ∖ R, in token form ρ ≥ σ(1 − x0)·s/s* (the largest per-token affected count where token blocks
+  vary), with the bounds s* ≤ max_x x(k − u(x))/a (A1, cut cost) and x0 ≤ max{x : u_in(x) ≤ k} (A1′, update cost from
+  the inputs). Security, under A1, A1′ and A2 (efficiency floor): reaching ℓ* covertly costs at least H(ℓ*)·min ρp, with
+  at most nc available per period.
 - **What a search measures**: H(ℓ*), the least compute of any method, and for each attack A its p_A = |C_A|/H and ρ_A,
   so S(c, k; θ, ℓ*) = min_A ρ_A·p_A = W*/H, with W* the least |C|·ρ over attacks reaching ℓ*. The inputs are the start,
   ℓ* and the policy; the red team chooses everything else (method, schedule, update form, placement, encoding). Score
   several c (`python -m te_core.policy`: the (c, k) grid in decades, from one token's inference block to the start's
   server block), and the reference policy first: c = 4096 w (one 4,096-token session per block) and k = 10 kB.
 - **Units**: |C|, c and w in Boolean gates, each operation's multiply-accumulates converted with its circuit's Definition
-  (the gate counts circuit-check reports, `python -m te_core.gates`), never a rule of thumb; k, τ, a, u, Δ and Δ_grad in
-  bits.
+  (the gate counts circuit-check reports, `python -m te_core.gates`), never a rule of thumb, and d too; k, τ, a, u, u_in,
+  Δ and Δ_grad in bits.
 
 ## Taking part: a direction
 
@@ -76,22 +82,24 @@ to work in a search, and the rules no code enforces yet.
 
 - **Valid** is every check of the harness's witness checker passing; an invalid record counts for nothing, whatever its
   loss.
-- **Fit** is checked on each record by construction. **Slowdown's ρ** is reported as "target" until Lean proves
-  Slowdown. u(x) and a are the best values a witness shows (an encoding or activation code the red team exhibits),
-  labelled upper bounds, never measured truth. Δ is Fit's quantity and u(1) Slowdown's: they agree only when every
-  token's path reads the whole update, so they are separate columns.
-- **Two readings of a frozen tail.** When frozen layers above the highest update take a share t of a token's dependent
-  work, Slowdown reads two ways, and Daniel decides which the theorem means. `literal-x0` takes x0 on the whole profile
-  (0 up to t), which exempts the tail's work: ρ ≈ φ(1 − t)·s·a/(t·k). `tail-charged` takes x0 from the token's start
-  and charges the tail through a: ρ ≈ φ(1 − k/u(1))·s·a/(t·k). They agree when t = 0. Every score, table and panel
-  carries both (a `reading` column), with no headline S.
+- **Fit** is checked on each record by construction, per kind of block. **Slowdown's ρ** is reported as "target" until
+  Lean proves Slowdown. The claim takes the assumptions' upper bounds, never best-known values: x0 and s* are maxima over
+  every block, so a score reads them from u_in and u (A1′, A1), which are labelled assumptions, and a and Δ are the best
+  values a witness shows (an encoding or activation code the red team exhibits), labelled upper bounds. The best-known
+  x0 and s*, from blocks someone exhibits, are the attack side (`x0_known`, `s_star_known`): they say how tight the bound
+  is, never what it is. Δ is Fit's quantity and u(1) Slowdown's: they agree only when every token's path reads the whole
+  update, so they are separate columns.
+- **A frozen tail is always charged.** With frozen layers above the changed ones (a share t of the
+  affected work, the changed update > k), u_in jumps to the changed update at once, so x0 ≈ 0, s* ≤ t·k/a and
+  ρ ≳ σ·s·a/(t·k): the tail's work is never exempt.
 - **Honest.** H(ℓ*) is the least |C| over every checkpoint of every valid record, of any method or direction (a covert
   one at its |C|), that reaches ℓ*: a checkpoint is a model someone reached, and the sealed final reruns guard against
   picking noise. W*(ℓ*) is the least |C|·ρ over the same checkpoints, so S = W*/H ≥ 1 by construction: a ratio below 1
   is a scoring bug, never a covert advantage. A column of the reference directions alone may stand beside it as
-  context. The table is `python -m te_core.frontier --formalism` (W*, H and S per target, reading and (c, k) cell),
-  the console's five panels `python -m te_core.plots --out DIR`, and both over v2.3's records
-  `python -m te_core.rescore --out DIR` (from benchmarks/covert_witness).
+  context. The table is `python -m te_core.frontier --formalism` (W*, H and S per target and (c, k) cell, with W*'s
+  bounds and attack side), the five panels `python -m te_core.plots --out DIR` (P1-P4 and A2, off the console, whose one
+  training panel is `training/frontier-branches`), and both over v2.3's records `python -m te_core.rescore --out DIR`
+  (from benchmarks/covert_witness).
 - **Aim short complete schedules at each target.** A schedule sized to end at ℓ* (say 0.5%, 1% and 2% below the start's
   loss) usually reaches it for about half the compute of a checkpoint inside one long run, so both sides run them.
 - **A reported W* is the best attack known**, an upper bound (`.agents/skills/friction/SKILL.md`), and H the best
@@ -144,7 +152,7 @@ The smell check (`.agents/skills/smell-check/SKILL.md`) applies to every claim; 
   result.
 - **No caps the score doesn't read.** The policy and the budget are the constraints. An update-size tier is a bin of Δ
   for the A2 curve, never a cap a record must fit, and a class is a launcher argument, never a cap.
-- **The measurement is the theorem's quantity.** Dep is every gate downstream of the update, activations included, not
+- **The measurement is the theorem's quantity.** A is every gate downstream of the update, activations included, not
   the products that read changed weights: an adapter scores the same merged or not. Rule from the theorem's definitions,
   never from the board's last line.
 - **The honest baseline is the best method of any kind**, and is re-derived whenever any record beats it.
@@ -155,4 +163,5 @@ The smell check (`.agents/skills/smell-check/SKILL.md`) applies to every claim; 
   Slowdown.
 - **Check before it goes out.** Read a record before relaying its label, and a FINAL before the scorer reruns it. A table
   goes out with S ≥ 1 in every cell, each H and W* naming the record that sets it, |C| in gates, each ρ labelled
-  "target", each u(x) and a an upper bound, and each checkpoint figure "upper bound (checkpoint)".
+  "target", u(x) and u_in(x) labelled assumptions, a and Δ upper bounds, the attack side beside the bound, and each
+  checkpoint figure "upper bound (checkpoint)".

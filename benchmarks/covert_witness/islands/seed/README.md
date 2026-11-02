@@ -4,7 +4,7 @@ This is the island's program for a researcher agent (autoresearch's program.md; 
 search brief says what the search is for; this file says how a candidate runs and what it must not do.
 
 **Nothing is capped** but the fixed training-FLOP budget and GPU-second cap (below): any update, any size or format of E,
-any layers. te_core scores what the run did by the training formalism v1.
+any layers. te_core scores what the run did by the training formalism v2.
 
 **Seed** (`train.py` as committed): MeZO (zeroth-order SGD): per step two forward passes at θ ± εz, z sampled from the step's seed, the step's coefficient c = lr · (L₊ − L₋)/2ε stored as f32; E is the coefficients.
 
@@ -38,8 +38,8 @@ Keep at most two candidates of this island in flight, so the islands share the n
   `te_core.frontier.TARGETS`) and policy (c, k) (`te_core.policy`'s grid, in decades from one token's inference block to
   the start's server block): W* is the least |C|ρ over every checkpoint of every valid record that reaches ℓ*, honest H
   the least |C| over the same checkpoints, and Security's S = W*/H ≥ 1. |C| is the harness's count in Boolean gates
-  (`te_core.gates`); ρ is 1 where Fit holds and Slowdown's target elsewhere (`te_core.formalism`), under each of its two
-  readings of a frozen tail above your highest update (`literal-x0`, `tail-charged`: both are scored). bpb is `score.bpb`, bits
+  (`te_core.gates`); ρ is c/(c − d) where Fit holds (d the decoder's gates, 1 for honest serving) and Slowdown's target
+  elsewhere (`te_core.formalism`), which always charges a frozen tail above your highest update. bpb is `score.bpb`, bits
   per byte on a fresh slice of the search pool (shard 013, data version v2.2) at context 1024, computed by the
   evaluation job (`evaluate.py`) on decode(θ, E) after your run ends. Compare only within a start.
 - Budget: train.py runs inside the harness (`te_core.run --script`, `te_core/README.md`), which counts every
@@ -53,9 +53,9 @@ Keep at most two candidates of this island in flight, so the islands share the n
   scores each, and each is a record in the ledger. Any checkpoint that reaches ℓ* counts for W*; for H only a complete
   schedule's does (a run's last checkpoint).
 - The formalism's quantities: ingest writes each checkpoint's (`te_core.formalism.of_record`): gates and token blocks
-  per step structure, the gates that depend on the update, and Δ_grad where te_core measures it. τ, a, u(x) and Δ are
-  stubs until te_core measures them (τ two token ids, a = d_model x 16 bits, u spread evenly with u(1) = Δ = 8·|E|),
-  each labelled in the row, so today what lowers ρ is a smaller E and a smaller dependent share. A step whose weights you
+  per step structure, the gates that depend on the update (A), and Δ_grad where te_core measures it. τ, a, u(x), u_in(x)
+  and Δ are stubs until te_core measures them (τ two token ids, a = d_model x 16 bits, u = u_in spread evenly with
+  u(1) = Δ = 8·|E|), each labelled in the row, so today what lowers ρ is a smaller E and fewer affected gates. A step whose weights you
   declare (`prepare.declare_step`) is still checked as a counterexample family (te_core's README) and recorded.
 
 ## The witnesses, which evaluate.py checks
