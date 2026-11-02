@@ -99,7 +99,7 @@ guard() {
   return 1
 }
 retry() {
-  echo "agent-guard: $(date -u +%FT%TZ) retrying infra's main every ${pause}s, up to $attempts times"
+  echo "agent-guard: $(date -u +%FT%TZ) retrying infra's main every ${pause}s, up to $attempts times (pid $$)"
   local i
   for ((i = 1; i <= attempts; i++)); do
     sleep "$pause"
