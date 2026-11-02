@@ -33,8 +33,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   `public import M`, and opens `@[expose] public section` after its header; `python3 tools/verity/lean/modules.py FILE`
   writes that. A proof's body is private, so an edit to it rebuilds no importer. What the module system refuses is fixed
   in the file (the codemod's docstring): a tactic's helper is `meta`; a proof that unfolds a core definition the
-  toolchain doesn't expose (`decide`, `rfl`, `unfold`) has `import all` of its module, never of an in-tree one (a
-  module's build reads only its imports' public parts); a theorem whose statement names another module's private
+  toolchain doesn't expose (`decide`, `rfl`, `unfold`) rewrites by core's lemma for it or has `import all` of its
+  module, never of an in-tree one (a module's build reads only its imports' public parts), and moves to a module of its
+  own when that `import all` slows its file's other proofs; a theorem whose statement names another module's private
   declaration (core's `Array.qsort.sort`) is private, beside a public one over the public definition; an exported
   `:= rfl` that unfolds an unexposed definition is `:= (rfl)`; a public definition that reads a private one, and a module
   whose private declarations another opens (`open private … from M`), take

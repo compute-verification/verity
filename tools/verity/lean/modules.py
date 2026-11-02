@@ -18,14 +18,15 @@ changes nothing and a branch made before the port takes it by running this on it
   imports: a module runs that code at the `meta` phase, which reads only what it meta-imports.
 
 What the module system refuses beyond that is fixed by hand in the file, which this then leaves alone: a tactic's helper
-gets `meta`; a proof that unfolds a core definition the toolchain doesn't expose gets `import all` of that definition's
-module (never of an in-tree module: a module's build reads only its imports' public parts); a theorem whose statement
-names another module's private declaration (core's `Array.qsort.sort`) is private, beside a public theorem over the
-public definition for other files; an exported `:= rfl` theorem whose `rfl` unfolds an unexposed definition is
-`:= (rfl)`, which isn't inferred `@[defeq]`; a tactic block in a statement gets its type ascribed. `--option` adds one of
-the transition options to a file that needs it: `backward.privateInPublic` (a public definition reads a private one, or
-another module opens one with `open private … from`; the private one keeps its name, and the warning is turned off) or
-`backward.proofsInPublic`.
+gets `meta`; a proof that unfolds a core definition the toolchain doesn't expose rewrites by core's lemma for it or gets
+`import all` of that definition's module (never of an in-tree module: a module's build reads only its imports' public
+parts), and when that `import all` slows the file's other proofs past their budget, the proof moves to a module of its
+own (`CallsFast100`); a theorem whose statement names another module's private declaration (core's `Array.qsort.sort`)
+is private, beside a public theorem over the public definition for other files; an exported `:= rfl` theorem whose `rfl`
+unfolds an unexposed definition is `:= (rfl)`, which isn't inferred `@[defeq]`; a tactic block in a statement gets its
+type ascribed. `--option` adds one of the transition options to a file that needs it: `backward.privateInPublic` (a
+public definition reads a private one, or another module opens one with `open private … from`; the private one keeps its
+name, and the warning is turned off) or `backward.proofsInPublic`.
 
 `header` reads a header as Lean does (`module`, then `prelude`, then each `[public] [meta] import [all] M`, with comments
 anywhere between; the header ends at the first other token). Stdlib only."""
