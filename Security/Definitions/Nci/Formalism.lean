@@ -6,8 +6,7 @@ import Definitions.Nci.Formalism.Runs
 /-!
 # The training formalism v1
 
-Daniel's training formalism v1 (2 Nov 2026, `note:training-20261102T1817Z-report-training-formalism-v1`), the one
-statement of the training slowdown, in Lean:
+Daniel's training formalism v1, the one statement of the training slowdown, in Lean:
 
 * §1, circuits (`Definitions.Nci.Formalism.Circuits`): a circuit is a `Verity.Circuit` that is `Wellformed`, `in(S)` is
   `Circuit.into`, `θ` is a `Verity.Declaration`'s registered inputs, and `reconstruct` is the reconstruction;

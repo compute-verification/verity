@@ -3,8 +3,8 @@ import Definitions.Core.Formalism
 /-!
 # The training formalism v1, §1: circuits
 
-Section 1 of Daniel's training formalism v1 (`note:training-20261102T1817Z-report-training-formalism-v1`), on core's one
-circuit type `Verity.Circuit` and its one declaration `Verity.Declaration`, which say it as written:
+Section 1 of Daniel's training formalism v1, on core's one circuit type `Verity.Circuit` and its one declaration
+`Verity.Declaration`, which say it as written:
 
 * a **circuit** of §1 is a `Verity.Circuit` that is `Wellformed`: every value is a bit (`Circuit.Boolean`) and every gate
   reads one or two values (`Circuit.Boolean`'s positive fan-in and `Circuit.FanIn C 2`). A value is a position
