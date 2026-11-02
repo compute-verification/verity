@@ -43,9 +43,11 @@ is a flag.
 """
 from __future__ import annotations
 
+import collections
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import resource
@@ -290,6 +292,46 @@ def narrowed_head(ops: dict, head: tuple[int, int], weights, tokens: dict) -> di
     cap = {"fwd": (tokens.get("train", 0) + tokens.get("forward", 0)) * rows * d, "bwd": tokens.get("train", 0) * rows * d}
     total = sum(min(saved[k], cap[k]) for k in saved)
     return {"saved_macs": total, "saved_by_phase": saved, "cap_macs": cap, "credited": credited}
+
+
+def consumed_tokens(log: list, shapes: dict) -> int:
+    """The tokens a step's counted forward GEMMs consumed, from its structure's op log (`[phase, class, op, shapes,
+    calls, MACs]` rows): a forward GEMM with one operand of a weight's shape (`shapes`: name -> shape, either way round)
+    consumed its other operand's rows times its calls, over the number of weights of that shape; the step consumed the
+    most any such GEMM shows. A zero-MAC lookup consumes nothing, and a GEMM with a weight's slice isn't read."""
+    per = collections.Counter(tuple(sorted(s)) for s in shapes.values() if len(s) == 2)
+    best = 0
+    for phase, _, op, sig, calls, _ in log:
+        if phase != "fwd" or op not in HEAD_GEMMS:
+            continue
+        mats = [tuple(s) for s in json.loads(sig) if len(s) >= 2]
+        held = [i for i, s in enumerate(mats) if len(s) == 2 and tuple(sorted(s)) in per]
+        if len(mats) != 2 or len(held) != 1:
+            continue
+        i = 1 - held[0]
+        rows = math.prod(mats[i]) // mats[i][-1 if i == 0 else -2]
+        best = max(best, rows * calls // per[tuple(sorted(mats[held[0]]))])
+    return best
+
+
+def readout_leaks(record: dict, tensors: dict) -> list[dict]:
+    """The coordinator's 14:22Z rule for ref-data's 14:06Z LOOPHOLE, at ingest: before te_core 3.11 the counter keyed a
+    program-made token tensor by its address, so zero-MAC lookups of distinct index tensors could raise a step's tokens,
+    which bound its read-outs. Each step's read-outs (`exited`) are judged here against the tokens its counted forward
+    GEMMs consumed (`consumed_tokens`, over θ's weights, `tensors`: the start's name -> [dtype, shape], and the step's
+    own updated ones). A step whose read-outs reach a value per consumed token but stayed under its counted tokens is
+    listed: its allowance came from index reads no counted work consumed, and the record is invalid."""
+    shapes = {k: v[1] for k, v in tensors.items()}
+    out = []
+    for s in [record.get("setup", {}), *record["steps"], record.get("tail", {})]:
+        exited, tokens = s.get("exited", 0), s.get("tokens", 0)
+        if exited < 2 or exited >= max(tokens, 2):
+            continue
+        used = shapes | {k: v[1] for k, v in s.get("shapes", {}).items()}
+        consumed = consumed_tokens(record["structures"][s["struct"]]["log"], used)
+        if exited >= max(consumed, 2):
+            out.append({"step": s["step"], "tokens": tokens, "consumed": consumed, "exited": exited})
+    return out
 
 
 def accounted_over(counted_flops: float, analytic_flops: float, saved_macs: int) -> float | None:
