@@ -46,7 +46,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **Lean's verifier builds the inner statement from its own partition object and program**: `setupTables` at the inner
 tags, the coin server's coins and one table, given the circuit and public files and the verifier's own `obj` and `prog`,

@@ -49,6 +49,7 @@ theorem not_mem_of_any {cs us : Array ℕ} (h : ¬ (cs.any us.contains) = true) 
   intro u hu hm
   exact h (Array.any_eq_true'.2 ⟨u, hu, Array.contains_iff_mem.2 hm⟩)
 
+-- `walk_step` down `Draw.UnitDraw.ofJson`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A draw's units ascend, and so does its closure, which holds no drawn unit**: `UnitDraw.ofJson` refuses any other. -/
 theorem ofJson_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
@@ -136,6 +137,7 @@ theorem asc_of_any {a : Array ℕ} {n : ℕ} {b : Bool}
   by_contra hge
   exact this hj0 (Nat.le_of_not_lt hge)
 
+-- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A registered population's labels ascend, one per instance**: `loadPublic` refuses any other. -/
 theorem loadPublic_asc {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Public}
@@ -155,6 +157,7 @@ theorem loadPublic_asc {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Pub
 
 /-! ## The staged table's public file -/
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 theorem setupH_none {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}

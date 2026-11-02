@@ -109,6 +109,7 @@ theorem verifyJK_one_ok (keep : Bool → Bool) {spec : SessionSpec} {st : Setup}
 
 /-! ## What the decoder reads through `keep`, at the parsed value -/
 
+-- `split` at every branch of `Record.decodeJWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **`decodeWithK_points` at the record's parsed value `j`.** -/
 theorem decodeJWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
@@ -122,6 +123,7 @@ theorem decodeJWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
     subst h
     exact check_pts (by assumption)
 
+-- `split` at every branch of `Record.decodeJWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **`decodeWithK_roundsWF` at the record's parsed value `j`.** -/
 theorem decodeJWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
@@ -151,6 +153,7 @@ theorem decodeJWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec
         subst hg
         exact check_coins (by assumption)
 
+-- `split` at every branch of `Record.decodeJWithK`'s unfolded body, an `obtain` per value it reads
 set_option maxHeartbeats 1000000 in
 /-- **`decodeWithK_retained` at the record's parsed value `j`.** -/
 theorem decodeJWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}

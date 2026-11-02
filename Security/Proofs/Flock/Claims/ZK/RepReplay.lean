@@ -22,7 +22,7 @@ a vector of width `64`. That fold reads only coins, so it is the firewall's.
 -/
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace FlockComplete.CutFree
 

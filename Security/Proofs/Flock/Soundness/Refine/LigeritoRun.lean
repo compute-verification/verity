@@ -440,6 +440,8 @@ theorem ligeritoC_model (r : ℕ) (sch : Accounting.Schedule) (T : 𝔽) (b : �
 
 /-! ## The run -/
 
+-- one proof of several hundred lines down `Flock.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
+-- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 /-- **Ligerito's rounds refine the model's** (§13.3). When the executable's Ligerito verifier accepts, from a transcript
 whose rounds are well formed, on a schedule whose dimensions and levels are the model's (`DimSeam`, `LevelSeam`) and

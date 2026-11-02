@@ -31,7 +31,7 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-! ## Fibers of one size under restriction -/
 

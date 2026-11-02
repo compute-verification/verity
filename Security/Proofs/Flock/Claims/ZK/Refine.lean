@@ -874,7 +874,7 @@ end LeanRelease
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 /-- The deployed record's last round is one past the `Finish`, which is one past the protocol's last coin. -/
 theorem deployZk_last_eq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (x : Msg) :

@@ -265,6 +265,8 @@ macro "tw_step" h:term : tactic => `(tactic| first
   | split
   | dsimp only)
 
+-- a cost combinator per bind and loop of `ligeritoWith`'s unfolded body (`repeat (first ...)`), each level's queries
+-- bounded by `qAll`
 set_option maxHeartbeats 20000000 in
 /-- **Ligerito's calls are its levels' queries**: one level-0 query and one per later round, each at most `qAll`. -/
 theorem cs_ligerito (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray)

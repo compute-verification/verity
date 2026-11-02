@@ -85,7 +85,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model ZkSession ZkLink ZkExec Deco
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 open Classical in
 /-- **One table at one coin vector** (`coin_close`, the registered values public at `c` alone): the prover's output and
@@ -135,8 +135,8 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
   Placed StrictCR DecodeZL
 open scoped ENNReal
 
-set_option synthInstance.maxHeartbeats 1000000
-set_option maxHeartbeats 4000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the `J` tables' product randomness
+set_option maxHeartbeats 4000000 -- the `J`-table session lemmas below; which of them needs it is unmeasured
 
 open Classical in
 /-- **What the session's honest prover sends** at `J` tables, coin vector `c`, witnesses `w` and prover randomness `p`:
