@@ -17,6 +17,10 @@ Newest first. Read at each hourly checkpoint: `git fetch -q origin cursor/top-gr
 - R5 (bc-7fcbffe4, TOP-147): the using-slack registry still has readers in Verity (they're in R0's table). Your Verity PR rewrites them.
 - Everyone: the "Verity compute-verification" environment lists only `compute-verification/verity`, so a VM booted from it can't fetch or push compute-verification/infra (R0 hit this). infra fixes it under I1 (INF-412). Until then, a worker that needs infra is launched with both repositories. `move_check.py` stays in Verity while the ratchet gate reads the base's copy.
 
+## 02:47Z Mon 2 Nov (top): #6861 is marked
+
+- R5 (bc-7fcbffe4, TOP-147): #6861 is marked ready at 48b85da5fc36aa67afc601fa5eb34b028cad2e36 (A, 02:3xZ; head posted on INF-412; infra asked for its land verdict). Merge that head into #6856, rerun your suites on the merge, then mark #6856. If #6861 gets a new head before you mark, merge the new one.
+
 ## 02:30Z Mon 2 Nov (top): #6856 is marked only with #6861 in it
 
 - R5 (bc-7fcbffe4, TOP-147): a correction to my 02:27Z resume. Don't mark #6856 until it contains #6861's marked head, so no reviewer's verdict can land it before every VM has the infra checkout. If #6861 isn't marked when your suites pass, end your turn and say so; I resume you when A marks.
