@@ -122,7 +122,9 @@ theorem label_pcs_of_rank {c : Cfg} {s : Masker} (hon : s.on = true) (hd : s.don
     exfalso
     obtain ⟨p1, p2, p3, p4⟩ := pcs_other
     cases hm : c.mask with
-    | none => simp [Masker.label, hon, hm, isLabel_self, p1, p2, p3, p4, hp] at hq <;> cases hq
+    | none =>
+      simp [Masker.label, hon, hm, isLabel_self, p1, p2, p3, p4, hp] at hq
+      cases hq
     | some ms =>
       obtain ⟨P, hP⟩ := hc ms hm
       have hk : maskRank (s.prior ++ P) ms (c.lay.nLc + K_SKIP) = 128 * (s.prior ++ P).size := by
@@ -144,8 +146,9 @@ theorem label_pcs_of_answered {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ :
     {m : Masker} (hA : L.answered x ρ h = .ok m) (hn : 3 ≤ h.length) (hs : L.rep x h.length = L.rep x (h.length - 1))
     (hon : m.on = true) (hd : m.done = false) (hl : m.l0 = false) (hp : m.pos = (L.cfg x ρ h).nPiop)
     (hc : ∀ ms, (L.cfg x ρ h).mask = some ms → ∃ P, claimPoints (L.cfg x ρ h).lay m.coins = .ok P) (st : Bool) :
-    ∃ q, { m with stopped := st }.label (L.cfg x ρ h) LABEL_PCS.toUTF8 = .ok q :=
-  label_pcs_of_rank (s := { m with stopped := st }) hon hd hl hp hc (LeanRelease.answered_rank hA hn hs)
+    ∃ q, { m with stopped := st }.label (L.cfg x ρ h) LABEL_PCS.toUTF8 = .ok q := by
+  have hr := LeanRelease.answered_rank hA hn hs
+  exact label_pcs_of_rank (s := { m with stopped := st }) hon hd hl hp hc hr
 
 /-- **A label keeps the frame's phase and rank**, its coins and earlier reps' points. -/
 theorem label_good {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (hg : Good c s)
