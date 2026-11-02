@@ -43,7 +43,7 @@ theorem pub_siteHP {T : Model.Statement} {a : AcceptedHP T} {pop : Public} {o : 
     (hx : x.val < a.rows.nIn) {q t : ℕ} (hk : Aliased.srcKeyP a.st.c a.pi x.val = .pub q t) :
     bit (T.block z o (a.col hg x)) = (pop.outputs.getD (u * a.pi.words + q) 0).testBit t := by
   obtain ⟨d, D, hd, hD, hlt, hpop, -, hu⟩ := hs
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, pi, s, L, hR, regs, hregs, hT⟩ := a
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, hi, h, pi, s, L, hR, regs, hregs, hT⟩ := a
   subst hT
   dsimp only at hd hpop hu hg x hx hk ⊢
   subst hd
@@ -52,14 +52,14 @@ theorem pub_siteHP {T : Model.Statement} {a : AcceptedHP T} {pop : Public} {o : 
     by_contra hn
     rw [Aliased.srcKeyP_of_neg (c := st.c) (pi := pi) (x := x.val) (by omega)] at hk
     exact Aliased.KeyP.noConfusion hk
-  obtain ⟨hpa, -⟩ := Hidden.parse_untyped ht s.parse
+  obtain ⟨hpa, -⟩ := Hidden.parse_untyped ht (s.parseF hi)
   have P := parse_facts hpa
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   obtain ⟨ro, ri, -, hRi, hst⟩ := s.regions
   have hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList := fun r hr' => by
     rw [hst, Array.toList_append]; exact List.mem_append_right _ hr'
-  obtain ⟨p, t', hkey, hq, hb⟩ := pub_block L regs hregs hRi hri (ports_of_pub s.ports hpub) C P.tmpl hg x hx hpub hz o
+  obtain ⟨p, t', hkey, hq, hb⟩ := pub_block L regs hregs hRi hri (ports_of_pub s.ports hpub) C hg x hx hpub hz o
   rw [hk] at hkey
   injection hkey with hqq htt
   subst hqq htt

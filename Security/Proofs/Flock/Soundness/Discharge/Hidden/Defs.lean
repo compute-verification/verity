@@ -83,7 +83,8 @@ def commitPair (r y r' y' : List UInt8) : List UInt8 × List UInt8 :=
 
 /-! ## What `setupHidden` checked and produced -/
 
-/-- **What `Stmt.setupHidden` accepted**: the circuit `HmOut.parse` accepted, the leaf scheme it names, the public file
+/-- **What `Stmt.setupHidden` accepted**: the circuit the session commits (`HmOut.parseCommit`: `HmOut.parse`'s, or a
+templated statement's read from its template; `Spec.parseF` at a flat statement's tags), the leaf scheme it names, the public file
 `HmOut.loadPublic` loaded (at a draw, `HmOut.drawn` of it) and `HmOut.checkPublic` passed, `n`, the block counts and `m`
 as the executable computes them (`k_log ≤ 27`, `m ≤ 35`), the pin `HmRow.pin` gave, Δ from `HmOut.delta`, the regions
 `HmOut.regions` built, which passed `checkInRange`, Σ over the circuit, the statement's
@@ -92,7 +93,7 @@ structure Spec (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List 
     (draw : Option Lean.Json) (st : Stmt) : Prop where
   tagsEq : st.tags = tags
   leaf : st.leaf = default
-  parse : HmOut.parse tags cf tables = .ok st.c
+  parse : HmOut.parseCommit tags cf tables = .ok st.c
   merkle : MerkleScheme.find? st.c.leafScheme = some st.merkle
   pub : ∃ pop, HmOut.loadPublic tags st.c pf = .ok pop ∧ (draw = none → st.pub = pop) ∧
     ∀ d, draw = some d → HmOut.drawn st.c pop d = .ok st.pub
@@ -111,6 +112,13 @@ structure Spec (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List 
   inRange : checkInRange st.c.kLog st.regions.size (PT_LOCAL + st.nbl) = .ok ()
   sigma : st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha)
   hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello
+
+/-- At a flat statement's tags (`Tags.isTmpl`), the committed circuit is `HmOut.parse`'s. -/
+theorem Spec.parseF {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw : Option Lean.Json} {st : Stmt} (s : Spec tags cf pf coins tables draw st) (hi : tags.isTmpl = false) :
+    HmOut.parse tags cf tables = .ok st.c := by
+  have h := s.parse
+  rwa [HmOut.parseCommit, if_neg (by simp [hi])] at h
 
 /-! ## The frozen statements -/
 
@@ -157,7 +165,8 @@ rows (`hv1`). -/
 def OutputsCommitted : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     st.c.outNet = st.c.unitNet →
@@ -187,7 +196,8 @@ and salts is a SHA-512 collision. -/
 def OutputsBinding : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →

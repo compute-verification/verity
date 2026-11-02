@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The e2e's timed window on node 2, from the run tree's root, with GPU 1's build.sh output tarred as
 # pearl-c-sm120-ship.tar:
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
+#   research run --on MACHINE --project verity --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=<you> --send pearl-c-sm120-ship.tar -- \
 #     gpu-lease 8 --wait --timed --max-min 20 -- timeout 1140 bash benchmarks/pouw/pearl_c_vllm/window.sh
 # It times on the first leased GPU only.  In order, the first failure ends the window:
@@ -10,8 +10,9 @@
 #  3. GPU 1's device check on this cubin, v1 (G = 4) only, no timing (run.py check.json, SHAPES empty);
 #  4. e2e.py: every mode's own gates, then its timing, then pearlc's verify pass, retained under $WORK/passes/<run id> (about
 #     45 GB on node 2's /workspace, outside the run directory, so custody does not upload it).  Before e2e.py writes a
-#     retained pass, its directory gets a retention record (`research keep`, priority keep, never expiring, owner
-#     @compute-accounting; KEEP_PRIORITY, KEEP_EXPIRES and KEEP_OWNER override them), and the window fails KEEP without one.
+#     retained pass, its directory gets a retention record (`research keep`, priority keep, never expiring, owned by
+#     the benchmark's handle; KEEP_PRIORITY, KEEP_EXPIRES and KEEP_OWNER override them), and the window fails KEEP
+#     without one.
 # The reference replay runs after the window, on the CPU (verify.sh <run id>); its ACCEPT is replay-verified (development
 # shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  Needs setup.sh's $WORK.
 # The venv's tools (ninja, which FlashInfer's JIT calls) come first on PATH, and FLASHINFER_CUDA_ARCH_LIST is setup.sh's, so
@@ -43,7 +44,7 @@ SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GR
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
-# the epoch's coins are the Lean verifier of record's (e2e.Coins, pouw.verifier.coins), which Lake builds and runs
+# the epoch's coins are the Lean verifier's (e2e.Coins, pouw.verifier.coins), which Lake builds and runs
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
 "$PY" -c 'import json, os, sys

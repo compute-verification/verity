@@ -1,7 +1,7 @@
 """M0 on per-round OS coins (`FC_COINS=os`): a proving build's identity then names the coin mode and no coin commitment or
 derivation, and the identity is in the statement digest, so such a session passes the Lean verifier's checks only under
 `--coins os` (`Tags.withCoins`), and a seeded one only under `--coins seed`. The sessions are the fixture's: one live session
-per coin mode, recorded from a proving build of main (`record.sh`, run r20261002-055711-3607), both accepted by its server.
+per coin mode, recorded from a proving build of main (`record.sh`), both accepted by its server.
 Neither has a draw, which `verify` refuses after every check has passed (§16.15, D12), so passing is that refusal
 (`DRAWLESS`). The seeded session, edited one field at a time, is also each of the record's checks' control: every edit is
 refused by the check that names it, so deleting any one of them fails a test."""
@@ -21,7 +21,7 @@ from verity_flock.record_text import session_text
 FLOCK = Path(__file__).resolve().parents[1]
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: RoPE d64 (4 instances) with a seeded and an FC_COINS=os loopback session of a proving build; the circuit is #306's
+#: RoPE d64 (4 instances) with a seeded and an FC_COINS=os loopback session of a proving build; the circuit is the session tables' fixture's
 FIXTURE = "art:12f95e2a"
 CIRCUIT = "art:425f6860/stage/circuit.txt"
 STATEMENT = "verity/flock-circuit@967b8d06"

@@ -25,7 +25,7 @@ spec.loader.exec_module(G)
 
 def test_linears_are_one_tp8_ranks():
     """The capture map's shapes (glm-moe-dsa-eager-hopper-tp8-v0) at GLM-5.3's config: KVA = QL + KVL + DR, NHL = NH / 8,
-    IKW = ID + IH, IL = I / 8, MIL = SIL = MI / 8; compute-accounting's per-rank K (256, 1536, 2048, 6144) are the FP8
+    IKW = ID + IH, IL = I / 8, MIL = SIL = MI / 8; the per-rank K (256, 1536, 2048, 6144) are the FP8
     linears' k but kv_b_proj's 512."""
     got = {lin.name: (lin.n, lin.k) for lin in G.linears()}
     assert got == {

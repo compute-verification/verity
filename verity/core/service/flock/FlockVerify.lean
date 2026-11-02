@@ -314,14 +314,13 @@ registered root, leaf count, row width and domain, and the position each unit re
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
-the root of that content (`Registered.checkKnownAll`). Beside the ports, whether the file names every port of the
-statement (`Registered.completeOf`, `Registered.checkComplete`), and the rows `KnownRead.check` holds every statement
-to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
+the root of that content (`Registered.checkKnownAll`). Beside the ports, the rows `KnownRead.check` holds every
+statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
 the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
 reads to). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
-    IO (Except String (Option (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) ×
+    IO (Except String (Option (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) ×
       Array String))) := do
   let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
@@ -335,12 +334,11 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-        let r : V (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
+        let r : V (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, ← Registered.completeOf j, known ++ KnownRead.fullRows own (← KnownRead.readOf j),
-            ← Registered.paramsOf j)
+          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j)
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -360,11 +358,15 @@ def fileDigest (args : List String) (flag : String) : IO (Except String (Option 
 
 /-- **What every part of a recursive statement shares** (`RecCompose.Shared`, the `VERDICT`'s `rec_shared`), from the
 files `verify` read: `--rec-inner` as `recInnerInput` reads it, the inner statement's and session's files at their paths
-as `RecCoins.filesInput` and `recTranscriptInput` read them, and how the inner statement is set up as
-`RecCoins.formInput` reads it. -/
+as `RecCoins.filesInput` and `recTranscriptInput` read them, how the inner statement is set up as
+`RecCoins.formInput` reads it, the link table as `RecLinkTree.linksArg` reads it, and the verifier's program of the inner
+statement (`--rec-inner-program`). -/
 def recSharedInput (args : List String) : IO (Except String RecCompose.Shared) := do
   let recInner ← match ← fileDigest args "--rec-inner" with
     | .ok h => pure h
+    | .error e => return .error e
+  let links ← match RecLinkTree.linksArg args with
+    | .ok l => pure l
     | .error e => return .error e
   let file := fun (path : Option String) => path.mapM fun f => RecCompose.digest <$> IO.FS.readBinFile f
   let statement := argOf args "--rec-inner-statement"
@@ -384,7 +386,9 @@ def recSharedInput (args : List String) : IO (Except String RecCompose.Shared) :
                  innerStatement := statement
                  innerStatementCoins := statement.map fun _ => argOf args "--rec-inner-statement-coins" == some "os"
                  innerTables := tables.map (·.map fun t => (t.1, RecCompose.digest t.2))
-                 innerDraw := ← file (argOf args "--rec-inner-draw") }
+                 innerDraw := ← file (argOf args "--rec-inner-draw")
+                 links := RecCompose.linksOf links
+                 innerProgram := ← file (argOf args "--rec-inner-program") }
   catch e => return .error s!"rec shared inputs: {e}"
 
 /-- The SHA-512, in hex, of the inner session's record (`--rec-inner-session DIR`'s `session.json`) and of the coin
@@ -528,16 +532,21 @@ def sparseInput (args : List String) : Except String (Option RecSparse.Shape) :=
     | [some nu, some ell, some sLog, some tLog] => .ok (some { nu, ell, sLog, tLog })
     | _ => .error s!"--sparse {v}: NU,ELL,S_LOG,T_LOG, four natural numbers"
 
-/-- `rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG]`: the shape of
-V*'s inner session (`RecVStar.innerOf`) from the inner statement, as one `verity/rec-inner/v2` line, for `verify
---rec-inner`; `--hide`: the verifier's own word that the inner session's circuits are private (`RecVStar.Inner.holo`);
-`--sparse`: its word that the session is candidate 3's, with the bucket's RecSparse shape (`RecVStar.Inner.sparse`). R's
-shape (`RecVStar.Inner.stacked`) is the inner circuit's META's (`RecVStar.stackedShapeOf`), the shape staging committed R
-at; a META naming one with no `--sparse` is refused, since R opens the sparse phase's claims. -/
+/-- `rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG]
+[--rec-links ROOT:N]`: the shape of V*'s inner session (`RecVStar.innerOf`) from the inner statement, as one
+`verity/rec-inner/v2` line, for `verify --rec-inner`; `--hide`: the verifier's own word that the inner session's circuits
+are private (`RecVStar.Inner.holo`); `--sparse`: its word that the session is candidate 3's, with the bucket's RecSparse
+shape (`RecVStar.Inner.sparse`); `--rec-links`: the link table the statement carries, whose `N` rows and the inner
+statement's units and rows give the table's shape (`RecVStar.linkShapeOf`, `RecVStar.Inner.links`). R's shape
+(`RecVStar.Inner.stacked`) is the inner circuit's META's (`RecVStar.stackedShapeOf`), the shape staging committed R at; a
+META naming one with no `--sparse` is refused, since R opens the sparse phase's claims. -/
 def recInnerCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG]"
+  let usage := "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG] [--rec-links ROOT:N]"
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
     | IO.eprintln usage; return 2
+  let links ← match RecLinkTree.linksArg args with
+    | .ok l => pure (l.map (·.2))
+    | .error e => IO.eprintln e; return 2
   let partition ← match ← partitionInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
@@ -555,7 +564,8 @@ def recInnerCmd (args : List String) : IO UInt32 := do
     IO.eprintln (s!"rec-inner: the inner circuit's META names R's shape (m {r.m}, claims {r.claims}), and the verifier names " ++
       "no RecSparse shape (--sparse NU,ELL,S_LOG,T_LOG): R opens the sparse phase's claims, so V*'s list would miss RecSparse")
     return 1
-  match RecVStar.innerOf (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile pub) partition program (args.contains "--hide") with
+  match RecVStar.innerOf (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile pub) partition program (args.contains "--hide")
+      links with
   | .ok i => IO.println { i with sparse, stacked }.toJson.compress; return 0
   | .error e => IO.eprintln s!"rec-inner: {e}"; return 1
 
@@ -746,7 +756,11 @@ shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`,
 prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
 statement and session its coefficients are checked against (`RecCoins.check`; `--rec-inner-coins` is refused,
-`RecCoins.refuseCoins`, and so is `--rec-links`, the inner population's link table, `RecLinks.refuseLinks`), and a statement reading a `rec-c<k>` the
+`RecCoins.refuseCoins`), a statement carrying the inner population's link table (`--rec-links ROOT:N`, its registered root
+and row count, `RecLinkTree.linksArg`) only at an inner shape naming a table of `N` rows and the other way round
+(`RecLinkPart.checkShape`), the link part's statement then held to the table, to the roots of the inner statement's
+input and output rows' trees and to V*'s link unit (`RecLinkPart.check`; the links' binding,
+`Flock.Guarantees.LinksBindDeployed`, which `Flock.Guarantees.RecursiveKSLinkAt` reads), and a statement reading a `rec-c<k>` the
 coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
 `RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
 (`--rec-rows`, `RecVStar.checkRows`). A V* statement whose check 5 reads the link points (a `rec-open/…`,
@@ -761,9 +775,11 @@ the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`
 statement's files and its inner shape, its setup holds the shape to the files' numbers and how the inner statement was
 proved to how its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`): `--rec-inner-statement
 verity/flock-circuit+plain-leaves`, `--rec-inner-statement-coins os`, no `--rec-inner-tables`, and a `--rec-inner-draw`
-of every unit in order.
+of every unit in order. An inner statement whose circuit links sets up only with the verifier's own program of it,
+`--rec-inner-program F` (`RecCoins.Files.program`), as the session's does with `--program`.
 Each DIR holds `session.json`
-and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
+and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each drawn session at its own
+draw; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
 `recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
@@ -791,7 +807,15 @@ cannot know what it verifies), then a record not in its canonical text (`RecordT
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, or two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
 different domains; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
-is accepted under `--zk` and changes nothing), all after every
+is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the recursion's)
+tags, files and a draw outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
+without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit
+reading several input groups or a tail stage returning the outputs is; a shared-row public file, with or without
+`--registered F`, outside the form `Flock.Guarantees.SampledKSLiveV5` covers (`KsScope.sharedWhy`: one whose circuit's
+public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
+under different domains); at more than one table a draw that does not parse or a subset draw whose `k` the tables don't
+divide; `Flock.Guarantees.SampledKSLiveV4` is over that acceptance without shared rows, and `SampledKSLiveV5` with
+them), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -806,11 +830,10 @@ verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.p
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
 public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
-  let templated := Tags.templated.any (·.name == stmtName)
-  let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
+  let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let tags := if args.contains "--upstream-plain" then { tags with upstreamPlain := true } else tags
   let stmtTags := tags
@@ -856,8 +879,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-  let (registered, complete, known, params) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, r.any (·.2.1), (r.map (·.2.2.1)).getD #[], (r.map (·.2.2.2)).getD #[])
+  let (registered, known, params) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2)).getD #[])
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -865,7 +888,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
-  if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
+  let recLinks ← match RecLinkTree.linksArg args with
+    | .ok l => pure l
+    | .error e => IO.eprintln e; return 2
   let recInner ← match ← recInnerInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
@@ -911,23 +936,22 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- a drawn statement that sets up is still refused when no soundness claim draws by its draw's law
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
-  -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`)
-  -- a templated statement (`Tags.templated`) is read from its template and refused in each session's verdict, after every
-  -- other check, until a soundness theorem reads `Circuit.tmpl`
-  let parsed := if templated then HmOut.parseTmpl tags circuitB tables else ProvedScope.circuitOf tags circuitB tables
-  let scope := if templated then .error (ProvedScope.refusal s!"{tags.name}, a templated statement")
-    -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
-    else if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
+  -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`): a templated
+  -- statement's (`Tags.templated`) carries its template, which the check reads (`ProvedScope.scopeOkT`)
+  let parsed := ProvedScope.circuitOf tags circuitB tables
+  -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
+  let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         Registered.checkProgram program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
+        RecLinkPart.checkShape recInner recLinks
         RecBudget.regs recInner registered
         RecBudget.statements recInner
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        if complete then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c (registered.getD #[])
+        if let some own := registered then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c own
         r.2.forM fun (st : Stmt) => Registered.checkCover st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
@@ -941,18 +965,19 @@ def verifyCmd (args : List String) : IO UInt32 := do
         if let (some i, some lk) := (recInner, recLink) then RecVStar.checkLinkRounds i lk
         r.2.forM (RecVStar.checkTopRows · registered recLink)
         r.2.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink)
+        r.2.forM (RecLinkPart.check · registered recCoins recLinks)
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
-  let ksFiles := if zk then
-      PortRoots.checkOf (if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables) tags pubB
-    else .ok ()
+  let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
+  let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
-  -- each statement is set up once, when a session first needs it: the population's, and each draw's
-  let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]
+  -- the population's statement is set up once, when a session first needs it; a drawn session at its own draw, never at
+  -- another session's (draws have no faithful cache key: `canon` refuses a non-integer number that `recordDraw` keeps)
+  let mut population : Option (Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := none
   let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
@@ -961,13 +986,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
       catch e => pure (Except.error s!"session files: {e}")
     -- a drawn session is verified against the drawn units' statement (Σ covers the draw); several tables split the draw
     let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
-    let key := draw.map fun d => (canon d).toOption.getD ""
     let mut st : Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json) := .error "setup: none"
-    match setups.find? (·.1 == key) with
-    | some (_, s) => st := s
-    | none =>
+    match draw, population with
+    | none, some s => st := s
+    | _, _ =>
       st := setupOf draw
-      setups := setups.push (key, st)
+      if draw.isNone then population := some st
       IO.eprintln s!"setup{if draw.isSome then " (drawn)" else ""}: {(← IO.monoMsNow) - t1} ms"
     let files ← match record, st with
       | .ok r, .ok (spec, _, _) =>
@@ -995,7 +1019,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
       -- the program,
       -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
-      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`)
+      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a circuit, a
+      -- public file or a draw outside its form (`KsScope.checkOf`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -1006,6 +1031,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       ProvedScope.programHeld program
       RecordText.check record
       ksFiles
+      if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
@@ -1032,17 +1058,28 @@ def verifyCmd (args : List String) : IO UInt32 := do
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
 
-/-- A templated statement's one-table statement (`Tags.templated`), its circuit read from its template
-(`HmOut.parseTmpl`). -/
-def buildStmtTmpl (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
-    (partition : Option Lean.Json) (program : Option ByteArray) (registered : Option (Array Registered.Port))
-    (publicInputs : Option ByteArray) (identifier : Option String) : V Stmt := do
-  let (_, sts) ← buildSessionOf (HmOut.parseTmpl tags circuitB tables) tags circuitB pubB compB coins tables 1
-    (partition := partition) (program := program) (registered := registered) (publicInputs := publicInputs)
-    (identifier := identifier)
-  match sts[0]? with
-  | some st => pure st
-  | none => throw "statement: the templated setup built no statement"
+/-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
+(`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a draw, as one
+line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit is read as `HmOut.parse` reads
+it, which refuses it: what passing the check establishes (`KsScope.check_ok`) is stated at that parse only. It accepts no
+session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held to. -/
+def ksFormCmd (args : List String) : IO UInt32 := do
+  let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
+  let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
+  let stmtName := (argOf args "--statement").getD Tags.circuit.name
+  let some tags := Tags.byName? stmtName
+    | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
+  let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
+  let tags := tags.withCoins (Coins.tree (Zk.coinSpec (tags.tableNames count)))
+  let (circuitB, pubB, _, tables) ← match ← statementInputs args with
+    | .ok x => pure x
+    | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
+  let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
+  let ksParsed := if tags.hiddenOutputs && !tags.isTmpl then ProvedScope.circuitOf tags circuitB tables
+    else HmOut.parse tags circuitB tables
+  match KsScope.checkOf ksParsed tags pubB count none with
+  | .ok () => IO.println "KS-FORM ok"; return 0
+  | .error why => IO.println s!"KS-FORM {why}"; return 1
 
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. With
 `--rec-inner F`, the statement must be one of V*'s at that inner shape, statement `--rec-part J` of them under the
@@ -1051,20 +1088,22 @@ rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`R
 and its rows of the circuit table's tops the coin server's (`RecVStar.checkTopRows`, `RecVStar.innerLink`, which holds the
 record's link points to the coin server's).
 Its verifier-registered values are checked against the verifier's coins (`RecCoins.check`) when it holds what that check
-reads: the inner statement and session (`--rec-inner-public` and its three; `--rec-inner-coins` is refused, and so is
-`--rec-links`, `RecLinks.refuseLinks`), or for R's levels and
+reads: the inner statement and session (`--rec-inner-public` and its three; `--rec-inner-coins` is refused), or for R's levels and
 opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
 whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
 tops (`RecCoins.checkLink`). Each level's cap statement (`rec-cap/…`) is checked against its registered reads and
 the inner transcript alone (`RecCoins.checkCap`, `RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
-(`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
+(`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). With
+`--rec-links ROOT:N`, the link table's registered root and row count, the statement is held as `verify` sets it up: at
+an inner shape naming a table of `N` rows and the other way round (`RecLinkPart.checkShape`), and the link part's
+statement to the table, to the roots of the inner statement's input and output rows' trees and to V*'s link unit
+(`RecLinkPart.check`, which needs the inner statement's files; `Flock.Guarantees.LinksBindDeployed`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
-  let templated := Tags.templated.any (·.name == stmtName)
-  let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
+  let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
@@ -1079,8 +1118,8 @@ def statementCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  let (registered, complete, known) ← match ← registeredFile args with
-    | .ok r => pure (r.map Prod.fst, r.any (·.2.1), (r.map (·.2.2.1)).getD #[])
+  let (registered, known) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[])
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -1088,7 +1127,9 @@ def statementCmd (args : List String) : IO UInt32 := do
   let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
-  if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
+  let recLinks ← match RecLinkTree.linksArg args with
+    | .ok l => pure l
+    | .error e => IO.eprintln e; return 2
   let recInner ← match ← recInnerInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
@@ -1116,14 +1157,13 @@ def statementCmd (args : List String) : IO UInt32 := do
   let c3 := RecSetup.c3 recInner recCommits
   match (do
       RecSetup.checkInner recInner recCoins recBound
+      RecLinkPart.checkShape recInner recLinks
       RecBudget.regs recInner registered
       RecBudget.statements recInner
-      let st ← (if templated then buildStmtTmpl tags circuitB pubB compB coins tables partition program registered
-          publicInputs (identifier.map Prod.snd)
-        else buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
-          (identifier.map Prod.snd))
+      let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
+        (identifier.map Prod.snd)
       RecBudget.table recInner #[st]
-      if complete then Registered.checkComplete st.c (registered.getD #[])
+      if let some own := registered then Registered.checkComplete st.c own
       KnownRead.check st.c known
       if recInner.isSome then
         RecSetup.checks recInner recCommits stmtTags tables #[st] circuitB partition program registered recPart
@@ -1137,6 +1177,7 @@ def statementCmd (args : List String) : IO UInt32 := do
         RecCoins.check st registered (RecCoins.Source.atC3 recCoins recInner recCommits) c3
       if recCoins.isSome || cap then
         RecCoins.checkLink st registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink
+      RecLinkPart.check st registered recCoins recLinks
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
@@ -1203,7 +1244,7 @@ def merkleTest (path : String) : IO UInt32 := do
   IO.println s!"merkle-test: {lines.size} cases, {bad} failures"
   return (if bad == 0 then 0 else 1)
 
-/-- `hm96-test VECTORS [sha512]`: PR #88's `hm96/vectors.json` against `Hm96.sha256` (PR #93's `vectors_sha512.json` against
+/-- `hm96-test VECTORS [sha512]`: `hm96/vectors.json` against `Hm96.sha256` (`vectors_sha512.json` against
 `Hm96.sha512`): the pinned key, the leaf prefix, every mask and every leaf. -/
 def hm96Test (path : String) (h : Hm96 := Hm96.sha256) : IO UInt32 := do
   let some v := (Lean.Json.parse (← IO.FS.readFile path)).toOption | IO.println "hm96-test: not JSON"; return 1
@@ -1634,7 +1675,7 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
   IO.println s!"QWORDPROGRAM {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
 
-/-- `rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG...`: a recursive statement's verdict from
+/-- `rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG...`: a recursive statement's verdict from
 its V* parts' `verify` logs and the challenger's interactive-run record (`RecCompose.check`). The verifier's own inner
 shape (`--rec-inner`) gives V*'s statements, `--rec-rows` is the one shared rows file the prover staged, and
 `--rec-run` the challenger's record of the run (`verity/rec-run/v1`), read from the challenger's host. It accepts
@@ -1643,15 +1684,16 @@ with one `VERDICT`, each accepted at its own part, under `--zk`, without an iden
 every part naming one set of the other shared inputs, the first at this inner shape's SHA-512 and in the compiled
 verifier's form; and no coin key twice; and `RecCompose.OneRun` holds of the record (`RecCompose.check_oneRun`): the
 staging first, exactly one session opened per part, every opened session a composed part's and every part's opened,
-the close last. A record that can't be read is refused. `--rec-links ROOT:N`, the link table's registered root and row
-count, is read (`RecLinkTree.linksArg`) and refused (`RecLinks.NO_LINKS`): no guarantee covers a table yet. One
-`REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
+the close last. A record that can't be read is refused. `--rec-links ROOT:N` (`RecLinkTree.linksArg`), the link table's
+registered root and row count, is the composition's own table: every part's `rec_shared` must name it, and without it
+none may name one (`Shared.Complete`, `RecCompose.checkForm`), so each part was verified at that table, the link part
+holding its rows to the inner statement's (`RecLinkPart.check`; the links' binding,
+`Flock.Guarantees.LinksBindDeployed`). One `REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG..."
-  match RecLinkTree.linksArg args with
-  | .error e => IO.eprintln e; return 2
-  | .ok (some (t, n)) => IO.eprintln s!"{RecLinks.NO_LINKS} (table root {hexOf t}, {n} rows)"; return 2
-  | .ok none => pure ()
+  let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG..."
+  let links : Option (ByteArray × Nat) ← match RecLinkTree.linksArg args with
+    | .ok l => pure l
+    | .error e => IO.eprintln e; return 2
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2
@@ -1672,14 +1714,15 @@ def recComposeCmd (args : List String) : IO UInt32 := do
   let mut flag := false
   for a in args do
     if flag then flag := false
-    else if a == "--rec-inner" || a == "--rec-rows" || a == "--rec-run" || a == "--archive" then flag := true
+    else if a == "--rec-inner" || a == "--rec-rows" || a == "--rec-run" || a == "--rec-links" || a == "--archive" then
+      flag := true
     else logs := logs.push a
   -- a log that can't be read is a part that never ran: no VERDICT, so refused
   let parts : List (String × String) ← logs.toList.mapM fun f => do
     try pure (f, ← IO.FS.readFile ⟨f⟩) catch _ => pure (f, "")
   -- a record that can't be read is no record: not JSON, so refused
   let run ← try IO.FS.readFile ⟨runFile⟩ catch _ => pure ""
-  let res := RecCompose.check n digest innerDigest run parts
+  let res := RecCompose.check n digest innerDigest (RecCompose.linksOf links) run parts
   let line := Lean.Json.mkObj [("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
       | .ok () => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length),
     ("rec_rows_sha512", Lean.Json.str digest), ("rec_inner_sha512", Lean.Json.str innerDigest),
@@ -1707,6 +1750,7 @@ def main (args : List String) : IO UInt32 := do
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
+  | "ks-form" :: rest => ksFormCmd rest
   | "rec-inner" :: rest => recInnerCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest
   | "rec-transcript" :: rest => recTranscriptCmd rest

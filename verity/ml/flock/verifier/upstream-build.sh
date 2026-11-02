@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Upstream's verifier builds, the other side of the agreement job, built once and stored (`upstream.json` pins them):
 #
-#   research run --on M --project verity --source . --cwd source --send ci-bundle.tar.gz -- bash verity/ml/flock/verifier/upstream-build.sh
+#   bash verity/ml/flock/verifier/upstream-build.sh
+#   (a job run from the source tree, with ci-bundle.tar.gz sent)
 #
 # From the bundle (`ci-bundle.sh`) it builds `ci-pod.sh`'s upstream loop, one `upstream-<M0 commit>` per live version, and
 # writes $RESEARCH_RUN_DIR/upstream.tar.gz (the binaries and BUILD.json: the flock commit, the Rust toolchain, the build host's

@@ -26,7 +26,7 @@ TIERS_KEYS = {"residual": "residual", "clock_share": "clock_share", "eps_w": "ep
 
 def context(fleet: str, registry: Registry = REG, seconds: float | None = None) -> Context:
     f = hardware.fleet(registry, fleet)
-    h = hardware.horizon(registry, "year") if seconds is None else hardware.Horizon("given", seconds)
+    h = hardware.monitoring_period(registry, "year") if seconds is None else hardware.MonitoringPeriod("given", seconds)
     return Context(f, hardware.location(registry, f.location), envelopes.policy(registry, "kimi-k2-1m-raw"), h,
                    hardware.units(registry))
 
@@ -73,8 +73,8 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
     slack = sampled.slack(ctx)
     assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
     assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-    assert math.fsum(v for k, v in slack.items() if k != "exfil.faulty") == pytest.approx(t5["residual"], rel=1e-9)
-    assert slack["exfil.faulty"] == pytest.approx(t5["cheat"], rel=1e-7)
+    assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+    assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
@@ -147,7 +147,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
 def test_the_inference_blocks_are_the_certified_work_that_ran():
     ctx = context("reference-h200")
     remote = envelopes.regime(REG, "remote")
-    loc, s = ctx.location, ctx.horizon.seconds
+    loc, s = ctx.location, ctx.period.seconds
     n = (1 - remote.pouw.audited(loc)) * (1 - remote.pouw.eps_w) * loc.phi * s / ctx.c
     assert remote.blocks(ctx, loc.phi * s).count == pytest.approx(n)
     assert remote.blocks(ctx, loc.phi * s).budget == Budget(ctx.c, ctx.policy.k)
@@ -159,8 +159,8 @@ def test_the_layout_gets_only_what_an_abiding_strategy_gets():
     layout = sampled.partition(ctx).serving[0].layout
     assert set(layout.uncertified) == set(Remote.ABIDING)
     assert set(sampled.slack(ctx)) - set(layout.uncertified) == {"skip.certs", "break.lag", "break.escape",
-                                                                 "exfil.faulty"}
-    used = ctx.location.phi * ctx.horizon.seconds * ctx.fleet.mfu_train
+                                                                 "exfil.incorrect"}
+    used = ctx.location.phi * ctx.period.seconds * ctx.fleet.mfu_train
     assert layout.uncertified["undecl.gpu"] == pytest.approx(sampled.pouw.residual * used)
 
 
@@ -397,12 +397,13 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
                                                ("reference-onsite-nvl72-per-device", "devices")])
 def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scenario, per):
     """`Σ_a δ_a`: PoUW's `p/ε'` over all windows, and the wipe's `2⁻¹²⁸ + Adv_PRF` once per game, a game per
-    server (or, per device, per device) per wipe over the horizon; the certifier adds nothing (it is the auditor's)."""
+    server (or, per device, per device) per wipe over the monitoring period; the certifier adds nothing (it is the
+    auditor's)."""
     s = build(REG, scenario)
     ctx, r = s.context, s.regime
     d = r.delta(ctx)
     assert set(d.by) == {"pouw", "detection", "wipe", "certifier"}
-    games = ctx.fleet.count * getattr(ctx.location, per) * ctx.horizon.seconds / r.wipe.wipe_s
+    games = ctx.fleet.count * getattr(ctx.location, per) * ctx.period.seconds / r.wipe.wipe_s
     assert d.by["wipe"] == pytest.approx((games * 2**-128, games * r.wipe.prf_advantage))
     assert d.by["pouw"] == pytest.approx(r.pouw.delta(ctx)) and d.by["certifier"] == (0.0, 0.0)
     assert d.coin == pytest.approx(math.fsum(c for c, _ in d.by.values()))
