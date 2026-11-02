@@ -367,7 +367,7 @@ theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forge
 theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
     exact.error a θ F c σ = 0 := by
   unfold Vocab.error Accounting.condError
-  rw [if_pos ⟨le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
+  rw [if_pos ⟨trivial, le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
 /-- At `exact`, PoUW's claim fails on every play: it certifies one gate computed, and no play computes one. -/
