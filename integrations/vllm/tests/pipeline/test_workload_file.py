@@ -14,7 +14,7 @@ import pytest
 from verity_vllm import config as C
 from verity_vllm.pipeline import cli
 
-EXAMPLE = C.REPO / "examples" / "vllm" / "workloads"
+EXAMPLE = C.REPO / "demos" / "vllm" / "workloads"
 
 
 def _stored(d: Path, docs: dict[str, dict]) -> dict[str, bytes]:

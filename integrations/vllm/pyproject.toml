@@ -50,7 +50,7 @@ markers = [
 # package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
 # fetch and `records.data` starts as `python -m research` (its `__main__`), and the run fixture
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
-# this package registers and the example's stored workload (examples/vllm/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
+# this package registers and the example's stored workload (demos/vllm/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
 # tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
@@ -63,7 +63,7 @@ markers = [
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `remote-audit-verifier`.
 inputs_only = true
-inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", ".gitignore",
+inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "demos/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/protocols/pouw/lean/check/lakefile.toml",
           "verity/core/protocols/remote_bandwidth/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",

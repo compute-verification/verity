@@ -24,7 +24,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `verity run` and `verity config` (`tests/test_run.py`): `verity`, the configuration's checks
 # (`verity.core.deploy.config`), what step 0's declarations read (`WardenParams`, the law parser) and the core parties
 # the test's table (`tests/step0.py`) runs. The served window's onsite configuration and its table
-# (`tests/test_onsite_served.py`): `examples/onsite_served`, and the piece scripts whose existence its dry run checks.
-inputs = ["verity", "examples/onsite_served", "benchmarks/one_stage/served_verdicts.sh",
+# (`tests/test_onsite_served.py`): `demos/onsite_served`, and the piece scripts whose existence its dry run checks.
+inputs = ["verity", "demos/onsite_served", "benchmarks/one_stage/served_verdicts.sh",
           "benchmarks/one_stage/served_verdicts.py", "benchmarks/pous/served_piece.sh",
           "benchmarks/pous/streamed_wipe/served_wipe.sh", "benchmarks/network_traces/certifier_piece.py"]

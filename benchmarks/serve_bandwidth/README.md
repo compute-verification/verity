@@ -6,7 +6,7 @@ in FP8 under `kv_filler/serve.py`'s bursty trace, sampled by nsys's GPU metrics 
 
 **Status: maintained.** Its suite runs in `check`, `budget.py` and `timeline.py` read `benchmarks/kv_filler`'s step
 profiles and kernel classes, and `benchmarks/stacked_share/share.py` takes its served trace from `mix.py`'s `mix.json`.
-Decided by `rg serve_bandwidth` over `verity/`, `benchmarks/`, `examples/`, `tests/` and `integrations/`.
+Decided by `rg serve_bandwidth` over `verity/`, `benchmarks/`, `demos/`, `tests/` and `integrations/`.
 
 - `mix.py`: the served mix, its steps named by what they schedule (prompt tokens, decodes, context).
 - `timeline.py`: each sample's bytes by phase (`prefill`, `decode`, `gap` between steps, `idle`) and kernel class

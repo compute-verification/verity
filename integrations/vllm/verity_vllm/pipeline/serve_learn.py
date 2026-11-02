@@ -7,7 +7,7 @@ to the host first, under the transient host budget (``--learn-host-budget-mb``, 
 plan was not pre-learned") and goes uncommitted. A declared Commit learns its plans in its warm-up run (`pipeline.commit`'s
 learn-only pass); `warm_up` is serve-openai's, run as soon as `warmed` gets the built committer, before the server listens.
 
-It serves the declared static shape (`shape_of`) the way ``examples/vllm/serve_load.py --fixed`` sends it: ``--max-num-seqs``
+It serves the declared static shape (`shape_of`) the way ``demos/vllm/serve_load.py --fixed`` sends it: ``--max-num-seqs``
 requests (at most ``--window-requests``) that share ``--max-num-batched-tokens`` (T) prompt ids among them, all prefilled at an
 execution block's first step and run through its last (``--window-steps``), greedy, with ``ignore_eos``. They are throwaway
 requests of random ids, parsed by the server's own protocol, and the committer runs learn-only around them
