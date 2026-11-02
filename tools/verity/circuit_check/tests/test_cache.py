@@ -393,6 +393,27 @@ def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeyp
     assert {"syn/other.py", _pin("SynOther_v1")} <= set(other["files"]), other["files"]
 
 
+def test_a_sidecar_whose_source_inspect_looked_for_is_declared_by_where_it_is(tmp_path, monkeypatch):
+    """The first check a process runs looks for the source of every module loaded (`syn.check`'s `inspect` lookup, as torch's
+    import does), each binding file among them (``present``).  `lookup` holds such a sidecar by whether it is where its module
+    is, so an edit of one no target is bound by reuses every target; `cache.declared` declares its path as a probe, not its
+    bytes, so a task keyed on the declaration isn't rerun by that edit either."""
+    from circuit_check import cache as CC
+
+    root = _tree(tmp_path)
+    side = "syn/extra.circuit-check.py"
+    (root / side).write_text("def _model_roots():\n    return []\n")
+    _run(root)
+    reads = [_entry(root, t)["reads"] for t in ("SynOther_v1", "SynTop_v1")]
+    assert any("syn.extra.circuit-check" in r["present"] for r in reads), reads
+    monkeypatch.syspath_prepend(str(root))
+    for r in reads:
+        d = CC.declared(root, r)
+        assert side not in d["files"] and (side in d["probes"]) == ("syn.extra.circuit-check" in r["present"]), d
+    _edit(root, side, "return []", "return []  # no roots")
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+
+
 def test_what_a_read_set_holds_beyond_its_declaration_is_undeclared():
     from circuit_check import cache as CC
 

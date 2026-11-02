@@ -2452,8 +2452,9 @@ def declared(root: Path, reads: dict[str, list[str]]) -> dict[str, Any]:
     (`registry_inputs`).  What `lookup` takes of them, through a move too (`_moved`): a module held, its file's bytes, and each
     path the search for it and for its import sites' modules asked about (`_resolve`), those modules by where they resolve
     (each held by its content only where a read holds it itself); a module whose source `inspect` looked for (``present``),
-    where it resolves; a sidecar's unit, pin or source, its file where its module is now (`_sidecar`); an enumerated package,
-    its listing and which of its directories are packages.  The installed
+    where it resolves, and a sidecar's, whether it is where its module is now (`_sidecar`), not its bytes (torch's import asks
+    for the source of every module loaded, each binding file among them); a sidecar's unit or pin, or one imported by name, its
+    file where its module is now; an enumerated package, its listing and which of its directories are packages.  The installed
     distributions are the environment's; a library git does not have (``untracked``) no task declares."""
     files: set[str] = set()
     listed: set[str] = set()
@@ -2512,7 +2513,11 @@ def _declared_read(root: Path, kind: str, r: str) -> tuple[frozenset[str], froze
                 where(_sites, root, r if f.name == "__init__.py" else r.rpartition(".")[0], _parsed(f)[1])
         elif kind in ("named", "missing", "present"):
             if (m := _side(r)) is not None:
-                path(where(_sidecar, root, m, ".py"))
+                p = where(_sidecar, root, m, ".py")
+                if kind != "present":
+                    path(p)
+                elif p is not None:
+                    probes.add(p)
             elif kind == "present":
                 where(_resolve, root, r)
             else:
