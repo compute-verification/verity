@@ -372,6 +372,14 @@ def test_an_env_module_whose_private_proof_holds_a_sorry_fails_its_env(tree, tmp
     assert res["status"] == "error" and any("private part" in line for line in res["detail"]["log"]), res["detail"]
 
 
+def test_an_env_with_no_build_of_its_fetched_packages_beyond_mathlib_s_cache_is_an_error(tree, tmp_path):
+    doc = graph.task_graph(tree, "lean-env:dep", listers=LISTERS)
+    shutil.rmtree(fetched_env(tree) / "evil" / ".lake" / "build")
+    res = runners.execute(doc["tasks"][0], doc, tmp_path / "env")
+    assert res["status"] == "error" and "no build of evil" in res["detail"]["error"], \
+        "a worker without warm dependencies or the bundle would record an env without them"
+
+
 def test_a_fetched_declaration_may_use_lake_s_family_axioms_and_no_axiom_a_fetched_package_or_init_declares():
     records = {
         "Lake.Build.Data": {"Lake.DataType.bool": ["Lake.DataType.bool"], "Lake.get": ["Lake.DataType.bool", "propext"]},

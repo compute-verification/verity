@@ -37,8 +37,10 @@ that uses Lake's API (a linter's executable) may use those, the toolchain's `Lak
 The toolchain's modules are recorded and not judged, since Init declares those axioms and the toolchain's own definitions
 use them (`Lean.reduceBool` takes `Lean.trustCompiler`): a module of the tree that reaches one takes it through the record
 and fails.
-An env that can't be made, a module under the module system whose private part is missing (its public part makes its
-theorems axioms), a replay that ends without a verdict and one that leaves out a module of the set are errors."""
+An env that can't be made, one with no build of any fetched package that Mathlib's cache doesn't supply (made without
+warm dependencies or the pinned bundle, which hold what the Lean check built of ArkLib and the rest), a module under the
+module system whose private part is missing (its public part makes its theorems axioms), a replay that ends without a
+verdict and one that leaves out a module of the set are errors."""
 from __future__ import annotations
 
 import json
@@ -117,6 +119,13 @@ def run(task: dict, work: Path) -> dict:
         replay = lm.program("Replay", tc, work)
     except (lm.EnvError, Timeout) as e:
         return {"status": "error", "detail": {"error": f"the lean env: {type(e).__name__}: {e}"}}
+    if deps is not None and (bare := [n for n in lm.fetched(pkg) if n not in lm.la.cache_covered(deps)]) and not any(
+            (deps / n / ".lake" / "build").is_dir() for n in bare):
+        return {"status": "error", "detail": {"error": (
+            f"the env holds no build of {', '.join(bare)}, which Mathlib's cache doesn't supply: this worker made it "
+            "without warm dependencies or the pinned bundle, and its record would leave their modules out. Run the task "
+            f"where the Lean check of {v['package']} has passed (`lean_audit.WarmDeps`) or where `setup.sh` can fetch "
+            f"the bundle, after removing {deps}")}}
     libs = lm.env_libs(pkg, tc, deps)
     found = lm.env_modules(libs)
     steps["env"] = round(time.monotonic() - t, 3)
