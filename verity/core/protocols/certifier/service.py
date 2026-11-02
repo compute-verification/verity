@@ -137,14 +137,14 @@ block takes as its ``sync`` parameter. The in-the-clear check runs `served_check
 **A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
 of each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
 schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
-(`certificate.parameters_digest`). The warden is the auditor's device, and its code puts every bucket's cells, r for
-each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's proof blocks in zero
-knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms charge them
-(log2 #S_s and Σ_c log2(cap_c + 1)), and the warden runs no shaper clock, so a window declares no sync and the
-charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each head check holding its
-end's head to the warden's grid and digest and to the warden's signed digest. Its public items are `PUBLIC_WARDEN`. The
-in-the-clear check is the opening's root and the head checks: the records' cells are the scan's, and the certifier's
-host audit doesn't read a warden's records.
+(`certificate.parameters_digest`). The network certifier is the auditor's device, and its code puts every bucket's
+cells, r for each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's proof blocks
+in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
+charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifier runs no shaper clock, so a window
+declares no sync and the charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each
+head check holding its end's head to the network certifier's grid and digest and to the network certifier's signed
+digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
+records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records.
 
 A link whose egress end has no occupancy profile and is neither served nor a warden's has no verdict
 (`ValueError`, failing closed): nothing would hold its egress timing.
@@ -163,8 +163,9 @@ reference's accept bit (`reference`), never a violation's kind.
 (`verity/core/protocols/network/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
-the Lean refuses the case. On a warden link the Lean reads the warden's parameters digest (`lean_case`'s ``warden``) for
-both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what `python_verdict` reads that the
+the Lean refuses the case. On a network certifier link the Lean reads the network certifier's parameters digest
+(`lean_case`'s ``warden``) for both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what
+`python_verdict` reads that the
 Lean takes as an input rather than checks:
 - on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
   as its schedule's, `warden.WardenParams.digest`), which neither derives;
@@ -546,8 +547,9 @@ class Hidden:
 
 @dataclass(frozen=True)
 class WardenProfile:
-    """A warden link's profile (`LinkWindows.warden`, the module docstring's "A warden link"): the link's windows and the
-    warden's parameters digest (`warden.WardenParams.digest`), which both ends' heads bind, both fixed before the run."""
+    """A network certifier link's profile (`LinkWindows.warden`, the module docstring's "A network certifier link"): the
+    link's windows and the network certifier's parameters digest (`warden.WardenParams.digest`), which both ends' heads
+    bind, both fixed before the run."""
 
     windows: int
     digest: bytes
@@ -618,7 +620,7 @@ class LinkWindows:
 
     @property
     def charge(self) -> float:
-        """log2 #Σ_sync: 7 bits per window at 16 × 8; 0 on a warden link, which declares no sync."""
+        """log2 #Σ_sync: 7 bits per window at 16 × 8; 0 on a network certifier link, which declares no sync."""
         return 0.0 if self.warden is not None else self.sync_set.bits
 
     def head_key(self, direction: int) -> tuple[int, int, int]:
@@ -629,7 +631,8 @@ class LinkWindows:
 
     def grid(self, direction: int) -> bytes:
         """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the egress grid's parameters digest
-        binds Σ_sync, the ingress grid's none; on a warden link both are the warden's (`WardenProfile.digest`)."""
+        binds Σ_sync, the ingress grid's none; on a network certifier link both are the network certifier's
+        (`WardenProfile.digest`)."""
         if self.warden is not None:
             return HC.grid_bytes((self.params, self.ingress_params)[direction], self.warden.digest)
         if direction == 0:

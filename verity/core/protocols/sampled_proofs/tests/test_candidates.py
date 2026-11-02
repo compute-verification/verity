@@ -57,6 +57,19 @@ def test_size_classes_admit_rows_and_tiles_and_prune_past_the_widest():
         cuts("wide", Shape("Wide", 1, 1, UNIT_CLASS_MAX + 1, out_gates=2), N, CostModel(per_and=1.0), OBJECTIVE)
 
 
+def test_a_shape_past_c_flocks_block_is_never_a_proof_block():
+    """A shape of cap 0 (its block past C-Flock's 2^K_MAX) is descended into, never proved whole, and gives no width hint;
+    with nothing to descend into it has no legal cut, which says why."""
+    tile = Shape("Tile2", 2 * 32 * 4190, 2048, 64, out_gates=2, rows=(1024, 1024, 1024, 8), commit_bits=64, cap=0,
+                 parts=((DOT, 2),))
+    costs = CostModel(per_and=1e-10, statement_fixed=1.0)
+    cands, alts, hints = cuts("tile", tile, N, costs, OBJECTIVE, grid=21)
+    assert all(u != "Tile2" for key in alts.values() for u, _ in key) and {c.cap for c in cands} == {4096}
+    assert not [h for h in hints if h.node == "Tile2"]
+    with pytest.raises(ValueError, match=r"^Huge has no legal cut: it is past C-Flock's block \(cap 0\)"):
+        cuts("huge", Shape("Huge", 1, 1, 16, cap=0), N, costs, OBJECTIVE)
+
+
 def test_boundary_pressure_names_the_unit_between_two_definitions():
     """With commitment against proving balanced at sqrt(c0 / (lam alpha)) between 32 and 1024 MACs, and no chunk
     Definition to bind, proof blocks of an eighth of the dot beat both the dot and its steps."""

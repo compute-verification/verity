@@ -185,6 +185,7 @@ theorem listed_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : R
   obtain ⟨t, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, hA, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, -, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h

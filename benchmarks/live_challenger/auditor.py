@@ -14,7 +14,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
                                              [--seed S] [--eos-ids ID,...] [--compact B] [--margin M])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
                                        [--temperature T] [--top-p P]
-                                       [--scan [--bucket-ms MS] [--prompts [--window-per-group]] < PROMPTS]
+                                       [--scan [--bucket-ms MS]
+                                        [--prompts [--scan-class w63|w63k4] [--window-per-group]] < PROMPTS]
     vy-challenger-gate weights-write [--shape h200|tiny]
     vy-challenger-gate load-relay --peer NAME --port PORT --sink-port PORT --program SHA512 --minutes M
                                   [--shape h200|tiny] [--streams 4] [warden-rehearse's flags]
@@ -187,10 +188,13 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   token ids each, at most the scan's KI of 1024 and below 2^17, its IDB), writes them to `witness/prompts.json` alone (the request records their
   count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
   (`WARDEN_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`WARDEN_PROMPT_REQUESTS`) the prompts' count by
-  default. `--window-per-group` (at most the scan's 4 lanes of prompts) sends them a group at a time, group g's half a
-  bucket into link-window g·G (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows
-  g·G … (g+1)·G − 1, which `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its
-  groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
+  default. `--scan-class CLASS` (with `--prompts`, recorded and passed on only when given) runs the network certifier
+  at that class's schedule instead (`SCAN_CLASSES`, `scan_schedule`: w63k4, the window circuit's 4,32,4, at 5 egress cells),
+  with its prompts of at most its KI ids (32) and `--tokens` at most its egress cells less the trailer (4)
+  (`scan_bounds`), the network certifier's run `scan_zk.py prove --class CLASS --warden-run` reads. `--window-per-group` (at most
+  the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket into link-window g·G
+  (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
+  `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
   --prompts --tokens 24`. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
@@ -343,13 +347,20 @@ WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second sampled from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
-#: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
-#: `scan_zk.py prove --warden-run` takes but for its tick (`SCAN_BUCKET_MS`), as `warden_serve.py`'s flags
+#: a scan rehearsal's (`--scan`) schedule at the class of record, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`),
+#: as `warden_serve.py`'s flags
 SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "27", "--lanes", "4",
                  "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
                  "--egress-cells", "65", "--every", "16")
 #: the scan's schedule by flag, which `--window-per-group` sizes a group's link-windows on (`scan_group_windows`)
 SCAN = {f: int(v) for f, v in zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2])}
+#: a scan rehearsal's classes, scan_zk's (`scan_zk.SETUPS`) by name, each its egress cells (KO + 1) and KI, the most ids
+#: a prompt has. `--scan-class` (with `--prompts`; `SCAN_CLASS`, the class of record, by default) picks one, whose
+#: schedule (`scan_schedule`, `scan_zk.py schedule --class`) is the only one `scan_zk.py prove --warden-run --class`
+#: takes but for its tick (`SCAN_BUCKET_MS`): `SCAN_SCHEDULE` at its egress cells, so what the gate counts off `SCAN`
+#: (minutes, groups, sampling blocks) holds at each. w63k4 is the window circuit's 4,32,4
+SCAN_CLASS = "w63"
+SCAN_CLASSES = {SCAN_CLASS: (SCAN["--egress-cells"], 1024), "w63k4": (5, 32)}
 #: a scan rehearsal's `--bucket-ms`, its tick τ: the endpoint gets a short request in its admission's tick, and its
 #: first egress cell leaves D = 27 ticks later, by which an answer of at most r = 4 ids must be whole: D·τ = 2.7 s at
 #: the scan's 100 ms, and at the most 108 s, for an endpoint that takes up to about 90 s to answer
@@ -358,13 +369,14 @@ SCAN_BUCKET_MS = (SCAN["--bucket-ms"], 4000)
 #: `WARDEN_PROMPTS` prompts, each of `WARDEN_PROMPT_IDS` token ids below 2^`WARDEN_PROMPT_ID_BITS` (the scan's IDB);
 #: then `--requests` and `--tokens` (each request's exact count, at most the scan's egress cells but the trailer's)
 #: take `WARDEN_PROMPT_REQUESTS` and `WARDEN_PROMPT_TOKENS`. A prompt is at most the scan's KI ids (`scan_zk.CLASS`),
-#: since the scan refuses a request of more and the gate refuses it at input instead
+#: since the scan refuses a request of more and the gate refuses it at input instead. These are the class of
+#: record's; another `--scan-class`'s are its own (`scan_bounds`)
 WARDEN_PROMPTS_BYTES = 1 << 20
 WARDEN_PROMPTS = (1, 400)
-WARDEN_PROMPT_IDS = (1, 1024)
+WARDEN_PROMPT_IDS = (1, SCAN_CLASSES[SCAN_CLASS][1])
 WARDEN_PROMPT_ID_BITS = 17
 WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
-WARDEN_PROMPT_TOKENS = (1, SCAN["--egress-cells"] - 1)
+WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
 #: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
@@ -1202,10 +1214,22 @@ def _minutes(arrivals_s: int, height: int) -> int:
     return -(-(arrivals_s + 3 * WARDEN_TAIL_S + 2 ** height // KEYGEN_LEAVES_S) // 60)
 
 
-def scan_schedule(bucket_ms: int | None = None) -> tuple[str, ...]:
-    """`SCAN_SCHEDULE` at the tick `bucket_ms` (`--bucket-ms`; its own when None)."""
-    at = SCAN_SCHEDULE.index("--bucket-ms") + 1
-    return SCAN_SCHEDULE if bucket_ms is None else (*SCAN_SCHEDULE[:at], str(bucket_ms), *SCAN_SCHEDULE[at + 1:])
+def scan_schedule(bucket_ms: int | None = None, scan_class: str | None = None) -> tuple[str, ...]:
+    """`SCAN_SCHEDULE` at the tick `bucket_ms` (`--bucket-ms`; its own when None) and the egress cells of
+    `scan_class` (`SCAN_CLASSES`; its own when None)."""
+    flags = dict(zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2]))
+    if bucket_ms is not None:
+        flags["--bucket-ms"] = str(bucket_ms)
+    if scan_class is not None:
+        flags["--egress-cells"] = str(SCAN_CLASSES[scan_class][0])
+    return tuple(x for flag in flags.items() for x in flag)
+
+
+def scan_bounds(scan_class: str | None = None) -> tuple[tuple[int, int], tuple[int, int]]:
+    """A scan rehearsal's `--prompts` at `scan_class` (`SCAN_CLASSES`; the class of record when None): a prompt's ids,
+    1 to its KI, and `--tokens`, 1 to its egress cells less the trailer's."""
+    cells, ki = SCAN_CLASSES[scan_class or SCAN_CLASS]
+    return (1, ki), (1, cells - 1)
 
 
 def warden_window_ms(req: dict) -> int:
@@ -1263,8 +1287,9 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic) with, when
     given, its tick `--bucket-ms` (`SCAN_BUCKET_MS`, which the minutes and the key's sampling blocks are counted at),
     the sampling (`sampling`) and the key's height. `--prompts` (with `--scan`) marks the request's prompts as the gate's stdin,
-    and `--window-per-group` (with `--prompts`) sends them a group a link-window's span; `warden_prompts` reads them
-    and checks what depends on them. With `load` (`load-relay`) it is the serving session with its load first
+    `--scan-class` (with `--prompts`, recorded only when given) the scan's class they are of (`SCAN_CLASSES`: its
+    schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
+    span; `warden_prompts` reads them and checks what depends on them. With `load` (`load-relay`) it is the serving session with its load first
     (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's."""
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {'load-relay' if load else 'warden-rehearse'}",
                                 exit_on_error=False, add_help=False, allow_abbrev=False)
@@ -1276,6 +1301,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     p.add_argument("--scan", action="store_true")
     p.add_argument("--bucket-ms", default=None)
     p.add_argument("--prompts", action="store_true")
+    p.add_argument("--scan-class", default=None)
     p.add_argument("--window-per-group", action="store_true")
     if load:
         p.add_argument("--sink-port", required=True)
@@ -1291,6 +1317,10 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused("--bucket-ms: the scan's tick, with --scan")
     if a.window_per_group and not a.prompts:
         raise Refused("--window-per-group: groups of the --prompts")
+    if a.scan_class is not None and not a.prompts:
+        raise Refused("--scan-class: the scan's class of the --prompts")
+    if a.scan_class is not None and a.scan_class not in SCAN_CLASSES:
+        raise Refused(f"--scan-class {a.scan_class!r}: one of {sorted(SCAN_CLASSES)}")
     tick = {} if a.bucket_ms is None else {"bucket_ms": bounded("--bucket-ms", a.bucket_ms, *SCAN_BUCKET_MS)}
     loaded = {"load": parse_load(a, host, port)} if load else {}
     spent = loaded["load"]["minutes"] if load else 0
@@ -1299,11 +1329,13 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
                       f"and witness at {LOAD_RATE / 1e6:g} MB/s and {LOAD_READY_S} s for the endpoint), and the "
                       "serving after it more")
     if a.prompts:
+        cls = {} if a.scan_class is None else {"scan_class": a.scan_class}
+        tokens = scan_bounds(a.scan_class)[1]
         return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "height": a.height,
                 "requests": None if a.requests is None else bounded("--requests", a.requests, *WARDEN_PROMPT_REQUESTS),
-                **({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_PROMPT_TOKENS)}),
-                "scan": True, **tick, "prompts": True, **({"window_per_group": True} if a.window_per_group else {})} | \
-            a.sampling | loaded
+                **({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *tokens)}),
+                "scan": True, **tick, "prompts": True, **cls,
+                **({"window_per_group": True} if a.window_per_group else {})} | a.sampling | loaded
     requests = bounded("--requests", a.requests or "100", *WARDEN_REQUESTS)
     given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}) | \
         ({"scan": True} if a.scan else {}) | tick
@@ -1407,12 +1439,13 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
     alone (the ids are the prover's, `witness/` only); refused when `--minutes` is under `warden_group_minutes` of its
     groups (`warden_minutes` of its requests otherwise), at its tick. Returns the prompts' canonical bytes, the
     witness's `PROMPTS`."""
-    prompts = prompts_of(data)
+    ids, most = scan_bounds(req.get("scan_class"))
+    prompts = prompts_of(data, ids)
     n = len(prompts)
     if req.get("window_per_group") and n > SCAN["--lanes"]:
         raise Refused(f"--window-per-group: {n} prompts, past a group's {SCAN['--lanes']} (the scan's lanes)")
     requests = req["requests"] or n
-    tokens, height, minutes = req.get("tokens", WARDEN_PROMPT_TOKENS[1]), req["height"], req["minutes"]
+    tokens, height, minutes = req.get("tokens", most[1]), req["height"], req["minutes"]
     spent, tick = req.get("load", {}).get("minutes", 0), req.get("bucket_ms", SCAN["--bucket-ms"])
     if req.get("window_per_group"):
         least, what = warden_group_minutes(-(-requests // n), tokens, height, tick), f"{-(-requests // n)} groups"
@@ -2064,12 +2097,12 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
-    for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick (`scan_schedule`), of its
-    prompts (`--prompts`, the gate's `PROMPTS` in `out`, the witness) and in groups (`--window-per-group`) when the
-    request says so, and the most tokens a request asks for only when the request has it. A `load-relay` request's
-    load goes first: the `store`'s stream of its shape relayed to `sinks` (the sink tunnels' local ends) for its
-    program, the endpoint given `LOAD_READY_S` to come up after it."""
-    scan = ["--ids", *scan_schedule(req.get("bucket_ms"))] if req.get("scan") else []
+    for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick and class
+    (`scan_schedule`), of its prompts (`--prompts`, the gate's `PROMPTS` in `out`, the witness) and in groups
+    (`--window-per-group`) when the request says so, and the most tokens a request asks for only when the request has
+    it. A `load-relay` request's load goes first: the `store`'s stream of its shape relayed to `sinks` (the sink
+    tunnels' local ends) for its program, the endpoint given `LOAD_READY_S` to come up after it."""
+    scan = ["--ids", *scan_schedule(req.get("bucket_ms"), req.get("scan_class"))] if req.get("scan") else []
     prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []

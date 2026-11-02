@@ -134,14 +134,14 @@ def commitment_binding(compiler: Any) -> bytes:
 advice_rows = IF.advice_rows
 
 
-def commit_advice(compiler: Any, data: bytes, salts: Sequence[bytes] | None = None) -> AC.Registration:
+def commit_advice(compiler: Any, data: bytes, salts: Sequence[bytes] | None = None) -> AC.Committed:
     """The advice's hiding commitment (`interface.commit_advice`: `advice_rows` under `commitment_binding`), fresh salts unless
     ``salts`` is given."""
     return IF.commit_advice(named(compiler), data, salts)
 
 
 def of_advice(compiler: Any, data: bytes, codec: Any = None,
-              salts: Sequence[bytes] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any], AC.Registration]:
+              salts: Sequence[bytes] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any], AC.Committed]:
     """The advice's bytes read by ``codec`` (`codec_of`), refused unless they are its canonical encoding: the compiler's requests
     (`requests_of`), the binding (`binding`: the root of `commit_advice` and the length, ``codec.total_bits``) and the commitment,
     whose rows and salts are the prover's."""
@@ -169,7 +169,7 @@ def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, A
             "refused": {str(advice.requests[i].id): why for i, why in sorted(refused.items())}}
 
 
-def opening(data: bytes, reg: AC.Registration) -> dict[str, Any]:
+def opening(data: bytes, reg: AC.Committed) -> dict[str, Any]:
     """The advice's opening: its encoding and every row's salt, the prover's private file.  Handing it to the verifier stands in
     for the proof that the compiler's units are wired as the committed advice says (the named gap)."""
     return IF.advice_opening(data, reg)
@@ -247,8 +247,8 @@ class Traced:
 
 
 CAPPED = "verity/prove-path/capped-compiler/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred requests (I1 spends tens of bits a
-#: row); `predict.steps.CAP_BITS`
+#: ℓ when a registration names none, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred
+#: requests (I1 spends tens of bits a row)
 CAP_BITS = 1 << 23
 
 

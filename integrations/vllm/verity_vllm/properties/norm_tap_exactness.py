@@ -88,7 +88,7 @@ def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | Non
     spec = bind(b1.RMSNormFusedCuda if kernel == "cuda" else b1.RMSNormTriton, N=N, EPS=eps)
     prog, call = standalone_call(spec)
     t: dict[int, int] = {}
-    evaluate_call(prog.circuit, call, [int(v) for v in x] + ([int(v) for v in res] if kernel == "cuda" else []) + [int(v) for v in w], transcript=t)
+    evaluate_call(prog.circuit, call, [int(v) for v in x] + ([int(v) for v in res] if kernel == "cuda" else []) + [int(v) for v in w], trace=t)
     return int(t[_scale_gate(kernel, call)])
 
 
