@@ -25,7 +25,8 @@ ORDER = ("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lea
 #: what each part of the recursive run is, recorded in the result's ``inputs``
 STATEMENTS = {
     "inner": "N x GemmCoordinate_v2{K,DOT=HopperBF16WgmmaDot16_v1} under Q_template_instance (rec_reprice.py), "
-             "verity/flock-circuit+plain-leaves, M0 (no --zk), FC_COINS=os, through rec_live's proxy",
+             "verity/flock-circuit+plain-leaves, M0 (no --zk), on the challenger's coin tree (FC_COINS=tree), through "
+             "rec_live's proxy",
     "vstar": "V*'s statements over the inner's last proxied run: each Ligerito level's RecOpen and RecCap, the algebra's "
              "InnerRepCheck parts (rec_vstage)",
     "outer": "each V* statement with --zk on loopback, every unit drawn, one at a time, in each of MODES",
@@ -429,7 +430,8 @@ def read(root: Path) -> dict[str, Any]:
         f"{staged['n']} x {staged['unit']} ({staged['subcircuit']}, m = {staged['m']}) under Q_template_instance, staged by "
         + (f"stage.sh from served window {staged['window']['run'][:16]}'s member {staged['window']['member']}"
            if staged.get("window") else "stage.sh from seeded draws (generated values)")
-        + ", verity/flock-circuit+plain-leaves, M0 (no --zk), FC_COINS=os, through rec_live's proxy")}
+        + ", verity/flock-circuit+plain-leaves, M0 (no --zk), on the challenger's coin tree (FC_COINS=tree), through "
+          "rec_live's proxy")}
     return {"schema": SCHEMA, "params": params(root), "inputs": inputs, "rows": [r.to_json() for r in rows], "summary": s,
             "steps": steps, "headline": headline(rows, s, steps), **({"staged": staged} if staged else {})}
 

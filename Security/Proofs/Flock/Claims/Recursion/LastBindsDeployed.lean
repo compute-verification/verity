@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Recursion.LastBindsEC
 /-!
 # (P4) at the deployed bound record
 
-`Bound.LastBindsEC`, (P4) modulo what `E*` reads (card ef47c02e), at the deployed bound record: `RecDeploy.bdDeployed`
+`Bound.LastBindsEC`, (P4) modulo what `E*` reads, at the deployed bound record: `RecDeploy.bdDeployed`
 at the deployed plain verifier's steps and columns and the deployed rows' digest input. It comes down to the deployed
 plain verifier binding its own last message.
 

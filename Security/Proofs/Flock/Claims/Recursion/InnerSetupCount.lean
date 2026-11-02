@@ -133,7 +133,7 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     | none => simp [filesOf, hq] at hheld
     | some p => exact ⟨p, rfl⟩
   have hfs : filesOf r = some (.files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none,
-      some (innerFormOf r.innerRaw)⟩) := by rw [filesOf, hp]; rfl
+      some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, hrows0⟩ := checkShape_rows hsh
   obtain ⟨spec2, st2, hstm2, -, -, -, -, hform⟩ := checkShape_files hsh
@@ -144,7 +144,7 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     (hrows0 t ht r hrt).trans (by norm_num [RecBudget.MAX_INNER_ROWS])
   obtain ⟨hs1, hs2, hs3, b, d, D, hb, hjd, hD, hpr⟩ := checkForm_ok hform
   have hs1 : r.innerRaw.statement = Tags.circuitPlainLeaves.name := hs1
-  have hs2 : r.innerRaw.osCoins = true := hs2
+  have hs2 : r.innerRaw.osCoins = false := hs2
   have hs3 : r.innerRaw.tables = [] := hs3
   have hb : r.innerRaw.draw = some b := hb
   obtain ⟨hdec, -, hok⟩ := readX_inner hr

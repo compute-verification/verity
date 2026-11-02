@@ -11,7 +11,7 @@ those facts are one proposition, and they are discharged for a flat statement `S
   the pin. `Realizes.placement` is the `Placement` it gives, at `composePlace`.
 - **`Compose.BlockFacts`**: 1e's form of the same facts, over the unit's block rows (`blockRow`, Δ applied), for the
   verifier's own `deriveChecked` run. `BlockFacts.realizes` turns them into `Realizes` for the unit's composed rows
-  (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness lane's `TableClass`).
+  (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness model's `TableClass`).
 - **`Layout.realizes`**: in the model of a statement `setupH` accepted (`Layout`),
   at unit slot `s₀` with positions `slot s₀ + c`, `Realizes` holds for every `Logical` whose rows are the unit net's
   (`Compose.NetRows`). It reads Δ only as `Layout` does, for statements without a typed template.

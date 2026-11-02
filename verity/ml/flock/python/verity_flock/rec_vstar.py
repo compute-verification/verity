@@ -1,4 +1,4 @@
-"""The reference for V*'s hashing (hiding model architectures, lane rec-v0): every inner Ligerito opening's leaf climbs to
+"""The reference for V*'s hashing (hiding model architectures): every inner Ligerito opening's leaf climbs to
 the node of its tree's top that its coin-derived position names, every top opens the salted commitment the coin server
 received, and every message row opens its commitment.
 

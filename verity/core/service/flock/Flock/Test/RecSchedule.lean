@@ -1,7 +1,7 @@
 /-
 `RecVStar.checkSchedule` counts the coin server's rounds. At the plain session's inner shape (fixture
-`rec-coins/16-16-8-n64`: m 27, k_log 22, 8 claims, whose two reps' 96 rounds each are `inner-honest`'s), a
-record listing the schedule's 192 rounds is on it, and one listing 194 is refused before any round is read. 194 is
+`rec-coins/16-16-8-n64`: m 28, k_log 22, 12 claims, whose two reps' 110 rounds each are `inner-honest`'s), a
+record listing the schedule's 220 rounds is on it, and one listing 222 is refused before any round is read. 222 is
 the inner verifier's `k` at that statement, `2 + rounds` (`FlockDeploy.V`): the link round 0, the reps' rounds and
 the last round. So a record that lists every inner round, as the proofs' first transcript model did, sets up no V*
 statement: `RecSetup.commits` runs `checkSchedule` on the staged transcript, and a premise read at that model held of
@@ -14,7 +14,7 @@ namespace Flock.Test.RecSchedule
 
 open Lean Flock.RecVStar
 
-def inner : Inner := { m := 27, kLog := 22, claims := 8, regions := 1 }
+def inner : Inner := { m := 28, kLog := 22, claims := 12, regions := 1 }
 
 def hex (n : Nat) : Json := Json.str (String.ofList (List.replicate n '0'))
 
@@ -40,15 +40,15 @@ def verdict (pre post : Array Json := #[]) : Option (Except String Unit) :=
   (recordJ pre post).map (checkSchedule inner)
 
 def first : Json := roundJ "circuit/rep0" 0 (6, #[], 1, false)
-def last : Json := roundJ "circuit/rep1" 96 (1, #[], 0, true)
+def last : Json := roundJ "circuit/rep1" 110 (1, #[], 0, true)
 
 #guard (scheduleOf inner "circuit").map (·.map fun (s, _, _, rs) => (s, rs.size)) ==
-  some #[("circuit/rep0", 96), ("circuit/rep1", 96)]
+  some #[("circuit/rep0", 110), ("circuit/rep1", 110)]
 
 #guard verdict.any (·.toOption.isSome)
 
 #guard match verdict #[first] #[last] with
-  | some (.error e) => (e.splitOn "194 rounds, and the schedule's 192").length == 2
+  | some (.error e) => (e.splitOn "222 rounds, and the schedule's 220").length == 2
   | _ => false
 
 #guard (verdict #[first]).any (·.toOption.isNone) && (verdict #[] #[last]).any (·.toOption.isNone)

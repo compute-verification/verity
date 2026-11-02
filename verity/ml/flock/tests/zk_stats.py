@@ -1,4 +1,4 @@
-"""C-Flock ZK (lane flock-zk): real against simulated transcripts of ``flock-circuit --zk`` on the checked fields.
+"""C-Flock ZK: real against simulated transcripts of ``flock-circuit --zk`` on the checked fields.
 
 Input: the ``ZKREAL``, ``ZKSIM`` and ``ZKCONTROL`` lines of ``flock-circuit zkstat --zk --n N`` (one verifier coin seed; the
 real sessions draw fresh prover seeds; the simulator sees only the public statement and those coins; the control is the same
