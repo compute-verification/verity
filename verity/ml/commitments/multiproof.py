@@ -179,20 +179,20 @@ def multiproof_root(
 
     if not leaves or any(not 0 <= rank < count for rank in leaves):
         return None
-    cursor = 0
+    node = _node_of(domain_id, hash)
+    needed = 0
 
-    def sibling(level: int, index: int) -> bytes:
-        nonlocal cursor
-        if cursor >= len(proof):
-            raise IndexError
-        cursor += 1
-        return proof[cursor - 1]
+    def count_sibling(level: int, index: int) -> bytes:
+        nonlocal needed
+        needed += 1
+        return b""
 
-    try:
-        reconstructed = _fold(count, leaves, sibling, _node_of(domain_id, hash))
-    except IndexError:
+    # which siblings are read depends on the ranks alone, not on any digest
+    _fold(count, dict.fromkeys(leaves, b""), count_sibling, lambda *_: b"")
+    if needed != len(proof):
         return None
-    return reconstructed if cursor == len(proof) else None
+    siblings = iter(proof)
+    return _fold(count, leaves, lambda level, index: next(siblings), node)
 
 
 @dataclass(frozen=True, slots=True)
