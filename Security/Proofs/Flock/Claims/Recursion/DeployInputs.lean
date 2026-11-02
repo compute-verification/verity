@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.DeployInputs
-import Flock.RecLinks
 import Flock.RecBudget
+import Flock.RecLinkPart
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
@@ -12,21 +12,24 @@ directory: Flock's statement (`FlockDeploy.Raw`, `--zk` on) and the bytes and nu
 `--rec-inner-partition`; `--rec-inner-coins`, which the verifier refuses), the inner session's record
 (`--rec-inner-session`'s `session.json`), the coin server's transcript (`--rec-inner-transcript`), the circuit
 registration (`--rec-inner-registration`) and how the inner statement is set up (`--rec-inner-statement`,
-`--rec-inner-statement-coins`, `--rec-inner-tables`' tables, `--rec-inner-draw`) and the inner population's link table
-(`--rec-links`: its root and row count). `decodeRec` keeps only a reading whose encoding is `x`, so it is injective
-(`decodeRec_injective`), and refuses every other format, `flock-verify-rec-statement/v1` (no link table) among them.
+`--rec-inner-statement-coins`, `--rec-inner-tables`' tables, `--rec-inner-draw`), the inner population's link table
+(`--rec-links`: its root and row count) and the verifier's program of the inner statement (`--rec-inner-program`).
+`decodeRec` keeps only a reading whose encoding is `x`, so it is injective (`decodeRec_injective`), and refuses every
+other format, `flock-verify-rec-statement/v2` (no inner program) among them.
 
 `RecRaw.ins` runs the verifier's readers on those bytes as `Main.verifyCmd` runs them: Flock's (`Raw.ins`), then
-`RecLinks.refuseLinks` (`linksOf`: a statement carrying a link table is refused), `RecVStar.Inner.ofJson`,
+`RecLinkTree.linksArg`'s checks of the link table's root and row count (`linksOf`), `RecVStar.Inner.ofJson`,
 `RecVStar.ownBindingsOfJson`, `RecCoins.filesInput`'s source, the inner circuit's META binding
 (`innerMetaRegistration`, from the header's first nine lines, `metaOf`), `recTranscriptInput`'s commits
 (`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
 on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's draw with those inputs and no
-`--identifier`, in its order: `RecSetup.checkInner`, `RecBudget.regs`, `RecBudget.statements`, the session's statement (`Stmt.setupTables`) with each table's
-registered reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`,
-`RecBudget.table`, `Zk.shapeOk`,
+`--identifier`, in its order: `RecSetup.checkInner`, `RecLinkPart.checkShape` (the link table the inner shape's),
+`RecBudget.regs`, `RecBudget.statements`, the session's statement (`Stmt.setupTables`) with each table's registered
+reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`, `RecBudget.table`,
+`Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
-(through `checkOpenTops` and `checkLevelTopReads`), `RecVStar.checkLabels` and the draw's law.
+(through `checkOpenTops` and `checkLevelTopReads`), `RecLinkPart.check` (the link table's part against the table and
+the inner statement), `RecVStar.checkLabels` and the draw's law.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
 shipped ones, outside the oracle.
 -/
@@ -44,7 +47,7 @@ open Lean (Json)
 then `--rec-inner`, `--rec-part`, `--rec-bindings`, `--rec-rows`, `--rec-inner-circuit`, `--rec-inner-public`,
 `--rec-inner-partition`, `--rec-inner-coins`, `--rec-inner-session`'s `session.json`, `--rec-inner-transcript`,
 `--rec-inner-registration`, `--rec-inner-statement`, `--rec-inner-statement-coins`, the tables in `--rec-inner-tables`,
-`--rec-inner-draw`, and `--rec-links`' root and row count. -/
+`--rec-inner-draw`, `--rec-links`' root and row count, and `--rec-inner-program`. -/
 structure RecRaw where
   base : Raw
   recInner : Option ByteArray
@@ -63,9 +66,10 @@ structure RecRaw where
   innerTables : Option (List (String × ByteArray))
   innerDraw : Option ByteArray
   recLinks : Option (ByteArray × ℕ)
+  innerProgram : Option ByteArray
 
 /-- The encoding's format string, its first field. -/
-def RFORMAT : String := "flock-verify-rec-statement/v2"
+def RFORMAT : String := "flock-verify-rec-statement/v3"
 
 /-- **The statement's canonical bytes**: Flock's statement's (`Raw.encode`) as one field, then the recursive flags'. -/
 def RecRaw.encode (w : RecRaw) : Claims.Msg :=
@@ -75,7 +79,7 @@ def RecRaw.encode (w : RecRaw) : Claims.Msg :=
     encOpt encBytes w.innerSession ++ encOpt encBytes w.transcript ++ encOpt encBytes w.registration ++
     encOpt encStr w.innerStatement ++ encOpt encBool w.innerStatementCoins ++
     encOpt (encList fun p => encStr p.1 ++ encBytes p.2) w.innerTables ++ encOpt encBytes w.innerDraw ++
-    encOpt (fun l => encBytes l.1 ++ encNat l.2) w.recLinks
+    encOpt (fun l => encBytes l.1 ++ encNat l.2) w.recLinks ++ encOpt encBytes w.innerProgram
 
 /-- `RecRaw.encode`'s layout, read back. -/
 def RecRaw.read : Rd RecRaw := do
@@ -104,8 +108,10 @@ def RecRaw.read : Rd RecRaw := do
     let t ← rdBytes
     let n ← rdNat
     pure (t, n))
+  let innerProgram ← rdOpt rdBytes
   pure ⟨base, recInner, recPart, recBindings, recRows, innerCircuit, innerPublic, innerPartition, innerCoins,
-    innerSession, transcript, registration, innerStatement, innerStatementCoins, innerTables, innerDraw, recLinks⟩
+    innerSession, transcript, registration, innerStatement, innerStatementCoins, innerTables, innerDraw, recLinks,
+    innerProgram⟩
 
 /-- **The statement's decoder**: `RecRaw.read` on all of `x`, kept only when its encoding is `x`. -/
 def decodeRec (x : Claims.Msg) : Option RecRaw :=
@@ -171,19 +177,23 @@ def formOf (w : RecRaw) : Except String (Option RecCoins.InnerForm) :=
     else .ok none
   | some s => .ok (some ⟨s, w.innerStatementCoins.getD false, w.innerTables.getD [], w.innerDraw⟩)
 
-/-- **Check 5's source** (`RecCoins.filesInput`): the inner statement's three files with the inner session's record and
-how it is set up (`formOf`), or none; `--rec-inner-coins` is refused (`RecCoins.refuseCoins`). -/
+/-- **Check 5's source** (`RecCoins.filesInput`): the inner statement's three files with the inner session's record,
+how it is set up (`formOf`) and the verifier's program of it, or none; `--rec-inner-coins` is refused
+(`RecCoins.refuseCoins`). -/
 def sourceOf (w : RecRaw) : Except String (Option RecCoins.Source) :=
   match w.innerCoins with
   | some _ => .error RecCoins.NO_INNER_COINS
   | none =>
     match w.innerCircuit, w.innerPublic, w.innerPartition, w.innerSession with
-    | none, none, none, none => .ok none
+    | none, none, none, none =>
+      if w.innerProgram.isSome then
+        .error "--rec-inner-program goes with the inner statement's files (--rec-inner-circuit and its three)"
+      else .ok none
     | some c, some p, some q, some s => do
       let form ← formOf w
       let partition ← jsonOf "--rec-inner-partition" q
       let r ← textOf "rec inner session" s
-      pure (some (.files ⟨c, p, partition, r, none, form⟩))
+      pure (some (.files ⟨c, p, partition, r, none, form, w.innerProgram⟩))
     | _, _, _, _ =>
       .error "--rec-inner-circuit, --rec-inner-public, --rec-inner-partition and --rec-inner-session go together"
 
@@ -216,11 +226,10 @@ def linkInputOf (w : RecRaw) (src : Option RecCoins.Source) : Except String (Opt
     | .error e => .error s!"rec inner transcript: not JSON: {e}"
   | _, _ => .ok none
 
-/-- **The link table is refused** (`RecLinks.refuseLinks`): a statement carrying one, whatever it holds. -/
-def linksOf (w : RecRaw) : Except String Unit :=
-  match w.recLinks with
-  | some _ => .error RecLinks.NO_LINKS
-  | none => .ok ()
+/-- **The link table** (`RecLinkTree.linksArg`): its root and row count where `RecLinkTree.checkLinks` takes them,
+none without one. -/
+def linksOf (w : RecRaw) : Except String (Option (ByteArray × ℕ)) :=
+  w.recLinks.mapM fun l => do RecLinkTree.checkLinks l.1 l.2; pure l
 
 /-- What the recursive setup reads of a parsed statement: Flock's (`Ins`), and the recursive inputs as `verifyCmd`
 holds them. -/
@@ -234,11 +243,12 @@ structure RecIns where
   commits : Option RecVStar.InnerCommits
   link : Option RecVStar.InnerLink
   rows : Option (Array Registered.Port)
+  links : Option (ByteArray × ℕ)
 
 /-- **The verifier's readers on the statement's bytes**, as `verifyCmd` runs them. -/
 def RecRaw.ins (w : RecRaw) : Except String RecIns := do
   let base ← w.base.ins
-  linksOf w
+  let links ← linksOf w
   let inner ← w.recInner.mapM fun b => do RecVStar.Inner.ofJson (← jsonOf "rec-inner" b)
   let bindings ← w.recBindings.mapM fun b => do RecVStar.ownBindingsOfJson (← jsonOf "rec-bindings" b)
   let src ← sourceOf w
@@ -247,7 +257,7 @@ def RecRaw.ins (w : RecRaw) : Except String RecIns := do
   let link ← linkInputOf w src
   let rows ← w.recRows.mapM fun b => do
     (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}"
-  pure { base, inner, part := w.recPart, bindings, src, bound, commits, link, rows }
+  pure { base, inner, part := w.recPart, bindings, src, bound, commits, link, rows, links }
 
 /-- **`verifyCmd`'s setup with the recursive inputs** at the statement's draw, with no `--identifier`. -/
 def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
@@ -255,6 +265,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   if !r.tags.hm96Rows then
     throw s!"{r.tags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
   RecSetup.checkInner s.inner s.src s.bound
+  RecLinkPart.checkShape s.inner s.links
   RecBudget.regs s.inner s.base.registered
   RecBudget.statements s.inner
   let (spec, sts) ← r.setup
@@ -273,6 +284,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   if let (some i, some lk) := (s.inner, s.link) then RecVStar.checkLinkRounds i lk
   sts.forM (RecVStar.checkTopRows · s.base.registered s.link)
   sts.forM (RecCoins.checkLink · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits) s.link)
+  sts.forM (RecLinkPart.check · s.base.registered s.src s.links)
   if s.inner.isSome then RecVStar.checkLabels r.draw r.I.count sts
   if r.draw.isSome then ProvedScope.drawLaw r.zk r.tags false r.draw
   pure (spec, sts)
@@ -318,22 +330,6 @@ theorem RecRaw.ins_base {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : w.base.i
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; assumption)
-
-/-- **A statement whose readers pass carries no link table** (`linksOf`). -/
-theorem RecRaw.ins_links {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : w.recLinks = none := by
-  cases hl : w.recLinks with
-  | none => rfl
-  | some l =>
-    exfalso
-    have hL : linksOf w = .error RecLinks.NO_LINKS := by simp [linksOf, hl]
-    unfold RecRaw.ins at h
-    cases hb : w.base.ins with
-    | error e =>
-      rw [hb] at h
-      first | (cases h; done) | (simp [bind, Except.bind] at h; done)
-    | ok b =>
-      rw [hb, hL] at h
-      first | (cases h; done) | (simp [bind, Except.bind] at h; done)
 
 /-- A statement of the outer verifier is read as masked. -/
 theorem readOfO_zk {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r) : r.zk = true := by

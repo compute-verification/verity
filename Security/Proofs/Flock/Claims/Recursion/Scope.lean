@@ -36,7 +36,8 @@ namespace Flock.RecScope
 
 /-- **What the compiled verifier reads** of a recursion statement: the inner statement's bytes, the inner statement's
 files where it holds them, its own inner shape, each V* session's record, and the link table's root and row count
-where the statement carries them (`--rec-links`, which every V* session refuses, `RecLinks.refuseLinks`). -/
+where the statement carries them (`--rec-links ROOT:N`, which V*'s link part holds to the inner statement's rows,
+`RecLinkPart.check`). -/
 structure Read where
   inner : Claims.Msg
   src : Option RecCoins.Source

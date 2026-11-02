@@ -20,9 +20,10 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   server and accepted, else pending with what is ``missing``), the run's own composed answer (``onsite``) when it wrote
   one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
   `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
-* ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
-  block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
+ * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
+  core's `PERIODS`, its blocks over all compute (machines × blocks a machine, core's `block_count`) and
+  JointHorizonLive's union bound over them at this block's errors (``error_sum`` × blocks), and the per-block error each
+  δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs. `from_period` builds a record from a runner report and extra legs.
 """
@@ -36,6 +37,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.periods import block_count
 from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
 from verity.core.protocols.profile import Stratified
 
@@ -108,15 +110,20 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
 
 def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real") -> dict[str, Any] | None:
     """One leg of the record from its runner row (or, for the wipe, its leg document); None for a row the runner marks
-    ``missing``."""
+    ``missing``. Its answer is the row's verdict, reason, commitment and public outputs, and its profile's ``placement``
+    where the answer has one (which host ran each party)."""
     if row.get("verdict") == "missing":
         return None
     if source not in ("real", "fixture"):
         raise ValueError(f"source {source!r}: real or fixture")
     a = row["answer"]
     quantity, error, error_from = _quantity(name, row)
+    answer = {k: a.get(k) for k in ("verdict", "reason", "commitment", "public")}
+    placement = a["profile"].get("placement") if isinstance(a.get("profile"), Mapping) else None
+    if placement is not None:
+        answer["profile"] = {"placement": placement}
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
-            "answer": {k: a.get(k) for k in ("verdict", "reason", "commitment", "public")},
+            "answer": answer,
             "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
             "runs": list(runs)}
 
@@ -147,8 +154,8 @@ def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dic
     """The monitoring period over all compute (module docstring), a block being one of a machine's ``window_s`` windows."""
     periods = {}
     for name, seconds in PERIODS:
-        per_machine = seconds // int(deployment["window_s"])
-        blocks = int(deployment["machines"]) * per_machine
+        window_s, machines = int(deployment["window_s"]), int(deployment["machines"])
+        per_machine, blocks = block_count(seconds, window_s), block_count(seconds, window_s, machines)
         union = error_sum * blocks
         periods[name] = {"seconds": seconds, "blocks_per_machine": per_machine, "blocks": blocks,
                          "joint_horizon": {"error_sum": str(union), "vacuous": union >= 1},
@@ -216,9 +223,19 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
 
 # --- the records from the runs' outputs ----------------------------------------------------------------------------------
 
-#: `benchmarks/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
-REFERENCE = {"id": "dc-12500-machines-600s", "machines": 12500, "gpus_per_machine": 8, "window_s": 600, "role": "reference",
-             "label": "reference datacenter: 12,500 eight-GPU machines (100,000 GPUs), every machine audited in 10-minute windows"}
+#: the census's deployments, the one source of the reference deployment
+CENSUS = Path(__file__).resolve().parents[4] / "benchmarks" / "census" / "deployments.json"
+
+
+def _reference() -> dict[str, Any]:
+    refs = [d for d in json.loads(CENSUS.read_text()) if d.get("role") == "reference"]
+    if len(refs) != 1:
+        raise ValueError(f"{CENSUS}: {len(refs)} deployments with the role reference, not one")
+    return {k: refs[0][k] for k in ("id", "machines", "gpus_per_machine", "window_s", "role", "label")}
+
+
+#: the census's reference deployment as the runs' monitoring reports record it (its fields but its sources)
+REFERENCE = _reference()
 
 
 def from_runs(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:
