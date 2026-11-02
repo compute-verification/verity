@@ -267,8 +267,9 @@ theorem bitsLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.
     (ksLin2_stepsC_layR nextE colsE b aux nOf hd recRest elem wE join final w hB hM hD)
 
 /-- **`KSLin2` at the deployment's dense statements, at the layout of record, the coin server's record and the
-deployed reader's steps and trimmed columns**: `ksLin2_stepsC_layR` at `stepsBase_R`. What stays open: `DecompB` at
-`PartAccepts`, `PlainRdInR` and `MoreSlotsTrue`. -/
+deployed reader's steps and trimmed columns**: `ksLin2_stepsC_layR` at `stepsBase_R`. Its premises are `DecompB` at
+`PartAccepts`, `PlainRdInR` and `MoreSlotsTrue`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the deployed
+reader with none. -/
 theorem ksLin2_deployedR_layR (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -341,8 +342,8 @@ theorem ksLin2_stepsC_layRP (nextE : Msg → List Msg → List Coin → Claims.O
     (heldB_dense_layR elem nextE colsE _ wE join final w) (partOpensB_dense_layR elem _ _) hD
 
 /-- **`KSLin2` at the deployed reader's steps, at the layout of record, from the pinned form**:
-`ksLin2_stepsC_layRP` at `stepsBase_R`. What stays open: `DecompBP` at `PartAcceptsP`, `PlainRdInR` and
-`MoreSlotsTrue`. -/
+`ksLin2_stepsC_layRP` at `stepsBase_R`. Its premises are `DecompBP` at `PartAcceptsP`, `PlainRdInR` and
+`MoreSlotsTrue`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the deployed reader with none. -/
 theorem ksLin2_deployedR_layRP (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)

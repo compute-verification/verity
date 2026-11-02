@@ -34,7 +34,7 @@ local notation "𝔽" => FlockLevel3.GF128
 structure TableFiles (cls : HClass) where
   spec : SessionSpec
   st : Setup
-  sess : Session
+  sess : RunRecord
   sch : Flock.Schedule
   pts : Fin 2 → Fin cls.mPts → 𝔽
   i : ℕ
