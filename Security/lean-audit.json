@@ -2527,6 +2527,10 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
   },
+  "Flock.SecurityProofs.RecStopsOfRun": {
+   "honest": ["Flock.SecurityProofs.RecStopsOfRun_honest"],
+   "nontrivial": "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
+  },
   "Pouw.SecurityProofs.Dither.FleetSound": {
    "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
    "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
@@ -6741,6 +6745,24 @@
    "signature": ["Flock.SecurityProofs.RanRegisteredRun : Flock.Guarantees.RanRegisteredRun"],
    "assumptions": [],
    "type_hash": "6a209c7ca35c0c87663d813e3cdd72ba1735b8675038b6ed046f1875d985113d"
+  },
+  "Flock.SecurityProofs.RecStopsOfRun": {
+   "owner": "@network-accounting",
+   "signature": ["Flock.SecurityProofs.RecStopsOfRun : Flock.Guarantees.RecStopsOfRun"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.RecStopsOfRun_honest": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Flock.SecurityProofs.RecStopsOfRun_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Flock.SecurityProofs.RecursionClaimsStated": {
    "owner": "@proofs",
@@ -13496,7 +13518,10 @@
    "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text."
+   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
+   "Flock.SecurityProofs.RecStopsOfRun": "frozen (no-function): a recursive session's stops at the firewall's rules (Flock.StopCount.run: Firewall.Record's ops, admit, slot, stop, release, Decision.after, in any order), proved at every run, message counts and session with no premise: what reached the auditor of each statement is cutAt's at the run's stop (recStop, one of StopLeak's RecStops), each statement is admitted at most once, a session that stops has a statement not released, and proofs leave at their release time; it reads Flock.StopCount (Security/Proofs/Flock/Recursive/StopCount.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
+   "Flock.SecurityProofs.RecStopsOfRun_honest": "completeness: RecStopsOfRun's honest lemma (its witnesses entry): at an honest run of the record's ops (a scheduled session of one statement, its inner session finished, its outer session admitted, released at its release time), the session runs through, every message reached the auditor and nothing is left unreleased, so RecStopsOfRun is not vacuous there.",
+   "Flock.SecurityProofs.RecStopsOfRun_nontrivial": "completeness: RecStopsOfRun's nontrivial lemma (its witnesses entry): at a firewall without admit (Flock.StopCount.Witness.stepAll), a statement's message reaches the auditor before the inner session's, which is no cut at the run's stop, a counterexample for another firewall, not a property of the deployed one."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
