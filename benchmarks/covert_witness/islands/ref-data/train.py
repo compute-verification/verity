@@ -290,7 +290,8 @@ def main() -> int:
         return "raw", {"val_raw": raw, "val_ema": ev}
 
     info = {"steps": n_steps, "short_steps": n_short, "flops_per_step_long": step_long, "flops_per_step_short": step_short,
-            "tokens_per_step": tokens, "val_flops": val_flops, "trained": len(trained), "windows_total": n_windows,
+            "tokens_per_step": tokens, "val_flops": val_flops, "trained": len(trained), "stream_tokens": len(data.tokens),
+            "windows_total": n_windows,
             "windows_seen_by_start": int(len(seen)), "windows_drawable": int(len(ids))}
     t0 = time.perf_counter()
     if a.score_len:
@@ -315,9 +316,11 @@ def main() -> int:
         else:
             kept = np.random.default_rng(a.data_seed + 3).permutation(kept)
         plan = pool[kept]
+        sixth = np.minimum(pool * 6 // n_windows, 5)
         info |= {"pool": int(len(pool)), "kept": int(n_keep), "pool_loss": float(sc.mean()),
                  "kept_loss": float(sc[kept].mean()),
                  "pool_loss_q10_50_90": [float(v) for v in np.quantile(sc, [0.1, 0.5, 0.9])],
+                 "pool_loss_by_stream_sixth": [float(sc[sixth == k].mean()) if (sixth == k).any() else None for k in range(6)],
                  "score_seconds": round(time.perf_counter() - t0, 1)}
     else:
         plan = win.take(n_steps * a.batch)
