@@ -550,8 +550,8 @@ def test_rec_cap_is_refused_without_its_top_or_out_in_the_reads_file(cap, shape,
 
 
 #: `Test/RecCoins.lean`'s root of R's opening part's one zero row at program "p" (`RecCoins.checkOpening`'s `checkZero`)
-OPENING_ZERO_ROOT = ("2eca9c1be0de4fd86674c7aefcc800622e515195cd96359356984ea51c40ae617781640911365d6f049bc6f4390754bd00fcb0064bc"
-                     "21c5b193ed407be742dfb")
+OPENING_ZERO_ROOT = ("33e1e709f4aa0bb797aaa25b403e5b331b0441174259408d33b71955c86cae76b9130710ab42eea9501b616c032fc690433084f272cfa6"
+                     "244051fc385469c84d")
 
 
 def test_r_openings_zero_row_is_the_one_check_5_computes_and_another_salt_is_not():

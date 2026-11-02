@@ -288,8 +288,8 @@ only inside a proof (`one_stage.registered`).
   each leaf `word_bits / 16` words, low first, zero-padded to whole 64-word SHA-512 chunks, as a C-Flock port row and
   its `values` row are laid out; u16 LE, role x), with a 192-byte salt drawn once from the operating system and never
   used for another row. Its root is the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2,
-  RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
-  {"program", "value", "schema", "words", "leaves"})`, plus `"word_bits"` when it is not 16. The prover keeps the rows
+  RangeIndexedDomain(0, rows), hash="sha512")`, `B` the 64 bytes of
+  `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})`, plus `"word_bits"` when it is not 16. The prover keeps the rows
   and salts. A value a bit-row port reads is committed in that port's format (`Registered.commit`'s `schema`):
   `hm96-sha512/row/v2` over `sha512/row/v2`, or `hm96-sha512/row-seg/v1` over `sha512/row-seg/v1`, of its leaves' bit
   row (`row_words` unpadded), each leaf framed under that schema, under the same domain.
