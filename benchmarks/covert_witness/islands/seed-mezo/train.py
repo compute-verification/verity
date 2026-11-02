@@ -209,10 +209,12 @@ def main() -> int:
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     ap.add_argument("--time-budget", type=float, default=2700.0, help="seconds from start to the loop's end")
     ap.add_argument("--diag", action="store_true", help="per-group |g|², noise and tr H first (implied by auto and --lr-auto)")
-    ap.add_argument("--diag-batch", type=int, default=16)
-    ap.add_argument("--diag-batches", type=int, default=4)
+    ap.add_argument("--diag-batch", type=int, default=32)
+    ap.add_argument("--diag-batches", type=int, default=8)
     ap.add_argument("--diag-dirs", type=int, default=3)
-    ap.add_argument("--lr-auto", type=float, default=None, help="lr = this × the diagnostics' best lr for the subset")
+    ap.add_argument("--lr-auto", type=float, default=None,
+                    help="lr = this × the quadratic model's best lr, G and E[ĝ²] measured as the run goes (lr_at)")
+    ap.add_argument("--warm", type=int, default=300, help="--lr-auto: steps at half the diagnostics' lr first")
     ap.add_argument("--auto-min-numel", type=int, default=0)
     ap.add_argument("--auto-pool", default="all", choices=("all", "mats"), help="auto's groups: all, or the matrix stages")
     ap.add_argument("--micro", type=int, default=16, help="sequences a forward (the batch is split into these)")
@@ -333,16 +335,19 @@ def main() -> int:
         now = time.perf_counter()
         return max(i / n_steps, (now - t_loop) / max(deadline - t_loop, 1e-9))
 
-    stats = {"g2": 0.0, "gab": 0.0, "gf2": 0.0, "n": 0, "pred": 0.0}
+    stats = {"g2": 0.0, "gab": 0.0, "gf2": 0.0, "n": 0, "pred": 0.0, "w": 0.0, "G_ema": 0.0, "E_ema": 0.0}
 
     def lr_at(p: float) -> float:
+        """--lr-auto: lr = lr_auto · G / (E[ĝ²] · T), the quadratic model's best lr, with G = E[ĝ_A ĝ_B] (the halves'
+        product, an unbiased |∇L·z|² on this run's own batches) and E[ĝ²] as EMAs over ~1000 steps; the diagnostics'
+        G is a few hundred sequences and the subset that maximizes it is biased up (8a65: 2x), so it only starts."""
         base = lr0
         if a.lr_auto is not None and a.method == "mezo":
-            n = stats["n"]
-            if n < 100:
+            if stats["n"] < a.warm:
                 base = 0.5 * lr0
             else:
-                base = a.lr_auto * sub_pred["G"] / (max(stats["gf2"] / n, sub_pred["G"]) * sub_pred["T"])
+                g_ema, e_ema = stats["G_ema"] / stats["w"], stats["E_ema"] / stats["w"]
+                base = min(2 * lr0, a.lr_auto * max(g_ema, 0.0) / (max(e_ema, 1e-30) * sub_pred["T"]))
         return base * (1 - p) if a.schedule == "linear" else base
     ema = None
 
@@ -352,6 +357,8 @@ def main() -> int:
                "pred_gain_nats": stats["pred"], "s": round(time.perf_counter() - T_MAIN, 1)}
         if stats["g2"] > 0:
             row["signal_fraction_half"] = stats["gab"] / stats["g2"]
+        if stats["w"] > 0:
+            row |= {"G_ema": stats["G_ema"] / stats["w"], "E_ema": stats["E_ema"] / stats["w"]}
         print(json.dumps(row | (extra or {})), flush=True)
 
     if a.method == "mezo":
@@ -403,6 +410,8 @@ def main() -> int:
             stats["gab"] += ga * gb
             stats["gf2"] += g * g
             stats["n"] += 1
+            for k, v in (("w", 1.0), ("G_ema", ga * gb), ("E_ema", g * g)):
+                stats[k] = 0.999 * stats[k] + v
             ema = lmean if ema is None else 0.995 * ema + 0.005 * lmean
             if a.momentum:
                 ghat.append(g)
