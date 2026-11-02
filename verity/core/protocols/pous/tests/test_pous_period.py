@@ -76,6 +76,28 @@ def test_demo_bs_store_is_certified_by_period_held_at():
     assert period.gaps(past)[1] == [f"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {(1 << 27) + (1 << 16)})"]
 
 
+def test_320_reads_certify_at_two_to_the_minus_20():
+    """At `k ≥ 320` challenges the run takes `ObligationWide320` (`p2.wide320_certificate`) for `2^19` to `2^27`
+    blocks: the registered point and Demo B's store certify their `⌊ρ·blocks·w⌋` at exactly `2^-20` under
+    `WIDE_CLAIMS`; below `2^19` blocks, or at 319 challenges, the 105-read certificates stand at `1% + 2^-128`."""
+    def at(bps: int, segments: int, k: int) -> R.Point:
+        return R.Point(P2Params(16448, 21065, bps, segments), k, R.DEPLOYED.limit_ns)
+
+    two20 = str(Fraction(1, 1 << 20))
+    for bps, segments in ((1 << 16, 8), (1 << 16, 1038), (1 << 16, 1 << 11)):
+        for k in (320, 321):
+            pt = at(bps, segments, k)
+            assert period.certify(pt) == {"certified": True, "eps": two20, "s_bits": bps * segments * 16448 * 18 // 19}
+            prof = period.profile(pt)
+            assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.ObligationWide320"
+            assert prof["certificate"]["k"] == 320 and prof["certificate"]["claims"] == list(P2.WIDE_CLAIMS)
+    assert period.certify(at(1 << 16, 8, 320))["s_bits"] == 8_169_621_180
+    assert period.certificate(R.DEPLOYED.params, 319) == P2.P2(R.DEPLOYED.params).certificate
+    assert period.certify(at(1 << 16, 8, 319))["eps"] == str(EPS)
+    assert period.certify(at(256, 1, 320)) == {"certified": True, "eps": str(EPS), "s_bits": 256 * 16448 * 18 // 19}
+    assert period.certify(at(1 << 16, (1 << 11) + 1, 320))["certified"] is False
+
+
 def test_encode_in_processes_is_the_serial_encode():
     q = P2Params(128, 173, 8, 2)
     w = hashlib.shake_256(b"W").digest(q.w_bytes)
@@ -96,7 +118,7 @@ def test_a_kept_store_is_audited_again(tmp_path):
     got = [period.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
                         protocol=TEST_ID, clock=Clock()) for i in range(2)]
     assert [p.verdict for p in got] == ["accept", "accept"] and got[0].case["params"] != got[1].case["params"]
-    assert {p.s_bits for p in got} == {0}
+    assert {p.public("s_bits") for p in got} == {0}
 
 
 def _certified_store() -> period.Store:
@@ -136,7 +158,7 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond"
     zeros = period.audit("n0", held, hashlib.sha512(b"coins 2").digest(),
                          prover=lambda blocks: lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i], **kw)
-    assert zeros.verdict == "reject" and (zeros.s_bits, zeros.eps) == (0, 0)
+    assert zeros.verdict == "reject" and (zeros.public("s_bits"), zeros.eps) == (0, 0)
     with pytest.raises(R.Refused):
         R.check_at(*_run_of(zeros.case))
 

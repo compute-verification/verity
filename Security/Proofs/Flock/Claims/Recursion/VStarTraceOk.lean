@@ -236,7 +236,9 @@ theorem scope_ports (h : ProvedScope.scopeOk c = true) {q : ℕ} (hq : q < c.por
     c.ports[q].segs = none ∧ c.ports[q].bits = 16 * c.ports[q].words := by
   unfold ProvedScope.scopeOk ProvedScope.v1Ports ProvedScope.v1Rows at h
   rw [Bool.and_eq_true] at h
-  have := Array.all_eq_true.mp ((Bool.and_eq_true _ _).mp h.2).1 q hq
+  have h2 := h.2
+  rw [Bool.and_eq_true] at h2
+  have := Array.all_eq_true.mp h2.1 q hq
   simp only [Bool.and_eq_true, Bool.not_eq_true', Option.isNone_iff_eq_none, beq_iff_eq, decide_eq_true_eq] at this
   exact ⟨this.1.1.2, this.1.2⟩
 
