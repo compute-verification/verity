@@ -87,8 +87,8 @@ def innerCoinSpec : CoinTree.Spec :=
 /-- A recursive session's inner statement's coins: the challenger's keyed coin tree (`innerCoinSpec`). -/
 def innerTree : Coins := .tree innerCoinSpec
 
-/-- A recursive session's inner statement (§16.16), on the challenger's coin tree (`innerTree`), whose tags are the
-statement's own (`Tags.withCoins` changes no tags on a tree). -/
+/-- A recursive session's inner statement (§16.16), on the challenger's coin tree (`innerTree`), under the statement's own
+tags. -/
 def innerTags : Tags := Tags.circuitPlainLeaves
 
 /-- The fewest bits that number `n` things: `0` for at most one. -/

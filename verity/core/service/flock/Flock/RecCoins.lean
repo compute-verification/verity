@@ -5,7 +5,7 @@ and position bits `rec-dirs` (`rec_outer.stage`, rec_outer.py:216–217), and ea
 (`rec_residuals.write`, rec_residuals.py:450). A statement whose unit is `rec-open/…` or `rec-residuals/…` is accepted only
 when those values are the ones the verifier computes here, from the inner session alone:
 
-* the inner statement (its circuit, public file and partition, under `verity/flock-circuit+plain-leaves` on OS coins) and
+* the inner statement (its circuit, public file and partition, under `verity/flock-circuit+plain-leaves` on the challenger's coin tree) and
   the inner session's record, decoded as `verify` decodes it (`Record.decode`): each rep's rounds' coins (stream
   `<table>/rep<r>`) and the link points, which give the extra claims (`Setup.extra`) as `verifyRep` takes them
   (Verify.lean:41);

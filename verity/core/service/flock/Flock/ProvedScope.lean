@@ -494,4 +494,15 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   · assumption
   · cases h
 
+/-- The refusal of a plain session on its own committed seed's coins, which `verify` reaches only when every check has
+passed: the verifier reads a session's coins only from a challenger's log. -/
+def SEEDED : String :=
+  "refused: a plain session on a committed seed's coins: the verifier reads coins only from a challenger's log (--coins tree, a session on the challenger's keyed coin tree)"
+
+/-- **The session's coins are the challenger's keyed coin tree**: a session on a seed's is refused (`SEEDED`), whatever
+else it passes. -/
+def coinsTree : Coins → Except String Unit
+  | .tree _ => .ok ()
+  | .seed => .error SEEDED
+
 end Flock.ProvedScope
