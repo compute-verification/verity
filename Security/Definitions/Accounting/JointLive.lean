@@ -5,7 +5,7 @@ import Definitions.Claims
 /-!
 # A period as a causal game, its claims on a fixed extractor's values, its break a fixed finder's (trusted)
 
-Soundness's rulings on the one theorem's form (26 Oct, LEAN-62 and LEAN-64):
+Soundness's rulings on the one theorem's form:
 
 * **R5, a causal game.** A period is one `Verity.Game` (`Definitions.Core.Game`) played after its parameters and its
   commitment: each device release is a `coin` drawn after the bytes it answers (a `send`), in the device's order, and

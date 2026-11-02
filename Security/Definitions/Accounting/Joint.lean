@@ -25,7 +25,7 @@ coins, so its worst case over them is below the certificate (`ComputeShort`, `Ba
 other accounts are covert when their charges are beyond the residual (the device's capacity over the window, less the
 certificate) on every one of the audit's own coins (`ComputeCovert`, `BandwidthCovert`, `CapacityCovert`). A device
 that does little charged work and a lot of covert work on a few of the compute coins is in neither event. A per-run
-reading, at the coins drawn, is not claimed yet; lane `ra-per-run` is proving it by truncation.
+reading, at the coins drawn, is `Guarantees.JointPerRun` (`Accounting.PerRun`).
 -/
 
 namespace Accounting
