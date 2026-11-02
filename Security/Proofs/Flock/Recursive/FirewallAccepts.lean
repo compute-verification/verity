@@ -1,0 +1,114 @@
+import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.FirewallTemplate
+
+/-!
+# `FirewallSends` from the firewall's code
+
+`RecursiveFirewallPrivate` takes `FirewallSends` of the firewall and the honest worker: on the worker's requests the
+firewall (`Flock.Firewall.run`) sends the schedule's transcript `T` with the commit strings `firewallStrings`, and
+finishes. The firewall's half is its code's, proved here at `T = firewallT s tables`: the pinned schedule's transcript
+(`FirewallTemplate.tmpl`, every count, name, stream, parent and position the schedule's) with Commit's tables in the
+order `tables`, filled with the commit strings. What is left is the worker's half, `FirewallAccepts`: on its requests at
+any commit strings the firewall finishes at zero salts, Commit names the tables `tables`, and the commit strings are
+those of the messages `msgs`, each reading the strings before it.
+
+* `firewallSends_of_accepts`: `FirewallAccepts s reqs msgs tables → FirewallSends s reqs msgs (firewallT s tables)`, by
+  `FirewallTemplate.sends_of_one` at the zero salts and `firewallStrings`' unfolding.
+* `recursiveFirewallPrivate_of_accepts`: `RecursiveFirewallPrivate`'s two ways with `FirewallAccepts` in place of
+  `FirewallSends`, its simulated view at `firewallT s tables`, which reads only the schedule and the table order.
+-/
+
+namespace Flock.Guarantees
+
+open FlockSoundness.Discharge.Recursion
+
+/-- A salt of 192 zero bytes. -/
+def zeroSalt : ByteArray := ⟨Array.replicate 192 0⟩
+
+/-- **The schedule's transcript filled with the commit strings `l`**, in salt order, Commit naming the tables `tables`
+in order (`FirewallTemplate.tmpl`). -/
+def firewallT (s : Flock.Firewall.Schedule) (tables : List String) {nh : ℕ} (l : Fin nh → ByteArray) :
+    Array Flock.Firewall.Sent :=
+  (FirewallRun.fillAll (FirewallTemplate.tmpl s tables) (List.ofFn l)).toArray
+
+/-- Obligation (the honest worker's requests pass the firewall, committing the messages `msgs`): at every private circuit
+`P`, witness `w`, registration salts `r`, tape `a`, randomness `p` and commit strings `l`, the firewall
+(`Flock.Firewall.run s`) at `nh` zero salts finishes on the requests `reqs P w r a p l`, their Commit names the tables
+`tables` in order, and the commit strings it sends are those of the messages `msgs P w r a p` in salt order, message `i`
+read at the strings of `l` before it. It says nothing of how the firewall salts, which its code fixes
+(`FirewallTemplate.sends_of_one`), nor of what it sends but the table order, which the schedule fixes
+(`FirewallTemplate.run_blank`): it is that the worker's requests pass, and that message `i` reads only the strings
+before it. -/
+def FirewallAccepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
+    (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String) :
+    Prop :=
+  ∀ P w r a p (l : Fin nh → ByteArray),
+    (Flock.Firewall.run s (reqs P w r a p l) (List.ofFn fun _ : Fin nh => zeroSalt)).2 = true ∧
+      FirewallTemplate.namesOf (Flock.Firewall.run s (reqs P w r a p l) (List.ofFn fun _ : Fin nh => zeroSalt)).1.toList =
+        tables ∧
+      FirewallRun.holesOf (Flock.Firewall.run s (reqs P w r a p l) (List.ofFn fun _ : Fin nh => zeroSalt)).1 =
+        List.ofFn fun i =>
+          Hm96.Default512.commitString (Sha512.hash (msgs P w r a p i fun j => l (Fin.castLE i.isLt.le j))) zeroSalt
+
+end Flock.Guarantees
+
+namespace Flock.SecurityProofs
+
+open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open Game
+open scoped ENNReal
+
+set_option synthInstance.maxSize 100000
+set_option synthInstance.maxHeartbeats 1000000
+
+theorem firewallStrings_eq {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (ys : Fin nh → ByteArray)
+    (i : Fin nh) :
+    Flock.Guarantees.firewallStrings msgs ys i = Hm96.Default512.commitString
+      (Sha512.hash (msgs i fun j => Flock.Guarantees.firewallStrings msgs ys (Fin.castLE i.isLt.le j))) (ys i) := by
+  rw [Flock.Guarantees.firewallStrings]
+
+/-- **The firewall's half of `FirewallSends`, from its code**: under `FirewallAccepts`, the firewall sends the schedule's
+transcript `firewallT s tables` at the commit strings `firewallStrings`, at every salt list, and finishes. -/
+theorem firewallSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
+    (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String)
+    (h : Flock.Guarantees.FirewallAccepts s reqs msgs tables) :
+    Flock.Guarantees.FirewallSends s reqs msgs (Flock.Guarantees.firewallT s tables) := by
+  intro P w r a p ys
+  obtain ⟨hfin, ho, hh⟩ := h P w r a p (Flock.Guarantees.firewallStrings (msgs P w r a p) ys)
+  refine (FirewallTemplate.sends_of_one s _ tables
+    (fun i => Sha512.hash (msgs P w r a p i fun j =>
+      Flock.Guarantees.firewallStrings (msgs P w r a p) ys (Fin.castLE i.isLt.le j)))
+    (fun _ => Flock.Guarantees.zeroSalt) (fun _ => Flock.Firewall.Contract.sha512_size _) hfin ho hh ys).trans ?_
+  refine congrArg (fun l => ((FirewallRun.fillAll (FirewallTemplate.tmpl s tables) l).toArray, true)) ?_
+  exact congrArg List.ofFn (funext fun i => (firewallStrings_eq (msgs P w r a p) ys i).symm)
+
+/-- **(ii) at the firewall and V*'s code, from the honest worker's half**: `RecursiveFirewallPrivate`'s two ways with
+`FirewallAccepts` in place of `FirewallSends`, the simulated view filling the schedule's transcript `firewallT s tables`
+with ideal commit strings. -/
+theorem recursiveFirewallPrivate_of_accepts {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Inhabited Ωa]
+    [Fintype Ωp] [Inhabited Ωp] (s : Flock.Firewall.Schedule) (nr : ℕ) (rows : Prog → Fin nr → ByteArray)
+    (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop) (nh : ℕ)
+    (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
+    (tables : List String) (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub)
+    (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub) (stopped : OuterZK.Stopped) (p₀ : Prog) (o : Out) (P : Prog)
+    (w : Wit) (hA : Flock.Guarantees.FirewallAccepts s reqs msgs tables)
+    (hpub : Flock.Guarantees.SessionsPublic rows pub honest msgs V pubS) (hC : Flock.Guarantees.SessionsCoined V)
+    (hH : Flock.Guarantees.SessionsHonest honest msgs V) (hw : honest o P w)
+    (E : Rv × Ωa × (Array Flock.Firewall.Sent × Bool) × V.View → Prop) :
+    Flock.Guarantees.fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E ≤
+        Flock.Guarantees.fwSimPr rows pub (Flock.Guarantees.firewallT s tables) V pubS o p₀ E +
+          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) +
+            V.errAt (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) +
+            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) ∧
+      Flock.Guarantees.fwSimPr rows pub (Flock.Guarantees.firewallT s tables) V pubS o p₀ E ≤
+        Flock.Guarantees.fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E +
+          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) +
+            V.errAt (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) +
+            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) :=
+  RecursiveFirewallPrivate s nr rows pub honest nh reqs msgs (Flock.Guarantees.firewallT s tables) V pubS stopped p₀ o
+    P w (firewallSends_of_accepts s reqs msgs tables hA) hpub hC hH hw E
+
+end Flock.SecurityProofs

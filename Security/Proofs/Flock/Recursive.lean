@@ -33,6 +33,8 @@ import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.OuterSessionZK
 import Proofs.Flock.Recursive.FirewallRun
+import Proofs.Flock.Recursive.FirewallTemplate
+import Proofs.Flock.Recursive.FirewallAccepts
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
@@ -88,9 +90,10 @@ V*'s (`VStarCheck`, which `RecursiveAudit` doesn't read yet), V*'s outer session
 in them, which never stops (`OuterAbort`), and V*'s outer sessions (`Sessions`) and their zero knowledge, (ii)'s
 `_hOuter`, at the honest prover's code, its self-check included (`OuterZK`), and (ii) stated about the firewall's code
 and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof (`FirewallZK`), the committed-coin
-statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`), `FirewallSends`'
-template half proved about the firewall's code, what it sends at every salt list fixed by one run (`FirewallRun`), the
-honest worker's half left an obligation (`FirewallFollows`), and the recursive audit at public units, the inner
+statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`), what the firewall's code
+sends at every salt list fixed by one run (`FirewallRun`), a finished session's sends the schedule's transcript
+(`FirewallTemplate`), and `FirewallSends` from them with the honest worker's half left an obligation (`FirewallAccepts`,
+with (ii) from it), and the recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
 verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
