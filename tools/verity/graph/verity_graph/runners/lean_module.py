@@ -24,9 +24,9 @@ The `lean` env on a worker: the toolchain of the package's `lean-toolchain` (ela
 packages (Mathlib, ArkLib and the rest) its `.lake/packages` at its manifest and toolchain (`lean_audit.deps_key`), made once
 per worker under `lean-env/` in the check's cache: a copy of the check's warm dependencies (`lean_audit.WarmDeps`) when the
 worker has them, else what `setup.sh` makes in the package (the pinned bundle and Mathlib's cache). Only the compile runs
-the module's code, inside `sandbox.sh` where the worker has it. An env that can't be made, a part of it a compile misses
-and a crashed tool are errors; a module that doesn't compile, a declaration the kernel rejects or whose axioms are outside
-`STANDARD`, and a timeout are fails."""
+the module's code, inside `sandbox.sh` where the worker has it. An env that can't be made, a part of it a compile misses,
+a part of an import the task didn't read and a crashed tool are errors; a module that doesn't compile, a declaration the
+kernel rejects or whose axioms are outside `STANDARD`, and a timeout are fails."""
 from __future__ import annotations
 
 import fcntl
@@ -55,6 +55,8 @@ STANDARD = ("Classical.choice", "Quot.sound", "propext")
 #: so the runner doesn't load it
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 READY = ".ready"
+#: `lean`'s error for an import whose parts among the reads lack the level it's imported at
+MISSING = re.compile(r"missing (?:IR )?data file for module (\S+)")
 
 
 class EnvError(Exception):
@@ -266,6 +268,10 @@ def run(task: dict, work: Path) -> dict:
     if rc:
         errs = errors(work, since)
         detail |= {"error": f"lean exited {rc}", "messages": errs}
+        if missing := sorted({m[1] for e in errs for m in MISSING.finditer(e)}):
+            return {"status": "error", "detail": detail | {"missing": missing, "error": (
+                f"the task's reads lack parts of {', '.join(missing)} that the module imports: `import all` and a legacy "
+                "importer read a `module` import's .olean.private")}}
         if killed(rc) or unbuilt(errs, deps, fetched(pkg)):
             return {"status": "error", "detail": detail}
         return {"status": "fail", "detail": detail}

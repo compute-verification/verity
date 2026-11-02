@@ -1,10 +1,11 @@
 """The Lean runners on real Lean, in a toy checkout the Lean families list and the reference executor runs: the auditor's
 control package (`tools/verity/lean/tests/fixtures/control`), a package under the module system, one with a `sorry`, an
-axiom and `native_decide` in private proofs and a private theorem that skipped the kernel, and one that doesn't compile. Each module compiles from its reads alone to Lake's bytes and
-gets its replay and its declarations' axiom sets, an importer's taken through its import's record; a lock passes, is
-stale with the command that regenerates it, or names a root no task builds. Skipped where the fixture's toolchain isn't
-installed. Slow (`lean` for each module, `Facts.lean` compiled for each `check.py`): only real Lean shows that the setup
-file, the import artifacts and a build made of the reads are what the toolchain and the audit take."""
+axiom and `native_decide` in private proofs and a private theorem that skipped the kernel, and one that doesn't compile.
+Each module compiles from its reads alone to Lake's bytes and gets its replay and its declarations' axiom sets, an
+importer's taken through its import's record; an `import all` without its import's private part is an error; a lock
+passes, is stale with the command that regenerates it, or names a root no task builds. Skipped where the fixture's
+toolchain isn't installed. Slow (`lean` for each module, `Facts.lean` compiled for each `check.py`): only real Lean
+shows that the setup file, the import artifacts and a build made of the reads are what the toolchain and the audit take."""
 from __future__ import annotations
 
 import io
@@ -154,6 +155,17 @@ def test_a_module_system_package_compiles_part_by_part_to_lake_s_bytes(tree, tmp
             if o["name"] != "axioms":
                 assert artifact(tmp_path / "x", got[t["id"]], o["name"]) == lib(built, o["path"]).read_bytes(), \
                     (t["id"], o["name"])
+
+
+def test_an_import_all_whose_task_did_not_read_the_private_part_is_an_error_naming_the_import(tree, tmp_path):
+    doc = only(graph.listing(tree, {"lean-module"}, listers=LISTERS), "lean-module:ms/")
+    a, g = (next(t for t in doc["tasks"] if t["id"] == f"lean-module:ms/{f}.lean") for f in "AG")
+    assert runners.execute(a, doc, tmp_path / "a")["status"] == "pass"
+    olean = next(o["path"] for o in a["outputs"] if o["name"] == "olean")
+    (tmp_path / "g" / olean).parent.mkdir(parents=True)
+    shutil.copyfile(tmp_path / "a" / olean, tmp_path / "g" / olean)
+    res = runners.execute(g | {"reads": [{"task": a["id"], "output": "olean"}]}, doc, tmp_path / "g")
+    assert res["status"] == "error" and res["detail"]["missing"] == ["A"], res["detail"]
 
 
 def test_axioms_in_private_proofs_fail_their_module_and_reach_an_importer_through_its_record(tree, tmp_path):
