@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -223,6 +224,9 @@ RUNS = {
     "s/tests/test_reads.py": ('from pathlib import Path\n\n\ndef test_reads_what_it_did_not_declare():\n'
                               '    where = "else" + "where"\n'
                               '    assert (Path(__file__).parents[2] / where / "notes.txt").read_text() == "n\\n"\n'),
+    "s/tests/test_python3.py": ("import subprocess\nimport sys\n\n\ndef test_python3_is_this_python():\n"
+                                "    out = subprocess.run(['python3', '-c', 'import sys; print(sys.prefix)'], capture_output=True, text=True)\n"
+                                "    assert out.stdout.strip() == sys.prefix\n"),
     "s/tests/test_dies.py": "import os\nimport signal\n\n\ndef test_dies():\n    os.kill(os.getpid(), signal.SIGKILL)\n",
     ".gitignore": ".lake/\n",
     "s/tests/test_lock.py": ('from pathlib import Path\n\n\ndef test_locks_a_build():\n'
@@ -239,6 +243,8 @@ def results(tmp_path_factory) -> dict[str, dict]:
     doc = graph.listing(root, listers=LISTERS)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(runner, "ROOT", root)
+        here = Path(sys.executable).parent
+        mp.setenv("PATH", os.pathsep.join(p for p in os.environ.get("PATH", "").split(os.pathsep) if p and Path(p) != here))
         return {Path(t["id"]).name: runners.execute(t, doc, work / Path(t["id"]).stem) for t in doc["tasks"]}
 
 
@@ -251,6 +257,7 @@ def test_a_file_whose_tests_pass_passes(results):
     assert r["status"] == "pass" and not r["undeclared_reads"], "a read of its env's spec is declared"
     assert _counts(r) == {"passed": 1, "failed": 0, "skipped": 0, "errors": 0, "exit": 0}
     assert results["test_none.py"]["status"] == "pass" and results["test_none.py"]["detail"]["exit"] == 5
+    assert results["test_python3.py"]["status"] == "pass", "a test's python3 is the runner's Python, as under `uv run`"
 
 
 def test_a_failing_test_or_collection_is_a_fail(results):

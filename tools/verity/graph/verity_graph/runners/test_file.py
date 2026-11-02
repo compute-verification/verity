@@ -91,9 +91,11 @@ def fixtures(task: dict, tests: dict) -> list[str]:
 
 
 def environment(task: dict, tests: dict, work: Path, suite: Path) -> dict[str, str]:
-    """The test process's environment: this one's less `DROP`, thread pools sized to the task's cores, a git identity (tests commit
+    """The test process's environment: this one's less `DROP`, this Python's directory first on the PATH (a test's `python3` is the
+    workspace's, as under `uv run`, which runs `suites.py`), thread pools sized to the task's cores, a git identity (tests commit
     in throwaway repositories), and the guard's variables, which declare no inputs to it."""
     env = {k: v for k, v in os.environ.items() if not k.startswith(DROP_PREFIXES) and k not in DROP}
+    env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), *filter(None, [env.get("PATH")])])
     for v in THREAD_VARS:
         env.setdefault(v, str(max(1, int(task["resources"]["cores"]))))
     for k in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
