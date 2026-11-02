@@ -35,7 +35,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .ledger import Ledger
-from .run import file_sha256, screen
+
+
+def file_sha256(path: Path) -> str:
+    from .run import file_sha256 as f
+
+    return f(path)
+
+
+def screen(text: str) -> list[str]:
+    # run.py imports torch; the node list (`nodes`) is read where torch isn't installed
+    from .run import screen as s
+
+    return s(text)
 
 
 @dataclass(frozen=True)
