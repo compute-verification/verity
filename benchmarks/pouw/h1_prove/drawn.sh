@@ -13,8 +13,16 @@
 #      safetensors dir, b/<K>'s rows) or H1_WEIGHTS (an npz of w<i>, s<i>)  H1_GATE and H1_MODEL (the auditor's model-key
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)
 #      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  H1_DRAWN_MEM_GB (the
-#      prover's budget, default 90% of the host's memory)  PY (served_verdicts.sh's venv python, default .venv's)
-#      H1_DRAWN_ONLY=1: write and check the statements, no verdict
+#      job's budget, default 90% of the host's memory)  H1_ZK_SERVER_GB (a session's ZK server cap, default 88)
+#      PY (served_verdicts.sh's venv python, default .venv's)  H1_DRAWN_ONLY=1: write and check the statements, no verdict
+# Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's ZK server and prover then run side by side, each under
+# an address-space cap (job.sh's vlimit): the server gets H1_ZK_SERVER_GB and the prover the rest of H1_DRAWN_MEM_GB. The
+# default is sized to a K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223 ANDs), which peaked
+# at 65.4 GiB resident in the server and 61.3 GiB in the prover, 238 s to prove at 8 threads (r20261102-160857-5d19):
+# each side's cap is its peak plus ~35%, since an address space outgrows resident memory by the allocator's arenas and
+# the threads' stacks. So a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 83 = 171 (a ~195 GB H200 host's 90% is ~174),
+# and drawn.sh refuses before staging only when the prover's share is below its 62 GB resident peak. A larger K's lane
+# is measured again before it runs.
 # Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the ZK server's log, the prover's LIVE
 # verdict lines and both sides' wall seconds and peak RSS, kept whether the session passed or failed; the server is the
 # verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
@@ -32,6 +40,10 @@ export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
 trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W" "$SCR"' EXIT
+SERVE_GB=${H1_ZK_SERVER_GB:-88}
+PROVE_GB=$(( MEM_GB - SERVE_GB ))
+[ "$PROVE_GB" -ge 62 ] || { log "drawn: the prover's share, $MEM_GB - $SERVE_GB (H1_ZK_SERVER_GB) = $PROVE_GB GB, is below a K 2048" \
+  "lane session's 62 GB peak: raise H1_DRAWN_MEM_GB (a larger host, or a CPU node) or, for a smaller K, lower H1_ZK_SERVER_GB"; exit 1; }
 setup
 export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python${PYTHONPATH:+:$PYTHONPATH}
 WK=$SCR/stage ST=$P/drawn/statements.json
