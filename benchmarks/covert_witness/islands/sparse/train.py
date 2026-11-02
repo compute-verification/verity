@@ -290,8 +290,9 @@ def main() -> int:
     ap.add_argument("--layers", default="all", help="`all` or `top:N`: touch only the top N blocks (and the final norm)")
     ap.add_argument("--norms", default="all", help="`all`, `none`, `final` or `top:N`: the gains trained in full")
     ap.add_argument("--orient", default="both", choices=("rows", "cols", "both"))
-    ap.add_argument("--select", default="grad", choices=("grad", "fisher", "magnitude", "random"),
-                    help="the lines' selection energy: G², the mean squared batch gradient, W², or uniform noise")
+    ap.add_argument("--select", default="grad", choices=("grad", "fisher", "adam", "magnitude", "random"),
+                    help="the lines' selection energy: G², the mean squared batch gradient, G²/√(that) (an Adam step's "
+                         "first-order gain), W², or uniform noise")
     ap.add_argument("--max-rank", type=int, default=64)
     ap.add_argument("--probe", type=int, default=4, help="probe batches at θ (0: no probe, no analysis)")
     ap.add_argument("--analyse", action=argparse.BooleanOptionalAction, default=True)
@@ -319,7 +320,7 @@ def main() -> int:
                    "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
 
     G = G2 = None
-    need_g = a.mech == "lora" or a.mech == "lines" and a.select in ("grad", "fisher")
+    need_g = a.mech == "lora" or a.mech == "lines" and a.select in ("grad", "fisher", "adam")
     if need_g and not a.probe:
         raise SystemExit("sparse: --mech lora and a gradient selection need --probe > 0")
     if a.probe and (need_g or a.analyse):
@@ -340,6 +341,8 @@ def main() -> int:
             energy = {n: G[n].pow(2) for n in cands}
         elif a.select == "fisher":
             energy = {n: G2[n] for n in cands}
+        elif a.select == "adam":
+            energy = {n: G[n].pow(2) / G2[n].sqrt().clamp_min(1e-30) for n in cands}
         elif a.select == "magnitude":
             energy = {n: theta[n].float().pow(2) for n in cands}
         else:
