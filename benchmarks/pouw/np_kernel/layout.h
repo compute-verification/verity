@@ -1,6 +1,7 @@
-// ssn_1l's lane layout (ssn.cu's header states it), the fold's row and column sources, and the fold: the one definition that
-// ssn.cu's operands, forming check and epilogue (xu_fold) and the CPU check (cpu_check.cc) read. Plain C++; under nvcc
-// the fold is also a device function.
+// ssn_1l's lane layout (ssn.cu's header states it), the fold's row and column sources and words, the fold and
+// verity_int8's epilogue it must equal: the one definition that ssn.cu's operands, forming, forming check and epilogue
+// (xu_fold) and the CPU check (cpu_check.cc) read. Plain C++; under nvcc the fold and the words it reads are also device
+// functions.
 #pragma once
 #include <algorithm>
 #include <cmath>
@@ -19,7 +20,7 @@ static int g_lw[3] = {1, 1, 1};  // BLC_W: A' in the three lane-coin lanes
 static bool g_rot = false;  // ROT=1: blc4a-t64-e7-rot, A' in the lane-coin lanes by row parity (ROT_W), in place of BLC_W
 constexpr int ROT_W[2][3] = {{127, 1, 1}, {1, 127, 1}};
 static bool g_xu = false;  // XU=1: ssn_1l_tag_xu's last step and epilogue, on a tag layout
-static bool g_fold = false;  // FOLD=1 (with BLC, not XU): served noisy, xu's epilogue folding out the lane coins alone
+static bool g_fold = false;  // FOLD=1 (with BLC, not XU): served noisy, xu's epilogue folding every coin term out
 // A' in lane-coin lane e (0..2) for row i
 static inline int coin_w(int i, int e) { return g_rot ? ROT_W[i & 1][e] : g_lw[e]; }
 static inline int lanes1() { return g_blc == 2 ? 21 : g_tag ? 24 : 28; }  // step 1's data lanes
@@ -52,7 +53,7 @@ static inline int pad_cols(int n) { return 8 * ((n + 7) / 8); }
 
 // C[e, j]: digit e of j + 1 in balanced base 13 (Lean's colCode, bal13 (j + 1)), the base-13 digits of j + 14,281 minus 6;
 // distinct and nonzero on columns below 28,560
-static inline int code_of(int j, int e) {
+SSN_HD inline int code_of(int j, int e) {
   long long c = (long long)j + 14281;
   for (int r = 0; r < e; r++) c /= 13;
   return (int)(c % 13) - 6;
@@ -69,7 +70,7 @@ static inline uint32_t coin_word_top(int t, int j) {
   return t == 0 ? (uint32_t)(uint8_t)(int8_t)code_of(j, 3) << 24 : 0x01000000u;
 }
 // T(i)[e]: digit e of z_i's balanced base-13 expansion, each in [-6, 6]
-static inline int tag_of(int i, int e) {
+SSN_HD inline int tag_of(int i, int e) {
   int z = (i / 2 + 1) * (i & 1 ? -1 : 1), d = 0;
   for (int r = 0; r <= e; r++) {
     d = ((z % 13) + 19) % 13 - 6;
@@ -190,32 +191,84 @@ static inline int xu_sigma(int cls, int S, LW lw) {
   }
   return s;
 }
-// the column source for a (tile, row class, column) from beta_j and its sigma: XU=1 beta_j - sigma (the row source is
-// 0x4B400000 - rho_i), so the fold serves A_i . B_j; FOLD=1 0x4B400000 - sigma (the row source is 0), so it serves the final
-// word less sigma, A_i . B_j - beta_j + sum_e a1[i, e] C[e, j] + sum_e T(i)[e] G[e, j] + sum_{t >= 2} (1 + a_t[i])
-static inline int col_source(int beta, int sigma) { return (g_xu ? beta : (int)XU_MAGIC_BITS) - sigma; }
+// the column source for a (tile, row class, column) from beta_j and its sigma, beta_j - sigma, under XU=1 and FOLD=1 alike
+static inline int col_source(int beta, int sigma) { return beta - sigma; }
 
-// xu's epilogue on a final word d: IADD3(d, row source r, column source c) mod 2^32 read as fp32, FFMA(v, s_j, m_j) with
-// m_j = -1.5 2^23 s_j, then FMUL s_i. With p the integer the sources leave (d + r + c = 0x4B400000 + p mod 2^32: A_i . B_j
-// under XU=1, the noisy word under FOLD=1), it is stock_fold on p bit for bit while |p| <= 2^22 and s_j has a 22-bit
-// significand.
-SSN_HD inline float xu_fold(uint32_t d, uint32_t r, uint32_t c, float sj, float mj, float si) {
+// The walk w_i = sum_{t >= 2} (1 + a_t[i]), lane 31 of each later step under the tag layout: S - 1 plus the popcount of
+// bits 4 to S + 2 of the row's feed words h
+SSN_HD inline int walk_of(const uint32_t* h, int S) {
+  int w = S - 1;
+  for (int p = 4; p < S + 3; p++) w += (int)((h[p >> 5] >> (p & 31)) & 1u);
+  return w;
+}
+// FOLD=1's cross terms, which the epilogue takes out of the word by two IDP4A, as four int8 bytes each: -a1[i, 0..3] (0
+// or -1, from bits 0-3 of the row's first feed word h0) against C[0..3, j], and -T(i)[0..3] against G[0..3, j] (the G
+// word as fed)
+SSN_HD inline uint32_t neg_a1_word(uint32_t h0) { return (((h0 & 0xFu) * 0x00204081u) & 0x01010101u) * 0xFFu; }
+SSN_HD inline uint32_t neg_tag_word(int i) {
+  uint32_t w = 0;
+  for (int e = 0; e < 4; e++) w |= (uint32_t)(uint8_t)(int8_t)-tag_of(i, e) << (8 * e);
+  return w;
+}
+SSN_HD inline uint32_t code_word(int j) {
+  uint32_t w = 0;
+  for (int e = 0; e < 4; e++) w |= (uint32_t)(uint8_t)(int8_t)code_of(j, e) << (8 * e);
+  return w;
+}
+// The epilogue's words a row, which the forming writes: the row source r (XU=1 0x4B400000 - rho_i, FOLD=1 0x4B400000 -
+// w_i) and FOLD=1's cross bytes na (neg_a1_word) and nt (neg_tag_word), 0 under XU=1, whose last step cancels a1 . C and
+// T . G in its lanes
+struct alignas(16) FoldRow {
+  uint32_t r, na, nt, unused;
+};
+// and a column, formed at load: s_j and the bytes C[0..3, j] (code_word)
+struct alignas(8) FoldCol {
+  float s;
+  uint32_t c;
+};
+// FOLD=1's row words for row i from its feed words h (the H zero words for a computed row past the committed ones)
+SSN_HD inline FoldRow fold_row(const uint32_t* h, int i, int S) {
+  return FoldRow{XU_MAGIC_BITS - (uint32_t)walk_of(h, S), neg_a1_word(h[0]), neg_tag_word(i), 0u};
+}
+
+// IDP4A: c plus the dot product of a's and b's four signed bytes, mod 2^32
+SSN_HD inline uint32_t dp4a(uint32_t a, uint32_t b, uint32_t c) {
 #if defined(__CUDA_ARCH__)
-  return __fmul_rn(__fmaf_rn(__uint_as_float(d + r + c), sj, mj), si);
+  return (uint32_t)__dp4a((int)a, (int)b, (int)c);
 #else
-  const uint32_t b = d + r + c;
-  float v;
-  memcpy(&v, &b, 4);
-  return std::fma(v, sj, mj) * si;
+  for (int e = 0; e < 4; e++) c += (uint32_t)((int8_t)(uint8_t)(a >> (8 * e)) * (int8_t)(uint8_t)(b >> (8 * e)));
+  return c;
 #endif
 }
-// stock's epilogue: I2F, FMUL s_j, FMUL s_i
-SSN_HD inline float stock_fold(int d, float sj, float si) {
+// xu's integer fold on a final word d: q = d + r + c (one IADD3 of the row and column sources), then q = IDP4A(na, cj,
+// IDP4A(nt, g, q)), which takes out FOLD=1's a1 . C and T . G (nothing under XU=1), so q = 0x4B400000 + A_i . B_j mod 2^32
+SSN_HD inline uint32_t fold_word(uint32_t d, uint32_t r, uint32_t c, uint32_t nt, uint32_t g, uint32_t na, uint32_t cj) {
+  return dp4a(na, cj, dp4a(nt, g, d + r + c));
+}
+// xu's epilogue on a final word d: fold_word's q, then FADD(v, -1.5 2^23), v the float whose bits are q, and the scales in
+// verity_int8's order, FMUL s_i, then FMUL s_j. While |A_i . B_j| <= 2^22 the FADD is exact (v and 1.5 2^23 lie in
+// [2^23, 2^24]) and gives A_i . B_j, so the fold is int8_epilogue on A_i . B_j bit for bit, whatever the scales; past it v
+// is another float (2^22 + 1 reads back as 2^22 + 2) and nothing flags it.
+SSN_HD inline float xu_fold(uint32_t d, uint32_t r, uint32_t c, uint32_t nt, uint32_t g, uint32_t na, uint32_t cj, float si,
+                            float sj) {
+  const uint32_t q = fold_word(d, r, c, nt, g, na, cj);
 #if defined(__CUDA_ARCH__)
-  return __fmul_rn(__fmul_rn(__int2float_rn(d), sj), si);
+  return __fmul_rn(__fmul_rn(__fadd_rn(__uint_as_float(q), -12582912.0f), si), sj);
 #else
-  const float f = (float)d * sj;
-  return f * si;
+  float v;
+  memcpy(&v, &q, 4);
+  const float f = (v - 12582912.0f) * si;
+  return f * sj;
+#endif
+}
+// verity_int8's epilogue (int8_exact.dequantize, int8_fused._epilogue) on its int32 product y, before the bf16 pack:
+// fl(fl(f32(y) s_a[i]) s_w[j]), the activation's scale first
+SSN_HD inline float int8_epilogue(int y, float si, float sj) {
+#if defined(__CUDA_ARCH__)
+  return __fmul_rn(__fmul_rn(__int2float_rn(y), si), sj);
+#else
+  const float f = (float)y * si;
+  return f * sj;
 #endif
 }
 // the bf16 pack, round to nearest even (finite values)
