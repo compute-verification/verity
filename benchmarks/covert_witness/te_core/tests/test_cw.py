@@ -142,12 +142,12 @@ def test_a_run_reads_its_own_outputs_and_no_other_runs(cw_root, monkeypatch, how
 
 def test_a_recast_copy_of_theta_is_theta_and_a_lossy_one_is_not():
     torch.manual_seed(0)
-    theta = {"w": torch.randn(8, 8)}
+    theta = {"w": torch.randn(8, 8), "emb": torch.randn(10, 8)}
     c = Counter(theta, digests=False)
     w = torch.nn.Parameter(theta["w"].clone())
-    c.register({"w": w})
+    emb = theta["emb"].clone()  # θ's table: its lookups compute nothing on the token
+    c.register({"w": w, "emb": emb})
     idx = torch.tensor([[1, 2, 3]])
-    emb = torch.randn(10, 8)
     with c:
         c.begin_step()
         w.data = w.data.double()

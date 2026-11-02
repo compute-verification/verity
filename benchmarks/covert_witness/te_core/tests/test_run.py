@@ -111,7 +111,10 @@ def test_sgd_run_records_every_step_and_verifies_an_identity_family(tmp_path, th
     assert fam["failed"] == {}
     assert len(fam["sampled"]) == 5
     assert fam["covers"] == [1, 2, 3, 4, 5]  # step 0 reads θ itself: nothing to cover
-    assert all(b > 32 for b in fam["beta"].values())  # a full update costs at least p bits per updated value
+    # a full update costs at least p bits per updated value (V·D + D·D of them, V, D = 32, 16); per token the updated MACs
+    # are the tied table's lookup (58 multiplexers per word), w1 and the head
+    floor = 32 * (32 * 16 + 16 * 16) / (58 * 16 + 16 * 16 + 32 * 16)
+    assert all(b > floor for b in fam["beta"].values()), fam["beta"]
     assert (out / "checkpoints").exists()
 
 

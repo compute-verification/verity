@@ -33,7 +33,10 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
   (`prepare.TrainData.next`) to the next.
 - **Updated blocks U**: the forward-pass MACs with a token-indexed operand and another operand that has roots, so their
   weight operand differs from θ. Backward products are left out of U: they read the same weights, so adding them halves
-  β per MAC, doubles φ and leaves φβ unchanged.
+  β per MAC, doubles φ and leaves φβ unchanged. A read of an updated weight by token data (embedding, index, gather) is
+  in U at its position, priced as the circuit's gather Definition prices it (`flops.gather_selects`: one multiplexer per
+  word selected per level of its tree, about one per row of a table): a tied embedding's update is read at the lookup,
+  so every later updated node has the lookup upstream. A lookup of θ's table is 0.
 - **Inference block S**: a set of at most c MACs that imports at most k bits beyond θ. It holds only computed gates, so
   its inputs are counted in in(S) and are never its members.
 - **in(S)**: the sender form, the bits of the gates outside S that feed a gate of S plus S's own source gates: the

@@ -3,10 +3,11 @@ import torch.nn.functional as F
 
 from conftest import D, PER_TOKEN, VOCAB, loss_of
 from te_core.annotate import annotate
-from te_core.flops import Counter, flags, forward_macs_per_token, guard_exits, leaked
+from te_core.flops import Counter, flags, forward_macs_per_token, gather_selects, guard_exits, leaked, mux_tree
 
 IDX = torch.randint(0, VOCAB, (3, 8), generator=torch.Generator().manual_seed(3))  # 24 tokens: no activation is weight-shaped
 TOKENS = IDX.numel()
+LOOKUP = mux_tree(VOCAB, 32) * D  # the updated tied table's lookup per token: 58 multiplexers per word
 
 
 def train(m, theta, n=3, params=None, lr=0.1, body=None):
@@ -34,15 +35,38 @@ def test_counts_and_updated_structure(tiny):
     assert s0["tokens"] == s1["tokens"] == TOKENS
     assert s0["by"]["fwd/theta"] == PER_TOKEN * TOKENS  # step 0 reads θ itself
     assert "fwd/updated" not in s0["by"]
-    assert s1["by"]["fwd/updated"] == PER_TOKEN * TOKENS
+    assert s1["by"]["fwd/updated"] == (PER_TOKEN + LOOKUP) * TOKENS
     assert sorted(s1["weights"]) == ["emb", "w1.weight", "w2.weight"]
     ann = annotate(rec)
     st = ann.steps[1]
-    assert st.updated_per_token == PER_TOKEN
-    assert st.depth == 2 * D * D  # the head, after w1 and w2
-    assert [u for u, _ in st.profile] == [0, D * D, 2 * D * D]
+    assert st.updated_per_token == PER_TOKEN + LOOKUP
+    assert st.depth == LOOKUP + 2 * D * D  # the head, after the updated table's lookup, w1 and w2
+    assert [u for u, _ in st.profile] == [0, LOOKUP, LOOKUP + D * D, LOOKUP + 2 * D * D]
     assert ann.macs == rec["totals"]["macs"] == sum(s["macs"] for s in rec["steps"])
     assert st.bits == 32
+
+
+def test_a_gathers_price_is_the_ands_of_the_circuits_gather():
+    """`gather_selects` against `verity.ml.circuits.boolean.gather` on one-bit words: one tree by the token's 32 bits up to a
+    chunk, and past it the registry's chunks by the low 10 bits, then their results by the high 22."""
+    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.ml.circuits.boolean.gather import gather
+
+    def ands(n):
+        C = Circuit()
+        idx = C.input("idx", 32)
+        words = [C.input(f"w{i}", 1) for i in range(n)]
+        if n <= 1024:
+            gather(C, idx, words, 0)
+        else:
+            chunks = [gather(C, idx[:10], words[i:i + 1024], 0) for i in range(0, n, 1024)]
+            gather(C, idx[10:], chunks, 0)
+        return C.kind.count("and")
+
+    for n in (1, 2, 3, 5, 32, 1000, 1024, 2048, 2051):
+        assert gather_selects(n) == ands(n), n
+    assert gather_selects(VOCAB) == mux_tree(VOCAB, 32) == 58
+    assert gather_selects(50304) == 50325  # GPT-2's table: about one multiplexer per row
 
 
 def test_frozen_weights_stay_theta(tiny):
@@ -53,6 +77,18 @@ def test_frozen_weights_stay_theta(tiny):
     assert list(st.weights) == ["w2.weight"]
     assert st.profile == ((0, D * D * TOKENS),)  # w1 is θ's: nothing updated upstream of w2
     assert st.depth == 0
+
+
+def test_an_update_of_the_tied_table_alone_is_read_at_its_lookup(tiny):
+    """The 12:50Z ruling: the lookup reads the updated table at position 0, an updated node priced as the circuit's gather,
+    so the tied head has it upstream; w1 and w2 are θ's and add nothing."""
+    m, theta = tiny
+    rec = train(m, theta, params=[m.emb])
+    st = annotate(rec).steps[2]
+    assert list(st.weights) == ["emb"]
+    assert st.updated_macs == (LOOKUP + VOCAB * D) * TOKENS
+    assert st.profile == ((0, LOOKUP * TOKENS), (LOOKUP, VOCAB * D * TOKENS))
+    assert st.depth == LOOKUP
 
 
 def test_new_weights_are_updated(tiny):

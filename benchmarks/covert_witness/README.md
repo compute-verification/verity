@@ -12,7 +12,7 @@ island per class (or per direction, `islands/<direction>/`), each with one edita
 `README.md`, for a researcher agent.
 
 **Version**: v2.3 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v4`; the harness is te_core
-3.5; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
+3.6; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
 times its steps, and every run is ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a
 fresh slice of the search pool drawn after the weights are hashed, promotions are decided on a sealed set one bit each,
 and the final set and a final start are sealed until the scorer's final scoring. Since v2.2, one pinned commit
