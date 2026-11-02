@@ -5,7 +5,7 @@ it runs on its own:
     hooks.plan(n_steps)                  # the step count: a checkpoint after every 5% of it (default: of the MAC budget)
     hooks.output(lambda: state_dict)     # the output model now, θ's tensors in θ's dtypes: the 5% checkpoints read it
     with hooks.step(): ...               # explicit step boundaries (default: each call of the start's data stream)
-    hooks.tokens(batch)                  # token data that reaches the model other than through an embedding lookup
+    hooks.tokens(batch)                  # token data not from the start's data stream, reaching the model other than by an embedding lookup
     fam = hooks.family(name, plan)       # a counterexample family (counterexample.py), `fam.put(step, enc)`
 
 None of them is needed: without them the harness counts the run, cuts its steps at the data stream's calls and scores

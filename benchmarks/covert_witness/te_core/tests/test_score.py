@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from te_core.annotate import Annotation, StepAnnotation, annotate
@@ -33,11 +35,10 @@ def test_rho_formula_and_depth_condition():
     assert rho_of(1.0, 1e9, 0.0, 8e4, 1e18) == 1.0
 
 
-def test_uncovered_run_scores_option_a_at_p_over_r():
+def test_uncovered_run_scores_at_p_over_r():
     ann = run(100)
     s = score(ann, {}, K, 10, 16, C)
-    assert s["beta"] == 1.6
-    assert s["a"]["rho"] == s["b"]["rho"]
+    assert s["beta"] == s["tau"] == 1.6 and s["steps"] == 100
     d_min = K / 1.6  # 50,000 MACs: every node but the first (none upstream) is deep
     assert s["phi"] == pytest.approx((NODES - 1) / NODES / 3)
     assert s["d_min"] == pytest.approx(d_min)
@@ -46,25 +47,66 @@ def test_uncovered_run_scores_option_a_at_p_over_r():
 
 
 def test_one_cheap_early_step_does_not_collapse_a_long_run():
-    """A family covering only step 0 at a tiny β_t pulls option (a)'s β down to it; option (b) leaves step 0 out and
-    keeps β = p/r for the other 99, so ρ stays within 1% of the uncovered run's."""
+    """A family covering only step 0 at a tiny β_t: τ = β_0 gives ρ 1, τ = p/r leaves step 0 out and keeps β = p/r for
+    the other 99, so ρ stays within 1% of the uncovered run's."""
     ann = run(100)
     clean = score(ann, {}, K, 10, 16, C)["rho"]
     s = score(ann, {0: 1e-6}, K, 10, 16, C)
-    assert s["a"]["rho"] == 1.0
-    assert s["option"] == "b"
+    assert s["tau"] == 1.6 and s["steps"] == 99
     assert s["rho"] == pytest.approx(clean * 0.99)
-    assert s["b"]["steps"] == 99
+
+
+def test_one_cheap_step_among_honestly_covered_steps_costs_its_own_share():
+    """Every step covered at an honest β_t ≥ p/r and one at 10⁻⁶ (lowrank-restart's 10:57Z and quant's 11:13Z
+    LOOPHOLEs): the cheap step drops out of U_{p/r}, and the honest steps stay in it at β = p/r."""
+    ann = run(100)
+    clean = score(ann, {}, K, 1, 16, C)["rho"]
+    s = score(ann, {0: 1e-6} | {t: 32.0 for t in range(1, 100)}, K, 1, 16, C)
+    assert s["tau"] == 16 and s["steps"] == 99
+    assert s["rho"] == pytest.approx(clean * 0.99)
+    assert score(ann, {t: 32.0 for t in range(100)}, K, 1, 16, C) == score(ann, {}, K, 1, 16, C)
 
 
 def test_a_family_covering_every_step_lowers_rho():
     ann = run(20)
     clean = score(ann, {}, K, 1, 16, C)
     covered = score(ann, {t: 0.5 for t in range(20)}, K, 1, 16, C)
-    assert covered["option"] == "a"
-    assert covered["b"]["rho"] == 1.0  # no uncovered step
-    assert covered["beta"] == 0.5
+    assert covered["beta"] == covered["tau"] == 0.5 and covered["steps"] == 20
     assert 1.0 < covered["rho"] < clean["rho"]
+
+
+def varied(n: int) -> Annotation:
+    """Steps of three profiles and depths, with a step that updates nothing."""
+    steps = []
+    for t in range(n):
+        nodes, per_node = NODES - t % 3, PER_TOKEN // NODES
+        profile = tuple((i * per_node, per_node * TOKENS) for i in range(nodes)) if t != 5 else ()
+        steps.append(StepAnnotation(step=t, tokens=TOKENS, macs=3 * PER_TOKEN * TOKENS,
+                                    updated_macs=nodes * per_node * TOKENS if t != 5 else 0, updated_per_token=PER_TOKEN,
+                                    depth=(nodes - 1) * per_node, profile=profile, bits=16, weights={}, shapes={}))
+    return Annotation(macs=sum(s.macs for s in steps), steps=tuple(steps))
+
+
+@pytest.mark.parametrize("family", ["geometric", "below_p_over_r"])
+@pytest.mark.parametrize("r", [1, 10, 100])
+@pytest.mark.parametrize("k", list(K_BITS.values()))
+def test_the_grouped_thresholds_are_the_annotations_own(k, r, family):
+    """`score` against the rule computed step by step with Annotation's own φ and D: a family graded from 0.05 bits, and
+    one covering most steps a little below p/r, where a τ between the least β_t and p/r wins."""
+    ann, base = varied(30), 16 / r
+    if family == "geometric":
+        covered = {t: 0.05 * 1.4 ** t for t in range(0, 30, 2)}
+    else:
+        covered = {t: base * (0.3 + 0.02 * t) for t in range(30) if t % 7}
+    want = (1.0, None)
+    for tau in sorted({base, *(b for b in covered.values() if b < base)}, reverse=True):
+        keep = [t for t in range(30) if covered.get(t, math.inf) >= tau]
+        beta = min(base, tau)
+        want = max(want, (rho_of(ann.phi(k / beta, keep), ann.depth(keep), beta, k, C * 50), tau), key=lambda x: x[0])
+    s = score(ann, covered, k, r, 16, C * 50)
+    assert s["rho"] == pytest.approx(want[0], rel=1e-12)
+    if family == "below_p_over_r" and want[0] > 1:
+        assert min(covered.values()) < s["tau"] == want[1] < base
 
 
 def test_covered_steps_outside_the_prefix_are_ignored():
