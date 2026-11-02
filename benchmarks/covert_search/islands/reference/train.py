@@ -19,7 +19,7 @@ HP = {
     "wd": 0.1,
     "clip": 1.0,
     "seqs": 64,
-    "micro": 64,
+    "micro": 16,
     "muon_lr": 0.01,
     "muon_momentum": 0.95,
     "muon_seqs": 60,
