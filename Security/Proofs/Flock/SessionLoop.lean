@@ -2,6 +2,7 @@ import Proofs.Flock.SessionLoop.Statement
 import Proofs.Flock.SessionLoop.TakenVals
 import Proofs.Flock.SessionLoop.FinalC
 import Proofs.Flock.SessionLoop.Inner
+import Proofs.Flock.SessionLoop.LiveInner
 import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.SessionLoop.Link
 import Proofs.Flock.Claims.ZK.FinishSwFrame
