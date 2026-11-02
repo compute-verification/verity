@@ -1,28 +1,33 @@
-"""The headline plots P1-P4 (note:training-20261102T1715Z-draft-training-efficiency-experiments) and the A2 curve,
-from the ledger.
+"""The headline plots P1-P4 (note:training-20261102T1715Z-draft-training-efficiency-experiments) and the A2 curve, from
+the ledger, as the console's five panels (note:dashboard-20261102T1934Z-draft-training-plots-contract, columns per
+note:training-20261102T1938Z-draft-training-plots-contract-reply), each with a PNG drawn from its rows.
 
     python -m te_core.plots --out DIR [--root LEDGER] [--pin COMMIT ...] [--policy reference|inference|server|c1e14/k1e4]
-                            [--drop 0.01] [--g 1] [--from-scratch F.json]
+                            [--drop 0.01] [--g 1] [--from-scratch F.json] [--reading literal-x0|tail-charged ...]
 
 Every point is scored by the training formalism (te_core.frontier's `formalism_rows`: |C| in gates, ρ at the start's
-policy grid) over the valid submissions at the pin, with honest H(l) the least |C| over complete schedules reaching l
-(the 14:57Z rule; a checkpoint where none is complete, drawn dashed) and W*(l) the least |C|ρ over the same records.
-Each plot writes DIR/P<n>.png and DIR/P<n>.json, the numbers drawn; each figure's footer names the stubs its
-records' quantities rest on (`formalism.STUBS`), so a v2.3 record's (its old fields, no traced quantities) shows as
-such.
+cells, te_core.policy's `cells`) over the valid submissions at the pin, with honest H(l) the least |C| over every
+checkpoint reaching l and W*(l) the least |C|ρ over the same checkpoints (the coordinator's 19:50Z rule). Slowdown's
+frozen-tail case has two readings (te_core.formalism's READINGS) and neither is the headline: every panel has a
+`reading` column with each reading's rows (a value no reading changes, H or A2's, is the same in both), and every
+figure draws each reading. Every slowdown value carries its `basis`: `fit` (ρ = 1 by Fit for the training) or
+`target` (Slowdown's bound, stated, not proved in Lean, with the best-known u and a). A panel is DIR/<name>.json,
+{id, title, kind: "table", updated_at, source, note, columns, rows}, the console's panels route's body (a value it
+doesn't have is null), beside DIR/<name>.png; its note and the figure's footer name the stubs and bounds its rows rest
+on (`formalism.STUBS`).
 
-- P1, per start (rows: size, columns: tokens per parameter): val bits per byte against compute after θ over C0, log x:
-  H, W* at the reference policy (`--policy`, default te_core.policy's REFERENCE), W*'s band over the reference's
-  neighbouring decades of c and k, and the from-scratch curve F (`--from-scratch`) as context.
-- P2: S = W*/H at the reference policy against the gain g = F(l*)/C0, one curve per start, coloured by l0 and styled
-  by saturation; without F, against the drop from l0 (the axis says so).
-- P3, per start: S over the (c, k) grid at a fixed g (`--g`, with F) or drop (`--drop`), filled by decade, with the
-  start's inference-block and server-block shapes and the reference policy marked.
-- P4, at that l* and the reference policy: p_A = |C_A|/H against s_A = ρ_A, log-log, one point per algorithm (a
-  direction and mechanism, its least-|C|ρ record), iso-S diagonals, the reference directions' full training marked.
-- A2, per start: the least compute reaching each target among the records with Δ ≤ x, against x (Δ's bins for A2,
-  the efficiency floor, never caps), over complete schedules and, dotted where lower, over every checkpoint, the
-  reference policy's k marked (Fit needs Δ + sτ ≤ k).
+- `p1-loss-vs-compute`, per start: val bits per byte against compute after θ, each curve's staircase: `honest` (H),
+  `covert` (W* at the reference policy, `--policy`, default te_core.policy's REFERENCE), `covert-policy` (W* at each
+  grid cell within a decade of it in c and k, a band) and `scratch` (F, `--from-scratch`).
+- `p2-slowdown-vs-gain`: S at the reference policy per start, target and reading, against the gain g = F(l*)/C0 (null
+  without F, when the figure plots S against the target).
+- `p3-policy-plane`: S at every cell and reference shape (`mark`), per start, target and reading (with F and `--g`,
+  also at that gain, `target_pct` null); the figure at `--g`, else at `--drop`.
+- `p4-decomposition`: p_A = |C_A|/H against s_A = ρ_A at the reference policy, one point per algorithm (a direction and
+  mechanism, its least-|C|ρ checkpoint), per start, target (or gain) and reading; the figure as P3's.
+- `a2-efficiency-floor`, per start and target: the least compute reaching it among the checkpoints with Δ ≤ x, at each
+  Δ that lowers it (Δ's bins, never caps), with that point's Δ_grad and the least k at which Fit holds at the reference
+  c for running and for training (formalism's `fit_k`).
 
 F.json is {start: [[gates, bpb], ...]}, the from-scratch runs' (compute, loss) on the same data and evaluator (the
 ladder's), read as F(l) = the least compute of a point at or below l, log-interpolated.
@@ -33,6 +38,7 @@ import argparse
 import json
 import math
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import matplotlib
@@ -41,44 +47,46 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from . import frontier, policy  # noqa: E402
+from . import formalism, frontier, policy  # noqa: E402
 from .ledger import Ledger  # noqa: E402
 
 LEVELS = (1, 10, 100, 1000, 10000)
-DROPS = tuple(round(0.0025 * i, 4) for i in range(1, 41))
+STYLE = {formalism.LITERAL: {"color": "C3", "ls": "-"}, formalism.TAIL_CHARGED: {"color": "C1", "ls": "--"}}
+NAMES = ("p1-loss-vs-compute", "p2-slowdown-vs-gain", "p3-policy-plane", "p4-decomposition", "a2-efficiency-floor")
 
 
 # ---- the data ----------------------------------------------------------------------------------------------------------
 
-def load(rows: list[dict], pin, shapes: dict[str, dict], keep=None) -> tuple[list[dict], dict]:
-    """The valid rows `keep` keeps (default all) scored by the formalism, each with `schedule_end` (read over every
-    row), and the stubs and bounds they rest on."""
-    ends = frontier.schedule_ends(rows)
-    scored, _ = frontier.formalism_rows([r for r in frontier.valid(rows, pin) if keep is None or keep(r)], shapes)
+def load(rows: list[dict], pin, shapes: dict[str, dict], keep=None,
+         readings=formalism.READINGS) -> tuple[list[dict], dict]:
+    """The valid rows `keep` keeps (default all) scored by the formalism under `readings`, and the stubs and bounds
+    they rest on."""
+    scored, _ = frontier.formalism_rows([r for r in frontier.valid(rows, pin) if keep is None or keep(r)], shapes,
+                                        readings)
     stubs: dict[str, int] = {}
     for r in scored:
-        r["schedule_end"] = r["id"] in ends
         for k, v in r["measured"].labels.items():
             if not v.startswith("measured") and not v.startswith("counted"):
                 stubs[f"{k}: {v}"] = stubs.get(f"{k}: {v}", 0) + 1
     return scored, stubs
 
 
-def reference_key(shape: dict, name: str) -> str:
-    if "/" in name:
-        return name
-    s = policy.shapes(shape)[name]
-    return policy.key(10 ** round(math.log10(s["c"])), 10 ** round(math.log10(s["k"])))
+def decade(cells: dict[str, tuple[float, float]], key: str) -> str:
+    """The grid cell nearest to `key`'s (c, k)."""
+    c, k = cells[key]
+    return policy.key(10 ** round(math.log10(c)), 10 ** round(math.log10(k)))
 
 
-def neighbours(key: str, keys: set[str]) -> list[str]:
+def neighbours(key: str, keys) -> list[str]:
     c, k = policy.of_key(key)
     out = [policy.key(c * a, k * b) for a in (0.1, 1, 10) for b in (0.1, 1, 10)]
     return [x for x in out if x in keys]
 
 
-def at(on: list[dict], l_star: float, keys: list[str]) -> dict:
-    return frontier.target(on, l_star, keys, size="gates")
+def policy_label(key: str) -> str:
+    if key == "reference":
+        return f"c={policy.SESSION_TOKENS}w k={policy.REFERENCE_K_BITS / 8000:g}kB"
+    return f"{key} block" if key in policy.MARKS else key
 
 
 def from_scratch(points: list[list[float]] | None):
@@ -106,298 +114,446 @@ def saturation(shape: dict) -> float:
     return shape.get("tokens_per_param") or shape["tokens"] / shape["parameters"]
 
 
-def panels(shapes: dict[str, dict], starts: list[str]) -> dict[str, tuple[int, int]]:
-    """Each start's panel: its size's row, and its saturation's rank among that size's starts."""
-    sizes = sorted({shapes[s].get("parameters", 0) for s in starts})
-    out = {}
-    for i, size in enumerate(sizes):
-        same = sorted((s for s in starts if shapes[s].get("parameters", 0) == size), key=lambda s: saturation(shapes[s]))
-        out |= {s: (i, j) for j, s in enumerate(same)}
+def start_label(shape: dict) -> str:
+    return f"{shape.get('parameters', 0) / 1e6:.0f}M · {saturation(shape):.3g} tok/p"
+
+
+def staircase(points: list[tuple[float, float, dict]]) -> list[tuple[float, float, dict]]:
+    """(compute, loss, row) sorted by compute with the loss strictly falling: the least compute reaching each loss."""
+    out, best = [], math.inf
+    for x, y, r in sorted(points, key=lambda p: (p[0], p[1])):
+        if y < best:
+            out.append((x, y, r))
+            best = y
     return out
 
+
+def deepest(l0: float, bpb: float) -> float | None:
+    hit = [f for f in frontier.TARGETS if bpb <= l0 * (1 - f)]
+    return -100 * max(hit) if hit else None
+
+
+def method(r: dict | None) -> str | None:
+    return r and f"{r.get('direction')}/{r.get('mechanism')}"
+
+
+def basis(r: dict | None, key: str) -> str | None:
+    return r and ("fit" if r["fit"].get(key) else "target")
+
+
+class Start:
+    """One start's scored rows and what its panels read: l0, C0 (None where it is a stub), the forward gates per token
+    w, its cells, the reference key and the from-scratch curve."""
+
+    def __init__(self, name: str, scored: list[dict], shape: dict, ref: str, fs: dict):
+        self.name, self.shape, self.on = name, shape, [r for r in scored if r["start"] == name]
+        self.l0 = frontier.start_bpb(self.on)
+        self.c0, how = policy.c0(shape)
+        self.c0_counted = None if how.startswith("stub") else self.c0
+        self.w = policy.shapes(shape)["inference"]["c"]
+        self.cells = policy.cells(shape)
+        if ref not in self.cells:
+            raise SystemExit(f"plots: no policy {ref!r} for {name}: one of {', '.join(policy.MARKS)} or a grid key")
+        self.ref, self.f = ref, from_scratch(fs.get(name))
+        self.head = [start_label(shape), name]
+        self.by_id = {r["id"]: r for r in self.on}
+
+    def frac(self, gates: float | None) -> float | None:
+        return gates / self.c0_counted if gates is not None and self.c0_counted else None
+
+    def gain(self, l: float) -> float | None:
+        return self.f(l) / self.c0 if self.f and self.f(l) else None
+
+    def levels(self, g: float | None = None, drop: float | None = None) -> list[tuple]:
+        """(target_pct, g, l*) at each of `TARGETS` (and `drop`), and with F and `g`, at the l* whose gain is g."""
+        drops = frontier.TARGETS + ((drop,) if drop is not None and drop not in frontier.TARGETS else ())
+        out = [(-100 * d, self.gain(self.l0 * (1 - d)), self.l0 * (1 - d)) for d in drops]
+        if self.f and g is not None:
+            lo = min(r["val_bpb"] for r in self.on if r.get("val_bpb") is not None)
+            for l in np.linspace(self.l0, lo, 400):
+                if self.f(float(l)) and self.f(float(l)) >= g * self.c0:
+                    out.append((None, g, float(l)))
+                    break
+        return out
+
+
+def starts_of(scored, shapes, ref, fs) -> list[Start]:
+    out = [Start(s, scored, shapes[s], ref, fs) for s in sorted({r["start"] for r in scored})]
+    return [s for s in out if s.l0 is not None]
+
+
+def picked(st: Start, g: float | None, drop: float) -> tuple[float | None, float | None, float]:
+    """The level P3 and P4's figures draw: the gain `g`'s with F, else `drop`'s target."""
+    lv = st.levels(g, drop)
+    if g is not None and lv[-1][0] is None:
+        return lv[-1]
+    return next(x for x in lv if x[0] == -100 * drop)
+
+
+def panel(name: str, title: str, columns: list[str], rows: list[list], note: str, ctx: dict) -> dict:
+    return {"id": f"training/{name}", "title": title, "kind": "table", "updated_at": ctx["stamp"],
+            "source": ctx["source"], "note": note + ctx["tail"], "columns": columns, "rows": rows}
+
+
+def frame(p: dict) -> list[dict]:
+    return [dict(zip(p["columns"], r)) for r in p["rows"]]
+
+
+# ---- the panels --------------------------------------------------------------------------------------------------------
+
+P1_COLUMNS = ["start", "start_id", "size", "saturation", "curve", "policy", "reading", "basis", "target_pct",
+              "compute_gates", "compute_frac", "loss", "loss_lo", "loss_hi", "record", "checkpoint", "method", "family"]
+
+
+def p1_panel(sts: list[Start], readings, ctx) -> dict:
+    rows = []
+    for st in sts:
+        size, sat = st.shape.get("parameters"), saturation(st.shape)
+
+        def emit(curve, key, name, pts, st=st, size=size, sat=sat):
+            for x, y, r in pts:
+                rows.append([*st.head, size, sat, curve, policy_label(key) if key else "", name,
+                             basis(r, key) if key and r else None, deepest(st.l0, y), x, st.frac(x), y, None, None,
+                             r and r["id"], r and r.get("checkpoint_step"), method(r), r and r.get("family")])
+
+        band = [k for k in neighbours(decade(st.cells, st.ref), st.cells) if k != st.ref]
+        for name in readings:
+            emit("honest", "", name, staircase([(r["gates"], r["val_bpb"], r) for r in st.on]))
+            for key in [st.ref, *band]:
+                emit("covert" if key == st.ref else "covert-policy", key, name,
+                     staircase([(r["gates"] * r["rho_by"][name][key], r["val_bpb"], r) for r in st.on]))
+            if st.f:
+                emit("scratch", "", name, staircase([(c, l, None) for c, l in ctx["fs"][st.name]]))
+    return panel("p1-loss-vs-compute", "Loss against compute spent after the start", P1_COLUMNS, rows,
+                 "Each curve is the least compute reaching each loss (its staircase) over every checkpoint of every "
+                 "valid record (19:50Z): honest = |C|, covert = |C| rho at the reference policy, covert-policy = at each "
+                 "grid cell (c1e<i>/k1e<j>: gates, bits) within a decade of it, scratch = the from-scratch curve F. "
+                 "loss = held-out bits per byte; target_pct = the deepest target the point reaches; compute_frac null "
+                 "where C0 is a stub.", ctx)
+
+
+def at_reference(st: Start, name: str, l_star: float, key: str) -> tuple[dict, dict]:
+    t = frontier.target(frontier.reading(st.on, name), l_star, [key], size="gates")
+    return t, t["cells"][key]
+
+
+def row_of(st: Start, of: dict | None) -> dict | None:
+    return of and st.by_id[of["id"]]
+
+
+def p2_panel(sts: list[Start], readings, ctx) -> dict:
+    columns = ["start", "start_id", "size", "saturation", "l0", "target_pct", "g", "S", "S_lo", "S_hi", "basis",
+               "reading", "policy", "method", "family", "record", "checkpoint", "H_gates", "W_gates", "rho", "p"]
+    rows = []
+    for st in sts:
+        for tp, g, l in st.levels(None):
+            for name in readings:
+                t, c = at_reference(st, name, l, st.ref)
+                w = row_of(st, c["of"])
+                rows.append([*st.head, st.shape.get("parameters"), saturation(st.shape), st.l0, tp, g,
+                             c["effective_slowdown"], None, None, basis(w, st.ref), name, policy_label(st.ref),
+                             method(w), w and w.get("family"), w and w["id"], w and w.get("checkpoint_step"),
+                             t["honest"], c["w_star"], c["rho"], w and t["honest"] and w["gates"] / t["honest"]])
+    return panel("p2-slowdown-vs-gain", "Slowdown S against the gain", columns, rows,
+                 "S = W*/H at the reference policy, the best known attack over every checkpoint of every valid record "
+                 "(19:50Z), so S >= 1; p = |C|/H and rho of the checkpoint that sets W*. g = F(l*)/C0, null until the "
+                 "from-scratch curve F: plot S against target_pct. One seed: S_lo and S_hi null.", ctx)
+
+
+def p3_panel(sts: list[Start], readings, g, drop, ctx) -> dict:
+    columns = ["start", "start_id", "target_pct", "g", "reading", "c_tokens_per_block", "c_gates", "k_bits", "k_bytes",
+               "S", "basis", "method", "family", "record", "checkpoint", "rho", "p", "mark"]
+    rows = []
+    for st in sts:
+        keys = list(st.cells)
+        for tp, gv, l in st.levels(g, drop):
+            for name in readings:
+                t = frontier.target(frontier.reading(st.on, name), l, keys, size="gates")
+                for key in keys:
+                    c, (cg, kb) = t["cells"][key], st.cells[key]
+                    w = row_of(st, c["of"])
+                    rows.append([*st.head, tp, gv, name, cg / st.w, cg, kb, kb / 8, c["effective_slowdown"],
+                                 basis(w, key), method(w), w and w.get("family"), w and w["id"],
+                                 w and w.get("checkpoint_step"), c["rho"], w and t["honest"] and w["gates"] / t["honest"],
+                                 policy_label(key) if key in policy.MARKS else ""])
+    return panel("p3-policy-plane", "Slowdown S over the policy (c, k)", columns, rows,
+                 "S = W*/H at each cell of the grid (every decade of c in gates and k in bits) and at the start's "
+                 "inference block, reference policy and server block (mark; te_core.policy), over every checkpoint of "
+                 "every valid record. c_tokens_per_block = c/w, w the start's forward gates per token.", ctx)
+
+
+def p4_panel(sts: list[Start], readings, g, drop, ctx) -> dict:
+    columns = ["start", "start_id", "target_pct", "g", "reading", "algorithm", "family", "record", "checkpoint", "p",
+               "s", "S", "basis", "seeds", "delta_bits", "delta_grad_bits", "compute_gates"]
+    rows = []
+    for st in sts:
+        for tp, gv, l in st.levels(g, drop):
+            h = frontier.target(st.on, l, [], size="gates")["honest"]
+            reach = [r for r in st.on if r.get("val_bpb") is not None and r["val_bpb"] <= l]
+            for name in readings:
+                best: dict[str, dict] = {}
+                for r in reach:
+                    a = method(r)
+                    if a not in best or r["gates"] * r["rho_by"][name][st.ref] < \
+                            best[a]["gates"] * best[a]["rho_by"][name][st.ref]:
+                        best[a] = r
+                for a, r in sorted(best.items()):
+                    s = r["rho_by"][name][st.ref]
+                    rows.append([*st.head, tp, gv, name, a, r.get("family"), r["id"], r.get("checkpoint_step"),
+                                 r["gates"] / h, s, r["gates"] * s / h, basis(r, st.ref), 1, r["measured"].delta_bits,
+                                 r["measured"].delta_grad_bits, r["gates"]])
+    return panel("p4-decomposition", "p against s per algorithm at the reference policy", columns, rows,
+                 "One point per algorithm (direction/mechanism) reaching the level: its checkpoint with the least |C| rho "
+                 "at the reference policy; p = |C|/H with H over every checkpoint of every valid record, s = rho (1 by "
+                 "Fit, else Slowdown's bound floored at 1), S = p s. One seed per point.", ctx)
+
+
+def a2_panel(sts: list[Start], readings, ctx) -> dict:
+    columns = ["start", "start_id", "size", "saturation", "target_pct", "reading", "delta_bits", "delta_grad_bits",
+               "compute_gates", "compute_frac", "method", "family", "record", "checkpoint", "fit_run_k_bits",
+               "fit_train_k_bits"]
+    rows = []
+    for st in sts:
+        c_ref = st.cells[st.ref][0]
+        for d in frontier.TARGETS:
+            l_star = st.l0 * (1 - d)
+            reach = [r for r in st.on if r["measured"].delta_bits is not None and r.get("val_bpb") is not None
+                     and r["val_bpb"] <= l_star]
+            steps = staircase([(r["measured"].delta_bits, r["gates"], r) for r in reach])
+            for name in readings:
+                for delta, gates, r in steps:
+                    run_k, train_k = formalism.fit_k(r["measured"], c_ref)
+                    rows.append([*st.head, st.shape.get("parameters"), saturation(st.shape), -100 * d, name, delta,
+                                 r["measured"].delta_grad_bits, gates, st.frac(gates), method(r), r.get("family"),
+                                 r["id"], r.get("checkpoint_step"), run_k, train_k])
+    return panel("a2-efficiency-floor", "Efficiency floor: least compute to each target against the update's size",
+                 columns, rows,
+                 "Per start and target, the least compute (Boolean gates) reaching it among every checkpoint of every "
+                 "valid record whose total update Delta (Fit's quantity) is at most delta_bits, at each Delta that "
+                 "lowers it; delta_grad_bits = that point's gradient and optimizer state passed between blocks. "
+                 "fit_run_k_bits and fit_train_k_bits: the least k at which Fit holds at the reference c, for running "
+                 "the updated model and for the training. A2 reads no rho: its readings' rows agree.", ctx)
+
+
+# ---- the figures -------------------------------------------------------------------------------------------------------
 
 def footer(fig, stubs: dict[str, int], pin) -> None:
     lines = [f"pin {' + '.join(c[:12] for c in pin)}; |C| in Boolean gates (te_core.gates); rho: 1 where Fit holds, "
-             "Slowdown's target where it fails; S = W*/H (Security)"] + [f"{n} rows, {s}" for s, n in sorted(stubs.items())]
+             "Slowdown's target where it fails; S = W*/H (Security); H and W* over every checkpoint (19:50Z)"] + \
+        [f"{n} rows, {s}" for s, n in sorted(stubs.items())]
     fig.text(0.01, 0.005, "\n".join(lines), fontsize=6, va="bottom", ha="left", family="monospace")
 
 
-# ---- P1-P4 -------------------------------------------------------------------------------------------------------------
-
-def p1(scored, shapes, ref: str, fs: dict, out: Path, stubs, pin) -> dict:
-    starts = sorted({r["start"] for r in scored})
-    where = panels(shapes, starts)
-    nr, nc = max(i for i, _ in where.values()) + 1, max(j for _, j in where.values()) + 1
-    fig, axes = plt.subplots(nr, nc, figsize=(5 * nc, 3.6 * nr + 1.6), squeeze=False)
-    for i in range(nr):
-        for j in range(nc):
-            axes[i][j].set_visible((i, j) in where.values())
-    numbers = {}
-    for start in starts:
-        sh = shapes[start]
-        ax = axes[where[start][0]][where[start][1]]
-        on = [r for r in scored if r["start"] == start]
-        l0 = frontier.start_bpb(on)
-        c0, _ = policy.c0(sh)
-        rk = reference_key(sh, ref)
-        keys = sorted(on[0]["rho"])
-        band = neighbours(rk, set(keys))
-        lmin = min(r["val_bpb"] for r in on if r.get("val_bpb") is not None)
-        ls = list(np.linspace(l0, lmin, 60))
-        pts = []
-        for l in ls:
-            t = at(on, l, band)
-            ws = [t["cells"][k]["w_star"] for k in band if t["cells"][k]["w_star"]]
-            pts.append({"l": l, "honest": t["honest"], "bound": t["bound"], "w_star": t["cells"][rk]["w_star"],
-                        "band": [min(ws), max(ws)] if ws else None})
-        f = from_scratch(fs.get(start))
-        x = lambda v: v / c0 if v else np.nan  # noqa: E731
-        ax.plot([x(p["honest"]) for p in pts], ls, "k-", lw=1.5, label="honest H")
-        ax.plot([x(p["w_star"]) for p in pts], ls, "C3-", lw=1.5, label=f"covert W* at {rk}")
-        ax.fill_betweenx(ls, [x(p["band"][0]) if p["band"] else np.nan for p in pts],
-                         [x(p["band"][1]) if p["band"] else np.nan for p in pts], color="C3", alpha=0.15,
-                         label="W* over c, k within a decade")
-        if any(p["bound"] for p in pts):
-            ax.plot([x(p["honest"]) if p["bound"] else np.nan for p in pts], ls, "k--", lw=1, label="H from a checkpoint")
-        if f:
-            ax.plot([x(f(l)) if f(l) else np.nan for l in ls], ls, "C0:", label="from scratch F")
-        ax.set_xscale("log")
-        ax.axhline(l0, color="grey", lw=0.5)
-        ax.set_title(f"{start}: {sh.get('parameters', 0) / 1e6:.0f}M params, {saturation(sh):g} tok/param, l0 {l0:.4f}",
-                     fontsize=9)
-        ax.set_xlabel("compute after theta / C0")
-        ax.set_ylabel("val bits per byte")
-        ax.legend(fontsize=6)
-        numbers[start] = {"l0": l0, "c0_gates": c0, "policy": rk, "band_cells": band, "points": pts}
+def save(fig, out: Path, name: str, stubs, pin, room: float) -> Path:
     footer(fig, stubs, pin)
-    fig.tight_layout(rect=(0, 0.06 + 0.012 * len(stubs), 1, 1))
-    fig.savefig(out / "P1.png", dpi=130)
+    fig.tight_layout(rect=(0, room + 0.014 * len(stubs), 1, 1))
+    path = out / f"{name}.png"
+    fig.savefig(path, dpi=120)
     plt.close(fig)
-    return numbers
+    return path
 
 
-def gain_axis(f, c0: float, l0: float, l: float) -> float | None:
-    return (f(l) / c0 if f and f(l) else None) if f else (l0 - l) / l0
-
-
-def p2(scored, shapes, ref: str, fs: dict, out: Path, stubs, pin) -> dict:
-    starts = sorted({r["start"] for r in scored})
-    have_f = all(fs.get(s) for s in starts)
-    l0s = {s: frontier.start_bpb([r for r in scored if r["start"] == s]) for s in starts}
-    cmap = plt.get_cmap("viridis")
-    lo, hi = min(l0s.values()), max(l0s.values())
-    sat_rank = {v: i for i, v in enumerate(sorted({saturation(shapes[s]) for s in starts}))}
-    styles = ["-", "--", ":", "-."]
-    fig, ax = plt.subplots(figsize=(7, 5.2))
-    numbers = {}
-    for start in starts:
-        sh, on = shapes[start], [r for r in scored if r["start"] == start]
-        c0, _ = policy.c0(sh)
-        f = from_scratch(fs.get(start)) if have_f else None
-        rk = reference_key(sh, ref)
-        pts = []
-        for d in DROPS:
-            l = l0s[start] * (1 - d)
-            t = at(on, l, [rk])
-            s = t["cells"][rk]["effective_slowdown"]
-            g = gain_axis(f, c0, l0s[start], l)
-            if s is not None and g is not None:
-                pts.append({"drop": d, "l_star": l, "x": g, "S": s, "bound": t["bound"], "rho": t["cells"][rk]["rho"]})
-        if pts:
-            ax.plot([p["x"] for p in pts], [p["S"] for p in pts], styles[sat_rank[saturation(sh)] % 4], marker=".",
-                    color=cmap((l0s[start] - lo) / (hi - lo) if hi > lo else 0.5),
-                    label=f"{start} (l0 {l0s[start]:.3f}, {saturation(sh):g} tok/param)")
-        numbers[start] = {"policy": rk, "points": pts}
-    ax.set_yscale("log")
-    if have_f:
-        ax.set_xscale("log")
-    ax.set_xlabel("gain g = F(l*)/C0" if have_f else "drop from l0, (l0 - l*)/l0 (no from-scratch curve F yet)")
-    ax.set_ylabel(f"S = W*/H at the {ref} policy")
-    ax.set_title("P2: Security's S = W*/H against the gain (colour: l0, style: saturation)", fontsize=9)
-    ax.legend(fontsize=7)
-    footer(fig, stubs, pin)
-    fig.tight_layout(rect=(0, 0.08 + 0.016 * len(stubs), 1, 1))
-    fig.savefig(out / "P2.png", dpi=130)
-    plt.close(fig)
-    return {"x": "g" if have_f else "drop", "starts": numbers}
-
-
-def l_star_of(on, shape, f, l0: float, g: float | None, drop: float) -> tuple[float, str]:
-    if f and g is not None:
-        c0, _ = policy.c0(shape)
-        ls = np.linspace(l0, min(r["val_bpb"] for r in on), 400)
-        for l in ls:
-            if f(l) and f(l) >= g * c0:
-                return float(l), f"g = {g:g}"
-    return l0 * (1 - drop), f"drop {100 * drop:g}%"
-
-
-def p3(scored, shapes, fs: dict, g, drop: float, out: Path, stubs, pin) -> dict:
-    starts = sorted({r["start"] for r in scored})
-    fig, axes = plt.subplots(1, len(starts), figsize=(4.6 * len(starts), 4.6 + 1.4), squeeze=False)
-    numbers = {}
-    for ax, start in zip(axes[0], starts):
-        sh, on = shapes[start], [r for r in scored if r["start"] == start]
-        l0 = frontier.start_bpb(on)
-        l, what = l_star_of(on, sh, from_scratch(fs.get(start)), l0, g, drop)
-        cells = policy.grid(sh)
-        keys = [policy.key(c, k) for c, k in cells]
-        t = at(on, l, keys)
-        cs, ks = sorted({c for c, _ in cells}), sorted({k for _, k in cells})
-        z = np.full((len(ks), len(cs)), np.nan)
-        for (c, k), key in zip(cells, keys):
-            s = t["cells"][key]["effective_slowdown"]
-            if s is not None:
-                z[ks.index(k), cs.index(c)] = math.log10(s)
-        numbers[start] = {"l_star": l, "at": what, "honest": t["honest"], "bound": t["bound"],
-                          "S": {key: t["cells"][key]["effective_slowdown"] for key in keys},
-                          "marks": {m: {"c": s["c"], "k": s["k"]} for m, s in policy.shapes(sh).items()}}
-        if np.isnan(z).all():
-            ax.text(0.5, 0.5, f"no record reaches l* = {l:.4f}", ha="center", transform=ax.transAxes)
-        else:
-            lc, lk = np.log10(cs), np.log10(ks)
-            top = max(math.log10(LEVELS[-1]), float(np.nanmax(z))) + 1e-9
-            levels = [math.log10(v) for v in LEVELS] + [top]
-            cf = ax.contourf(lc, lk, z, levels=levels, cmap="magma_r", extend="neither")
-            ax.contour(lc, lk, z, levels=levels[1:-1], colors="k", linewidths=0.5)
-            fig.colorbar(cf, ax=ax, label="log10 S")
-        for m, s in policy.shapes(sh).items():
-            ax.plot(math.log10(s["c"]), math.log10(s["k"]), {"inference": "c^", "reference": "co", "server": "cs"}[m],
-                    mec="k", ms=8)
-            ax.annotate(m, (math.log10(s["c"]), math.log10(s["k"])), fontsize=7, xytext=(4, 4),
-                        textcoords="offset points")
-        ax.set_xlabel("log10 c (gates per block)")
-        ax.set_ylabel("log10 k (bits per block beyond theta)")
-        ax.set_title(f"{start}: S at {what} (l* {l:.4f})", fontsize=9)
-    footer(fig, stubs, pin)
-    fig.tight_layout(rect=(0, 0.1 + 0.02 * len(stubs), 1, 1))
-    fig.savefig(out / "P3.png", dpi=130)
-    plt.close(fig)
-    return numbers
-
-
-def p4(scored, shapes, ref: str, fs: dict, g, drop: float, out: Path, stubs, pin) -> dict:
-    starts = sorted({r["start"] for r in scored})
-    fig, axes = plt.subplots(1, len(starts), figsize=(4.6 * len(starts), 4.6 + 1.4), squeeze=False)
-    numbers = {}
-    for ax, start in zip(axes[0], starts):
-        sh, on = shapes[start], [r for r in scored if r["start"] == start]
-        l0 = frontier.start_bpb(on)
-        l, what = l_star_of(on, sh, from_scratch(fs.get(start)), l0, g, drop)
-        rk = reference_key(sh, ref)
-        t = at(on, l, [rk])
-        h = t["honest"]
-        pool = [r for r in on if r.get("val_bpb") is not None and r["val_bpb"] <= l and (r["schedule_end"] or t["bound"])]
-        best: dict[tuple, dict] = {}
-        for r in pool:
-            a = (r.get("direction", ""), r.get("mechanism", ""))
-            if a not in best or frontier.cost(r, rk, "gates") < frontier.cost(best[a], rk, "gates"):
-                best[a] = r
-        pts = [{"algorithm": f"{d}/{m}", "id": r["id"], "p": r["gates"] / h, "s": r["rho"][rk],
-                "full_training": d in frontier.REF_DIRECTIONS} for (d, m), r in sorted(best.items())] if h else []
-        numbers[start] = {"l_star": l, "at": what, "policy": rk, "honest": h, "bound": t["bound"], "points": pts}
-        if not pts:
-            ax.text(0.5, 0.5, f"no record reaches l* = {l:.4f}", ha="center", transform=ax.transAxes)
-        else:
-            ps, ss = [p["p"] for p in pts], [p["s"] for p in pts]
-            lo, hi = min(min(ps), min(ss), 1) / 2, max(max(ps), max(ss)) * 2
-            xs = np.logspace(math.log10(lo), math.log10(hi), 50)
-            for i in range(0, 2 * math.ceil(math.log10(hi)) + 1, 2):
-                ax.plot(xs, 10 ** i / xs, color="grey", lw=0.4)
-                x_top = 10 ** i / (hi / 1.6)
-                if lo < x_top < hi:
-                    ax.annotate(f"S=1e{i}", (x_top, hi / 1.6), fontsize=6, color="grey")
-            for p in pts:
-                ax.plot(p["p"], p["s"], "*" if p["full_training"] else "o", color="C3" if p["full_training"] else "C0",
-                        ms=10 if p["full_training"] else 5)
-                ax.annotate(p["algorithm"], (p["p"], p["s"]), fontsize=5, xytext=(3, 2), textcoords="offset points")
-            ax.set_xlim(lo, hi)
-            ax.set_ylim(lo, hi)
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        ax.set_xlabel("p_A = |C_A| / H")
-        ax.set_ylabel(f"s_A = rho (Slowdown's target) at {rk}")
-        ax.set_title(f"{start}: {what} (l* {l:.4f}); star: full training", fontsize=9)
-    footer(fig, stubs, pin)
-    fig.tight_layout(rect=(0, 0.1 + 0.02 * len(stubs), 1, 1))
-    fig.savefig(out / "P4.png", dpi=130)
-    plt.close(fig)
-    return numbers
-
-
-def least_by_delta(reach: list[dict]) -> list[dict]:
-    """The steps of x -> the least |C| among `reach` with Δ ≤ x: each record that lowers it, at its Δ."""
-    out, best = [], math.inf
-    for r in sorted(reach, key=lambda r: (r["measured"].delta_bits, r["gates"])):
-        if r["gates"] < best:
-            best = r["gates"]
-            out.append({"delta_le": r["measured"].delta_bits, "gates": best, "of": frontier._of(r)})
+def panels_by_size(sts: list[Start]) -> dict[str, tuple[int, int]]:
+    """Each start's subplot: its size's row, and its saturation's rank among that size's starts."""
+    sizes = sorted({s.shape.get("parameters", 0) for s in sts})
+    out = {}
+    for i, size in enumerate(sizes):
+        same = sorted((s for s in sts if s.shape.get("parameters", 0) == size), key=lambda s: saturation(s.shape))
+        out |= {s.name: (i, j) for j, s in enumerate(same)}
     return out
 
 
-def a2(scored, shapes, ref: str, out: Path, stubs, pin) -> dict:
-    """Per start, the least |C| reaching each target among the records whose update has Δ ≤ x, against x (the A2
-    curve: Δ's bins, never caps): over complete schedules (solid, the frontier's honest rule) and over every checkpoint
-    (dashed, where it is lower), each non-increasing in x."""
-    starts = sorted({r["start"] for r in scored})
-    fig, axes = plt.subplots(1, len(starts), figsize=(4.6 * len(starts), 4.6 + 1.4), squeeze=False)
-    numbers = {}
-    for ax, start in zip(axes[0], starts):
-        sh = shapes[start]
-        on = [r for r in scored if r["start"] == start and r["measured"].delta_bits is not None]
-        l0, (c0, _) = frontier.start_bpb(on), policy.c0(sh)
-        x_end = max(r["measured"].delta_bits for r in on) * 3
-        k_ref = policy.shapes(sh)[ref]["k"] if ref in policy.MARKS else policy.of_key(ref)[1]
-        numbers[start] = {"l0": l0, "c0_gates": c0, "k_reference": k_ref, "targets": []}
-        for i, f in enumerate(frontier.TARGETS):
-            l_star = l0 * (1 - f)
-            reach = [r for r in on if r.get("val_bpb") is not None and r["val_bpb"] <= l_star]
-            curves = {"complete": least_by_delta([r for r in reach if r["schedule_end"]]),
-                      "checkpoint": least_by_delta(reach)}
-            h = at(on, l_star, [])["honest"]
-            for s in curves["complete"] + curves["checkpoint"]:
-                s["p"] = s["gates"] / h if h else None
-            numbers[start]["targets"].append({"drop": f, "l_star": l_star, "honest": h} | curves)
-            for name, ls in (("complete", "-"), ("checkpoint", ":")):
-                steps = curves[name]
-                if not steps or name == "checkpoint" and steps == curves["complete"]:
-                    continue
-                xs, ys = [s["delta_le"] for s in steps], [s["gates"] / c0 for s in steps]
-                ax.step(xs + [x_end], ys + ys[-1:], where="post", color=f"C{i}", ls=ls,
-                        label=f"-{100 * f:g}% (l* {l_star:.4f})" if name == "complete" or not curves["complete"]
-                        else None)
-                ax.plot(xs, ys, "o", color=f"C{i}", ms=3, mfc="white" if name == "checkpoint" else None)
-        ax.axvline(k_ref, color="grey", ls="--", lw=0.8, label=f"k at the {ref} policy: Fit needs Δ + sτ ≤ k")
+def draw_p1(p: dict, sts: list[Start], readings, out: Path, stubs, pin) -> Path:
+    rows, where = frame(p), panels_by_size(sts)
+    nr, nc = max(i for i, _ in where.values()) + 1, max(j for _, j in where.values()) + 1
+    fig, axes = plt.subplots(nr, nc, figsize=(5 * nc, 3.8 * nr + 1.6), squeeze=False)
+    for i in range(nr):
+        for j in range(nc):
+            axes[i][j].set_visible((i, j) in where.values())
+    for st in sts:
+        ax = axes[where[st.name][0]][where[st.name][1]]
+        mine = [r for r in rows if r["start_id"] == st.name]
+
+        def curve(sel, **kw):
+            pts = [(r["compute_gates"], r["loss"]) for r in mine if sel(r)]
+            if pts:
+                ax.step(*zip(*pts, (pts[-1][0] * 10, pts[-1][1])), where="post", **kw)
+
+        for name in readings:
+            for pol in sorted({r["policy"] for r in mine if r["curve"] == "covert-policy"}):
+                curve(lambda r, pol=pol, name=name: r["policy"] == pol and r["reading"] == name, lw=0.6, alpha=0.2,
+                      color=STYLE[name]["color"])
+            curve(lambda r, name=name: r["curve"] == "covert" and r["reading"] == name, lw=1.4, **STYLE[name],
+                  label=f"W* at {policy_label(st.ref)}, {name}")
+        curve(lambda r: r["curve"] == "honest" and r["reading"] == readings[0], color="k", lw=1.6, label="honest H")
+        curve(lambda r: r["curve"] == "scratch" and r["reading"] == readings[0], color="C0", ls=":",
+              label="from scratch F")
+        for d in frontier.TARGETS:
+            ax.axhline(st.l0 * (1 - d), color="0.85", lw=0.5, ls=":")
+        ax.axhline(st.l0, color="grey", lw=0.5)
+        ax.set_xscale("log")
+        ax.set_title(f"{st.name} ({start_label(st.shape)}), l0 {st.l0:.4f}; C0 {st.c0:.3g} gates"
+                     + ("" if st.c0_counted else " (stub)"), fontsize=9)
+        ax.set_xlabel("compute after theta (Boolean gates)")
+        ax.set_ylabel("val bits per byte")
+        ax.legend(fontsize=6)
+    fig.suptitle("P1: loss against compute after theta (light: W* at the grid cells within a decade of the policy)",
+                 fontsize=9)
+    return save(fig, out, p["id"].split("/")[1], stubs, pin, 0.06)
+
+
+def draw_p2(p: dict, sts: list[Start], readings, out: Path, stubs, pin) -> Path:
+    rows = frame(p)
+    have_g = all(r["g"] is not None for r in rows)
+    fig, axes = plt.subplots(1, len(readings), figsize=(6.5 * len(readings), 5.4), squeeze=False, sharey=True)
+    cmap, l0s = plt.get_cmap("viridis"), [st.l0 for st in sts]
+    lo, hi = min(l0s), max(l0s)
+    sat_rank = {v: i for i, v in enumerate(sorted({saturation(st.shape) for st in sts}))}
+    for ax, name in zip(axes[0], readings):
+        for st in sts:
+            pts = [(r["g"] if have_g else r["target_pct"], r["S"]) for r in rows
+                   if r["start_id"] == st.name and r["reading"] == name and r["S"] is not None]
+            if pts:
+                ax.plot(*zip(*pts), ["-", "--", ":", "-."][sat_rank[saturation(st.shape)] % 4], marker="o",
+                        color=cmap((st.l0 - lo) / (hi - lo) if hi > lo else 0.5),
+                        label=f"{st.name} ({start_label(st.shape)}, l0 {st.l0:.3f})")
+        ax.set_yscale("log")
+        if have_g:
+            ax.set_xscale("log")
+        ax.set_xlabel("gain g = F(l*)/C0" if have_g else "target, % of l0 (no from-scratch curve F yet)")
+        ax.set_title(f"reading = {name}", fontsize=9)
+        ax.legend(fontsize=7)
+    axes[0][0].set_ylabel(f"S = W*/H at {policy_label(sts[0].ref)}")
+    fig.suptitle("P2: Security's S = W*/H against the gain, per reading (colour: l0, style: saturation)", fontsize=9)
+    return save(fig, out, p["id"].split("/")[1], stubs, pin, 0.08)
+
+
+def draw_p3(p: dict, sts: list[Start], readings, g, drop, out: Path, stubs, pin) -> Path:
+    rows = frame(p)
+    fig, axes = plt.subplots(len(readings), len(sts), figsize=(4.6 * len(sts), 4.4 * len(readings) + 1.4),
+                             squeeze=False)
+    for i, name in enumerate(readings):
+        for ax, st in zip(axes[i], sts):
+            tp, gv, l = picked(st, g, drop)
+            mine = [r for r in rows if r["start_id"] == st.name and r["reading"] == name and r["target_pct"] == tp
+                    and r["g"] == gv]
+            grid = [r for r in mine if not r["mark"]]
+            cs, ks = sorted({r["c_gates"] for r in grid}), sorted({r["k_bits"] for r in grid})
+            z = np.full((len(ks), len(cs)), np.nan)
+            for r in grid:
+                if r["S"] is not None:
+                    z[ks.index(r["k_bits"]), cs.index(r["c_gates"])] = math.log10(r["S"])
+            if np.isnan(z).all():
+                ax.text(0.5, 0.5, f"no record reaches l* = {l:.4f}", ha="center", transform=ax.transAxes)
+            else:
+                lc, lk = np.log10(cs), np.log10(ks)
+                top = max(math.log10(LEVELS[-1]), float(np.nanmax(z))) + 1e-9
+                levels = [math.log10(v) for v in LEVELS] + [top]
+                cf = ax.contourf(lc, lk, z, levels=levels, cmap="magma_r", extend="neither")
+                ax.contour(lc, lk, z, levels=levels[1:-1], colors="k", linewidths=0.5)
+                fig.colorbar(cf, ax=ax, label="log10 S")
+            for r in mine:
+                if r["mark"]:
+                    x, y = math.log10(r["c_gates"]), math.log10(r["k_bits"])
+                    ax.plot(x, y, {"inference block": "c^", "server block": "cs"}.get(r["mark"], "co"), mec="k", ms=8)
+                    s = "—" if r["S"] is None else f"{r['S']:.3g}"
+                    ax.annotate(f"{r['mark']}: S {s}", (x, y), fontsize=6, xytext=(4, 4), textcoords="offset points")
+            what = f"g = {gv:g}" if tp is None else f"{tp:g}%"
+            ax.set_xlabel("log10 c (gates per block)")
+            ax.set_ylabel("log10 k (bits per block beyond theta)")
+            ax.set_title(f"{st.name} at {what} (l* {l:.4f}), {name}", fontsize=8)
+    fig.suptitle("P3: S over the policy plane, per reading", fontsize=9)
+    return save(fig, out, p["id"].split("/")[1], stubs, pin, 0.08)
+
+
+def draw_p4(p: dict, sts: list[Start], readings, g, drop, out: Path, stubs, pin) -> Path:
+    rows = frame(p)
+    fig, axes = plt.subplots(len(readings), len(sts), figsize=(4.6 * len(sts), 4.4 * len(readings) + 1.4),
+                             squeeze=False)
+    for i, name in enumerate(readings):
+        for ax, st in zip(axes[i], sts):
+            tp, gv, l = picked(st, g, drop)
+            pts = [r for r in rows if r["start_id"] == st.name and r["reading"] == name and r["target_pct"] == tp
+                   and r["g"] == gv]
+            if not pts:
+                ax.text(0.5, 0.5, f"no record reaches l* = {l:.4f}", ha="center", transform=ax.transAxes)
+            else:
+                ps, ss = [r["p"] for r in pts], [r["s"] for r in pts]
+                lo, hi = min(min(ps), min(ss), 1) / 2, max(max(ps), max(ss)) * 2
+                xs = np.logspace(math.log10(lo), math.log10(hi), 50)
+                for e in range(0, 2 * math.ceil(math.log10(hi)) + 1, 2):
+                    ax.plot(xs, 10 ** e / xs, color="grey", lw=0.4)
+                best = min(pts, key=lambda r: r["S"])
+                for r in pts:
+                    full = r["algorithm"].split("/")[0] in frontier.REF_DIRECTIONS
+                    ax.plot(r["p"], r["s"], "*" if full else "o", color="C3" if full else "C0", ms=10 if full else 5,
+                            mec="red" if r["basis"] == "fit" else None)
+                    ax.annotate(r["algorithm"], (r["p"], r["s"]), fontsize=5, xytext=(3, 2), textcoords="offset points")
+                ax.plot(best["p"], best["s"], "o", mfc="none", mec="red", ms=14)
+                ax.set_xlim(lo, hi)
+                ax.set_ylim(lo, hi)
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.set_xlabel("p_A = |C_A| / H")
+            ax.set_ylabel(f"s_A = rho at {policy_label(st.ref)}")
+            what = f"g = {gv:g}" if tp is None else f"{tp:g}%"
+            ax.set_title(f"{st.name} at {what} (l* {l:.4f}), {name}; star: full training, ring: sets W*", fontsize=7)
+    fig.suptitle("P4: p against s per algorithm, per reading (grey: iso-S, S = p s)", fontsize=9)
+    return save(fig, out, p["id"].split("/")[1], stubs, pin, 0.08)
+
+
+def draw_a2(p: dict, sts: list[Start], readings, out: Path, stubs, pin) -> Path:
+    rows = [r for r in frame(p) if r["reading"] == readings[0]]
+    fig, axes = plt.subplots(1, len(sts), figsize=(4.6 * len(sts), 4.6 + 1.4), squeeze=False)
+    for ax, st in zip(axes[0], sts):
+        mine = [r for r in rows if r["start_id"] == st.name]
+        x_end = max((r["delta_bits"] for r in mine), default=1.0) * 3
+        for i, d in enumerate(frontier.TARGETS):
+            pts = [(r["delta_bits"], r["compute_gates"]) for r in mine if r["target_pct"] == -100 * d]
+            if pts:
+                xs, ys = zip(*pts)
+                ax.step([*xs, x_end], [*ys, ys[-1]], where="post", color=f"C{i}",
+                        label=f"-{100 * d:g}% (l* {st.l0 * (1 - d):.4f})")
+                ax.plot(xs, ys, "o", color=f"C{i}", ms=3)
+        k_ref = st.cells[st.ref][1]
+        ax.axvline(k_ref, color="grey", ls="--", lw=0.8, label=f"k at {policy_label(st.ref)}: Fit needs Δ + sτ ≤ k")
         ax.set_xscale("log")
         ax.set_yscale("log")
-        ax.set_xlabel("Δ, the update's bits (records with Δ ≤ x)")
-        ax.set_ylabel("least compute after theta / C0")
-        ax.set_title(f"{start} (l0 {l0:.4f})", fontsize=9)
+        ax.set_xlabel("Δ, the update's bits (checkpoints with Δ ≤ x)")
+        ax.set_ylabel("least compute after theta (gates)")
+        ax.set_title(f"{st.name} ({start_label(st.shape)}, l0 {st.l0:.4f})", fontsize=9)
         ax.legend(fontsize=6)
-    fig.suptitle("A2: the least compute reaching each target with an update of at most Δ bits (solid: complete "
-                 "schedules; dotted, hollow: any checkpoint, where lower)", fontsize=9)
-    footer(fig, stubs, pin)
-    fig.tight_layout(rect=(0, 0.1 + 0.02 * len(stubs), 1, 1))
-    fig.savefig(out / "A2.png", dpi=130)
-    plt.close(fig)
-    return numbers
+    fig.suptitle("A2: the least compute reaching each target with an update of at most Δ bits, over every checkpoint "
+                 "(no rho: the same under both readings)", fontsize=9)
+    return save(fig, out, p["id"].split("/")[1], stubs, pin, 0.1)
 
 
 def write(scored, shapes, stubs, pin, out: Path, ref: str = policy.REFERENCE, fs: dict | None = None,
-          g: float | None = None, drop: float = 0.01) -> list[Path]:
-    """P1-P4 and A2 into `out`, each as a PNG and the JSON of its numbers."""
+          g: float | None = None, drop: float = 0.01, readings=formalism.READINGS, source: str = "",
+          stamp: str | None = None) -> list[Path]:
+    """The five panels into `out`, each DIR/<name>.json (the console's panel) and DIR/<name>.png. `source` names the run
+    or command; `stamp` is `updated_at` (default now, UTC)."""
     fs = fs or {}
     out.mkdir(parents=True, exist_ok=True)
+    sts = starts_of(scored, shapes, ref, fs)
+    tail = (f" Readings: {', '.join(readings)} (Slowdown's frozen-tail case; Daniel decides which the theorem means, so "
+            "both are listed and neither is the headline). basis: fit = rho 1 by Fit for the training; target = "
+            "Slowdown's bound (stated, not proved in Lean). Pin " + " + ".join(c[:12] for c in pin) + ". Stubs and "
+            "bounds: " + "; ".join(f"{s} ({n} rows)" for s, n in sorted(stubs.items())) + ".")
+    ctx = {"stamp": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source, "tail": tail,
+           "fs": fs}
+    made = {"p1-loss-vs-compute": (p1_panel(sts, readings, ctx), lambda p: draw_p1(p, sts, readings, out, stubs, pin)),
+            "p2-slowdown-vs-gain": (p2_panel(sts, readings, ctx), lambda p: draw_p2(p, sts, readings, out, stubs, pin)),
+            "p3-policy-plane": (p3_panel(sts, readings, g, drop, ctx),
+                                lambda p: draw_p3(p, sts, readings, g, drop, out, stubs, pin)),
+            "p4-decomposition": (p4_panel(sts, readings, g, drop, ctx),
+                                 lambda p: draw_p4(p, sts, readings, g, drop, out, stubs, pin)),
+            "a2-efficiency-floor": (a2_panel(sts, readings, ctx), lambda p: draw_a2(p, sts, readings, out, stubs, pin))}
     written = []
-    for name, fn in (("P1", lambda: p1(scored, shapes, ref, fs, out, stubs, pin)),
-                     ("P2", lambda: p2(scored, shapes, ref, fs, out, stubs, pin)),
-                     ("P3", lambda: p3(scored, shapes, fs, g, drop, out, stubs, pin)),
-                     ("P4", lambda: p4(scored, shapes, ref, fs, g, drop, out, stubs, pin)),
-                     ("A2", lambda: a2(scored, shapes, ref, out, stubs, pin))):
-        numbers = fn()
-        (out / f"{name}.json").write_text(json.dumps({"pin": list(pin), "policy": ref, "stubs": stubs,
-                                                      "data": numbers}, indent=1, default=str) + "\n")
-        written.append(out / f"{name}.png")
+    for name in NAMES:
+        p, draw = made[name]
+        (out / f"{name}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
+        written.append(draw(p))
     return written
 
 
@@ -406,17 +562,21 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--pin", action="append", default=None)
-    ap.add_argument("--policy", default=policy.REFERENCE, help="a reference shape (te_core.policy.MARKS) or a cell key")
-    ap.add_argument("--drop", type=float, default=0.01, help="P3 and P4's l*, as a drop from l0, without F")
-    ap.add_argument("--g", type=float, default=None, help="P3 and P4's l*, as a gain F(l*)/C0 (needs --from-scratch)")
+    ap.add_argument("--policy", default=policy.REFERENCE, help="a reference shape (te_core.policy.MARKS) or a grid key")
+    ap.add_argument("--drop", type=float, default=0.01, help="P3 and P4's figures' target, as a drop from l0")
+    ap.add_argument("--g", type=float, default=None, help="P3 and P4's gain F(l*)/C0 (needs --from-scratch)")
     ap.add_argument("--from-scratch", type=Path, default=None, help="JSON {start: [[gates, bpb], ...]}")
+    ap.add_argument("--reading", action="append", choices=formalism.READINGS, default=None,
+                    help="one reading of Slowdown's frozen-tail case, repeated (default both)")
     ap.add_argument("--manifest", type=Path, default=policy.MANIFEST)
     a = ap.parse_args(argv)
     shapes = policy.starts(a.manifest)
     pin = tuple(a.pin) if a.pin else frontier.pinned()
-    scored, stubs = load(Ledger(a.root).index(), pin, shapes)
+    readings = tuple(a.reading or formalism.READINGS)
+    scored, stubs = load(Ledger(a.root).index(), pin, shapes, readings=readings)
     fs = json.loads(a.from_scratch.read_text()) if a.from_scratch else {}
-    for p in write(scored, shapes, stubs, pin, a.out, a.policy, fs, a.g, a.drop):
+    for p in write(scored, shapes, stubs, pin, a.out, a.policy, fs, a.g, a.drop, readings,
+                   source="python -m te_core.plots"):
         print(f"{p}, {p.with_suffix('.json').name}")
     return 0
 

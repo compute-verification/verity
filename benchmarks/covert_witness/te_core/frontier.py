@@ -1,6 +1,7 @@
 """The search's frontier, read from the ledger's index.
 
-    python -m te_core.frontier [--root DIR] [--json OUT] [--pin COMMIT ...] [--facts FACTS.json] [--formalism]
+    python -m te_core.frontier [--root DIR] [--json OUT] [--pin COMMIT ...] [--facts FACTS.json]
+                               [--formalism [--reading literal-x0|tail-charged ...]]
 
 It reads only the submissions measured by the pinned measurement commit or an earlier commit its `pinned.json` names as
 measuring the same version (`same_version`; covert_witness's `pin.py`; `--pin`, repeated, names others), and leaves
@@ -19,16 +20,16 @@ grid (score.K_BITS x score.R):
   the least |C| ρ breaking ties;
 - the coverage map: every niche of the observed mechanism tags, β and φ ranges and starts, the empty ones listed;
 - W*(l*), honest(l*) and the effective slowdown W*/honest at l* = the start's bits per byte less 0.5%, 1%, 2% and 5%,
-  by the coordinator's 14:57Z ruling (`target`): honest(l*) is the least |C| over every valid submission of any class
-  or direction that reaches l* by a complete schedule (`schedule_ends`), W*(l*) the least |C| ρ over the same ones, so
-  W*/honest ≥ 1; where nothing complete reaches l*, any checkpoint that does, labelled `UPPER_BOUND`. The reference
-  directions' honest(l*) alone, the rule before, is printed beside it as context. The table prints training FLOPs,
-  2|C|.
+  by the coordinator's 19:50Z ruling (`target`): honest(l*) is the least |C| over every checkpoint of every valid
+  submission, of any class or direction, that reaches l*, W*(l*) the least |C| ρ over the same checkpoints, so
+  W*/honest ≥ 1. The reference directions' honest(l*) alone is printed beside it as context. The table prints
+  training FLOPs, 2|C|.
 
 With `--formalism` it scores the valid submissions by the training formalism v1 instead (te_core.formalism): |C| in
-Boolean gates, ρ at every (c, k) of the start's policy grid (te_core.policy; 1 where Fit holds, Slowdown's target
-elsewhere), and per start and l* honest H, W* in each cell and Security's S = W*/H by the same 14:57Z rule
-(`formalism_report`), with every quantity's source.
+Boolean gates, ρ at every (c, k) of the start's policy grid and at its reference shapes (te_core.policy's `cells`; 1
+where Fit holds, Slowdown's target elsewhere) under both readings of Slowdown's frozen-tail case
+(formalism.READINGS), and per start, l* and reading honest H, W* in each cell and Security's S = W*/H by the same
+19:50Z rule (`formalism_report`), with every quantity's source.
 
 `candidates(rows, T)` are the frontier members and elites at tier T - 1 not yet promoted to T; which of them are promoted
 is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as the scorer).
@@ -51,7 +52,6 @@ PHI_EDGES = (0.1, 0.25, 0.5, 0.75)
 TARGETS = (0.005, 0.01, 0.02, 0.05)
 KEYS = [cell(k, r) for k in K_BITS for r in R]
 REF_DIRECTIONS = ("ref-optim", "ref-data")
-UPPER_BOUND = "upper bound (checkpoint)"
 
 
 def bin_of(x: float, edges: tuple[float, ...]) -> int:
@@ -65,41 +65,6 @@ PRICED_FROM = (3, 0)
 
 def _run_key(r: dict):
     return (r["run_id"], r.get("measurement_commit"), r.get("checkpoint_step")) if r.get("run_id") else None
-
-
-def _run_of(r: dict):
-    return (r["run_id"], r.get("measurement_commit")) if r.get("run_id") else r["id"]
-
-
-def arg_value(args: str | list | None, flag: str) -> str | None:
-    """`flag`'s value in a program's arguments (a string, or `script_args`' list), "" when it is given none, None when
-    absent."""
-    a = list(args) if isinstance(args, list) else str(args or "").split()
-    for i, t in enumerate(a):
-        if t == flag:
-            return "" if i + 1 == len(a) or a[i + 1].startswith("--") else a[i + 1]
-        if t.startswith(flag + "="):
-            return t[len(flag) + 1:]
-    return None
-
-
-def fork_ladder(r: dict) -> bool:
-    """The scorer's rule: a reference direction's train.py run with --forks and an empty --snap-at checkpoints only at
-    its cooldown branches' ends (a branch decays the rate to 0, is snapshotted, and the run returns to where it forked)
-    and its own end, so each of its checkpoints ends a complete schedule of that length (its |C| includes the earlier
-    branches', so honest is overstated there, never understated)."""
-    return (r.get("direction") in REF_DIRECTIONS and bool(arg_value(r.get("args"), "--forks"))
-            and arg_value(r.get("args"), "--snap-at") == "")
-
-
-def schedule_ends(rows: list[dict]) -> set[str]:
-    """The ids of the rows that end a complete schedule: each run's last checkpoint (a run is its run id and
-    measurement commit; a row without a run id is its own run) and every checkpoint of a fork ladder (`fork_ladder`).
-    A checkpoint inside a longer schedule is not what an honest run of that length reaches (coordinator 12:05Z)."""
-    top: dict = {}
-    for r in rows:
-        top[_run_of(r)] = max(top.get(_run_of(r), -1), r.get("checkpoint_step", -1))
-    return {r["id"] for r in rows if r.get("checkpoint_step", -1) == top[_run_of(r)] or fork_ladder(r)}
 
 
 def tied_lookup(changed: list[str], layers: int | None) -> bool:
@@ -207,29 +172,29 @@ def coverage_map(rows: list[dict], key: str) -> dict:
 
 
 def _of(r: dict | None) -> dict | None:
-    return r and {"id": r["id"], "checkpoint": r.get("checkpoint_step", r.get("cp")), "direction": r.get("direction")}
+    return r and {"id": r["id"], "checkpoint": r.get("checkpoint_step", r.get("cp")), "direction": r.get("direction"),
+                  "mechanism": r.get("mechanism")}
 
 
 def target(on: list[dict], l_star: float, keys=KEYS, reference=None, size: str = "macs") -> dict:
-    """The coordinator's 14:57Z ruling at one l*, over one start's valid submissions `on` (each with `id`, `macs`,
-    `val_bpb`, `rho` and `schedule_end`). honest(l*) is the least |C| over every submission of any class or direction
-    that reaches l* by a complete schedule, and W*(l*) in each cell of `keys` the least |C| ρ over the same
-    submissions, so W*/honest ≥ 1 (ρ ≥ 1) and is the effective slowdown. Where no complete schedule reaches l*, both
-    read every checkpoint that does and the target is labelled `UPPER_BOUND`: the checkpoint's |C| bounds honest(l*)
-    from above. `honest_reference` is the least |C| over the reference directions' complete schedules alone (the rule
-    before, as context; `reference` picks them, by default a direction in `REF_DIRECTIONS`). |C| is each row's `size`:
-    MACs, or the formalism's gates (`formalism_targets`)."""
+    """The coordinator's 19:50Z ruling at one l*, over one start's valid submissions `on` (each a checkpoint, with
+    `id`, its |C| in `size`, `val_bpb` and `rho`). honest(l*) is the least |C| over every checkpoint of every
+    submission, of any class or direction, that reaches l* (a checkpoint is a model someone reached; the sealed final
+    reruns guard against picking noise), and W*(l*) in each cell of `keys` the least |C| ρ over the same checkpoints,
+    so W*/honest ≥ 1 (ρ ≥ 1) and is the effective slowdown; `fit` is whether Fit holds for the training at W*'s
+    checkpoint (None: the row doesn't say). `honest_reference` is the least |C| over the reference directions'
+    checkpoints alone, as context (`reference` picks them, by default a direction in `REF_DIRECTIONS`). |C| is MACs,
+    or the formalism's gates (`formalism_targets`)."""
     is_ref = reference or (lambda r: r.get("direction") in REF_DIRECTIONS)
     reach = [r for r in on if r.get("val_bpb") is not None and r["val_bpb"] <= l_star]
-    ends = [r for r in reach if r.get("schedule_end")]
-    pool = ends or reach
-    h = min(pool, key=lambda r: r[size], default=None)
-    ref = min((r for r in ends if is_ref(r)), key=lambda r: r[size], default=None)
-    out = {"l_star": l_star, "bound": UPPER_BOUND if reach and not ends else "", "honest": h and h[size],
-           "honest_of": _of(h), "honest_reference": ref and ref[size], "honest_reference_of": _of(ref), "cells": {}}
+    h = min(reach, key=lambda r: r[size], default=None)
+    ref = min((r for r in reach if is_ref(r)), key=lambda r: r[size], default=None)
+    out = {"l_star": l_star, "honest": h and h[size], "honest_of": _of(h), "honest_reference": ref and ref[size],
+           "honest_reference_of": _of(ref), "cells": {}}
     for key in keys:
-        w = min(pool, key=lambda r: cost(r, key, size), default=None)
+        w = min(reach, key=lambda r: cost(r, key, size), default=None)
         out["cells"][key] = {"w_star": w and cost(w, key, size), "of": _of(w), "rho": w and w["rho"][key],
+                             "fit": w and (w.get("fit") or {}).get(key),
                              "effective_slowdown": cost(w, key, size) / h[size] if w and h[size] else None}
     return out
 
@@ -240,13 +205,11 @@ def start_bpb(on: list[dict]) -> float | None:
     return v[len(v) // 2] if v else None
 
 
-def targets(rows: list[dict], key: str, ends: set[str] | None = None) -> list[dict]:
-    """`target` per start and l* = its l0 less each of `TARGETS`, in cell `key`. `ends` are the rows that end a complete
-    schedule (`schedule_ends`, by default over `rows`)."""
-    ends = schedule_ends(rows) if ends is None else ends
+def targets(rows: list[dict], key: str) -> list[dict]:
+    """`target` per start and l* = its l0 less each of `TARGETS`, in cell `key`."""
     out = []
     for start in sorted({r["start"] for r in rows}):
-        on = [r | {"schedule_end": r["id"] in ends} for r in rows if r["start"] == start]
+        on = [r for r in rows if r["start"] == start]
         l0 = start_bpb(on)
         if l0 is None:
             continue
@@ -254,14 +217,13 @@ def targets(rows: list[dict], key: str, ends: set[str] | None = None) -> list[di
             t = target(on, l0 * (1 - f), [key])
             c = t["cells"][key]
             out.append({"start": start, "drop": f, "l_star": t["l_star"], "w_star": c["w_star"], "w_star_of": c["of"],
-                        "rho": c["rho"], "honest": t["honest"], "honest_of": t["honest_of"], "bound": t["bound"],
+                        "rho": c["rho"], "honest": t["honest"], "honest_of": t["honest_of"],
                         "honest_reference": t["honest_reference"], "honest_reference_of": t["honest_reference_of"],
                         "effective_slowdown": c["effective_slowdown"]})
     return out
 
 
 def report(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> dict:
-    ends = schedule_ends(rows)
     rows = valid(rows, pin)
     out = {}
     for key in KEYS:
@@ -272,14 +234,17 @@ def report(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> dict:
             "elites": [{"niche": list(n), "id": r["id"], "val_bpb": r["val_bpb"], "cost": cost(r, key)}
                        for n, r in sorted(el.items())],
             "coverage": coverage_map(rows, key),
-            "targets": targets(rows, key, ends),
+            "targets": targets(rows, key),
         }
     return out
 
 
-def formalism_rows(rows: list[dict], shapes: dict[str, dict]) -> tuple[list[dict], dict[str, str]]:
-    """Each row whose start has a shape, with its formalism quantities (`measured`), |C| in gates and ρ in every cell of
-    its start's policy grid (te_core.policy); and each row left out, with why (`no-shape`, or `unmeasured`)."""
+def formalism_rows(rows: list[dict], shapes: dict[str, dict],
+                   readings=formalism.READINGS) -> tuple[list[dict], dict[str, str]]:
+    """Each row whose start has a shape, with its formalism quantities (`measured`), |C| in gates, ρ under each reading
+    in every cell of its start (te_core.policy's `cells`: the grid's and the reference shapes'), `rho_by[reading]`, and
+    whether Fit holds there for the training (`fit`); and each row left out, with why (`no-shape`, or `unmeasured`).
+    `reading` gives one reading's rows, each with that reading's ρ as `rho`."""
     out, skipped, cells = [], {}, {}
     for r in rows:
         shape = shapes.get(r["start"])
@@ -287,69 +252,86 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict]) -> tuple[list[dict
             skipped[r["id"]] = "no-shape"
             continue
         if r["start"] not in cells:
-            cells[r["start"]] = {policy.key(c, k): (c, k) for c, k in policy.grid(shape)}
+            cells[r["start"]] = policy.cells(shape)
         try:
             m = formalism.measure(r, shape)
         except ValueError:
             skipped[r["id"]] = "unmeasured"
             continue
-        out.append(r | {"gates": m.gates, "rho": formalism.rhos(m, cells[r["start"]]), "measured": m})
+        rho, fit = formalism.rhos(m, cells[r["start"]], readings)
+        out.append(r | {"gates": m.gates, "rho_by": rho, "fit": fit, "measured": m})
     return out, skipped
 
 
-def formalism_targets(rows: list[dict], shapes: dict[str, dict], ends: set[str]) -> dict[str, dict]:
-    """Per start (its rows `formalism_rows` gives): its reference shapes, and at each l* = l0 less each of `TARGETS`
-    honest H(l*) (least gates over every valid complete schedule reaching l*, `target`), and per policy cell W*(l*) (least
-    gates·ρ over the same) and S = W*/H."""
+def reading(scored: list[dict], name: str) -> list[dict]:
+    """`formalism_rows`' rows under one reading: each with that reading's ρ as `rho`."""
+    return [r | {"rho": r["rho_by"][name]} for r in scored]
+
+
+def formalism_targets(rows: list[dict], shapes: dict[str, dict], readings=formalism.READINGS) -> dict[str, dict]:
+    """Per start (its rows `formalism_rows` gives): its reference shapes, and at each l* = l0 less each of `TARGETS`,
+    one entry per reading (`reading`): honest H(l*) (least gates over every valid checkpoint reaching l*, `target`;
+    the same under both readings), and per cell of te_core.policy's `cells` (the reference shapes by name) W*(l*)
+    (least gates·ρ over the same checkpoints), the checkpoint that sets it (`of`), its ρ, S = W*/H and `basis`: `fit`
+    where Fit holds for the training there (ρ = 1 by Fit), else `target` (Slowdown's bound, a target)."""
     out = {}
     for start in sorted({r["start"] for r in rows}):
-        on = [r | {"schedule_end": r["id"] in ends} for r in rows if r["start"] == start]
+        on = [r for r in rows if r["start"] == start]
         l0 = start_bpb(on)
         if l0 is None:
             continue
-        keys = [policy.key(c, k) for c, k in policy.grid(shapes[start])]
-        marks = {m: s | {"key": policy.key(10 ** round(math.log10(s["c"])), 10 ** round(math.log10(s["k"])))}
-                 for m, s in policy.shapes(shapes[start]).items()}
-        out[start] = {"l0": l0, "shape": shapes[start], "marks": marks, "targets": []}
+        keys = list(policy.cells(shapes[start]))
+        out[start] = {"l0": l0, "shape": shapes[start], "marks": policy.shapes(shapes[start]), "targets": []}
         for f in TARGETS:
-            t = target(on, l0 * (1 - f), keys, size="gates")
-            out[start]["targets"].append({"drop": f, "l_star": t["l_star"], "honest": t["honest"],
-                                          "honest_of": t["honest_of"], "bound": t["bound"],
-                                          "cells": {k: {"w_star": v["w_star"], "of": v["of"], "rho": v["rho"],
-                                                        "S": v["effective_slowdown"]} for k, v in t["cells"].items()}})
+            for name in readings:
+                t = target(reading(on, name), l0 * (1 - f), keys, size="gates")
+                out[start]["targets"].append({
+                    "drop": f, "l_star": t["l_star"], "reading": name, "honest": t["honest"],
+                    "honest_of": t["honest_of"],
+                    "cells": {k: {"w_star": v["w_star"], "of": v["of"], "rho": v["rho"], "S": v["effective_slowdown"],
+                                  "basis": None if v["of"] is None else "fit" if v["fit"] else "target"}
+                              for k, v in t["cells"].items()}})
     return out
 
 
 def formalism_report(rows: list[dict], pin: str | tuple[str, ...] | None = None,
-                     shapes: dict[str, dict] | None = None, keep=None) -> dict:
-    """The formalism's frontier over the valid rows (`valid`) that `keep` keeps (default all): `formalism_targets`, with
-    every quantity's source (the labels of the rows' measurements) and the rows it couldn't score. Complete schedules
-    are read over every row."""
+                     shapes: dict[str, dict] | None = None, keep=None, readings=formalism.READINGS) -> dict:
+    """The formalism's frontier over the valid rows (`valid`) that `keep` keeps (default all): `formalism_targets`
+    under `readings`, with every quantity's source (the labels of the rows' measurements) and the rows it couldn't
+    score."""
     shapes = policy.starts() if shapes is None else shapes
-    ends = schedule_ends(rows)
-    scored, skipped = formalism_rows([r for r in valid(rows, pin) if keep is None or keep(r)], shapes)
+    scored, skipped = formalism_rows([r for r in valid(rows, pin) if keep is None or keep(r)], shapes, readings)
     labels: dict[str, dict[str, int]] = {}
     for r in scored:
         for k, v in r["measured"].labels.items():
             labels.setdefault(k, {}).setdefault(v, 0)
             labels[k][v] += 1
-    return {"starts": formalism_targets(scored, shapes, ends), "sources": labels, "skipped": skipped,
-            "scored": len(scored)}
+    return {"readings": list(readings), "starts": formalism_targets(scored, shapes, readings), "sources": labels,
+            "skipped": skipped, "scored": len(scored)}
+
+
+def _route(of: dict | None) -> str:
+    return f"{of['direction']}/{of['mechanism']} {of['id'][-12:]}@{of['checkpoint']}" if of else ""
 
 
 def formalism_markdown(rep: dict) -> str:
-    lines = ["Security's S = W*/H per start and target, at each reference shape (te_core.policy; ρ is 1 where Fit holds "
-             "and Slowdown's target where it fails; |C| in Boolean gates):", "", "| start | target | l* | H (gates) | "
-             + " | ".join(
-                 f"S at {m}" for m in policy.MARKS) + " |", "|---|---|---|---|" + "---|" * len(policy.MARKS)]
+    lines = ["Security's S = W*/H per start, target and reading of Slowdown's frozen-tail case (te_core.formalism's "
+             "READINGS: Daniel decides which the theorem means, so both are listed and neither is the headline), at each "
+             "reference shape (te_core.policy). H and W* read every checkpoint of every valid record (19:50Z), so S >= 1; "
+             "ρ is 1 where Fit holds for the training (basis fit) and Slowdown's target elsewhere (basis target); |C| in "
+             "Boolean gates; each S with W*'s ρ, basis and route (direction/mechanism record@checkpoint):", "",
+             "| start | target | reading | l* | H (gates; route) | " + " | ".join(f"S at {m}" for m in policy.MARKS)
+             + " |", "|---|---|---|---|---|" + "---|" * len(policy.MARKS)]
     for start, v in rep["starts"].items():
         for t in v["targets"]:
-            h = "—" if t["honest"] is None else f"{t['honest']:.3g}" + (f", {t['bound']}" if t["bound"] else "")
+            h = "—" if t["honest"] is None else f"{t['honest']:.3g} ({_route(t['honest_of'])})"
             ss = []
             for m in policy.MARKS:
-                cell = t["cells"].get(v["marks"][m]["key"], {})
-                ss.append("—" if cell.get("S") is None else f"{cell['S']:.3g} (ρ {cell['rho']:.3g})")
-            lines.append(f"| {start} | -{100 * t['drop']:g}% | {t['l_star']:.4f} | {h} | " + " | ".join(ss) + " |")
+                cell = t["cells"].get(m, {})
+                ss.append("—" if cell.get("S") is None else
+                          f"{cell['S']:.3g} (ρ {cell['rho']:.3g}, {cell['basis']}; {_route(cell['of'])})")
+            lines.append(f"| {start} | -{100 * t['drop']:g}% | {t['reading']} | {t['l_star']:.4f} | {h} | "
+                         + " | ".join(ss) + " |")
     lines += ["", "Sources:"] + [f"- {k}: " + "; ".join(f"{n} rows {s}" for s, n in sorted(v.items()))
                                   for k, v in sorted(rep["sources"].items())]
     return "\n".join(lines)
@@ -374,12 +356,12 @@ def markdown(rep: dict) -> str:
         lines.append(f"| {key} | {len(v['frontier'])} | {len(v['elites'])} | {v['coverage']['filled']}/"
                      f"{v['coverage']['cells']} |")
     keys = list(rep)
-    lines += ["", "W*/honest per cell (training FLOPs, 2|C|; honest over every complete schedule, the reference "
-              "directions' alone as context):", "",
+    lines += ["", "W*/honest per cell (training FLOPs, 2|C|; honest over every checkpoint of every valid record, the "
+              "reference directions' alone as context):", "",
               "| start | target | l* | honest | reference directions only | " + " | ".join(keys) + " |",
               "|---|---|---|---|---|" + "---|" * len(keys)]
     for i, t in enumerate(rep[keys[0]]["targets"] if keys else []):
-        honest = _flops(t["honest"], t["honest_of"]) + (f", {t['bound']}" if t["bound"] else "")
+        honest = _flops(t["honest"], t["honest_of"])
         eff = ["—" if rep[k]["targets"][i]["effective_slowdown"] is None
                else f"{rep[k]['targets'][i]['effective_slowdown']:.3g}" for k in keys]
         lines.append(f"| {t['start']} | -{100 * t['drop']:g}% | {t['l_star']:.4f} | {honest} | "
@@ -397,6 +379,8 @@ def main(argv=None) -> int:
                     help="JSON, run id -> args, changed, layers, readout_leaks, for rows ingested before 3.13")
     ap.add_argument("--formalism", action="store_true",
                     help="score by the training formalism v1 over the policy grid (te_core.formalism, te_core.policy)")
+    ap.add_argument("--reading", action="append", choices=formalism.READINGS, default=None,
+                    help="with --formalism, one reading of Slowdown's frozen-tail case, repeated (default both)")
     ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
     ap.add_argument("--as", dest="agent", default="", help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
@@ -409,7 +393,7 @@ def main(argv=None) -> int:
         rows = with_facts(rows, json.loads(a.facts.read_text()))
     pin = tuple(a.pin) if a.pin else pinned()
     if a.formalism:
-        rep = formalism_report(rows, pin)
+        rep = formalism_report(rows, pin, readings=tuple(a.reading or formalism.READINGS))
         if a.json:
             a.json.write_text(json.dumps({"pin": list(pin), "left_out": status(rows, pin)} | rep, indent=1) + "\n")
         print(formalism_markdown(rep))

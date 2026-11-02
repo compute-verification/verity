@@ -176,8 +176,8 @@ def start_tensors(name: str) -> dict:
 
 
 def facts(record: dict, run_dir: Path, tensors: dict | None = None) -> dict:
-    """What the frontier's rules read beyond a run's price (`frontier.status`, `frontier.fork_ladder`): the program's
-    arguments (`args`); the tensors the witness saw change and the start's layers (`changed`, `layers`), when the
+    """What the frontier's rules read beyond a run's price (`frontier.status`), and the program's arguments (`args`,
+    for the record): the tensors the witness saw change and the start's layers (`changed`, `layers`), when the
     record's `witness.json` sits beside its run directory (a covert_witness record's out/); and, given the start's
     `tensors`, the steps `cw.readout_leaks` lists (`readout_leaks`)."""
     out = {"args": record.get("script_args")}

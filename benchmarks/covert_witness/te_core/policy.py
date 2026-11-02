@@ -17,7 +17,8 @@ on, its forward MACs per token as the harness counts them) gives the two referen
   state beyond θ, P·(16 + 2·32) bits (new bf16 weights and AdamW's two f32 moments).
 
 The grid is every decade of c and of k from the least to the greatest of those shapes' (`grid`), keyed
-`c1e<i>/k1e<j>` (`key`). P1, P2 and P4 read the reference policy (`REFERENCE`); P3 marks all three.
+`c1e<i>/k1e<j>` (`key`). A start is scored at the grid's cells and at the three shapes exactly, keyed by name
+(`cells`). P1, P2 and P4 read the reference policy (`REFERENCE`); P3 marks all three.
 """
 from __future__ import annotations
 
@@ -79,6 +80,12 @@ def grid(shape: dict) -> list[tuple[float, float]]:
     cs = decades(min(r["c"] for r in ref), max(r["c"] for r in ref))
     ks = decades(min(r["k"] for r in ref), max(r["k"] for r in ref))
     return [(c, k) for c in cs for k in ks]
+
+
+def cells(shape: dict) -> dict[str, tuple[float, float]]:
+    """Every (c, k) a start is scored at: the grid's, keyed by decade (`key`), and its reference shapes', exactly, keyed
+    by name (`MARKS`)."""
+    return {key(c, k): (c, k) for c, k in grid(shape)} | {m: (s["c"], s["k"]) for m, s in shapes(shape).items()}
 
 
 def key(c: float, k: float) -> str:
