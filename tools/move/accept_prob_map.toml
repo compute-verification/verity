@@ -11,19 +11,27 @@
 "Exfil.escape_le_exp" = "Exfil.acceptProb_le_exp"
 "Exfil.pow_escape_le_exp" = "Exfil.pow_acceptProb_le_exp"
 "subsetDraw_escape" = "subsetDraw_acceptProb"
+# the same two as `sample_map.toml` names them, so the map renames the same lemmas before and after the sample move
+"subsetSample_escape" = "subsetSample_acceptProb"
+"indepSample_escapes" = "indepSample_acceptCoins"
 "indepDraw_escapes" = "indepDraw_acceptCoins"
 "Exfil.escapes" = "Exfil.acceptCoins"
 "TileStratumEscape" = "TileStratumAcceptProb"
 "tileStratumEscape" = "tileStratumAcceptProb"
 
-# proofs' sampling designs have lemmas of their own that end in `_escape_le_exp` (`Law.stratified_escape_le_exp`)
+# proofs' sampling designs have lemmas of their own that end in `_escape_le_exp` (`Law.stratified_escape_le_exp`). The
+# population's files are named under either name of its area (`security_areas_map.toml` moves `Population` to
+# `SampledProofs`), so the map renames the same declarations before and after that move.
 [[words_in]]
 files = ["Security/Definitions/Population.lean", "Security/Definitions/Population/*.lean", "Security/Proofs/Population.lean",
-         "Security/Proofs/Population/*.lean"]
+         "Security/Proofs/Population/*.lean", "Security/Definitions/SampledProofs.lean",
+         "Security/Definitions/SampledProofs/*.lean", "Security/Proofs/SampledProofs.lean",
+         "Security/Proofs/SampledProofs/*.lean"]
 words = { "escape_le_exp" = "acceptProb_le_exp", "pow_escape_le_exp" = "pow_acceptProb_le_exp" }
 
 [[words_in]]
-files = ["Security/Definitions/Population/Exfiltration.lean", "Security/Proofs/Population/ExfiltrationBound.lean"]
+files = ["Security/Definitions/Population/Exfiltration.lean", "Security/Proofs/Population/ExfiltrationBound.lean",
+         "Security/Definitions/SampledProofs/Exfiltration.lean", "Security/Proofs/SampledProofs/ExfiltrationBound.lean"]
 words = { "escapes" = "acceptCoins" }
 
 [rewrite]
