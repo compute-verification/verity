@@ -1497,7 +1497,7 @@ def final_collect() -> list[dict]:
     out, te = [], ""
     for la in launches:
         run = la.get("run")
-        if not run:
+        if not run or la.get("kind") not in ("rerun", "smoke"):
             continue
         research("fetch", run)
         st = (json.loads((RUNS / run / "status.json").read_text()).get("state")
