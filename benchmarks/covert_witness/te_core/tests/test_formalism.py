@@ -1,4 +1,5 @@
-"""te_core.formalism and te_core.policy: Fit and Cover as the formalism states them, the stubs labelled, the grid."""
+"""te_core.formalism and te_core.policy: Fit and Slowdown as the formalism states them, the stubs and upper bounds
+labelled, the grid."""
 import math
 
 import pytest
@@ -17,7 +18,7 @@ def measured(u1=1e8, phi=0.5, delta=None, dgrad=None, decoder=None, u=None) -> F
                       decoder_gates=decoder)
 
 
-def test_even_update_cover_is_the_corollary():
+def test_even_update_slowdown_is_the_corollary():
     """Evenly spread with u(1) >> k: rho ≳ 4 phi s a u(1) / k^2."""
     m, c, k = measured(u1=1e9), 1e13, 1e5
     r = F.at(m, c, k)
@@ -27,7 +28,7 @@ def test_even_update_cover_is_the_corollary():
     assert r["rho"] == pytest.approx(4 * 0.5 * s * 8192 * 1e9 / k ** 2, rel=1e-3)
 
 
-def test_frozen_tail_cover_is_the_corollary():
+def test_frozen_tail_slowdown_is_the_corollary():
     """A single updated layer under a frozen tail (u = 0 on the tail's share t, then the whole update): rho ≈
     phi s a / (k t)."""
     t, k = 0.05, 1e5
@@ -37,7 +38,7 @@ def test_frozen_tail_cover_is_the_corollary():
     assert r["rho"] == pytest.approx(0.5 * (1 - t) * (1e13 / 1e9) * 8192 / (k * t), rel=1e-3)
 
 
-def test_fit_makes_rho_one_and_flags_a_cover_above_it():
+def test_fit_makes_rho_one_and_flags_a_slowdown_bound_above_it():
     k = 1e9
     fits = measured(u1=1e6, dgrad=1e6)
     assert F.at(fits, 1e13, k)["rho"] == 1.0
@@ -45,7 +46,31 @@ def test_fit_makes_rho_one_and_flags_a_cover_above_it():
     no_grad = measured(u1=1e6)
     assert F.at(no_grad, 1e13, k)["parts"][0]["fit"] and not F.at(no_grad, 1e13, k)["parts"][0]["fit_training"]
     wide = F.at(measured(u1=1e8, delta=1e3, dgrad=1e3), 1e13, 1e6)
-    assert wide["rho"] == 1.0 and wide["flags"] == [F.FIT_OVER_COVER]
+    assert wide["rho"] == 1.0 and wide["flags"] == [F.FIT_OVER_SLOWDOWN]
+
+
+def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
+    """A small total update (Fit's Δ) with a large per-token update (Slowdown's u(1)) fits for running, while the
+    Slowdown bound reads u(1); the record says which value each came from."""
+    row = {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": {}}}
+    part = {"gates": 1e12, "tokens": 1e3, "dep_gates": 5e11, "steps": 1, "delta_grad_bits": None}
+    m = F.complete({"parts": [part], "u1_bits": 1e9, "labels": {"u1_bits": "upper bound (witness): a test"}}, row, SHAPE)
+    assert (m.delta_bits, m.u1_bits, m.u) == (80, 1e9, F.even(1e9))
+    assert m.labels["u1_bits"] == "upper bound (witness): a test" and m.labels["u"] == F.STUBS["u"]
+    k = 1e6
+    r = F.at(m, 1e13, k)
+    assert r["parts"][0]["fit"] and not r["parts"][0]["fit_training"] and r["x0"] == pytest.approx(k / 1e9)
+    assert r["rho"] == pytest.approx(4 * 0.5 * 1e4 * 512 * 16 * 1e9 / k ** 2, rel=2e-3)
+    with pytest.raises(ValueError):
+        F.complete({"parts": [part], "u": [[0, 0], [1, 5.0]], "u1_bits": 6.0}, row, SHAPE)
+
+
+def test_the_frozen_tail_profile_is_the_least_of_the_two_witnesses():
+    t, u1, k = 0.2, 1e9, 1e5
+    u = F.frozen_tail(u1, t)
+    assert F.u_at(u, 0.1) == 0 and F.u_at(u, 0.5) == pytest.approx(0.5 * u1)
+    assert F.bottom_share(u, k) == pytest.approx(t) and F.room(u, k) == pytest.approx(t * k)
+    assert F.frozen_tail(u1, 0.0) == F.even(u1)
 
 
 def test_a_decoder_wider_than_c_counts_no_update():
@@ -62,10 +87,11 @@ def test_a_v23_row_is_measured_from_its_old_fields_with_every_stub_named():
     assert m.tokens == pytest.approx(3 + 10 / SHAPE["forward_macs_per_token"])
     assert m.parts[0].dep_gates == pytest.approx(10 * per_mac("gemm/bf16"))
     assert m.delta_bits == 8000 and m.u == ((0.0, 0.0), (1.0, 8000))
-    assert m.tau_bits == 32 and m.a_bits == 512 * 16
+    assert m.tau_bits == 16 and m.a_bits == 512 * 16 and m.u1_bits == 8000
     assert set(m.labels) == {"gates", "tokens", "dep_gates", "tau_bits", "a_bits", "delta_bits", "decoder_gates", "u",
-                             "delta_grad_bits"}
-    assert all(m.labels[k].startswith("stub") for k in ("tokens", "dep_gates", "tau_bits", "a_bits", "u"))
+                             "u1_bits", "delta_grad_bits"}
+    assert all(m.labels[k].startswith("stub") for k in ("tokens", "dep_gates", "tau_bits"))
+    assert all(m.labels[k].startswith("upper bound") for k in ("a_bits", "u", "u1_bits", "delta_bits"))
     with pytest.raises(ValueError):
         F.measure(row | {"output": {}}, SHAPE)
 

@@ -112,8 +112,8 @@ def panels(shapes: dict[str, dict], starts: list[str]) -> dict[str, tuple[int, i
 
 
 def footer(fig, stubs: dict[str, int], pin) -> None:
-    lines = [f"pin {' + '.join(c[:12] for c in pin)}; |C| in Boolean gates (te_core.gates); rho: Cover's target where Fit "
-             "fails"] + [f"{n} rows, {s}" for s, n in sorted(stubs.items())]
+    lines = [f"pin {' + '.join(c[:12] for c in pin)}; |C| in Boolean gates (te_core.gates); rho: 1 where Fit holds, "
+             "Slowdown's target where it fails; S = W*/H (Security)"] + [f"{n} rows, {s}" for s, n in sorted(stubs.items())]
     fig.text(0.01, 0.005, "\n".join(lines), fontsize=6, va="bottom", ha="left", family="monospace")
 
 
@@ -208,7 +208,7 @@ def p2(scored, shapes, ref: str, fs: dict, out: Path, stubs, pin) -> dict:
         ax.set_xscale("log")
     ax.set_xlabel("gain g = F(l*)/C0" if have_f else "drop from l0, (l0 - l*)/l0 (no from-scratch curve F yet)")
     ax.set_ylabel(f"S = W*/H at the {ref} policy")
-    ax.set_title("P2: the slowdown against the gain (colour: l0, style: saturation)", fontsize=9)
+    ax.set_title("P2: Security's S = W*/H against the gain (colour: l0, style: saturation)", fontsize=9)
     ax.legend(fontsize=7)
     footer(fig, stubs, pin)
     fig.tight_layout(rect=(0, 0.08 + 0.016 * len(stubs), 1, 1))
@@ -311,7 +311,7 @@ def p4(scored, shapes, ref: str, fs: dict, g, drop: float, out: Path, stubs, pin
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel("p_A = |C_A| / H")
-        ax.set_ylabel(f"s_A = rho at {rk}")
+        ax.set_ylabel(f"s_A = rho (Slowdown's target) at {rk}")
         ax.set_title(f"{start}: {what} (l* {l:.4f}); star: full training", fontsize=9)
     footer(fig, stubs, pin)
     fig.tight_layout(rect=(0, 0.1 + 0.02 * len(stubs), 1, 1))

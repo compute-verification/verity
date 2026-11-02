@@ -104,8 +104,11 @@ counted op by the circuits' own Definitions (a bf16 GEMM MAC is `HopperBF16Wgmma
 dependent gates and Δ_grad, read from 4.0's `cut_bits` where the record has them). `frontier --formalism` gives, per
 start, target and cell of the start's (c, k) grid (`policy`: decades from one token's inference block to the start's
 server block, with the reference policy c = 4096 w, k = 10 kB, marked), W\* = the least |C|ρ, honest = the least |C|
-of a complete schedule, and S = W\*/honest. Fit is checked; Cover's ρ is a target until Lean proves it. A quantity not
-measured yet is a stub named in the row's `labels` (`formalism.STUBS`, and `formalism.V23` for a row ingested before).
+of a complete schedule, and Security's S = W\*/honest. Fit (Δ + sτ ≤ k) is checked; Slowdown's ρ, read on u(1) (the
+per-token update, a field of its own: it equals Δ only when every token's path reads the whole update), is a target
+until Lean proves it. u(x), u(1) and a are the best-known values from witnesses, labelled upper bounds; a quantity not
+measured yet is a stub; the row's `labels` name each (`formalism.STUBS`, and `formalism.V23` for a row ingested
+before).
 
 ## What the integrator calls
 
@@ -191,7 +194,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block) and the (c, k) grid in decades |
-| `formalism.py` | the formalism's per-record quantities, Fit and Cover's ρ at (c, k); `of_record` (ingest's), `measure` (with labelled stubs) |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k); `of_record` (ingest's), `measure` (with labelled stubs and upper bounds), the witness profiles `even` and `frozen_tail` |
 | `plots.py` | P1-P4 of the experiments draft from the ledger, each a PNG and its numbers |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
