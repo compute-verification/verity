@@ -2,9 +2,11 @@
 
     python -m te_core.frontier [--root DIR] [--json OUT]
 
-It reads the submissions of te_core's current VERSION only: from 2.2 a covert_witness val bpb is a paired score on a
-fresh slice of the search pool and its start's bpb is the whole pool's, which an earlier record's fixed-set scores don't
-compare with. Per (k, r) cell of the grid (score.K_BITS x score.R):
+It reads the submissions of runs under te_core 2.2 or later only (`valid`): from 2.2 a covert_witness val bpb is a
+paired score on a fresh slice of the search pool and its start's bpb is the whole pool's, which an earlier record's
+fixed-set scores don't compare with. A run with covered steps ingested before 3.0 waits for a re-ingest
+(`python -m te_core.ledger ingest RUN_DIR`), since 3.0 prices ρ by thresholds. Per (k, r) cell of the grid (score.K_BITS x
+score.R):
 
 - the frontier: the valid submissions no other beats on both |C| ρ and val bits per byte;
 - the elites: per niche (mechanism tag x β range x φ range x start), the submission with the least val bits per byte,
@@ -24,8 +26,7 @@ import math
 import sys
 from pathlib import Path
 
-from . import VERSION
-from .ledger import Ledger
+from .ledger import Ledger, coverage_of
 from .score import K_BITS, R, cell, effective_slowdown, honest, w_star
 
 BETA_EDGES = (1e-3, 1e-2, 1e-1, 1.0, 10.0)
@@ -38,8 +39,24 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
     return sum(x >= e for e in edges)
 
 
+#: the first te_core whose val bpb is a paired score on a fresh slice of the search pool (a row's `run_te_core`)
+MEASURED_FROM = (2, 2)
+#: the first te_core whose ingest prices ρ by thresholds (a row's `te_core`): an earlier ingest could price a run with
+#: covered steps at its cheapest step's β, so such a row counts once its run is ingested again
+PRICED_FROM = (3, 0)
+
+
+def version(v) -> tuple[int, ...]:
+    try:
+        return tuple(int(x) for x in str(v).split("."))
+    except ValueError:
+        return ()
+
+
 def valid(rows: list[dict]) -> list[dict]:
-    return [r for r in rows if not r.get("invalid") and r.get("val_bpb") is not None and r.get("run_te_core") == VERSION]
+    return [r for r in rows if not r.get("invalid") and r.get("val_bpb") is not None
+            and version(r.get("run_te_core")) >= MEASURED_FROM
+            and (version(r.get("te_core")) >= PRICED_FROM or not coverage_of(r.get("families", [])))]
 
 
 def cost(r: dict, key: str) -> float:

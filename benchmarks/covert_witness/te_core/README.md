@@ -76,7 +76,8 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **Niche**: a mechanism tag × β range × φ range × start cell (`frontier.BETA_EDGES`, `PHI_EDGES`).
 - **Elite**: a niche's submission with the least val bpb, ties going to the least |C|·ρ.
 - **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r), among the
-  runs of the current `VERSION` (a submission's `run_te_core`).
+  runs under te_core 2.2 or later (a submission's `run_te_core`) whose ρ is priced by thresholds (ingested by 3.0 or
+  later, or with no covered step; `frontier.valid`).
 - **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
   GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
   seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.

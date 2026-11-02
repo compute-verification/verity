@@ -113,3 +113,12 @@ def test_frontier_elites_targets_and_promotion_candidates(tmp_path):
     assert t["effective_slowdown"] == pytest.approx(0.5)
     assert set(frontier.candidates(rows, 1)) == {ref["id"], cheap["id"], good["id"]}
     assert "| 10kB/r10 |" in frontier.markdown(rep)
+
+
+def test_the_frontier_keeps_runs_from_2_2_and_rho_priced_by_thresholds():
+    covered = [{"covers": [0, 1], "beta": {"0": 1e-6, "1": 32.0}}]
+    rows = {name: {"id": name, "val_bpb": 1.0, "invalid": [], "run_te_core": run, "te_core": ingest, "families": fams}
+            for name, run, ingest, fams in [("v2.1", "2.1", "3.1", []), ("v2.2", "2.2", "2.2", []),
+                                            ("v2.10", "2.10", "2.10", []), ("old-priced", "2.2", "2.2", covered),
+                                            ("repriced", "2.2", "3.1", covered), ("unversioned", "", "3.1", [])]}
+    assert [r["id"] for r in frontier.valid(list(rows.values()))] == ["v2.2", "v2.10", "repriced"]
