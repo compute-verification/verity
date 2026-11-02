@@ -29,7 +29,6 @@ STATUSES = ("measured", "ASSUMED", "provisional", "joint", "datasheet")
 class Model:
     cycle_u: float                      # u in one SMSP-cycle (R*)
     honest_real: float                  # u of real time a MAC for the honest kernel
-    honest_real_600w: float             # the same at the 600 W cap
     cuda: tuple[str, ...]               # the CUDA lane kinds ρ binds, in constraint order
     honest: dict[str, float]            # the honest GEMM's program a MMA
     adopted: str                        # the design whose cheapest attack is the margin
@@ -119,8 +118,7 @@ def model(data: Path = DATA) -> Model:
     honest kernel's u a MAC, the price LP's `[lp]`, `[honest]` and `adopted` (NaN and empty here)."""
     t = tomllib.loads((data / "model.toml").read_text())
     c, lp = t["constants"], t.get("lp", {})
-    return Model(cycle_u=c["cycle_u"], honest_real=c.get("honest_real", math.nan),
-                 honest_real_600w=c.get("honest_real_600w", math.nan), cuda=tuple(t["cuda"]),
+    return Model(cycle_u=c["cycle_u"], honest_real=c.get("honest_real", math.nan), cuda=tuple(t["cuda"]),
                  honest=dict(t.get("honest", {})), adopted=t.get("adopted", ""), rho=lp.get("rho", math.nan),
                  tie=lp.get("tie", math.nan), x_min=lp.get("x_min", math.nan), epochs=tuple(t["epochs"]),
                  current=t["current"],
@@ -151,9 +149,16 @@ def _runs(s: str) -> tuple[str, ...]:
     return tuple(s.split())
 
 
+def cites(s: str, named: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """A `runs` field's runs and notes, each `@NAME` the list `named` (`run_lists`) gives it."""
+    return tuple(x for c in _runs(s) for x in (named[c[1:]] if c.startswith("@") else (c,)))
+
+
 def rows(data: Path = DATA) -> dict[str, Row]:
+    named = run_lists(data)
     with open(data / "rows.csv", newline="") as f:
-        return {d["row"]: Row(d["row"], d["status"], _runs(d["runs"]), d["description"]) for d in csv.DictReader(f)}
+        return {d["row"]: Row(d["row"], d["status"], cites(d["runs"], named), d["description"])
+                for d in csv.DictReader(f)}
 
 
 def census_files(m: Model, data: Path = DATA) -> list[Path]:
@@ -165,11 +170,22 @@ def census_files(m: Model, data: Path = DATA) -> list[Path]:
     return out + [p for e in m.epochs if (p := data / "census" / f"{e}.csv").is_file()]
 
 
+def citations() -> dict[str, str]:
+    """`data/citations.toml`: the notes many lines cite, in `data/` and every device directory, each cited in a line's
+    `runs` as `@NAME`."""
+    return tomllib.loads((DATA / "citations.toml").read_text())
+
+
 def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
     """`data/census/runs.toml`: the run lists many census lines share (a refit's every line cites every run its fit read),
-    each cited in a line's `runs` as `@NAME`."""
+    each cited in a line's `runs` as `@NAME`; and `citations`, each a list of its one note."""
     p = data / "census" / "runs.toml"
-    return {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
+    own = {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
+    shared = {k: (v,) for k, v in citations().items()}
+    if both := set(own) & set(shared):
+        raise SystemExit(f"{p}: {sorted(both)} also name a note in {DATA / 'citations.toml'}; give the run list its "
+                         f"own name")
+    return own | shared
 
 
 def kind_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
@@ -190,9 +206,8 @@ def census_lines(m: Model, data: Path = DATA) -> list[dict[str, str]]:
 
 def entries(m: Model, data: Path = DATA) -> list[Entry]:
     named, kinds = run_lists(data), kind_lists(data)
-    cites = lambda s: tuple(x for c in _runs(s) for x in (named[c[1:]] if c.startswith("@") else (c,)))
     return [Entry(k, d["row"], u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"]), d["since"],
-                  d["until"], cites(d["runs"])) for d in census_lines(m, data)
+                  d["until"], cites(d["runs"], named)) for d in census_lines(m, data)
             for k in (kinds[d["kind"][1:]] if d["kind"].startswith("@") else (d["kind"],))]
 
 

@@ -1,4 +1,4 @@
-"""A statement's identifier (PROTOCOL.md §16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be
+"""A statement's identifier (PROTOCOL.md §16.10): the public header's `identifier`, a JSON object Flock does not read, must be
 the verifier's own `--identifier F` in RFC 8785 form, or the Lean verifier refuses the statement; a header with one and no
 `F`, and `F` with a header that names none, refuse too. The public digest binds the header, so Σ binds the identifier, and a
 session's verdict reports it. The fixture's public input ports are a form the soundness proof does not cover (§16.15), so
@@ -22,7 +22,7 @@ VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
-#: PoUW's (H, s, U) stand-in: C-Flock reads none of it
+#: PoUW's (H, s, U) stand-in: Flock reads none of it
 IDENTIFIER = {"scheme": "test/identifier/v0", "H": "ab" * 32, "s": 7, "U": [3, 1, 2], "nested": {"b": None, "a": True}}
 
 OUTSIDE = "identifier: --identifier F is outside canonical JSON's RFC 8785 domain: "

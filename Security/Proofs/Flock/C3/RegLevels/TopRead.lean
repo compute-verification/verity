@@ -53,7 +53,7 @@ passing at the filter's level `l`, its `q` openings and the verifier's positions
 theorem topLevel_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) :
-    ∃ (o : Flock.RecCoins.Opening) (l : ℕ), Flock.RecCoins.opening c3 c.unit.name = .ok o ∧
+    ∃ (o : Flock.RecCoins.RegisteredOpening) (l : ℕ), Flock.RecCoins.opening c3 c.unit.name = .ok o ∧
       (∀ ℓ < o.sh.sched.levels.size, 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES →
         (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H → ℓ = l) ∧
       Flock.RecCoins.checkTopReads c.unit.name own l (o.sh.sched.levels[l]!).q H (o.lg.conss[l]!).pos = .ok () := by
@@ -86,7 +86,7 @@ theorem topRead_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (h
     {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish)) {LANES H : ℕ}
     (hn : Flock.RecCoins.stackedParams (F.Vs j).c.unit.name = some (LANES, H)) :
-    ∃ (c3 : Flock.RecCoins.C3) (op : Flock.RecCoins.Opening) (l : ℕ),
+    ∃ (c3 : Flock.RecCoins.C3) (op : Flock.RecCoins.RegisteredOpening) (l : ℕ),
       Flock.RecCoins.opening c3 (F.Vs j).c.unit.name = .ok op ∧
       (∀ ℓ < op.sh.sched.levels.size, 2 ^ (op.sh.sched.levels[ℓ]!).lanes = LANES →
         (op.sh.sched.levels[ℓ]!).d - (op.sh.sched.levels[ℓ]!).cap = H → ℓ = l) ∧
@@ -102,7 +102,7 @@ theorem topReads_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (
     (hP : StackedParams M sh) {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) :
-    ∀ ℓ < sh.sched.levels.size, ∃ (c3 : Flock.RecCoins.C3) (op : Flock.RecCoins.Opening) (l : ℕ),
+    ∀ ℓ < sh.sched.levels.size, ∃ (c3 : Flock.RecCoins.C3) (op : Flock.RecCoins.RegisteredOpening) (l : ℕ),
       Flock.RecCoins.opening c3 (F.Vs (M.sess ℓ)).c.unit.name = .ok op ∧
       (∀ ℓ' < op.sh.sched.levels.size, 2 ^ (op.sh.sched.levels[ℓ']!).lanes = FlockVBridge.AccChain.levelLanes sh ℓ →
         (op.sh.sched.levels[ℓ']!).d - (op.sh.sched.levels[ℓ']!).cap =

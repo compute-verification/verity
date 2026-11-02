@@ -1,4 +1,4 @@
-"""The Commit's coins from the auditor host's challenger: one challenge phase a Commit, which draws its openings
+"""The Commit's coins from the auditor host's challenger: one challenge phase a Commit, which samples its openings
 and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
@@ -23,7 +23,7 @@ and its served C2 replay challenge after each run's root of record.
   (`remote.trusted_session`): the coin commitment the challenger signed and the roots its signed release log shows it
   received. The Commit's challenge phase must be that challenge phase, its coins that commitment's, and the log must show each run's
   coin of each family released after that run's root of record: coins held in the Commit's process, a challenge phase opened on
-  another root, a second challenge phase for the Commit's root, a coin drawn before its root and a ledger cut before the
+  another root, a second challenge phase for the Commit's root, a coin flipped before its root and a ledger cut before the
   challenge phase's end are refused.
 """
 from __future__ import annotations
@@ -193,16 +193,16 @@ _DRAWN = object()
 
 
 def positions(rc: Any, session: Any = _DRAWN) -> dict[str, Any]:
-    """`challenge.challenge_positions`' keywords for run `rc`: off legacy, from its `POSITIONS` coin; given `session`
-    (None without a gate), the run's coins are drawn first (`draw`)."""
+    """`challenge.challenge_positions`' keywords for run `rc`: its `POSITIONS` coin; given `session` (None without a
+    gate), the run's coins are drawn first (`draw`)."""
     if session is not _DRAWN:
         draw(session, rc)
-    return {"legacy": False, "source": _key(rc, POSITIONS)}
+    return {"source": _key(rc, POSITIONS)}
 
 
 def identities(rc: Any) -> dict[str, Any]:
-    """`binding.challenge_identities`' keywords for run `rc`: off legacy, from its `IDENTITIES` coin."""
-    return {"legacy": False, "source": _key(rc, IDENTITIES)}
+    """`binding.challenge_identities`' keywords for run `rc`: its `IDENTITIES` coin."""
+    return {"source": _key(rc, IDENTITIES)}
 
 
 def replay_challenge(rc: Any, given: str | None) -> tuple[str, dict[str, Any]]:
@@ -231,7 +231,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
            key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify, *, pins: Sequence[Any] | None,
            main: Sequence[str] | None) -> str | None:
     """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
-    challenger's, drawn after `roots` (each run's root of record as the verifier holds it); None when they are. The
+    challenger's, sampled after `roots` (each run's root of record as the verifier holds it); None when they are. The
     challenge phase is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head
     published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins, the host's pins log
     from `pins` (every head published, each a ``pins.jsonl``) and `main`, the verifier's own first-parent history

@@ -139,7 +139,7 @@ def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
     assert s["outer"]["firewall"] == {"prove_s": 6.0, "e2e_s": 6.5, "proof_bytes": 2000, "statements": 1}
     assert s["outer"]["dev"]["prove_s"] == 3.0 and s["outer"]["dev"]["statements"] == 2
     assert s["slowest"]["stage"] == "lean L0"                                             # 61.5 s, the largest median
-    assert s["pipeline"]["outer prove (dev) e2e_s"] == 4.0    # dev proved both statements, firewall one
+    assert s["pipeline"]["outer prove (dev) e2e_s"] == 4.0    # dev proved both statements, ZK server one
     assert s["pipeline"]["V* staging_s (vstage + vcap steps)"] == 75.0     # the step's wall, not its parallel stagings' sum
     assert s["pipeline"]["Lean step_s"] == 75.0
     assert "outer alg-p0 (dev)" in s["not_ok"] and "lean alg-p0" in s["not_ok"]
@@ -511,7 +511,7 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     (fa / "out" / "forge-after.json").write_text(json.dumps({"verify": verify, "untouched": True}))
     doc = RP.read(o)
     coef = row(doc, "outer forged-coef-L0")
-    assert coef["ok"] is True and coef["note"].endswith(stop)        # the release the firewall stopped, from its LIVE record
+    assert coef["ok"] is True and coef["note"].endswith(stop)        # the release the ZK server stopped, from its LIVE record
     outer = row(doc, "outer forged-dirs-L0")
     assert outer["ok"] is True and outer["note"].startswith("no run finished") and "FIREWALL-REFUSED" in outer["note"]
     assert doc["summary"]["outer"]["firewall"]["statements"] == 1      # a forged statement is no part of the run's cost

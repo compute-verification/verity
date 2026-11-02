@@ -12,7 +12,6 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import importlib.util
-import itertools
 import json
 import socket
 import stat
@@ -24,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
@@ -55,6 +55,7 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
+fakes = _load("pous_fakes", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_fakes.py")
 ts = _load("pous_test_signer", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
@@ -111,11 +112,6 @@ def served(tmp_path, monkeypatch) -> Served:
     return Served(serve, tmp_path / "hf", pins, tmp_path / "pieces" / "pous", tmp_path / "private", tensors)
 
 
-def _ticks(step: int = 1_000):
-    counter = itertools.count(0, step)
-    return lambda: next(counter)
-
-
 def _in_process_party(signer, log):
     """`challenger_party.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock) and the prover's over a socket pair (`challenger_party.answer`)."""
@@ -127,7 +123,7 @@ def _in_process_party(signer, log):
         def challenger():
             with b, b.makefile("rwb") as f:
                 return CP.serve(f, request, signer=signer, log=log, coins=COINS, domain=period.SESSION_DOMAIN,
-                                clock=_ticks())
+                                clock=fakes.Clock(step=1_000))
         with futures.ThreadPoolExecutor(1) as pool:
             served_side = pool.submit(challenger)
             try:
@@ -146,7 +142,7 @@ def _run(s: Served, tmp_path, monkeypatch, **kw):
     monkeypatch.setattr(CP, "session", session)
     kw.setdefault("trusted_sha512", hashlib.sha512(signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
-                    party=CP.Party(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
+                    party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
                     private=s.private, pins=s.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
     return answer, calls
 
@@ -180,9 +176,19 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
+    assert request["k"] == SP.ROUNDS == 320 and prof["k"] == 320
 
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["rounds_answered"] == period.K and doc["latency"]["late"] == 0
+    assert doc["key_pinned"] and doc["rounds_answered"] == 320 and doc["latency"]["late"] == 0
+    assert json.loads((served.private / "run.json").read_text())["point"]["k"] == 320
+
+
+def test_the_rounds_are_the_sessions_and_the_verdicts(served, tmp_path, monkeypatch):
+    """`--rounds` sets the challenges the session asks for and the verdict checks: at 105 the run is checked there."""
+    answer, calls = _run(served, tmp_path, monkeypatch, rounds=period.K)
+    assert answer["verdict"] == "accept", answer["reason"]
+    assert calls[0][1]["k"] == period.K and answer["profile"]["k"] == period.K
+    assert json.loads((served.out / "pous.json").read_text())["rounds_answered"] == period.K
 
 
 def test_the_answer_reveals_nothing_of_the_weights_and_its_commitment_opens_privately(served, tmp_path, monkeypatch):
@@ -207,6 +213,25 @@ def test_the_answer_reveals_nothing_of_the_weights_and_its_commitment_opens_priv
     assert not advice.verify(bytes.fromhex(answer["commitment"]), 1, 512, SP.binding(REPO, REV, 4, None), op)
     assert stat.S_IMODE(served.private.stat().st_mode) == 0o700
     assert (served.private / "digests.bin").stat().st_size == 48 * 64
+    case = json.loads((served.private / "case.json").read_text())
+    assert case["evidence"][:64] not in text and not (served.out / "case.json").exists()
+
+
+def test_the_composites_piece_is_written_privately_with_the_runs_own_answer(served, tmp_path, monkeypatch):
+    """The run's case (`period.case`) and the run protocol's answer on its bytes, which is the run's own, go beside the
+    private record as the composite reads a piece: its commitment the digest of the case's, setup's published outputs;
+    the public answer is that answer under its hiding commitment."""
+    answer, _ = _run(served, tmp_path, monkeypatch)
+    run = json.loads((served.private / "run.json").read_text())
+    case = json.loads((served.private / "case.json").read_text())
+    own = json.loads((served.private / "answer.json").read_text())
+    assert own == run["answer"] and own == answer | {"commitment": own["commitment"], "profile": own["profile"]}
+    assert sorted(case) == ["commitment", "evidence", "params"]
+    assert json.loads(bytes.fromhex(case["commitment"])) == run["published"]
+    assert own["commitment"] == hashlib.sha512(bytes.fromhex(case["commitment"])).hexdigest()
+    assert SP.SC.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) == own
+    for f in ("case.json", "answer.json"):
+        assert stat.S_IMODE((served.private / f).stat().st_mode) == 0o600
 
 
 def test_a_store_missing_blocks_is_rejected_with_its_reason(served, tmp_path, monkeypatch):
@@ -223,6 +248,7 @@ def test_a_store_missing_blocks_is_rejected_with_its_reason(served, tmp_path, mo
     assert answer["public"] is None and answer["profile"] is None and len(bytes.fromhex(answer["commitment"])) == 64
     row = SV.piece_row("space", served.out.parent)
     assert row["verdict"] == "reject" and row["reason"] == answer["reason"]
+    assert json.loads((served.private / "answer.json").read_text())["verdict"] == "reject"
 
 
 def test_weights_that_are_not_the_pins_are_rejected_before_any_session(served, tmp_path, monkeypatch):
@@ -250,11 +276,12 @@ def test_a_session_signed_under_another_key_is_rejected(served, tmp_path, monkey
 def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(served, tmp_path):
     """No retry and no exception: the answer says the session didn't complete, and why."""
     answer = SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
-                    party=CP.Party(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
+                    party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
                     pins=served.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(
         f"the memory challenger's session on {AUDITOR} did not complete")
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
+    assert not (served.private / "case.json").exists()
 
 
 def test_a_serve_dir_without_serve_json_makes_no_answer(served, tmp_path, capsys):

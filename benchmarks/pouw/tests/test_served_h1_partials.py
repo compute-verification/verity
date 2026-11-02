@@ -1,4 +1,4 @@
-"""Kernels' prover side of option A (`served_h1/partials.py`, #3095/#3101) held to the order the service states
+"""Kernels' prover side of option A (`served_h1/partials.py`, /) held to the order the service states
 (`pouw.leaf_lanes`): row l of a drawn leaf's partials is lane l at the stated rows, columns and key block, its words in
 `leaf_lanes.word_order`, each `h1zy.lane_partial` (the row PouwH1LaneZy_v1 checks), and a dead leaf's rows are zero. Skips
 until served_h1/partials.py is on the tree."""

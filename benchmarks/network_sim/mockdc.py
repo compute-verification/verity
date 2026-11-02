@@ -29,10 +29,11 @@ by a random bit (`active_replay.adversary_writes`); `late`, which holds a sessio
 `extra`, honest but for one more event, at a position the Program doesn't have; or `maintenance`, an honest server
 whose certifier is down for window 1. Each block is audited twice: by the
 certifier's reference verifier, `audit.Audit`, on the raw and committed records (`active_replay.audit_configuration`),
-and by the accounting layer's record check, `datacenter.check_records`, on the records as `datacenter.observe.Record`s
-against the ones the Program declares (`records`). For that check the declaration's cadence is the certifiers'
-calibrated parameters (`records.cadence`), whatever it declared. The record check also runs once on every block's
-records together, over the declaration's ports (a fleet's merged ones), with the account's charge for the whole run. A
+and by the accounting layer's record check, `datacenter.check_records`, on the records as
+`datacenter.observe.PortRecord`s against the ones the Program declares (`records`). For that check the declaration's
+cadence is the certifiers' calibrated parameters (`records.cadence`), whatever it declared. The record check also runs
+once on every block's records together, over the declaration's ports (a fleet's merged ones), with the account's charge
+for the whole run. A
 non-honest block's wire is compared with an honest block's of the same run (`active_replay.against_honest`).
 
 With `--salt`, each certifier's per-window salt is on (`Proxy(salt=active.fresh_salt)`): its ingress side puts one salt

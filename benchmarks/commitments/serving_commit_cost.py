@@ -52,7 +52,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     return ns
 
 
-def batch(s: InputSet, n: int) -> tuple[SR.Window, list[dict[str, dict[str, np.ndarray]]]]:
+def batch(s: InputSet, n: int) -> tuple[SR.Binding, list[dict[str, dict[str, np.ndarray]]]]:
     """One member per run of consecutive instances with the same row widths (an attention class set: one per key count T, as
     serving commits each template instance's rows)."""
     sub = s.subcircuit
@@ -70,7 +70,7 @@ def batch(s: InputSet, n: int) -> tuple[SR.Window, list[dict[str, dict[str, np.n
                                  tuple((p, int(a.shape[1])) for p, a in outs.items()), hi - lo, lo))
         data.append({"rows": rows, "outs": outs})
         lo = hi
-    window = SR.Window({"program": s.content_digest}, f"input-set:{s.name}", n, f"serving-commit-cost:{s.content_digest[:16]}", tuple(members))
+    window = SR.Binding({"program": s.content_digest}, f"input-set:{s.name}", n, f"serving-commit-cost:{s.content_digest[:16]}", tuple(members))
     return window, data
 
 

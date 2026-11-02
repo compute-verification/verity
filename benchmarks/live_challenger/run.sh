@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The proof service's challenger on its auditor host (cwd = the source tree): `serve.py`, one session a run, its record,
+# The proof system's challenger on its auditor host (cwd = the source tree): `serve.py`, one session a run, its record,
 # key, release log, its signed close and address in $RESEARCH_RUN_DIR/out, which the run publishes from this machine. It runs on a
 # machine the prover doesn't control (AGENTS.md's auditor-trusted devices), never on PEER: once it listens it opens
 # `ssh -R PORT` to PEER (a name in /etc/vy/peers), as benchmarks/remote_session/run.sh's verifier does, so the prover's

@@ -1,14 +1,12 @@
 # The Security/ layout move's renames: what `tools/move/rename.py --map tools/move/security_map.toml` renames.
 #
-# Daniel's ruling of 23 Oct 2026 (10:54 PM PDT): `Security/` is three trees, `Definitions/`, `Properties/` and `Proofs/`.
+# `Security/` is three trees, `Definitions/`, `Properties/` and `Proofs/`.
 # - `Models/<Area>/{Assumptions,Guarantees}` folds into `Definitions/<Area>/{Assumptions,Guarantees}`: module `Models.<Area>.X`
 #   becomes `Definitions.<Area>.X`. The aggregator `Models.lean` keeps its name and imports them until the follow-up folds
 #   it into `Definitions.lean`.
 # - The property proofs leave `Properties/Proofs/` for `Proofs/Properties/`, roots of `security_proofs`: module
 #   `Properties.Proofs.X` becomes `Proofs.Properties.X`. `Properties/` keeps the statements.
 # Declarations and namespaces keep their names, so no guarantee changes.
-#
-# The 7 Oct move this file held before (`Specs` -> `Models`, commit 9fb0a83a0c) is done; its map is in git history.
 
 [words]
 "Models.Accounting" = "Definitions.Accounting"

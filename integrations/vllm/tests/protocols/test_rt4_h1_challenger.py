@@ -9,8 +9,8 @@ challenger's signed close, sealed under its ledger.
   extend one another are refused, and so is a tampered byte of the gate's own v2 head. A period (`period_reason`) is its
   lane's windows between its signed period-open and period-close: one with no close, an incomplete one, an accepted
   window outside it and a window of it abandoned after its coins are refused.
-* the window's draw coin opens once, after a root over the manifest, the last receipts and every round's root
-  and coin; an early draw, a draw from another family and a challenge phase closed with no draw are refused.
+* the window's sampling coin opens once, after a root over the manifest, the last receipts and every round's root
+  and coin; an early draw, a sample from another family and a challenge phase closed with no sample are refused.
 * round s's root commits the A and z tables of its calls and round s - 1's receipts.
 * a window whose coins were held in the serving process is no challenge phase's and credits nothing; pouw-serve
   takes the auditor host's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
@@ -143,7 +143,7 @@ class _Session:
 
 
 def _serve(settings, seed: int = 9, prompt: int = 5, run: bool = False):
-    """`test_pouw_h1._serve_window`'s two served steps of a 3-step window, its activations drawn from `seed` and request
+    """`test_pouw_h1._serve_window`'s two served steps of a 3-step window, its activations sampled from `seed` and request
     a's one prompt token `prompt`: the commitment (and the run, with `run`)."""
     model, runner = T.Model(T.Linear(32, 1), T.Linear(40, 2)), settings["pouw"]["runner"]
     comp = T.PO.install(model, T.PO.Context(stage="serve", enabled=(T._entry(),), settings=settings))
@@ -664,9 +664,9 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
 
 
 def test_an_early_draw_is_refused_and_the_windows_own_draw_fails_visibly(tmp_path, monkeypatch):
-    """A draw coin opened after a root of the prover's, before the window's first round, is the challenger's one
-    draw coin; the window's own draw at `finish` is then refused by the challenger (it has no second draw coin, and a
-    retry never redraws), the window records the refusal, and the trusted check refuses the early draw."""
+    """A sampling coin opened after a root of the prover's, before the window's first round, is the challenger's one
+    sampling coin; the window's own draw at `finish` is then refused by the challenger (it has no second sampling coin, and a
+    retry never resamples), the window records the refusal, and the trusted check refuses the early draw."""
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=13)
     probe = hashlib.sha512(b"a root of the prover's, before any round").digest()
     draw = host.client.open(Wd.DRAW, 0, probe)
@@ -685,8 +685,8 @@ def test_an_early_draw_is_refused_and_the_windows_own_draw_fails_visibly(tmp_pat
 
 
 def test_a_draw_from_another_family_off_its_root_or_never_opened_is_refused(tmp_path, monkeypatch):
-    """The honest window's draw passes; its draw coin swapped for a round coin, a draw root not over the
-    window's parts, and a challenge phase closed at `finish` with no draw opened are refused."""
+    """The honest window's sample passes; its sampling coin swapped for a round coin, a sample root not over the
+    window's parts, and a challenge phase closed at `finish` with no sample opened are refused."""
     host = _Session(tmp_path, monkeypatch, SA, leaf=2, seed=14, reserved=True)
     honest = _serve(host.remote())
     assert host.ended() is None
@@ -850,7 +850,7 @@ def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():
 
 
 def test_the_order_of_roots_and_coins_is_signed_by_the_challengers_close_and_a_rewrite_of_it_is_refused(tmp_path, monkeypatch):
-    """Roots chosen after every coin, with a draw opened after a root over them, are refused against the
+    """Roots chosen after every coin, with a sample opened after a root over them, are refused against the
     honest log, and so is a log rewritten to name them, which the challenger's signed close no longer signs."""
     host = _Session(tmp_path, monkeypatch, SA, leaf=2, seed=15, reserved=True)
     weights, requests = hashlib.sha512(b"the weights' root").digest(), hashlib.sha512(b"round 0's requests").digest()

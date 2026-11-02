@@ -5,7 +5,7 @@
 # L costs L·split/(k_dense·m·n) of its instructions. Converting an FP accumulator to s32, and summing a split form's
 # partial accumulators, cost nothing here (the cheater's favour). `ptx` are tensor_kinds' 19 native mma.sync forms
 # (KIND in benchmarks/pouw/tensor_kinds/tensor_kinds.py), `sass` the opcodes its runs read for them.
-source = "tensor_kinds' M1, all 19 native mma.sync forms timed on sm_120 (r20261017-041103-d35d, r20261017-041754-7630; note:20261017T0321Z-draft-eps1-tensor §2.1); shapes from the PTX ISA's mma.sync"
+source = "tensor_kinds' M1, all 19 native mma.sync forms timed on sm_120; shapes from the PTX ISA's mma.sync"
 
 [IMMA16832]
 shape = [16, 8, 32]

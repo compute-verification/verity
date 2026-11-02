@@ -1,8 +1,8 @@
-"""The firewall's contract, inner phase: `rec_live`'s proxy sends the coin server exactly what `Flock.Firewall.run` (the Lean
+"""The ZK server's contract, inner phase: `rec_live`'s proxy sends the coin server exactly what `Flock.Firewall.run` (the Lean
 program `flock-firewall`) sends, byte for byte, on an honest session and on every session a worker can make of it here (each
 schedule edit of `test_rec_live`, every prefix, drop, duplicate and swap of a request, requests after ``Finish``, forged
 requests, and seeded random byte flips). The Lean program's type is the contract (live PROTOCOL.md §10.3): each message is the
-schedule's own value or a commitment under one of the firewall's salts, so agreement means nothing else leaves the proxy."""
+schedule's own value or a commitment under one of the ZK server's salts, so agreement means nothing else leaves the proxy."""
 from __future__ import annotations
 
 import hashlib
@@ -213,7 +213,7 @@ def test_the_proxy_sends_what_the_lean_firewall_sends(lean_runs):
 
 def test_the_coin_server_never_sees_where_an_open_was_sent(lean_runs):
     """The coin server is the auditor's, so its calls, not only its record, must not show where the worker sent each Open
-    (firewall-contract's gap 3): `Flock.Firewall.run` opens a stream there just before its first round. Every placement of
+    (ZK server-contract's gap 3): `Flock.Firewall.run` opens a stream there just before its first round. Every placement of
     the two Opens gives the honest session's calls, and every cut of one a prefix of them."""
     cs, lean = lean_runs
     got = {name: o["calls"] for (name, _, _), o in zip(cs, lean) if name.startswith("Opens at ")}
