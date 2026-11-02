@@ -21,10 +21,12 @@ submission's notes.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import re
 import time
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +34,11 @@ import torch
 import torch.nn.functional as F
 
 import prepare
+
+try:
+    from te_core import hooks
+except ImportError:
+    hooks = None
 
 KLASS = globals().get("KLASS", "reference")
 LF_LEAVES = {"qkv": ("wq", "wk", "wv"), "o": ("wo",), "mlp-in": ("w_gate", "w_up"), "down": ("w_down",)}
@@ -119,6 +126,10 @@ def delta_of(params: dict, theta: dict, names: list[str]) -> dict:
 PROBE_BATCHES = 4
 
 
+class Skip(Exception):
+    """A config that cannot run within its budget, raised before it computes anything: a suite goes on to the next."""
+
+
 def probe_flops(a, rec, trainable, n_values: int) -> int:
     tokens = a.batch * prepare.EVAL_CTX
     return PROBE_BATCHES * n_values * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": tokens}])["flops"]
@@ -128,20 +139,21 @@ def line_search(a, fwd, data, steps: list, apply, values: list[float]) -> tuple[
     """Mean loss on PROBE_BATCHES fresh training batches (each logged as a forward pass) at every value `apply` sets; the
     least wins and stays applied."""
     tokens = a.batch * prepare.EVAL_CTX
-    probe = [data.next(a.batch) for _ in range(PROBE_BATCHES)]
     results = {}
-    for v in values:
-        apply(v)
-        tot = 0.0
-        with torch.no_grad():
-            for rows in probe:
-                for i in range(0, a.batch, a.micro):
-                    x = rows[i: i + a.micro]
-                    tot += float(loss_of(fwd, x)) * len(x)
-                steps.append({"op": "forward", "tokens": tokens})
-        results[v] = tot / (PROBE_BATCHES * a.batch)
-    best = min(results, key=results.get)
-    apply(best)
+    with step_of():
+        probe = [data.next(a.batch) for _ in range(PROBE_BATCHES)]
+        for v in values:
+            apply(v)
+            tot = 0.0
+            with torch.no_grad():
+                for rows in probe:
+                    for i in range(0, a.batch, a.micro):
+                        x = rows[i: i + a.micro]
+                        tot += float(loss_of(fwd, x)) * len(x)
+                    steps.append({"op": "forward", "tokens": tokens})
+            results[v] = tot / (PROBE_BATCHES * a.batch)
+        best = min(results, key=results.get)
+        apply(best)
     print(json.dumps({"line_search": results, "best": best}), flush=True)
     return best, results
 
@@ -177,7 +189,8 @@ def add_adapters(net, theta: dict, params: dict, mats: list[str], gains: list[st
     return factors, rank
 
 
-def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
+def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
+    fwd = fwd or net
     mats = [n for n in tuned if params[n].ndim == 2]
     gains = [n for n in tuned if params[n].ndim == 1]
     opts, extra, factors = [], 0, {}
@@ -214,6 +227,8 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
     alphas = [1.0] + a.extrapolate if a.extrapolate else []
     reserve = probe_flops(a, rec, trainable, len(alphas)) if alphas else 0
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // per_step)
+    if n_steps < 1:
+        raise Skip(f"wildcard {a.method}: the budget leaves no step after the line search's reserve")
     base = [[g["lr"] for g in o.param_groups] for o, _ in opts]
     if a.ema and factors:
         raise SystemExit("wildcard: --ema is for full-tensor sets")
@@ -233,30 +248,31 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
         for (o, _), lrs in zip(opts, base):
             for g, lr in zip(o.param_groups, lrs):
                 g["lr"] = lr * frac
-        rows = data.next(a.batch)
-        for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
-            loss = loss_of(fwd, x, len(x) / a.batch)
-            loss.backward()
-        torch.nn.utils.clip_grad_norm_(trained, a.clip)
-        for o, _ in opts:
-            o.step()
-            o.zero_grad(set_to_none=True)
-        steps.append({"op": "train", "tokens": tokens})
-        if extra:
-            steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
-        if ema is not None:
-            with torch.no_grad():
-                for n in tuned:
-                    ema[n].lerp_(params[n].detach(), 1 - a.ema)
+        with step_of():
+            rows = data.next(a.batch)
+            for i in range(0, a.batch, a.micro):
+                x = rows[i: i + a.micro]
+                loss = loss_of(fwd, x, len(x) / a.batch)
+                loss.backward()
+            torch.nn.utils.clip_grad_norm_(trained, a.clip)
+            for o, _ in opts:
+                o.step()
+                o.zero_grad(set_to_none=True)
+            steps.append({"op": "train", "tokens": tokens})
+            if extra:
+                steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+            if ema is not None:
+                with torch.no_grad():
+                    for n in tuned:
+                        ema[n].lerp_(params[n].detach(), 1 - a.ema)
+            if step + 1 in marks:
+                snaps.append((encode(ema if ema is not None else params), len(steps)))
+                if getattr(a, "probe", None) is not None:
+                    print(json.dumps({"step": step + 1, "flops": prepare.train_flops(rec, trainable, steps)["flops"],
+                                      "probe_loss": probe_loss(fwd, a.probe, a.micro, steps)}), flush=True)
         if (step + 1) % 100 == 0:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step + 1 in marks:
-            snaps.append((encode(ema if ema is not None else params), len(steps)))
-            if getattr(a, "probe", None) is not None:
-                print(json.dumps({"step": step + 1, "flops": prepare.train_flops(rec, trainable, steps)["flops"],
-                                  "probe_loss": probe_loss(fwd, a.probe, a.micro, steps)}), flush=True)
     info = {"steps": n_steps, "lora_rank": a.lora_rank}
     if alphas:
         info["alpha"], info["line_search"] = extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas)
@@ -285,7 +301,7 @@ def extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas)
     return line_search(a, fwd, data, steps, apply, alphas)
 
 
-def train_kfac(a, net, rec, theta, params, tuned, data, fwd):
+def train_kfac(a, net, rec, theta, params, tuned, data):
     """One damped K-FAC step on each trained matrix from statistics gathered at θ; the gains take the plain gradient."""
     mats = [n for n in tuned if params[n].ndim == 2]
     mods = {n: net.inner.get_submodule(n.removesuffix(".weight")) for n in mats}
@@ -310,19 +326,22 @@ def train_kfac(a, net, rec, theta, params, tuned, data, fwd):
     reserve = probe_flops(a, rec, trainable, len(a.etas) + 1)
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // (per_step + moment_flops))
     if n_steps < 1:
-        raise SystemExit("wildcard kfac: the budget leaves no accumulation step after the line search's reserve")
+        for h in handles:
+            h.remove()
+        raise Skip("wildcard kfac: the budget leaves no accumulation step after the line search's reserve")
     steps = []
     print(json.dumps({"steps": n_steps, "tuned": tuned, "flops_per_step": per_step, "moment_flops": moment_flops}),
           flush=True)
     for step in range(n_steps):
-        rows = data.next(a.batch)
-        for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
-            loss = loss_of(net, x, len(x) / a.batch)
-            loss.backward()
-            for n in mats:
-                h = inputs.pop(n).reshape(-1, params[n].shape[1]).float()
-                stats[n]["A"].add_(h.T @ h)
+        with step_of():
+            rows = data.next(a.batch)
+            for i in range(0, a.batch, a.micro):
+                x = rows[i: i + a.micro]
+                loss = loss_of(net, x, len(x) / a.batch)
+                loss.backward()
+                for n in mats:
+                    h = inputs.pop(n).reshape(-1, params[n].shape[1]).float()
+                    stats[n]["A"].add_(h.T @ h)
         steps += [{"op": "train", "tokens": tokens}, {"op": "extra", "flops": moment_flops, "what": "kfac moments"}]
         if (step + 1) % 50 == 0:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x)}), flush=True)
@@ -424,16 +443,20 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     dup = torch.empty(n_pos, dtype=torch.bool, device=dev)
     ce0 = torch.empty(n_pos, dtype=torch.float32, device=dev)
     grab = {}
-    hooks = [top.register_forward_pre_hook(lambda m, i: grab.__setitem__("x", i[0])),
+    handles = [top.register_forward_pre_hook(lambda m, i: grab.__setitem__("x", i[0])),
              top.wo.register_forward_hook(lambda m, i, o: grab.__setitem__("o", o)),
              top.register_forward_hook(lambda m, i, o: grab.__setitem__("y", o))]
     embed = inner.embed.detach()
-    eb = embed.bfloat16()
 
     @torch.no_grad()
     def fill(lo: int, hi: int, steps: list):
         at = lo
         while at < hi:
+            with step_of():
+                at = fill_micro(at, hi, steps)
+
+    def fill_micro(at: int, hi: int, steps: list) -> int:
+        if True:
             rows = data.next(min(a.micro, (hi - at) // prepare.EVAL_CTX))
             n = rows.shape[0] * prepare.EVAL_CTX
             with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
@@ -448,17 +471,17 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             p.scatter_(1, k_ids, 0.0)
             p.scatter_(1, t[:, None], 0.0)
             mass = p.sum(-1).clamp_min(1e-30)
-            ebar = (p.bfloat16() @ eb).float() / mass[:, None]
+            ebar = (p @ embed) / mass[:, None]
             del p
             xs[at: at + n] = (grab["x"] + grab["o"]).view(n, d).bfloat16()
             es[at: at + n] = ebar.bfloat16()
             ids[at: at + n] = (k_ids - 32768).to(torch.int16)
             tgt[at: at + n] = t.int()
-            cs[at: at + n] = lse + mass.log() - (es[at: at + n].float() * y).sum(-1)
+            cs[at: at + n] = lse + mass.log() - (y * es[at: at + n].float()).sum(-1)
             ce0[at: at + n] = lse - logits_t
             dup[at: at + n] = (k_ids == t[:, None]).any(-1)
             steps += [{"op": "forward", "tokens": n}, {"op": "extra", "flops": 2 * V * d * n, "what": "cache: rest mean"}]
-            at += n
+            return at + n
 
     def cached_loss(ix: torch.Tensor, w: torch.Tensor | None = None) -> torch.Tensor:
         x = xs[ix].float()
@@ -466,9 +489,9 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             h = F.rms_norm(x, (d,), top.mlp_norm)
             y = x + top.w_down(F.silu(top.w_gate(h)) * top.w_up(h))
         z = rms(y.float(), inner.norm)
-        sub = torch.einsum("pd,pkd->pk", z.bfloat16(), eb[ids[ix].int() + 32768]).float()
+        sub = torch.einsum("pd,pkd->pk", z, embed[ids[ix].int() + 32768])
         own = (z * embed[tgt[ix]]).sum(-1)
-        rest = cs[ix] + (es[ix].float() * z).sum(-1)
+        rest = cs[ix] + (z * es[ix].float()).sum(-1)
         own_slot = torch.where(dup[ix], torch.full_like(own, -torch.inf), own)
         lse = torch.logsumexp(torch.cat([sub, own_slot[:, None], rest[:, None]], dim=-1), dim=-1)
         return (lse - own).mean() if w is None else ((lse - own) * w).mean()
@@ -488,7 +511,31 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     @torch.no_grad()
     def held_loss(what: str) -> float:
         steps.append({"op": "extra", "flops": fwd_mm * m, "what": f"cached: held-out loss, {what}"})
-        return float(cached_loss(held))
+        with step_of():
+            return float(cached_loss(tokens_of(held)))
+
+    def cached_step(step: int, filled: int, imp) -> float:
+        frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
+        for g, lr in zip(opt.param_groups, base):
+            g["lr"] = lr * frac
+        if imp is not None:
+            cdf, weight = imp
+            j = torch.searchsorted(cdf, torch.rand(P, device=dev, generator=gen) * cdf[-1]).clamp_max(len(cdf) - 1)
+            ix, w = j + m, weight[j]
+        else:
+            ix, w = m + torch.randint(filled - m, (P,), device=dev, generator=gen), None
+        ix = tokens_of(ix)
+        tot = 0.0
+        for i in range(0, P, a.cached_micro):
+            wi = None if w is None else w[i: i + a.cached_micro]
+            loss = cached_loss(ix[i: i + a.cached_micro], wi) * (len(ix[i: i + a.cached_micro]) / P)
+            loss.backward()
+            tot += float(loss.detach())
+        torch.nn.utils.clip_grad_norm_(trained, a.clip)
+        opt.step()
+        opt.zero_grad(set_to_none=True)
+        steps.append({"op": "extra", "flops": per_pos * P, "what": "cached step: top MLP, final norm, top-K head"})
+        return tot
 
     for c in range(chunks):
         fill(filled, filled + per_chunk, steps)
@@ -496,42 +543,39 @@ def train_cached(a, net, rec, theta, params, tuned, data):
         if c == 0:
             print(json.dumps({"cached_loss_at_theta": held_loss("at theta"), "true_loss": float(ce0[:m].mean()),
                               "held_out_positions": m}), flush=True)
+        cdf = weight = None
         if a.sample == "loss":
             q = ce0[m:filled].clamp_min(0.05 * float(ce0[m:filled].mean()))
-            cdf = q.cumsum(0)
-            weight = float(q.mean()) / q
+            cdf, weight = q.cumsum(0), float(q.mean()) / q
         for _ in range(step_per_chunk):
-            frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
-            for g, lr in zip(opt.param_groups, base):
-                g["lr"] = lr * frac
-            if a.sample == "loss":
-                j = torch.searchsorted(cdf, torch.rand(P, device=dev, generator=gen) * cdf[-1]).clamp_max(len(q) - 1)
-                ix, w = j + m, weight[j]
-            else:
-                ix, w = m + torch.randint(filled - m, (P,), device=dev, generator=gen), None
-            for i in range(0, P, a.cached_micro):
-                wi = None if w is None else w[i: i + a.cached_micro]
-                loss = cached_loss(ix[i: i + a.cached_micro], wi) * (len(ix[i: i + a.cached_micro]) / P)
-                loss.backward()
-            torch.nn.utils.clip_grad_norm_(trained, a.clip)
-            opt.step()
-            opt.zero_grad(set_to_none=True)
-            steps.append({"op": "extra", "flops": per_pos * P, "what": "cached step: top MLP, final norm, top-K head"})
+            with step_of():
+                loss = cached_step(step, filled, None if a.sample == "uniform" else (cdf, weight))
             step += 1
             if step % 100 == 0:
-                print(json.dumps({"step": step, "chunk": c, "loss": float(loss.detach()) * P / a.cached_micro,
-                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+                print(json.dumps({"step": step, "chunk": c, "loss": loss, "s": round(time.perf_counter() - t0, 1)}),
+                      flush=True)
         row = {"chunk": c, "filled": filled, "held_out_loss": held_loss(f"chunk {c}")}
         if getattr(a, "probe", None) is not None:
-            row |= {"flops": prepare.train_flops(rec, trainable, steps)["flops"],
-                    "probe_loss": probe_loss(net, a.probe, a.micro, steps)}
+            with step_of():
+                row |= {"flops": prepare.train_flops(rec, trainable, steps)["flops"],
+                        "probe_loss": probe_loss(net, a.probe, a.micro, steps)}
         print(json.dumps(row), flush=True)
         if c < chunks - 1:
             snaps.append((prepare.encode_full(delta_of(params, theta, tuned)), len(steps)))
-    for h in hooks:
+    for h in handles:
         h.remove()
     return (prepare.encode_full(delta_of(params, theta, tuned)), trainable, steps, snaps,
             {"steps": n_steps, "positions": n_pos, "epochs": n_steps * P / n_pos, "top_k": K})
+
+
+def step_of():
+    """An explicit harness step (a cached step reads no fresh batch); outside the harness, nothing."""
+    return hooks.step() if hooks is not None else contextlib.nullcontext()
+
+
+def tokens_of(ix: torch.Tensor) -> torch.Tensor:
+    """Cached positions are token data: their rows of the cache are this step's token-indexed values."""
+    return hooks.tokens(ix) if hooks is not None else ix
 
 
 def rms(x: torch.Tensor, gain: torch.Tensor) -> torch.Tensor:
@@ -578,29 +622,59 @@ def main() -> int:
     a = ap.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = True
     configs = json.loads(a.suite) if a.suite else [{}]
-    rec = prepare.start_record(a.start)
+    if a.suite and a.lora_rank:
+        raise SystemExit("wildcard: a suite trains full tensors (adapters' hooks would outlive their config)")
+    net, rec, theta = prepare.load_start(a.start)
+    params = net.params()
+    tuned = resolve_set(a.tset, rec, params)
+    shape = prepare.deep_share(rec, set(tuned))
+    print(json.dumps({"class": KLASS, "set": tuned, "phi": shape["phi"], "lowest_updated_layer": shape["lowest_updated_layer"]}),
+          flush=True)
+    if shape["phi"] > 0 and not a.allow_deep:
+        raise SystemExit(f"wildcard: --set {a.tset!r} has witnessed φ = {shape['phi']:.4f} > 0 (use --allow-deep)")
+    for n, p in params.items():
+        p.requires_grad_(n in tuned)
+        if n in tuned:
+            p.data = p.data.float()
     probe = probe_rows(rec, a) if a.suite else None
     all_steps, results, best = [], [], None
     for i, over in enumerate(configs):
         c = argparse.Namespace(**(vars(a) | {k.replace("-", "_"): v for k, v in over.items()}))
         if c.tset != a.tset or c.lora_rank != a.lora_rank:
             raise SystemExit("wildcard: a suite keeps one --set and --lora-rank, so its trainable is one update's")
+        for key in ("etas", "extrapolate", "scales"):
+            v = getattr(c, key)
+            setattr(c, key, [float(x) for x in v.split(",") if x] if isinstance(v, str) else list(v))
         c.probe = probe
-        out = run_one(c)
-        blob, trainable, steps, snaps, info, model, tuned, net = out
+        with torch.no_grad():
+            for n in tuned:
+                params[n].copy_(theta[n])
+        data = prepare.TrainData(rec["tokenizer"], seed=c.data_seed)
+        try:
+            blob, trainable, steps, snaps, info = TRAIN.get(c.method, train_iterative)(c, net, rec, theta, params,
+                                                                                       tuned, data)
+        except Skip as e:
+            if not a.suite:
+                raise SystemExit(str(e))
+            print(json.dumps({"config": i, "overrides": over, "skipped": str(e)}), flush=True)
+            results.append({"overrides": over, "skipped": str(e)})
+            continue
         if probe is not None:
-            net.load(model)
-            info["probe_loss"] = probe_loss(net, probe, c.micro, steps)
+            if data.at + a.probe_rows > len(data.order):
+                info["probe_overlaps_training"] = True
+            with step_of():
+                info["probe_loss"] = probe_loss(net, probe, c.micro, steps)
             print(json.dumps({"config": i, "overrides": over, "probe_loss": info["probe_loss"], "info": info}), flush=True)
         all_steps += steps
         results.append({"overrides": over, "info": info, "E_bytes": len(blob)})
         if best is None or (probe is not None and info["probe_loss"] < best[-1]):
-            best = (c, blob, trainable, snaps, info, model, tuned, info.get("probe_loss"))
-        del net
+            best = (c, blob, trainable, snaps, info, info.get("probe_loss"))
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    c, blob, trainable, snaps, info, model, tuned, _ = best
-    theta = prepare.load_theta(a.start)
+    if best is None:
+        raise SystemExit("wildcard: every config of the suite was skipped")
+    c, blob, trainable, snaps, info, _ = best
+    model = prepare.decode(theta, blob)
     changed = [n for n in tuned if not prepare.same_bits(model[n], theta[n])]
     notes = {"direction": "wildcard", "mechanism": a.mechanism, "method": c.method, "set": tuned,
              "args": {k: v for k, v in vars(c).items() if k != "probe"}, "info": info, "E_bytes": len(blob),
@@ -608,7 +682,6 @@ def main() -> int:
     prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, all_steps, changed=changed, notes=notes,
                    snapshots=snaps if not a.suite else [])
     return 0
-
 
 def probe_rows(rec: dict, a) -> torch.Tensor:
     """The last `--probe-rows` windows of the training order, which a run reaches only after reading all the others."""
@@ -628,37 +701,13 @@ def probe_loss(fwd, rows: torch.Tensor, micro: int, steps: list) -> float:
     return tot / len(rows)
 
 
-def run_one(a):
-    a.etas = [float(x) for x in a.etas.split(",")] if isinstance(a.etas, str) else a.etas
-    a.extrapolate = [float(x) for x in a.extrapolate.split(",") if x] if isinstance(a.extrapolate, str) else a.extrapolate
-    a.scales = [float(x) for x in a.scales.split(",") if x] if isinstance(a.scales, str) else a.scales
-    net, rec, theta = prepare.load_start(a.start)
-    params = net.params()
-    tuned = resolve_set(a.tset, rec, params)
-    shape = prepare.deep_share(rec, set(tuned))
-    print(json.dumps({"class": KLASS, "set": tuned, "phi": shape["phi"], "lowest_updated_layer": shape["lowest_updated_layer"]}),
-          flush=True)
-    if shape["phi"] > 0 and not a.allow_deep:
-        raise SystemExit(f"wildcard: --set {a.tset!r} has witnessed φ = {shape['phi']:.4f} > 0 (use --allow-deep)")
-    for n, p in params.items():
-        p.requires_grad_(n in tuned)
-        if n in tuned:
-            p.data = p.data.float()
-    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
-    if a.method == "kfac":
-        blob, trainable, steps, snaps, info = train_kfac(a, net, rec, theta, params, tuned, data, net)
-    elif a.method == "scale":
-        blob, trainable, steps, snaps, info = train_scale(a, net, rec, theta, params, tuned, data)
-    elif a.method == "cached":
-        blob, trainable, steps, snaps, info = train_cached(a, net, rec, theta, params, tuned, data)
-    else:
-        blob, trainable, steps, snaps, info = train_iterative(a, net, rec, theta, params, tuned, data, torch.compile(net))
-    if a.probe is not None and data.at + a.probe_rows > len(data.order):
-        info["probe_overlaps_training"] = True
-    model = prepare.decode(theta, blob)
-    if a.probe is not None:
-        net = prepare.Net(rec["config"]).to(prepare.DEVICE)
-    return blob, trainable, steps, snaps, info, model, tuned, net
+
+TRAIN = {"kfac": train_kfac, "scale": train_scale, "cached": train_cached}
+
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception:
+        traceback.print_exc()
+        raise
