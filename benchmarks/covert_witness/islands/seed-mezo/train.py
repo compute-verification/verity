@@ -18,15 +18,15 @@ Methods (`--method`):
 The learning rate: `--lr` absolute, or `--lr-auto F` from the diagnostics (`--diag`): per tensor group (each block's
 (layer, stage), the final norm, the embedding) |g|² of the population gradient (products of independent batches' backprop
 gradients), the batch noise, and tr H (fp32 three-point curvature, one declared step a group), from which a subset's MeZO
-gain a direction is G² / (2 E[ĝ²] T) at lr = G / (E[ĝ²] T); `--lr-auto` uses the diagnostics' G and T with the E[ĝ²] MeZO
-measures, rounding noise included. Every extra pass is logged (forwards as forward passes, the diagnostics' backward passes
+gain a direction is G² / (2 E[ĝ²] T) at lr = G / (E[ĝ²] T); `--lr-auto` takes T from the diagnostics and G (ĝ_A ĝ_B) and
+E[ĝ²] as EMAs of the run's own steps (`lr_at`), after `--warm` steps at half the diagnostics' lr. Every extra pass is logged (forwards as forward passes, the diagnostics' backward passes
 as full-model train passes in `extra`). `--names auto` grows the subset greedily by predicted gain a direction (over every
 group, or the matrix groups with `--auto-pool mats`); `best1` takes the best single matrix (layer, stage) group. Each MeZO
 step splits its batch in halves, so the log reports the signal fraction |g|² / |g_B|² and a running prediction of the gain,
 Σ η ĝ_A ĝ_B − c² tr Ĥ / 2, in nats a token.
 
-    python launch.py seed s50 --note TEXT -- [--method mezo|fo]
-        [--names blocks|all|gains|top:K|re:REGEX|auto|best1] [--auto-pool all|mats] [--lr LR | --lr-auto F] [--diag]
+    python launch.py seed s50 --island seed-mezo --note TEXT -- [--method mezo|fo]
+        [--names blocks|all|gains|top:K|re:REGEX|auto|best1] [--auto-pool all|mats] [--lr LR | --lr-auto F [--warm 300]] [--diag]
         [--eps 1e-3 | --eps-rel R] [--precision bf16|tf32|fp32] [--batch 8] [--micro 16] [--ctx 1024] [--coeff bf16]
         [--max-dirs N] [--momentum B] [--schedule const|linear] [--budget-fraction 0.98] [--time-budget 2700]
 """
