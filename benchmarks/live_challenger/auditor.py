@@ -101,7 +101,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   verifier tree, is signed as `model` alone, its digest core's pin, `pouw/lean/check/models.json`, and refused when the
   pin lacks it; an open without either commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
   the circuit file the auditor's lowering built for K's template, which PoUW's credit verifies each window's statements
-  on; an open without it commits none), and with `--length JSON` the fixed length its windows serve (`length`,
+  on; a K in credit's lanes form commits `lane<K>` and `combine<K>` instead, and `leaf_programs` their leaf Programs'
+  descriptor digests; an open without it commits none), and with `--length JSON` the fixed length its windows serve (`length`,
   `{"max_tokens": [n, ...], "stop": "fixed"}`: each request's public max_tokens, served to that cap whatever it samples,
   which PoUW's credit holds each window's served rows to; an open without it commits none, and credit counts none of
   its windows). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
@@ -291,6 +292,10 @@ ROOT = re.compile(r"[0-9a-f]{128}")
 PINNED = re.compile(r"[0-9a-f]{40}")
 #: a circuit file's template: K's tile template (``k<K>``) or the live Program's (``live``), PoUW's `credit._TEMPLATE`
 TEMPLATE = re.compile(r"k[1-9][0-9]{0,7}|live")
+#: one of a lanes-form K's two leaf files (``lane<K>``, ``combine<K>``), PoUW's `credit._LEAF_FILE`
+LEAF_FILE = re.compile(r"(lane|combine)([1-9][0-9]{0,7})")
+#: beside a lanes-form K's files, each one's leaf Program's descriptor digest, PoUW's `credit.LEAF_PROGRAMS`
+LEAF_PROGRAMS = "leaf_programs"
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
 SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
@@ -564,21 +569,36 @@ def weights_root_of(s: str) -> str:
     return s
 
 
-def circuit_files_of(s: str) -> dict[str, str]:
+def circuit_files_of(s: str) -> dict[str, Any]:
     """A period-open's circuit files (`--circuit-files`, written as `circuit_files`): a JSON object taking each K's
     template (``k<K>``, and ``live`` the live Program's) to the SHA-512 of the circuit file the auditor's lowering built
-    for it, in lowercase hex, as PoUW's credit reads it (`committed_files`); or Refused."""
+    for it, in lowercase hex, as PoUW's credit reads it (`committed_files`); a K in credit's lanes form takes ``lane<K>``
+    and ``combine<K>`` in place of ``k<K>``, and `LEAF_PROGRAMS` takes exactly those files to their leaf Programs'
+    descriptor digests (credit's `lanes_files`); or Refused."""
     def pairs(items: list) -> dict | None:
         return dict(items) if len({k for k, _ in items}) == len(items) else None
+
+    def digests(d: Any, key: re.Pattern) -> bool:
+        return isinstance(d, dict) and all(key.fullmatch(k) and type(v) is str and ROOT.fullmatch(v) for k, v in d.items())
 
     try:
         files = json.loads(s, object_pairs_hook=pairs)
     except (ValueError, RecursionError):
         files = None
-    if not (isinstance(files, dict) and 0 < len(files) <= 64 and all(
-            TEMPLATE.fullmatch(k) and type(v) is str and ROOT.fullmatch(v) for k, v in files.items())):
+    if not isinstance(files, dict):
+        files = {}
+    progs = files.get(LEAF_PROGRAMS)
+    plain = {k: v for k, v in files.items() if k != LEAF_PROGRAMS}
+    leaf = {k for k in plain if LEAF_FILE.fullmatch(k)}
+    ks = {LEAF_FILE.fullmatch(k).group(2) for k in leaf}
+    lanes = (progs is None if not leaf else digests(progs, LEAF_FILE) and set(progs) == leaf) and leaf == {
+        f"{kind}{k}" for k in ks for kind in ("lane", "combine")} and not any(f"k{k}" in plain for k in ks)
+    if not (0 < len(plain) <= 64 and digests({k: v for k, v in plain.items() if k not in leaf}, TEMPLATE)
+            and digests({k: plain[k] for k in leaf}, LEAF_FILE) and lanes):
         raise Refused(f"--circuit-files {s[:200]!r}: each K's template to its circuit file's SHA-512, a JSON object "
-                      '{"k<K>" or "live": "<128 lowercase hex>", ...} of 1 to 64 distinct K')
+                      '{"k<K>" or "live": "<128 lowercase hex>", ...} of 1 to 64 distinct K; a K in the lanes form '
+                      'commits "lane<K>" and "combine<K>" in place of "k<K>", and "leaf_programs" then takes exactly '
+                      "those files to their leaf Programs' digests")
     return files
 
 
