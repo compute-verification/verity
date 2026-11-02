@@ -35,6 +35,7 @@ import Proofs.Flock.SessionLoop.CutInnerLive
 import Proofs.Flock.SessionLoop.InnerSlot
 import Proofs.Flock.SessionLoop.InnerUnrefused
 import Proofs.Flock.SessionLoop.LiveInnerAt
+import Proofs.Flock.SessionLoop.LiveInnerOwn
 import Proofs.Flock.SessionLoop.LiveOwn
 
 /-!
