@@ -49,19 +49,26 @@ the prover's bytes:
   inner proof's rounds that are not the stream's (`Finish.coinsWhy`), refuses a table's level-0 data from the host
   (`table`) and any rep's proof file but the one its live inner request computed (`Finish.Kept`), and keeps each rep's
   proof file, once (`Frames.Sessions.file`).
-* A `Proof` the prover sends is answered `Resp::Ok` and dropped. The proofs that leave, just before `Finish`, are the
+* A `Proof` the prover sends before a stop is answered `Resp::Ok` and dropped. The proofs that leave, just before `Finish`, are the
   loop's kept files (`ownProofs`), every rep's of the session's bound level 0 or none, and only once every rep's frame
   ended not stopped (`Frames.finish`). The finish computes none where a constraint fails on the pads. Where a frame
   stopped its rep, `Finish` leaves without them (the auditor sees the stop there, as where a file is missing) and the
   prover's `Finish` is refused.
-* `Ping` leaves as the prover's probe of 64 zero bytes (`PING`), `Link` as zeros at the session's link points
-  (`linkFrame`), and `Open` as its rep stream's at the stream's domain (`openFrame`). Any other request (`Prime`, an
-  unknown tag) is refused, as are a `Link` before the `Hello` and an `Open` of a stream the session does not have
-  (`State.wire`).
+* `Link` leaves as zeros at the session's link points (`linkFrame`), and `Open` as its rep stream's at the stream's domain
+  (`openFrame`). `Ping` never leaves: the loop answers it `Resp::Ok` itself, before a stop and after. Any other request
+  (`Prime`, an unknown tag) is refused (`State.wire`).
+* Each request leaves at most once, at its place in the session's schedule, the honest prover's order (`State.place`, on
+  what of the session's frames that carry no coin left before it, `Placed`): `Register`; `Hello`; the first rep stream's
+  `Open`; `Commit`; `Link`; the first rep stream's rounds; then each later rep stream's `Open` and its rounds, in
+  `SessionSpec.repStreams` order, a stream's `Open` only once the rounds before it are past; and `Finish` once every rep
+  stream opened. A second `Register`, `Hello`, `Link` or `Open` of a stream, and any of them out of its place, is a
+  refusal. So what leaves is fixed by the statement and the schedule, as the model has it: each frame that carries no
+  coin once, at its place, and one message a round (`Claims.ZKServer.LeanRelease.toSrv`), and nothing the prover places.
 
-A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, without asking the auditor: no
-coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only
-moves frames.
+A refusal answers the prover `Resp::Refused(WHY)` and stops the session: every request after it is refused for the same
+reason without asking the auditor (`State.request`), `Ping` alone answered `Resp::Ok` by the loop, so nothing of the
+session reaches the auditor after its stop, and the auditor's connection closes at the session's end as at any other
+stop. No coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only moves frames.
 
 The release side (live PROTOCOL.md §10.5) is `core-firewall session`'s, around this loop (`run` with a `Hold`): a held
 session's `Ping`s are answered here until its first other request, which the hold admits or refuses before anything
@@ -162,9 +169,6 @@ def REGISTER : ByteArray := ByteArray.mk #[10]
 /-- `Req::Finish`. -/
 def FINISH : ByteArray := ByteArray.mk #[6]
 
-/-- `Req::Ping` of the prover's probe, 64 zero bytes (`ping_rtt`). -/
-def PING : ByteArray := ByteArray.mk #[9] ++ field ⟨Array.replicate 64 0⟩
-
 /-- `Req::Round` on `stream` with the content `c`, squeezing `n` coins. -/
 def roundFrame (stream : String) (c : ByteArray) (n : Nat) : ByteArray :=
   ByteArray.mk #[4] ++ field stream.toUTF8 ++ field c ++ u32le n
@@ -221,29 +225,91 @@ def State.finish (S : State) : Option (State × ByteArray) :=
     else some (S.refuse
       s!"{Coins.STOP}a Finish after {C.opened.length} openings, where the schedule's are {S.plan.size + 1}")
 
-/-- **Whether a request of kind `k` leaves**: `none` where it does, else the refusal the prover receives in its place and
-the session after. A `Commit` or `Round` leaves only as the schedule's next opening (`reqAt`): no coin is asked for after
-a refusal, before `Hello`'s answer, or at a place the prover picks. `Finish` leaves only after the last (`State.finish`). -/
-def State.request (S : State) (k : Kind) : Option (State × ByteArray) :=
-  if k == .finish then S.finish else
-  let opening : Option (String × Nat) := match k with
-    | .commit => some (Coins.SESSION, 0)
-    | .round stream n => some (stream, n)
-    | _ => none
-  match opening, S.stop, S.session with
-  | none, _, _ => none
-  | some _, some why, _ => some (S, refused why)
-  | some _, none, none => some (S.refuse s!"{Coins.STOP}coins before the step-0 coin commitment")
-  | some (stream, n), none, some C =>
-    let j := C.opened.length
-    let (st, want) := reqAt S.plan C.hello.links j
-    if j = 0 then
-      if k == .commit then none
-      else some (S.refuse s!"{Coins.STOP}a round of {stream} before the step-0 coin commitment")
-    else if k == .commit then some (S.refuse s!"{Coins.STOP}a second step-0 coin commitment")
-    else if j > S.plan.size then some (S.refuse s!"{Coins.STOP}a round of {stream} past the schedule's {S.plan.size}")
-    else if stream == st && n == want then none
-    else some (S.refuse s!"{Coins.STOP}opening {j}: {n} coins of {stream}, where the schedule's are {want} of {st}")
+/-- **What of a session's frames that carry no coin has left**, beside `State`: its `Register`, its `Link`, and how many of
+its rep streams' `Open`s, which leave in `SessionSpec.repStreams` order. -/
+structure Placed where
+  register : Bool := false
+  link : Bool := false
+  opens : Nat := 0
+
+/-- `P` once a request of kind `k` left. -/
+def Placed.after (P : Placed) : Kind → Placed
+  | .register => { P with register := true }
+  | .link => { P with link := true }
+  | .openStream _ => { P with opens := P.opens + 1 }
+  | _ => P
+
+/-- **Whether a request of kind `k` is at its place** in the session's schedule, once `P` left: `none` where it is, else
+why not. The schedule is the honest prover's order (`flock-circuit`'s): `Register`; `Hello`; the first rep stream's `Open`;
+`Commit`; `Link`, just after `Commit`'s coins; the first rep stream's rounds; then each later rep stream's `Open`, once
+the rounds before it are past, and its rounds, in `SessionSpec.repStreams` order; `Finish` once every rep stream opened.
+So `Register`, `Hello`, `Link` and each stream's `Open` have one place each, and a second one has none. Which opening a
+`Commit` or `Round` is, and whether `Finish` comes after the last, are `State.request`'s (`reqAt`, `State.finish`).
+`Ping` and `Proof` never leave, and any other request (`Prime`, an unknown tag) has no place. -/
+def State.place (S : State) (P : Placed) (k : Kind) : Option String :=
+  let j := (S.session.map (·.opened.length)).getD 0
+  let streamAt := fun (i : Nat) => (S.labels[i]?.map (·.1)).getD ""
+  match k with
+  | .register => if P.register then some "a second Register" else none
+  | .hello =>
+    if !P.register then some "a Hello before the Register"
+    else if S.sent then some "a second Hello"
+    else none
+  | .link =>
+    if !S.sent then some "a Link before the session's Hello"
+    else if P.link then some "a second Link"
+    else if j != 1 then some s!"a Link at opening {j}, where its place is just after the step-0 coin commitment"
+    else none
+  | .openStream s =>
+    match S.labels.findIdx? (·.1 == s) with
+    | none => some s!"an Open of {s}, which is none of the session's rep streams"
+    | some i =>
+      if i < P.opens then some s!"a second Open of {s}"
+      else if P.opens < i then some s!"an Open of {s} before the Open of {streamAt P.opens}"
+      else if i = 0 then none
+      else if !P.link then some s!"an Open of {s} before the Link"
+      else if (S.plan[j - 1]?.map (·.1)) == some (streamAt (i - 1)) then
+        some s!"an Open of {s} before the last round of {streamAt (i - 1)}"
+      else none
+  | .commit => if P.opens = 0 then some s!"a Commit before the Open of {streamAt 0}" else none
+  | .round stream _ =>
+    if !P.link then some s!"a round of {stream} before the Link"
+    else if (S.labels.extract 0 P.opens).any (·.1 == stream) then none
+    else some s!"a round of {stream} before its Open"
+  | .finish => if P.opens < S.labels.size then some s!"a Finish before the Open of {streamAt P.opens}" else none
+  | .ping | .proof => none
+  | .other => some "a request the session loop does not serve"
+
+/-- **Whether a request of kind `k` leaves**, once `P` of the session's frames that carry no coin left: `none` where it
+does, else the refusal the prover receives in its place and the session after. After a stop every request is refused for
+its reason, so nothing more of the session reaches the auditor. A `Commit` or `Round` leaves only as the schedule's next
+opening (`reqAt`): no coin is asked for before `Hello`'s answer or at a place the prover picks. `Finish` leaves only after
+the last (`State.finish`). Every request leaves only at its place (`State.place`). -/
+def State.request (S : State) (P : Placed) (k : Kind) : Option (State × ByteArray) :=
+  match S.stop with
+  | some why => some (S, refused why)
+  | none =>
+    let coins : Option (State × ByteArray) := if k == .finish then S.finish else
+      let opening : Option (String × Nat) := match k with
+        | .commit => some (Coins.SESSION, 0)
+        | .round stream n => some (stream, n)
+        | _ => none
+      match opening, S.session with
+      | none, _ => none
+      | some _, none => some (S.refuse s!"{Coins.STOP}coins before the step-0 coin commitment")
+      | some (stream, n), some C =>
+        let j := C.opened.length
+        let (st, want) := reqAt S.plan C.hello.links j
+        if j = 0 then
+          if k == .commit then none
+          else some (S.refuse s!"{Coins.STOP}a round of {stream} before the step-0 coin commitment")
+        else if k == .commit then some (S.refuse s!"{Coins.STOP}a second step-0 coin commitment")
+        else if j > S.plan.size then some (S.refuse s!"{Coins.STOP}a round of {stream} past the schedule's {S.plan.size}")
+        else if stream == st && n == want then none
+        else some (S.refuse s!"{Coins.STOP}opening {j}: {n} coins of {stream}, where the schedule's are {want} of {st}")
+    match coins with
+    | some r => some r
+    | none => (S.place P k).map fun why => S.refuse s!"{Coins.STOP}{why}"
 
 /-- The coins the auditor answered `a` to the schedule's next opening (`reqAt`), once they open the committed tree; the
 session with the round counted. -/
@@ -321,15 +387,14 @@ def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : Byt
                       labels, tables, sigma := spec.sigma, points := spec.points },
              ⟨m.toArray⟩)
 
-/-- **What leaves for a request of kind `k`** that carries no coin, the loop's own frame (`Register`, `Ping`, `Link` and
-`Open`); else why it is refused: a `Link` before the session's `Hello`, an `Open` of a stream that is none of its rep
-streams, and any request the loop does not serve (`Prime`, an unknown tag). A `Link` leaves as zeros at the session's
-link points, each table's, and an `Open` at its stream's domain. -/
+/-- **What leaves for a request of kind `k`** that carries no coin, at its place (`State.place`), the loop's own frame
+(`Register`, `Link` and `Open`); else why it is refused: an `Open` of a stream that is none of its rep streams, and any
+request the loop does not serve (`Ping`, which the loop answers itself, `Prime`, an unknown tag). A `Link` leaves as zeros
+at the session's link points, each table's, and an `Open` at its stream's domain. -/
 def State.wire (S : State) (k : Kind) : Except String ByteArray :=
   match k with
   | .register => .ok REGISTER
-  | .ping => .ok PING
-  | .link => if S.sent then .ok (linkFrame (S.points * S.tables.size)) else .error "a Link before the session's Hello"
+  | .link => .ok (linkFrame (S.points * S.tables.size))
   | .openStream s => match S.labels.find? (·.1 == s) with
     | some (_, d) => .ok (openFrame s d)
     | none => .error s!"an Open of {s}, which is none of the session's rep streams"
@@ -483,13 +548,14 @@ def ownProofs (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : 
   return if fs.all (·.isSome) then (fs.filterMap id).toArray else #[]
 
 /-- **A session's relay** once it reaches the auditor `a` (`serve`), from its first request `first` if the hold read it:
-each request decided and its own frame sent (the prover's `Proof`s dropped), and with a hold the loop's proofs and
-`Finish` held for `Hold.barrier`. `phase` is where a held
-session stands, and `ended` why it ended if the hold has no outcome of it. -/
+each request decided and its own frame sent at its place (`State.request`, the prover's `Proof`s dropped and its `Ping`s
+answered by the loop), nothing after a stop, and with a hold the loop's proofs and `Finish` held for `Hold.barrier`.
+`phase` is where a held session stands, and `ended` why it ended if the hold has no outcome of it. -/
 def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : Nat)
     (p : Socket.Client) (hold : Option Hold) (a : Socket.Client) (first : Option ByteArray) (phase : IO.Ref Phase)
     (ended : IO.Ref String) : IO Unit := do
   let mut st : State := {}
+  let mut pl : Placed := {}
   let mut next := first
   repeat
     let mut f := ByteArray.empty
@@ -499,12 +565,16 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
     else
       let some g ← recvFrame p | break
       f := g
-    if byte? f 0 == some 5 then
+    if byte? f 0 == some 9 then
+      sendFrame p ok
+      continue
+    if byte? f 0 == some 5 && st.stop.isNone then
       sendFrame p ok
       continue
     if byte? f 0 == some 6 then
-      let complete := st.finish.isNone
-      let stopped : Option String ← match st.finish with
+      let fin := st.request pl .finish
+      let complete := fin.isNone
+      let stopped : Option String ← match fin with
         | some (S', _) => pure S'.stop
         | none => do
           match ← Frames.finish reg sid st.tables.size with
@@ -548,9 +618,13 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
         continue
     match kind f with
     | .error e =>
-      sendFrame p (refused s!"{Coins.STOP}{e}")
+      sendFrame p (refused (st.stop.getD s!"{Coins.STOP}{e}"))
       break
     | .ok .hello =>
+      if let some (st', out) := st.request pl .hello then
+        st := st'
+        sendFrame p out
+        continue
       let nonce ← IO.getRandomBytes Hello.NONCE_BYTES.toUSize
       let id ← IO.getRandomBytes Level0.ID_BYTES.toUSize
       let set ← S.setupAt specs st.draw
@@ -568,7 +642,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
         st := st'
         sendFrame p out
     | .ok k =>
-      if let some (st', out) := st.request k then
+      if let some (st', out) := st.request pl k then
         st := st'
         sendFrame p out
         continue
@@ -610,6 +684,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
           sendFrame p out
           continue
       sendFrame a g
+      pl := pl.after k
       let some r ← recvFrame a | ended.set "the auditor ended the session"; break
       let (st', out) := st.answer k r
       st := st'

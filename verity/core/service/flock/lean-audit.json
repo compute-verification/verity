@@ -71,6 +71,7 @@
   "Flock.Test.Canon",
   "Flock.Test.ZkIdentity",
   "Flock.Test.FrameStep",
+  "Flock.Test.SessionPlace",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
   "Flock.Test.RequireLink",
