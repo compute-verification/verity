@@ -16,37 +16,10 @@ import pytest
 from verity.core.deploy.stream import Side
 from verity.core.protocols.remote_bandwidth import audit, codec, verifier_party
 from verity.core.protocols.remote_bandwidth import period as P
+from remote_bandwidth_fakes import Clock, Entropy
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()
-
-
-class Clock:
-    """The verifier's clock: each reading a microsecond after the last, and waiting moves it on."""
-
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-    def sleep_until(self, clock, t: int) -> None:
-        self.now = max(self.now, t)
-
-
-class Entropy:
-    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 class _Dropped:
@@ -72,7 +45,7 @@ def _split(cheat=None) -> tuple[P.Period, int]:
     got: dict = {}
 
     def verifier() -> None:
-        c = Clock()
+        c = Clock(10 ** 9, 1_000)
         with a, a.makefile("rwb") as f:
             got["period"] = verifier_party.serve(f, request, coins=COINS, clock=c, sleep_until=c.sleep_until)
 
@@ -85,7 +58,7 @@ def _split(cheat=None) -> tuple[P.Period, int]:
 
 
 def _in_process(cheat=None) -> P.Period:
-    c = Clock()
+    c = Clock(10 ** 9, 1_000)
     return P.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(b"salts"), cheat=cheat)
 
 

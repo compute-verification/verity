@@ -15,7 +15,6 @@ import pytest
 
 from verity.ml.circuits import metadata as A
 from verity.ml.circuits import codec
-from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 

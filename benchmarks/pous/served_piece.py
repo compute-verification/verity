@@ -31,10 +31,10 @@ DIR``).
    never the report's (a report of a session under any other id is a reject), and its answer on that case's bytes
    (`served_case.pous_answer`, `period.answer`): the tie, the run's
    check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
-   an accepted run certifies (`period.certify`): at `ROUNDS` challenges, ``⌊ρ·|C|⌋`` bits at ``2^-20 + 2^-127``
-   (`p2.wide320_certificate`: the window's ``2^-20`` and `Sha512Prf`'s ``ε_prf`` at the memory challenger's SHA-512
-   indices); at 105, at ``1% + 2^-128``. The check takes about 2.3 minutes at the registered point at
-   105 challenges or 320: the tie is its cost, not the rounds.
+   an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
+   105 (`p2.wide320_certificate`'s ``2^-20 + 2^-127``, the window's ``2^-20`` and `Sha512Prf`'s ``ε_prf`` at the
+   memory challenger's SHA-512 indices, is no run's certificate). The check takes about 2.3 minutes at the registered
+   point at 105 challenges or 320: the tie is its cost, not the rounds.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
@@ -105,7 +105,7 @@ CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesO
 TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
                   "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
 BINDING_TAG = b"verity/pous/served-window/v1"
-#: the period's challenges: the 320-read window's, at which an accepted run certifies at `2^-20 + 2^-127`
+#: the period's challenges: the 320-read window's (`ObligationWide320`); an accepted run certifies at `1% + 2^-128`
 ROUNDS = P2.CERT_K_WIDE320
 DTYPES = {"I8": torch.int8, "F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
 SIZES = {"I8": 1, "U8": 1, "F16": 2, "BF16": 2, "F32": 4, "I32": 4, "F64": 8, "I64": 8}

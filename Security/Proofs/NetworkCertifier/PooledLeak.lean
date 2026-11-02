@@ -14,7 +14,7 @@ the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`
 whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`); a union bound adds the
 leak relations' errors `e' i`.
 
-The count half: a family of faulty sets with fewer than `Fmax` units in total is the units listed by some
+The count half: a family of faulty sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
 `encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
@@ -97,7 +97,7 @@ theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0
 
 /-! ### The families of faulty sets -/
 
-/-- The units that `g` lists in window `i`. -/
+/-- The proof blocks that `g` lists in window `i`. -/
 def famOf {m : ℕ} {n : Fin m → ℕ} {F : ℕ} (g : Fin F → Option (Σ i : Fin m, Fin (n i))) (i : Fin m) : Finset ℕ :=
   (univ.filter fun v : Fin (n i) => ∃ t, g t = some ⟨i, v⟩).image Fin.val
 

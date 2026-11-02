@@ -1,5 +1,5 @@
 """`check.env()`: the steps get an allowlisted environment, and never what `check` sets for its own steps from the environment
-(#420: inside a real recorded check, its steps' CHECK_STORE_CUSTODY and VERITY_STORE_REQUIRED leaked into `env()` and into the
+(inside a real recorded check, its steps' CHECK_STORE_CUSTODY and VERITY_STORE_REQUIRED must not leak into `env()` or into the
 tests that check it)."""
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def test_a_step_never_inherits_what_check_set_for_it(tmp_path, monkeypatch):
 
 
 def test_checks_own_tests_pass_inside_a_recorded_checks_step():
-    """#420's own test failed in train TB's recorded check: the step's variables reached it."""
+    """The step's own variables, set by a recorded check, never reach the test of `env()`."""
     leaked = {**os.environ, CHECK.STORE_REQUIRED_ENV: "1", CHECK.CUSTODY_ENV: "/w/requests/r0/custody"}
     test = "tests/test_check.py::test_a_recorded_runs_steps_require_the_store_and_get_its_custody_dir"
     p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", test], cwd=ROOT / "tools" / "verity" / "check", env=leaked,

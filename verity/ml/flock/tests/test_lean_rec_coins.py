@@ -42,6 +42,7 @@ from pathlib import Path
 import keyed
 import pytest
 from verity_flock import rec_bindings as RB
+from verity_flock import rec_compose as RC
 from verity_flock import rec_live as RL
 from verity_flock import rec_outer as O
 from verity_flock import rec_vstage as S
@@ -173,10 +174,10 @@ def _files(level: Path, public: Path, registered: Path, shape: Path, rows: Path 
             "--rec-inner", str(shape), *_own(level, shape), *([] if rows is None else ["--rec-rows", str(rows)])]
 
 
-def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
-         session: Path = SET / "outer-L3" / "session", rows: Path | None = None,
-         statement: str = "verity/flock-circuit", transcript: bool = True) -> subprocess.CompletedProcess:
-    """`verify` of a staged statement; with an inner session, the coin server's record of the honest one
+def _args(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
+          session: Path = SET / "outer-L3" / "session", rows: Path | None = None,
+          statement: str = "verity/flock-circuit", transcript: bool = True) -> list[str]:
+    """`verify`'s arguments for a staged statement; with an inner session, the coin server's record of the honest one
     (`--rec-inner-transcript`, whose link points and tops every V* statement is held to) unless `extra` names another or
     `transcript` is false."""
     u = SET / "u" / "stage"
@@ -185,8 +186,13 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
     held = ["--rec-inner-transcript", str(shape.parent / "transcript.json")]
     rec = [] if inner is None else [*files, "--rec-inner-session", str(SET / inner / "session"),
                                     *(held if transcript and "--rec-inner-transcript" not in extra else [])]
-    return keyed.run([str(BIN), "verify", "--zk", *_files(level, public, registered, shape, rows, statement), *rec, *extra,
-                      "--session", str(session)])
+    return ["verify", "--zk", *_files(level, public, registered, shape, rows, statement), *rec, *extra,
+            "--session", str(session)]
+
+
+def _run(*a, **k) -> subprocess.CompletedProcess:
+    """`verify` at `_args`."""
+    return keyed.run([str(BIN), *_args(*a, **k)])
 
 
 def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
@@ -211,10 +217,13 @@ def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape
     """Its VERDICT names its part (`rec_part`), the SHA-512 of the shared rows file it read (`rec_rows_sha512`), of
     the verifier's inner shape file (`rec_inner_sha512`), and of the inner session's record and the coin server's
     transcript of it (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`). `rec-compose` holds every part to
-    those inputs through `rec_shared` (`test_lean_rec_compose.py`)."""
+    those inputs through `rec_shared` (`test_lean_rec_compose.py`), which `rec_compose.shared_of_args` derives from the
+    same arguments, as the pod stages it in a run's record."""
     rows = _acc_rows(tmp_path / "rows.json", restaged)
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest", rows=rows)
     assert (v["accepted"], v["why"]) == (False, S2_R7), v
+    args = _args(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest", rows=rows)
+    assert RC.shared_of_args(args) == v["rec_shared"], v
     sha = {k: hashlib.sha512(f.read_bytes()).hexdigest() for k, f in (
         ("rec_rows_sha512", rows), ("rec_inner_sha512", shape),
         ("rec_inner_session_sha512", SET / "inner-honest" / "session" / "session.json"),

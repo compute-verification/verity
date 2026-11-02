@@ -15,6 +15,8 @@ from verity_vllm.commit.challenge import challenge_positions
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = 64
+#: the run's positions coin, as the auditor host's challenger would open it after the run's root
+COIN = b"positions coin"
 
 
 def stream(seed: int = 3, steps: int = 3, tensors: int = 4, nbytes: int = 1000) -> list[list[tuple[str, bytes]]]:
@@ -101,7 +103,7 @@ def test_root_recomputed_after_the_fact_is_not_accepted_as_prechallenge_root():
     c = committer()
     run = c.commit_offline(st)
     R = run.run_root
-    chal = challenge_positions(R, [s.n_leaves for s in run.steps], 16)
+    chal = challenge_positions(R, [s.n_leaves for s in run.steps], 16, source=COIN)
     ops = c.open(chal)
     assert all(c.verify(run, o) for o in ops)
     # adversary alters one challenged byte and recommits (same context) -> R'
@@ -118,7 +120,7 @@ def test_root_recomputed_after_the_fact_is_not_accepted_as_prechallenge_root():
     op2 = c2.open([(s0, i0)])[0]
     assert not c.verify(run, op2)                     # against the verifier's held (prechallenge) commitment: refused
     assert c2.verify(run2, op2)                       # a valid opening of R' — which was never the fixed root
-    assert challenge_positions(run2.run_root, [s.n_leaves for s in run2.steps], 16) != chal
+    assert challenge_positions(run2.run_root, [s.n_leaves for s in run2.steps], 16, source=COIN) != chal
     # substituting only the run root (keeping the original step roots) is caught by the run-root membership check
     fake = RunCommitment(run2.run_root, run.steps, run.spans, 0.0, 0.0, 0, 0)
     assert not c.verify(fake, ops[0])

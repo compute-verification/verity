@@ -9,19 +9,19 @@ clock certificate;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose incorrect
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
-Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
+Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sample and a warden
 the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
-let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' draws and free
+let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' samples and free
 inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
 (exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
 period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
 block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
-session and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
+session and key, execution phases the chain certified under N2's own registrations, the report's compute audits) and the
 verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
-doesn't give, other audits, another registration, a link-window N2 didn't register, a missing case, no verifier, a
+doesn't give, other audits, another registration, an execution phase N2 didn't register, a missing case, no verifier, a
 refused or scan-only chain or no server."""
 
 from __future__ import annotations
@@ -324,7 +324,8 @@ def _period(d: Path, case: dict, answer: dict) -> str:
 
 
 def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
-    """An accepted chain whose certifier session, link-windows, N2 registrations and compute audits are ``case``'s."""
+    """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are
+    ``case``'s."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})

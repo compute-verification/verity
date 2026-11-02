@@ -234,7 +234,8 @@ fi
 # the per-call challenger round's measured round trips (paced samples in percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
 cd integrations/vllm
-PY=${PY:-/workspace/jobs/venv312/bin/python3}
+[ -x /workspace/jobs/venv312/bin/python3 ] && PY=${PY:-/workspace/jobs/venv312/bin/python3}
+PY=${PY:-$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python3")} || exit 2
 export PATH=$(dirname "$PY"):$PATH
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=$FI_ARCH
