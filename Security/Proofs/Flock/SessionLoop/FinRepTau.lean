@@ -539,7 +539,8 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
   rw [hsch] at hgo
   have ht₀ : (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8).rounds = #[] := rfl
   have e3 := Masked.fwTau_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx ⟨k / 2, hj⟩ ⟨k % 2, hr⟩
-    (vs x w ν (finCoins x ops)) (hRows ν t κ m₀ ρ₀ ops hctx ⟨k / 2, hj⟩) (_root_.Flock.Firewall.Finish.claimsOf q.xs)
+    (vs x w ν (finCoins x ops) (finS.seenOf x t)) (hRows ν t κ m₀ ρ₀ ops hctx ⟨k / 2, hj⟩)
+    (_root_.Flock.Firewall.Finish.claimsOf q.xs)
     hxsz tb.st hst tb.tPad _ tb.g hg tb.cm0.toC (_root_.Flock.Firewall.Finish.padsOf q.draws).toC hP' ic'.toC q.vals
     tb.extra tb.lanePad _ ht₀ hl' hgo hmk'
   exact e1.trans (e2.trans e3.symm)
