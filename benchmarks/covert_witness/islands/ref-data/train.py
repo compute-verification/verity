@@ -22,7 +22,8 @@ Data (all off by default: TrainData's stream permuted by `--data-seed`, the seed
 
 E is the trained tensors in full (`prepare.encode_full`). It runs inside the harness (candidate.sh's script mode), and
 since it reads windows by id rather than through `TrainData.next`, it marks its steps itself
-(`hooks.step()`): θ's scoring pass, each training step with its snapshots and forks, and the final validation and submit.
+(`hooks.step()`): each chunk of θ's scoring pass, each training step with its snapshots and forks, and the final
+validation and submit.
 
     launch.py reference m100 --note "MECHANISM ..." -- [--mat-lr 0.004] [--windows fresh] [--score-len 64 --keep 0.75 ...]
 """
@@ -316,9 +317,11 @@ def main() -> int:
         pool = win.take(int(round(n_steps * pool_per_step)))
         sc = np.empty(len(pool), dtype=np.float32)
         rows_per = max(1, a.micro * CTX // a.score_len)
-        with hooks.step(), torch.no_grad():
-            for i in range(0, len(pool), rows_per):
-                chunk = pool[i: i + rows_per]
+        # one step per chunk: the harness counts a step's tokens once per index buffer, and the chunks reuse one, so a
+        # single scoring step would read out a score per window against one chunk's tokens, which the harness refuses
+        for i in range(0, len(pool), rows_per):
+            chunk = pool[i: i + rows_per]
+            with hooks.step(), torch.no_grad():
                 sc[i: i + len(chunk)] = seqf(win.rows(chunk, CTX, length=a.score_len)).float().cpu().numpy()
         steps.append({"op": "forward", "tokens": int(len(pool)) * a.score_len, "ctx": a.score_len,
                       "what": f"theta scores {len(pool)} windows on their first {a.score_len} tokens"})
