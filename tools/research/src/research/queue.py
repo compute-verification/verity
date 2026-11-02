@@ -159,8 +159,9 @@ the queue's state.  A sync keeps the longest prefix of that chain which still ma
 order) and merges the rest on top, each by `git merge-tree` and `git commit-tree` (`Queue._merge`: no worktree, so a candidate
 that conflicts costs one call).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
 sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
-change a pinned input both change its pin.  Once the merged tree has Lean's module system (it holds the codemod, `MODULES`),
-that codemod runs over the whole merged tree, in a worktree of it, and what it ports goes into the merge commit, with each pin
+change a pinned input both change its pin.  Once the merged tree is on Lean's module system (it holds the codemod, `MODULES`,
+and its `PORTED_ROOTS` are modules: `on_modules`, since the codemod may land before the port), that codemod runs over the
+whole merged tree, in a worktree of it, and what it ports goes into the merge commit, with each pin
 recording it (`ported`): git runs the `.lean` merge driver only on a file both sides changed, so a `.lean` file either side
 added before the port (the PR, or `checked` since the port's base) would stay unported, and a module importing it wouldn't
 build.  A codemod that fails leaves the PR out with why.  So a new push moves its PR to the tip, a dropped PR takes the
@@ -289,10 +290,12 @@ RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 DRIVE_FLAGS = "tools/verity/check/drive.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
 PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
-#: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, landed with the port and the lint refusing
-#: a package's file that isn't a module: a tree holding it has the port, and a merge into it runs it over the merged tree
-#: (`ported`)
-MODULES = "tools/verity/lean/modules.py"
+#: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, and the one reading of a Lean header it reads
+#: with: a merge into a tree on the module system runs the codemod over the merged tree (`ported`)
+MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
+#: the root modules of Security's `Definitions` library and C-Flock's `Flock`, which the port makes modules: a tree holding
+#: the codemod is on the module system when each is a module (`on_modules`)
+PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 #: drive.toml's `after_landing_shards` for the shard planner's N: "auto", or "auto:MAX"
 AUTO_SHARDS_RE = re.compile(r"auto(:[1-9]\d*)?")
@@ -2453,14 +2456,42 @@ def ported(repo: Path, tree: str) -> tuple[str | None, list[str], list[str], str
     one of them, "") or (None, [], [], why not).  Git runs the `.lean` merge driver, which ports a side made before the port,
     only on a file both sides changed, so a `.lean` file either side added before the port stays as it was written (a PR's,
     or one `checked` added since the port's base, under the port's own merge), and a module importing it doesn't build.  Only
-    a tree that has the port (it holds `MODULES`) is touched: that tree's `MODULES` runs over all of it, at the root of a
+    a tree on the module system (`on_modules`) is touched: that tree's `MODULES` runs over all of it, at the root of a
     worktree of it, and leaves a ported tree as it is; each pin's record of a file it rewrote moves with it
     (`_repinned_files`).  No cheaper test stands in for the run: a header check of every `.lean` file would read a script or a
-    test fixture, which the codemod leaves alone, as a file to port.  The codemod failing is the reason."""
-    if _git(repo, "cat-file", "-e", f"{tree}:{MODULES}", check=False).returncode:
-        return tree, [], [], ""
+    test fixture, which the codemod leaves alone, as a file to port.  The codemod, or the header reader, failing is the
+    reason."""
+    on, why = on_modules(repo, tree)
+    if not on:
+        return (None if why else tree), [], [], why
     new, files, pins, why = _codemod(repo, tree)
     return new, list(files), list(pins), why
+
+
+#: `on_modules`' reading, run apart from the queue as the codemod is: the tree's `HEADERS` (stdin's "headers") says whether each
+#: of stdin's "roots" has a header that starts with `module`
+_ROOTS_READ = ("import json, sys, types\nd = json.load(sys.stdin)\nm = types.ModuleType('headers')\n"
+               "exec(compile(d['headers'], 'headers.py', 'exec'), m.__dict__)\n"
+               "print(json.dumps([(h := m.header(s)) is not None and h.module for s in d['roots']]))\n")
+
+
+def on_modules(repo: Path, tree: str) -> tuple[bool, str]:
+    """(whether ``tree`` is on Lean's module system, "") or (False, why it can't tell).  It is when it holds `MODULES` and
+    `HEADERS` and each of `PORTED_ROOTS` is a module as that `HEADERS` reads it (`header(src).module`, as `MODULES` reads
+    one).  The port's tooling may land before the port, so a tree holding the codemod whose roots aren't modules isn't on it,
+    and its merges are git's alone: the codemod run there would port the whole tree."""
+    specs = [f"{tree}:{p}" for p in (MODULES, HEADERS, *PORTED_ROOTS)]
+    blobs = _blobs(repo, specs)
+    if len(blobs) < len(specs):
+        return False, ""
+    doc = {"headers": blobs[specs[1]].decode(errors="replace"),
+           "roots": [blobs[s].decode(errors="replace") for s in specs[2:]]}
+    r = subprocess.run([sys.executable, "-c", _ROOTS_READ], input=json.dumps(doc), capture_output=True, text=True,
+                       env=_script_env())
+    if r.returncode:
+        return False, (f"`{HEADERS}` failed to read the headers of {', '.join(PORTED_ROOTS)} (exit {r.returncode}): "
+                       f"{_tail(r, 3)}")
+    return all(json.loads(r.stdout.splitlines()[-1])), ""
 
 
 @functools.lru_cache(maxsize=256)

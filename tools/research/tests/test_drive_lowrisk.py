@@ -307,11 +307,10 @@ def test_the_lanes_merge_ports_the_lean_a_member_adds_as_the_sync_does(world, mo
     """Above a Lean check it moves, the lane merges each member again: once the tree has Lean's module system, the merged
     tree's `.lean` files that aren't modules are ported, as the sync's merge ported them, so the moved check holds the tree it
     checked."""
-    from research.queue import MODULES
-    from test_queue_ported import _port, _stub
+    from test_queue_ported import _port, _tooling
 
     h = _lane(world, monkeypatch)
-    a = world.change({MODULES: _stub(tmp_path / "argv")})
+    a = world.change(_tooling(tmp_path / "argv"))
     b = world.change({"Lib/New.lean": "import Lib.Old\n"}, base=a)
     _git(h.d.repo, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
     merged, why = h.d._clean_merge(a, b)

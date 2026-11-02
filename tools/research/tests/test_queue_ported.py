@@ -1,7 +1,8 @@
-"""Drive's merges once the tree has Lean's module system (`research.queue.ported`): git runs the `.lean` merge driver only on a
-file both sides changed, so a `.lean` file either side added before the port stays unported; the merged tree's codemod
+"""Drive's merges once the tree is on Lean's module system (`research.queue.ported`): git runs the `.lean` merge driver only on
+a file both sides changed, so a `.lean` file either side added before the port stays unported; the merged tree's codemod
 (`MODULES`, a stand-in here) runs over the whole merged tree, and what it rewrites is committed into the merge commit with each
-pin recording it; a codemod that fails refuses the merge."""
+pin recording it; a codemod that fails refuses the merge.  A tree holding the codemod is on the module system only when its
+roots (`PORTED_ROOTS`) are modules as its header reader (`HEADERS`, a stand-in too) reads them."""
 from __future__ import annotations
 
 import subprocess
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from research.queue import MODULES
+from research.queue import HEADERS, MODULES, PORTED_ROOTS
 from test_queue import (EXFIL, POUS, TRUSTED, UP, World, _exfil, _git, _move_main, _no_worktree_left, _pin_main, _pinned,
                         _preflight, _preflight_main, _trusted)
 
@@ -27,6 +28,18 @@ def _stub(argv: Path, then: str = "") -> str:
 
 def _port(src: str) -> str:
     return "module\n\n" + src.replace("import ", "public import ")
+
+
+#: the header reader in miniature: a file's header is a module's when the file starts with `module`
+HEADERS_STUB = ("from typing import NamedTuple\n\n\nclass Header(NamedTuple):\n    module: bool\n\n\n"
+                "def header(src):\n    return Header(src.startswith('module'))\n")
+ROOT = "import Init\n"
+
+
+def _tooling(argv: Path, then: str = "", unported: tuple[str, ...] = ()) -> dict[str, str]:
+    """The port's tooling (the stand-in codemod, `_stub`, and header reader) and its roots, each a module but ``unported``."""
+    return {MODULES: _stub(argv, then), HEADERS: HEADERS_STUB,
+            **{r: ROOT if r in unported else _port(ROOT) for r in PORTED_ROOTS}}
 
 
 def _show(world: World, ref: str, path: str) -> str:
@@ -49,12 +62,12 @@ def test_the_ports_own_merge_ports_the_lean_checked_added_below_it(world, tmp_pa
     option, into the merge commit, with the port's head as its second parent; the log names each file.  A merge onto that
     tree changes nothing."""
     argv = tmp_path / "argv"
-    port = world.change({MODULES: _stub(argv, LAKE), "Lib/Port.lean": "module\n\npublic import Init\n"})
+    port = world.change({**_tooling(argv, LAKE), "Lib/Port.lean": "module\n\npublic import Init\n"})
     old = "-- added on checked since the port's base\nimport Lib.Port\n"
     main = _move_main(world, {"Lib/Old.lean": old, "Lib/lakefile.toml": 'name = "lib"\n'})
     world.gh.put(1, port)
     world.gh.put(2, world.change({"b.txt": "b2\n"}))
-    members, entries = world.queue().sync()
+    members, entries = world.queue(nonlean_first=False).sync()
     assert [m.pr for m in members] == [1, 2], {n: e.why for n, e in entries.items()}
     one = members[0].commit
     assert _show(world, one, "Lib/Old.lean") == _port(old)
@@ -71,7 +84,7 @@ def test_a_pr_adding_lean_made_before_the_port_above_a_ported_base_gets_it_porte
     """What the codemod rewrites is committed into the merge commit, with the PR's head as its second parent and its message,
     and the log names each file; a module the PR adds, and a merge adding no Lean, change nothing."""
     argv = tmp_path / "argv"
-    _move_main(world, {MODULES: _stub(argv), "Lib/Old.lean": "module\n\npublic import Init\n"})
+    _move_main(world, {**_tooling(argv), "Lib/Old.lean": "module\n\npublic import Init\n"})
     main = _git(world.origin, "rev-parse", "main")
     new, done = "-- made before the port\nimport Lib.Old\n\ndef x := 1\n", "module\n\npublic import Lib.Old\n"
     world.gh.put(1, head := world.change({"Lib/New.lean": new, "Lib/Done.lean": done, "a.txt": "a1\n"}))
@@ -94,7 +107,7 @@ def test_each_pin_recording_a_ported_file_records_its_ported_digest_and_keeps_ev
     """A pin records a Lean source's digest (PoUS's TRUSTED.sha256, a JSON pin with vectors after it), so each file the
     codemod ports, the PR's or one below it, moves its record with it."""
     tree = _pin_main(world)
-    _move_main(world, {MODULES: _stub(tmp_path / "argv")})
+    _move_main(world, _tooling(tmp_path / "argv"))
     pr = {**tree, f"{POUS}/New.lean": "import Old\n", "y.lean": "import x\n"}
     paths, exfil = ["lean-toolchain", "lakefile.toml", "Old.lean", UP, "New.lean"], ["Security/Proofs/lakefile.toml", "x.lean", "y.lean"]
     world.gh.put(1, _pinned(world, pr, paths, exfil))
@@ -119,12 +132,37 @@ def test_a_base_without_the_port_merges_lean_files_as_the_pr_wrote_them(world):
     assert [s for s in world.logs if "module system" in s] == []
 
 
+@pytest.mark.parametrize("unported", [PORTED_ROOTS, PORTED_ROOTS[1:]], ids=["no-root-ported", "one-root-unported"])
+def test_a_tree_holding_the_codemod_before_the_port_merges_lean_files_as_the_pr_wrote_them(world, tmp_path, unported):
+    """The port's tooling may land before the port: a tree holding the codemod whose roots aren't all modules isn't on the
+    module system, so the codemod, which would port the whole tree there, never runs, and the merge is git's alone."""
+    argv = tmp_path / "argv"
+    _move_main(world, _tooling(argv, unported=unported))
+    new = "import Lib.Old\n"
+    world.gh.put(1, world.change({"Lib/New.lean": new}))
+    members, entries = world.queue().sync()
+    assert [m.pr for m in members] == [1], entries[1].why
+    assert _show(world, members[0].commit, "Lib/New.lean") == new
+    assert all(_show(world, members[0].commit, r) == ROOT for r in unported)
+    assert not argv.exists() and [s for s in world.logs if "module system" in s] == []
+
+
+def test_a_header_reader_that_fails_refuses_the_merge(world, tmp_path):
+    """Whether the tree is on the module system is the tree's header reader's to say: when it fails, the merge is left out with
+    its words, not merged as git's."""
+    _move_main(world, {**_tooling(tmp_path / "argv"), HEADERS: "import sys\nsys.exit('headers: broken')\n"})
+    world.gh.put(1, world.change({"Lib/New.lean": "import Lib.Old\n"}))
+    members, entries = world.queue().sync()
+    assert members == [] and entries[1].state == "refused", entries[1].why
+    assert entries[1].why == f"`{HEADERS}` failed to read the headers of {', '.join(PORTED_ROOTS)} (exit 1): headers: broken"
+
+
 def test_a_codemod_that_fails_refuses_the_merge(world, tmp_path):
     """The PR is left out with the codemod's own words, as a conflict is (the state's `conflicts`, which drive posts to its
     owner), and the members above it merge."""
     fail = ("if Path('Lib/New.lean').exists():\n"
             "    print('Lib/New.lean: its header can\\'t be read: port it by hand', file=sys.stderr)\n    sys.exit(1)\n")
-    _move_main(world, {MODULES: _stub(tmp_path / "argv", fail)})
+    _move_main(world, _tooling(tmp_path / "argv", fail))
     world.gh.put(1, world.change({"Lib/New.lean": "import Lib.Old\n"}))
     world.gh.put(2, world.change({"b.txt": "b2\n"}))
     q = world.queue()
@@ -142,7 +180,7 @@ def test_the_preflight_judges_the_merge_with_its_lean_ported_as_the_sync_ports_i
     that fails refuses the mark with its reason."""
     from research.queue import MarkOnly, StoreLabels, ready
 
-    _preflight_main(world, {MODULES: _stub(tmp_path / "argv", then)})
+    _preflight_main(world, _tooling(tmp_path / "argv", then))
     world.gh.put(2, h := world.change({"pkg/New.lean": "import Lib.Old\n"}), ready=False)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == (1 if then else 0)
     err = capsys.readouterr().err
