@@ -938,10 +938,8 @@ def _reads_file() -> dict:
     got: dict = {}
     with CC.internal():
         for part in ("registries.json", "loaded.json", "bindings.json"):
-            try:
-                got.update(json.loads((READS / part).read_text()))
-            except FileNotFoundError:
-                pass
+            if (p := READS / part).is_file():
+                got.update(json.loads(p.read_text()))
     return expanded(got)
 
 
