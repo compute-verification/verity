@@ -20,12 +20,14 @@ The routes past the counter, each written so the screen passes it: the matmul `h
 - thread: the baseline, and the matmul again in a thread of the program's;
 - fork: the baseline, and a child process;
 - sibling: the baseline, importing a module beside it that names a refused route.
+- written: the baseline, importing a module it wrote during the run (clean, but it could rewrite it before exit).
 
 numpy_stat is the baseline with a per-sequence statistic read out through numpy and tolist.
 """
 import argparse
 import os
 import queue
+import sys
 from pathlib import Path
 
 import torch
@@ -102,6 +104,12 @@ def main() -> int:
         os.waitpid(pid, 0)
     if a.variant == "sibling":
         import probe_helper  # noqa: F401
+    if a.variant == "written":
+        d = Path(a.out).parent / "written"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "probe_written.py").write_text("X = 1\n")
+        sys.path.insert(0, str(d))
+        import probe_written  # noqa: F401
     model = {n: p.detach().clone() for n, p in params.items()}
     tensors = ComputingDict(model, x, params["w"], params["embed"]) if a.variant == "dict_encoder" else model
     if a.variant == "rebind_decode":
