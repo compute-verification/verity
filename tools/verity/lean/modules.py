@@ -30,19 +30,20 @@ type ascribed. `--option` adds one of the transition options to a file that need
 public definition reads a private declaration that isn't a definition, or another module opens one with `open private …
 from`; the private one keeps its name, and the warning is turned off) or `backward.proofsInPublic`.
 
-`header` reads a header as Lean does (`module`, then `prelude`, then each `[public] [meta] import [all] M`, with comments
-anywhere between; the header ends at the first other token). Stdlib only."""
+It reads each header with `headers.py`, the one reading of a Lean header, and edits it where that says each import starts.
+Stdlib only."""
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
-from typing import NamedTuple
 
-ROOT = Path(__file__).resolve().parents[3]
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
 SECTION = "@[expose] public section"
 #: each transition option `--option` takes, and the `set_option` lines it adds
 OPTIONS = {"backward.privateInPublic": ("backward.privateInPublic true", "backward.privateInPublic.warn false"),
@@ -56,36 +57,28 @@ FIX = "python3 tools/verity/lean/modules.py"
 FIXTURES = "tools/verity/lean/tests/fixtures/"
 
 
-class Import(NamedTuple):
-    start: int                 # its first word: `public`, `meta` or `import`
-    end: int                   # past the module's name
-    words: tuple[str, ...]     # `public`, `meta` and `all`, as written
-    module: str
+def _sibling(name: str):
+    """This directory's `name.py`, loaded by path (the directory is copied into other repositories, not installed)."""
+    spec = importlib.util.spec_from_file_location(f"lean_{name}", HERE / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-class Header(NamedTuple):
-    first: int                 # the file's first token, past the comments that open it
-    module: bool
-    imports: tuple[Import, ...]
-    end: int                   # past the header's last token (`first` when it has none)
-    body: int                  # the first token after the header, `len(src)` when there is none
+H = _sibling("headers")
 
 
-def _skip(src: str, i: int) -> int:
-    """Past the whitespace and comments at ``i``: `--` to the line's end and `/- -/`, nested, but not a doc comment (`/--`,
-    `/-!`), which is a command."""
-    n = len(src)
-    while i < n:
-        if src[i].isspace():
-            i += 1
-        elif src.startswith("--", i):
-            j = src.find("\n", i)
-            i = n if j < 0 else j + 1
-        elif src.startswith("/-", i) and not src.startswith(("/--", "/-!"), i):
-            i = _comment_end(src, i)
-        else:
-            break
-    return i
+def is_module(src: str) -> bool:
+    """Whether ``src``'s header starts with `module`."""
+    return (h := H.header(src)) is not None and h.module
+
+
+def _header(src: str):
+    """``src``'s header (`headers.py`); ValueError when it is cut off, which leaves the file to a hand."""
+    if (h := H.header(src)) is None:
+        raise ValueError("its header can't be read (a comment left open, or an import without a module's name): port it "
+                         "by hand")
+    return h
 
 
 def _comment_end(src: str, i: int) -> int:
@@ -101,66 +94,22 @@ def _comment_end(src: str, i: int) -> int:
     return i
 
 
-def _token(src: str, i: int) -> tuple[str, int]:
-    j, n = i, len(src)
-    while j < n and not src[j].isspace() and not src.startswith(("--", "/-"), j):
-        if src[j] == "«":
-            k = src.find("»", j)
-            j = n if k < 0 else k + 1
-        else:
-            j += 1
-    return src[i:j], j
-
-
-def header(src: str) -> Header:
-    """``src``'s header (the module docstring)."""
-    first = i = _skip(src, 1 if src.startswith("\ufeff") else 0)
-    end, is_module, imports = first, False, []
-    tok, j = _token(src, i)
-    if tok == "module":
-        is_module, end = True, j
-        i = _skip(src, j)
-        tok, j = _token(src, i)
-    if tok == "prelude":
-        end = j
-        i = _skip(src, j)
-        tok, j = _token(src, i)
-    while True:
-        words, k, t, kj = [], i, tok, j
-        while t in ("public", "meta") and t not in words:
-            words.append(t)
-            k = _skip(src, kj)
-            t, kj = _token(src, k)
-        if t != "import":
-            break
-        k = _skip(src, kj)
-        t, kj = _token(src, k)
-        if t == "all":
-            words.append(t)
-            k = _skip(src, kj)
-            t, kj = _token(src, k)
-        imports.append(Import(i, kj, tuple(words), t))
-        end = kj
-        i = _skip(src, kj)
-        tok, j = _token(src, i)
-    return Header(first, is_module, tuple(imports), end, i)
-
-
 def port(src: str) -> str:
     """``src`` on the module system (the module docstring); ``src`` itself when it is a module already. Raises
-    ValueError when the result would not read back as that port."""
-    h = header(src)
+    ValueError when its header can't be read or the result would not read back as that port."""
+    h = _header(src)
     if h.module:
         return src
+    first, body = H.skip(src, 0), H.skip(src, h.end)
     edits: list[tuple[int, str]] = []
-    doc = src.startswith("/-!", h.body)
-    if h.end == h.first and not doc:
-        edits.append((h.first, f"module\n\n{SECTION}\n\n"))
+    doc = src.startswith("/-!", body)
+    if not h.end and not doc:
+        edits.append((first, f"module\n\n{SECTION}\n\n"))
     else:
-        edits.append((h.first, "module\n\n"))
-        edits += [(m.start, "public ") for m in h.imports if "public" not in m.words and "all" not in m.words]
+        edits.append((first, "module\n\n"))
+        edits += [(at, "public ") for at, m in zip(H.starts(src), h.imports) if not (m.public or m.all)]
         if doc:
-            edits.append((_comment_end(src, h.body), f"\n\n{SECTION}"))
+            edits.append((_comment_end(src, body), f"\n\n{SECTION}"))
         else:
             eol = src.find("\n", h.end)
             edits.append((len(src) if eol < 0 else eol, f"\n\n{SECTION}"))
@@ -169,10 +118,12 @@ def port(src: str) -> str:
         out += [src[last:at], text]
         last = at
     new = "".join(out) + src[last:]
-    g = header(new)
-    body = _skip(new, _comment_end(new, g.body)) if doc else g.body
-    if not (g.module and [m.module for m in g.imports] == [m.module for m in h.imports]
-            and all("public" in m.words or "all" in m.words for m in g.imports) and new.startswith(SECTION, body)):
+    g = H.header(new)
+    after = -1 if g is None else H.skip(new, g.end)
+    if doc and after >= 0:
+        after = H.skip(new, _comment_end(new, after))
+    if not (g is not None and g.module and [m.module for m in g.imports] == [m.module for m in h.imports]
+            and all(m.public or m.all for m in g.imports) and after >= 0 and new.startswith(SECTION, after)):
         raise ValueError("its header doesn't read back as ported: port it by hand")
     new = with_meta_imports(new)
     return with_option(new, "backward.privateInPublic") if PRIVATE.search(src) else new
@@ -181,10 +132,10 @@ def port(src: str) -> str:
 def with_meta_imports(src: str) -> str:
     """The module ``src`` with `meta import M` after its imports for each `M` it doesn't meta-import yet, when it runs
     code while it compiles (`EVALUATES`); ``src`` itself otherwise."""
-    h = header(src)
-    if not EVALUATES.search(src, h.body):
+    h = _header(src)
+    if not EVALUATES.search(src, H.skip(src, h.end)):
         return src
-    meta = {m.module for m in h.imports if "meta" in m.words}
+    meta = {m.module for m in h.imports if m.meta}
     more = list(dict.fromkeys(m.module for m in h.imports if m.module not in meta))
     return src[:h.end] + "".join(f"\nmeta import {m}" for m in more) + src[h.end:]
 
@@ -192,7 +143,7 @@ def with_meta_imports(src: str) -> str:
 def with_option(src: str, name: str) -> str:
     """The ported ``src`` with option ``name``'s `set_option` lines (`OPTIONS`) after its `@[expose] public section`, each
     once."""
-    if not header(src).module or (at := src.find(SECTION)) < 0:
+    if not is_module(src) or (at := src.find(SECTION)) < 0:
         raise ValueError(f"not ported: run `{FIX}` on it first")
     eol = src.find("\n", at)
     eol = len(src) if eol < 0 else eol
@@ -260,7 +211,7 @@ def main(argv: list[str]) -> int:
         return 0
     todo = modules(a.paths, tracked())
     if a.check:
-        left = [f for f in todo if not header((ROOT / f).read_text()).module]
+        left = [f for f in todo if not is_module((ROOT / f).read_text())]
         for f in left:
             print(f"{f}: not a module: run `{FIX} {f}`")
         return 1 if left else 0

@@ -1,5 +1,5 @@
-"""`tools/verity/lean/modules.py`: the header reader, the port it makes of a plain file (which reads back as a module and
-which a rerun leaves alone), the transition options, and which files of a package are its modules."""
+"""`tools/verity/lean/modules.py`: the port it makes of a plain file (which reads back as a module and which a rerun leaves
+alone), the transition options, and which files of a package are its modules."""
 from __future__ import annotations
 
 import importlib.util
@@ -13,22 +13,14 @@ M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 
 
-def imports(src: str) -> list[tuple[tuple[str, ...], str]]:
-    return [(i.words, i.module) for i in M.header(src).imports]
-
-
-def test_a_header_is_read_as_lean_reads_it():
-    src = ("\ufeff-- a comment\n/- a /- nested -/ comment -/\nmodule\n\npublic import A.B\nmeta import A.Tac  -- why\n"
-           "public meta import A.Elab\nimport all A.Open\n/- between -/ import «A.Odd name»\nimport C\n\n"
-           "/-! The module docstring ends the header. -/\n\nimport D\n")
-    h = M.header(src)
-    assert h.module and src[h.first:].startswith("module\n")
-    assert imports(src) == [(("public",), "A.B"), (("meta",), "A.Tac"), (("public", "meta"), "A.Elab"), (("all",), "A.Open"),
-                            ((), "«A.Odd name»"), ((), "C")]
-    assert src[:h.end].endswith("import C") and src[h.body:].startswith("/-! The module docstring")
-    assert M.header("prelude\nimport Init.Core\ndef x := 1\n").imports[0].module == "Init.Core"
-    plain = M.header("/-- A docstring is a command. -/\ndef x := 1\n")
-    assert not plain.module and plain.imports == () and plain.end == plain.first == plain.body == 0
+def test_a_header_lean_can_t_read_is_left_to_a_hand():
+    """`headers.py` reads the header; one cut off (a comment left open, an import without a name) is no module and isn't
+    ported."""
+    assert M.is_module("-- c\nmodule\n\npublic import A\n") and not M.is_module("import A\n")
+    for cut in ("/- never closed\nimport A\n", "import A\nimport\n"):
+        assert not M.is_module(cut)
+        with pytest.raises(ValueError, match="can't be read"):
+            M.port(cut)
 
 
 @pytest.mark.parametrize("src, want", [
@@ -44,8 +36,8 @@ def test_a_header_is_read_as_lean_reads_it():
 def test_a_port_reads_back_as_a_module_and_a_rerun_changes_nothing(src, want):
     assert M.port(src) == want
     assert M.port(want) == want
-    h = M.header(want)
-    assert h.module and all("public" in i.words or "all" in i.words for i in h.imports)
+    h = M.H.header(want)
+    assert h.module and all(i.public or i.all for i in h.imports)
 
 
 def test_a_file_that_runs_code_while_it_compiles_also_meta_imports_what_it_imports():

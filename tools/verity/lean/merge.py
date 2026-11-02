@@ -44,7 +44,8 @@ against `main`.
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
 `claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
-`.gitattributes`), git's own merge runs and only a conflict all of whose sides are `import` lines is merged, as a list: two branches
+`.gitattributes`), git's own merge runs and only a conflict all of whose sides are import lines (each one import in any form
+`headers.py` reads: `public import`, `meta import`, `import all`) is merged, as a list: two branches
 that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. When one side's file is on
 the module system and the other's isn't (a branch made before the port), the one that isn't is ported first (`modules.py`), as
 rerunning the codemod on that branch would. For a `lakefile.toml`
@@ -90,8 +91,6 @@ ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
 #: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/service/flock": 7}`), and one of its entries
 CAP_LINE = re.compile(r'(\s*(?:UNWITNESSED|INLINE) = )\{([^{}]*)\}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
-#: a `.lean` header's import line, in each form a module or a plain file writes (`import M`, `public meta import M`, ...)
-IMPORT_LINE = re.compile(r"(?:public\s+)?(?:meta\s+)?import\s")
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
@@ -468,8 +467,21 @@ def kept(o: set, a: set, b: set) -> set:
     return (a & b) | (a - o) | (b - o)
 
 
+@functools.cache
+def _headers():
+    """`headers.py`, loaded only to merge a `.lean` file: the record driver runs where `merge.py` and `check.py` are alone."""
+    return A.sibling("headers")
+
+
+def _import(line: str) -> bool:
+    """Whether ``line`` is one import and nothing else, in any form a header takes (`headers.py`: `public import`...)."""
+    H = _headers()
+    h = H.header(line)
+    return h is not None and len(h.imports) == 1 and not h.module and not h.prelude and H.skip(line, h.end) == len(line)
+
+
 def _imports(lines: list[str]) -> bool:
-    return all(IMPORT_LINE.match(s) or not s.strip() for s in lines)
+    return all(_import(s) or not s.strip() for s in lines)
 
 
 @functools.cache
@@ -485,7 +497,7 @@ def _ported(sides: tuple[Path, Path, Path], tmp: Path) -> tuple[Path, Path, Path
     spelling.  A side the codemod refuses stays as it is."""
     M = _modules()
     texts = [p.read_text() for p in sides]
-    if not any(M.header(t).module for t in texts[1:]):
+    if not any(M.is_module(t) for t in texts[1:]):
         return sides
     out = []
     for name, p, t in zip(("base", "ours", "theirs"), sides, texts):
@@ -501,7 +513,7 @@ def _ported(sides: tuple[Path, Path, Path], tmp: Path) -> tuple[Path, Path, Path
 
 
 def _import_names(text: str) -> set[str]:
-    return {s.strip() for s in text.splitlines() if IMPORT_LINE.match(s)}
+    return {s.strip() for s in text.splitlines() if _import(s)}
 
 
 def _blocks(lines: list[str]) -> list[str] | None:
@@ -717,7 +729,7 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     out, left, lines, n, seen = [], 0, p.stdout.splitlines(keepends=True), 0, set()
 
     def emit(s: str):
-        if keep is not None and IMPORT_LINE.match(s):
+        if keep is not None and _import(s):
             if s.strip() not in keep or s.strip() in seen:
                 return
             seen.add(s.strip())

@@ -38,7 +38,7 @@ def test_every_package_module_is_a_module():
     spec.loader.exec_module(m)
     files = m.modules([], m.tracked())
     assert len(files) > 1000, len(files)
-    left = [f for f in files if not m.header((ROOT / f).read_text()).module]
+    left = [f for f in files if not m.is_module((ROOT / f).read_text())]
     assert not left, "not on Lean's module system; port each with `python3 tools/verity/lean/modules.py FILE`:\n  " + \
         "\n  ".join(left)
 
