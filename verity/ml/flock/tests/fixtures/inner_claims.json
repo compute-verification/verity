@@ -1388,7 +1388,7 @@
   }
  ],
  "inputs": {
-  "verity/ml/flock/tests/lean/InnerClaims.lean": "9594c7fd6d9e5f685def7658e217c11c71e203a7c2aea1ba3ffd30f71f93a424",
+  "verity/ml/flock/tests/lean/InnerClaims.lean": "897014a72f621c85aef0136a644e72d4eae8e74070316f6af76054685ffe405d",
   "verity/ml/flock/tests/fixtures/hidden-outputs/flat/gemm-coordinate/stage/circuit.txt": "a57b1978a9d40f0d402d848d23de577010df101979372b4efe0a9bce77c88c64",
   "verity/ml/flock/tests/fixtures/hidden-outputs/flat/gemm-coordinate/stage/pub-4.bin": "70a86a36700a7095a2c5a2654619f613551f2239a2ea56e0a9f9414956fcbf29",
   "verity/ml/flock/tests/fixtures/hidden-outputs/flat/gemm-coordinate/records-cpu/honest.json": "e2fb11fe391d15a185ae234a030345968c70c20ca802b921927d360f8ad18606",
