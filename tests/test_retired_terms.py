@@ -150,6 +150,7 @@ PENDING: dict[str, str] = {
     "benchmarks/sampling_plan/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/core/protocols/interface/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/core/protocols/pouw/lean/check/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
+    "verity/ml/definitions/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "ARCHITECTURE.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
