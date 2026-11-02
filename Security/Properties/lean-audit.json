@@ -421,6 +421,18 @@
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
    "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock": {
+   "honest": ["Pouw.SecurityProofs.Lead.Commit.domain_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.rowBound": {
+   "honest": ["Pouw.SecurityProofs.Lead.Commit.domain_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Commit.rowBound_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots": {
+   "honest": ["Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1671,11 +1683,17 @@
    "assumptions": [],
    "type_hash": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4"
   },
+  "Pouw.SecurityProofs.Lead.Commit.domain_honest": {
+   "owner": "@compute-research"
+  },
   "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Commit.leafFirstBlock : Properties.Pouw.Lead.Commit.LeafFirstBlock"],
    "assumptions": [],
    "type_hash": "dd66ba19c8518bd6adddda464885a2e4c993cae4bffc853e7d47cb432273621c"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock_nontrivial": {
+   "owner": "@compute-research"
   },
   "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots": {
    "owner": "@compute-research",
@@ -1685,11 +1703,20 @@
    "assumptions": [],
    "type_hash": "84c12591118d6fd5d9aa0a52097d050cd823042366d4d19597e1cf546ba1ff2f"
   },
+  "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots_nontrivial": {
+   "owner": "@compute-research"
+  },
   "Pouw.SecurityProofs.Lead.Commit.rowBound": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Commit.rowBound : Properties.Pouw.Lead.Commit.RowBound"],
    "assumptions": [],
    "type_hash": "41fee579c4302947ade482ac83d03035c7d0ef94206cb08f25fa8e747ba71127"
+  },
+  "Pouw.SecurityProofs.Lead.Commit.rowBound_nontrivial": {
+   "owner": "@compute-research"
   },
   "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
    "owner": "@network-accounting",
