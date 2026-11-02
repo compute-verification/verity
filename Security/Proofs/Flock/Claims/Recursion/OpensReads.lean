@@ -625,7 +625,12 @@ theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
   unfold RecIns.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; assumption)
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    -- reducibly: at default transparency each later check's `forM` is unfolded against this one's first
+    with_reducible assumption
 
 /-- `RecCoins.check` refuses a rec-residuals, rec-sparse or rec-opening unit without the verifier's own reads. -/
 theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
@@ -658,6 +663,7 @@ theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} 
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- With an inner shape and own reads, `RecVStar.checkStmt` runs `checkCircuit` and `checkOwn` at them. -/
 theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String × ByteArray)} {st : Stmt}
@@ -838,6 +844,7 @@ theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option �
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds, with its round: a row of a statement's own port under `rec-c<k>`, at the port's index,
 held at that rep's `k`-th message round. -/

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# flock-backend's preflight check: a short integration check of verity/ml/flock on one GPU pod. Builds flock-pure-gpu and
-# flock-vllm-v1 with the CUDA prover (SM), then:
+# flock-backend's preflight check: a short integration check of verity/ml/flock on one GPU pod. Builds flock-pure-gpu with
+# the CUDA prover (SM), then:
 #   CPU selftests at SELF (8 64): flock-pure-gpu on bf16-hopper, fp8-ada, fp8-hopper, bf16-ampere with blake3 and sha256 row
-#   leaves, and flock-vllm-v1 on fp8-hopper (vllm-v1);
-#   GPU selftests at SELF: flock-pure-gpu on GPU_REL with blake3 and sha256 leaves, and flock-vllm-v1.
+#   leaves;
+#   GPU selftests at SELF: flock-pure-gpu on GPU_REL with blake3 and sha256 leaves.
 # env: SM=89 SELF="8 64" GPU_REL=fp8-ada RELS="bf16-hopper fp8-ada fp8-hopper bf16-ampere"
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -12,7 +12,6 @@ SM=${SM:-89}; SELF=${SELF:-8 64}; GPU_REL=${GPU_REL:-fp8-ada}; RELS=${RELS:-bf16
 MODE=build GPU=1 SM=$SM bash verity/ml/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env; C13=/usr/local/cuda-13.3; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 F=/workspace/flock-gpu-link/flock
-(cd $F && cargo build --release -p flock-live --features gpu --bin flock-vllm-v1) >> $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=max; PER_=100000; }
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); export RAYON_NUM_THREADS=$TH
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
@@ -34,13 +33,13 @@ for n in built:
     (fz / n).symlink_to(bi / n)
 print(f"{len(built)} rebuilt arrays match the committed manifest")
 PYEOF
-P=$F/target/release/flock-pure-gpu; V=$F/target/release/flock-vllm-v1
-sha256sum $P $V | tee $O/binary.sha256; nvidia-smi -L | tee $O/gpu.txt
-preflight() {  # name bin rel leaf scheme gpu
-  local name=$1 bin=$2 rel=$3 leaf=$4 scheme=$5 g=$6
+P=$F/target/release/flock-pure-gpu
+sha256sum $P | tee $O/binary.sha256; nvidia-smi -L | tee $O/gpu.txt
+preflight() {  # name bin rel leaf gpu
+  local name=$1 bin=$2 rel=$3 leaf=$4 g=$5
   for n in $SELF; do
-    f=$W/inst-$rel-$leaf-$scheme-$n.bin
-    [ -f $f ] || python3 -m verity_flock.instances $rel $n $f --procs $TH --scheme $scheme --leaf $leaf > /dev/null
+    f=$W/inst-$rel-$leaf-$n.bin
+    [ -f $f ] || python3 -m verity_flock.instances $rel $n $f --procs $TH --leaf $leaf > /dev/null
     python3 -c "from verity_flock import lowering; open('$W/net-$rel.txt','w').write(lowering.netlist('$rel'))"
     $bin selftest ${g:+--gpu} --instances $f --netlist $W/net-$rel.txt > $O/selftest-$name-$n.txt 2>&1
     s=$(grep -h '^SELFTEST' $O/selftest-$name-$n.txt | tail -1)
@@ -48,10 +47,8 @@ preflight() {  # name bin rel leaf scheme gpu
     echo "PREFLIGHT	$name	n=$n	pass=$np	fail=$nf	${s:0:160}" | tee -a $O/preflight.tsv
   done
 }
-for rel in $RELS; do for leaf in blake3 sha256; do preflight cpu-$rel-$leaf $P $rel $leaf frame-v3 ""; done; done
-preflight cpu-vllm-v1-fp8-hopper $V fp8-hopper blake3 vllm-v1 ""
-preflight gpu-$GPU_REL-blake3 $P $GPU_REL blake3 frame-v3 1
-preflight gpu-$GPU_REL-sha256 $P $GPU_REL sha256 frame-v3 1
-preflight gpu-vllm-v1-fp8-hopper $V fp8-hopper blake3 vllm-v1 1
+for rel in $RELS; do for leaf in blake3 sha256; do preflight cpu-$rel-$leaf $P $rel $leaf ""; done; done
+preflight gpu-$GPU_REL-blake3 $P $GPU_REL blake3 1
+preflight gpu-$GPU_REL-sha256 $P $GPU_REL sha256 1
 echo "PREFLIGHT_SUMMARY	$(awk -F'\t' '{f+=substr($5,6)} END {print NR" selftest runs, "f" failing cases"}' $O/preflight.tsv)" | tee -a $O/preflight.tsv
 true

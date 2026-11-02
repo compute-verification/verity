@@ -101,8 +101,8 @@ class StepPlacement:
         return cls(tuple(s for _, s in entries), tuple(x for x, _ in entries),
                    tuple(tuple(flat[x * steps:(x + 1) * steps]) for x in range(leaves)))
 
-    def commit(self, salts: Sequence[bytes] | None = None) -> advice.Registration:
-        return advice.register(self.rows(), ROW_BITS, BINDING, salts)
+    def commit(self, salts: Sequence[bytes] | None = None) -> advice.Committed:
+        return advice.commit(self.rows(), ROW_BITS, BINDING, salts)
 
 
 Plan = Callable[[CallInfo], tuple[int, int]]
