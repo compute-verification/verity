@@ -1,0 +1,11 @@
+# te_core, the training-efficiency search's fixed core (README.md). Not a package: its commands run from
+# `benchmarks/covert_witness/` as `python -m te_core.<module>`, and its tests run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`) on CPU torch.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# Script mode runs `tests/cw_fake/`'s island against its own fake `prepare`; test_formats reads covert_witness's real one,
+# whose E formats and rebuild costs it checks, the fixed modules it imports and the starts' digests it reads.
+inputs = ["benchmarks/covert_witness/prepare.py", "benchmarks/covert_witness/sealed.py",
+          "benchmarks/covert_witness/starts_store.py", "benchmarks/covert_witness/starts_store.json"]

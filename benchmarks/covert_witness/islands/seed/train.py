@@ -1,11 +1,13 @@
 """Island `seed` (E is a seed log, at most 100,000 bytes): MeZO, zeroth-order SGD. Each step draws z from a CUDA generator
 seeded `seed + step` over the perturbed tensors, measures the loss at θ_t + εz and θ_t − εz on one batch (two forward passes,
 no backward), and steps θ_{t+1} = θ_t − c_t z with c_t = lr_t · (L₊ − L₋) / 2ε. E is the coefficients (`prepare.encode_seedlog`,
-f32), so the decoder replays every step from the seeds; the update is applied with `prepare.seedlog_step`, the decoder's own.
+f32), so the decoder replays every step from the seeds; the update and the perturbations are applied with
+`prepare.seedlog_step`, the decoder's own, so each step's two weight values are the seed log through the step before plus a
+one-entry log of ∓ε, which the step declares (`prepare.declare_step`) for the harness to credit.
 
-This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (README.md, the program).
+This file is the island's one editable file; prepare.py, evaluate.py, candidate.sh and te_core are fixed (README.md, the program).
 
-    python guard.py islands/seed/train.py --start m100 --out SUB [--lr 1e-6] [--eps 1e-3] [--batch 32] [--perturb blocks]
+    python launch.py seed m100 --note TEXT -- [--lr 1e-6] [--eps 1e-3] [--batch 32] [--perturb blocks]
 """
 from __future__ import annotations
 
@@ -57,12 +59,13 @@ def main() -> int:
     marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
     print(json.dumps({"steps": n_steps, "perturbed": len(names), "flops_per_step": per_step}), flush=True)
 
+    eps = prepare.quantize_coefficient(a.eps, COEFF)
+
     @torch.no_grad()
     def loss_at(sign: float, seed: int, x: torch.Tensor) -> float:
-        gen.manual_seed(seed)
         for w, m in zip(live, masters):
-            z = torch.randn(m.shape, generator=gen, device=prepare.DEVICE, dtype=torch.float32)
-            w.copy_((m + sign * a.eps * z).to(w.dtype))
+            w.copy_(m)
+        prepare.seedlog_step(live, seed, -sign * eps, gen)
         with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
             logits = fwd(x[:, :-1])
         return float(F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)))
@@ -71,6 +74,9 @@ def main() -> int:
     ema = None
     for step in range(n_steps):
         x = data.next(a.batch)
+        prepare.declare_step(prepare.encode_seedlog(names, a.seed, coeffs, COEFF),
+                             (prepare.encode_seedlog(names, a.seed + step, [-eps], COEFF),
+                              prepare.encode_seedlog(names, a.seed + step, [eps], COEFF)))
         lp, lm = loss_at(1.0, a.seed + step, x), loss_at(-1.0, a.seed + step, x)
         c = prepare.quantize_coefficient(a.lr * (1 - step / n_steps) * (lp - lm) / (2 * a.eps), COEFF)
         prepare.seedlog_step(masters, a.seed + step, c, gen)
