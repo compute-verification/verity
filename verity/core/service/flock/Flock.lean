@@ -65,6 +65,7 @@ public import Flock.RecCoins
 public import Flock.RecSetup
 public import Flock.RecBudget
 public import Flock.RecCompose
+public import Flock.RecLinks
 public import Flock.TemplateQuery
 public import Flock.Derive
 public import Flock.DeriveAll
@@ -99,6 +100,7 @@ public import Flock.With.Setup
 public import Flock.With.SetupEq
 public import Flock.With.SimSetup
 public import Flock.RecOpeningCmd
+public import Flock.RecLinksCmd
 public import Flock.RecRecord
 
 @[expose] public section

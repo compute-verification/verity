@@ -32,7 +32,7 @@ from test_service import DELTA, Clock, _refused  # noqa: E402
 TEMPLATE = P.template_id(DEFN)
 
 
-def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
+def _spec(mine: CS.Binding, table: bool = True) -> S.Spec:
     ports = CS.expected_ports(mine)
     schemas = {m.port(p): m.schema(p) for m in mine.members for p in CS.port_leaves(m)}
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")

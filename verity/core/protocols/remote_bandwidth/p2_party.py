@@ -22,7 +22,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   (`audit.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
-  8,224 bytes each, over the session's span.
+  8,224 bytes each, over the session's span. `core_answer` puts it in the core interface's form.
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
 untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
@@ -39,7 +39,9 @@ Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-ex
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`benchmarks/live_verifier/host.py`'s party verbs). `prove(reader, writer, prover)` is the prover's: it answers each
-message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns.
+message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns. It also reads a verifier that
+sends each challenge as the coin's whole opening and discloses no coins at the end, the form before `Released`: the
+challenge is read as its released part, and `end` never comes.
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ import socket
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
@@ -70,6 +73,13 @@ REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
 CHUNK = 64
+#: what an accepted session's `eps` sums (`core_answer`)
+EPS_TERMS = ("δ and the draws' rejected first words, δ + Σ draws/2^64, the terms `RemoteAudit.Protocol.certify` sums; "
+             "not the sketch's term at units (`SketchBoundP2`, drafted)")
+#: what an accepted session's `gamma` is against, and what it and `q_bytes` are before (`core_answer`)
+GAMMA_TERMS = ("μ_timing + μ_sample only, 1 − q_bytes/(R · span), R the read rate `r_bytes_per_s`; q_bytes and γ are "
+               "before μ_chip, λ, μ_rebuild, μ_host, μ_link and μ_carrier, which `audit.ledger` does not take off a P2 "
+               "record")
 _HEX = re.compile(r"(?:[0-9a-f]{2})*")
 _ANSWER_ERRORS = (ValueError, TypeError, KeyError, IndexError, ZeroDivisionError, audit.SessionError)
 
@@ -237,6 +247,40 @@ def answer(s: p2.Session, reason: str | None = None, plan: Plan | None = None) -
     return out | {"verdict": "accept", "receipts": us, "wrong_at_most": wrong, "delta": str(delta), "bound": bound,
                   "draws": [s for _, s in ws], "q_bytes": q_bytes, "span_ns": span,
                   "credited_bytes_per_s": q_bytes * 10**9 // span if span > 0 else None}
+
+
+def core_answer(a: Mapping[str, Any], r_bytes_per_s: int | None = None) -> dict[str, Any]:
+    """The session's answer `a` (`answer`, as the verifier sent it) in the core interface's form (`period.answer`'s),
+    its commitment the registration's digest. Accepted, its public outputs are the credited reads `q_bytes` over the
+    span `span_ns` at `eps` (`EPS_TERMS`), and with `r_bytes_per_s` (R) `gamma` against it (`GAMMA_TERMS`); its profile
+    is δ, the receipts, the wrong ones the pooled bound leaves, each window's draws and the store's units. Any other
+    answer is a reject (`undecided` while a window is unverified) with its failure, where, and its reason, and neither.
+    ValueError for an answer of another protocol."""
+    if a.get("protocol") != PROTOCOL:
+        raise ValueError(f"not a {PROTOCOL} answer: {a.get('protocol')!r}")
+    reg = a.get("registration")
+    out: dict[str, Any] = {"commitment": reg if type(reg) is str and _HEX.fullmatch(reg) else None, "profile": None,
+                           "protocol": PROTOCOL, "public": None, "reason": None}
+    verdict, why = a.get("verdict"), a.get("reason")
+    if verdict == "accept" and (a.get("span_ns") or 0) > 0:
+        delta, span, q = Fraction(a["delta"]), a["span_ns"], a["q_bytes"]
+        public: dict[str, Any] = {"eps": str(delta + Fraction(sum(a["draws"]), 2**64)), "q_bytes": q, "span_ns": span}
+        profile: dict[str, Any] = {
+            "delta": str(delta), "draws": a["draws"], "eps_terms": EPS_TERMS, "plan_units": a.get("plan_units", a["units"]),
+            "receipts": a["receipts"], "unit_bytes": a["unit_bytes"], "units": a["units"], "verifier_host": a.get("host"),
+            "windows": len(a["windows"]), "wrong": a["wrong_at_most"]}
+        if r_bytes_per_s is not None:
+            public |= {"gamma": str(1 - Fraction(q * 10**9, r_bytes_per_s * span)), "r_bytes_per_s": r_bytes_per_s}
+            profile["gamma_terms"] = GAMMA_TERMS
+        return out | {"profile": profile, "public": public, "verdict": "accept"}
+    if verdict == "undecided":
+        return out | {"reason": f"the session has a window not yet verified{f': {why}' if why else ''}",
+                      "verdict": "undecided"}
+    if verdict == "reject":
+        where = f"{a.get('failure')} at window {a.get('window')}, draw {a.get('at')}"
+        return out | {"reason": f"the session was rejected: {where}{f' ({why})' if why else ''}", "verdict": "reject"}
+    return out | {"reason": f"the session has no accepted answer: {verdict}{f': {why}' if why else ''}",
+                  "verdict": "reject"}
 
 
 class _Out:
@@ -567,6 +611,14 @@ class Prover(Protocol):
         every challenge this prover was sent opens against them (`coins.received_reason`)."""
 
 
+def released_of(doc: Any) -> C.Released:
+    """A run's challenge: a released coin, or the coin's whole opening (with its `path` and `salt`) read as its released
+    part."""
+    if isinstance(doc, dict) and "path" in doc and "salt" in doc:
+        doc = {k: v for k, v in doc.items() if k not in ("path", "salt")}
+    return C.Released.from_json(doc)
+
+
 def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str, Any],
           log: Callable[[str], None] = lambda _m: None) -> dict[str, Any]:
     """The prover's side of one session over the channel: `request` sent, then each message answered by `prover`
@@ -577,7 +629,7 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str,
         if kind == "hold":
             prover.hold(m["registration"])
         elif kind == "run":
-            root = prover.run(C.Released.from_json(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
+            root = prover.run(released_of(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
             send(f_out, {"root": root.hex()})
         elif kind == "open":
             send(f_out, {"openings": [opening_json(o) for o in prover.open(m["t"], [tuple(d) for d in m["draws"]])]})
@@ -648,9 +700,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "PROTOCOL", "Prover", "Twin", "answer", "held_json", "hold", "main", "message", "opening_json",
-           "opening_of", "params_of", "plan_of", "prove", "registration_json", "registration_of", "request_of",
-           "session", "verdict_json"]
+__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "Twin", "answer", "core_answer", "held_json",
+           "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "prove", "registration_json",
+           "registration_of", "released_of", "request_of", "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())
