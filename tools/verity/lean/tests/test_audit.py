@@ -1646,13 +1646,13 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     loop.write_text(LOOP)
     (pkg / "Control" / "LoopThm.lean").write_text(
         "import Control.Loop\nnamespace Control\n"
-        "theorem loop : Guarantees.Loop := by\n  unfold Guarantees.Loop\n  intros\n  unfold double\n  omega\nend Control\n")
+        "theorem doubles : Guarantees.Loop := by\n  unfold Guarantees.Loop\n  intros\n  unfold double\n  omega\nend Control\n")
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.LoopThm\n")
     pol = A.load(pkg)
     A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
                        "trees": pol["trees"] | {"proofs": [*pol["trees"]["proofs"], "Control.Loop"],
                                                 "except": {"Control.Loop": "the statement this test records, in a proof module"}},
-                       "guarantees": pol["guarantees"] | {"Control.loop": {"owner": "@lean"}}})
+                       "guarantees": pol["guarantees"] | {"Control.doubles": {"owner": "@lean"}}})
 
     def build():
         return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -1665,10 +1665,10 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     build()
     assert unshaped(audit(True)) == []
     first = lock()
-    assert first["guarantees"]["Control.loop"]["signature"] == ["Control.loop : Control.Guarantees.Loop"]
+    assert first["guarantees"]["Control.doubles"]["signature"] == ["Control.doubles : Control.Guarantees.Loop"]
     assert list(first["reads"]["Control.Loop"]["definitions"]) == ["Control.Guarantees.Loop"]
-    assert first["reads"]["Control.Loop"]["guarantees"] == ["Control.loop"]
-    assert "Control.loop" in first["reads"]["Control.Defs"]["guarantees"], "and through it, what it reads under `meaning`"
+    assert first["reads"]["Control.Loop"]["guarantees"] == ["Control.doubles"]
+    assert "Control.doubles" in first["reads"]["Control.Defs"]["guarantees"], "and through it, what it reads under `meaning`"
     seen = {first["reads"]["Control.Loop"]["digest"]}
     for text, shows in ((LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5"),
                         (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.double n")):
@@ -1683,7 +1683,7 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
         assert after["reads"]["Control.Loop"]["digest"] not in seen
         seen.add(after["reads"]["Control.Loop"]["digest"])
         changes = A.statement_changes(rep["review"])
-        assert changes[0] == "definition Control.Guarantees.Loop (Control.Loop), read by Control.loop: changed", changes
+        assert changes[0] == "definition Control.Guarantees.Loop (Control.Loop), read by Control.doubles: changed", changes
         assert any(shows in line for line in changes[1:]), changes
         after["reads"]["Control.Loop"] = before["reads"]["Control.Loop"]
         assert after == before, "the statement's record changed, and nothing else"
