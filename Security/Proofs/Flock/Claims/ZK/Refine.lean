@@ -306,18 +306,19 @@ theorem stopRefine_of_sessionFrames (S : RefSession) (vs : S.SwVals)
   stopRefine_of_sessionStops S vs L H n wk x w hA (sessionStops_of_frames S vs L H x w hF)
 
 /-- **After an opening the prover's check refuses, `LiveRefine` makes the frame's release the `abort` message**: at a
-live frame round whose last coins the frame takes, where some opening so far fails the coin-tree check, the
-frame's release of the worker's round is the switched reference prover's `abort`. -/
+live frame round of the deferred release's own run whose last coins the frame takes, where some opening so far fails
+the coin-tree check, the frame's release of the worker's round is the switched reference prover's `abort`. -/
 theorem release_eq_abort_of_liveRefine (S : RefSession) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
     (w : Flock.Wit) (hL : L.LiveRefine H (S.swP vs).prover wk x w) (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk)
     (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg) (hk : L.kindAt x ((m₀, ρ₀) :: ops).length = .masked)
     (hl : L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true)
     (hr : L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false)
+    (hown : L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops))
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false))
     (hok : ((allOk ((S.swP vs).chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = false) :
     L.release x (ν, t) ((m₀, ρ₀) :: ops) false v = S.abort := by
-  have he := hL (ν, t) κ ((m₀, ρ₀) :: ops) v hk hl hr hv
+  have he := hL (ν, t) κ ((m₀, ρ₀) :: ops) v hk hl hr hown hv
   have hm : ((strat ((S.swP vs).hello x ν) (S.swP vs).abort (S.swP vs).dec ((S.swP vs).chk x ν)
       ((S.swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = S.abort := by
     rw [strat_eval_cons, hok]
@@ -487,7 +488,7 @@ theorem liveRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
     (w : Flock.Wit) (hlast : L.last x = refK x + 1) (hR : StopsAt S Rf L H x) (hO : OpeningsRefused S L H x)
     (hE : LiveRoundEq S vs L H wk x w) :
     L.LiveRefine H ((S.withStops Rf L.stop).swP vs).prover wk x w := by
-  intro ρ κ h v hk hl hr hv
+  intro ρ κ h v hk hl hr _ hv
   obtain ⟨ν, t⟩ := ρ
   cases h with
   | nil => exact Kind.noConfusion (hk : Kind.own = Kind.masked)
