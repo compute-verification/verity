@@ -605,7 +605,7 @@ def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_abo
 def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base_is(world):
     """A PR's preflight is recorded per (head, base): a sync that tries a refused PR again onto the same tree reads its refusal
     back, and so does one onto another commit of that tree (a rebuilt `next`'s merges carry the time they're made).  A new
-    base runs it again."""
+    base runs a refusal again; a pass stands there when the new base changed nothing it touches (the tests below)."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     refuse, calls = _sync_preflight({2: "refused: x"})
@@ -633,7 +633,77 @@ def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base
     moved = world.queue()
     moved.preflight = refuse
     moved.sync()
-    assert [n for n, _ in calls] == [1, 2, 1, 2], world.logs
+    assert [n for n, _ in calls] == [1, 2, 2], world.logs
+
+
+#: a lock record as a landing's lock commit on `main` rewrites it: the only path the commit changes
+RELOCKED = {"pkg/lean-audit.json": json.dumps({"guarantees": {"T": "2"}, "reads": {}, "dependencies": {"M": "1"}})}
+
+
+def test_a_rebuild_below_a_member_that_changes_nothing_its_change_touches_keeps_its_pass_and_runs_no_preflight(world):
+    """Every rebuild of `next` (an ejection below a member, a landing's lock commit on `main`) gives each member above the change
+    a new base tree, and each preflight takes about a minute of the sync's budget.  Where the member's change onto the new base
+    is the one it made onto the old, nothing the checks run changed and no path went, its pass stands (`Queue._standing`)."""
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and [n for n, _ in calls] == [1, 2, 3]
+    world.gh.ready.discard((1, world.gh.prs[1].head))                      # #1 ejected: #2 and #3 merge onto `main` again
+    assert [m.pr for m in q.sync()[0]] == [2, 3] and [n for n, _ in calls] == [1, 2, 3], world.logs
+    assert world.logs[-1].endswith("kept 0, merged 2, preflights' verdicts reused for 2"), world.logs[-1]
+    _move_main(world, RELOCKED)
+    assert [m.pr for m in q.sync()[0]] == [2, 3] and [n for n, _ in calls] == [1, 2, 3], world.logs
+    assert world.logs[-1].endswith("kept 0, merged 2, preflights' verdicts reused for 2"), world.logs[-1]
+
+
+def test_a_rebuild_that_changes_a_file_a_members_change_touches_preflights_that_member_again(world):
+    """A pass stands only while the member's change is the same: an ejection below it that rewrites another part of a file its
+    change touches (so the merge stays clean) runs its preflight again, and the member above, which touches neither, keeps its
+    pass."""
+    _move_main(world, {"m.txt": "1\n2\n3\n4\n5\n6\n7\n"})
+    world.gh.put(1, world.change({"m.txt": "one\n2\n3\n4\n5\n6\n7\n"}))
+    world.gh.put(2, world.change({"m.txt": "1\n2\n3\n4\n5\n6\nseven\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and [n for n, _ in calls] == [1, 2, 3]
+    world.gh.ready.discard((1, world.gh.prs[1].head))
+    assert [m.pr for m in q.sync()[0]] == [2, 3], world.logs
+    assert calls[3:] == [(2, _git(world.origin, "rev-parse", "main"))], world.logs
+    assert world.logs[-1].endswith("preflights' verdicts reused for 1"), world.logs[-1]
+
+
+def test_a_pass_stands_across_no_base_that_changes_what_the_checks_run_or_deletes_a_path_nor_for_a_change_that_deletes_one(world):
+    """What `Preflight.onto` can't judge from the change's own files: a base that changed what its checks run (a test of
+    `PREFLIGHT_RULES`), one that deleted a path the change may name, and a change that deletes a path the base may name.  Each
+    preflights again."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": None}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and [n for n, _ in calls] == [1, 2]
+    _move_main(world, RELOCKED)
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and [n for n, _ in calls[2:]] == [2], world.logs
+    _move_main(world, {"tests/test_pins.py": "def test_no_pin_is_stale():\n    pass\n"})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and [n for n, _ in calls[3:]] == [1, 2], world.logs
+    _move_main(world, {"c.txt": None})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and [n for n, _ in calls[5:]] == [1, 2], world.logs
+
+
+def test_a_new_head_is_preflighted_though_its_change_onto_next_is_the_old_heads_file_for_file(world):
+    """A verdict is its head's: a head pushed again, here rebased onto a `main` that moved so that its change onto `next` is the
+    old head's file for file, is preflighted, while the member below it keeps its pass."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, old := world.change({"b.txt": "2\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and [n for n, _ in calls] == [1, 2]
+    _move_main(world, {"c.txt": "moved\n"})
+    world.gh.put(2, new := world.change({"b.txt": "2\n"}))
+    members, _ = q.sync()
+    assert new != old and [(m.pr, m.head) for m in members] == [(1, world.gh.prs[1].head), (2, new)], world.logs
+    assert calls[2:] == [(2, members[0].commit)], world.logs
 
 
 def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_preflighted_waits_off_next_untold(world):

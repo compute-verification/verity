@@ -214,7 +214,9 @@ onto `next` refuses it: drive's sync (`Queue.preflight`, `Preflight.onto`) runs 
 environment of the merged tree's (`pins.py --stale`, `PREFLIGHT_TEST_PATHS`; `lock_drops` is the sync's own) on each merge it
 makes, onto the member below the PR's place, never on the prefix it keeps (so never under a running Lean check),
 and one PR's failure stays that PR's.  Each verdict is kept per (head, base tree) (the state's `preflights`), so a merge onto
-an unchanged tree is never preflighted twice; a sync's preflights start only within `PREFLIGHT_BUDGET_S` together, and a PR
+an unchanged tree is never preflighted twice, and a pass stands onto a rebuilt base that changed nothing its change touches or
+the checks run and deleted no path, while its change deletes none (`Queue._standing`); a sync's preflights start only within
+`PREFLIGHT_BUDGET_S` together, and a PR
 whose preflight hasn't run waits off `next`, untold, for a later sync, with the PRs that contain it; those the last sync left
 waiting take the budget first (the state's `preflight_waited`), so every PR is reached in turn.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
@@ -1299,6 +1301,8 @@ class Queue:
         #: preflights take this sync's budget first, and those of the waiting still to come in this sync (`_preflighted`)
         self._preflight_first: set[int] = set()
         self._preflight_ahead: set[int] = set()
+        #: the merges this sync took a recorded preflight verdict for instead of running one (`_preflighted`)
+        self._preflights_reused = 0
         #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
         #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
         self.unlock: Callable[[], None] = lambda: None
@@ -1929,8 +1933,9 @@ class Queue:
     def _preflighted(self, pr: PR, tip: str, commit: str, members: list[Member], flights: dict) -> tuple[bool, str | None]:
         """(whether ``pr``'s preflight onto ``tip`` is known, its refusal or None, or why it waits): `preflight` of ``commit``,
         its merge onto ``tip`` above ``members``, recorded per (head, base) in ``flights`` (the state's `preflights`): a
-        pair whose verdict is recorded, for the same merged tree, isn't run again.  The base is taken by its tree: the
-        queue's merges carry the time they're made, so a rebuilt `next` names the same members' merges anew.  A preflight
+        pair whose verdict is recorded, for the same merged tree, isn't run again, and a pass onto another base tree stands
+        where `_standing` says it does.  The base is taken by its tree: the queue's merges carry the time they're made, so a
+        rebuilt `next` names the same members' merges anew.  A preflight
         starts only while this sync's have taken under `PREFLIGHT_BUDGET_S`; past it the PR waits off `next` for a later sync.
         The PRs the last sync left waiting (the state's `preflight_waited`), and those they contain, take the budget first: while
         one of them is still to come in this sync, any other PR waits too instead of spending it, so the PRs before one the budget
@@ -1941,7 +1946,12 @@ class Queue:
         for got in (flights["now"].get(key), flights["before"].get(key)):
             if got is not None and got.get("tree") == tree:
                 flights["now"][key] = got
+                self._preflights_reused += 1
                 return True, got.get("why")
+        if self._standing(pr.head, base_tree, tree, flights):
+            flights["now"][key] = {"pr": pr.number, "head": pr.head, "tree": tree, "why": None}
+            self._preflights_reused += 1
+            return True, None
         if self._preflight_ahead and pr.number not in self._preflight_first:
             return False, (f"its preflight onto `{self.branch}` hasn't run: the PRs the last sync left waiting for theirs go "
                            f"first ({' '.join(f'#{n}' for n in sorted(self._preflight_ahead))}), so a later sync runs it")
@@ -1959,6 +1969,37 @@ class Queue:
             self._preflight_s += self.clock() - start
         flights["now"][key] = {"pr": pr.number, "head": pr.head, "tree": tree, "why": why}
         return True, why
+
+    def _standing(self, head: str, base_tree: str, tree: str, flights: dict) -> bool:
+        """Whether ``head``'s newest record in ``flights`` is a pass onto another base tree that stands for its merge ``tree``
+        onto ``base_tree``.  A rebuild of `next` (a landing's lock commit, a lift, an ejection, a `main` that moved) gives every
+        member above the change a new base tree, and each preflight takes about a minute of the sync's budget.  It stands when
+        (a) the head's change is the same onto both bases: `git diff-tree -r` from base to merge, each path with its modes and
+        blobs on both sides, so no path it touches differs between the bases and the merge (a rebuilt pin, a restack) wrote the
+        same files; (b) between the bases no path of `PREFLIGHT_RULES` changed and none was deleted; and (c) the change deletes
+        no path.  `Preflight.onto` refuses only what fails on the merge and not on its base, so what a check says of a file
+        alone (a Markdown cap, a report-genre name, a pin, which every change to its inputs rewrites) carries across, and (b)
+        and (c) keep out a reference from one side to a path the other takes away (a module string, a doc path).  What still
+        carries is a reference to a name the other side drops from a file it keeps (a `module:attr` whose attribute a change
+        below removed): the after-landing run's suites run these checks on `checked`'s tip and revert the culprit, as for a
+        preflight that fails to run.  A record whose trees this clone lacks stands for nothing."""
+        old = next(((k, rec) for fl in (flights["now"], flights["before"]) for k, rec in reversed(fl.items())
+                    if rec.get("head") == head), None)
+        if old is None or old[1].get("why") is not None or not old[1].get("tree"):
+            return False
+        old_base, old_tree = old[0].rpartition(":")[2], old[1]["tree"]
+        diffs = [_git(self.workdir, "diff-tree", "-r", "-z", "--no-renames", a, b, check=False)
+                 for a, b in ((old_base, old_tree), (base_tree, tree), (old_base, base_tree))]
+        if any(r.returncode for r in diffs) or diffs[0].stdout != diffs[1].stdout:
+            return False
+
+        def rows(raw: str) -> list[tuple[str, str]]:
+            parts = raw.split("\0")
+            return [(meta.rpartition(" ")[2], path) for meta, path in zip(parts[::2], parts[1::2])]
+
+        between = rows(diffs[2].stdout)
+        ruled = lambda path: any(path == r or (r.endswith("/") and path.startswith(r)) for r in PREFLIGHT_RULES)  # noqa: E731
+        return not (any(status == "D" for status, _ in [*between, *rows(diffs[0].stdout)]) or any(ruled(p) for _, p in between))
 
     def _unmerged(self, r: subprocess.CompletedProcess, files: list[str], members: list[Member]) -> str:
         if not files:
@@ -2079,7 +2120,7 @@ class Queue:
         before = (cache.get("of") or {}) if (cache.get("main"), cache.get("gates")) == (main, list(gates)) else {}
         verdicts: dict[str, list[str]] = {}
         flights = {"before": state.get("preflights") or {}, "now": {}}
-        self._preflight_s = 0.0
+        self._preflight_s, self._preflights_reused = 0.0, 0
         waited = {n for n in state.get("preflight_waited") or () if n in entries}
         self._preflight_first = waited.union(*(entries[n].after for n in waited))
         self._preflight_ahead = waited & set(order[k:])
@@ -2144,6 +2185,7 @@ class Queue:
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `{self.into}`"
                  + (f", kept {k}, merged {len(members) - k}" if members else "")
                  + (f", gates' verdicts reused for {reused}" if (reused := len(verdicts.keys() & before.keys())) else "")
+                 + (f", preflights' verdicts reused for {self._preflights_reused}" if self._preflights_reused else "")
                  + (f", {len(unrun)} waiting off it for their preflight ({' '.join(f'#{n}' for n in sorted(unrun))})" if unrun else "")
                  + (" (dry run: not pushed)" if dry_run else ""))
         if not dry_run:
@@ -2153,7 +2195,8 @@ class Queue:
             state["restacks"] = {k: v for k, v in self._restacks.items() if k in self._used or k.rpartition(":")[2] in moves}
             if self.preflight is not None:
                 heads = {p.head for p in prs}
-                kept = {key: rec for key, rec in {**flights["before"], **flights["now"]}.items() if rec.get("head") in heads}
+                newest = {**{k: v for k, v in flights["before"].items() if k not in flights["now"]}, **flights["now"]}
+                kept = {key: rec for key, rec in newest.items() if rec.get("head") in heads}
                 state["preflights"] = dict(list(kept.items())[-GATE_VERDICTS:])
                 state["preflight_waited"] = sorted(unrun)
             if gates:
@@ -2964,6 +3007,13 @@ def _tree(repo: Path, commit: str) -> str:
 #: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name); about 5 s
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
                         "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
+#: what the sync's preflight runs rather than judges: `PREFLIGHT_TEST_PATHS` and what they load from the tree (pytest's settings
+#: and conftests for the two directories they run in, `waits.py`, `pins.py` and the `suites.py` the module strings take the
+#: members' packages from, under `tools/verity/check/`, and the `research` on their PYTHONPATH), and the workspace's members (the
+#: root `pyproject.toml`); a directory ends in `/`.  A base that changes one of them carries no verdict across (`Queue._standing`)
+PREFLIGHT_RULES = (*PREFLIGHT_TEST_PATHS, "tests/conftest.py", "tools/research/tests/conftest.py",
+                   "tools/research/tests/waits.py", "tools/research/pyproject.toml", "tools/research/src/", "tools/verity/check/",
+                   "pyproject.toml")
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
