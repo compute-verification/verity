@@ -1166,19 +1166,22 @@ def official_src() -> Path:
     """A clean sparse checkout of TE_BRANCH's head, or of `$TE_HARNESS_COMMIT` (a launcher at the pin's harness version
     once the head's launcher has moved past it), with covert_witness and the research package, for the harness's own
     tools (promote.py, nodes.txt, launch.py), and a `research` in SHIM that runs that package (the VM's install predates
-    pools)."""
+    pools). At `$TE_HARNESS_COMMIT` already, nothing is touched: the finals' dispatch and collect loops share it."""
     if not (OFFICIAL_SRC / ".git").exists():
         subprocess.run(["git", "-C", str(REPO), "worktree", "add", "-q", "--no-checkout", "--detach", str(OFFICIAL_SRC),
                         f"origin/{TE_BRANCH}"], check=True)
         subprocess.run(["git", "-C", str(OFFICIAL_SRC), "sparse-checkout", "set", "--no-cone", "/benchmarks/covert_witness/",
                         "/tools/research/"], check=True)
-    subprocess.run(["git", "-C", str(OFFICIAL_SRC), "fetch", "-q", "origin", TE_BRANCH], capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(OFFICIAL_SRC), "checkout", "-q", "--detach",
-                    os.environ.get("TE_HARNESS_COMMIT") or "FETCH_HEAD"], check=True)
+    pinned = os.environ.get("TE_HARNESS_COMMIT")
+    head = subprocess.run(["git", "-C", str(OFFICIAL_SRC), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+    if not (pinned and head.startswith(pinned)):
+        subprocess.run(["git", "-C", str(OFFICIAL_SRC), "fetch", "-q", "origin", TE_BRANCH], capture_output=True, text=True)
+        subprocess.run(["git", "-C", str(OFFICIAL_SRC), "checkout", "-q", "--detach", pinned or "FETCH_HEAD"], check=True)
+    shim = f'#!/usr/bin/env bash\nPYTHONPATH="{OFFICIAL_SRC}/tools/research/src" exec "{sys.executable}" -m research "$@"\n'
     SHIM.mkdir(parents=True, exist_ok=True)
-    (SHIM / "research").write_text(f'#!/usr/bin/env bash\nPYTHONPATH="{OFFICIAL_SRC}/tools/research/src" '
-                                   f'exec "{sys.executable}" -m research "$@"\n')
-    (SHIM / "research").chmod(0o755)
+    if not (SHIM / "research").exists() or (SHIM / "research").read_text() != shim:
+        (SHIM / "research").write_text(shim)
+        (SHIM / "research").chmod(0o755)
     return OFFICIAL_SRC
 
 
