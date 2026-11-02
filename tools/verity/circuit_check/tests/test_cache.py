@@ -455,7 +455,7 @@ def test_a_module_whose_file_is_a_bare_name_names_no_file_wherever_the_check_run
     """Resolved against the working directory, a bare ``__file__`` would be a module imported from outside the tree for a check
     run outside it (storing nothing) and a file of the tree for one run at its root, so where a check ran would decide whether
     its verdict is stored and what it holds.  It names no file: stored from either, reused from the other, and no entry holds
-    it."""
+    it, nor where `inspect` looked for its source from the tree's root."""
     root, elsewhere = _tree(tmp_path / "tree"), tmp_path / "elsewhere"
     elsewhere.mkdir()
     _edit(root, "syn/check.py", "from syn import reg", "from syn import reg\n    import syn_bare  # noqa: F401")

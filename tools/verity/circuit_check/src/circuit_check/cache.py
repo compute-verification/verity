@@ -79,7 +79,8 @@ name, so a new workspace member or a lock entry no check imports reuses every ta
 A module in the tree is held by its name and resolved again at lookup (``modules``), so a new ``sys.path`` entry or editable
 redirect that shadows it reruns what holds it, without ``sys.path`` in the key.  A module whose ``__file__`` is no absolute path
 (a module object made by hand: `torch.ops`'s ``_ops.py``), like a code object whose file is none (``<string>``), has no file
-(`_module_file`): it is neither in the tree nor outside it, whatever the working directory (torch's are held with torch).
+(`_module_file`): it is neither in the tree nor outside it, whatever the working directory (torch's are held with torch), and
+`inspect` looking for its source where that name points from the working directory reads nothing (`_bare_files`).
 
 A hit means every file, listing, probe, library, ``pins/`` pin and registration (a kernel's, a Definition's) this target's check
 read is unchanged (the tree as git has it, `visible`: a file git does not track, bytecode, a build or a fetched file inside the
@@ -602,6 +603,13 @@ def _module_file(m: Any) -> str | None:
     result is stored, and what it holds, would depend on where the check ran."""
     f = getattr(m, "__file__", None)
     return f if isinstance(f, str) and os.path.isabs(f) else None
+
+
+def _bare_files() -> set[str]:
+    """Where in the tree a loaded module's bare ``__file__`` (`_module_file`) points from the working directory: `inspect`, asked
+    for the module of a frame, looks for every loaded module's source, this one's there, which is no input of a check."""
+    return {r for m in list(sys.modules.values())
+            if isinstance(f := getattr(m, "__file__", None), str) and not os.path.isabs(f) and (r := _rel(f)) is not None}
 
 
 def _code_rel(code: Any) -> str | None:
@@ -1925,6 +1933,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any], sidecars:
         else:
             acc.dirs.add(rel)
     present: set[str] = set()
+    bare = _bare_files()
     for rel in acc.sources:                            # a loaded module's source looked for, by the module's name
         f = os.path.abspath(os.path.join(root, rel))
         name = by_file.get(f)
@@ -1935,7 +1944,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any], sidecars:
         elif name is not None and (m := _side(name)) is not None and (r := _sidecar(root, m, ".py")) is not None \
                 and os.path.realpath(root / r) == os.path.realpath(f):
             present.add(name)                          # a sidecar's, by its module's name: it moves with its module
-        else:
+        elif rel not in bare:
             acc.probes.add(rel)
     if sidecars:
         registry = {"registrars": sorted(reached | acc.registered | (acc.kernels - {"*"}))}
