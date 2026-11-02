@@ -298,6 +298,52 @@ def test_reads_holds_each_path_once_and_gives_each_binding_its_whole_read_set_ba
     assert cli._ranges([0, 1, 2, 3, 7, 9, 10]) == "0-3,7,9-10" and cli._places("0-3,7,9-10") == [0, 1, 2, 3, 7, 9, 10]
 
 
+def test_the_modules_whose_source_inspect_looked_for_are_every_binding_s_loaded_probes(tmp_path, monkeypatch):
+    """`cli._read_sets` takes the modules whose source `inspect` looked for (``present``) out of each binding's own set: their
+    paths, but the files the set holds by their bytes, are ``loaded``, every binding's, since torch's import asks for the
+    source of every module the process loaded and which those are depends on how the run went.  A run reports what it holds
+    beyond `cli.READS`' ``loaded`` as undeclared ``loaded``, and another binding's run that loaded the same module, nothing."""
+    monkeypatch.setattr(cli, "READS", tmp_path / "reads")
+    entries = {"kx": {"files": ["a.py"], "present": ["m", "own"]}, "ky": {"files": ["b.py"], "present": ["n"]}}
+    where = {"m": "m.py", "n": "n.py", "own": "a.py"}
+    monkeypatch.setattr(CC, "recorded", lambda cache, key, repo: entries[key])
+    monkeypatch.setattr(CC, "declared", lambda root, reads: {
+        "files": sorted(reads.get("files", ())), "listed": [], "probes": sorted(where[m] for m in reads.get("present", ())),
+        "registry": False})
+    group = {"files": [], "listed": [], "probes": []}
+    ids, keys = [("definition", "X_v1"), ("definition", "Y_v1")], ["kx", "ky"]
+    got = cli._read_sets(tmp_path, {"x": [0], "y": [1]}, ids, keys, group)
+    assert got["reads"]["bindings"] == {"x": {"files": ["a.py"], "listed": [], "probes": [], "registry": False},
+                                        "y": {"files": ["b.py"], "listed": [], "probes": [], "registry": False}}
+    assert got["reads"]["loaded"] == ["m.py", "n.py"] and got["undeclared"]["x"] == {"files": ["a.py"], "loaded": ["m.py"]}
+    cli.update_reads(got, every=True)
+    assert cli._read_sets(tmp_path, {"x": [0], "y": [1]}, ids, keys, group)["undeclared"] == {}
+    entries["ky"] = {"files": ["b.py"], "present": ["n", "m"]}
+    assert cli._read_sets(tmp_path, {"y": [1]}, ids, keys, group)["undeclared"] == {}
+
+
+def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, monkeypatch):
+    """`cli.update_reads` adds what a run read to each binding's declared set, and to ``registries`` and ``loaded``: a
+    binding's runs read otherwise by how they ran (``--binding`` makes only its own binding's roots), so its declaration holds
+    each way.  A run of every binding drops a binding the catalog no longer has."""
+    monkeypatch.setattr(cli, "READS", tmp_path / "reads")
+
+    def rep(bindings: dict, loaded: list[str], files: tuple[str, ...] = ("r.py",)) -> dict:
+        return {"reads": {"registries": {"files": list(files), "listed": [], "probes": []}, "loaded": loaded,
+                          "bindings": bindings}}
+
+    a1 = {"files": ["x.py"], "listed": [], "probes": ["p"], "registry": False}
+    a2 = {"files": ["y.py"], "listed": ["d"], "probes": [], "registry": True}
+    b = {"files": ["z.py"], "listed": [], "probes": [], "registry": False}
+    assert cli.update_reads(rep({"a": a1, "b": b}, ["m"]), every=True) == []
+    cli.update_reads(rep({"a": a2}, ["n"], ("r.py", "s.py")), every=False)
+    got = cli._reads_file()
+    assert got["bindings"] == {"a": {"files": ["x.py", "y.py"], "listed": ["d"], "probes": ["p"], "registry": True}, "b": b}
+    assert got["loaded"] == ["m", "n"] and got["registries"]["files"] == ["r.py", "s.py"]
+    cli.update_reads(rep({"a": a1}, []), every=True)
+    assert set(cli._reads_file()["bindings"]) == {"a"}
+
+
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
     m = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#"
     assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
@@ -496,9 +542,10 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
     imported: here all of ``syn``, which `load_registries` enumerates): its own targets' pins files, no other binding's, and
     the package listing every check holds.  With no `cli.READS` all of it is undeclared; once ``--update-reads`` wrote it,
     nothing is, and another binding's run written beside it keeps the first's: each of those runs makes only its own binding's
-    roots, the others' are the catalog's roots record's (`units.plan`'s ``binding``).  A module the process loaded before its
-    checks, which a check's `inspect` lookup asks for, is undeclared in ``loaded`` alone, the probes every binding's set holds
-    (`cli.READS`): which modules a process loaded depends on how it runs.  A module only one target's check imports, new, is
+    roots, the others' are the catalog's roots record's (`units.plan`'s ``binding``).  A module the process loaded after the
+    registries' inputs and before its checks, which a check's `inspect` lookup asks for, is undeclared in ``loaded``, the probes
+    every binding's set holds (`cli.READS`), not in the binding's own set: which modules a process loaded depends on how it
+    runs.  A module only one target's check imports, new, is
     undeclared for that binding alone; a module the registries import anew, for every binding, until it is written."""
     from test_cache import _pin
 
@@ -526,15 +573,19 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
     paths = [(k, p) for g in written["groups"] for k, ps in g.items() for p in ps]
     assert len(paths) == len(set(paths)) and set(paths) >= {("files", _pin("SynTop_v1")), ("files", _pin("SynOther_v1"))}
     # a module the process loaded before its checks, whose source `syn.check`'s `inspect` lookup asks for as torch's import
-    # asks for every loaded module's: in a tree with the records alone, `loaded` holds it and the binding's own set is as it was
+    # asks for every loaded module's: in a tree with the records alone, `loaded` holds it, and the binding's own set doesn't.
+    # It is first imported after the registries' inputs are taken, in a recording no target holds, as making another
+    # binding's roots imports what only that binding reads (one imported before them is the registries')
     shutil.copytree(root / "reads", pre / "reads")
     (pre / "synpre").mkdir()
     (pre / "synpre/__init__.py").write_text("")
-    first = _run_units(pre, _reads_run("_core_roots").replace("rep = cli.run(", "import synpre\nrep = cli.run(", 1))
-    assert first["reads"]["bindings"]["_core_roots"] == mine, first["reads"]["bindings"]
-    assert list(first["undeclared"]) == ["_core_roots"] and set(first["undeclared"]["_core_roots"]) == {"loaded"}, \
-        first["undeclared"]
-    assert "synpre/__init__.py" in first["undeclared"]["_core_roots"]["loaded"], first["undeclared"]
+    late = ("_inputs = cli.CC.registry_inputs\n\n\ndef _then(root):\n    got = _inputs(root)\n"
+            "    with cli.CC.recording(merge=False):\n        import synpre  # noqa: F401\n    return got\n\n\n"
+            "cli.CC.registry_inputs = _then\nrep = cli.run(")
+    first = _run_units(pre, _reads_run("_core_roots").replace("rep = cli.run(", late, 1))
+    own, u = first["reads"]["bindings"]["_core_roots"], first["undeclared"]["_core_roots"]
+    assert (own["files"], own["listed"]) == (mine["files"], mine["listed"]) and "files" not in u, (own, u)
+    assert "synpre/__init__.py" in u["loaded"] and "synpre/__init__.py" not in own["probes"], (own, u)
     (root / "synlib").mkdir()
     (root / "synlib/__init__.py").write_text("")
     (root / "synlib/helper.py").write_text("H = 1\n")
