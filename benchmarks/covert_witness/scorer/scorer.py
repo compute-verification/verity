@@ -1254,9 +1254,11 @@ def unseeded(args: list[str]) -> list[str]:
     return out
 
 
-def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node: str | None = None) -> list[dict]:
+def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node: str | None = None,
+                 kind: str = "rerun") -> list[dict]:
     """launch.py --final --no-wait for each seed of each entry (a valid search record of the current regime), from the
-    overlay of its island on the harness's head; one line each into FINAL/launches.jsonl."""
+    overlay of its island on the harness's head; one line each into FINAL/launches.jsonl. A `smoke` (the pipeline's
+    check before the final) is collected like a rerun and never enters the table."""
     rows = [json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip()]
     harness = subprocess.run(["git", "-C", str(official_src()), "rev-parse", "HEAD"], capture_output=True, text=True,
                              check=True).stdout.strip()
@@ -1269,11 +1271,12 @@ def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node:
         commit = overlay(x["commit"], harness)
         src = source_at(commit)
         for seed in seeds if seed_args(x, 0) else seeds[:1]:
-            note = f"final {short(x['id'])} seed {seed}" if seed_args(x, 0) else f"final {short(x['id'])} (no seed flag)"
+            tag = "final" if kind == "rerun" else "final smoke"
+            note = f"{tag} {short(x['id'])} seed {seed}" if seed_args(x, 0) else f"{tag} {short(x['id'])} (no seed flag)"
             argv = [sys.executable, "benchmarks/covert_witness/launch.py", x["class"], x["start"], "--direction", "scorer",
                     "--final", "--no-wait", "--note", note, "--mechanism", x["mechanism"], *(["--node", node] if node else []),
                     "--", *unseeded(shlex.split(x.get("args") or "")), *seed_args(x, seed)]
-            row = {"kind": "rerun", "id": x["id"], "seed": seed if seed_args(x, 0) else None, "commit": commit,
+            row = {"kind": kind, "id": x["id"], "seed": seed if seed_args(x, 0) else None, "commit": commit,
                    "entry_commit": x["commit"], "harness": harness, "class": x["class"], "start": x["start"],
                    "mechanism": x["mechanism"], "note": note, "at": now(), "argv": argv, "run": ""}
             if not dry_run:
@@ -1601,6 +1604,7 @@ def main(argv=None) -> int:
     f.add_argument("--node", default=None, help="launch: one of nodes.txt's nodes (default: launch.py's turn)")
     f.add_argument("--deadline", default="15:20", help="plan: HH:MM UTC by which a planned rerun ends")
     f.add_argument("--dry-run", action="store_true")
+    f.add_argument("--smoke", action="store_true", help="launch: a check of the pipeline, never in the table")
     a = ap.parse_args(argv)
     if a.cmd == "final":
         if a.what in ("entries", "plan"):
@@ -1611,7 +1615,8 @@ def main(argv=None) -> int:
             print(json.dumps(rep, indent=1))
             return 0
         if a.what == "launch":
-            res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run, a.node)
+            res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run, a.node,
+                               "smoke" if a.smoke else "rerun")
         elif a.what == "table":
             final_table()
             print((FINAL / "table.md").read_text())
