@@ -218,10 +218,7 @@ def env_digests(key: str, libs: list[Path], mods: list[str]) -> dict[str, str | 
     hashed once per worker and kept under `lean-env/digests/` with each part's size, mtime and inode, and hashed again
     where those changed."""
     f = env_dir() / "digests" / f"{hashlib.sha256(chr(0).join([key, *map(str, libs)]).encode()).hexdigest()[:32]}.json"
-    try:
-        kept = json.loads(f.read_text())
-    except (OSError, ValueError):
-        kept = {}
+    kept = json.loads(f.read_text()) if f.is_file() else {}
     out: dict[str, str | None] = {}
     new = {}
     for m in mods:
@@ -236,10 +233,7 @@ def env_digests(key: str, libs: list[Path], mods: list[str]) -> dict[str, str | 
             new[m] = {"path": str(o), "stat": st, "digest": out[m]}
     if new:
         with _locked(f.with_suffix(".lock")):
-            try:
-                kept = json.loads(f.read_text())
-            except (OSError, ValueError):
-                kept = {}
+            kept = json.loads(f.read_text()) if f.is_file() else {}
             tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
             tmp.write_text(json.dumps(kept | new, sort_keys=True))
             os.replace(tmp, f)
