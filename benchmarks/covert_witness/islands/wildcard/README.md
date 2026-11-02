@@ -17,5 +17,6 @@ gains alone (`norms`), keep φ = 0. `train.py` refuses a set whose witnessed φ 
 - `--method kfac`: closed form, one damped natural-gradient step per matrix from statistics gathered at θ.
 - `--set`: `mlp-in:B`, `qkv:B`, `o:B`, `down:B` (B < 0 from the top), `norms`, `norms-after`, `final`, or a regex.
 
-Run: `python benchmarks/covert_witness/launch.py shallow s50 --note "onestage-mlpin ..." -- --set mlp-in:-1 --lr 1e-3`.
+Run: `python benchmarks/covert_witness/launch.py shallow s50 --note "onestage-mlpin ..." -- --class shallow --set mlp-in:-1 --lr 1e-3`
+(`--class` names launch.py's class, which evaluate.py checks the submission against).
 The note's first word is the mechanism the scorer files the record under.

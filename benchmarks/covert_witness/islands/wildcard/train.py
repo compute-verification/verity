@@ -16,10 +16,10 @@ Methods:
 - `scale`: every tensor of the set times one line-searched scalar.
 - `--extrapolate`: after training, θ + αΔ with α line-searched (ExPO); `--suite`: several configs in one run.
 
-This file runs under the class its shim names (`islands/<class>/train.py` sets KLASS); its source rides in the
-submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the harness's script mode:
+`--class` must be the class launch.py runs it under (the submission names it); its source rides in the submission's
+notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the harness's script mode:
 
-    python benchmarks/covert_witness/launch.py shallow s50 --note "cachedhead ..." -- --set mlp-in:-1 --method cached
+    python benchmarks/covert_witness/launch.py shallow s50 --note "cachedhead ..." -- --class shallow --set mlp-in:-1 --method cached
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ try:
 except ImportError:
     hooks = None
 
-KLASS = globals().get("KLASS", "reference")
+KLASS = "reference"
 LF_LEAVES = {"qkv": ("wq", "wk", "wv"), "o": ("wo",), "mlp-in": ("w_gate", "w_up"), "down": ("w_down",)}
 
 
@@ -629,6 +629,7 @@ def rms(x: torch.Tensor, gain: torch.Tensor) -> torch.Tensor:
 
 
 def main() -> int:
+    global KLASS
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
@@ -666,7 +667,10 @@ def main() -> int:
     ap.add_argument("--suite", default="", help="a JSON list of argument overrides run one after another in this run; "
                     "each is scored on the same probe windows and the least probe loss is submitted (no snapshots)")
     ap.add_argument("--probe-rows", type=int, default=256, help="windows at the end of the training order kept as a probe")
+    ap.add_argument("--class", dest="klass", default=KLASS, choices=tuple(prepare.CLASSES),
+                    help="the class launch.py names, which the submission must name too")
     a = ap.parse_args()
+    KLASS = a.klass
     torch.backends.cuda.matmul.allow_tf32 = True
     configs = json.loads(a.suite) if a.suite else [{}]
     if a.suite and a.lora_rank:
