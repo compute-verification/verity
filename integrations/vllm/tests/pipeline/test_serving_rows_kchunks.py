@@ -97,7 +97,7 @@ def pairs(monkeypatch):
 def window(rows, tmpls=TMPLS):
     ms = KC.wire(SRW.members(tmpls, [rows] * len(tmpls), None, CAPS), tmpls, [rows] * len(tmpls))
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Window(*CS.population_program(defs, several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
 
 
 def test_a_w13_row_holds_its_first_middle_and_last_chunks_at_each_width():

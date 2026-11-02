@@ -6,7 +6,7 @@ Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetTiming.Difft
 `DIR/difftest/python.jsonl`, the same line's results from the checkout's `verity.core.protocols.certifier`:
 `schedule.expected_grids` of each egress link (`rows`), `Audit.check_link`'s verdicts (`verdicts`) and the first bucket
 of each recorded window whose row differs from the expected one (`diff`), `Audit.check_ingress_link`'s verdict for
-every boundary link-window (`status`), and whether the audit accepts every link-window of the first `m` windows
+every boundary execution phase (`status`), and whether the audit accepts every execution phase of the first `m` windows
 (`accepted`) and every status there (`complete`), for `m = 0 … W`. The Lean audit runs `NetTimingDifftest.lean` on
 both files (`runs` in `lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/certifier/tests/
 test_network_certifier_lean_difftest.py` checks that this script still writes them.
@@ -15,7 +15,7 @@ An instance has one to three egress links and up to two ingress links, varied `T
 fractional or not), anchors (some past the horizon) and indices, sessions out of anchor order, bursts beyond the
 allocation, late frames, a sender on another clock, a malformed frame, grids forged slot by slot, statuses, a sync
 outside `Σ_sync` or other than the unit's, and runs whose records stop at a window boundary. It has no negative index or
-anchor (Lean's are ℕ), no row of another length than the allocation, and exactly one record per link-window recorded
+anchor (Lean's are ℕ), no row of another length than the allocation, and exactly one record per execution phase recorded
 (Lean's observation has one status per link and step): the audit's own tests cover duplicates and missing records.
 """
 from __future__ import annotations
@@ -45,8 +45,8 @@ def _sync_outside(rng: random.Random, ss: SyncSet) -> ClockSync:
 
 
 def _frames(rng: random.Random, horizon: int, buckets: int, allocation: int, size: int) -> list[LogicalFrame]:
-    """Sessions of frames, each at one anchor (some past the horizon), with indices 0, 1, … or drawn, some bursts beyond
-    the allocation, and in anchor order or not."""
+    """Sessions of frames, each at one anchor (some past the horizon), with indices 0, 1, … or sampled, some bursts
+    beyond the allocation, and in anchor order or not."""
     sessions = []
     for _ in range(rng.randrange(0, 2 + horizon)):
         anchor = rng.randrange(horizon) if rng.random() < 0.85 else rng.randrange(horizon, horizon + buckets + 1)

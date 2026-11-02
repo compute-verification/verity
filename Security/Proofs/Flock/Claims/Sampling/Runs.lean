@@ -81,7 +81,7 @@ theorem E_ext_eq (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- A checked unit's extraction reruns at most `m′·K′` times: Flock's waits on its session. -/
 theorem unitExt_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
+    (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
     (run' : (Fin (D.V.k x) → Coin) → Trace) :
     ((unitExt D decode x s u r v ρ).eval H run').2.2 ≤ D.innerWaits x * D.innerCap x := by
   unfold unitExt
@@ -163,7 +163,7 @@ theorem E_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- A checked unit's extraction's own calls are its reveal's checks, at most `openCalls`. -/
 theorem unitExt_own_le {H : Msg → Msg} {D : Deploy Coin Col T} (hopen : OpenCallsLe H D)
-    (decode : List (ℕ × Col) → List T) {x : Msg} {s : AuditStatement} (hs : D.parse x = some s) (u : ℕ × ℕ)
+    (decode : List (ℕ × Col) → List T) {x : Msg} {s : AuditStatement} (hs : D.parse x = some s) (u : ℕ)
     (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) (run' : (Fin (D.V.k x) → Coin) → Trace) :
     (ownLog H run' (unitExt D decode x s u r v ρ)).length ≤ D.openCalls x := by
   unfold unitExt

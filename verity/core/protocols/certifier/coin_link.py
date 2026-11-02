@@ -14,9 +14,10 @@ both ways, one connection at a time, in the challenger's order:
   `coin_cells` cells a bucket of τ = `bucket_ms`; the prover's frames go to the challenger on `coin-requests`, egress, at
   `request_cells`. Each is a `grid.Certifier`: constant-rate, left-packed and FIFO. A cell leaves the link only at its
   bucket's tick, and so do a direction's end and a connection's close, so what either side sees of the other's timing is
-  the grid's occupancy, T·log2(r + 1) bits a link-window (the K charge's unit). Nothing the prover does moves a tick or
-  slows the link: a prover that doesn't take what a tick releases fails the link closed, so there is no flow control from
-  inside. The ticks read one clock, this host's monotonic one, which the challenger's release log reads too.
+  the grid's occupancy, T·log2(r + 1) bits an execution phase (the K charge's unit). Nothing the prover does moves a
+  tick or slows the link: a prover that doesn't take what a tick releases fails the link closed, so there is no flow
+  control from inside. The ticks read one clock, this host's monotonic one, which the challenger's release log reads
+  too.
 - **Content (RP5).** Each challenger frame answers the prover's oldest unanswered frame (`remote.serve` answers in order).
   It is exempt, a `COIN`, only when that frame asked for coin (label, index) after `after` and the answer is an opening
   of that coin that opens against the session's committed coin root (`live_reason` against `commitment`, the one the
@@ -27,9 +28,9 @@ both ways, one connection at a time, in the challenger's order:
 - **Fail closed.** A frame `remote` would refuse whole (a body, a head past `remote.MAX_HEAD`, a stream that ends inside
   one), a queue past `queue_cells`, a prover that leaves more than `backlog` bytes untaken, cells still queued when their
   connection ends, and a tick later than `slack` each fault a grid (`grid.Reason`), which cuts the connection at that
-  tick: nothing leaves the link uncertified, and the fault is the link-window's status.
+  tick: nothing leaves the link uncertified, and the fault is the execution phase's status.
 
-`CoinLink.summary` is what the link publishes for its window: its parameters, each link-window's status, the coins'
+`CoinLink.summary` is what the link publishes for its window: its parameters, each execution phase's status, the coins'
 frames and bytes, every counted frame's name and bytes, and the charge. Each bucket's occupancy and every frame's content
 stay witness. `protocol/coin-link.md` has the premises. The module imports only the standard library and `verity`.
 """
@@ -72,7 +73,7 @@ _HEX = re.compile(r"(?:[0-9a-f]{2})*")
 @dataclass(frozen=True)
 class CoinLinkParams:
     """The coin link's public parameters, fixed before the window (`digest` binds them). The defaults are D7's: one
-    4 KiB cell a bucket of 100 ms each way, link-windows of T = 600 buckets."""
+    4 KiB cell a bucket of 100 ms each way, execution phases of T = 600 buckets."""
 
     cell_bytes: int = 4096  # B
     coin_cells: int = 1  # r_coin
@@ -226,11 +227,11 @@ def _status(record: BlockGrid) -> str | None:
 class CoinLink:
     """The coin link (the module docstring): `handle(reader, writer)` serves one connection from the prover's side, after
     every one before it; `run()` ticks both grids from `origin`, the clock's time of bucket 0, until `stop()` or
-    `buckets`, then on to the end of that link-window, and cuts whatever is still open. `connect()` opens a connection to
-    the challenger, a (reader, writer) pair.
+    `buckets`, then on to the end of that execution phase, and cuts whatever is still open. `connect()` opens a
+    connection to the challenger, a (reader, writer) pair.
 
-    - `windows` has each link-window's two statuses as it closes, and `publish(record, params)`, when given, receives its
-      two records, coins then requests;
+    - `windows` has each execution phase's two statuses as it closes, and `publish(record, params)`, when given,
+      receives its two records, coins then requests;
     - `log` has one entry a connection once it ends;
     - `until(predicate)` waits until the link's state satisfies it, for a caller that drives a `VirtualClock`."""
 
@@ -415,10 +416,10 @@ class CoinLink:
 
     def summary(self) -> dict:
         """What the link publishes for its window: its parameters and their digest, the buckets it ticked, each
-        link-window's statuses, whether every one is complete with no cell dropped, the coins' frames and bytes, every
-        counted challenger frame's count and bytes by name, the prover's frames and bytes, the cells each grid released,
-        each connection's entry, the late ticks, and the charge in bits: each grid's timing, T·log2(r + 1) a link-window,
-        and its counted content, 8 bits a counted byte (the coins' content is 0)."""
+        execution phase's statuses, whether every one is complete with no cell dropped, the coins' frames and bytes,
+        every counted challenger frame's count and bytes by name, the prover's frames and bytes, the cells each grid
+        released, each connection's entry, the late ticks, and the charge in bits: each grid's timing, T·log2(r + 1) an
+        execution phase, and its counted content, 8 bits a counted byte (the coins' content is 0)."""
         p = self.params
         counted = {name: {"frames": self.frames[name], "bytes": self.frame_bytes[name]}
                    for name in COUNTED if self.frames[name]}

@@ -6,10 +6,11 @@ import CoreProtocol.Cli
 /-!
 # The network certificate check, a core protocol: `verity/network-certificate/v4`
 
-The auditor's check of one spatial unit's certified link-windows (record v2, `certificate.py`), as `audit.py`'s `Audit`
-runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each against the
-network certifier's public key (`LmsKey`) in the certifier session the parameters name. The id is the check's; the message
-a certificate signs has its own domain-separation tag, `verity/network-certificate-message/v2` (`messageTag`).
+The auditor's check of one spatial unit's certified execution phases (record v2, `certificate.py`), as `audit.py`'s
+`Audit` runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each
+against the network certifier's public key (`LmsKey`) in the certifier session the parameters name. The id is the
+check's; the message a certificate signs has its own domain-separation tag, `verity/network-certificate-message/v2`
+(`messageTag`).
 
 **Params**, canonical JSON:
 
@@ -22,11 +23,11 @@ The spatial unit's boundary links by direction, each list duplicate-free, a name
 link in all; the grid parameters of each direction (`GridParams`, with T, r, B and τ_b u32s, since a record encodes them so,
 and every value ≥ 1); Σ_sync (`SyncSet`: non-empty, every δ and every ρ = num/den listed once, num and den ≥ 1); the W ≥ 1
 windows checked; the LMS parameters (`lms.Params`) and the public key, 16 + N bytes; and the certifier session's id, the 32
-bytes the challenger drew for the certifier's session, which every certificate's message binds.
+bytes the challenger sampled for the certifier's session, which every certificate's message binds.
 
 **Commitment**: what the auditor holds before the check, the unit's certified records (`CertifiedRecord`: the record
-head, the 64 bytes the certifier drew for it, `salt_c`, and the certificate that signs the head's digest salted by them),
-each in `service.encode`'s bytes, concatenated:
+head, the 64 bytes the certifier sampled for it, `salt_c`, and the certificate that signs the head's digest salted by
+them), each in `service.encode`'s bytes, concatenated:
 
     RecordHead.encode() ‖ salt_c (64) ‖ u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖
     digest (64) ‖ u32be len(signature) ‖ signature
@@ -46,7 +47,8 @@ the Program's grid from these frames and syncs (`NetworkCertifier.expectedRow`, 
 `constantRate`) and compares its record digest, root and counts included, with the signed head's. Evidence that doesn't fit
 the parameters (another number of links or of syncs, a payload of other than B bytes) is a rejection.
 
-**The verdict** of each link-window, in `Audit`'s order and with its names (`_status_violation`, then the link's own checks):
+**The verdict** of each execution phase, in `Audit`'s order and with its names (`_status_violation`, then the link's own
+checks):
 * `no-verdict`: no record for it, so no certificate (a refused signer issues none), or a head not settled by the deadline;
 * `duplicate`: more than one record;
 * `signature`: the certificate is not the key's (its I), names another link, direction or window than the head, signs
@@ -60,13 +62,13 @@ the parameters (another number of links or of syncs, a payload of other than B b
   parameters digest, is not the ingress grid's.
 
 A record of a link or window the unit doesn't check is ignored, as `Audit` ignores it. The check rejects if any
-link-window has a violation other than `no-verdict`, is undecided if some are `no-verdict` and none is another, and accepts
-only when every link-window is accepted.
+execution phase has a violation other than `no-verdict`, is undecided if some are `no-verdict` and none is another, and
+accepts only when every execution phase is accepted.
 
-**Public**: nothing beyond the verdict, `{}`. `service.py` publishes a link-window's `verdict` and `deadline`; on an accepted
-unit every head is settled by the deadline.
+**Public**: nothing beyond the verdict, `{}`. `service.py` publishes an execution phase's `verdict` and `deadline`; on
+an accepted unit every head is settled by the deadline.
 
-**Profile**, the check's own: `link_windows`, every link-window's verdict in the audit's order
+**Profile**, the check's own: `link_windows`, every execution phase's verdict in the audit's order
 (`{"direction", "link", "verdict", "window"}`, all `accept` on an accepted unit), `windows`, the accepted windows
 `[0, …, W − 1]`, and `syncs`, the unit's clock, the sync declared for each window as `[δ, num, den]` (the advice the
 accepted-runs bound charges, `log2 #Σ_sync` bits per window); integers only.
@@ -322,7 +324,7 @@ def verifies (p : Params) (r : Certified) : Bool :=
      | .error _ => false) &&
     c.signs p.lms p.key p.session
 
-/-- `_status_violation`: the one record of the link-window, or its violation. -/
+/-- `_status_violation`: the one record of the execution phase, or its violation. -/
 def screen (p : Params) (found : Array Certified) : Except String Certified :=
   match found.toList with
   | [] => .error "no-verdict"
@@ -345,7 +347,7 @@ def expectedGrid (g : Grid) (W : Nat) (l : LinkOpening) (w : Nat) : Array (Array
     (List.ofFn (expectedRow g.allocation g.buckets W syncs l.frames (w * g.buckets + i))).toArray.map
       (·.map bytesOfBits)
 
-/-- The unit's records of a link-window. -/
+/-- The unit's records of an execution phase. -/
 def found (c : Commitment) (d : Direction) (l : String) (w : Nat) : Array Certified :=
   c.records.filter fun r => r.head.direction == d && r.head.link == l && r.head.window == (w : Int)
 
@@ -365,7 +367,7 @@ def egressVerdict (p : Params) (c : Commitment) (e : Evidence) (egressDigest : B
       | .ok d, .ok d' => if d' == d then none else some "mismatch"
       | _, _ => some "mismatch"
 
-/-- An ingress link-window's violation (`check_ingress_link`), none when it is accepted. -/
+/-- An ingress execution phase's violation (`check_ingress_link`), none when it is accepted. -/
 def ingressVerdict (p : Params) (c : Commitment) (ingressDigest : ByteArray) (l : String) (w : Nat) : Option String :=
   match screen p (found c .ingress l w) with
   | .error v => some v
@@ -376,8 +378,8 @@ def ingressVerdict (p : Params) (c : Commitment) (ingressDigest : ByteArray) (l 
         h.bucketMs == g.bucketMs && h.parameters == ingressDigest then none
     else some "mismatch"
 
-/-- Every link-window's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's. `egressDigest`
-and `ingressDigest` are `parameters_digest` of the egress grid with Σ_sync and of the ingress grid. -/
+/-- Every execution phase's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's.
+`egressDigest` and `ingressDigest` are `parameters_digest` of the egress grid with Σ_sync and of the ingress grid. -/
 def verdicts (p : Params) (c : Commitment) (e : Evidence) (egressDigest ingressDigest : ByteArray) : Array LinkWindow :=
   (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) => (List.range p.windows).map fun w =>
       ({ direction := .egress, link := l, window := w, violation := egressVerdict p c e egressDigest l link w } :
