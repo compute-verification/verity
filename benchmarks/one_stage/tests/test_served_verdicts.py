@@ -1106,7 +1106,9 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
     VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
     and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
-    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone."""
+    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
+    audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
+    case."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -1125,7 +1127,9 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
     v2 = d / "private" / "sampled-proofs-v2"
     (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
 from pathlib import Path
-assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private", "--from-division"], sys.argv
+assert sys.argv[1:3] in (["--serve-dir", "{d}"], ["--audit", "{d}/sampled-proofs-served"]), sys.argv
+assert sys.argv[3:] == ["--private", "{d}/private", "--from-division"], sys.argv
+Path("{tmp_path}", "served_cases.argv").write_text(json.dumps(sys.argv[1:3]))
 Path("{v2}").mkdir(parents=True)
 Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
 Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
@@ -1171,6 +1175,13 @@ sys.exit(1)
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components"]
     assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
+    assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
+    (d / "sampled-proofs-served" / "window").mkdir(parents=True)
+    (d / "sampled-proofs-served" / "window" / "case.json").write_text("{}")
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(d / "private")
+    assert run().returncode == 0
+    assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--audit", str(d / "sampled-proofs-served")]
 
 
 DIGEST = "5e" * 64
