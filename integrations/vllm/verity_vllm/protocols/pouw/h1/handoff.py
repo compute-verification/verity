@@ -17,7 +17,7 @@ GPU lease ends only when it exits.
   resuming process; its client (`Resumed`) is the session past its hello, its commitment the one the hello was answered
   with. Every frame is a request and its answer, so the hand-off falls between two of them.
 * **What is unchanged.** The resuming process runs the same `close` and release (`pouw_h1_window.finish`) the serving
-  process would have: the same empty calls, tables, rounds, trees and draw, each committed when it would have been, and
+  process would have: the same empty calls, tables, rounds, trees and sampling coin, each committed when it would have been, and
   each coin opened after the same roots, on the same session. Nothing opens in the gap: the next frame is the round coin
   of the first step past the last served one.
 * **The file** holds the run's salt key, which nothing else persists, so it is the prover's scratch (mode 0600, outside a

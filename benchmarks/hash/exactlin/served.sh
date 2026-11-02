@@ -18,6 +18,7 @@ ROOT=$PWD
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
+PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1)
 case $CC in
   12.0) export FLASHINFER_CUDA_ARCH_LIST=12.0f ;;

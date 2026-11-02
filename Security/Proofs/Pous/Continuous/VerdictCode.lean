@@ -16,7 +16,7 @@ runs `prog` against the Definition's compiled circuit (`verdict_circuit.PousVerd
 * `prog_eval`, `prog_accepts`: `verdictProg_eval` and `verdict_accepts` read through the code: run by the code, `prog`'s
   output is `accepts M` of the code's verdicts, and `1` iff `contAccepts M` holds on records with those verdicts.
 
-What stays a test: the deployed unit is the descriptor flattened (`Stmt.prog`), and no Lean reads a descriptor into
+What stays a test: the deployed unit is the descriptor flattened (`AuditStatement.prog`), and no Lean reads a descriptor into
 gates, so that the Definition's circuit is `prog` at given statics is the difftest's, at the statics it runs.
 -/
 

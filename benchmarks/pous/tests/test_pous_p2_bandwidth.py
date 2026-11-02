@@ -1,4 +1,4 @@
-"""The remote bandwidth session's prover over the P2 store (`p2_v1/bandwidth.py`): SHA-512's midstate and the device's
+"""The PoUB session's prover over the P2 store (`p2_v1/bandwidth.py`): SHA-512's midstate and the device's
 receipts held to hashlib and `p2.Sketcher`, the sketch of stored rows held to the unit sketch, the receipt tree built in
 worker processes held to `receipts.tree`, PoUS's vk paths from row digests held to the verifier's tree, the plan of a
 layout's tensors' units (the tracked registration's, the real layout's), and the toy's store served through
@@ -211,6 +211,33 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     assert kept == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
     record = {"verdict": "accept"}
     assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
+
+
+KILLED = """
+import json, socket
+with socket.create_server(("127.0.0.1", 0)) as srv:
+    print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+    conn, _ = srv.accept()
+    conn.makefile("rb").readline()
+    conn.close()
+print(json.dumps({"killed": "the session's 1 min ran out"}), flush=True)
+"""
+
+
+def test_a_party_the_gate_kills_fails_the_session_naming_the_kill(tmp_path) -> None:
+    """A party whose minutes ran out: the gate closes its session and says so on its stdout (`{"killed"}`), and the
+    session fails with that reason, not a bare closed connection."""
+    reg = B.toy(tmp_path / "toy")
+    (tmp_path / "killed.py").write_text(KILLED)
+    out = tmp_path / "killed"
+    assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
+                   "--node", reg.node.decode(), "--party", f"{sys.executable} {tmp_path / 'killed.py'}",
+                   "--party-host", "127.0.0.1", "--device", "cpu", "--ref-decode", "--workers", "1", "--out", str(out),
+                   "--expect", "accept"]) == 1
+    doc = json.loads((out / "session.json").read_text())
+    assert doc["answer"]["verdict"] == "prover-error", doc["answer"]
+    assert doc["answer"]["reason"] == ("ConnectionError: the auditor's gate killed the party: the session's 1 min ran "
+                                       "out")
 
 
 def test_the_cli_runs_as_a_script(tmp_path) -> None:

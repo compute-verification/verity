@@ -4,11 +4,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The calculator's lower bound cites guarantees by name; the tests check that the lock lists them. ReferenceLayered's
-# falsification test (test_tiers.py) checks the parameters its Lean statements state against tiers.py's.
+# falsification test (test_tiers.py) checks the parameters its Lean statements state against tiers.py's, with the
+# Dot width read from the BF16 GEMM's step (gemm.py's GEMM_HOPPER).
 inputs = [
   "Security/lean-audit.json",
   "Security/Definitions/Nci/Assumptions/Layered.lean",
   "Security/Definitions/Nci/Guarantees/Layered.lean",
+  "verity/ml/circuits/ops/boolean/gemm.py",
   # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ PoUW's H1 record (test_tiers.py)
   "Security/Definitions/Core/Accel/Sm120.lean",
   "verity/core/protocols/pouw/circuit/h1device.py",
