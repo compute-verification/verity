@@ -265,7 +265,6 @@
     {"file": "benchmarks/datacenter/datacenter/binding.py", "count": 1},
     {"file": "benchmarks/datacenter/datacenter/examples.py", "count": 2},
     {"file": "benchmarks/datacenter/tests/test_datacenter.py", "count": 4},
-    {"file": "benchmarks/harness/tests/test_bench.py", "count": 1},
     {"file": "benchmarks/hash/dither/dither_one.py", "count": 1},
     {"file": "benchmarks/hash/dither/h1o.cu", "count": 1},
     {"file": "benchmarks/hash/dither/j10r90.py", "count": 1},
