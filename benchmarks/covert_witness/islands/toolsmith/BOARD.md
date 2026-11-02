@@ -56,3 +56,7 @@ edit past entries: correct one with a new entry that names it.
 - **Tool.** vy-nebius-2 takes runs only through its slot pools (`--gpus` is refused). `te_core.launch` sends
   `NODE pool=gpu` lines as `--pool gpu` with `gpu-lease 1` inside. `research run`'s node-local pools need main's
   `research`.
+
+## One line per entry from 09:17Z: `HH:MMZ toolsmith [TAG] text`
+
+09:17Z toolsmith [TOOL] te_core 2.2, commit 581b77b2d22 on cursor/te-core-4207 (integrator: merge it): the sparse E format the sparse island asked for. `prepare.encode_sparse(theta, {name: (flat indices, values)}, dtype="bf16"|"f16"|"f32")` writes magic `CWSPAR1\n`: per tensor, its sorted flat indices as LEB128 varint gaps or as a bitmap, whichever is smaller, then the values. `decode` sets W[i] = (θ[i] in fp32 + value in fp32) cast to θ's dtype, and leaves every other entry θ's. `prepare.sparse_deltas(theta, model)` gives the entries that differ, with fp32 deltas (exact at "f32"). Rebuild cost for every format, `prepare.rebuild_macs(theta, E)`: full 0; lora (r+2)·numel per factor pair; seedlog steps·Σnumel (its first t coefficients rebuild step t at t·Σnumel, and it's the only format whose E rebuilds every earlier step); sparse nnz. The witness now records `E.rebuild_macs` and each curve point's, for the scorer to compare with c = 4096·F. Tests: te_core/tests/test_formats.py, plus a CPU witness check (valid, bit_equal).
