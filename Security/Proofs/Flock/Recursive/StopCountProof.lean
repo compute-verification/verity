@@ -230,4 +230,95 @@ theorem orphan_push_ne {evs : Events} {e : Event} (he : ∀ s p, e ≠ .slot s p
     · rw [hd] at h
       simp at h
 
+/-! ## The ops' events -/
+
+theorem openSession_evs (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
+    (release : Option Core.Firewall.Schedule) :
+    (openSession evs stream parts budget release).2 = evs ∨
+      ∃ s, (openSession evs stream parts budget release).2 =
+        evs.push (.opened { session := s, stream, parts, budget, release }) := by
+  unfold openSession openSession.go openSession.made
+  simp only
+  repeat' split
+  all_goals first | exact Or.inl rfl | exact Or.inr ⟨_, rfl⟩
+
+theorem stop_evs (evs : Events) (s part why : String) :
+    (stop evs s part why).2 = if (stopOf evs s).isSome then evs else evs.push (.stop s part why) := by
+  by_cases h : (stopOf evs s).isSome <;> simp [Core.Firewall.stop, h]
+
+theorem stop_evs_none {evs : Events} {s : String} (part why : String) (h : stopOf evs s = none) :
+    (stop evs s part why).2 = evs.push (.stop s part why) := by
+  rw [stop_evs, h]
+  rfl
+
+theorem slot_evs (evs : Events) (s part : String) :
+    (slot evs s part = evs.push (.slot s part) ∨
+      ∃ k s' p' w, orphan evs = some (k, s', p') ∧ stopOf evs s' = none ∧
+        slot evs s part = (evs.push (.stop s' p' w)).push (.slot s part)) ∧
+    ∀ k s' p', orphan evs = some (k, s', p') → (stopOf (slot evs s part) s').isSome := by
+  refine ⟨?_, fun k s' p' ho => ?_⟩
+  · unfold Core.Firewall.slot
+    cases ho : orphan evs with
+    | none => exact Or.inl rfl
+    | some t =>
+      obtain ⟨k, s', p'⟩ := t
+      dsimp only
+      cases hst : stopOf evs s' with
+      | none =>
+        exact Or.inr ⟨k, s', p', _, rfl, hst, rfl⟩
+      | some _ => exact Or.inl rfl
+  · unfold Core.Firewall.slot
+    rw [ho]
+    dsimp only
+    apply stopOf_push_isSome
+    cases hst : stopOf evs s' with
+    | none => exact stopOf_push_stop_isSome evs s' p' _
+    | some _ => simp only [Option.isNone_some, Bool.false_eq_true, ↓reduceIte, hst, Option.isSome_some]
+
+/-- `admit` refusing records the refusal, after the stop at the next statement if the part was asked out of turn. -/
+theorem admit_error {evs : Events} {s part why : String} {evs' : Events} (h : admit evs s part = (.error why, evs')) :
+    evs' = evs.push (.refused s part) ∨ ∃ p w, evs' = (evs.push (.stop s p w)).push (.refused s part) := by
+  unfold admit admit.served admit.refuse at h
+  simp only at h
+  repeat' split at h
+  all_goals
+    first
+    | (simp only [Prod.mk.injEq] at h; exact Or.inl h.2.symm)
+    | (simp only [Prod.mk.injEq] at h; exact Or.inr ⟨_, _, h.2.symm⟩)
+    | simp at h
+
+theorem after_go {a : Admitted} {now : ℕ} {prove ready : Core.Firewall.Run} {a' : Admitted}
+    (h : Decision.after a now prove ready = .go a') : a' = a :=
+  (Properties.Firewall.afterOnTime a now prove ready a' h).1
+
+/-- What `partsOk` admits: at least one statement, and distinct ones. -/
+theorem partsOk_ok {parts : Array String} (h : partsOk parts = .ok ()) :
+    0 < parts.size ∧ ∀ i j (hi : i < parts.size) (hj : j < parts.size), parts[i] = parts[j] → i = j := by
+  unfold partsOk at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i hc
+    have hne : parts.isEmpty = false := by
+      revert hc; cases parts.isEmpty <;> simp
+    have hd : ((List.range parts.size).all fun i =>
+        (List.range parts.size).all fun j => i == j || parts[i]! != parts[j]!) = true := by
+      revert hc
+      cases ((List.range parts.size).all fun i =>
+        (List.range parts.size).all fun j => i == j || parts[i]! != parts[j]!) <;> simp
+    refine ⟨?_, fun i j hi hj hij => ?_⟩
+    · have h0 : parts.size ≠ 0 := fun h0 => by
+        have := Array.isEmpty_iff_size_eq_zero.mpr h0
+        rw [hne] at this
+        exact absurd this (by decide)
+      omega
+    · rw [List.all_eq_true] at hd
+      have hi' := hd i (List.mem_range.mpr hi)
+      rw [List.all_eq_true] at hi'
+      have hij' := hi' j (List.mem_range.mpr hj)
+      cases hb : (i == j)
+      · rw [hb, Bool.false_or, getElem!_pos parts i hi, getElem!_pos parts j hj, hij] at hij'
+        simp at hij'
+      · exact beq_iff_eq.mp hb
+
 end Flock.StopCount
