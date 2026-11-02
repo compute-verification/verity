@@ -2,8 +2,8 @@
 admitted PR, one merge commit each, in the order they were admitted.  Drive (`research.drive`) fast-forwards `checked` to the top
 of the longest prefix of `next` whose every member has a reviewer's land verdict at its head, merges onto `checked` each member
 whose merge changes no Lean, lock or soundness-path file (drive.toml's `lowrisk_lane`) on its ready mark alone, and `main` to a commit of `checked`
-only once that commit's after-landing run, the full check, passed every step on the merge gate (not circuit-check, ci.toml's
-`gate = false`): `main` holds only tested commits.
+only once that commit's after-landing run, the full check, passed every step on the merge gate (not circuit-check, policy.toml's
+`off_gate`), or failed it only where an unexpired allowance of that policy covers: `main` holds only tested commits.
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
@@ -1278,17 +1278,21 @@ class Queue:
         return r
 
     def _clone(self) -> None:
-        if not (self.workdir / ".git").exists():
+        if fresh := not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
             self._remote(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
         # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
         _git(self.workdir, "remote", "set-url", "origin", self.remote)
-        # `.gitattributes` names this driver for every lean-audit.json; without it in the clone's config git merges the records
-        # as text, and any two PRs that each add a record conflict
-        from .clone import RECORD_DRIVER
+        # `.gitattributes` names these drivers; `git_env` gives them to the queue's own git, but without them in the clone's
+        # config any other git in it (one by hand) merges the records line by line
+        from .clone import Refused, set_drivers
 
-        for k, v in RECORD_DRIVER.items():
-            _git(self.workdir, "config", k, v)
+        try:
+            if (changed := set_drivers(self.workdir)) and not fresh:
+                self.log(f"research queue: set the record merge drivers in {self.workdir}'s config, which lacked or held "
+                         f"another value for {', '.join(changed)}")
+        except Refused as e:
+            raise QueueError(str(e)) from None
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard")
         _git(self.workdir, "clean", "-qfdx")
@@ -1736,7 +1740,7 @@ class Queue:
             return None, (f"the members below it change {', '.join(changed)} from `{into}` {main[:12]}: its move runs "
                           f"`{into}`'s scripts, and the members above it are carried across it with its base's, so it waits "
                           f"until those members land on `{into}`")
-        with tempfile.TemporaryDirectory(prefix="queue-move-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="queue-move-", ignore_cleanup_errors=True) as tmp:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
             try:
@@ -1823,7 +1827,7 @@ class Queue:
         script = _git(self.workdir, "show", f"{self.base}:{RESTACK}", check=False)
         if script.returncode:
             return dict.fromkeys(keys, {"why": f"`{self.into}` has no {RESTACK}"})
-        with tempfile.TemporaryDirectory(prefix="queue-restack-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="queue-restack-", ignore_cleanup_errors=True) as tmp:
             path = Path(tmp, "restack.py")
             path.write_text(script.stdout, errors="surrogateescape")
             r = subprocess.run([sys.executable, str(path), *heads, "--move-commit", mv.commit, "--script", RENAME,
@@ -2344,7 +2348,7 @@ def base_drivers(repo: Path, base: str):
                           for m in re.findall(r"(?:^|\s)merge=(\S+)", ln)) if not attrs.returncode else {}
     cmds = {k: c for k in (f"merge.{n}.driver" for n in names)
             if (c := RECORD_DRIVER.get(k) or _git(repo, "config", "--get", k, check=False).stdout.strip())}
-    with tempfile.TemporaryDirectory(prefix="research-drivers-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="research-drivers-", ignore_cleanup_errors=True) as tmp:
         held = {s.split(":", 1)[1] for s in _blobs(repo, [f"{base}:{p}" for c in cmds.values() for p in _DRIVER_PATH.findall(c)])}
         files = []
         for d in sorted({posixpath.dirname(p) for p in held}):
@@ -2414,7 +2418,7 @@ def repinned(repo: Path, tree: str, ours: str, theirs: str, conflicted: list[str
     pins = pins_at(repo, ours)
     if not conflicted or any(p not in pins for p in conflicted):
         return None
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         env = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
         _git(repo, "read-tree", tree, env=env)
         for path in conflicted:
@@ -2689,9 +2693,21 @@ QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu",
 LEAN_BUILDS = ("verity/core/service/flock",)
 
 
+def allowed(repo: Path, base: str | None) -> Callable[[dict], bool] | None:
+    """What drive's policy at ``base`` (the quick tier's base, a commit of `main`: `research.policy.at`) allows of a failed suite's
+    row, as drive judges it after landing; None when it allows nothing there or can't be read, so every failure refuses."""
+    from . import policy
+
+    pol = policy.at(repo, base) if base else None
+    if not isinstance(pol, policy.Policy) or not pol.allow:
+        return None
+    now = time.time()
+    return lambda row: pol.suite(str(row.get("name")), row, now).covered
+
+
 class QuickTier:
     """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout (`quick_tier.tier`, judged by
-    `quick_tier.judge`): one worktree of the caller's repository per machine under `root`, checked out at the head and cleaned of
+    `quick_tier.judge`, with what drive's policy on `main` allows: `allowed`): one worktree of the caller's repository per machine under `root`, checked out at the head and cleaned of
     everything but its `.venv` and the `.lake` of each of `LEAN_BUILDS` for each PR (one PR at a time: `{name}.lock`), so its
     environment syncs only what moved and Lake rebuilds only what changed.  Each of `LEAN_BUILDS` is built first (with the PATH's
     `lake`, else elan's; none, or a failed build, refuses).  Passes are cached by input (`suites.py`), so a re-run after a failure
@@ -2711,7 +2727,8 @@ class QuickTier:
             if base is None:
                 return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
             out = self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
-            return quick_tier.judge(quick_tier.tier(wt, out, pr.head, base, QUICK_TIER, LEAN_BUILDS), pr.head)
+            return quick_tier.judge(quick_tier.tier(wt, out, pr.head, base, QUICK_TIER, LEAN_BUILDS), pr.head,
+                                    covers=allowed(self.repo, base))
 
     @contextlib.contextmanager
     def _checkout(self, pr: PR):
@@ -2839,7 +2856,7 @@ class RemoteQuickTier(QuickTier):
               f"(`research inspect {rid}`)", flush=True)
         d = R.runs_root() / rid
         status, why = self._wait(d, on)
-        return why or judge_run(d, rid, on, pr.head, status)
+        return why or judge_run(d, rid, on, pr.head, status, allowed(self.repo, base))
 
     def _wait(self, d: Path, on: str) -> tuple[dict, str | None]:
         """The run's status.json once it says the run ended, from its records fetched every `poll_s` until the wait's deadline; or why
@@ -2901,21 +2918,26 @@ def tier_report(d: Path, rid: str, on: str, status: dict):
     return res, None
 
 
-def judge_report(res, rid: str, on: str, head: str, status: dict) -> str | None:
-    """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``; else what failed."""
-    if (why := quick_tier.judge(res.doc.get("tier"), head, f"its output is in run {rid}'s log on {on}")) is not None:
+def judge_report(res, rid: str, on: str, head: str, status: dict, covers: Callable[[dict], bool] | None = None) -> str | None:
+    """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``, its failures all
+    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: `done`, exit 0 and validation
+    passed when it found no failure, and `done`, exit 1 and validation failed when every one it found is allowed."""
+    tier, output = res.doc.get("tier"), f"its output is in run {rid}'s log on {on}"
+    if (why := quick_tier.judge(tier, head, output, covers)) is not None:
         return why
-    if status.get("state") != "done" or status.get("rc") != 0 or res.validation_status != "passed":
+    want = ("done", 0, "passed") if quick_tier.judge(tier, head, output) is None else ("done", 1, "failed")
+    if (status.get("state"), status.get("rc"), res.validation_status) != want:
         return (f"run {rid}'s facts show a pass, but it ended {status.get('state')} (exit {status.get('rc')}) with validation "
                 f"{res.validation_status}")
     return None
 
 
-def judge_run(d: Path, rid: str, on: str, head: str, status: dict) -> str | None:
-    """None when ended run ``rid`` (records in ``d``) reports a pass of the quick tier at ``head``; else what failed: a run that ends
-    without the facts, with facts from another run or head, or other than `done` with exit 0, is a failure."""
+def judge_run(d: Path, rid: str, on: str, head: str, status: dict, covers: Callable[[dict], bool] | None = None) -> str | None:
+    """None when ended run ``rid`` (records in ``d``) reports a pass of the quick tier at ``head`` (``covers``: `judge_report`);
+    else what failed: a run that ends without the facts, with facts from another run or head, or other than as it judged
+    itself, is a failure."""
     res, why = tier_report(d, rid, on, status)
-    return why or judge_report(res, rid, on, head, status)
+    return why or judge_report(res, rid, on, head, status, covers)
 
 
 def _json_file(p: Path) -> dict:
@@ -3500,8 +3522,9 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
     lists the guarantee under `guarantees` (removed), or restated it: it records the guarantee otherwise than ``base`` does,
     its owner aside, or a definition both say it reads has another hash (`check.py --update` keeps a premise only while the
     statement prints it, and the head's records run checked its lock).  It may drop an entry whose text (a premise, a frozen
-    entry's reason) it holds under a key of the section ``base`` lacks (renamed), and a guarantee's premises while it adds as
-    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them)."""
+    entry's reason) it holds under a key of the section ``base`` lacks (renamed), a guarantee's premises while it adds as
+    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them), and a frozen
+    entry's reason while it keeps the key (reworded: `check.py` reads the key and the reason's category, not its wording)."""
     listed, was = merged.get("guarantees") or {}, base.get("guarantees") or {}
     reads, read = _read_by(base), _read_by(merged)
 
@@ -3521,7 +3544,7 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
             had, kept = _texts(section, b, g), _texts(section, m, g)
             gone = [t for t in had if t not in kept and t not in moved]
             if section == "frozen":
-                out += [f"shape.frozen[{g}]" for _ in gone]
+                out += [f"shape.frozen[{g}]" for _ in gone if g not in m]
             elif len(gone) > len([t for t in kept if t not in had]):
                 out += [f"shape.inline[{g}]: " + (t if len(t) <= LOCK_DROP_SHOWN else t[:LOCK_DROP_SHOWN] + "…") for t in gone]
     return out
@@ -3994,7 +4017,8 @@ FAST_KIND, LEAN_AUDIT_STEP = "lean-fast/v1", "lean-audit"
 #: the fast path's command, which `RecordsGate` names for each package it can't vouch for
 RECORDS_COMMAND = ("research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
-#: where a records run keeps, under its `--out`, the record `--update` wrote when it differs from the commit's lock
+#: where a records run keeps, under its `--out`, PKG's record `--update` wrote when it differs from the commit's lock (each
+#: package's, PKG's and a requirer's, is also under `record/<path>/`)
 RECORD_KEPT = "record/" + LEAN_LOCK
 #: a requirer's report in a records run's files (`lean_changed.reports`: `requirer-<path, each run of other characters `_`>/`)
 REQUIRER_AUDIT = re.compile(r"(?:^|/)requirer-([^/]+)/audit\.json$")
@@ -4016,7 +4040,8 @@ RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/com
 #: won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read vouches for nothing
 RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 5000, 200, 48
 #: the files of a package that a records run doesn't read, and so leaves out of its inputs (`RecordsGate._differs`): those in a
-#: `tests/` or `test/` directory of it, Markdown and READMEs; everything else stays, as a build may read any file
+#: `tests/` or `test/` directory of it, Markdown and READMEs, but never a `.lean` file, a lakefile, `lake-manifest.json` or a
+#: lock, wherever it sits (the audit walks every `.lean` file of the package); everything else stays, as a build may read any file
 RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
 _SHA = re.compile(r"[0-9a-f]{40}")
 
@@ -4034,8 +4059,9 @@ def _blob(repo: Path, commit: str, path: str) -> bytes | None:
 class RecordsRun:
     """A records run (`lean_changed.py --records PKG`) of one commit, as `research run` published it: its result (`FAST_KIND`:
     PKG, `validation.status`, `path`: `slot`, `dev-cache` or `reused`) and its run files ({path: sha256}), which hold check.py's
-    `audit.json` for PKG and for each requirer (`requirer-<path>/`) and, when `--update` wrote a record that differs from the
-    commit's lock, `record/lean-audit.json`."""
+    `audit.json` for PKG and for each requirer (`requirer-<path>/`) and, for each package whose record `--update` wrote differs
+    from the commit's lock (PKG, or a requirer whose every failure was a record difference), `record/<path>/lean-audit.json`,
+    PKG's also as `record/lean-audit.json`."""
     id: str
     pkg: str
     passed: bool
@@ -4043,9 +4069,12 @@ class RecordsRun:
     files: dict[str, str]
     art: str | None
 
-    def kept_record(self) -> str | None:
-        """The sha256 of the record `--update` wrote that differs from the commit's lock, or None when there's none."""
-        return next((s for p, s in sorted(self.files.items()) if (p == RECORD_KEPT or p.endswith("/" + RECORD_KEPT))
+    def kept_record(self, pkg: str | None = None) -> str | None:
+        """The sha256 of the record `--update` wrote for ``pkg`` (PKG by default) that differs from the commit's lock, or None
+        when there's none."""
+        pkg = self.pkg if pkg is None else pkg
+        want = [f"record/{pkg}/{LEAN_LOCK}", *([RECORD_KEPT] if pkg == self.pkg else [])]
+        return next((s for p, s in sorted(self.files.items()) if any(p == w or p.endswith("/" + w) for w in want)
                      and "requirer-" not in p), None)
 
     def audits(self) -> list[str]:
@@ -4055,9 +4084,12 @@ class RecordsRun:
         return sorted(top) + sorted(p for p in self.files if REQUIRER_AUDIT.search(p))
 
     def reports_of(self, pkg: str) -> list[str]:
-        """The per-package reports (`audit-<name>/report.json` beside an `audit.json`) that may be ``pkg``'s: a package audited
-        beside PKG or a requirer, its `proved_in` one (`Security/Proofs` in a run of `Security`); its path is in the report."""
-        each = (posixpath.join(posixpath.dirname(a), f"audit-{posixpath.basename(pkg)}", "report.json") for a in self.audits())
+        """The per-package reports (`audit-<tag>/report.json` beside an `audit.json`) that may be ``pkg``'s: a package audited
+        beside PKG or a requirer, its `proved_in` one (`Security/Proofs` in a run of `Security`); its path is in the report.
+        The tag is lean/check.py's: the package's repository path with each run of other characters as `_`
+        (`audit-Security_Proofs`)."""
+        tag = re.sub(r"[^A-Za-z0-9]+", "_", pkg.strip("/"))
+        each = (posixpath.join(posixpath.dirname(a), f"audit-{tag}", "report.json") for a in self.audits())
         return [p for p in each if p in self.files]
 
 
@@ -4084,11 +4116,15 @@ class RecordsGate:
     `AUDIT: FAIL` still writes a record, which reads as a pass, and a head marked on it fails a train's Lean check, about 50
     minutes later.
 
-    Two heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one that commits exactly the
-    record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/lean-audit.json`),
-    changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
-    but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
-    for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
+    Four heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one whose tree is a parent's
+    byte for byte (a merge that resolved to its own side, the parent vouched); one whose one parent is vouched and has the
+    package's inputs (`_inputs`, non-Lean tests and docs aside: a tests-only fix above a record commit); one that commits
+    exactly the record a records run of its one parent regenerated for a package that passed there (`--update`'s
+    `record/<path>/lean-audit.json`, PKG's or a requirer's), changing nothing but locks, or of a commit below a chain of such
+    commits (Security's record on top of Security/Proofs'), each lock each of them changes being a record a records run that
+    passed its package regenerated below it in the chain; and one that only merged `main` into a vouched commit, every file it
+    changed being main's whole but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast
+    path reports `path: reused` for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
     A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): every file of
     the package's directory, lock included, and of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
@@ -4153,8 +4189,8 @@ class RecordsGate:
         for pkg in missing:
             lines += self._failures(pr.head, pkg)
             lines.append(f"start `{RECORDS_COMMAND.format(pkg=pkg)}` and mark once it passed; when its run files hold "
-                         f"`lean-audit/{RECORD_KEPT}`, commit exactly that over {pkg}/{LEAN_LOCK} and mark that commit, which "
-                         f"needs no run of its own")
+                         f"records under `lean-audit/record/` (`lean-audit/record/{pkg}/{LEAN_LOCK}`, a requirer's beside it), "
+                         f"commit exactly each over the lock of its path and mark that commit, which needs no run of its own")
         notes = f" ({'; '.join(self.notes[:3])})" if self.notes else ""
         return (f"it changes the Lean lock of {', '.join(missing)} against `{self.into}`, and the store holds no records run of "
                 f"{pr.head[:12]} in which {'it' if len(missing) == 1 else 'each'} passed on the head's own lock, nor a Lean check of "
@@ -4276,7 +4312,7 @@ class RecordsGate:
 
     def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
         """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
-        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside)."""
+        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside, never Lean)."""
         if not commits:
             return set()
         r = subprocess.run(["git", "diff-tree", "--stdin", "--always", "-r", "-z", "--name-only", "--no-renames", "--", *inputs],
@@ -4301,7 +4337,9 @@ class RecordsGate:
             p = next((p for p in pkgs if p == "." or tok.startswith(p + "/")), None)
             rel = tok if p in (None, ".") else tok[len(p) + 1:]
             name = posixpath.basename(rel)
-            if not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or name.lower().endswith(".md") or name.startswith("README")):
+            lean = name.endswith(".lean") or name.startswith("lakefile.") or name in ("lake-manifest.json", LEAN_LOCK)
+            if lean or not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or name.lower().endswith(".md")
+                            or name.startswith("README")):
                 out.add(at)
         if n != len(commits):                                    # a pair it skipped (an object it couldn't read) is no match
             raise QueueError(f"git diff-tree --stdin compared {n} of {len(commits)} commits")
@@ -4366,7 +4404,7 @@ class RecordsGate:
     def _reported(self, run: RecordsRun, path: str, pkg: str) -> tuple[bool, str | None] | None:
         """What run file ``path`` (an `audit.json`, or one package's `report.json`) says of ``pkg``; None when it doesn't name it."""
         try:
-            with tempfile.TemporaryDirectory() as d:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
                 doc = json.loads((self.store.fetch(run.art, Path(d), paths=[path]) / path).read_text())
         except Exception as e:  # noqa: BLE001
             return False, f"records run {run.id}'s {path} can't be read ({type(e).__name__})"
@@ -4390,6 +4428,10 @@ class RecordsGate:
         if depth >= RECORDS_WALK:
             return None
         parents = _out(self.repo, "rev-list", "--parents", "-n", "1", commit).split()[1:]
+        tree = _out(self.repo, "rev-parse", f"{commit}^{{tree}}").strip()
+        for p in parents:
+            if _out(self.repo, "rev-parse", f"{p}^{{tree}}").strip() == tree and (how := self._vouch(p, pkg, depth + 1)):
+                return f"{commit[:12]} has {p[:12]}'s tree byte for byte, where {how}"
         if len(parents) == 2 and self._main_merge(commit, *parents):
             if how := self._vouch(parents[0], pkg, depth + 1):
                 return f"{commit[:12]} only merges `main`'s {parents[1][:12]} into {parents[0][:12]}, where {how}"
@@ -4397,6 +4439,14 @@ class RecordsGate:
         if len(parents) != 1:
             return None
         below = parents[0]
+        try:
+            same = below not in self._differs(commit, [below], self._inputs(commit, pkg))
+        except (QueueError, ValueError, TypeError, AttributeError) as e:
+            self.notes.append(f"{pkg}'s inputs at {commit[:12]} can't be compared with {below[:12]}'s ({type(e).__name__}: {e})")
+            same = False
+        if same:
+            how = self._vouch(below, pkg, depth + 1)
+            return how and f"{commit[:12]} changes none of {pkg}'s records inputs over {below[:12]}, where {how}"
         files = _out(self.repo, "diff", "--name-only", "--no-renames", below, commit).splitlines()
         if not files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
             return None
@@ -4405,17 +4455,36 @@ class RecordsGate:
             how = self._vouch(below, pkg, depth + 1)
             return how and f"{commit[:12]} changes only other packages' locks over {below[:12]}, where {how}"
         sha = hashlib.sha256(_blob(self.repo, commit, lock) or b"").hexdigest()
-        for run in self._at(below)[0]:
-            if run.pkg == pkg and run.kept_record() == sha and self._audited(run, pkg)[0]:
-                return f"{commit[:12]} commits the record records run {run.id} of {below[:12]} regenerated, where {pkg} passed"
-        return None
+        chain, steps = [below], []        # steps[i]: {lock: its sha} of each lock chain[i] changes over chain[i + 1]
+        while True:
+            base = chain[-1]
+            if all(self._kept(chain[i + 1:], f, s) for i, step in enumerate(steps) for f, s in step.items()):
+                for run in self._at(base)[0]:
+                    if run.kept_record(pkg) == sha and self._audited(run, pkg)[0]:
+                        via = f", over {len(steps)} commit(s) of records runs' records," if steps else ""
+                        return (f"{commit[:12]} commits the record records run {run.id} of {base[:12]}{via} regenerated, "
+                                f"where {pkg} passed")
+            if depth + len(chain) >= RECORDS_WALK:
+                return None
+            parents = _out(self.repo, "rev-list", "--parents", "-n", "1", base).split()[1:]
+            files = _out(self.repo, "diff", "--name-only", "--no-renames", parents[0], base).splitlines() if len(parents) == 1 else []
+            if not files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
+                return None
+            steps.append({f: hashlib.sha256(_blob(self.repo, base, f) or b"").hexdigest() for f in files})
+            chain.append(parents[0])
+
+    def _kept(self, commits: list[str], lock: str, sha: str) -> bool:
+        """Whether a records run at one of ``commits`` passed ``lock``'s package and kept ``sha`` as the record `--update` wrote."""
+        pkg = posixpath.dirname(lock) or "."
+        return any(run.kept_record(pkg) == sha and self._audited(run, pkg)[0]
+                   for c in commits for run in self._at(c)[0])
 
     def _passed(self, commit: str, pkg: str) -> tuple[str, str, str] | None:
         """(`records run` or `Lean check`, its id, a records run's `path`) of the first run of ``commit`` that passed ``pkg`` on
         the commit's own lock, or None."""
         runs, checks = self._at(commit)
         for run in runs:
-            if self._audited(run, pkg)[0] and not (run.pkg == pkg and run.kept_record()):
+            if self._audited(run, pkg)[0] and not run.kept_record(pkg):
                 return "records run", run.id, run.path
         for check in checks:
             if self._checked(check, pkg)[0]:
@@ -4440,7 +4509,7 @@ class RecordsGate:
         try:
             if not check.art or AUDIT not in {f["path"] for f in self.store.listing(check.art)}:
                 return False, f"the Lean check {check.id} published no {AUDIT}"
-            with tempfile.TemporaryDirectory() as d:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
                 audit = json.loads((self.store.fetch(check.art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
             reps = audit.get("packages")
             regen = audit.get("regenerated") or {}
@@ -4478,7 +4547,7 @@ class RecordsGate:
         tool = self.lock_merge
         if not tool.is_file():
             return False
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             sides = []
             for name, c in (("base", base), ("ours", ours), ("theirs", theirs)):
                 (p := Path(d) / name).write_bytes(_blob(self.repo, c, path) or b"")
@@ -4498,9 +4567,10 @@ class RecordsGate:
         out = [why for c in checks if (why := self._checked(c, pkg)[1])]
         for run in runs:
             ok, line = self._audited(run, pkg)
-            if ok and run.pkg == pkg and run.kept_record():
+            if ok and run.kept_record(pkg):
                 out.append(f"records run {run.id} of {head[:12]} passed {pkg} only with the record its `--update` wrote, which "
-                           f"differs from the head's lock: commit its `{RECORD_KEPT}`")
+                           f"differs from the head's lock: commit its "
+                           f"`{RECORD_KEPT if pkg == run.pkg else f'record/{pkg}/{LEAN_LOCK}'}`")
                 break
             if line:
                 out.append(line)
@@ -4654,7 +4724,8 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
             "which is no open PR's head now, nor its tree (pushed again since, or closed?)"))
     if records is not None and (why := records(prs[0])):
         return refuse(f"#{prs[0].number} is not marked ready at {prs[0].head[:12]}: {why}")
-    return _mark(store, prs[0], by, judge_report(res, rid, machine, head, status), "judge")
+    covers = allowed(repo or Path.cwd(), tier.get("base") if isinstance(tier, dict) else None)
+    return _mark(store, prs[0], by, judge_report(res, rid, machine, head, status, covers), "judge")
 
 
 def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:

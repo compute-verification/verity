@@ -85,9 +85,9 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    or prover, is refused, and the challenger checks that first (`core_check.recorded_reason`), asking for the reveal
    only after. So one proxy records one stream and prover for p. The certifier reveals p's salt once, and
    only until its reveal deadline on its own clock after p's end (`Proxy(reveal_deadline=…)`, one PoUW window by
-   default), so one registration of p, made after p's work, gets it. `salt.Registrations` is a once-only registration
-   ledger: p registers once per stream and prover, when the challenger receives it, before its draw and any proof (its
-   tiles are private, so that is the finest public key), and a second registration under them is refused
+   default), so one registration of p, made after p's work, gets it. `salt.WindowOpens` is a once-only ledger of
+   opens: p opens once per stream and prover, when the challenger receives it, before its draw and any proof (its
+   tiles are private, so that is the finest public key), and a second open under them is refused
    (`reregistered`). It is not credit: a window's credit is its outcome's verdict, and no period record yet closes a
    stream's credit at its first refused window.
    - **No served-zk certified window is credited today.** A certified window credits only units that read its salt
@@ -568,11 +568,11 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   at n = 2,048).
 - **β = 129** (f = 20, `Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2`) needs
   an unsigned P and a SASS check that the IADD3 with two negated sources is one instruction. The native route-U kernel
-  (`benchmarks/pouw/kernels/pouw_gemm.cu`, `ncp_route_u`) reads X + β already formed, so its SASS shows the u8 × s8 `IMMA` but not the
+  read X + β already formed, so its SASS showed the u8 × s8 `IMMA` but not the
   forming step; `ncp-v1` stays at β = 128.
 - **γ is conditional on TTNCP_U(0.5%).** A2, as first written, required the model program to
   reproduce every output, not only the checked words. Restricted to the checked words, A2 makes the Theorem D chain
-  equivalent to TT_NCP rather than a reduction to milder assumptions (`Pouw.SecurityProofs.Dimension.A2WordsIff`). So
+  equivalent to TT_NCP rather than a reduction to milder assumptions, and Lean no longer states it. So
   TTNCP_U, TT_NCP over the route-U checked values, stays the named conjecture, and every γ here holds only under it.
 
 - **P.** `ncp-v1` uses the word-granular production P v1.1: a SHAKE256 Fisher-Yates over the k/4 aligned words from
