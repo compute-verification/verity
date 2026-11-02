@@ -13,7 +13,8 @@ Mechanisms (`--mech`):
   gradient at its first step).
 - `galore`: every target matrix is trained in full through a rank-r projected Adam (GaLore; `--opt muon`: Muon's
   orthogonalized momentum step on the projected gradient instead). The projector is the top-r singular basis of the
-  gradient, refreshed K times, so each period's update is exactly P_j @ N_j, one rank-r piece.
+  gradient, refreshed K times, so each period's update is exactly P_j @ N_j, one rank-r piece (`--alloc 1`: each
+  refresh gives the tensors ranks greedily by the gradient's σ² per byte, as many bytes as rank r on every tensor).
   After every step each W is rebuilt from θ with the pieces so far as E stores them (N's and the norm gains' fp32
   masters kept apart), so the next step reads decode(θ, E_t) bit for bit and declares E_t (`prepare.declare_step`):
   merged steps the harness credits as a counterexample family.
@@ -60,7 +61,7 @@ CHECKPOINTS = 20
 #: the factors' and full tensors' storage in E (`--dtype`); f16 keeps 4x bf16's mantissa for norm gains near 1
 CODE = {"name": "f16", "dtype": torch.float16}
 ARM_KEYS = {"mech": str, "lr": float, "rank": int, "pieces": int, "alpha": float, "norm_lr": float, "warmup": int, "rewarm": int,
-            "dirs": int, "targets": str, "blocks": str, "basis": str, "opt": str, "project_every": int}
+            "dirs": int, "targets": str, "blocks": str, "basis": str, "opt": str, "project_every": int, "alloc": int}
 
 
 # ---- targets and byte accounting --------------------------------------------------------------------------------------
@@ -556,13 +557,15 @@ class GaloreState:
         self.m = self.v = self.N = None
         self.t = 0
 
-    def refresh(self, grad: torch.Tensor, keep: bool) -> None:
-        u, _, vh = torch.linalg.svd(grad.float(), full_matrices=False)
-        self.P = u[:, :self.r].contiguous() if self.left else vh[:self.r].T.contiguous()
-        shape = (self.r, grad.shape[1]) if self.left else (grad.shape[0], self.r)
+    def refresh(self, svd: tuple, r: int, keep: bool) -> None:
+        u, _, vh = svd
+        keep = keep and r == self.r
+        self.r = r
+        self.P = u[:, :r].contiguous() if self.left else vh[:r].T.contiguous()
+        shape = (r, vh.shape[1]) if self.left else (u.shape[0], r)
         if not keep or self.m is None:
-            self.m, self.v, self.t = torch.zeros(shape, device=grad.device), torch.zeros(shape, device=grad.device), 0
-        self.N = torch.zeros(shape, device=grad.device)
+            self.m, self.v, self.t = torch.zeros(shape, device=u.device), torch.zeros(shape, device=u.device), 0
+        self.N = torch.zeros(shape, device=u.device)
 
     def piece(self) -> tuple[torch.Tensor, torch.Tensor]:
         if self.left:
@@ -571,6 +574,8 @@ class GaloreState:
 
     @torch.no_grad()
     def step(self, grad: torch.Tensor, lr: float, b1=0.9, b2=0.95, eps=1e-8, muon: bool = False) -> None:
+        if not self.r:
+            return
         R = self.P.T @ grad if self.left else grad @ self.P
         if muon:
             # P has orthonormal columns, so P @ dN has dN's spectral norm: a full-matrix Muon step's size at the same lr
@@ -582,6 +587,19 @@ class GaloreState:
         self.v.mul_(b2).addcmul_(R, R, value=1 - b2)
         d = (self.m / (1 - b1 ** self.t)) / ((self.v / (1 - b2 ** self.t)).sqrt() + eps)
         self.N.add_(d, alpha=-lr)
+
+
+def allocate(svds: dict, r: int) -> dict[str, int]:
+    """One piece's ranks: greedy by the gradient's σ² per byte of factors, within the bytes of rank r on every tensor."""
+    cost = {n: 2 * (u.shape[0] + vh.shape[1]) for n, (u, _, vh) in svds.items()}
+    budget = r * sum(cost.values())
+    order = sorted(((s_i ** 2 / cost[n], n) for n, (_, s, _) in svds.items() for s_i in s.cpu().tolist()), reverse=True)
+    ranks = dict.fromkeys(svds, 0)
+    for _, n in order:
+        if cost[n] <= budget:
+            ranks[n] += 1
+            budget -= cost[n]
+    return ranks
 
 
 def run_galore(run: Run) -> None:
@@ -597,6 +615,11 @@ def run_galore(run: Run) -> None:
     proj = sum(4 * r * params[n].shape[0] * params[n].shape[1] for n in targets)
     svd = sum(svd_flops(tuple(params[n].shape)) for n in targets)
     rebuild = sum(2 * K * r * params[n].shape[0] * params[n].shape[1] for n in targets)
+    if a.alloc:
+        # allocated ranks can sit where a byte buys the most MACs: plan for the worst tensor's MACs per byte
+        worst = max(params[n].shape[0] * params[n].shape[1] / sum(params[n].shape) for n in targets)
+        uniform = sum(params[n].shape[0] * params[n].shape[1] for n in targets) / sum(sum(params[n].shape) for n in targets)
+        proj, rebuild = proj * worst / uniform, rebuild * worst / uniform
     muon = a.opt == "muon"
     ns = sum(ns_flops((r, max(params[n].shape))) for n in targets) if muon else 0
     proj += ns
@@ -617,9 +640,14 @@ def run_galore(run: Run) -> None:
         loss = loss_backward(fwd, rows, a)
         torch.nn.utils.clip_grad_norm_([params[n] for n in targets + run.norms], 1.0)
         if step == bounds[piece]:
+            svds = {n: torch.linalg.svd(params[n].grad.float(), full_matrices=False) for n in targets}
+            ranks = allocate(svds, r) if a.alloc else dict.fromkeys(targets, r)
             for n in targets:
-                st[n].refresh(params[n].grad, a.keep_moments)
+                st[n].refresh(svds[n], ranks[n], a.keep_moments)
             run.steps.append({"op": "extra", "flops": svd, "what": f"projector SVDs, piece {piece}"})
+            if a.alloc:
+                print(json.dumps({"arm": len(run.results), "piece": piece, "ranks": {n: k for n, k in ranks.items() if k}}),
+                      flush=True)
         for n in targets:
             st[n].step(params[n].grad, a.lr * frac, muon=muon)
             params[n].grad = None
@@ -636,11 +664,12 @@ def run_galore(run: Run) -> None:
                     params[n].data.copy_(masters[n].to(CODE["dtype"]))
             if step + 1 == bounds[piece + 1]:
                 for n in targets:
-                    pieces[n].append(st[n].piece())
+                    if st[n].r:
+                        pieces[n].append(st[n].piece())
                 piece += 1
                 current = pieces
             else:
-                current = {n: pieces[n] + [st[n].piece()] for n in targets}
+                current = {n: pieces[n] + ([st[n].piece()] if st[n].r else []) for n in targets}
             # each step reads W = decode(θ, E_t) bit for bit: rebuilt from θ with the factors as E stores them
             so_far = concat_factors(current)
             for n, (aq, bq, _) in so_far.items():
@@ -814,6 +843,8 @@ def main(klass: str) -> int:
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--rewarm", type=int, default=20, help="relora/stack/galore: steps of warmup after each restart")
     ap.add_argument("--keep-moments", action="store_true", help="galore: keep the projected moments across refreshes")
+    ap.add_argument("--alloc", type=int, default=0, help="galore: 1 allocates each piece's ranks across tensors by the "
+                    "gradient's σ² per byte, within the bytes of rank r on every tensor")
     ap.add_argument("--project-every", type=int, default=0, help="full: project W − θ to the byte budget every T steps")
     ap.add_argument("--project-bytes", type=int, default=0)
     ap.add_argument("--whiten", type=int, default=0, help="truncate by output error, from this many batches' inputs")
