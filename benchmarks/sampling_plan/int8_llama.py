@@ -1,4 +1,4 @@
-"""The sampling plan for an int8 row under C-Flock (`verity.core.protocols.sampled_proofs`), Llama-3.1-8B or Qwen3-8B: the
+"""The sampling plan for an int8 row under Flock (`verity.core.protocols.sampled_proofs`), Llama-3.1-8B or Qwen3-8B: the
 fitted cost model, the cuts the generator finds, the frontier of ε against the verification overhead B, the break-even
 granularity by window, ε and commitment regime, the frontier's sensitivity to its inputs, the tensors committed at more
 than one scale, and the weight classes' weights at each target.
@@ -8,7 +8,7 @@ compressions), opens its operand rows and its output in circuit, and carries its
 may be cut into K-chunks (`S8Dot{T0 = input}`), each committing its running sum, and tiles of r x c dots are offered,
 each a unit when its outputs fit a size class.  B is GPU-seconds of overhead per plain GPU-second over a window (the budget model's unit),
 the total: everything is committed at serve time, so B holds every scale's serve-time commitments under the PoUW
-scheme (`inputs.serve_rows`: the Commit's taps, PoUW's work blocks, the bits they pin, the remote audit's receipts) beside
+scheme (`inputs.serve_rows`: the Commit's taps, PoUW's work blocks, the bits they pin, PoUB's receipts) beside
 the proving, the units' commitments, the witnesses' replay and the zero-work subcircuits.  The `floor` scheme is the earlier
 accounting, its one measured term (`commit_floor`) and nothing else.
 

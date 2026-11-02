@@ -18,7 +18,7 @@ open Claims.Recursion.VStarB
 key `(jj, o, g, 0)`, instance `o + g`): `resTie_site`, with `VVTie` from `vvTie_dense`. -/
 theorem resTie_resVRead {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
-    {w : Claims.Flock.Wit} {cs : ℕ → Coin} {Bk : Msg → ℕ} {st0 : Claims.Recursion.Stmt}
+    {w : Claims.Flock.Wit} {cs : ℕ → Coin} {Bk : Msg → ℕ} {st0 : Claims.Recursion.CompiledStatement}
     (hst : RecDeploy.parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form)
     (hB : RestRead.kI x ≤ Bk (xIOf x))
     (hT : ∀ e ∈ (DeployedR.layR elem).calls x s w, FlockDeploy.sha512 e.1 = e.2)

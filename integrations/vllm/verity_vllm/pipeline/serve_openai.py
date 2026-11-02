@@ -6,7 +6,7 @@
         [--retain host|device [--retain-device-gb 32] [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
-        [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
+        [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
@@ -26,7 +26,7 @@ Sampling parameters are values the request brings: the server applies vLLM's neu
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
 engine's resulting parameters, the seed and its rule). A request without a ``seed`` is sampled under the public default,
 `engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
-pinned yet, so its draw is not a function of the committed values.
+pinned yet, so its sample is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention) with the committer's GPU tree: the one setting
 whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
@@ -39,8 +39,8 @@ thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under 
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
 certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
-rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
-``serve.json``'s ``step_rows``). Under ``--required-manifest`` the engine schedules as the bench row declares (`serve_row`).
+rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
+``step_rows``). The engine schedules synchronously unless ``--async-scheduling``, which a bench row must declare (`serve_row`).
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
 a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -86,14 +86,14 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
-bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
+``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
+PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 another thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
 ``--switch-interval-ms`` (0.1 ms; Python's is 5 ms) and seals in a spawned process (``--seal-process``, `seal_process.sealer_of`),
-the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_seal.Watchdog`) records each stall of 0.2 s or more.
+the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_guard.Watchdog`) records each stall of 0.2 s or more.
 """
 from __future__ import annotations
 
@@ -113,12 +113,11 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import (seal_process as SP, serve_h1 as SH, serve_release as RL, serve_remote as SR, serve_row as RW,
-                                   serve_seal as SS)
+from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
+                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
-from verity_vllm.pipeline import serve_learn as SL
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -156,6 +155,7 @@ class Options:
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
     prefix_caching: bool = option("--prefix-caching", action="boolean_optional", default=False, help="serve with vLLM's prefix cache")
+    async_scheduling: bool = option("--async-scheduling", action="boolean_optional", default=False, help="vLLM's async scheduling (serve_row)")
     gpu_memory_utilization: float = option("--gpu-memory-utilization", type=float, default=0.55)
     seed: int = option("--seed", type=int, default=0)
     commit: bool = option("--commit", action="boolean_optional", default=True, help="commit every engine step (default on)")
@@ -596,7 +596,7 @@ class HttpThread(threading.Thread):
 # ---------------------------------------------------------------------------------------------------------------- main
 
 def engine_options(opts: Options) -> dict[str, Any]:
-    kw: dict[str, Any] = {"max_num_seqs": opts.max_num_seqs, "max_model_len": opts.max_model_len,
+    kw: dict[str, Any] = {"max_num_seqs": opts.max_num_seqs, "max_model_len": opts.max_model_len, "async_scheduling": opts.async_scheduling,
                           "max_num_batched_tokens": opts.max_num_batched_tokens, "gpu_memory_utilization": float(opts.gpu_memory_utilization),
                           "enforce_eager": True, "seed": opts.seed, **({"enable_prefix_caching": True} if opts.prefix_caching else {})}
     if opts.precision == "int8_exact":
@@ -626,17 +626,6 @@ def served_class(opts: Options) -> dict[str, int]:
             **{k: int(v) for k, v in given.items()}}
 
 
-def disk_floor_of(opts: Options, usage: Callable[[Any], Any] = shutil.disk_usage) -> SS.DiskFloor | None:
-    """``--seal``'s `serve_seal.DiskFloor` over the filesystem ``--out`` is on (its nearest existing directory), None without
-    a floor."""
-    if not (opts.seal and opts.disk_floor_gb > 0):
-        return None
-    p = Path(opts.out).resolve()
-    while not p.exists() and p != p.parent:
-        p = p.parent
-    return SS.DiskFloor(p, int(opts.disk_floor_gb * SS.GB), usage)
-
-
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
               usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
     """What would fail after the model has loaded, refused before it."""
@@ -650,11 +639,11 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if (floor := disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts):
+    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts) or RW.commit_refusal(opts):
         raise UsageError(why)
     if opts.required_manifest and not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
@@ -664,7 +653,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
 
 
 def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
-    """The engine (`verity_vllm.LLM`), scheduling as the bench ``row`` declares, and with the Commit on, its committer, sized
+    """The engine (`verity_vllm.LLM`), scheduling as ``--async-scheduling`` says (`serve_row`), and with the Commit on, its committer, sized
     from the engine's envelope, with a `served_record.SamplerInputsSource` attached; built under a remote ``session``."""
     from verity_vllm.engine import env as engine_env
 
@@ -674,8 +663,7 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     scope = register_int8(opts.precision)
     from verity_vllm.llm import LLM
 
-    kw = engine_options(opts) | RW.engine_args(row)
-    llm = RW.checked(row, LLM(opts.model, revision=opts.revision, **(session.engine_args(kw) if session is not None else kw)))
+    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(engine_options(opts))))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
@@ -711,7 +699,7 @@ def main(opts: Options) -> int:
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
-                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
+                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm, release=draws)
         if arm is not None:
             arm.drawing(draws)
@@ -742,7 +730,7 @@ def main(opts: Options) -> int:
     bound = [http.address]
     if opts.switch_interval_ms:
         sys.setswitchinterval(opts.switch_interval_ms / 1000)
-    watchdog = SS.Watchdog(out / "pauses.jsonl")
+    watchdog = SG.Watchdog(out / "pauses.jsonl")
     watchdog.thread.start()
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "id_payload": getattr(proto, "payload", None),
@@ -768,7 +756,7 @@ def main(opts: Options) -> int:
               "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
-              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model)}
+              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     if mirror is not None:
         mirror()

@@ -37,12 +37,12 @@ PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU
     not_executed_by_rule, ...}, uncovered_by_name, query_checks, catch_probability}; the linkage record {result, why, pairs, linked, unlinked}.
   Invariants: result True only if EVERY sampled VU replays bit-exactly AND every non-empty stratum was evaluated (None = partial,
     never PASS); the seed is never prover-choosable in advance (run root after commitment, or sha256(challenge|root)[:8]); Calls at
-    request-relative steps >= n_exec leave the pool into a NAMED class before any draw; a request linked over fewer steps than its
+    request-relative steps >= n_exec leave the pool into a NAMED class before sampling; a request linked over fewer steps than its
     cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
     False fails the replay by name.
 
 The check runs here; its steps live beside it: `index` (the Program rows), `population` and `coverage` (what may be sampled
-and what the query population names), `sample` (the stratified draw and its seed), `opening` (committed words by
+and what the query population names), `sample` (the stratified sample and its seed), `opening` (committed words by
 identity), `evaluate` and `compare` (one VU), and `linkage` (the exhaustive boundary linkage).  A caller wires the check
 through this module: the names in `__all__` are its interface.
 """
@@ -461,7 +461,7 @@ DRAWS = ("family", "uniform")
 
 def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: str = "family") -> tuple[list[dict], int]:
     """With `k` (the config run), every VU re-keyed to one stratum per `draw` (the key's fields kept) and `k` picks per stratum.
-    `uniform`: one stratum (`all|all|all|all|all|all`), so the k units are a uniform draw without replacement from every unit.
+    `uniform`: one stratum (`all|all|all|all|all|all`), so the k units are a uniform sample without replacement from every unit.
     `family`: one stratum per family (`family|all|all|all|all|all`); with the cap at `k`, the round-robin order of `sample` then takes
     k units in all, one per family first, a small family used up before the others, the rest split evenly.  Without `k`, the VUs and
     `per_stratum` as given.  Any other `draw` is refused by name."""
@@ -522,8 +522,8 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
 
 
 def planned(picked: list[dict], indices: dict, store: CommittedStore, arrivals: dict[str, int], t_start: float) -> dict[str, Any]:
-    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the draw's size, its
-    picks ([request, request-relative step, Program row, op_path] in draw order) and the VUs whose inputs did not resolve."""
+    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the sample's size, its
+    picks ([request, request-relative step, Program row, op_path] in sample order) and the VUs whose inputs did not resolve."""
     unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], store, vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
     return {"plan": True, "picked": len(picked), "picks": [[vu["request_id"], int(vu["step"]), int(vu["i"]), vu["op_path"]] for vu in picked],
             "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
@@ -563,7 +563,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
                    program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None,
                    cached_prefixes: dict[str, dict] | None = None) -> dict[str, Any]:
-    """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `cached_prefixes`: each warm
+    """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) keys the sample in place of `seed`.  `cached_prefixes`: each warm
     request's cached rows and their producers (`populate`): its attention reads its cached prefix from what they committed.  `executed_prefix`: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
@@ -572,11 +572,11 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...})
     -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
     `max_evaluate` caps the stratified sample but never below one VU per stratum (round-robin order; the effective cap is recorded);
-    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, drawn by `replay_draw` (`family_strata`).
+    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, sampled by `replay_draw` (`family_strata`).
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the
     manifest was built with (recorded as `addresses`).
     Result: True = every sampled VU replays bit-exactly and every non-empty stratum was evaluated; False = a mismatch (named);
-    None = nothing evaluable / a stratum could not be evaluated (partial, never PASS).  `plan`: the same draw, read only (`planned`).
+    None = nothing evaluable / a stratum could not be evaluated (partial, never PASS).  `plan`: the same sample, read only (`planned`).
     `worker_peak` (bytes): the forked pool is fitted after the prewarm to the cgroup's memory (`fit_pool`, recorded as
     `evaluator.memory`), and a pick too large for it is refused (PoolDoesNotFit); None forks the workers asked for."""
     t_start = time.perf_counter()

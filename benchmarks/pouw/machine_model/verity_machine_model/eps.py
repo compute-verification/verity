@@ -837,7 +837,7 @@ class Eps:
 
     def core(self, sched: bool = True) -> float:
         """ε with 100% checking, every word and operand verified, Corollary D3's: ε_skip, ε_mand, ε_machine, ε_luck
-        (each check one draw, Theorem S at each block's own p) and the credit terms, with ε_adapt = 0."""
+        (each check one sample, Theorem S at each block's own p) and the credit terms, with ε_adapt = 0."""
         s = (self.sched or 0.0) if sched else 0.0
         return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck) * (1 - s) * (1 - self.clock)
 
