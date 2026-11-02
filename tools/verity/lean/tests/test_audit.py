@@ -755,6 +755,52 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     assert [f.split(":")[0] for f in unshaped(rep)] == ["moved"] and "Control.Protocol.f would be Control.f" in rep["failures"][0]
 
 
+SPLIT_KEPT = "def pick : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\ndef three : Fin 5 := ⟨3, by decide⟩\n"
+SPLIT_OFF = "def pick' : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\ndef three' : Fin 5 := ⟨3, by decide⟩\n"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_file_split_changes_no_definition_s_hash_though_lean_renames_the_helpers_it_shared(tmp_path):
+    """Lean shares a matcher and a proof it abstracts out of a definition between the declarations of one module: `pick'`
+    reads `pick.match_1` and `three'` reads `three._proof_1`, until a split moves them into a file of their own, where they
+    get `pick'.match_1` and `three'._proof_1`.  A definition's hash holds those in place, not by name, so after the split
+    every definition read has the hash it had, and the review says only that two moved."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    kept, off = pkg / "Control" / "Split.lean", pkg / "Control" / "SplitOff.lean"
+    kept.write_text(f"namespace Control\n{SPLIT_KEPT}{SPLIT_OFF}end Control\n")
+    off.write_text("namespace Control\nend Control\n")
+    (pkg / "Control" / "SplitThms.lean").write_text(
+        "import Control.Split\nimport Control.SplitOff\nnamespace Control\n"
+        "theorem picked : pick' 0 = 1 := rfl\ntheorem third : three'.val = 3 := rfl\nend Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.SplitThms\n")
+    pol = unclaimed(A.load(pkg))
+    names = ("Control.main_thm", "Control.picked", "Control.third")
+    A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Split": {"imports": []}, "Control.SplitOff": {"imports": []}},
+                       "guarantees": {n: {"owner": "@lean"} for n in names}})
+
+    def built() -> tuple[dict, dict, dict]:
+        subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+        rep = A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
+        assert unshaped(rep) == []
+        f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": dict.fromkeys(names, {})}, tmp_path)
+        own = {r["name"]: r["own"] for p in ("Control.picked", "Control.third") for r in f["pins"][p]["reads"]}
+        return rep, A.load(pkg), own
+
+    def hashes(rec: dict) -> dict:
+        return {d: h for g in rec["reads"].values() for d, h in A.definitions(g).items()}
+
+    _, before, own = built()
+    assert own["Control.pick'"] == own["Control.three'"] == [], "both use the helpers of the declarations before them"
+    kept.write_text(f"namespace Control\n{SPLIT_KEPT}end Control\n")
+    off.write_text(f"namespace Control\n{SPLIT_OFF}end Control\n")
+    rep, after, own = built()
+    assert (own["Control.pick'"], own["Control.three'"]) == (["Control.pick'.match_1"], ["Control.three'._proof_1"])
+    assert hashes(after) == hashes(before) and after["guarantees"] == before["guarantees"]
+    assert list(after["reads"]["Control.SplitOff"]["definitions"]) == ["Control.pick'", "Control.three'"]
+    assert rep["review"] == [f"reads: 2 {A.MOVED_READS}"]
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
     """`Facts.lean`'s one-step unfolding on a real build, without `--moved`: lifts with no binders, with binders whose argument

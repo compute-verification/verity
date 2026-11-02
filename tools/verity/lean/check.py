@@ -1162,9 +1162,10 @@ def readers(reads: dict[str, dict[str, dict]]) -> dict[str, list[str]]:
 def group_keys(reads: dict[str, dict[str, dict]]) -> dict[str, str]:
     """{read constant: the definition its `reads` digest is part of}: a generated constant goes with its declaration when the
     declaration is read in its module and reaches it through its own type, value or constructors (`own`, transitively through
-    its other generated constants, as a structural recursion's `_f` reaches the matchers), so
-    the group is the same whichever guarantees read the declaration; any other read constant (an inductive's `casesOn`
-    another definition's match uses, an equation lemma a statement names) is a definition of its own."""
+    its other generated constants), so the group is the same whichever guarantees read the declaration.  The matchers and
+    proofs Lean shares between a module's declarations are no reads: a definition's hash holds them in place (`Facts.lean`'s
+    `readCanon`).  Any other read constant (an inductive's `casesOn` a definition's match uses, an equation lemma a
+    statement names) is a definition of its own."""
     entries = {n: e for es in reads.values() for n, e in es.items()}
     key = {}
     for n, e in entries.items():
