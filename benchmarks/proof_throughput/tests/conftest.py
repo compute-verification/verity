@@ -11,7 +11,7 @@ LIVE = {"accepted": True, "why": None, "prover": "gpu", "instances": 16, "k_log"
         "witness_s": 0.6, "witness_prebuilt_s": None, "pipeline_depth": 4, "prove_s": [3.0, 3.0], "prove_total_s": 6.0,
         "proof_bytes": [900_000, 900_000], "wire_sent": 1_850_000, "wire_recv": 4_000, "statement_digest": "ab" * 32,
         "buckets": [REP, REP], "prover_peak_gb": 12.5, "verifier_peak_gb": 1.1, "verifier": "loopback",
-        "coins": "live-os", "verify_s": 0.8, "timed_runs": 3}
+        "coins": "coin-tree", "verify_s": 0.8, "timed_runs": 3}
 
 HARDWARE = {"gpu": {"name": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "driver": "580.95.05", "cuda": "13.0", "count": 8,
                     "memory_total_bytes": 97887 << 20},
