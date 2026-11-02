@@ -639,8 +639,8 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
       (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0) with err | ⟨c', t, dom, xs, hi⟩
   · rw [hph] at ho
     rcases ho with h | h
-    · exact Bool.false_ne_true h
-    · exact h rfl
+    · exact (Bool.false_ne_true h).elim
+    · exact (h rfl).elim
   rw [hph] at ho
   dsimp only at ho
   obtain ⟨CR0, CR, hCR0, hCR, ho⟩ := repState_named ho

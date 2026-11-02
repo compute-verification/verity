@@ -271,8 +271,8 @@ theorem repState_rank {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < 
   cases b with
   | true =>
     rcases ho with h | h
-    · exact Bool.false_ne_true h
-    · exact h rfl
+    · exact (Bool.false_ne_true h).elim
+    · exact (h rfl).elim
   | false =>
     simp only [Bool.false_eq_true, ↓reduceIte] at ho
     have hin : S0.m.inner.isSome = true := by
@@ -430,9 +430,9 @@ theorem repState_ok_of {c : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {rep : �
     · exact h rfl
   rcases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom
     with e | alg
-  · exact absurd h (h0 _ (by unfold repState; simp only [hal, bind, Except.bind] <;> rfl))
+  · exact absurd h (h0 _ (by unfold repState; simp only [hal, bind, Except.bind]))
   · rcases hs : schedSoFar t rep dom xs hi cr.pop with e | sched
-    · exact absurd h (h0 _ (by unfold repState; simp only [hal, hs, bind, Except.bind] <;> rfl))
+    · exact absurd h (h0 _ (by unfold repState; simp only [hal, hs, bind, Except.bind]))
     · exact ⟨alg, sched, rfl, rfl⟩
 
 end Loop
