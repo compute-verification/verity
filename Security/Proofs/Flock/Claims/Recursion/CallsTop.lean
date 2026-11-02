@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.CallsRep
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # A verdict's SHA-512 calls on every run
