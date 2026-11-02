@@ -25,8 +25,10 @@ The model reads the record as its events: every op reads back the events the fir
 line that is not `Event.line` of the event it parses to).
 
 * `RecStopsOfRun`: at every run and every recursive session `s`, what reached the auditor of each statement of `s` is
-  `cutAt (recStop …)`'s, nothing of any other statement; `s` runs through (`recStop … = none`) unless a statement of it
-  was not released (`unreleasedOf`); and each statement's proofs left at its release time where `s` is scheduled.
+  `cutAt (recStop …)`'s, nothing of any other statement, and each statement's from the one outer session of it
+  admitted, if any (`adm`: the slot records a holder that ended without its outcome as its stop, so no statement is
+  admitted twice); `s` runs through (`recStop … = none`) unless a statement of it was not released (`unreleasedOf`);
+  and each statement's proofs left at its release time where `s` is scheduled.
 * `recCut`, `recReleased`: the whole view, one part a statement, cut at a stop by a cut of one statement's part
   (`cutP`, at how many of its messages are kept), and the view the run released, each statement's part cut at what
   reached the auditor of it. `recReleased … = recCut … (recStop …) …` is `RecStopsOfRun`'s first conjunct read at the
@@ -47,14 +49,15 @@ structure Holder where
 
 /-- The firewall's state in a run: the record's events, the outer slot's holder, how many of statement `p`'s messages
 of recursive session `s` reached the auditor (`sent s p`, statement `0` the inner session, `j + 1` V*'s statement `j`),
-and when statement `p`'s proofs left (`left s p`). -/
+how many outer sessions of it were admitted (`adm s p`), and when its proofs left (`left s p`). -/
 structure St where
   evs : Events
   holder : Option Holder
   sent : String → ℕ → ℕ
+  adm : String → ℕ → ℕ
   left : String → ℕ → Option ℕ
 
-def St.init : St := ⟨#[], none, fun _ _ => 0, fun _ _ => none⟩
+def St.init : St := ⟨#[], none, fun _ _ => 0, fun _ _ => 0, fun _ _ => none⟩
 
 /-- `f` with one more message at `s`, `p`. -/
 def bump (f : String → ℕ → ℕ) (s : String) (p : ℕ) : String → ℕ → ℕ :=
@@ -115,7 +118,7 @@ def step (M : String → ℕ → ℕ) (σ : St) : Step → St
     | some _ => σ
     | none =>
       match admit (slot σ.evs s part) s part with
-      | (.ok a, evs) => { σ with evs, holder := some ⟨s, part, a, false⟩ }
+      | (.ok a, evs) => { σ with evs, holder := some ⟨s, part, a, false⟩, adm := bump σ.adm s (a.index + 1) }
       | (.error _, evs) => { σ with evs }
   | .relay =>
     match σ.holder with
@@ -204,13 +207,14 @@ namespace Flock.Guarantees
 
 /-- **A recursive session's view is cut at its stop.** At every run (`StopCount.run`: the firewall's ops in any order,
 at each statement's message count `M s p`) and every recursive session `s`: what reached the auditor of each statement
-of `s` is what `cutAt` keeps at the stop the run reached (`recStop`), nothing of any statement past `s`'s; `s` runs
-through unless a statement of it was not released; and where `s` is scheduled, each statement `j` whose proofs left did
-so at its release time (`releaseMs`). -/
+of `s` is what `cutAt` keeps at the stop the run reached (`recStop`), nothing of any statement past `s`'s, and each
+statement's from one outer session, admitted at most once; `s` runs through unless a statement of it was not released;
+and where `s` is scheduled, each statement `j` whose proofs left did so at its release time (`releaseMs`). -/
 def RecStopsOfRun : Prop :=
   ∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) (s : String),
     (∀ p, (StopCount.run M steps).sent s p =
       StopCount.cutAt _ (StopCount.recStop M (StopCount.run M steps) s) p) ∧
+    (∀ p, (StopCount.run M steps).adm s p ≤ 1) ∧
     (StopCount.recStop M (StopCount.run M steps) s = none ∨ StopCount.unreleasedOf (StopCount.run M steps) s = true) ∧
     ∀ j, StopCount.schedOf (StopCount.run M steps) s = none ∨ (StopCount.run M steps).left s (j + 1) = none ∨
       (StopCount.run M steps).left s (j + 1) = Core.Firewall.releaseMs (StopCount.schedOf (StopCount.run M steps) s) j
