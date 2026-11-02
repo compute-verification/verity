@@ -698,7 +698,7 @@ drop, duplicate, swap, forgery and seeded byte flip of one. One difference is de
 spelling, so `flock-firewall` refuses any `Hello` with a fraction or an exponent, where the proxy compares Python's canonical
 JSON. The two agree whenever the schedule's `Hello` holds only integers, as `schedule_for`'s does.
 
-The send check is that program itself. `rec_live --lean BIN` (default `FC_FIREWALL_LEAN`, required) starts one `flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and
+The send check is that program itself. `rec_live --lean BIN` (required) starts one `flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and
 each request goes to it before the proxy handles it. It answers with the messages the coin server gets for the request and
 the salts it drew for them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those
 a request doesn't draw kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order, and handles the request too,

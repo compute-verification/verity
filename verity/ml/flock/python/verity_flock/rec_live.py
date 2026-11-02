@@ -48,7 +48,7 @@ zeros), is refused ``FIREWALL-REFUSED`` before the coin server sees it. A refusa
 is a **stop**: the coin server's record says so (``end``: ``stop``, not why), and `serve` writes that record and counts the
 session.
 
-**The send check.** With ``--lean`` (default ``FC_FIREWALL_LEAN``, required) every session's send check is Lean's: each
+**The send check.** With ``--lean`` (required) every session's send check is Lean's: each
 request goes to ``flock-firewall live`` (`LeanFirewall`, `Flock.Firewall.liveWith`) before the proxy handles it, a refusal
 there stops the session, and every call on the coin server is one of the messages Lean sent for the request (`deliver`),
 with the salts Lean drew. The proxy handles the request too, for the prover's side (the answers, the session record,
@@ -953,14 +953,7 @@ class LeanFirewall:
         return got["sent"], salts
 
     def close(self) -> None:
-        if self.proc.stdin and not self.proc.stdin.closed:
-            try:
-                self.proc.stdin.close()
-            except OSError:
-                pass
-        self.proc.wait()
-        if self.proc.stdout:
-            self.proc.stdout.close()
+        self.proc.communicate()
 
 
 class Proxy:
@@ -1493,7 +1486,7 @@ def main(argv=None) -> int:
                     help="the release schedule's public window a statement, in ms: statement j leaves at the connection's time "
                          "plus W0 + ... + Wj (--firewall)")
     ap.add_argument("--lean", metavar="BIN",
-                    help="Lean's flock-firewall, each session's send check (LeanFirewall; default FC_FIREWALL_LEAN): required")
+                    help="Lean's flock-firewall, each session's send check (LeanFirewall): required")
     add_tree_args(ap)
     a = ap.parse_args(argv)
     if a.schedule_for:
@@ -1518,16 +1511,15 @@ def main(argv=None) -> int:
         from .firewall import Firewall
         fw = Firewall(Path(a.firewall))
     source = tree_source(ap, a)
-    lean = a.lean or os.environ.get("FC_FIREWALL_LEAN")
-    if not lean:
-        ap.error("--lean BIN (or FC_FIREWALL_LEAN): Lean's flock-firewall is every session's send check")
+    if not a.lean:
+        ap.error("--lean BIN: Lean's flock-firewall is every session's send check")
     try:
         serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
               done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True),
               schedule=json.loads(Path(a.schedule).read_text()), firewall=fw,
               parts=None if a.parts is None else a.parts.split(","), stream=a.stream, budget=a.budget, release=release,
               draw=json.loads(Path(a.draw).read_text()) if a.draw else None, tree=INNER_COIN_SPEC if a.coin_tree else None,
-              source=source, lean=lean)
+              source=source, lean=a.lean)
     finally:
         if source is not None:
             source.close()

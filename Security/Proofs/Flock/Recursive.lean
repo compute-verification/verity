@@ -103,6 +103,6 @@ with (ii) from it and the live send check's sends from it), and the recursive au
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
 verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
-pieces under `Proofs.Flock.C3` and its hidden statement at the word the prover's runs open, `RegExtract`),
+pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`),
 `flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`), and a unit's rows read off the
 inner relation's witness, each the commit string its public file publishes (`InnerRows`). -/
