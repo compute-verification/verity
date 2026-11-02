@@ -4,10 +4,10 @@ import Definitions.Accounting.PerRun
 /-!
 # The bandwidth audit's guarantee as a joint run's bandwidth guarantee (trusted)
 
-The bandwidth audit v0's guarantee (`Bandwidth.Guarantees.AuditRO`) embeds into the device model at its own certificate
-and error: in a run that realizes its game (`Accounting.RealizesBandwidth`), the bandwidth audit has its guarantee
-(`Accounting.Run.BandwidthSound`) at AuditRO's certificate and error, with the game's bounds the device's limits over the
-bandwidth window.
+The bandwidth audit v0's guarantee, PoUB's per-pass lemma (`Accounting.Guarantees.Remote.AuditRO`), embeds into the
+device model at its own certificate and error: in a run that realizes its game (`Accounting.RealizesBandwidth`), the
+bandwidth audit has its guarantee (`Accounting.Run.BandwidthSound`) at AuditRO's certificate and error, with the game's
+bounds the device's limits over the bandwidth window.
 
 `BandwidthOfAudit` keeps AuditRO's numbers but not its per-run reading: `BandwidthSound`, the form `Joint` takes, is about
 a bound on the bandwidth account's reads on every one of the bandwidth audit's own coins, its worst case over them.
@@ -16,7 +16,7 @@ AuditRO bounds the ingress at the coins drawn, so it also gives the per-run form
 
 Proved by `Accounting.SecurityProofs.BandwidthOfAudit : Accounting.Guarantees.BandwidthOfAudit` and
 `Accounting.SecurityProofs.BandwidthOfAuditPerRun : Accounting.Guarantees.BandwidthOfAuditPerRun`
-(`Proofs.Accounting.BandwidthAudit`), from `Bandwidth.SecurityProofs.AuditRO`.
+(`Proofs.Accounting.BandwidthAudit`), from `Accounting.SecurityProofs.Remote.AuditRO`.
 -/
 
 namespace Accounting.Guarantees

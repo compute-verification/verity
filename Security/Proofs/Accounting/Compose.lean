@@ -84,8 +84,8 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    `SeedLuckAt` gives the queries' gains `g` and `Break`; off `Off` and `Break` round `r`'s gain is at most
    `g (sq a r)`, so at most `max_q g q`. Where `θ_r > 0` (`seedTheta r` folded, `wholeTheta r` whole), GRIND's
    premium (`grind_le`) bounds `∃ q, ln(T_q/δ_g)/θ_r ≤ g q` by `δ_g`: redrawing the query's one answer is an
-   involution of the window (`redraw_redraw`), so the window's mean of `e^{θ_r·g q}` is the mean of its moment over
-   that answer, at most `1` (`sum_redraw`), and Markov and a union over the `T_q` queries give `δ_g`. So round `r`'s
+   involution of the window (`resample_resample`), so the window's mean of `e^{θ_r·g q}` is the mean of its moment over
+   that answer, at most `1` (`sum_resample`), and Markov and a union over the `T_q` queries give `δ_g`. So round `r`'s
    gain `L − κ·U` is below `π*_r` except with probability `δ_g + δ_b`, off `Off` (`gain_le_premium`); where
    `θ_r = 0`, `roundPremium` is the round's weight (`roundCone`), which bounds `L` and so the gain (`κ ≥ 0`). A union
    over the `rounds` rounds and the two modes gives `L_F ≤ 4·U_F + Π_F` and `L_0 ≤ κ₀·U_0 + Π_0` (`gainSum_le`,
@@ -112,7 +112,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
 12. `WholeLuckOfEntropy` (proved, `Compose/WholeLuckOfEntropy.lean`): per round take `WholeEntropyAt`'s `Wh`, `Lk`
    and `Break`, and `g q a = Σ_{v ∈ Wh q a} w_v·((1 + κ₀)·[v ∈ Lk q a] − κ₀)`. Off `Break` at `sq a r = some q` the
    round's whole tiles are `Wh q a` and `same` lands in `Lk q a`, so `roundGain ≤ g q a` (`w ≥ 0`, `1 + κ₀ ≥ 0`).
-   `Wh q` doesn't read `q`'s answer, so on `redraw a r q b` the sum is over one set `W`, and with `x_v = θ_r·w_v`
+   `Wh q` doesn't read `q`'s answer, so on `resample a r q b` the sum is over one set `W`, and with `x_v = θ_r·w_v`
    (`moment_le`) `exp(θ_r·g) = Π_{v ∈ W} ([v ∈ Lk]·c_v + e^{−κ₀x_v})`, `c_v = e^{x_v} − e^{−κ₀x_v} ≥ 0`, which
    `Finset.prod_add` expands to `Σ_{S ⊆ W} [S ⊆ Lk]·Π_{v ∈ S} c_v·Π_{v ∈ W \ S} e^{−κ₀x_v}`. Summing over `b`, the
    entropy conjunct bounds each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to

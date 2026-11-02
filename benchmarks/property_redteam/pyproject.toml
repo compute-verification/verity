@@ -1,12 +1,13 @@
 # The property red team's refusal suite: Programs a stacking property (property/v1) must refuse or fully budget, the honest
 # steps.py shapes it must pass (`cases.py`), and a runner that grades any check, a function from a Program to a verdict
 # (`run.py`). Not a package: the tests put this directory on sys.path, like benchmarks/word_codec. `demo.py` is round 1's
-# registry-evaluator demo. `renorm.py` searches toy fields for circuits of 6b's model (a port of Model.lean) that return a
-# square's digits with few budgeted gates: the falsification test of the re-normalization conjecture N_L.
-# `tests/test_key_binding_order.py` checks KeyBinding's ideal step against the codec's {x, p − x} symmetry; KB-1's
-# regression test is remote_bandwidth's `test_append_order.py`. `squaring.py` ports Model.lean at p1024 and builds squaring
-# circuits measured in its units (SquaringFloor's e a squaring); `free_codec.py` builds the whole codec word from the
-# one-word gather Model.lean once counted as free; `bitwise_codec.py` builds a block of words at 8 units a key
+# registry-evaluator demo. `gates.py` is Model.lean's gate model on the canonical circuit (a `Program` the circuits IR's
+# reference evaluator runs), which the studies build in, pinned by `tests/test_gates.py`. `renorm.py` searches toy fields
+# for circuits of the model that return a square's digits with few budgeted gates: the falsification test of the
+# re-normalization conjecture N_L. `tests/test_key_binding_order.py` checks KeyBinding's ideal step against the codec's
+# {x, p − x} symmetry; KB-1's regression test is remote_bandwidth's `test_append_order.py`. `squaring.py` builds squaring
+# circuits at p1024 measured in the model's units (SquaringFloor's e a squaring); `free_codec.py` builds the whole codec
+# word from the one-word gather Model.lean once counted as free; `bitwise_codec.py` builds a block of words at 8 units a key
 # byte under the count before the repricing (bits kept bits by u8 mma ANDs and affine NOTs), which falsified
 # EncodeChainHardness; `products_pass.py` counts the gate model's data products on property/v1's pass (honest int8:
 # the attention row's QKᵀ and PV).
@@ -18,7 +19,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The cases are built from the circuits IR and evaluated by its reference evaluator, from core's registered primitives (ops,
 # PoUW's words) and the Definitions' integer, gather and cast primitives (`verity.ml.definitions.registry`, which imports
 # their twins in `verity.ml.definitions.numerics`; both read `verity.ml.definitions.evidence` and its `evidence.json`),
-# and the integration's quarantine, difftest and relation modules.
+# and the integration's quarantine, difftest and relation modules. `demo.py`'s registry walk reads
+# `verity.ml.definitions.boolean` too.
 # The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/core/protocols/record.py",
@@ -32,7 +34,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "integrations/vllm/verity_vllm/program/__init__.py", "verity/ml/definitions/__init__.py",
           "verity/ml/definitions/registry",
           "verity/ml/definitions/numerics", "verity/ml/definitions/evidence.py",
-          "verity/ml/definitions/evidence.json", "integrations/vllm/verity_vllm/commit/__init__.py",
+          "verity/ml/definitions/evidence.json", "verity/ml/definitions/boolean.py",
+          "integrations/vllm/verity_vllm/commit/__init__.py",
           "integrations/vllm/verity_vllm/commit/challenge.py",
           "integrations/vllm/verity_vllm/program/quarantine",
           "integrations/vllm/verity_vllm/program/mla_capture.py",

@@ -9,6 +9,7 @@ With each level, that level's committed tops are staged too, every node held at 
     inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
         [--salts FILE] [--part-jobs N]
+    python -m verity_flock.rec_vstage stage-links CIRCUIT INST LINKS OUT [--forge link]
 
 ``stage`` refuses an inner session whose record holds no sample (`rec_live.inner_draw`, exit 2): the verifier refuses every
 session over it (`RecSetup.innerDrawn`), so the coin server answers ``Register`` with the verifier's full draw
@@ -60,6 +61,11 @@ In both, the opening climbs to the output row the prover gives, and that row doe
 * ``filler``: the inner session's own forgery, a padded inner statement's filler output row one bit off in the inner prover's
   file (`rec_shape.forge_filler`), so the session it gave is of an unsatisfied table. V*'s algebra over it is staged as it
   is, under ``forged-filler/``, and must not hold (the openings are the session's, which the forgery leaves consistent).
+
+**The link table** (``stage-links``, `stage_links`): over an inner statement that wires its units (its ``links.json``,
+`class_statement.links_file`), the table of its links registered as ``rec-links`` and the part ``RecLink{UB, PB}`` that
+checks every row of it under ``OUT/links/``, with the statement's ``--rec-links ROOT:N`` in ``rec-links.txt``. Its forgery
+``link`` (``OUT/forged-link/links/``): a table whose first link names a writer whose row is not its reader's.
 
 ``--cap`` (default REC_CAP, `rec_shape.Cap.parse`): the deployment's public cap; a session whose V* is not the cap's shape is
 refused before anything is staged (`rec_shape.check`, exit 2).
@@ -388,6 +394,217 @@ def stage_cap(inner: Path, out: Path, evaluate: bool = True, levels: list[int] |
                               Path(out) / (f"L{l}" if l else ""), evaluate) for l in (every if levels is None else levels)}
 
 
+def inner_rows(meta_: dict, inst: Path) -> SimpleNamespace:
+    """The inner statement's rows as the link part reads them (`Flock.RecLinkPart.innerRows`), from its prover's file ``inst``
+    (`circuit.write`'s, each instance's own rows or shared ones): its instances ``n``, its input rows ``n_in`` (META's
+    ``input_ports``; the row ports past them are its output rows), and per instance and row port in META's order (a shared
+    row through the instance's ref, as `Flock.Public.digest` reads it) the row's digest ``x``, its salt ``y`` and its
+    ``b || c``, each the commitment of ``x`` under ``y``."""
+    from verity.ml.commitments import hm96
+
+    from . import circuit as FC
+
+    data = Path(inst).read_bytes()
+    nl = data.index(b"\n") + 1
+    head = json.loads(data[:nl])
+    n, ports = int(head["instances"]), FC._meta_ports(meta_)
+    k = len(ports)
+    shared = head.get("shared_rows")
+    at = nl
+    if shared:
+        counts = [int(shared[p.name]) for p in ports]
+        rows = []
+        for p, c in zip(ports, counts):
+            rows.append([data[at + 2 * p.words * r:at + 2 * p.words * (r + 1)] for r in range(c)])
+            at += 2 * p.words * c
+        per = {}
+        for what, size in (("y", FC.SALT_BYTES), ("bc", FC.BC_BYTES)):
+            per[what] = []
+            for c in counts:
+                per[what].append([data[at + size * r:at + size * (r + 1)] for r in range(c)])
+                at += size * c
+        refs = [[int.from_bytes(data[at + 4 * (i * k + j):at + 4 * (i * k + j + 1)], "little") for j in range(k)] for i in range(n)]
+    else:
+        width = sum(2 * p.words for p in ports)
+        starts = [sum(2 * q.words for q in ports[:j]) for j in range(k)]
+        rows = [[data[at + width * i + starts[j]:at + width * i + starts[j] + 2 * p.words] for i in range(n)] for j, p in enumerate(ports)]
+        at += width * n
+        per = {}
+        for what, size in (("y", FC.SALT_BYTES), ("bc", FC.BC_BYTES)):
+            per[what] = [[data[at + size * (i * k + j):at + size * (i * k + j + 1)] for i in range(n)] for j in range(k)]
+            at += size * n * k
+        refs = [[i] * k for i in range(n)]
+    key = hm96.SHA512.default_key
+    x, y, bc = [], [], []
+    for i in range(n):
+        xi, yi, bi = [], [], []
+        for j, p in enumerate(ports):
+            r = refs[i][j]
+            xi.append(p.digest(rows[j][r][:p.bytes]))
+            yi.append(per["y"][j][r])
+            bi.append(per["bc"][j][r])
+            if hm96.SHA512.commit_string(key, xi[-1], yi[-1]) != bi[-1]:
+                raise ValueError(f"{inst}: instance {i}'s row {p.name} is not the row its b || c commits")
+        x.append(xi)
+        y.append(yi)
+        bc.append(bi)
+    return SimpleNamespace(n=n, n_in=int(meta_["input_ports"]), ports=[p.name for p in ports], x=x, y=y, bc=bc)
+
+
+def drawn_rows(seed: int, units: int, n_in: int, n_out: int, links: list) -> SimpleNamespace:
+    """A drawn population in `inner_rows`' form, for the link part's tests: ``units`` units of ``n_in`` input and ``n_out``
+    output rows, each row a drawn digest under a drawn salt with its ``b || c``, and each link's (`rec_links.LinkEntry`)
+    reader row its writer's digest under its own salt."""
+    import random
+
+    from verity.ml.commitments import hm96
+
+    g, H = random.Random(seed), hm96.SHA512
+    x = [[g.randbytes(H.digest_bytes) for _ in range(n_in + n_out)] for _ in range(units)]
+    for lk in links:
+        x[lk.reader][lk.port] = x[lk.writer][n_in + lk.out]
+    y = [[g.randbytes(H.salt_bytes) for _ in range(n_in + n_out)] for _ in range(units)]
+    bc = [[H.commit_string(H.default_key, a, b) for a, b in zip(xs, ys)] for xs, ys in zip(x, y)]
+    return SimpleNamespace(n=units, n_in=n_in, ports=[f"in{p}" for p in range(n_in)] + [f"out{o}" for o in range(n_out)],
+                           x=x, y=y, bc=bc)
+
+
+LINKS_DIR = "links"
+LINK_FORGERIES = ("link",)
+
+
+def stage_links(circuit: Path, inst: Path, links: list, out: Path, forge: str | None = None, evaluate: bool = True,
+                salts: list[bytes] | None = None) -> dict:
+    """The link table's V* part over the inner statement ``circuit`` and its prover's file ``inst``: `link_part` at their
+    rows (`inner_rows`)."""
+    return link_part(inner_rows(meta(circuit), inst), links, out, forge, evaluate, salts)
+
+
+@_without_gc
+def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None = None, evaluate: bool = True,
+              salts: list[bytes] | None = None) -> dict:
+    """The link table's V* part (`VStar.Stmt.link`: ``RecLink{UB, PB}`` over the table's ``N = grid(L)`` rows, instance
+    ``i`` checking row ``i``) over the inner statement's rows ``rows`` (`inner_rows`' form), under ``out/links`` (with
+    ``forge``, under ``out/forged-<forge>/links``): ``circuit.txt``, the prover's ``inst.bin``, the verifier's ``pub.bin``,
+    ``program.json``, ``partition.json``, ``registered.json`` and ``rec-links.txt``, the statement's ``--rec-links ROOT:N``.
+
+    ``links`` (`rec_links.LinkEntry`, `rec_links.entries`): the inner population's links, each checked to hold (the reader's
+    row digest the writer's). ``UB`` and ``PB`` are the verifier's (`RecVStar.linkShapeOf`): the bits of the inner
+    statement's instances, and of the larger of its input and output rows' counts. The table (`rec_links.table`) is
+    registered as ``rec-links`` at the part's program (`rec_links.register`, ``salts`` its rows', default fresh), which
+    ``trow`` reads; each row's reader and writer rows are opened in the input and output rows' trees (`rec_link.Tree` over
+    the rows' ``b || c``), a filler's at unit 0's row 0 of each; ``rin`` and ``rout`` are the verifier's own rows, the two
+    roots (`rec_link.expected`), as `Flock.RecLinkPart.check` holds them. ``xyr``, ``raux``, ``xyw`` and ``waux`` are under
+    fresh salts, drawn port by port in that order, row by row. These are `VStar.In.linkIn`'s port inputs, which the V*
+    difftest (``part_in``) holds to this ``inst.bin``. With `rec_circuits`' cache the circuit text is built once per
+    ``(UB, PB, N)``, and ``evaluate`` (the unit's replay against `rec_link.link_ref`) runs only when it is built.
+
+    ``forge`` ``link``: the table's first link names as its writer the first unit whose output row is not its reader's
+    row, its openings honest. The prover keeps the outputs the verifier registers, which the unit's row then does not
+    give, so no proof of the part holds."""
+    import numpy as np
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.ml.commitments import hm96
+
+    from . import circuit as FC
+    from . import rec_budget as RB
+    from . import rec_circuits as RC
+    from . import rec_link as LK
+    from . import rec_links as RLK
+
+    n_out = len(rows.ports) - rows.n_in
+    UB, PB = LK.bits_for(rows.n), LK.bits_for(max(rows.n_in, n_out))
+    D = LK.depth(UB, PB)
+    tin = LK.Tree({LK.index(u, p, PB): LK.leaf(rows.bc[u][p]) for u in range(rows.n) for p in range(rows.n_in)}, D)
+    tout = LK.Tree({LK.index(u, o, PB): LK.leaf(rows.bc[u][rows.n_in + o]) for u in range(rows.n) for o in range(n_out)}, D)
+    links = list(links)
+    for k, lk in enumerate(links):
+        if not (lk.reader < rows.n and lk.writer < rows.n and lk.port < rows.n_in and lk.out < n_out):
+            raise ValueError(f"link {k} {lk} is outside the inner statement's {rows.n} units, {rows.n_in} input rows and "
+                             f"{n_out} output rows")
+        if rows.x[lk.reader][lk.port] != rows.x[lk.writer][rows.n_in + lk.out]:
+            raise ValueError(f"link {k} {lk}: the reader's row is not the writer's")
+    res: dict = {}
+    if forge is not None:
+        if forge not in LINK_FORGERIES:
+            raise ValueError(f"--forge {forge}: one of {LINK_FORGERIES}")
+        lk = links[0]
+        w = next((u for u in range(rows.n) if rows.x[u][rows.n_in + lk.out] != rows.x[lk.reader][lk.port]), None)
+        if w is None:
+            raise ValueError("forge link: every unit's output row is the first link's reader row")
+        links[0] = dataclasses.replace(lk, writer=w)
+        out = Path(out) / f"forged-{forge}"
+        res["forge"] = forge
+        res["forged_link"] = {"row": 0, "writer": lk.writer, "forged_writer": w}
+    table = RLK.table(links)
+    N = len(table)
+    defn = LK.definition(UB, PB)
+    program_ = P.population_program(defn, N)
+    part = P.partition(program_, P.template_instance_query(defn))
+    prog = P.program_sha512(program_)
+    reg = RLK.register(prog, links, salts)
+    rin = RR.verifier_value(prog, LK.IN_VALUE, [LK.expected(tin.root)] * N)
+    rout = RR.verifier_value(prog, LK.OUT_VALUE, [LK.expected(tout.root)] * N)
+    trows, tsalts, tentry = reg.statement(range(N))
+    ports: dict[str, list] = {p: [] for p in LK.PORTS}
+    ports["trow"] = [list(r) for r in trows]
+    for i in range(N):
+        lk = links[i] if i < len(links) else None
+        (ru, rp), (wu, wo) = ((lk.reader, lk.port), (lk.writer, lk.out)) if lk else ((0, 0), (0, 0))
+        ports["xr"].append(R.words_of(rows.x[ru][rp]))
+        ports["yr"].append(R.words_of(rows.y[ru][rp]))
+        ports["raux"].append(LK.aux(tin.path(LK.index(ru, rp, PB)), D))
+        ports["xw"].append(R.words_of(rows.x[wu][rows.n_in + wo]))
+        ports["yw"].append(R.words_of(rows.y[wu][rows.n_in + wo]))
+        ports["waux"].append(LK.aux(tout.path(LK.index(wu, wo, PB)), D))
+    ref = [LK.link_ref(UB, PB, *(ports[p][i] for p in LK.PORTS)) for i in range(N)]
+    holds = [a == LK.expected(tin.root) and b == LK.expected(tout.root) for a, b in ref]
+    flat = np.concatenate([np.array(ports[p], np.uint16) for p in LK.PORTS], axis=1)
+    cuts = np.cumsum((0,) + LK.row_words(UB, PB))
+    tables = {nm: flat[:, cuts[j]:cuts[j + 1]] for j, nm in enumerate(LK.ROWS)}
+    sub = LK.subcircuit(UB, PB)
+    key = {"UB": UB, "PB": PB, "n": N, "definition": sub.program_digests(None)[defn.id]}
+    if kept := RC.load("rec-link", key):
+        low, (text, info) = None, kept
+    else:
+        low = LK.lowering(UB, PB)
+        text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+        info = {"unit_rows": low.layout.useful}
+        RC.store("rec-link", key, text, info)
+    agrees = None
+    if evaluate and low is not None:
+        got, _cut, ok = low.evaluate(flat.astype(np.uint64))
+        agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i][0] + ref[i][1] for i in range(N)]
+    in_rows, in_salts, in_entry = rin.statement(range(N))
+    out_rows, out_salts, out_entry = rout.statement(range(N))
+    read = lambda e: {**e, "word_bits": 16, "reads": list(range(N))}  # noqa: E731
+    own = {"format": G.READS, "ports": {"trow": read(reg.entry()), "rin": read(rin.entry()), "rout": read(rout.entry())}}
+    RB.check(own, LK.TEMPLATE, N)
+    d = Path(out) / LINKS_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "circuit.txt").write_text(text)
+    (d / "program.json").write_bytes(canonical_json(encode_program(program_)))
+    (d / "partition.json").write_text(json.dumps(part))
+    (d / "registered.json").write_text(json.dumps(own))
+    rec_links = f"{reg.root.hex()}:{N}"
+    (d / "rec-links.txt").write_text(rec_links + "\n")
+    fresh = {p: [hm96.SHA512.fresh_salt() for _ in range(N)] for p in LK.ROWS[1:]}
+    FC.write(text, SimpleNamespace(name=LK.TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", None, list(range(N)),
+             share_rows=True, outs={"rin": np.asarray(in_rows, np.uint16), "rout": np.asarray(out_rows, np.uint16)},
+             tables=tables, refs={p: list(range(N)) for p in LK.ROWS},
+             salts={"trow": tsalts, **fresh, "rin": in_salts, "rout": out_salts},
+             registered={"trow": tentry, "rin": in_entry, "rout": out_entry})
+    m = json.loads(text.split("\n", 2)[1][5:])
+    return res | {"template": defn.id, "name": LK.unit_name(UB, PB), "UB": UB, "PB": PB, "instances": N, "links": len(links),
+                  "holds": holds, "unit_agrees": agrees, "rec_links": rec_links, "in_root": tin.root.hex(),
+                  "out_root": tout.root.hex(), "unit_rows": info["unit_rows"], "circuit_kept": low is None,
+                  "unit_log": m["unit_log"], "k_log": m["k_log"],
+                  "vus_per_block": m["vus_per_block"], "per_vu": m["per_vu"], "circuit_sha512": FC.digest(text),
+                  "program_sha512": prog, "partition_digest": P.digest(part)}
+
+
 def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
     """Each opening's ``coef`` words at its rep's coins, its position the one the verifier's query coins give."""
     out = {}
@@ -678,7 +895,24 @@ def main(argv=None) -> int:
                    "vus_per_block=V (rec_shape.Cap.parse; default REC_CAP): refuse a session of another shape, exit 2")
     s.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="stage the sparse phase at this RecSparse shape (with --circuit)")
     s.add_argument("--circuit", help="--sparse: the inner statement's circuit.txt, whose META has the hidden circuit's range")
+    k = sub.add_parser("stage-links", help="the link table's V* part over the inner statement (stage_links)")
+    k.add_argument("circuit", help="the inner statement's circuit.txt")
+    k.add_argument("inst", help="its prover's file, inst-<n>.bin")
+    k.add_argument("links", help="its links file (class_statement.links_file)")
+    k.add_argument("out")
+    k.add_argument("--forge", default=None, choices=LINK_FORGERIES)
+    k.add_argument("--no-evaluate", action="store_true", help="skip evaluating the unit against the reference")
     a = ap.parse_args(argv)
+    if a.cmd == "stage-links":
+        from . import rec_links as RLK
+
+        circuit = Path(a.circuit)
+        entries = RLK.entries([p[0] for p in meta(circuit)["ports"]], json.loads(Path(a.links).read_text())["links"])
+        res = stage_links(circuit, Path(a.inst), entries, Path(a.out), a.forge, not a.no_evaluate)
+        print(json.dumps(res, sort_keys=True), flush=True)
+        if res["unit_agrees"] not in (None, [True] * res["instances"]):
+            return 1
+        return 0 if a.forge or all(res["holds"]) else 1
     if a.cmd == "points":
         inner = Path(a.inner)
         t0 = time.perf_counter()

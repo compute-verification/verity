@@ -8,8 +8,8 @@ its reader lives with the application, not in core.  One `delta` serves every co
 union counts it once.
 
 The law is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
-partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`) or only
-groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`, `Work`) or
+only groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
 carries draws, never roles.
 """
 
@@ -27,6 +27,10 @@ from verity.ml.circuits.partition import Hierarchy, Level
 #: `worst_case`'s margin: risks are shrunk and the bound raised by this relative amount, far above the arithmetic's error
 #: (a few units in the last place), so the bound is never below the relaxation's exact optimum
 MARGIN = 2.0 ** -30
+
+#: the per-window δ, the one failure probability a window's ε is reported at: PoUW's credit and its grind premium, and
+#: the remote bandwidth audit's pooled bound
+WINDOW_DELTA = Fraction(1, 2 ** 40)
 
 
 def neg_log_ratio(a: int, d: int) -> float:
@@ -94,8 +98,9 @@ class IntegrityProfile:
     """Checked by sampling over `levels`, coarse to fine: `sizes[0]` members at the top level, then `sizes[i]`
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
     is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
-    level; undrawn levels only group.  A `Stratified` draw is the only draw, of the checked level, with its strata
-    tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
+    level; undrawn levels only group.  A `Stratified` or `Work` draw is the only draw, of the checked level, with its
+    strata tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through
+    `strata`.
     `drawn` counts the members actually drawn at each level, all passed.
 
     A profile of more than one level is valid only when its checked level is committed before the first draw
@@ -119,7 +124,7 @@ class IntegrityProfile:
 
     levels: Hierarchy
     sizes: tuple[int, ...]
-    draws: Mapping[str, Draw] = field(hash=False)
+    draws: Mapping[str, SamplingDesign] = field(hash=False)
     delta: float
     programs: tuple[str, ...] = field(default=(), kw_only=True)
     prescribed: frozenset[str] = field(default=frozenset(), kw_only=True)
@@ -143,13 +148,13 @@ class IntegrityProfile:
         object.__setattr__(self, "drawn", MappingProxyType({n: int(self.drawn[n]) for n in names if n in self.drawn}))
         bernoulli = [n for n, d in self.draws.items() if isinstance(d, Bernoulli)]
         subsets = [n for n, d in self.draws.items() if isinstance(d, Subset)]
-        stratified = [n for n, d in self.draws.items() if isinstance(d, Stratified)]
+        stratified = [n for n, d in self.draws.items() if isinstance(d, (Stratified, Work))]
         if len(bernoulli) + len(subsets) + len(stratified) != len(self.draws) or len(bernoulli) > 1:
-            raise ValueError("a profile's draws are Bernoulli, Subset or Stratified, with at most one Bernoulli level")
+            raise ValueError("a profile's draws are Bernoulli, Subset, Stratified or Work, with at most one Bernoulli level")
         if names[-1] not in self.draws or subsets not in ([], [names[-1]]):
             raise ValueError("the checked (finest) level is drawn, and only it may be drawn by Subset")
         if stratified and list(self.draws) != [names[-1]]:
-            raise ValueError("a Stratified draw is the profile's only draw, of the checked level")
+            raise ValueError("a Stratified or Work draw is the profile's only draw, of the checked level")
         if any(v < 0 for v in self.drawn.values()):
             raise ValueError("drawn counts are >= 0")
         if stratified:
@@ -182,7 +187,7 @@ class IntegrityProfile:
     def _law(self) -> tuple[int, int, Fraction, int]:
         """(Bernoulli members, checked members n inside each, p, k)."""
         checked = self.levels[-1].name
-        if isinstance(self.draws[checked], Stratified):
+        if isinstance(self.draws[checked], (Stratified, Work)):
             raise ValueError("a stratified profile has no single k: read it through `strata`")
         at = next((n for n, d in self.draws.items() if isinstance(d, Bernoulli)), None)
         p = self.draws[at].p if at is not None else Fraction(1)
@@ -262,13 +267,15 @@ class IntegrityProfile:
         return best if cap is None else min(best, float(cap))
 
     def strata(self) -> Stratified | None:
-        """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, or, when a
-        `Subset(k)` of the checked level is the only draw, one stratum of all its members, named after the level.  None
-        when a level is drawn `Bernoulli`."""
+        """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, a `Work`
+        draw's at its k_s, or, when a `Subset(k)` of the checked level is the only draw, one stratum of all its members,
+        named after the level.  None when a level is drawn `Bernoulli`."""
         checked = self.levels[-1].name
         law = self.draws[checked]
         if isinstance(law, Stratified):
             return law
+        if isinstance(law, Work):
+            return law.stratified
         if isinstance(law, Subset) and len(self.draws) == 1:
             return Stratified.uniform(self.count(checked), law.k, checked)
         return None
@@ -577,8 +584,69 @@ class Stratified:
         return {"law": "stratified", "strata": [{"name": s.name, "size": s.size, "k": s.k} for s in self.strata]}
 
 
-Draw = Bernoulli | Subset | Stratified
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's draw under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
+    at most `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum", "Subset",
-           "neg_log_ratio"]
+@dataclass(frozen=True, slots=True)
+class WorkStratum:
+    """A stratum of the work sampling design: `size` members, `k` of them drawn, each doing `work` (an integer in any
+    fixed unit, 0 for members that do none), and `floor`, the fewest it draws."""
+
+    name: str
+    size: int
+    k: int
+    work: int
+    floor: int
+
+
+@dataclass(frozen=True, slots=True)
+class Work:
+    """The work sampling design `work:k` (Lean `Core.SamplingDesign.work`): uniform draws inside disjoint strata of the checked
+    level, each stratum's k_s sized by its work above its floor (`work_k`).  Its sample is the stratified one at those
+    k_s, so its bounds are `stratified`'s."""
+
+    k: int
+    strata: tuple[WorkStratum, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "strata", tuple(self.strata))
+        if not all(isinstance(s, WorkStratum) for s in self.strata):
+            raise ValueError("a work design's strata are WorkStratum")
+        if not self.strata or not 1 <= self.k <= self.population:
+            raise ValueError("a work design needs strata and 1 <= k <= population")
+        total = sum(s.work * s.size for s in self.strata)
+        if total == 0:
+            raise ValueError("a work design's population does no work")
+        seen: set[str] = set()
+        for s in self.strata:
+            if s.name in seen:
+                raise ValueError(f"stratum {s.name!r} twice")
+            seen.add(s.name)
+            if s.floor < 1:
+                raise ValueError(f"stratum {s.name!r}: a floor is at least one")
+            if s.k != work_k(self.k, s.work, s.size, total, s.floor):
+                raise ValueError(f"stratum {s.name!r}: k is not the work rule's")
+
+    @property
+    def population(self) -> int:
+        return sum(s.size for s in self.strata)
+
+    @property
+    def stratified(self) -> Stratified:
+        """Its sample's design: the stratified one at its k_s."""
+        return Stratified(tuple(Stratum(s.name, s.size, s.k) for s in self.strata))
+
+    def to_json(self) -> dict:
+        return {"law": "work", "k": self.k,
+                "strata": [{"name": s.name, "size": s.size, "k": s.k, "work": s.work, "floor": s.floor}
+                           for s in self.strata]}
+
+
+SamplingDesign = Bernoulli | Subset | Stratified | Work
+
+
+__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "IntegrityProfile", "SamplingDesign", "Stratified",
+           "Stratum", "Subset", "neg_log_ratio"]
