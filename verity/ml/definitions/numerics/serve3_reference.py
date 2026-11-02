@@ -1,5 +1,5 @@
 """Vectorized reference evaluator of `Serve@3`'s padding layer — the inactive transition and its outputs
-(lane PAD-IMPL; semantics: PAD-SPEC v1 §4–§8).
+(semantics: PAD-SPEC v1 §4–§8).
 
 The padded circuit adds one semantic layer over the `Serve_v2` skeleton: the flag chain, the guards, and
 the row muxes.  Everything in that layer is a word computation on the raw samples `y_0..y_{D_MAX}` (the
@@ -16,7 +16,7 @@ circuit evaluation — `tests/program/test_serve3.py::test_reference_evaluator_m
 * `interpret(out, live)` — the interpretation map (spec §8): `n = Σ live[0..D_MAX-1]`, `transcript =
   out[0..n-1]` (EOS-exclusive; slot `n` is stop evidence when `n < D_MAX`, never a semantic output; the
   suffix equals the pad constant and is not an output).
-* `inactive_boundary(C)` — the step-boundary relation of spec §6 (INACT-BASE's trivial statement): for
+* `inactive_boundary(C)` — the step-boundary relation of spec §6, in its trivial form: for
   `live_in = 0` the `PadDecodeStep_v1` boundary outputs are the constants `(tok_out, live_out, k_new,
   v_new) = (0, 0, 0…0, 0…0)`, checkable without touching an interior gate.
 
@@ -24,7 +24,7 @@ What this module does **not** vectorize: the inactive step *bodies* ("canonical 
 values are the registered gate semantics on the actual inputs (tensor-core k-chains, FA2 online softmax,
 MUFU tables), whose bit-exact reference is the circuit evaluator itself; `materialize(prog, inputs)` runs it
 and returns the full transcript, which is how a prover materializes `canonical, not captured` leaves
-(spec §12).  Vectorized twins of those kernels are the numerics lane's C++ model, not a padding concern.
+(spec §12).  Vectorized twins of those kernels are the C++ models of `numerics/cpp/`, not a padding concern.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ def materialize(prog, inputs: list[list[int]]) -> dict[int, int]:
     """Materialize *every* circuit value (live and `canonical, not captured` alike, spec §12) from the
     committed inputs by the registered gate semantics: the full transcript `{root gate index: word}` of
     `prog` on `inputs` (one flat word list per program input, leaf order)."""
-    from verity.ml.circuits.evaluate import evaluate_region
+    from verity.ml.circuits.evaluation.reference import evaluate_region
     from verity.ml.circuits.layout import resolve
     circ = prog.circuit
     t: dict[int, int] = {}

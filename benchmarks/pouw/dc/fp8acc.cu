@@ -1,7 +1,7 @@
-// M4e's E4M3 part (note:20261017T0321Z-draft-eps1-tensor §5): is tcgen05.mma kind::f8f6f4's FP32 accumulation exact in
+// M4e's E4M3 part: is tcgen05.mma kind::f8f6f4's FP32 accumulation exact in
 // emu8's binades? The one question B300 (no kind::i8) hangs on; it runs on a B200, the same kind.
 //
-// emu8 (branch cursor/emu8-ea24, not on main) writes an s8 product through E4M3 limb planes: x = 16 h + l,
+// emu8 writes an s8 product through E4M3 limb planes: x = 16 h + l,
 // h = (x + 8) >> 4, l in [-8, 7], m = h + l. k3: acc1 = C1 + (4h)(4h')^T + (-l)(l')^T, acc2 = C2 + m m'^T, and the k32
 // word is 15 bits(acc1) + 2 bits(acc2) mod 2^32 (C1 = 0x4B7BAB6C ulp 1, C2 = 0x49E07A56 ulp 1/8, 15 C1 + 2 C2 = 0).
 // k4: acc = C0 + (16h)(16h')^T + (16h) l'^T + l (16h')^T + l l'^T, word = bits(acc) - C0 (C0 = 1.5 2^23).

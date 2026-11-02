@@ -106,6 +106,16 @@ structure Certificate where
   digest : ByteArray
   signature : ByteArray
 
+/-- `Certificate.verify`, every certificate check's LMS check: under the LMS key `key` in certifier session `session`,
+the certificate is the key's (its I) and its LMS signature verifies over `certificate_message` of its fields; a message
+that can't be formed or a signature that doesn't decode is false. -/
+def Certificate.signs (lms : Lms.Params) (key session : ByteArray) (c : Certificate) : Bool :=
+  c.keyId == key.extract 0 16 &&
+    match certificateMessage c.keyId session c.link c.direction c.window c.digest,
+        Lms.Signature.decode lms c.signature with
+    | .ok m, .ok sig => (Lms.verify lms key m sig).toOption == some true
+    | _, _ => false
+
 /-- `certificate.CertifiedRecord`: the head, the certifier's salt for it (`salt_c`) and the certificate. -/
 structure Certified where
   head : RecordHead
@@ -302,20 +312,17 @@ def inSyncSet (ss : NetworkCertifier.SyncSet) (s : ClockSync) : Bool := decide (
 def manifestSet (ss : NetworkCertifier.SyncSet) : NetworkCheck.SyncSet :=
   ⟨ss.deltas.toArray.map Int.ofNat, ss.rhos.toArray.map fun ρ => (ρ.num, ρ.den)⟩
 
-/-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate is the key's, names the head's
-link-window, signs the head's digest salted by the record's salt (`certificateDigest`), and its signature verifies over
-the message in that session; a signature that doesn't decode is false. -/
+/-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate names the head's link-window,
+signs the head's digest salted by the record's salt (`certificateDigest`), and is the key's and verifies in that session
+(`Certificate.signs`). -/
 def verifies (p : Params) (r : Certified) : Bool :=
   let c := r.certificate
   let h := r.head
-  c.keyId == p.key.extract 0 16 && c.link == h.link && c.direction == h.direction && (c.window : Int) == h.window &&
+  c.link == h.link && c.direction == h.direction && (c.window : Int) == h.window &&
     (match h.digest with
      | .ok d => c.digest == certificateDigest r.salt d
      | .error _ => false) &&
-    match certificateMessage c.keyId p.session c.link c.direction c.window c.digest,
-        Lms.Signature.decode p.lms c.signature with
-    | .ok m, .ok sig => (Lms.verify p.lms p.key m sig).toOption == some true
-    | _, _ => false
+    c.signs p.lms p.key p.session
 
 /-- `_status_violation`: the one record of the execution phase, or its violation. -/
 def screen (p : Params) (found : Array Certified) : Except String Certified :=

@@ -1,5 +1,5 @@
 /-
-A templated unit, `flock-ir-tmpl/v2` (PRF-133): a `flock-ir-unit/v2` unit's rows given once per Definition, with placed
+A templated unit, `flock-ir-tmpl/v2`: a `flock-ir-unit/v2` unit's rows given once per Definition, with placed
 copies, so its text is O(description) where the flat form is O(unrolled). No verifier path reads it: `HmRow.parse` takes a
 flat `NET` block only, and the guarantees read the flat circuit `Desc.unroll` stands for. `unroll` is the reference, the
 flat net it stands for, built by `Net.ofRows` with every check `Net.parse` runs; `Flock.Test.Tmpl` holds it to `Net.parse`

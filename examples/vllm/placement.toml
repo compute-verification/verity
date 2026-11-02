@@ -12,8 +12,8 @@ row = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 VENV = "/workspace/cp/venv312"
 CUDA_HOME = "/usr/local/cuda-13.0"
 HF_HOME = "/workspace/hf"
-# the workload dirs, LLAMA_ROOT/<run>/<row>; COMMIT_RUN is the run whose workload dir the endpoint commits under: its Build's
-# manifest (ROW/manifest.json), and the taps built beside it
+# the workload dirs, LLAMA_ROOT/<run>/<row>; COMMIT_RUN is the run whose traced workload dir the endpoint's Build of record
+# (`predict row`) is held to, and the taps built beside it
 LLAMA_ROOT = "/workspace/research/vllm-composed-h200int8"
 COMMIT_RUN = "r20261026-185144-3ccb"
 # no endpoint serves with less free on its serve dir's filesystem

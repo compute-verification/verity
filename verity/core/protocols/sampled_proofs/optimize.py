@@ -10,7 +10,7 @@ sizes (the note's gap G1).
 **Cuts.**  An op type is cut into proof blocks one of several ways, each a set of subcircuits (`Candidate.cut`): one subcircuit per
 op is a partition of it; a shared piece is either its own subcircuit, committed once and read by the others, or
 recomputed inside each reader (a covering, `recomputed_across` in `Q_word` v2), and the planner picks per density.  A proof block
-whose wrong output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
+whose incorrect output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
