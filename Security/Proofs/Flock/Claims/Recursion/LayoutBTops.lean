@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.LayoutBCap
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # V*'s bound layout with every level's tops at its RecCap (`layoutBTops`), and `HeldB` there

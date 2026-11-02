@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Complete.Zk.Json.Files
 public import Proofs.Flock.Claims.Complete.Replay.ProverOk
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The masked prover's pieces at every good case (`ProverOkZk`)
