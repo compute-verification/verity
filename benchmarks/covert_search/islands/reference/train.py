@@ -19,7 +19,7 @@ HP = {
     "wd": 0.1,
     "clip": 1.0,
     "seqs": 64,
-    "micro": 16,
+    "micro": 64,
     "muon_lr": 0.01,
     "muon_momentum": 0.95,
     "muon_seqs": 60,
@@ -75,21 +75,27 @@ def block(ctx, carry):
     t = int(carry["step"])
     f = schedule(ctx)
     b1, b2 = HP["beta1"], HP["beta2"]
+    lr = HP["lr"] * f
     with torch.no_grad():
+        adam = []
         for n in names:
-            p, g = carry["p." + n], grads[n] * scale
+            p, g = carry["p." + n], grads[n].mul_(scale)
             if muon and hidden_matrix(n, p):
                 m = carry["m." + n].mul_(HP["muon_momentum"]).add_(g)
                 u = newton_schulz(g + HP["muon_momentum"] * m, HP["ns_steps"])
                 p.add_(u, alpha=-HP["muon_lr"] * f * max(1.0, p.size(0) / p.size(1)) ** 0.5)
-                continue
-            m, v = carry["m." + n], carry["v." + n]
-            m.mul_(b1).add_(g, alpha=1 - b1)
-            v.mul_(b2).addcmul_(g, g, value=1 - b2)
-            lr = HP["lr"] * f
-            if p.dim() >= 2:
-                p.mul_(1 - lr * HP["wd"])
-            p.addcdiv_(m / (1 - b1 ** t), (v / (1 - b2 ** t)).sqrt_().add_(1e-8), value=-lr)
+            else:
+                adam.append(n)
+        ps, gs = [carry["p." + n] for n in adam], [grads[n] for n in adam]
+        ms, vs = [carry["m." + n] for n in adam], [carry["v." + n] for n in adam]
+        torch._foreach_lerp_(ms, gs, 1 - b1)
+        torch._foreach_mul_(vs, b2)
+        torch._foreach_addcmul_(vs, gs, gs, value=1 - b2)
+        torch._foreach_mul_([p for p in ps if p.dim() >= 2], 1 - lr * HP["wd"])
+        denom = torch._foreach_div(vs, 1 - b2 ** t)
+        torch._foreach_sqrt_(denom)
+        torch._foreach_add_(denom, 1e-8)
+        torch._foreach_addcdiv_(ps, ms, denom, value=-lr / (1 - b1 ** t))
     for n in names:
         carry["p." + n] = carry["p." + n].detach()
     return carry

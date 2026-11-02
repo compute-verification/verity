@@ -21,7 +21,7 @@ HP = {
     "wd": 0.0,
     "clip": 1.0,
     "seqs": 64,
-    "micro": 16,
+    "micro": 64,
     "max_rank": 64,
     "scope": "auto",        # auto | all | attn | vo | o
 }
