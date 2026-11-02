@@ -36,13 +36,13 @@ from pathlib import Path
 
 os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
 
-import torch  # noqa: E402
+import torch
 
-from . import VERSION  # noqa: E402
-from .codecs import Plan  # noqa: E402
-from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check  # noqa: E402
-from .flops import Counter, digest, flags, forward_macs_per_token  # noqa: E402
-from .score import block_c  # noqa: E402
+from . import VERSION
+from .codecs import Plan
+from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
+from .flops import Counter, digest, flags, forward_macs_per_token
+from .score import block_c
 
 CHECKPOINTS = 20
 #: a run past its tier's GPU budget by this factor is stopped at its next step

@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import struct
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -113,7 +114,7 @@ def rebuild(plan: Plan, enc: bytes, step, theta: dict, c: float, device="cpu") -
         with counter:
             out = plan.decode(enc, bases)
         cost = max(counter.setup.macs, plan.cost_macs(enc, bases))
-    except Exception as e:  # a malformed encoding is a failed rebuild, never a crash of the checker
+    except (ValueError, KeyError, IndexError, TypeError, RuntimeError, struct.error) as e:
         return False, f"decode: {type(e).__name__}: {e}", 0
     if cost > c:
         return False, f"rebuild costs {cost} MACs > c = {c:.0f}", cost

@@ -6,8 +6,9 @@ forward, backward (autograd's threads inherit the mode) and optimizer alike. It 
 
 - matmuls (`mm`, `addmm`, `bmm`, `baddbmm`, `dot`, `mv`, `addmv`, `addbmm`, `_int_mm`, `_scaled_mm`), attention and
   convolutions, by torch's FLOP formulas (`torch.utils.flop_counter`) halved, or by shape;
-- elementwise multiplications (`mul`, `addcmul`, `addcdiv`, `lerp`, their in-place and `_foreach_` forms), one MAC per output
-  element, so a matmul written as a broadcast product is counted too;
+- elementwise multiplications (`mul`, `addcmul`, `addcdiv`, `lerp`, `add` with a scale, their in-place and `_foreach_`
+  forms), one MAC per output element, so a matmul written as a broadcast product is counted too, and fused optimizer
+  steps at their unfused forms' multiplications per parameter;
 - dense linear algebra (`eigh`, `svd`, `qr`, `cholesky`, `inv`, solves), at n**3 per matrix, marked approximate.
 
 |C| is their sum (`macs`). Each multiplication is a node classified by its operands' provenance, which the counter tracks
@@ -22,9 +23,12 @@ per tensor through every op within a step:
 
 A node is `updated` when it is in a forward pass (outside autograd's backward), one operand is token-indexed and another
 (the weight, or an initial accumulator) has roots: the updated multiplications U. Others are `theta` (the weight equals
-θ's), `act` (two token-indexed operands: attention), `param` (no token-indexed operand: optimizer work) or, in the
-backward pass, the same kinds under `bwd`. Each updated node records its MACs per token row and the updated MACs per token
-row upstream of it in its token's pass (the cone of updated forward nodes its operands were computed from).
+θ's, or a fast value made in the step), `act` (two token-indexed operands: attention), `param` (no token-indexed
+operand: optimizer work), and every product in autograd's backward is `bwd/grad`. Each updated node records its MACs per token row and the updated MACs per token
+row upstream of it in its token's pass (the cone of updated forward nodes its operands were computed from). Every value
+autograd's backward produces is a weight from then on (`derived`): a gradient used as a weight, directly or through an
+out-of-place update, is updated. So is a token-derived operand shaped like a weight in a two-token-operand matmul (a
+gradient computed by hand); a forward activation that happens to have a weight's 2-D shape is counted as one too.
 
 Tags are cleared at every step boundary, so a value carried from one step to the next is a weight from then on. Writes
 the dispatcher doesn't see (a custom kernel into a weight's memory) are caught at each step's end, when every registered
@@ -77,6 +81,9 @@ ELEMENTWISE = {aten.mul, aten.mul_, aten.addcmul, aten.addcmul_, aten.addcdiv, a
                aten._foreach_addcdiv, aten._foreach_addcdiv_, aten._foreach_lerp, aten._foreach_lerp_}
 SCALED = {aten.add, aten.add_, aten.sub, aten.sub_, aten._foreach_add, aten._foreach_add_, aten._foreach_sub,
           aten._foreach_sub_}
+#: fused optimizer steps, at the multiplications per parameter their unfused forms make
+FUSED_OPTIMIZERS = {getattr(aten, n): k for n, k in (("_fused_adam_", 7), ("_fused_adamw_", 8), ("_fused_sgd_", 2),
+                                                      ("_fused_adagrad_", 4)) if hasattr(aten, n)}
 LINALG = {getattr(aten, n) for n in ("_linalg_eigh", "linalg_eigh", "_linalg_svd", "linalg_svd", "linalg_qr",
                                      "linalg_cholesky_ex", "linalg_inv_ex", "_linalg_solve_ex", "linalg_solve_triangular",
                                      "linalg_lu_factor_ex", "cholesky_solve", "triangular_solve") if hasattr(aten, n)}
@@ -332,6 +339,8 @@ class Counter(TorchDispatchMode):
             return int(flop_counter.flop_registry[p](*args, **kwargs, out_val=out)) // 2, "matmul"
         if p in ELEMENTWISE or p in SCALED and kwargs.get("alpha", 1) != 1:
             return sum(t.numel() for t in _tensors(out) or _tensors(args[0])), "elementwise"
+        if p in FUSED_OPTIMIZERS:
+            return FUSED_OPTIMIZERS[p] * sum(t.numel() for t in _tensors(args[0])), "elementwise"
         if p in LINALG:
             a = args[0]
             n = a.shape[-1] if a.dim() else 1

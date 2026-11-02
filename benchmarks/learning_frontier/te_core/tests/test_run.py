@@ -1,3 +1,4 @@
+import importlib.util
 import json
 
 import pytest
@@ -81,11 +82,13 @@ def train(te):
 
 @pytest.fixture
 def theta_file(tmp_path):
-    ns = {}
-    exec(MODEL, ns)
+    (tmp_path / "tiny_model.py").write_text(MODEL)
+    spec = importlib.util.spec_from_file_location("tiny_model", tmp_path / "tiny_model.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
     torch.manual_seed(0)
     path = tmp_path / "theta.pt"
-    torch.save({"state": ns["Tiny"]().state_dict(), "meta": {}}, path)
+    torch.save({"state": mod.Tiny().state_dict(), "meta": {}}, path)
     return path
 
 

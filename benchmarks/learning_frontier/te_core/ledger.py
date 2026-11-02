@@ -21,7 +21,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 from . import VERSION
@@ -38,7 +38,7 @@ def default_root() -> Path:
 
 
 def now_iso(clock=time.time) -> str:
-    return datetime.fromtimestamp(clock(), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(clock(), UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Ledger:
