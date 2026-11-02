@@ -116,7 +116,7 @@ def handler(b: Bucket, name: str):
             items = "".join(
                 f"<Contents><Key>{escape(k)}</Key><Size>{len(b.objects[k][0])}</Size>"
                 f"<ETag>&quot;{hashlib.md5(b.objects[k][0]).hexdigest()}&quot;</ETag><LastModified>"
-                f"{datetime.datetime.fromtimestamp(b.objects[k][1], datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')}"
+                f"{datetime.datetime.fromtimestamp(b.objects[k][1], datetime.UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z')}"
                 f"</LastModified></Contents>" for k in page)
             more = f"<IsTruncated>true</IsTruncated><NextContinuationToken>{escape(rest[0])}</NextContinuationToken>" if rest \
                 else "<IsTruncated>false</IsTruncated>"
@@ -238,7 +238,7 @@ def test_a_transient_answer_is_retried_and_any_other_is_raised_at_once(monkeypat
     monkeypatch.setattr(C.urllib.request, "urlopen", urlopen)
     monkeypatch.setattr(C, "_sleep", waits.append)
     s3 = C.S3("https://r2.example", "b", "k", "s",
-              now=lambda: datetime.datetime(2026, 10, 21, 0, 0, next(ticks), tzinfo=datetime.timezone.utc))
+              now=lambda: datetime.datetime(2026, 10, 21, 0, 0, next(ticks), tzinfo=datetime.UTC))
     answers[:] = [500, C.urllib.error.URLError("reset"), 503, "ok"]
     assert s3.open("GET", "main/x") == "ok" and waits == list(C.RETRY_S) and len(set(dates)) == 4
     waits.clear()
@@ -642,8 +642,9 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     shutil.copytree(HERE / "fixtures" / "control", pkg,
                     ignore=shutil.ignore_patterns(".lake"))
     store = tmp_path / "artifacts"
-    build = lambda: subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True,
-                                   env=LC.lake_env())
+    def build():
+        return subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True,
+                              env=LC.lake_env())
     build()
     arts = LA.LakeArtifacts(store)
     assert arts.put({pkg}) > 0

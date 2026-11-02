@@ -798,7 +798,7 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     body[at:at + 4] = (1).to_bytes(4, "little")
     assert list(WI.check_drawn(ms, {**publics, ms[1].key: bytes(body)}, [2])) == [ms[1].key]
     with pytest.raises(ValueError, match="own rows"):
-        CS.Window(win.window.program, win.window.query, LAW, RUN,
+        CS.Binding(win.window.program, win.window.query, LAW, RUN,
                   (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
 
 
@@ -815,9 +815,9 @@ class Bound(Held):
 
 def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, the files
-    `write` writes byte for byte, and each member's prover body as the files make it (`rows.read_private`), where ``refd``'s
-    leave a registered value's rows and salts out of the member's own file (``value_rows``); both leave a wired port's
-    (``wired_rows``)."""
+    `write` writes under one index salt byte for byte, and each member's prover body as the files make it
+    (`rows.read_private`), where ``refd``'s leave a registered value's rows and salts out of the member's own file
+    (``value_rows``); both leave a wired port's (``wired_rows``)."""
     a, b = full.close(salt_key=bytes(32)), refd.close(salt_key=bytes(32))
     assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
     assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
@@ -827,7 +827,7 @@ def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
     files = []
     for win, c, d in ((full, a, tmp_path / "full"), (refd, b, tmp_path / "refd")):
-        win.write(c, d, {"by": "test"}, registrar=reg)
+        win.write(c, d, {"by": "test"}, registrar=reg, index_salt=bytes(CS.SALT_BYTES))
         doc = json.loads((d / "window.json").read_text())
         got = {f.name: f.read_bytes() for f in d.iterdir() if not re.fullmatch(r"[mv][0-9]+-private\.bin", f.name)}
         got["window.json"] = {k: v for k, v in doc.items() if k not in ("seconds", "value_rows", "members")}
@@ -1084,7 +1084,7 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
         mixed.close(salt_key=bytes(32))
 
 
-def given_by_reference(monkeypatch) -> tuple[CS.Window, list[dict], Bound]:
+def given_by_reference(monkeypatch) -> tuple[CS.Binding, list[dict], Bound]:
     """`fed_chain` with every chain input recorded by reference: the window and each member's rows as `Window.close` hands
     them to `rows.commit` (each wired ``x`` `rows.WIRED`, each ``w`` a `rows.ValueRows` of the registered value)."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
@@ -1099,7 +1099,7 @@ def given_by_reference(monkeypatch) -> tuple[CS.Window, list[dict], Bound]:
     return window, data, w
 
 
-def _first(window: CS.Window, tid: str) -> int:
+def _first(window: CS.Binding, tid: str) -> int:
     return next(k for k, m in enumerate(window.members) if m.template == tid)
 
 
@@ -1112,7 +1112,7 @@ def _like(value: Bound, **fields) -> Bound:
 def _value_rows(value=None, positions=None, salts=None):
     """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)`` under ``salts(the salts
     `Window.close` drew)``, each as given when None (the salts drawn again by `rows.commit` when the positions change)."""
-    def edit(window: CS.Window, data: list[dict]) -> CS.Window:
+    def edit(window: CS.Binding, data: list[dict]) -> CS.Binding:
         k = _first(window, GID)
         src = data[k]["rows"]["w"]
         data[k]["rows"]["w"] = CS.ValueRows(src.value if value is None else value(src.value),
@@ -1122,13 +1122,13 @@ def _value_rows(value=None, positions=None, salts=None):
     return edit
 
 
-def _feed_x_wired(window: CS.Window, data: list[dict]) -> CS.Window:
+def _feed_x_wired(window: CS.Binding, data: list[dict]) -> CS.Binding:
     """The feed's external ``x``, which no wire writes, given as `rows.WIRED`."""
     data[_first(window, SID)]["rows"]["x"] = CS.WIRED
     return window
 
 
-def _beside_a_row_table(window: CS.Window, data: list[dict]) -> CS.Window:
+def _beside_a_row_table(window: CS.Binding, data: list[dict]) -> CS.Binding:
     """The feed's ``x`` made the one row of a row table both its units read, the chain's rows still by reference."""
     k = _first(window, SID)
     m = window.members[k]

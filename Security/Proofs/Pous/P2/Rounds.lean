@@ -155,4 +155,16 @@ theorem floor_043_eps :
       rw [show (137 : ℕ) = 7 + 130 by norm_num, pow_add, ← mul_assoc, ← mul_pow,
         ENNReal.mul_inv_cancel (by norm_num) (by norm_num), one_pow, one_mul]
 
+theorem half_pow (n : ℕ) : (2⁻¹ : ℝ≥0∞) ^ n = ENNReal.ofReal ((1 / 2) ^ n) := by
+  rw [ENNReal.ofReal_pow (by norm_num), one_div, ENNReal.ofReal_inv_of_pos two_pos, ENNReal.ofReal_ofNat]
+
+set_option exponentiation.threshold 320 in
+/-- **`p = 0.043` and `ε₀ = 2^-137` at 320 rounds**: `0.957^320 ≈ 7.8·10^-7`, and with `320·2^-137` it stays below
+`2^-20 ≈ 9.5·10^-7`. -/
+theorem floor_043_eps_320 :
+    (1 - 43 / 1000 : ℝ≥0∞) ^ 320 + 320 * (2⁻¹ : ℝ≥0∞) ^ 137 ≤ (2⁻¹ : ℝ≥0∞) ^ 20 := by
+  rw [one_sub_043, ← ENNReal.ofReal_pow (by norm_num), half_pow, half_pow, ← ENNReal.ofReal_ofNat 320,
+    ← ENNReal.ofReal_mul (by norm_num), ← ENNReal.ofReal_add (by positivity) (by positivity)]
+  exact ENNReal.ofReal_le_ofReal (by norm_num)
+
 end PousP2Rounds

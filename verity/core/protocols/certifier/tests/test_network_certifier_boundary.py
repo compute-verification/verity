@@ -16,7 +16,8 @@ from verity.ml.circuits.defs import bind
 @dataclass(frozen=True)
 class Toy:
     """A toy template: its parameter rows and output rows ``(name, words, kind)``, each output bit one gate: ``dense`` the
-    XOR of every input bit of the unit, ``last`` the NOT of one bit of its last parameter row, ``const`` bit 0 set."""
+    XOR of every input bit of the proof block, ``last`` the NOT of one bit of its last parameter row, ``const`` bit 0
+    set."""
 
     tid: str
     rows: tuple[tuple[str, int], ...]
@@ -122,7 +123,7 @@ def test_a_window_whose_egress_reads_only_earlier_ingress_fits():
     doc = record(toys, wires, 2, 2, 3)
     assert accepted(doc)
     assert fits(doc, toys)
-    earlier = [0, 0, 1, 3, 3, 5]  # egress (ℓ, t) in order reads ingress unit ℓ·3 + t' at t' ≤ t
+    earlier = [0, 0, 1, 3, 3, 5]  # egress (ℓ, t) in order reads ingress proof block ℓ·3 + t' at t' ≤ t
     doc = record(toys, {(EGR.tid, "y"): earlier}, 2, 2, 3)
     assert accepted(doc) and fits(doc, toys)
 
@@ -173,8 +174,9 @@ def test_the_unit_grain_contains_depends_and_is_exact_on_dense_templates():
 
 
 def test_a_record_that_fits_only_at_the_gate_grain_is_refused():
-    """The ingress unit's output reads only its ``aux`` row, an input that isn't ingress, so egress bucket 0 reading bucket
-    1's ingress unit depends on no ingress gate; the record's grain can't see that, and refuses."""
+    """The ingress proof block's output reads only its ``aux`` row, an input that isn't ingress, so egress bucket 0
+    reading bucket 1's ingress proof block depends on no ingress gate; the record's grain can't see that, and
+    refuses."""
     ing = Toy(ING.tid, ING.rows, (("o0", 1, "last"),))
     toys = [(ing, 2), (EGR, 2)]
     doc = record(toys, {(EGR.tid, "y"): [1, 1]}, 1, 1, 2)
@@ -216,7 +218,8 @@ def test_the_unit_of_a_bucket_is_its_templates_unit_link_times_T_plus_t():
     assert [b.unit(doc, "ingress", 0, t) for t in range(3)] == [0, 1, 2]
     with pytest.raises(ValueError, match=r"egress has links \[0, 2\) and buckets \[0, 3\), not \(2, 0\)"):
         b.unit(doc, "egress", 2, 0)
-    # with a first template: bucket 0 of link ℓ its unit ℓ, bucket t ≥ 1 the other's unit ℓ·(T − 1) + t − 1
+    # with a first template: bucket 0 of link ℓ its proof block ℓ, bucket t ≥ 1 the other's proof block ℓ·(T − 1) + t −
+    # 1
     toys = [(FIRST, 2), (ING, 4), (EGR, 6)]
     doc = record(toys, {(EGR.tid, "y"): [0, 2, 3, 1, 4, 5]}, 2, 2, 3, first=True)
     b = BD.parse(doc)
@@ -309,7 +312,7 @@ def test_an_egress_only_window_has_no_ingress_gates():
 
 def test_an_egress_unit_that_reads_a_row_table_fits():
     """Its frame is a row it computes, so what fills its inputs moves no egress gate off `C.outs`; a row table's rows are
-    inputs no unit writes, so no ingress either."""
+    inputs no proof block writes, so no ingress either."""
     toys, _ = identity(2, 1, 1)
     doc = record(toys, {}, 1, 1, 2)
     doc["members"][1].update(tables=[["y", 1]], links=[[0, 0]], link_units=[2])
@@ -322,12 +325,13 @@ def _words(t) -> int:
 
 @pytest.mark.parametrize("G", [1, 2])
 def test_the_scans_link_windows_fit(G):
-    """A group of G link-windows in the composed scan's generator form at w63's class (`benchmarks/network_traces/
+    """A group of G execution phases in the composed scan's generator form at w63's class (`benchmarks/network_traces/
     scan_zk.py`), one link of G·T buckets: `IngressScanFirst` (bucket 0), G·T − 1 `IngressScanBucket` and G·T
-    `EgressBucket` units, each member's rows and outputs its Definition's signature's. The ingress frame is the warden's
-    ingress row; the egress frame is the row `EgressBucket` computes (o1), beside its u16 verdict (o0); ingress unit t's
-    state output (o1) is wired to unit t + 1's ``sin`` and its view output (o2) to egress unit t's ``state``. The check
-    passes it, and the checker form, its egress frame a parameter row, is refused by name."""
+    `EgressBucket` proof blocks, each member's rows and outputs its Definition's signature's. The ingress frame is the
+    warden's ingress row; the egress frame is the row `EgressBucket` computes (o1), beside its u16 verdict (o0); ingress
+    proof block t's state output (o1) is wired to proof block t + 1's ``sin`` and its view output (o2) to egress proof
+    block t's ``state``. The check passes it, and the checker form, its egress frame a parameter row, is refused by
+    name."""
     cls, T = IS.Class(B=512, r=4, lanes=4, C=47), 32
     n, sh = G * T, cls.egress
     st = {k: getattr(cls, k) for k in IS.STATICS}

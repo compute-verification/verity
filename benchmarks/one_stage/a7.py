@@ -653,7 +653,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     """The remote session's check 3 by proofs: each sample's opening unit (`opening.witness`), one member a receipt-leaf
     size, its plan row under the canonical plan's salt of the sample's step and every other row under a fresh salt,
     registered, every unit sampled by the verifier's Lean and each member proved --zk and held by Lean `verify --zk
-    --partition --program`. The verifier opens each drawn unit's public rows to its own copy (`opening.public`) and its
+    --partition --program`. The verifier opens each sampled proof block's public rows to its own copy (`opening.public`) and its
     verdict row, holds its plan row to the certified one by ``b || c`` (`opening.plan_link`), and decides each window of
     the session on its samples. No block, payload, receipt leaf or plan row is opened."""
     out.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-"""The toy model served from its P2-encoded weights store under the remote bandwidth audit: the CPU reference of the
+"""The toy model served from its P2-encoded weights store under PoUB: the CPU reference of the
 serving loop, and the fixture a decode kernel's sketch is held to.
 
     serve.py [--steps 12] [--per-window 3] [--prompt 1]   # serve the toy, print its tokens and each window's verdict

@@ -119,10 +119,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
-    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Definitions/Accounting/Guarantees/Bandwidth.lean): the
-    # guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is such;
-    # a co-audited set is one such device over its members' stores (Bandwidth.Guarantees.AuditSet), and side sources that may
-    # carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
+    # the device of PoUB's per-pass bound (Bandwidth.Device, Security/Definitions/Accounting/Bandwidth/Game.lean):
+    # the guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is
+    # such; a co-audited set would be one such device over its members' stores, which no guarantee states yet, and side
+    # sources that may carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
     Entry("bandwidth-device", "model",
           "Bandwidth device model: the bound is stated for a co-audited set of whole PCIe-only GPUs (no MIG slices, no NVLink; "
           "NVLink domains are to be certified as sets later) running simultaneous windows over pairwise-distinct stores, with "
@@ -184,7 +184,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows. What Lean proves is
     # the narrower verbatim class (Accounting.Guarantees.RateAuditSketch, RateAuditTensorSketchRank: on-chip state, device
     # memory, the side link and rebuilding each return whole sectors as they are); the restated form, where a device that
-    # computes from blocks it read has those reads counted, is the remote audit's composition, not yet proved for the sketch
+    # computes from blocks it read has those reads counted, is PoUB's composition, not yet proved for the sketch
     Entry("rate-sketch-verbatim", "model",
           "Rate sketch store-as-blocks model: in every tier the prover holds the store only as its blocks (any number of "
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "

@@ -1,4 +1,4 @@
-"""One-stage audit, run A8: one window of the remote bandwidth audit over a registered store of a few thousand chunks, its
+"""One-stage audit, run A8: one window of PoUB over a registered store of a few thousand chunks, its
 openings proved in zero knowledge through the proof system in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
 deploys them), so that the verifier receives no chunk bytes; and the prover's cost per opening.
 

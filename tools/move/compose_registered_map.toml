@@ -1,0 +1,62 @@
+# The composition's registered circuit: what `tools/move/rename.py --map tools/move/compose_registered_map.toml` renames
+# ("declared circuit" is an older name for the registered circuit). `Accounting.Compose.Declared`, the circuit as the IR
+# binds it, becomes `RegisteredCircuit`, and its definitions follow (`Declared.atDraw` `RegisteredCircuit.atDraw`, ...).
+# `Accounting.Gates.Declared`, every declared bound earned, is another word (a declared interval, not a declared
+# circuit) and stays, so the map renames only the files that read the composition's, and keeps the `Gates.Declared`
+# module they import. Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that
+# `check.py --update --moved` takes.
+[words]
+
+[[words_in]]
+files = [
+    "Security/Definitions/Accounting/Assumptions/Compose.lean",
+    "Security/Definitions/Accounting/Compose.lean",
+    "Security/Definitions/Accounting/ComposePeriod.lean",
+    "Security/Definitions/Accounting/Guarantees/Compose.lean",
+    "Security/Definitions/Accounting/Guarantees/ComposePeriod.lean",
+    "Security/Definitions/Accounting/JointBridge/CreditedWords.lean",
+    "Security/Definitions/Accounting/Served.lean",
+    "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean",
+    "Security/Proofs/Accounting/Compose/CircuitWork.lean",
+    "Security/Proofs/Accounting/Compose/CircuitWorkSeeded.lean",
+    "Security/Proofs/Accounting/Compose.lean",
+    "Security/Proofs/Accounting/ComposePeriod/Covers.lean",
+    "Security/Proofs/Accounting/ComposePeriod/Honest.lean",
+    "Security/Proofs/Accounting/ComposePeriod.lean",
+    "Security/Proofs/Accounting/Compose/ServiceCovers.lean",
+    "Security/Proofs/Accounting/JointBridge/HonestH200.lean",
+    "Security/Proofs/Accounting/TS/HeldSound.lean",
+    "Security/Proofs/Accounting/TS/Session/Held/Assumptions.lean",
+    "Security/Proofs/Accounting/TS/Session/Held/Guarantees.lean",
+    "Security/Proofs/Accounting/TS/Session/Held/Layer.lean",
+    "Security/Proofs/Pouw/Period/Honest.lean",
+    "Security/Proofs/Pouw/PeriodJ10R/Honest.lean",
+    "Security/Proofs/Pouw/PeriodJ10R.lean",
+    "Security/Proofs/Pouw/PeriodJ10R/Nontrivial.lean",
+    "Security/Proofs/Pouw/Period.lean",
+    "Security/Proofs/Pouw/ServedValues/Honest.lean",
+    "Security/Proofs/Pouw/ServedValues.lean",
+    "Security/Proofs/Properties/Accounting/Served.lean",
+    "Security/Properties/Accounting/Compose.lean",
+    "Security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean",
+    "Security/Properties/Accounting/Served.lean",
+    "Security/Properties/Pouw/PeriodJ10R.lean",
+    "Security/Properties/Pouw/Period.lean",
+    "Security/Properties/Pouw/ServedValues.lean",
+]
+[words_in.words]
+"Declared" = "RegisteredCircuit"
+
+[rewrite]
+# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# `Gates.Declared`: the gate model's declared bounds, a module `Served` imports; "Declared circuit": prose.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            'Gates\.Declared\b', 'Declared circuit']
+strings = []
+
+[keep_in]

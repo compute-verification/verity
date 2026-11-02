@@ -1,4 +1,4 @@
-"""The remote bandwidth audit end to end on a small store: an honest session replayed from `timing.honest` is accepted
+"""PoUB end to end on a small store: an honest session replayed from `timing.honest` is accepted
 and recorded, and each way a session goes wrong is rejected with its failure."""
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
@@ -25,28 +26,6 @@ SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_n
 A = 20 + 30 + 2 * 5 + 300 + 10
 APPENDS = 8
 """The append coins a test session's challenger commits to: these sessions append none, so a few keep it quick."""
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(j: int) -> bytes:
@@ -1026,6 +1005,14 @@ def test_opening_size_matches_the_timing_model(store) -> None:
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert prover.open(passes[0, 0], 0).size == timing.opening_bytes(N)
     assert timing.wrong_bound(10 ** 6, timing.samples_for(1e-3, 2.0 ** -40), 2.0 ** -40) <= 10 ** 3
+
+
+@pytest.mark.parametrize("units, samples", [(1, 1), (100, 1), (1000, 37), (10_000, 500), (10_000, 10_000)])
+def test_the_closed_wrong_bound_is_above_the_profiles_exact_one(units, samples) -> None:
+    """`stated` charges `wrong_bound`, the closed form, where the profile's exact count bound for `Subset(s)` would take
+    seconds a window at the stated store; it is never below the exact bound."""
+    exact = IntegrityProfile(("receipt",), (units,), {"receipt": Subset(samples)}, 2.0 ** -40).bound()
+    assert exact <= timing.wrong_bound(units, samples, 2.0 ** -40) <= units
 
 
 def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:

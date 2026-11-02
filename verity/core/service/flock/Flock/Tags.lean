@@ -452,6 +452,30 @@ def templated : List Tags := [circuitTmpl]
 `circuitTmpl` would hash its identity's default key (`leafSchemeHm96Os`) inside the compiled verifier. -/
 def isTmpl (t : Tags) : Bool := t.name == tmplName
 
+/-- The tags `--statement` names, as `verify` and `statement` read them: a statement of `all` (`find?`), else a templated
+one (`templated`). -/
+def byName? (name : String) : Option Tags := find? name <|> templated.find? (·.name == name)
+
+theorem byName?_of_find? {name : String} {t : Tags} (h : find? name = some t) : byName? name = some t := by
+  unfold byName?
+  rw [h]
+  rfl
+
+/-- The tags a name names carry that name. -/
+theorem byName?_name {name : String} {t : Tags} (h : byName? name = some t) : t.name = name := by
+  unfold byName? at h
+  cases hf : find? name with
+  | some t' =>
+    rw [hf] at h
+    change some t' = some t at h
+    cases h
+    unfold find? at hf
+    simpa using List.find?_some hf
+  | none =>
+    rw [hf] at h
+    change templated.find? (·.name == name) = some t at h
+    simpa using List.find?_some h
+
 end Tags
 
 end Flock
