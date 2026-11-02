@@ -5,7 +5,9 @@
 Each queue line is `CLASS START ; NOTE ; TRAIN_ARGS` (`#` comments). A line launches once (keyed by its text), with
 `launch.py --no-wait` from this checkout, which must be clean (the run ships HEAD); an ended run is collected with
 `launch.py --collect`. Every launch and collection goes to `state.jsonl` beside the queue, from which a restarted driver
-resumes. No launch after 14:30Z.
+resumes. No launch after 14:30Z. The nodes are `$CW_NODES`'s (default the search's shared /tmp/te-nodes.txt).
+
+A tool of the agent VM, never run by the harness: only `islands/CLASS/train.py` is a candidate program.
 """
 from __future__ import annotations
 
@@ -49,7 +51,8 @@ def main() -> int:
     a = ap.parse_args()
     state_path = a.queue.parent / "state.jsonl"
     # the research CLI from this checkout's tools (`bin/research`): /workspace's may predate the node's own pools
-    env = dict(os.environ, PATH=f"{a.queue.parent / 'bin'}:/workspace/.venv/bin:{os.environ['PATH']}")
+    env = dict(os.environ, PATH=f"{a.queue.parent / 'bin'}:/workspace/.venv/bin:{os.environ['PATH']}",
+               CW_NODES=os.environ.get("CW_NODES", "/tmp/te-nodes.txt"))
 
     def record(rec: dict) -> None:
         with state_path.open("a") as f:
