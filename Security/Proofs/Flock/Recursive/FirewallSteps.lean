@@ -101,7 +101,8 @@ theorem Runs.send_bind {β : Type} {m : Sent} {f : PUnit → Fw β} {st : State}
 def cs (rows : List (Array Nat)) (ys : List ByteArray) : List ByteArray :=
   List.zipWith (fun row y => Hm96.Default512.commitString (rowDigest row) y) rows ys
 
-theorem cs_append (a b : List (Array Nat)) (ys : List ByteArray) : cs (a ++ b) ys = cs a ys ++ cs b (ys.drop a.length) :=
+theorem cs_append (a b : List (Array Nat)) (ys : List ByteArray) :
+    cs (a ++ b) ys = cs a ys ++ cs b (ys.drop a.length) :=
   FirewallRun.zipWith_append_left _ a b ys
 
 /-- `m` draws one salt for each of `rows`, in order, and changes nothing else; `P` holds of its result and the rows'
@@ -123,7 +124,8 @@ theorem draws_salted (row : Array Nat) : Draws (salted row) [row] (fun c l => l 
   | nil => exact absurd hl (by simp)
   | cons y rest => exact ⟨_, FirewallRun.run_salted row _, rfl⟩
 
-theorem draws_lift {α : Type} {x : V α} {a : α} (hx : x = .ok a) : Draws (liftM x : Fw α) [] (fun b l => b = a ∧ l = []) := by
+theorem draws_lift {α : Type} {x : V α} {a : α} (hx : x = .ok a) :
+    Draws (liftM x : Fw α) [] (fun b l => b = a ∧ l = []) := by
   subst hx
   intro st _
   exact ⟨a, rfl, rfl, rfl⟩
@@ -425,7 +427,8 @@ theorem run_round (s : Schedule) (stream : String) (content : ByteArray) (n : Na
     (hl : st.linked = true) (hopen : k = 0 → (s.streams.find? (·.1 == stream)).isSome)
     (hsalts : ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows).length +
       (messageRows sp.free).length ≤ st.salts.length) :
-    Runs (step s (.round stream content n)) st fun _ t => ∃ (x : Array Sent) (tops : List (List ByteArray)) (bcs : List ByteArray),
+    Runs (step s (.round stream content n)) st fun _ t =>
+      ∃ (x : Array Sent) (tops : List (List ByteArray)) (bcs : List ByteArray),
       t = { st with
         salts := (st.salts.drop ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows).length).drop
           (messageRows sp.free).length,
@@ -434,7 +437,8 @@ theorem run_round (s : Schedule) (stream : String) (content : ByteArray) (n : Na
         sent := x.push (.round stream tops (copiesOf s st.rounds) bcs n) } ∧
       (∃ e, x.toList = st.sent.toList ++ e ∧ e.flatMap FirewallRun.holes = []) ∧
       tops.flatten = cs ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows) st.salts ∧
-      bcs = cs (messageRows sp.free) (st.salts.drop ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows).length) := by
+      bcs = cs (messageRows sp.free)
+        (st.salts.drop ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows).length) := by
   rw [step]
   refine Runs.get (Runs.ite_neg (by simp [hf]) ?_)
   refine Runs.get ?_

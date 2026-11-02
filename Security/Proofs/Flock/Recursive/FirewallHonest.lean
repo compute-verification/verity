@@ -14,6 +14,12 @@ round's fresh tops and message) in salt order. It holds at every schedule the fi
 (`Canonical`) and every worker that follows it (`Fits`): its Commit's tables the schedule's roots, each stream opened
 once before its first round, and each round's caps, copies, fresh tops and message the schedule's entry.
 
+The proof follows the firewall's loop (`FirewallSteps.Goes`) through the requests. What `Schedule.canonical` checks is
+`Facts`. The Pings, Register, Hello, the first `Open`s, Commit and Link reach the loop's invariant (`At`): each salt of
+the worker's rows before the next round drawn and its commit string sent, each opened stream with its count of rounds
+so far (`cnt`). Each round, after the `Open`s just before it, keeps it (`goes_opens`, `goes_round`), and at its end
+Finish's pin holds (`finish_pin`).
+
 `honestMsgs` is the messages `FirewallAccepts` reads: message `i` the bytes `rowDigest` hashes of the worker's row `i`
 at the commit strings before it, the worker's rows reading no commit string at or after their own (`Causal`).
 `honestReqs_accepts` (`FirewallAccepts`) is `run_honestReqs` at zero salts.
@@ -611,8 +617,10 @@ theorem goes_rounds (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArr
     obtain ⟨t, hg, hAt⟩ := goes_rounds hs hf hy hA j (by omega)
     have ho := goes_opens (facts_of hs) hf (p := j + 1) (by omega)
       (fun n hn => cnt_new (facts_of hs) hf (by omega) hn) hAt.finished hAt.streams
-    obtain ⟨u, hu, hAu⟩ := goes_round hs hf hy (j := j) (st := { t with streams := (openedTo h (j + 2)).map (F s j) })
-      (by omega) ⟨hAt.hello, hAt.committed, hAt.linked, hAt.finished, hAt.roots, hAt.rounds, rfl, hAt.salts, hAt.names, hAt.holes⟩
+    obtain ⟨u, hu, hAu⟩ := goes_round hs hf hy (j := j)
+      (st := { t with streams := (openedTo h (j + 2)).map (F s j) }) (by omega)
+      ⟨hAt.hello, hAt.committed, hAt.linked, hAt.finished, hAt.roots, hAt.rounds, rfl, hAt.salts, hAt.names,
+        hAt.holes⟩
     refine ⟨u, ?_, hAu⟩
     rw [List.range_succ, List.flatMap_append, List.flatMap_singleton, List.map_append]
     exact goes_append s _ _ hg (goes_append s _ _ ho hu)
@@ -690,8 +698,8 @@ theorem run_honestReqs {s : Schedule} (hs : Canonical s) {tables : List String} 
     rw [Array.size_replicate]
     exact hf.link
   have g6 := goes_one (FirewallWire.decode_putReq hlink) (run_link s (st := st3) rfl rfl rfl)
-  have hA0 : At s h ys 0 1 { st3 with linked := true, sent := st3.sent.push (.link s.y) } := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by rw [hpre0], ⟨_, tops, _, rfl, htn⟩,
-    by
+  have hA0 : At s h ys 0 1 { st3 with linked := true, sent := st3.sent.push (.link s.y) } :=
+    ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by rw [hpre0], ⟨_, tops, _, rfl, htn⟩, by
       show FirewallRun.holesOf ((((#[] : Array Sent).push (.hello s.hello)).push (.commit tops)).push (.link s.y)) = _
       rw [hpre0]
       simp only [FirewallRun.holesOf, FirewallRun.holes, Array.toList_push, List.flatMap_append, List.flatMap_cons,
@@ -742,7 +750,8 @@ theorem honestMsgs_digest {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Cano
     (hD : ∀ P w r a p l, Fits s tables (D P w r a p l)) (hc : Causal s D)
     (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp) (l : Fin (rowCount s) → ByteArray) (i : Fin (rowCount s)) :
     Sha512.hash (honestMsgs s D P w r a p i fun j => l (Fin.castLE (Nat.le_of_lt i.isLt) j)) =
-      rowDigest ((honestRows s (D P w r a p l))[i.val]'(by rw [length_honestRows hs (hD P w r a p l)]; exact i.isLt)) := by
+      rowDigest ((honestRows s (D P w r a p l))[i.val]'(by
+        rw [length_honestRows hs (hD P w r a p l)]; exact i.isLt)) := by
   have e := hc P w r a p (pad i fun j => l (Fin.castLE (Nat.le_of_lt i.isLt) j)) l i.val fun j hj => by
     simp only [pad, hj, dite_true]
     rfl
@@ -757,8 +766,8 @@ theorem honest_accepts {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Canonic
     (hD : ∀ P w r a p l, Fits s tables (D P w r a p l)) (hc : Causal s D) (y : ByteArray)
     (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp) (l : Fin (rowCount s) → ByteArray) :
     (run s (honestReqs s (D P w r a p l)) (List.ofFn fun _ : Fin (rowCount s) => y)).2 = true ∧
-      FirewallTemplate.namesOf (run s (honestReqs s (D P w r a p l)) (List.ofFn fun _ : Fin (rowCount s) => y)).1.toList =
-        tables ∧
+      FirewallTemplate.namesOf
+          (run s (honestReqs s (D P w r a p l)) (List.ofFn fun _ : Fin (rowCount s) => y)).1.toList = tables ∧
       FirewallRun.holesOf (run s (honestReqs s (D P w r a p l)) (List.ofFn fun _ : Fin (rowCount s) => y)).1 =
         List.ofFn fun i => Hm96.Default512.commitString
           (Sha512.hash (honestMsgs s D P w r a p i fun j => l (Fin.castLE (Nat.le_of_lt i.isLt) j))) y := by
