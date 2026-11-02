@@ -42,6 +42,7 @@ untraced = [
     "tests/test_lean_public_inputs.py",
     "tests/test_lean_rec_cap_guards.py",
     "tests/test_lean_region_words.py",
+    "tests/test_lean_registered_bit_rows.py",
     "tests/test_lean_session_tables.py",
     "tests/test_lean_shared_reads.py",
     "tests/test_lean_typed_reads.py",
