@@ -99,8 +99,11 @@ program's torch function modes, global module hooks and profilers off, and with 
 prepare.py names as they were before the program ran. A program that rebinds what that work calls (`cw.watched`) makes
 its run invalid. So does one that routes work past the counter: an op outside torch's own namespaces (a custom op), a
 product op with no MAC formula, token data read out of torch (`numpy`, `tolist`, DLPack) at a value per token or more, a
-thread or a child process it starts, or a module it imports that names a route the screen refuses (`run.Imports`). From
-`benchmarks/covert_witness/`:
+thread or a child process it starts, or a module it imports that names a route the screen refuses or that it wrote during
+the run (`run.Imports`). The screen reads the program and every module it imports outside the fixed side, and refuses
+what would run code it never reads: `exec`, `eval` and `compile` (called or not), `runpy`, `importlib`, `__import__`,
+`marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and `sys.meta_path`; while the program runs no bytecode cache is
+read (`run.no_bytecode`). From `benchmarks/covert_witness/`:
 
 ~~~text
 python -m te_core.run --script islands/CLASS/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
