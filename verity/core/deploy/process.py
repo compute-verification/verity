@@ -1,5 +1,4 @@
-"""The local-process adapter: a party run in a process of its own on this machine, over TCP to the run that spawned it
-(`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §4, the addendum of 00:08Z).
+"""The local-process adapter: a party run in a process of its own on this machine, over TCP to the run that spawned it.
 
 `spawn(spec)` starts `python -m verity.core.deploy.process` and writes `spec` to its stdin as JSON; the child calls
 `runtime.run` for its parties and prints the run's summary (`RunResult.summary`) as its last line of stdout. Core

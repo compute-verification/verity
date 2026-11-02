@@ -9,7 +9,7 @@
 # The builds run before the lease, niced; each build's tests and timing hold one GPU, about 10 minutes. GPU_LEASE_ON, if
 # set, is gpu-lease's --on: the GPUs it may take; LEASE_MIN its --max-min (20).
 #
-#   research run --on vy-nebius-2 --cwd source --source . [--env GPU_LEASE_ON=2,3] [--env BUILDS=hbc] \
+#   research run --on MACHINE --cwd source --source . [--env GPU_LEASE_ON=2,3] [--env BUILDS=hbc] \
 #     -- bash benchmarks/pouw/served_h1/producer_gpu.sh
 set -euo pipefail
 PY=${PY:-/workspace/jobs/venv312/bin/python}
@@ -29,7 +29,7 @@ for name in "${builds[@]}"; do
     > "$OUT/build-$name.log" 2>&1 || { echo "producer_gpu: NVCC_FAIL $name"; tail -30 "$OUT/build-$name.log"; exit 11; }
   sha256sum "$S/h1u_$name.so" | tee -a "$OUT/builds.txt"
 done
-nice -n 10 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -I benchmarks/codec_tensor -cubin \
+nice -n 10 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -cubin \
   -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/build-noise.log" 2>&1 \
   || { echo "producer_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
 sha256sum "$S/noise.cubin" | tee -a "$OUT/builds.txt"

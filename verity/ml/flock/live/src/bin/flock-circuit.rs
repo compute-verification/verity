@@ -2,6 +2,7 @@
 //! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1). Lane flock-circuit.
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
+//!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
@@ -32,6 +33,7 @@ use flock_field::F128;
 use flock_live::{
     circuit::*,
     firewall::{Framer, Gate},
+    run_record::RunLog,
     session_verify as sverify,
     zk_hooks::{Hooks, NoMask, ProverSeed},
     zk_veil::{self as zkv, InnerProof, Layout},
@@ -2088,7 +2090,7 @@ fn eq256(r: &[flock_field::F256]) -> Vec<flock_field::F256> {
     (0..1usize << r.len()).map(|l| r.iter().enumerate().fold(F256::ONE, |a, (i, &ri)| a * if (l >> i) & 1 == 1 { ri } else { F256::ONE + ri })).collect()
 }
 
-/// Two linear functionals of one session's public transcript that span fields and both reps (red-team-m1-zk F1's), each a
+/// Two linear functionals of one session's public transcript that span fields and both reps, each a
 /// function of the witness alone if level 0's extra lanes or their padding were shared by the reps:
 /// - level 0: `D(q) = N·pc^0(q) + pc^1(q) + Σ_l u_l row_q[l]` at every level-0 position either rep opened, where `pc^r` is
 ///   rep r's `Enc(c·ybar ‖ ybar)`, `W^r` the F128 matrix of `(a, b) ↦ ρ^r_0 a + ρ^r_1 b`, `N = W^1 (W^0)^-1` and
@@ -2521,7 +2523,7 @@ fn zk_audit_inner_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
 /// latter at rep 0's round `k`. `ZeroBeta(k)` commits to β = 0 at rep 0's round `k`, `OuterOne(k)` to a zerocheck outer coin
 /// `r_0 = 1` at rep 0's round `k` (the round that opens the outer coins, [`outer_round`]). The gated strategies decide on one
 /// message whether to continue for sure (half of those messages, "good") or only with probability `ε / 65536`:
-/// `CapGated(ε)` on the witness cap (red-team-m2-zk's; it stops at rep 0's first round), `LateGated(ε)` on rep 0's round
+/// `CapGated(ε)` on the witness cap (it stops at rep 0's first round), `LateGated(ε)` on rep 0's round
 /// that carries `T'` and `ybar` (it stops there). A simulator that reused messages across rewinds would fail against them.
 #[cfg(feature = "seed-injection")]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2978,7 +2980,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     }
 }
 
-/// `zkgk --zk --attempts A`: the rewinds are independent trials (red-team-m2-zk G1). For each gated V* (`cap-gated`,
+/// `zkgk --zk --attempts A`: the rewinds are independent trials. For each gated V* (`cap-gated`,
 /// `late-gated`, `--eps`), A real sessions give its completion rate; then, conditioned on an extraction run that reached the
 /// proofs with its gate "bad", A rewinds with a fresh dummy opening each (as `gk_simulate` does) must complete at the same
 /// rate, not at ε. `--reuse-dummy` also runs A rewinds on the extraction run's own dummy opening, the defect, to show the
@@ -3177,7 +3179,7 @@ struct Plan {
     zk_zero_pads: bool,
     /// M1: Ligerito level 0's hiding tampered (`Level0Zk::tamper`)
     zk_l0_tamper: u8,
-    /// both reps fold, sum and pad rep 0's pair of extra lanes (red-team-m1-zk F1's shared lanes; the verifier rejects rep 1)
+    /// both reps fold, sum and pad rep 0's pair of extra lanes (shared lanes; the verifier rejects rep 1)
     zk_shared_pair: bool,
     /// M1: whether the inner proof checks its batched constraint before it speaks (`zk_veil::SelfCheck`). Every honest plan
     /// stops; `Skip` is for the negative controls in `plan_of` whose witness or pads fail by design, so that their proofs
@@ -3664,7 +3666,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep))?) };
                 let tt = t.clone();
                 let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
-                    // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
+                    // both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
                     // opens anything (its openings would reveal id-0 salts over other leaves). A later table's rep 0 checks the
                     // root it committed the same way.
                     match &root0 {
@@ -4344,7 +4346,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                       "prover_stopped": r["prover_stopped"], "last_round": s["last_round"], "end": s["end"]});
     }
     if name == "zk_dummy_witness_passes_the_region_claims" {
-        // red-team-m1-zk F4: M2's extraction run is live, so the dummy witness carries the public region words; its region
+        // M2's extraction run is live, so the dummy witness carries the public region words; its region
         // claims' s_hat_v, sent before any coin opens, are the public ones, and only the inner proof rejects it
         let s0 = Arc::new(Mutex::new(server(st, inst)));
         let (v, _) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, zero_witness: true, ..Plan::default() }, ProverSeed::from_os());
@@ -4377,7 +4379,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     #[cfg(feature = "seed-injection")]
     if name == "zk_session_relations_vary_with_the_seed" {
-        // red-team-m1-zk F1: under one verifier coin seed, the two cross-rep functionals are the same for any two prover seeds
+        // under one verifier coin seed, the two cross-rep functionals are the same for any two prover seeds
         // when the reps share level 0's extra lanes and their padding (a prover folding rep 0's pair in both reps, which the
         // verifier rejects); with a pair per rep they differ in every word. The level-1 functional exists only at the
         // positions both reps open at level 1, which the coins select for each rep independently: on some statements
@@ -4608,7 +4610,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
     }
     if name == "leaf_salts_from_prover_seed_refused" || name == "leaf_key_witness_refused" {
-        // the pinned leaf scheme with its salts from a seeded stream; or with the hm96 key a prover witness (red-team-hm96 F6: a
+        // the pinned leaf scheme with its salts from a seeded stream; or with the hm96 key a prover witness (a
         // key chosen after commitment opens a leaf to any value), or chosen by the prover rather than the statement's constant
         let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
         let lines: Vec<String> = text.split('\n').map(str::to_string).collect();
@@ -5370,7 +5372,7 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         let ts = Instant::now();
         std::thread::scope(|sc| {
             for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
-                flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, || {
+                flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, None, || {
                     let mut s = server(st, inst);
                     fix_verifier_coins(&mut s, [9; 32]);
                     s
@@ -5627,7 +5629,27 @@ fn firewall_outcome(fw: &ReleaseArgs, seen: usize, v: &Value) -> Value {
     json!({"session": fw.session, "part": fw.part, "outcome": outcome, "why": why})
 }
 
-fn serve_loop(make: impl Fn() -> Server) {
+/// `serve --rec-run FILE --rec-part J`: the recursive run's record the challenger's operator staged at FILE before any
+/// session (`flock_live::run_record`), where each Hello this server answers with coins is logged as an open for V*'s part J
+/// before the answer leaves.
+fn run_log(st: &Stmt) -> Option<RunLog> {
+    let (file, part) = (arg("--rec-run", ""), arg("--rec-part", ""));
+    if file.is_empty() && part.is_empty() {
+        return None;
+    }
+    let Ok(part) = part.parse::<usize>() else {
+        refuse("--rec-run FILE takes --rec-part J: the V* part (0, 1, ..) this server's sessions are opened for".into())
+    };
+    if file.is_empty() {
+        refuse("--rec-part J takes --rec-run FILE: the run's record its sessions are logged in".into());
+    }
+    if !is_zk(st) {
+        refuse("--rec-run: the run's record logs each session's coin-tree key, which only --zk's keyed coin tree draws".into());
+    }
+    Some(RunLog::new(file, part).unwrap_or_else(|e| refuse(e)))
+}
+
+fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Server) {
     let listen = arg("--listen", "127.0.0.1:7500");
     let out = std::path::PathBuf::from(arg("--out", "sessions"));
     let l = std::net::TcpListener::bind(&listen).unwrap();
@@ -5638,12 +5660,14 @@ fn serve_loop(make: impl Fn() -> Server) {
     // the bound address: --listen 127.0.0.1:0 serves on a port the system picks
     let bound = l.local_addr().unwrap().to_string();
     println!("SERVING {bound}");
-    serve_on(&l, &out, max, concurrency, &bound, make);
+    serve_on(&l, &out, max, concurrency, &bound, log, make);
 }
 
 /// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`); each
-/// session's record, proofs and verifier file under `out/<session>`, its line in `out/index.jsonl` and on stdout.
-fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize, listen: &str, make: impl Fn() -> Server) {
+/// session's record, proofs and verifier file under `out/<session>`, its line in `out/index.jsonl` and on stdout. With a
+/// run's record (`log`), each session's Hello answered with coins is logged there first.
+fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize, listen: &str,
+            log: Option<&RunLog>, make: impl Fn() -> Server) {
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
     let free = (Mutex::new(concurrency), std::sync::Condvar::new());
@@ -5655,9 +5679,10 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let id = format!("l{:04}-{}", i, std::process::id());
         loop {
             let Ok(b) = read_frame(&mut r) else { break };
-            let resp = match Req::decode(&b) {
-                Ok(req) => s.handle(req),
-                Err(e) => Resp::Refused(e),
+            let resp = match (Req::decode(&b), log) {
+                (Ok(req), Some(log)) => log.handle(&mut s, &id, req),
+                (Ok(req), None) => s.handle(req),
+                (Err(e), _) => Resp::Refused(e),
             };
             let done = matches!(resp, Resp::Verdict(_));
             if write_frame(&mut w, &resp.encode()).is_err() || done {
@@ -5932,8 +5957,9 @@ fn main() {
         "zkgk" => zkgk(&st, &inst),
         "replay" => replay(&st, &inst, tables),
         "serve" => {
+            let log = run_log(&st);
             let sv = serving(&st, &inst, tables);
-            serve_loop(move || server_of(&sv, &st, &inst, tables))
+            serve_loop(log.as_ref(), move || server_of(&sv, &st, &inst, tables))
         }
         "prove" => {
             if firewall_on(&st) {

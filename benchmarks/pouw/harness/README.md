@@ -41,7 +41,7 @@ family also gets that cuBLASLt's candidates, named `lt<major>_…`. On node 2 th
 queue's cores:
 
 ```bash
-research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source -- bash -c \
+research run --on MACHINE --project verity --source . --cwd source -- bash -c \
   '. benchmarks/pouw/harness/jobs/toolkit.sh && export POUW_HARNESS_BUILD=/workspace/pouw/harness/build JOBS=8 LT2_HOME=/usr/local/cuda &&
    L="$(nice -n 19 taskset -c 96-191 benchmarks/pouw/harness/native/build.sh)" &&
    cp "${L%/*}"/{libpouw_harness.so,libpouw_lt2.so,build.json} "$RESEARCH_RUN_DIR/"'
@@ -69,7 +69,7 @@ against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 -
 times; the harness records clocks and the UUID itself:
 
 ```bash
-R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<you>
+R='research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=<you>
    --send BUILD/libpouw_harness.so --send BUILD/libpouw_lt2.so --send BUILD/build.json --send GPUS.md'  # GPUS.md: server.md's table
 H='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/bench.py --gpu lease
    --server-md "$RESEARCH_RUN_DIR/inputs/GPUS.md" --clock-label locked-2100 --shapes headline

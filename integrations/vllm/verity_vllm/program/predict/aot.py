@@ -76,15 +76,15 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     """The names no digest covers, as the trace gave them: each Call's naming hint (the descriptor's `node_hints`: the Calls are the
     trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
     in field order), refused where the fields differ in number or size."""
-    from verity.ml.circuits.types import Record
+    from verity.ml.circuits.types import RecordType
     hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
     params = []
     for n, t in program.fn.body.params:
-        if isinstance(t, Record):
+        if isinstance(t, RecordType):
             leaves = sorted(json.loads(Path(trace, "derive-report.json").read_text())["provenance"]["weights"], key=lambda w: w["field"])
             if (got := [f.leaves for _, f in t.fields]) != (want := [math.prod(w["shape"]) for w in leaves]):
                 raise UsageError(f"{trace}: the predicted {n} record's {len(got)} fields are not the trace's {len(want)} weight leaves in size")
-            t = Record(*((w["name"], f) for w, (_, f) in zip(leaves, t.fields)))
+            t = RecordType(*((w["name"], f) for w, (_, f) in zip(leaves, t.fields)))
         params.append([n, str(t)])
     return hints, params
 

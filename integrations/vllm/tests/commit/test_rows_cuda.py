@@ -2,7 +2,8 @@
 / ``rows_tree``) hashes what ``verity_vllm.commit.step_rows`` does, bit for bit: frame-v3-sha512's hiding-leaf vectors and hm96-sha512's
 ``sha512/row/v1`` leaf vectors (given salts), both hm96 keys' masks, the derived salts, leaves and pads at every position width, the
 leaves in two halves (h, then the frame once the step's length is known) as ``rows_leaves``' bytes, nodes at large indices and high
-levels, and whole trees and windowed subtrees against ``step_rows.levels``."""
+levels, and whole trees and windowed subtrees (one window a fold, or several with their levels copied on another stream) against
+``step_rows.levels``."""
 from __future__ import annotations
 
 import hashlib
@@ -204,6 +205,49 @@ def test_trees_and_windowed_subtrees_are_step_rows_levels(ext, hasher, n):
                 assert [got[64 * i:64 * i + 64] for i in range(m >> L)] == list(want[L][first >> L:(first + m) >> L]), (j, k, L)
         _, wroot, _ = hasher.rows_tree(rs, torch.cat(tops), n_levels - 1, st)
         assert wroot == want[-1][0], j
+
+
+@pytest.mark.parametrize("n", [5, 100, 257])
+def test_windows_folded_together_copy_their_levels_on_another_stream(ext, hasher, n):
+    """Consecutive windows' leaves folded at once, g windows a fold (the worker's held leaves), each fold's levels copied into pinned
+    host slices on a copy stream with no sync, the copy stream joined before the tops' tree: every level and the root are step_rows'."""
+    rng = random.Random(n)
+    rows = [rng.randbytes(R.ROW_BYTES) for _ in range(n)]
+    ks = rng.randbytes(R.KEY_BYTES)
+    dom = R.domain(PD, CTX, GEO, n)
+    want = R.levels(dom, rows, ks, BITS)
+    width, depth = len(want[0]), len(want) - 1
+    rs, tn, st = _step(ext, dom, ks, R.row_prefix(BITS), R.ROW_BYTES), _tn(), _stream()
+    stream = _rows(rows, R.ROW_BYTES)
+    copy = torch.cuda.Stream()
+    for j, g in ((0, 3), (2, 2), (2, 3), (5, 3)):
+        w, n_levels = 1 << j, min(j, depth) + 1
+        host = [torch.empty(64 * (width >> L), dtype=torch.uint8).pin_memory() for L in range(n_levels)]
+        tops: list[torch.Tensor] = []
+        held: list[torch.Tensor] = []
+
+        def fold() -> None:
+            lv = torch.cat(held) if len(held) > 1 else held[0]
+            held.clear()
+            first, m = sum(int(t.shape[0]) for t in tops) << (n_levels - 1), int(lv.shape[0])
+            dsts = [h[64 * (first >> L):64 * ((first + m) >> L)] for L, h in enumerate(host)]
+            tops.append(hasher.rows_tree_window(rs, lv, n_levels, first, st, dsts, copy.cuda_stream))
+
+        for k in range(max(1, width >> j)):
+            first = k * w
+            m, n_rows = min(w, width - first), max(0, min(w, n - first))
+            window = stream[R.ROW_BYTES * first:] if n_rows else _dev(b"")
+            held.append(hasher.rows_leaves(rs, window, R.ROW_BYTES * n_rows, first, m, n, tn, st)[0])
+            if len(held) == g:
+                fold()
+        if held:
+            fold()
+        torch.cuda.current_stream().wait_stream(copy)
+        _, wroot, _ = hasher.rows_tree(rs, torch.cat(tops), n_levels - 1, st)
+        for L, h in enumerate(host):
+            got = h.numpy().tobytes()
+            assert [got[64 * i:64 * i + 64] for i in range(width >> L)] == list(want[L]), (j, g, L)
+        assert wroot == want[-1][0], (j, g)
 
 
 @pytest.mark.parametrize("n,level0,first", [(2048, 0, 0), (4096, 3, 0), (1536, 0, 4 * 1536), (3072, 0, 2 * 3072), (1 << 17, 0, 0),

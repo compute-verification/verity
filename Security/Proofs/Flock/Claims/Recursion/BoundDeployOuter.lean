@@ -15,9 +15,9 @@ honest staging meets, `DeployHonest`), it is `FlockDeploy.KS.zk_KS_outer`. Each 
 
 * **The outer relation alone** (`_outer`, the inner `rel` still free): `ksA_deployed_outer` and `ksFlock_deployed_outer`
   (`DeployPremises`), `ksA_deployed_reg_outer`, `ksFlock_deployed_reg_outer` and `ksA_deployed_parts_outer`
-  (`DeployReg`), `ksA_deployed_concrete_outer` and `ksFlock_deployed_concrete_outer` (`DeployLayout`); `KSBoundRoute`'s
-  ∀-form (`ksBoundRoute_outer`) and the A′ route's, with `LastBindsEC` and `LastCoinFree` for `LastBinds`
-  (`ksBoundRouteCols_outer`, at the bridge `bridge_bdDeployed`).
+  (`DeployReg`), `ksA_deployed_concrete_outer` and `ksFlock_deployed_concrete_outer` (`DeployLayout`); `KSBoundDeployed`'s
+  ∀-form, the A′ route with `LastBindsEC` and `LastCoinFree` (`ksBoundRouteCols_outer`, at the bridge
+  `bridge_bdDeployed`).
 * **Both relations** (`_relation`, `rel = Readable.relation` too): the `ksA` family reads the plain record's table bound
   (`TableBoundθOnAcc`) only for `Inner.KSAbort` at the plain record, which `plain_KSAbortR` gives there with no premise
   (`plain_tableBoundθOnAccR`), so the bound goes as well.
@@ -206,39 +206,6 @@ theorem ksFlock_deployed_concrete_outer (rel : Flock.Readable.Parsed → Flock.R
     htab hPub hFin hD hH hS
 
 /-! ## The routes at the deployed outer relation -/
-
-/-- **`KSBoundRoute` at the deployed outer relation, with no premise on the outer record**: `ksBoundRoute`, where
-Flock's KS at the outer record is `zk_KS_outer`. -/
-theorem ksBoundRoute_outer (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) :
-    ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
-      (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-      (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ),
-      let Bd := bdDeployed rel nextE colsE wE join rowIn final w
-      let D := recBound rel b L Bd.IVStar
-      let bL : Brings := { b with rd := L.readers }
-      Bd.PlainKSAbort FlockDeploy.sha512 → Bd.Binds → Bd.WeightCovers → Bd.LastBinds FlockDeploy.sha512 →
-      (∃ decC : Msg → Msg → Coin,
-        (∀ decI, Claims.Recursion.VStar.RunPairs FlockDeploy.sha512 D
-          (Claims.Recursion.Inner.ofFlock Bd.deploy decI) decC) ∧
-        ∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
-          ∃ (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
-            (cmt : Msg → ℕ → Msg → Msg),
-            (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
-            (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
-              decC shows cmt) ∧
-            (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L
-              shape shows cmt chk s) ∧
-            (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec Flock.Readable.relation) L shape
-              shows cmt s) ∧
-            Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
-      ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec Flock.Readable.relation) →
-      ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec Flock.Readable.relation) →
-      ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec Flock.Readable.relation) →
-      KSBoundDeployed rel Flock.Readable.relation b L nextE colsE wE join rowIn final w := by
-  intro nextE colsE wE join rowIn final w Bd D bL hP1 hBinds hWC hLB hst hT hL hRRP
-  exact ksBoundRoute rel Flock.Readable.relation b L hRows nextE colsE wE join rowIn final w hP1 hBinds hWC hLB
-    FlockDeploy.KS.zk_KS_outer hst hT hL hRRP
 
 /-- **`KSBoundRouteCols` at the deployed outer relation, with no premise on the outer record and none on the
 bridge**: `ksBoundRoute_of_bridge_cols` at `bridge_bdDeployed`, where Flock's KS at the outer record is
