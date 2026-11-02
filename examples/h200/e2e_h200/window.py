@@ -36,7 +36,7 @@ read opens the widest row holding its bytes and an output the narrowest, so the 
 `Window.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (a ``Read``'s
 commit unit and rank, the port word it fills and its bytes in the row; ``n`` a ``Position``; an output that is one whole
 row as ``(unit, rank, None)``). Binding a port's words to the segments of rows opened under the step roots is that bundle's
-and C-Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
+and Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
 """
 from __future__ import annotations
 
@@ -158,13 +158,13 @@ def _shared_group(entries: list[Entry], row: int) -> L.Group:
 
 def shared_layout(shape: Shape, row: int = ROW, fused: frozenset[str] = frozenset()) -> Any:
     """FAMILIES' shared-row layout at ``shape`` with the map's fusions ``fused``, one commit unit a row of at most ``row``
-    bytes (a quantizer's row is its chunk's codes and the scale), as the `slots.Layout` that commits it; every layer's group
+    bytes (a quantizer's row is its chunk's codes and the scale), as the `slots.CommitShape` that commits it; every layer's group
     is one `L.Group`."""
     S, _ = _slots()
     m = Map(shape, fused)
     layer = _shared_group(m.layer(0), row)
     groups = [layer if 1 <= i <= shape.layers else _shared_group(entries, row) for i, entries in enumerate(m.groups())]
-    lay = S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b{fusion_tag(m.fused)}/v1",
+    lay = S.CommitShape(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b{fusion_tag(m.fused)}/v1",
                    tuple(groups))
     check_shared(lay, m)
     return lay
@@ -180,7 +180,7 @@ def check_shared(layout: Any, m: Map) -> None:
             src = _sources(entries)
             outputs += [(gi, src[t.op] + 1, 0, 4) if u.scale_only else (gi, src[t.op], u.offset + i * u.stride, u.nbytes)
                         for t, us in entries for u in us if u.template != "AllGather_v1" for i in range(u.count)]
-    L.check_shared(L.Layout(layout.name, tuple(layout.groups)), outputs)
+    L.check_shared(L.RowsPerSlot(layout.name, tuple(layout.groups)), outputs)
 
 
 @dataclass(frozen=True)

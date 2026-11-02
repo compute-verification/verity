@@ -13,7 +13,7 @@ adaptive prover.
   except with δ at most M − 1 of the T wipes fail their bound.
 - **Per wipe** (`per_wipe`): every one of the T wipes meets its `foreign_bits` at once, except with T·`eps`.
 
-`short_sessions`, `PERIODS` and `DELTAS` are the remote bandwidth audit's too (`remote_bandwidth.monitoring`).
+`short_sessions`, `PERIODS` and `DELTAS` are PoUB's too (`remote_bandwidth.monitoring`).
 
 A wipe signed `UNCOUNTED` is vacuous until a network certifier counts its egress: `counted` recomputes its bound from a
 covered `wipe-egress/v1` record's `egress_mib` (`wipe_period.certify`, on the session's parameters in the answer's
@@ -21,7 +21,7 @@ profile). Nothing here checks that record's certificates or that its window is t
 
 Both statements leave out (`EXCEPT`) each wipe's PRF advantage, δ_net and the egress count's premises, which are named
 assumptions, not numbers, and what the wipe's own bound doesn't cover (`wipe_period.uncertified` of the answer's
-placement). What the wipe proves is its verdict and outputs, by the Lean verifier of record; what is scaled is the number
+placement). What the wipe proves is its verdict and outputs, by the Lean verifier; what is scaled is the number
 of wipes and that each is wiped as this one was."""
 
 from __future__ import annotations

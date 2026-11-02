@@ -133,8 +133,9 @@ SYMM_MEM_MAX_BYTES = 64 * 1024 * 1024
 MULTIMEM_ALIGN_BYTES = 16
 #: the bf16 elements of one 16-byte vector, what one ``multimem.ld_reduce.v4.bf16x2`` reduces
 MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
-#: `CAPTURE_RUNS`' kept multimem words replayed on `AllReduceMultimemVector_v1`'s batch (tests/properties/glm53_multimem_replay.py)
-MULTIMEM_REPLAY_RUN = EVIDENCE["glm53_multimem_replay"]["run"]
+#: the record of the run that replayed `CAPTURE_RUNS`' kept multimem words on `AllReduceMultimemVector_v1`'s batch
+#: (tests/properties/glm53_multimem_replay.py)
+MULTIMEM_REPLAY_RUN = EVIDENCE["glm53_multimem_replay"]["run_record"]
 H200_SMS = 132
 _NEG_ZERO32 = const(32, 0x80000000)
 
@@ -142,8 +143,9 @@ _NEG_ZERO32 = const(32, 0x80000000)
 #: "defaults" are vLLM's (``disable_custom_all_reduce`` false, ``VLLM_ALLREDUCE_USE_SYMM_MEM`` and ``VLLM_ALLREDUCE_USE_FLASHINFER``
 #: 1); "custom-off" is ``disable_custom_all_reduce`` true, what the two GO runs served; "switch" is ``VLLM_ALLREDUCE_USE_SYMM_MEM=0``.
 SETTINGS = {"defaults": (True, True), "custom-off": (False, True), "switch": (True, False)}
-#: the 8-GPU capture's GO runs on vy-glm53-h8 (the first with NCCL_P2P_DISABLE=1, which only NCCL's routes read)
-CAPTURE_RUNS = tuple(EVIDENCE["glm53_tp8_allreduce_capture"]["runs"])
+#: the records of the 8-GPU capture's GO runs on an 8-GPU H200 node (the first with NCCL_P2P_DISABLE=1, which only NCCL's routes
+#: read)
+CAPTURE_RUNS = tuple(EVIDENCE["glm53_tp8_allreduce_capture"]["run_records"])
 _CUSTOM_OFF_RUNS = CAPTURE_RUNS[:2]
 _DEFAULT_RUNS = CAPTURE_RUNS[2:]
 #: the tree every owner's multimem reduction took in all three runs (including the 7168-wide pass)
@@ -152,18 +154,18 @@ GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
 BATCH_INVARIANT = "batch-invariant"
 #: (compute capability, SMs) of the RTX PRO 6000 Blackwell Server Edition
 RTX_PRO_6000 = ("12.0", 188)
-#: Llama-3.1-70B int8's TP4 capture on vy-nebius-1 (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay of its every all-reduce through
-#: `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls, 1,514,110,976 rank words, GO) and
-#: NCCL's tree probed on GPUs 0, 1, 2, 5 (``probe``: the same chain, NaNs 0x7FFF)
-NCCL_TREE_RUNS = tuple(EVIDENCE["tp4_nccl_tree_replay"]["runs"])
+#: the records of three runs on an RTX PRO 6000 node: Llama-3.1-70B int8's TP4 capture (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay
+#: of its every all-reduce through `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls,
+#: 1,514,110,976 rank words, GO) and NCCL's tree probed on GPUs 0, 1, 2, 5 (``probe``: the same chain, NaNs 0x7FFF)
+NCCL_TREE_RUNS = tuple(EVIDENCE["tp4_nccl_tree_replay"]["run_records"])
 
 
 class Captured(NamedTuple):
     """A route the capture showed: at `setting`, hidden size N, the calls of lo..hi tokens on `route` (``fused``:
     `fused_allreduce_rms_norm`'s FlashInfer call; else the communicator `CudaCommunicator.all_reduce` hands it to) equal
-    `definition` at `statics` on every word, in `runs`, over `world` ranks of `device` ((compute capability, SMs)) with NCCL's
-    `transport` between them (``"shm"``: ``NCCL_P2P_DISABLE=1``). A device or transport of None is one the entry is not keyed on
-    (the H200 entries', routes NCCL does not run, keyed on their setting at world 8)."""
+    `definition` at `statics` on every word, in the runs whose records are `runs`, over `world` ranks of `device` ((compute
+    capability, SMs)) with NCCL's `transport` between them (``"shm"``: ``NCCL_P2P_DISABLE=1``). A device or transport of None is
+    one the entry is not keyed on (the H200 entries', routes NCCL does not run, keyed on their setting at world 8)."""
     setting: str
     N: int
     route: str

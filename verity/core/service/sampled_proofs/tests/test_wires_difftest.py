@@ -1,6 +1,6 @@
 """A window circuit's wires (`SampledProofs.Wires`): the check at the size of the description (`wires`, `Wires.check`) and the
 unrolled reference (`wires_unrolled`, `Wires.checkRef`), each held to one Python reference that expands every covered
-reader row, as V3a's `verity.ml.windows.interface.members` does (#4111): reader index i of a wire is unit
+reader row, as `verity.ml.windows.interface.members` does: reader index i of a wire is unit
 ``at + i // C``, row ``c0 + i % C``, and its writer ``base + sum(d[k] * step[k])`` over i's mixed-radix digits, the
 first digit the slowest (`Wire.writers`, copied below rather than imported: a verifier imports no `verity.ml` code).
 Both pieces agreeing with it on the same inputs is the difftest of the closed form (spans, lookups, wired rows and bits,
@@ -169,7 +169,7 @@ def expand(j):
 
 
 def reference_drawn(j):
-    """The drawn units' wired rows (`wires_drawn`): each is its writer's when both public strings are given and equal."""
+    """The sampled proof blocks' wired rows (`wires_drawn`): each is its writer's when both public strings are given and equal."""
     if set(_obj(j, "an instance")) != {"templates", "cuts", "wires", "drawn", "reads", "writes"}:
         raise D.Reject("an instance is {templates, cuts, wires, drawn, reads, writes}")
     drawn, reads, writes = set(), {}, {}

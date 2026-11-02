@@ -1,5 +1,5 @@
-# Dither-2S with Dither-C's committed-digit P·V (SKIP's Ap, Result 3): both operands dithered, no U, the last checked
-# word served, and P·V's strip digits committed, so no product is unchecked. Perplexity +1.38% (8B WT-2 2K) on SKIP's
+# Dither-2S with Dither-C's committed-digit P·V: both operands dithered, no U, the last checked
+# word served, and P·V's strip digits committed, so no product is unchecked. Perplexity +1.38% (8B WT-2 2K) on the
 # `adopted-bd-lm-pv` arm (P in one block; `adopted-bd-lm-pv256` and up for blocks of keys).
 base = "dither-2s"
 name = "dither-2s-pv"

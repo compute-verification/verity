@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import dataclasses
+import hashlib
 import json
 import os
 import subprocess
@@ -58,7 +59,7 @@ import v31
 
 HERE = Path(__file__).resolve().parent
 
-SEED_BYTES = 64 * len(v31.FILL_STREAMS)
+SEED_BYTES = hashlib.sha512().digest_size * len(v31.FILL_STREAMS)
 
 
 def build_lib(out: str, gencode: str = "arch=compute_120a,code=sm_120a", nvcc: str = "nvcc") -> str:
@@ -89,6 +90,7 @@ class Lib:
             "v31_levels_async": ([vp, u64, vp], i),
             "v31_pad": ([vp, vp], i),
             "v31_sync": ([vp], i),
+            "v31_stream": ([vp, i], vp),
             "v31_destroy": ([vp], None),
             "v31_lt_create": ([i, i, i, vp, vp, vp, vp], vp),
             "v31_lt_run": ([vp] * 5, None),
@@ -239,6 +241,14 @@ class Prover:
     def sync(self) -> None:
         self.lib.check(self.lib.sync(self.h))
 
+    def stream(self, which: int) -> int:
+        """The shared compute (0) or commit (1) stream's handle, for timing events: a call's compute is on the first,
+        and its commit and `levels_async`'s copies follow on the second."""
+        s = self.lib.stream(self.h, which)
+        if not s:
+            raise RuntimeError("v31_stream: called from a thread other than the binding's")
+        return int(s)
+
 
 call_seeds = v31.call_seeds
 served_seeds = v31.served_seeds
@@ -295,8 +305,8 @@ def _forged(f: v31.Fill, cheat: str) -> tuple[int, int, int] | None:
 
 def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int, L: int, row: int, a_kind: str,
               cheat: str, q: int, rng: np.random.Generator) -> dict:
-    """One gate: a call on fresh coins (64-byte coins drawn after the operands are fixed, the stand-in for the challenger's
-    opening), the GPU's values, pad and tree against the reference, then q proof blocks from a check coin drawn after the
+    """One gate: a call on fresh coins (64-byte coins flipped after the operands are fixed, the stand-in for the challenger's
+    opening), the GPU's values, pad and tree against the reference, then q proof blocks from a check coin flipped after the
     root, answered from the GPU's own openings."""
     f = v31.Fill(m, n, k, lp, L, row, served)
     A, B = v31.operands(f, rng, "llm" if a_kind == "pad" else a_kind)

@@ -1,7 +1,7 @@
 """What compute efficiency eta (``tiers.py``) is most exposed to: a plausible range for every parameter, eta and 1/eta
 across it at each tier, elasticities d ln eta / d ln p in four scenarios, the values at which 1/eta falls below 100, 10
-and 2, and the closed forms of the memory cap mu, NCI's term nu and the cheating share chi checked against
-``tiers.evaluate``. 1/eta is not the compute dampener D (``statement.dampener``, the overhead calculator's
+and 2, and the closed forms of the memory cap mu, the inference-only policy's term nu and the cheating share chi checked against
+``tiers.evaluate``. 1/eta is not the slowdown D (``statement.dampener``, the slowdown calculator's
 ``rho.theorem.multiple_bound``): eta counts every term at peak, D the residual r at MFU_0 (reference efficiency), so at
 s = 0, g = 1 and no memory cap, D = 1 / (r + (eta - r) / MFU_0) wherever D > 1. ``statement.py`` gives the thresholds
 on D.
@@ -173,7 +173,7 @@ def mu(p: dict, exhaust: bool = False) -> float:
 
 
 def nu(p: dict) -> float:
-    """NCI's term, the declared computation at the thread bound: 2 alpha Lambda(K) / (kappa b_a)."""
+    """The inference-only policy's term, the declared computation at the thread bound: 2 alpha Lambda(K) / (kappa b_a)."""
     return 2 * p["K"] / p["Gamma"] * T.lam(p, p["K"]) / (p["kappa"] * p["b_a"])
 
 
@@ -239,7 +239,7 @@ def inverse_eta(p: dict, tier: str) -> float:
 
 def thresholds(p: dict, key: str, tier: str, n: int = GRID, steps: int = BISECT, levels: tuple[float, ...] = LEVELS,
                size: Callable[[dict, str], float] = inverse_eta) -> dict[float, list[list[float]]]:
-    """For each level, the intervals of the parameter's slider range on which ``size`` (1/eta, or tiers' dampener D) is
+    """For each level, the intervals of the parameter's slider range on which ``size`` (1/eta, or tiers' slowdown D) is
     below it, the others at ``p``."""
     xs = grid(key, n)
     ys = [size(p | {key: x}, tier) for x in xs]

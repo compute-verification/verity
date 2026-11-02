@@ -45,7 +45,7 @@ class Term:
 
 
 def ncp_terms(m: int, k: int, n: int) -> list[Term]:
-    """Route U at β = 128, f = 24, with sub-word extraction priced (03:50Z):
+    """Route U at β = 128, f = 24, with sub-word extraction priced:
     the schedule whose biased accumulator is ``ncp-v1``'s checked values (Lean `wrefU 24`).  The retired unbiased sums would
     cost 36 units per position (γ = 1.08% at n = 2,048)."""
     return [

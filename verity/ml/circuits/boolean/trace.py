@@ -1,7 +1,7 @@
-"""Boolean Definitions from circuit builders: run a builder over `forms`, then write what it computed as And/Xor/Not gates.
+"""Boolean Definitions from registered compilers: run a builder over `forms`, then write what it computed as And/Xor/Not gates.
 
 A builder is ``build(C, *elements) -> elements``: one argument per element of the Definition's parameters (`boolean.elements`,
-in order), each a list of forms LSB first, as C-Flock's pieces take one argument per leaf of the word Definition; it returns a
+in order), each a list of forms LSB first, as Flock's pieces take one argument per leaf of the word Definition; it returns a
 list of forms (one element) or a list of elements, those of the return type in order.
 
 `trace` runs it once on a `Circuit` whose forms remember how they were made (`TL`: the XOR of two forms, or the NOT of one),
@@ -19,7 +19,7 @@ emitted; the body is traced on first use, not on import. A Boolean Definition na
 function of its bindings); `word_of` reads it.
 
 `definition` keeps the builder as the Definition's ``build``, and a lowering into `forms` rows runs it instead of the gates:
-C-Flock's (`verity_flock.ir_lower.lower_gates`) lowers each activation of the Definition it holds whole by ``build`` on its
+Flock's (`verity_flock.ir_lower.lower_gates`) lowers each activation of the Definition it holds whole by ``build`` on its
 own circuit, so a commit is a row there, and an AND operand the form its builder gave it. `part` is `definition` for a builder
 ``build(C, S, *elements)`` with statics, traced once per binding; gate by gate, a part's linear forms grow without bound (one
 SHA-512 compression passes 1 GB).

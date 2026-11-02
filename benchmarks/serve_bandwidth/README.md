@@ -4,6 +4,10 @@ Where a served mix's DRAM read bandwidth goes on the RTX PRO 6000: vLLM serving 
 in FP8 under `kv_filler/serve.py`'s bursty trace, sampled by nsys's GPU metrics (DRAM read and write throughput, about
 10 kHz), with the CUDA kernels and one NVTX range an engine step.
 
+**Status: maintained.** Its suite runs in `check`, `budget.py` and `timeline.py` read `benchmarks/kv_filler`'s step
+profiles and kernel classes, and `benchmarks/stacked_share/share.py` takes its served trace from `mix.py`'s `mix.json`.
+Decided by `rg serve_bandwidth` over `verity/`, `benchmarks/`, `examples/`, `tests/` and `integrations/`.
+
 - `mix.py`: the served mix, its steps named by what they schedule (prompt tokens, decodes, context).
 - `timeline.py`: each sample's bytes by phase (`prefill`, `decode`, `gap` between steps, `idle`) and kernel class
   (`gemm`, `attention`, `other`, `none`; phases only when nsys traced no kernels, as for TP workers), against the
@@ -15,7 +19,7 @@ in FP8 under `kv_filler/serve.py`'s bursty trace, sampled by nsys's GPU metrics 
   `kv_filler/step_profile.py`'s `step_profile.json` of a stock run and encoded runs at the same shapes.
 
 ~~~bash
-uv run research run --queue --gpus 1 --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 \
-  --max-min 30 -- bash benchmarks/serve_bandwidth/run.sh
+uv run research run --queue --gpus 1 --project verity --source . --cwd source --mem-gb 64 --max-min 30 \
+  -- bash benchmarks/serve_bandwidth/run.sh
 MODEL=/workspace/hf/hub/models--unsloth--Meta-Llama-3.1-70B/snapshots/<rev> TP=8 SECS=15  # the 70B, --gpus 8
 ~~~
