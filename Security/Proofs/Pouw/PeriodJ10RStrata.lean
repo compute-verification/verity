@@ -79,7 +79,7 @@ theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0
 
 /-- **Stratum `s`'s live words on its view** are its `creditLive` at the period's `Credit.window` inputs there. -/
 theorem stratumLive_symm {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
-    (σ : Fin nB → Fin mB) (s : Fin mB) (Wp : Period C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
+    (σ : Fin nB → Fin mB) (s : Fin mB) (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (ws : CreditWindows (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) Cd.rounds σ s) n) :
     stratumLive Sc Cd hM σ s Wp ws ((pathsAt C hM σ s n).symm y) = creditLive Sc Cd Wp (creditAt hM σ s ws) y := by
   unfold stratumLive
@@ -103,7 +103,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
     (ws : CreditWindows (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C 1 σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (Pl : Play (Coin C (Rest σ s) Cd.rounds σ s) n K T L U)
     (folded : Paths (Coin C (Rest σ s) Cd.rounds σ s) n → ℝ) (ρ δs δbind δks : ℝ)
     (hDraw : StrataDrawIsCoin σ k hk S unitOf ws)

@@ -50,6 +50,7 @@ TIMES = {"pkg/tests/test_a.py": 10.0, "pkg/tests/test_b.py": 9.0, "pkg/tests/tes
 def _workspace(root: Path) -> None:
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests" / "sub").mkdir(parents=True)
