@@ -892,8 +892,12 @@ KNOWN: dict[str, str] = {
         "homonym, a link-window's witness: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
-    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
-        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
+        "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Site":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
     "verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean::NetworkCheck.LinkWindow.Verdict":
@@ -902,12 +906,6 @@ KNOWN: dict[str, str] = {
         "homonym, the certifier's bucket and slot schedule: rename (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the log's projection (deleted) (proofs)",
-    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
-        "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
-    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
-        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
-    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Site":
-        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
     "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a sampling period (proofs)",
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean::NciCheck.Circuit":
@@ -1031,16 +1029,12 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it: the service's admitted log entry (proofs)",
     "verity/core/protocols/sampled_proofs/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Coins.lean::Flock.Firewall.Coins.Session":
-        "homonym, a firewall release: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
         "homonym, the firewall loop's frames: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Session":
-        "homonym, a firewall release: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
         "homonym, the firewall loop's tables: rename (proofs)",
     "verity/core/service/flock/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
@@ -1052,7 +1046,6 @@ KNOWN: dict[str, str] = {
         "homonym, a polynomial-commitment opening: rename (proofs)",
     "verity/core/service/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
-    "verity/core/service/flock/Flock/Record.lean::Flock.Session": "homonym, a proof's session record: rename (proofs)",
     "verity/core/service/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
     "verity/core/service/flock/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
     "verity/core/service/sampled_proofs/SampledProofs/Program.lean::SampledProofs.Program":

@@ -308,9 +308,8 @@ openings (`{name: [(0, b ‖ c)]}`), or the refusal (`registration`): each `read
 the leaf's place (`leafPlace`), each table's entry the verifier's own at the one root `roots` gives it (its domain
 binding the window's open root `window` but for the weights' `b/<K>`), each partials port at the produced record's root
 `produced` under the window's draw root `registration`; its known ports (`pub` of the window's Program salt `salt`,
-position u and the call's roots, `admit` every row, `o0` the row 1, each its own served value under `knownSalt`): every
-port of the statement's circuit, as flock-verify's `Registered.checkComplete` holds it to. An A, B or partials port is
-read in full. -/
+position u and the call's roots, `admit` every row, `o0` the row 1, each its own served value under `knownSalt`). An A,
+B or partials port is read in full. -/
 def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : Nat) (st : St) (roots : Json)
     (window : String) (steps : Nat) (salt registration : String) (produced : List (String × String)) :
     R (Json × Array (String × Array (Nat × String))) := do

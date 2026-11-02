@@ -766,7 +766,7 @@ def _unit_fn(k: int, r: int, c: int, j10r: bool = False, tile: int | None = None
 
 
 def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
-                unit_fns: dict[int, str] | None = None, tile: int | None = None) -> dict:
+                tile: int | None = None, unit_fns: dict[int, str] | None = None) -> dict:
     """A served window's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
@@ -807,9 +807,9 @@ def desc_bytes(desc: dict) -> bytes:
 
 
 def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
-               unit_fns: dict[int, str] | None = None, tile: int | None = None) -> str:
+               tile: int | None = None, unit_fns: dict[int, str] | None = None) -> str:
     """`window_desc`'s bytes in hex, as a window's evidence carries them."""
-    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r, unit_fns, tile)).hex()
+    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r, tile, unit_fns)).hex()
 
 
 def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
