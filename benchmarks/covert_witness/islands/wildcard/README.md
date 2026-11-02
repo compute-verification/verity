@@ -1,8 +1,7 @@
 # Island `wildcard`: updates the theorem prices at ρ = 1, trained as cheaply as possible
 
 The program of the training-efficiency search's `wildcard` direction (any class). `train.py` is the one file it edits;
-on this branch the `shallow`, `e100kb` and `e1mb` islands' `train.py` are shims that run it under that class's name (the
-`reference` island is left alone, since the scorer reads `reference` records as honest runs).
+`launch.py` ships this island from the branch `cursor/te-wildcard-NNNN` and runs `train.py` with the named class's caps.
 
 ## The structural lever
 
