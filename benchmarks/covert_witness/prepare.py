@@ -1,5 +1,11 @@
 """The fixed side of the covert-witness speedrun: the registered starts, the decoders, the training-FLOP meter, the witness
-checker, the classes' caps and `evaluate_bpb`. A candidate's `train.py` imports it and never edits it; `evaluate.py` runs it.
+checker, the classes' caps, `evaluate_bpb` and the `Scorer`. A candidate's `train.py` imports it and never edits it;
+`evaluate.py` and the harness run it.
+
+A search score (`Scorer.search`) is taken after the weights are hashed: a slice of the search pool drawn from a fresh
+coin and the digest (`draw_slice`), scored paired with the start (the start's whole-pool bpb plus the candidate's minus
+the start's on the slice). `Scorer.seal` writes the promotion set's score under the digest, which only `sealed.py`
+reads. In final mode (`CW_FINAL=1`) every score is the final set's, and the sealed start (`register_pythia`) loads.
 
 A candidate starts from a registered start θ (`load_start`), trains within its class's caps and the fixed budget, and submits
 (`submit`):
