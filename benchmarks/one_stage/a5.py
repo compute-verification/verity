@@ -957,13 +957,13 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registe
 
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
-    one table's `--zk` sessions on its circuit and public file."""
+    one table's one `--zk` session on its circuit and public file."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
     if len(done) != 1:
-        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
+        return f"v2 verifies one table's session on its circuit and public file; this audit drew {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
     tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []

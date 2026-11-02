@@ -9,7 +9,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"public", "sessions"}`: the public file's SHA-512 and,
   for each of v1's `sessions` in order, `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and
-  `{file: SHA-512}` naming at least each rep file the statement's session reads (`<stream with / as .>.bin`);
+  `{file: SHA-512}` naming at least each rep file the statement's session reads (`<stream with / as .>.bin`). The drawn
+  units are proved in one session, whose statement is theirs: the check refuses evidence naming none or several
+  (`oneSession`) before it reads a tree;
 * **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
   SHA-512 as `flock-verify --archive` finds them;
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
@@ -427,13 +429,18 @@ def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs
     named := named.push (s.name, (Json.parse record).toOption.getD Json.null)
   if let some why := Challenger.sessionsTreeReason ts named then throw why
 
-/-- The check at the coins `ξ` (module docstring, **check**): each session's coins held to the trees the challenger
-logged (`treesOf`, `treesHeld`), then the sessions' verdicts on the blobs, then v1's `checkAt` at `ξ` on them. v1
-accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads
-the run rather than the verdicts' JSON. -/
+/-- The evidence's one session (module docstring, **evidence**): evidence naming none or several refuses. -/
+def oneSession (sessions : Array RunFiles) : V Unit :=
+  if sessions.size == 1 then pure ()
+  else throw s!"the evidence names {sessions.size} sessions: the drawn units are proved in one session"
+
+/-- The check at the coins `ξ` (module docstring, **check**): the evidence's one session (`oneSession`), its coins held
+to the trees the challenger logged (`treesOf`, `treesHeld`), then its verdict on the blobs, then v1's `checkAt` at `ξ`
+on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an
+acceptance reads the run rather than the verdicts' JSON. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
-  match treesOf p e >>= (treesHeld · e bs) >>= fun () =>
+  match oneSession e.sessions >>= fun () => treesOf p e >>= (treesHeld · e bs) >>= fun () =>
       run p.own e.pub e.sessions (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
@@ -508,5 +515,8 @@ def main (args : List String) : IO UInt32 := do
 #guard !(provedHeld (#[3] ++ #[9]) #[3, 7, 9]).toBool
 #guard !((provedUnits "{\"units\":{\"indices\":[7,3,9]}}".toUTF8 "{\"unit_draw\":{\"units\":[2,2]}}") >>=
   (provedHeld · #[9])).toBool
+#guard (oneSession #[⟨"s", "", #[]⟩]).toBool
+#guard !(oneSession #[]).toBool
+#guard !(oneSession #[⟨"s", "", #[]⟩, ⟨"t", "", #[]⟩]).toBool
 
 end SampledProofs.OneStageZk

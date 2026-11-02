@@ -58,8 +58,7 @@ from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, registered as G,
                                                             registration as R)
-from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
-                                                             ChallengerKey, CoinError)
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -1957,12 +1956,11 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
-    for naming verdicts; rejected with them replaced by proofs naming no session (no session proved the units the
-    evidence claims, or, when the challenger sampled a coin tree, no session used it), and by the session's own verdict
-    when its files are not a statement's; refused before any session is verified when a session's coins are not a tree
-    the challenger logged, or two sessions share one; refused when a file it names is in no blob, or its sessions are
-    not the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
-    `test_challenger_difftest.py` the trees' check to its Python."""
+    for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
+    drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
+    a statement's; refused before the session is verified when its coins are not a tree the challenger logged; refused
+    when a file it names is in no blob, or its sessions are not the evidence's. `test_proofs.py` holds the verdicts to
+    `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2000,16 +1998,13 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     assert run(evidence | {"proofs": proofs([])}) == (
         "reject", "evidence: the evidence names verdicts: this audit's verdicts are its own run of the verifier on the "
                   "proofs")
-    _, _, base0, p0 = audit(0)
-    assert run(base0 | {"proofs": proofs([])}, p=p0) == (
-        "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
     assert run(base | {"proofs": proofs([])}) == (
-        "reject", f"proofs: the challenger's release log shows 1 coin trees and the sessions use 0: {UNUSED_TREE}")
+        "reject", "proofs: the evidence names 0 sessions: the drawn units are proved in one session")
     assert run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}) == ("reject", "verdict flock-verify/s did not accept")
     assert run(base | {"proofs": proofs(["s"], stand_in), "sessions": ["s"]}) == (
         "reject", f"proofs: session s's coins are not the challenger's: {NO_TREE}")
     assert run(base | {"proofs": proofs(["s", "t"]), "sessions": ["s", "t"]}) == (
-        "reject", f"proofs: session t's coins are not the challenger's: {SHARED_TREE}")
+        "reject", "proofs: the evidence names 2 sessions: the drawn units are proved in one session")
     got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[1:])
     assert got[0] == "reject" and got[1].startswith("proofs: circuit: no blob has the SHA-512"), got
     got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[:2])
