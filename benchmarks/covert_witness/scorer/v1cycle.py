@@ -305,19 +305,29 @@ def put_data(tree: Path, kind: str, meta: dict) -> str:
     return json.loads(r.stdout)["id"]
 
 
-def put_panel(panel: dict) -> str:
+def put_panels(C: dict) -> dict[str, str]:
+    """PUT each console cut with one identity token (the identity service rate-limits: HTTP 429 on a token per panel);
+    each panel's status, or why it wasn't PUT."""
     import urllib.error
     import urllib.request
 
-    from research.slack import oidc_token
-    req = urllib.request.Request(f"{PANELS_URL}/{panel['id']}", body(panel), method="PUT",
-                                 headers={"Authorization": f"Bearer {oidc_token(PANELS_URL)}",
-                                          "Content-Type": "application/json"})
+    from research.slack import SlackError, oidc_token
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return f"{r.status}"
-    except urllib.error.HTTPError as e:
-        return f"{e.code} {e.read()[:400].decode(errors='replace')}"
+        token = oidc_token(PANELS_URL)
+    except SlackError as e:
+        return {pid: f"not PUT: {e}" for pid in C}
+    out = {}
+    for pid, panel in C.items():
+        req = urllib.request.Request(f"{PANELS_URL}/{panel['id']}", body(panel), method="PUT",
+                                     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                out[pid] = f"{r.status}"
+        except urllib.error.HTTPError as e:
+            out[pid] = f"{e.code} {e.read()[:400].decode(errors='replace')}"
+        except (urllib.error.URLError, OSError) as e:
+            out[pid] = f"not PUT: {e}"
+    return out
 
 
 def night2_runs() -> set[str]:
@@ -399,7 +409,7 @@ def main() -> int:
         (PANELS_DIR / f"{pid}.png").write_bytes(png)
         if not args.no_publish:
             ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 {what} {pid}", **meta})
-    puts = {} if args.no_put else {pid: put_panel(C[pid]) for pid in PLOT_OF.values()}
+    puts = {} if args.no_put else put_panels(C)
     summary = meta | {"art": ids, "panels_put": puts, "rows": {k: len(v["rows"]) for k, v in P.items()},
                       "console_rows": {k: len(v["rows"]) for k, v in C.items()},
                       "console_bytes": {k: len(body(v)) for k, v in C.items()}, "rescore": last, "out": str(out)}
@@ -473,10 +483,9 @@ def reput(out: Path) -> int:
     """The console's cut of a finished refresh's full panels, written to PANELS_DIR and PUT, with nothing re-scored."""
     C = console({pid: json.loads((out / "publish" / key / f"{pid}.json").read_text()) for key, pid in PLOT_OF.items()
                  if (out / "publish" / key / f"{pid}.json").exists()})
-    puts = {}
     for pid, q in C.items():
         (PANELS_DIR / f"{pid}.json").write_bytes(body(q) + b"\n")
-        puts[pid] = put_panel(q)
+    puts = put_panels(C)
     print(json.dumps({"panels_put": puts, "console_bytes": {k: len(body(v)) for k, v in C.items()}}))
     return 0 if all(str(v).startswith("2") for v in puts.values()) else 1
 
