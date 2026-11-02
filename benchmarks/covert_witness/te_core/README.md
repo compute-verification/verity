@@ -78,7 +78,7 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r).
 - **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
   GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
-  seeds, every start. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
+  seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
 
 ## What the integrator calls
 
@@ -98,7 +98,7 @@ python -m te_core.frontier
 A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`; each a no-op outside the harness) for
 5% checkpoints of its own model or counterexample families. The rest of this section is the `train(te)` program form.
 
-1. **The starts registry** (`starts.json`): one entry per start, `small`, `medium` and `large`, each written by
+1. **The starts registry** (`starts.json`): one entry per start, `small` and `medium`, each written by
    `python -m te_core.starts --name small --theta S.pt --factory MODULE:FUNCTION --val-bpb X`, which gives `{path, sha256,
    val_bpb, ctx, vocab, forward_macs_per_token}`.
 2. **The evaluator**: a function `bpb(state_dict, split, device) -> float`, with `split` either `"val"` or `"test"`,
