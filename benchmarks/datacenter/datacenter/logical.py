@@ -344,7 +344,7 @@ class Registration:
     `root` is public, and so is the number of profiles; the values, salts and profiles are the developer's."""
 
     values: dict[str, int | tuple[int, ...]]
-    rows: advice.Registration
+    rows: advice.Committed
     #: the digests of the occupancy profiles the developer may choose from (`profile_digest`), which the root binds;
     #: none: one profile, the placement's own
     profiles: tuple[bytes, ...] = ()
@@ -370,7 +370,7 @@ def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Se
     words = [w for n in regd for w in ([regd[n]] if isinstance(regd[n], int) else regd[n])]
     width = max(sum(e) for _, t in params for e in layout(t))
     digests = tuple(o if isinstance(o, bytes) else profile_digest(o) for o in profiles)
-    return Registration(regd, advice.register(_rows(words, width), width,
+    return Registration(regd, advice.commit(_rows(words, width), width,
                                               _binding(b"datacenter/registration/v1", program, digests), salts), digests)
 
 
@@ -389,12 +389,12 @@ def committed(program: Program) -> list[tuple[tuple[int, ...], tuple[int, ...]]]
     return _committed[program]
 
 
-def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] | None = None) -> advice.Registration:
+def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] | None = None) -> advice.Committed:
     """The hiding commitment to a run's values (`committed`), a row per element: its `root` is public, its rows and salts
     witness."""
     rs = committed(program)
     width = max(sum(ws) for _, ws in rs)
-    return advice.register(_rows([_word(transcript, gs, ws) for gs, ws in rs], width),
+    return advice.commit(_rows([_word(transcript, gs, ws) for gs, ws in rs], width),
                            width, _binding(b"datacenter/values/v1", program), salts)
 
 

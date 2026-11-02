@@ -1,5 +1,6 @@
-"""IoTieRequest's adversarial cases as regressions, on the proof block a bucket row of the warden's own ingress: what a
-bucket's verdict holds alone, and what rests on the verifier's lanes chaining each connection over its buckets.
+"""IoTieRequest's adversarial cases as regressions, on the proof block a bucket row of the network certifier's own
+ingress: what a bucket's verdict holds alone, and what rests on the verifier's lanes chaining each connection over its
+buckets.
 
   a. The public inputs are the lanes (each lane's ordinal and its request's carry-in and carry-out) and still no
      advice digest or Commit: `tie_service.IoTieVerdict` keys the verdicts to the advice's digest, built only
@@ -10,7 +11,7 @@ bucket's verdict holds alone, and what rests on the verifier's lanes chaining ea
   c. Open here: the prompt id values are tied to nothing (the ingress-ids tie, `io_ids`, holds them to the Commit's
      `c00.input/ids`).
   d. Changed: the ordinal is read. Each cell's header carries its connection's ordinal, and a lane's cells must be on
-     the lane's q, the warden's release order[i] + 1.
+     the lane's q, the network certifier's release order[i] + 1.
   e. The proof block reads neither the response's length nor the user: `max_tokens` is parsed as a field and not
   compared.
 """

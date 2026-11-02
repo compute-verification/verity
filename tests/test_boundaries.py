@@ -59,6 +59,9 @@ ALLOWED = {
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
+    # Ticks, spans and the monitoring period, stdlib only: the mirror of the code's `CoreProtocol.Period`, which a
+    # protocol's periods read rather than define.
+    "core.periods": set(),
     "core.claims": set(),
     # An auditor party's signed period roots and liveness records,
     # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
@@ -68,6 +71,9 @@ ALLOWED = {
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
+    # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
+    # views a protocol reads. Its digests are canonical JSON's, the wire's.
+    "core.site": {"core.wire"},
     "core.deploy": {"core.wire"},
     # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: canonical JSON
     # and SHA-512 only, so it reaches no ml.

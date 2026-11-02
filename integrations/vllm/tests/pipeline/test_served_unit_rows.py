@@ -19,7 +19,8 @@ STATEMENTS = ("dbda90083c381ad2053d9bd617ab8ac3f92a90dd4a2fe872014603060828ee21"
 def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monkeypatch):
     tmpls = sorted({t for f in SERVED for t in json.loads(f.read_text())["chunk_cap"]})
     monkeypatch.setattr(IF, "templates_of", lambda _w: [])
-    monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts: sts)
-    sts = SRW.circuit_record(SimpleNamespace(members=[SimpleNamespace(template=t, schemas=True) for t in tmpls]))
+    monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
+    members = [SimpleNamespace(template=t, schemas=True) for t in tmpls]
+    sts = SRW.circuit_record(SimpleNamespace(members=members, row_tables=()), [])
     got = hashlib.sha512(IF.circuit_bytes(sts)).hexdigest()
     assert len(sts) == 27 and got == STATEMENTS, got

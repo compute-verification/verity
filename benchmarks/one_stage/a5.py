@@ -152,6 +152,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 import multiprocessing
 import os
@@ -163,7 +164,10 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from verity_vllm.pipeline import advice_windows as AW
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -462,9 +466,8 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
         neg["partial-wired-to-another-combine-slot (§16.13)"] = {
             "refused": bool(WI.check_drawn(rewired(j, tuple(w)), publics, units(j)))}
     m = members[k]
-    names = [q for q, _ in m.all_rows]
     body = bytearray(publics[m.key])
-    body[names.index(p) * WI.BC_BYTES] ^= 1
+    body[WI.string_at(m, body, p, 0)] ^= 1
     neg["wired-row-not-its-writer-s-output (§16.13)"] = {
         "refused": bool(WI.check_drawn(members, {**publics, m.key: bytes(body)}, [m.base]))}
     return neg
@@ -495,9 +498,92 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
     return out
 
 
+def compose_key(compose: Callable, defn: object, template: str) -> str | None:
+    """The cache entry (`compose_circuit.cache_key`) of a caller's composer ``compose``'s circuit for ``template``, None for one
+    that doesn't say what it composes from besides its binding (``compose.inputs``, JSON: its stager's label, the template's
+    statement): keyed by those inputs, the template, its Definition's program digest, the composer's own file and
+    compose_circuit's, and the composing packages' code and data (`compose_circuit.tree_digest`)."""
+    inputs = getattr(compose, "inputs", None)
+    if inputs is None:
+        return None
+    import compose_circuit as CM
+
+    return CM.cache_key(["a5/own", template, P.program_digest(Program(defn)), inputs],
+                        files=(Path(CM.__file__), Path(inspect.getsourcefile(compose))))
+
+
+def own_composed(a: argparse.Namespace, compose: Callable, defn: object, template: str, out: Path | None, pd: str,
+                 program: str) -> tuple[dict, bool | None]:
+    """A caller's composer ``compose`` (``(out, partition digest, program digest) -> line``) for ``template``'s circuit at
+    ``out``, bound to ``pd`` and ``program``: through ``a.compose_cache`` (`compose_circuit.cached`, keyed by `compose_key`)
+    when given and the composer says what it composes from, else composed at ``out``. -> (compose's line with the circuit's
+    META, whether the cache held it already: None off the cache)."""
+    import compose_circuit as CM
+
+    cache = getattr(a, "compose_cache", None)
+    key = compose_key(compose, defn, template) if cache else None
+    if key is None:
+        out.unlink(missing_ok=True)
+        made = compose(out, pd, program)
+        return {**made, "meta": made.get("meta") or CM.head(out)}, None
+    kept = (Path(cache) / key / "made.json").exists()
+    return CM.cached(Path(cache), key, out, {"partition": pd, "program": program}, lambda p: compose(p, pd, program)), kept
+
+
+def circuit_of(path: Path, made: dict, read: set[Path]) -> FI.FlockCircuit:
+    """The circuit at ``path`` as staging reads it: its META, pin and class from compose's line ``made`` where the line carries
+    its META, never reading a circuit that can be past 100 GB (`held` holds a sampled proof block's to them before its prover
+    reads it); else read off the file, ``path`` then put in ``read``."""
+    if "meta" in made and made.get("class_sha512"):
+        return FI.FlockCircuit(made["meta"], made["pin"], made["class_sha512"])
+    read.add(path)
+    return FI.flock_circuit(path.read_bytes())
+
+
+def held(path: Path, circ: FI.FlockCircuit, read: set[Path]) -> None:
+    """The circuit at ``path`` is the one staging took off compose's line (``circ``: its META, pin and class), read whole once:
+    ``read`` holds the circuits already read."""
+    if path in read:
+        return
+    got = FI.flock_circuit(path.read_bytes())
+    if (got.meta, got.pin, got.cls) != (circ.meta, circ.pin, circ.cls):
+        raise RuntimeError(f"{path}: not the circuit its compose's line names (its META, SHA-512 or class differ)")
+    read.add(path)
+
+
+_WARM: dict = {}
+
+
+def _warm_one(t: str) -> dict:
+    w, t0 = _WARM, time.time()
+    compose, defn = w["sets"][t]
+    made, kept = own_composed(w["a"], compose, defn, t, None, w["pd"], w["program"])
+    return {"template": t, "seconds": round(time.time() - t0, 1), "kept": kept, "pin": made["pin"], "k_log": made.get("k_log")}
+
+
+def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1) -> list[dict]:
+    """Every template of window ``mine`` that a caller's composer in ``sets`` makes, and says what it makes it from
+    (`compose_key`), composed into ``a.compose_cache`` bound to the window's partition and program, ``jobs`` at a time, each in
+    a process forked for it: a window's templates and binding are public, so this runs before its timed audit, whose staging
+    then links each kept circuit and reads none (`own_composed`). A 4,32,4 window's Int8RowQuant_v3 holds its text, past 100 GB,
+    while it composes, so ``jobs`` is what the machine's memory takes. -> each template's seconds, pin and whether the cache
+    held it already."""
+    if not getattr(a, "compose_cache", None):
+        raise ValueError("warm makes a5's compose cache: give --compose-cache")
+    todo = [t for t in dict.fromkeys(m.template for m in mine.members)
+            if callable(sets.get(t, (None,))[0]) and getattr(sets[t][0], "inputs", None) is not None]
+    _WARM.update(a=a, sets=sets, pd=mine.partition_digest, program=mine.partition["program"])
+    if jobs <= 1:
+        return [_warm_one(t) for t in todo]
+    with ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("fork")) as ex:
+        return [f.result() for f in [ex.submit(_warm_one, t) for t in todo]]
+
+
 def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
-    """A drawn member's prover's file and its circuit, under the header its public file was held to before the sample."""
+    """A drawn member's prover's file and its circuit, under the header its public file was held to before the sample, the
+    circuit held to its compose's line first (`held`)."""
     m, st_dir = mm["m"], mm["st"]["dir"]
+    held(mm["circuit"], mm["circ"], mm["read"])
     if mm["circuit"] != st_dir / "circuit.txt":
         link(mm["circuit"], st_dir / "circuit.txt")
         for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
@@ -556,7 +642,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # file and the circuit's link only for a drawn member, after the sample (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
-    members, publics, checks, composed, programs_ok = [], {}, {}, {}, {}
+    members, publics, checks, composed, programs_ok, kept, read = [], {}, {}, {}, {}, {}, set()
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -574,8 +660,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             circuit, made, circ = composed[m.template]
         elif own:
             circuit = st_dir / "circuit.txt"
-            made = sets[m.template][0](circuit, pd, part["program"])
-            circ = FI.flock_circuit(circuit.read_bytes())
+            made, kept[m.template] = own_composed(a, sets[m.template][0], defn, m.template, circuit, pd, part["program"])
+            circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
@@ -586,7 +672,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             if p.returncode != 0:
                 raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
             circuit, made = st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1])
-            circ = FI.flock_circuit(circuit.read_bytes())
+            circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
         got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
@@ -611,7 +697,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                     and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
         checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
-        members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ,
+        members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json"},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
@@ -631,7 +717,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
                    circuits={mm["m"].template: {"pin": mm["pin"], "class": mm["class"], "compose_s": mm["compose_s"],
-                                                "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log")}
+                                                "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log"),
+                                                **({"cached": kept[mm["m"].template]} if mm["m"].template in kept else {})}
                              for mm in members if mm["circuit"].parent == mm["st"]["dir"]})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -769,7 +856,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units))
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part)
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -792,7 +879,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"])
+                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part)
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -906,22 +993,68 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
-               session_roots: dict, served: list[int]) -> None:
-    """The audit as `SampledProofs.OneStage`'s case, what onsite's evidence carries for sampled proofs
-    (`replay.Case.case`: the registration record, the evidence `audit_record` was handed and the verifier's params, δ the
-    audit's as an exact ratio), in ``out/case.json``, and the current Python on it (`replay.python`) in
-    ``out/case-python.json``."""
+               session_roots: dict, served: list[int], v2: dict | str | None = None,
+               partition: dict | None = None) -> None:
+    """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
+    `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
+    verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, and
+    the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case of the
+    audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there is
+    none in ``out/case-v2-error.txt``."""
     try:
         import replay as RP
 
         d = str(Fraction(delta).limit_denominator(10**12))
-        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table)
+        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition)
         e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
         (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
         (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
-    except Exception as x:  # noqa: BLE001: the case is a copy of the audit for onsite; its failure leaves the audit's verdict
+    except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+        return
+    if v2 is None:
+        return
+    try:
+        if isinstance(v2, str):
+            raise ValueError(v2)
+        (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
+    except Exception as x:  # noqa: BLE001 -- as the v1 case's
+        (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+
+
+def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
+            tables: Sequence[Path]) -> dict:
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
+    the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
+    (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
+    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`)."""
+    import replay as RP
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+
+    pr, blobs = PF.evidence_v2(proof, sessions)
+    evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
+    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
+            "evidence": RP.DT.canonical(evidence).encode().hex(),
+            "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
+
+
+def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
+    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
+    one table's `--zk` sessions on its circuit and public file."""
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+
+    if not zk:
+        return "v2 verifies --zk sessions; this audit's are plain"
+    if len(done) != 1:
+        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
+    mm, sdir = done[0]["mm"], done[0]["sdir"]
+    st, n = mm["st"], mm["m"].n
+    tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
+    reads = st.get("registered_file")
+    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
+                              tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
+            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables}
 
 
 def streamed(a: argparse.Namespace) -> bool:
