@@ -114,14 +114,14 @@ open FlockSoundness.Discharge in
 theorem finSrc_padLeaf (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2)
     (hrows : ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩)).tab.onVals.RowsAt
-      (finS.wt x w ⟨i, hi⟩, vs x w ν (finCoins x ops) ⟨i, hi⟩)
+      (finS.wt x w ⟨i, hi⟩, vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩)
       (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1.1 (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1.2.1) :
     ((finSrc vs x w ν t ops i).rep r).padLeaf = ((Masked.srcV x (finCoins x ops) w t i).rep r).padLeaf :=
   Masked.tabSrcView_padLeaf Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
     (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)
     (Masked.viewsE x (finCoins x ops) w t) hi hr
     (ZkView.Coined.swExe_leavesP ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
       (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows)
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
@@ -136,7 +136,7 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : finS.Tape} {ops : List (Msg × Msg)}
     (hrows : ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
-      (finS.wt x w j, vs x w ν (finCoins x ops) j)
+      (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
       (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     {schs : Array (_root_.Flock.Schedule × ℕ)}

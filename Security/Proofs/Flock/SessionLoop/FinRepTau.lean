@@ -404,7 +404,8 @@ lanes, pads and `μ` alone, as `Masked.swViewE`'s. -/
 theorem finSrc_tau (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2) (hrows : FinRows vs x w ν t ops ⟨i, hi⟩) :
     ((finSrc vs x w ν t ops i).rep r).tau =
-      FlockLevel3.GF128.val ((Masked.swViewE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t ⟨i, hi⟩).tau ⟨r, hr⟩) := by
+      FlockLevel3.GF128.val
+        ((Masked.swViewE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t ⟨i, hi⟩).tau ⟨r, hr⟩) := by
   unfold finSrc Masked.tabSrcView
   rw [dite_eq_left hi]
   dsimp only
@@ -413,7 +414,7 @@ theorem finSrc_tau (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce
   simp only [RefSession.swViewsAt]
   exact congrArg (fun g : Fin 2 → _ => FlockLevel3.GF128.val (g ⟨r, hr⟩))
     (ZkView.Coined.swExe_tau ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
       (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows)
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
@@ -505,7 +506,7 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
     rw [hst, hsch]
     rfl
   have hmk' : ∀ i < (Composed.layOf (Masked.zkTab x ⟨k / 2, hj⟩).table (Masked.stAt x ⟨k / 2, hj⟩)).zp 64,
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2)).masked i =
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
     rw [← hlay]
     exact hmk

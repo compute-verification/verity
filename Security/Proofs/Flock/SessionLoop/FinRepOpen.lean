@@ -194,7 +194,7 @@ namespace Loop
 base the tape gives it, so its switched view is the view at those values (`Hm96.swViewR_eq`). -/
 def FinRows (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape) (ops : List (Msg × Msg))
     (j : Fin (Masked.jOf x)) : Prop :=
-  ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt (finS.wt x w j, vs x w ν (finCoins x ops) j)
+  ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
     (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1
 
 open FlockSoundness.Discharge in
@@ -207,7 +207,7 @@ theorem finSrc_padCols (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.N
       ((finSrc vs x w ν t ops i).rep r).cm = ((Masked.srcV x (finCoins x ops) w t i).rep r).cm ∧
       ((finSrc vs x w ν t ops i).rep r).padSalt = ((Masked.srcV x (finCoins x ops) w t i).rep r).padSalt := by
   obtain ⟨h1, h2, h3⟩ := ZkView.Coined.swExe_padCols ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
     (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows
   exact Masked.tabSrcView_padCols Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
     (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)
