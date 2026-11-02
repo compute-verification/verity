@@ -15,8 +15,9 @@ Modes:
 `--arms` (qat, qlora) packs settings into one candidate: each arm trains from θ on the same data order with an equal
 share of the budget, in its own 5%s of the run, so a later arm's checkpoints are charged every earlier arm's MACs.
 
-Until prepare.decode reads CWQUAN1 (asked of the toolsmith), E is the model through `encode_full` (`--emit full`), and
-the record's notes give its CWQUAN1 size, checked to rebuild that model bit for bit. The step count is a multiple of the
+With `--emit quan` (it needs prepare.encode_quant, which writes qformat.encode's bytes), every quantized checkpoint and
+the submission are CWQUAN1; with `--emit full` (the default) they are the model through `encode_full`, and the record's
+notes give its CWQUAN1 size, checked to rebuild that model bit for bit. The step count is a multiple of the
 harness's 20 checkpoints (`hooks.plan`). In ptq the harness scores the fp model after each 5% (`hooks.output`), and right
 after it the program encodes one variant of the same weights, which the harness scores as that 5%'s checkpoint: the
 variants cycle back from the last 5% (`--variants`' non-fp ones, the first at 100%), and the notes' `buckets` say which
@@ -245,15 +246,26 @@ def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float) -> qf.QArra
 
 
 def check_decoder(theta: dict, name: str) -> None:
-    """Refuse `--declare` unless prepare.decode reads this island's CWQUAN1 as qformat.decode does."""
+    """Refuse `--declare` and `--emit quan` unless prepare encodes CWQUAN1 byte for byte as qformat.encode does and
+    prepare.decode reads it as qformat.decode does."""
     q = qat_quant(torch.randn(theta[name].shape, generator=torch.Generator().manual_seed(0)), "tern", -1, 1.0)
-    blob = qf.encode({name: {"kind": "delta", "q": q}}, {name: theta[name]})
+    entries, one = {name: {"kind": "delta", "q": q}}, {name: theta[name]}
+    blob = qf.encode(entries, one)
+    if not hasattr(prepare, "encode_quant"):
+        raise SystemExit("quant: --declare and --emit quan need prepare.encode_quant (CWQUAN1 in prepare)")
+    if prepare.encode_quant(entries, one) != blob:
+        raise SystemExit("quant: prepare.encode_quant writes CWQUAN1 differently from islands/quant/qformat.py")
     try:
-        got = prepare.decode({name: theta[name]}, blob, device="cpu")
+        got = prepare.decode(one, blob, device="cpu")
     except ValueError as e:
-        raise SystemExit(f"quant: --declare needs prepare.decode to read CWQUAN1 ({e})")
-    if not prepare.same_bits(got[name].cpu(), qf.decode({name: theta[name]}, blob)[name]):
+        raise SystemExit(f"quant: --declare and --emit quan need prepare.decode to read CWQUAN1 ({e})")
+    if not prepare.same_bits(got[name].cpu(), qf.decode(one, blob)[name]):
         raise SystemExit("quant: prepare.decode reads CWQUAN1 differently from islands/quant/qformat.py")
+
+
+def encode_quan(entries: dict, theta: dict) -> bytes:
+    """CWQUAN1 through prepare's encoder when it has one (the same bytes as qformat.encode, `check_decoder`)."""
+    return prepare.encode_quant(entries, theta) if hasattr(prepare, "encode_quant") else qf.encode(entries, theta)
 
 
 LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
@@ -316,6 +328,8 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
     net, rec, theta = prepare.load_start(a.start)
     dev = prepare.DEVICE
     params = net.params()
+    if a.emit == "quan":
+        check_decoder(theta, min((n for n, p in params.items() if p.ndim == 2), key=lambda n: params[n].numel()))
     for p in params.values():
         p.requires_grad_(False)
     all_norms = sorted(n for n, p in params.items() if p.ndim == 1)
@@ -351,6 +365,8 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
     def emit(fac, full, qent):
         if a.emit == "lora":
             return prepare.encode_lora(fac, "bf16", full)
+        if a.emit == "quan":
+            return encode_quan(qent, theta)
         return prepare.encode_full({k: v for k, v in qf.decode(theta, qf.encode(qent, theta), dev).items()
                                     if k in qent})
 
@@ -497,11 +513,9 @@ def main() -> int:
                 raise SystemExit("quant: --emit lora carries k-bit factors exactly only with pow2")
             if not x.qbits and a.emit != "lora":
                 raise SystemExit("quant: qbits 0 (plain LoRA) is emitted as --emit lora")
-        if a.emit == "quan":
-            raise SystemExit("quant: prepare.decode doesn't read CWQUAN1 yet")
         return main_qlora(a, arms)
-    if a.emit != "full":
-        raise SystemExit("quant: ptq and qat emit full (prepare.decode reads neither lora codes nor CWQUAN1 for them)")
+    if a.emit == "lora":
+        raise SystemExit("quant: ptq and qat emit full or quan")
     if a.mode == "ptq" and len(arms) > 1:
         raise SystemExit("quant: --arms is qat's and qlora's (ptq's variants already share one training)")
     if a.declare and a.mode != "qat":
@@ -523,7 +537,7 @@ def main() -> int:
     embed = "embed" if rec["config"]["family"] == "lf" else "model.embed_tokens.weight"
     mats = [n for n in names if params[n].ndim == 2 and n != embed]
     rest = [n for n in names if n not in mats]
-    if a.declare:
+    if a.declare or a.emit == "quan":
         check_decoder(theta, min(mats, key=lambda n: params[n].numel()))
     theta_dev = {n: theta[n].to(dev) for n in names}
     trainable = {"full": names}
@@ -571,9 +585,7 @@ def main() -> int:
                     grp["lr"] = lr * frac
             rows = data.next(a.batch)
             if a.declare and qarrays:
-                prepare.declare_step(qf.encode({n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
-                                               | {n: {"kind": "full", "t": params[n].detach()} for n in names
-                                                  if n not in qarrays}, theta))
+                prepare.declare_step(encode_quan(arm_entries(qarrays, params, names), theta))
             total = 0.0
             for i in range(0, a.batch, a.micro):
                 xb = rows[i: i + a.micro]
@@ -599,13 +611,17 @@ def main() -> int:
                 print(json.dumps({"arm": k, "step": step + 1, "loss": total, "ema": ema,
                                   "s": round(time.perf_counter() - t0, 1)}), flush=True)
             if sched.due(g, step == n_arm - 1):
-                if quantized:
+                if quantized and a.emit == "quan":
+                    encode_quan(arm_entries(qarrays, params, names), theta)
+                elif quantized:
                     prepare.encode_full({n: params[n].detach().to(theta[n].dtype).cpu() for n in names})
                 else:
                     b = sched.bucket(g)
                     v = cycle[(CHECKPOINTS - b) % len(cycle)]
-                    model_v, note = ptq_variant(v, {n: params[n].detach() for n in names}, theta, a.norm_bits, dev)
-                    prepare.encode_full(model_v)
+                    model_v, note, qblob = ptq_variant(v, {n: params[n].detach() for n in names}, theta, a.norm_bits,
+                                                       dev, encode_quan if a.emit == "quan" else qf.encode)
+                    if a.emit != "quan" or qblob is None:
+                        prepare.encode_full(model_v)
                     buckets.append(note | {"bucket": b, "step": g, "arm": k})
                     del model_v
             g += 1
@@ -620,8 +636,9 @@ def main() -> int:
     notes = {"direction": "quant", "mode": a.mode, "args": vars(a), "steps": sched.total,
              "trained_parameters": sum(params[n].numel() for n in names), "variants": notes_v, "buckets": buckets,
              "train_seconds": round(t_train, 1), "process_seconds": round(time.perf_counter() - t_start, 1),
-             "E_format_note": "E is encode_full of the model until prepare.decode reads CWQUAN1; q_bytes is the update's "
-                              "CWQUAN1 size (islands/quant/qformat.py), checked to rebuild that model bit for bit. ptq: "
+             "E_format_note": "E is encode_full of the model, or with --emit quan the update's CWQUAN1 bytes "
+                              "(prepare.encode_quant); q_bytes is the update's CWQUAN1 size (islands/quant/qformat.py), "
+                              "checked to rebuild that model bit for bit. ptq: "
                               "each 5% checkpoint scores the fp model (source output) and, on the same weights, the "
                               "bucket's variant (source encode; `buckets`). qat: one note per arm, the submission the "
                               "arm with the least final training loss"}
@@ -640,7 +657,8 @@ def variant_note(v: str, qblob: bytes | None, q_bytes: int, h_bits: float, ok: b
 
 def finish_qat(a, results: list[dict], theta, names, cycle, dev):
     """Each arm's CWQUAN1 note (an fp arm's: `--variants` of its final weights); the submission is the quantized arm with
-    the least final training loss (any arm, if none is quantized), as encode_full."""
+    the least final training loss (any arm, if none is quantized), as encode_full, or with `--emit quan` a quantized
+    arm's CWQUAN1."""
     best = min([r for r in results if r["qarrays"]] or results, key=lambda r: r["loss"])
     notes, blob = [], None
     for r in results:
@@ -648,7 +666,7 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
         if not qarrays:
             weights = {n: t.to(dev) for n, t in r["rest"].items()}
             for v in ["fp", *cycle]:
-                m, note = ptq_variant(v, weights, theta, a.norm_bits, dev)
+                m, note, _ = ptq_variant(v, weights, theta, a.norm_bits, dev)
                 notes.append(note | {"arm": r["k"], "spec": getattr(r["x"], "arm", ""), "steps": r["steps"],
                                      "final_loss_ema": r["loss"], "where": "submission" if r is best and v == "fp"
                                      else "arm, final weights"})
@@ -658,7 +676,7 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
             continue
         entries = {n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
         entries |= {n: {"kind": "full", "t": t} for n, t in r["rest"].items()}
-        qblob = qf.encode(entries, theta)
+        qblob = (encode_quan if a.emit == "quan" else qf.encode)(entries, theta)
         rebuilt = qf.decode(theta, qblob, dev)
         trained = {n: (theta[n].to(dev).float() + q.value()).to(theta[n].dtype).cpu() for n, q in qarrays.items()}
         trained |= {n: t.to(theta[n].dtype) for n, t in r["rest"].items()}
@@ -671,43 +689,53 @@ def finish_qat(a, results: list[dict], theta, names, cycle, dev):
                                   spec=getattr(r["x"], "arm", ""), steps=r["steps"], final_loss_ema=r["loss"],
                                   nonzero_share=nonzero / max(1, q_n), where="submission" if r is best else "arm"))
         if r is best:
-            blob = prepare.encode_full(trained)
+            blob = qblob if a.emit == "quan" else prepare.encode_full(trained)
         del rebuilt, trained
     return blob, prepare.decode(theta, blob), notes
 
 
-def ptq_variant(v: str, weights: dict[str, torch.Tensor], theta: dict, norm_bits: int, dev) -> tuple[dict, dict]:
-    """The model (θ's dtypes, on the CPU) that variant `v` makes of the update W − θ, and its note."""
+def ptq_variant(v: str, weights: dict[str, torch.Tensor], theta: dict, norm_bits: int, dev,
+                encoder=qf.encode) -> tuple[dict, dict, bytes | None]:
+    """The model (θ's dtypes, on the CPU) that variant `v` makes of the update W − θ, its note, and its CWQUAN1 blob
+    (None for fp) by `encoder`."""
     t1 = time.perf_counter()
     n_params = sum(w.numel() for w in weights.values())
     if v == "fp":
         model = {n: w.to(theta[n].dtype).cpu() for n, w in weights.items()}
         q_bytes = sum(t.numel() * t.element_size() for t in model.values())
-        return model, variant_note(v, None, q_bytes, 8.0 * q_bytes, True, 0.0, n_params, t1)
+        return model, variant_note(v, None, q_bytes, 8.0 * q_bytes, True, 0.0, n_params, t1), None
     delta = {n: w.float() - theta[n].to(dev).float() for n, w in weights.items()}
     entries = entries_of(v, delta, norm_bits)
     h_bits = sum(entry_bits(e) for e in entries.values())
-    qblob = qf.encode(entries, theta)
+    qblob = encoder(entries, theta)
     rebuilt = qf.decode(theta, qblob, dev)
     model = {n: rebuilt[n] for n in weights}
     want = {n: entry_value(theta[n].to(dev), entries[n]).cpu() for n in weights}
     ok = all(prepare.same_bits(model[n], want[n]) for n in weights)
     num = sum(float(((model[n].to(dev).float() - theta[n].to(dev).float() - delta[n]) ** 2).sum()) for n in weights)
     rel = num / max(1e-30, sum(float((d ** 2).sum()) for d in delta.values()))
-    return model, variant_note(v, qblob, len(qblob), h_bits, ok, rel, n_params, t1)
+    return model, variant_note(v, qblob, len(qblob), h_bits, ok, rel, n_params, t1), qblob
 
 
 def finish_ptq(a, theta, params, names, cycle, dev):
-    """The submission (`--variants`' first, encode_full) and, on the final weights, every variant's note."""
+    """The submission (`--variants`' first: encode_full, or its CWQUAN1 with `--emit quan`) and, on the final weights,
+    every variant's note."""
     weights = {n: params[n].detach() for n in names}
     order = [a.variants.split(",")[0]] + [v for v in cycle if v != a.variants.split(",")[0]]
-    model, notes_v = None, []
+    blob, notes_v = None, []
     for v in order:
-        m, note = ptq_variant(v, weights, theta, a.norm_bits, dev)
-        notes_v.append(note | {"where": "submission" if model is None else "final weights, not submitted"})
-        model = m if model is None else model
-    blob = prepare.encode_full(model)
+        m, note, qblob = ptq_variant(v, weights, theta, a.norm_bits, dev, encode_quan if a.emit == "quan" else qf.encode)
+        notes_v.append(note | {"where": "submission" if blob is None else "final weights, not submitted"})
+        if blob is None:
+            blob = qblob if a.emit == "quan" and qblob is not None else prepare.encode_full(m)
+        del m
     return blob, prepare.decode(theta, blob), notes_v
+
+
+def arm_entries(qarrays: dict, params: dict, names: list[str]) -> dict[str, dict]:
+    """A QAT arm's weights as CWQUAN1 entries: each quantized matrix's delta code, every other trained tensor in full."""
+    return ({n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
+            | {n: {"kind": "full", "t": params[n].detach()} for n in names if n not in qarrays})
 
 
 if __name__ == "__main__":
