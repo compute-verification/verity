@@ -308,7 +308,15 @@
    "nontrivial": "Flock.RecLinks.check_sound_nontrivial"
   }
  },
- "unwitnessed": {},
+ "unwitnessed": {
+  "Flock.Firewall.Contract.holds_coins": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df",
+  "Flock.Firewall.Contract.holds_coins_binding": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711",
+  "Flock.Firewall.Contract.holds_commit": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d",
+  "Flock.Firewall.Contract.holds_computed": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59",
+  "Flock.Firewall.Contract.holds_finish": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027",
+  "Flock.Firewall.Contract.holds_fixed": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4",
+  "Flock.Firewall.Contract.holds_masked": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
+ },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
    "why": "returns_walk, a tactic macro (syntax and macro_rules only) that expands to core tactics (repeat', first, extract_lets, with_reducible apply/refine/exact, intro, assumption, split, conv whnf) and the Flock.With.Returns lemmas; it runs no IO and declares nothing a guarantee reads",
