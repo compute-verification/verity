@@ -22,6 +22,7 @@ untraced = [
     "tests/test_a5_tp_gates.py",
     "tests/test_a5_tp_store.py",
     "tests/test_a5_warden.py",
+    "tests/test_served_bandwidth.py",
     "tests/test_served_overhead.py",
     "tests/test_served_verdicts.py",
 ]

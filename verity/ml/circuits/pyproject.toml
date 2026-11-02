@@ -22,5 +22,9 @@ tests = ["tests/test_codec_stream.py"]
 paths = ["verity"]
 
 [[tool.verity.tests.reads]]
+tests = ["tests/test_population_recorded.py"]
+paths = ["verity/errors.py", "verity/ml/circuits", "verity/ml/kernels"]
+
+[[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]
 paths = ["verity/ml/circuits"]

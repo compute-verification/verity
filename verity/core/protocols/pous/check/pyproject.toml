@@ -27,6 +27,7 @@ untraced = [
     "tests/test_run.py",
     "tests/test_run_protocol.py",
     "tests/test_setup_difftest.py",
+    "tests/test_timed_audit.py",
     "tests/test_verdict_difftest.py",
 ]
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface and C-Flock's verifier's
