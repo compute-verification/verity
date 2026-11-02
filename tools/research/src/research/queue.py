@@ -3978,9 +3978,10 @@ class RecordsRun:
         """The per-package reports (`audit-<tag>/report.json` beside an `audit.json`) that may be ``pkg``'s: a package audited
         beside PKG or a requirer, its `proved_in` one (`Security/Proofs` in a run of `Security`); its path is in the report.
         The tag is lean/check.py's: the package's repository path with each run of other characters as `_`
-        (`audit-Security_Proofs`)."""
-        tag = re.sub(r"[^A-Za-z0-9]+", "_", pkg.strip("/"))
-        each = (posixpath.join(posixpath.dirname(a), f"audit-{tag}", "report.json") for a in self.audits())
+        (`audit-Security_Proofs`), or its directory's name alone when the build is outside the checkout, as a records run's
+        is (`audit-Proofs`)."""
+        tags = dict.fromkeys((re.sub(r"[^A-Za-z0-9]+", "_", pkg.strip("/")), posixpath.basename(pkg.strip("/"))))
+        each = (posixpath.join(posixpath.dirname(a), f"audit-{t}", "report.json") for a in self.audits() for t in tags)
         return [p for p in each if p in self.files]
 
 
