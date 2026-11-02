@@ -19,8 +19,9 @@ Methods:
 Codes (witnesses for formalism v1's cut cost a, `adamw` / `muon`):
 - `--cut B:q4,...`: the residual stream at block boundary B is handed on as a code (`Coded`): a randomized DCT, rebuilt
   in every step, then each group's coordinates on a 2^q-level grid with a bf16 scale; the gradient crosses back in the
-  same code with stochastic rounding (`q2b4`: 2 bits forward, 4 back; `g64`: a scale per 64 coordinates). Training sees
-  only the coded state; the evaluator scores the uncoded model, and the probe windows are scored both ways.
+  same code with stochastic rounding (`q2b4`: 2 bits forward, 4 back; `g64`: a scale per 64 coordinates; `q4o4`: each
+  token's 4 largest coordinates go apart at bf16 with their indices, and the rest is coded with its own scale). Training
+  sees only the coded state; the evaluator scores the uncoded model, and the probe windows are scored both ways.
 - `--cut B:dq2,...`: the forward codes only the update's effect h - h_frozen at B; h_frozen, θ's residual for the same
   tokens, comes from frozen copies of the trained blocks (the receiving side recomputes it from the token's data), and
   its products are counted and declared as the code's.
@@ -227,17 +228,27 @@ def code_bits(d: int, bits: int, group: int) -> int:
 class Coded(torch.autograd.Function):
     """A token's d-vector handed across a cut as a code: rotated by R, quantized per group, rotated back (forward,
     nearest rounding); the backward passes the gradient straight through the quantizer and hands it across the cut in
-    the same code with stochastic rounding. With `rotate` false the vector is coded in its own basis."""
+    the same code with stochastic rounding. With `rotate` false the vector is coded in its own basis. With `outliers`
+    k > 0 the forward first takes out each token's k largest coordinates, which go apart at bf16 (with their indices),
+    and codes the rest."""
 
     @staticmethod
-    def forward(ctx, x, bits_f, bits_b, group, seed, rotate):
+    def forward(ctx, x, bits_f, bits_b, group, seed, rotate, outliers=0):
         ctx.cfg = (bits_b, group, seed, rotate)
         with torch.autocast(x.device.type, enabled=False):
             y = x.float()
+            if outliers:
+                idx = y.abs().topk(outliers, dim=-1).indices
+                val = y.gather(-1, idx).to(torch.bfloat16).float()
+                y = y.scatter(-1, idx, 0.0)
             if rotate:
                 r = fresh_rotation(x.shape[-1], seed, x.device)
-                return (quantize(y @ r.T, bits_f, group, False) @ r).to(x.dtype)
-            return quantize(y, bits_f, group, False).to(x.dtype)
+                y = quantize(y @ r.T, bits_f, group, False) @ r
+            else:
+                y = quantize(y, bits_f, group, False)
+            if outliers:
+                y = y.scatter(-1, idx, val)
+            return y.to(x.dtype)
 
     @staticmethod
     def backward(ctx, g):
@@ -249,16 +260,17 @@ class Coded(torch.autograd.Function):
                 out = quantize(y @ r.T, bits_b, group, True) @ r
             else:
                 out = quantize(y, bits_b, group, True)
-        return out.to(g.dtype), None, None, None, None, None
+        return out.to(g.dtype), None, None, None, None, None, None
 
 
-CUT_RE = re.compile(r"(d?)q(\d+)(?:b(\d+))?(?:g(\d+))?")
+CUT_RE = re.compile(r"(d?)q(\d+)(?:o(\d+))?(?:b(\d+))?(?:g(\d+))?")
 
 
 def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
     """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
-    as CODE = [d]q<forward bits>[b<backward bits>][g<group>] in a randomized-DCT basis (group d unless given). With the
-    `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at B for the same
+    as CODE = [d]q<forward bits>[o<k>][b<backward bits>][g<group>] in a randomized-DCT basis (group d unless given);
+    `o<k>` sends each token's k largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index each. With the `d`
+    prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at B for the same
     tokens, which the receiving side recomputes from the token's data; it needs B above the lowest trained block `low`
     (at or below it the effect is 0)."""
     out = []
@@ -266,21 +278,23 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
         where, code = part.split(":")
         m = CUT_RE.fullmatch(code)
         if not m:
-            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[b<bits>][g<group>]")
+            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[o<k>][b<bits>][g<group>]")
         delta = m.group(1) == "d"
         bf = int(m.group(2))
-        bb = int(m.group(3) or bf)
-        group = int(m.group(4) or d)
-        if d % group or not (1 <= bf <= 16 and 1 <= bb <= 16):
-            raise SystemExit(f"wildcard: --cut {part!r}: bits 1-16 and a group dividing d = {d}")
+        k = int(m.group(3) or 0)
+        bb = int(m.group(4) or bf)
+        group = int(m.group(5) or d)
+        if d % group or not (1 <= bf <= 16 and 1 <= bb <= 16) or not 0 <= k < d:
+            raise SystemExit(f"wildcard: --cut {part!r}: bits 1-16, outliers below d and a group dividing d = {d}")
+        side = k * (16 + math.ceil(math.log2(d)))
         for b in (range(1, L + 1) if where == "all" else [int(where)]):
             if not 1 <= b <= L:
                 raise SystemExit(f"wildcard: --cut boundary {b} is not in 1..{L}")
             if delta and (low is None or not 0 <= low < b):
                 raise SystemExit(f"wildcard: --cut {b}:{code} codes h - h_frozen, which needs trained blocks only, "
                                  f"the lowest below boundary {b} (lowest trained block: {low})")
-            out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group, "delta": delta,
-                        "a_fwd_bits": code_bits(d, bf, group), "a_bwd_bits": code_bits(d, bb, group)})
+            out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group, "delta": delta, "outliers": k,
+                        "a_fwd_bits": code_bits(d, bf, group) + side, "a_bwd_bits": code_bits(d, bb, group)})
     return sorted(out, key=lambda c: c["boundary"])
 
 
@@ -332,8 +346,8 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
                     acc = CUT["spectrum"].setdefault(c["boundary"], {"of": "h - h_frozen" if c["delta"] else "h"})
                     spectrum_add(acc, out - f if c["delta"] else out, out)
             if c["delta"]:
-                return f + Coded.apply(out - f, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True)
-            return Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True)
+                return f + Coded.apply(out - f, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True, c["outliers"])
+            return Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True, c["outliers"])
         handles.append(net.inner.blocks[j].register_forward_hook(hook))
     return handles
 
@@ -441,7 +455,7 @@ def add_adapters(net, theta: dict, params: dict, mats: list[str], gains: list[st
         def hook(m, inp, out, A=A, B=B, s=s):
             z = F.linear(inp[0], A)
             if zbits:
-                z = Coded.apply(z, zbits, zbits, rank, 0, False)
+                z = Coded.apply(z, zbits, zbits, rank, 0, False, 0)
             return out + s * F.linear(z, B)
         net.inner.get_submodule(n.removesuffix(".weight")).register_forward_hook(hook)
     return factors, rank
@@ -952,7 +966,8 @@ def main() -> int:
     ap.add_argument("--lora-fix", default="", choices=("", "A", "B"),
                     help="freeze the adapters' A (random) or B (seeded orthonormal, A = 0 trained)")
     ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
-    ap.add_argument("--cut", default="", help="B:[d]q<bits>[b<bits>][g<group>],...: block boundaries handed on coded (parse_cut)")
+    ap.add_argument("--cut", default="", help="B:[d]q<bits>[o<k>][b<bits>][g<group>],...: block boundaries handed on coded "
+                                            "(parse_cut)")
     ap.add_argument("--cut-probe-rows", type=int, default=128,
                     help="with --cut: probe windows scored coded and uncoded at theta and at the end (0: none)")
     ap.add_argument("--lr", type=float, default=1e-3)
