@@ -82,6 +82,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/pous/decode_circuit.py", "verity/ml/protocols/pous/decode_circuit.circuit-check.py",
           "verity/ml/protocols/pous/verdict_circuit.py", "verity/ml/protocols/pous/verdict_circuit.circuit-check.py",
           "verity/core/protocols/certifier/__init__.py", "verity/core/protocols/certifier/certificate.py",
+          "verity/core/protocols/certifier/blocks.py", "verity/core/protocols/certifier/transfer_rows.py",
           "verity/core/protocols/certifier/arith_encode.py", "verity/core/protocols/certifier/arith_encode.circuit-check.py",
           "verity/core/protocols/certifier/arith_encode.circuit-check.json",
           "verity/core/protocols/certifier/charge_chain.py", "verity/core/protocols/certifier/charge_chain.circuit-check.py",

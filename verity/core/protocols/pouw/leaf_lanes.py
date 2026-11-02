@@ -104,6 +104,9 @@ OKS, CARRY = "oks", "carry"
 FULL = (A, B, PARTIALS, OKS)
 LANE_ROWS, LANE_COLS = 4, 8
 LANE, CHUNK, COMBINE = "lane", "chunk", "combine"
+#: the least K at which a leaf's combine is proved (`h1zy.combine`); a lane is proved at any K the Definitions bind
+#: (64 <= K)
+LEAST_K = 384
 #: the tag of a served leaf's known rows' salts (`known_salt`)
 KNOWN_SALT_TAG = b"verity/pouw/h1/leaf-known/v1\0"
 
