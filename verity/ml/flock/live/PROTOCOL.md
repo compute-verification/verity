@@ -733,12 +733,17 @@ The session itself goes through Lean: one `flock-firewall session` process (`Flo
 `firewall::LeanSession`) per verifier address and table count, on the same statement arguments, listens on loopback and
 holds the auditor's connection for every session the prover opens to it. No byte the prover sends reaches the auditor:
 every frame that leaves is the loop's own encoding of what it decided (`Session.roundFrame`, `Session.commitFrame`,
-`Session.State.wire`). `Register` and `Finish` leave as their tags, a `Ping` as the prover's probe of 64 zero bytes, a
-`Link` as zeros at the session's link points, an `Open` as its rep stream's at the stream's domain, a `Round` as the
-schedule's stream and count around the frame's release (bytes after its count dropped), and a `Commit` as the session's
-Σ, its tables' level-0 roots and no public words. A `Proof` the prover sends is answered `Ok` and dropped: the proofs
-that leave are the loop's finish's files. A `Prime`, a frame of a tag it doesn't know, a `Link` before the `Hello` and an
-`Open` of a stream the session doesn't have are refused. It sends its own
+`Session.State.wire`). `Register` and `Finish` leave as their tags, a `Link` as zeros at the session's link points, an
+`Open` as its rep stream's at the stream's domain, a `Round` as the schedule's stream and count around the frame's release
+(bytes after its count dropped), and a `Commit` as the session's Σ, its tables' level-0 roots and no public words. A
+`Ping` never leaves: the loop answers it `Ok` itself, as `rec_live` does. A `Proof` the prover sends is answered `Ok` and
+dropped: the proofs that leave are the loop's finish's files. Each request leaves at most once, at its place in the honest
+prover's order (`Session.State.place`): `Register`, `Hello`, the first rep stream's `Open`, `Commit`, `Link`, that
+stream's rounds, then each later rep stream's `Open`, once the rounds before it are past, and its rounds, and `Finish`
+once every rep stream opened. A second `Register`, `Hello`, `Link` or `Open` of a stream, any of them out of its place, a
+`Prime`, a frame of a tag it doesn't know and an `Open` of a stream the session doesn't have are refused. So what leaves
+is fixed by the statement and the schedule, as the model has it: each frame that carries no coin once, at its place, and
+one message a round (`Claims.ZKServer.LeanRelease.toSrv`), and nothing the prover places. It sends its own
 `Hello` (the Lean `Hello` at the auditor's sample and a nonce it samples from the OS) in place of the prover's, checks
 `Hello`'s answer (20 words, key bit 2047 clear) and every coin opening against the root, and hands the prover only the
 coins, as `coin_tree::Checked` does. `Hello`'s answer itself never reaches the prover: once it checked, the prover
@@ -749,8 +754,10 @@ then each table's `rep0` and `rep1`, distinct (`Session.streamsOk`), else `Hello
 opening at the schedule's place, not the prover's: the session stream's at `Commit`, then every round of each rep
 stream in table order, rep 0's before rep 1's, at the coin counts the verifier's replay samples (`Session.planOf`;
 `flock-firewall session --schedule` prints them). A `Commit` or `Round` anywhere else is refused before it reaches the
-auditor, and so is a `Finish` before the schedule's last opening. A coin it refuses, or one asked for after a refusal,
-is answered `Refused("PROVER-STOPPED: …")`. The reps' frames are the loop's own, and the loop drives them
+auditor, and so is a `Finish` before the schedule's last opening. A request it refuses is answered
+`Refused("PROVER-STOPPED: …")` and stops the session: every request after it is refused for the same reason without
+reaching the auditor, a `Ping` alone answered `Ok` by the loop, so nothing of the session reaches the auditor after its
+stop, and the auditor's connection closes at the session's end as at any other stop. The reps' frames are the loop's own, and the loop drives them
 (`Frames`): it prints `FRAMES 127.0.0.1:PORT` after its `LISTENING` line, and a connection there whose first line is
 `rep SESSION I R` starts table `I`'s rep `R`'s frame for the live session named `SESSION` (`Frames.startRep`,
 `firewall::LoopRep::start`), at the statement's start (`Drive.start`), and is answered `ok 64` and the pads' root alone:
@@ -1017,7 +1024,10 @@ their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the pro
 no record: the inner ZK server answers `Register` itself, with the full sample the record already holds). An inner `Open` may come any
 time before its stream's first round, but the ZK server passes it to the coin server only at that round (§10.3), so where it
 came never reaches the auditor. A `Commit`, `Link` or `Finish` out of its place is refused by the ZK server before any call
-on the coin server (§10.3), so it reaches the auditor as a plain stop. What a worker still chooses is
+on the coin server (§10.3), so it reaches the auditor as a plain stop. An outer session through the Lean session loop
+(§10.4) is fixed the same way: `Register`, `Hello`, the first rep stream's `Open`, `Commit`, `Link`, then each rep stream's
+rounds and the next one's `Open`, the proofs, `Finish`, each frame that carries no coin once, at its place; anything else
+is refused before it reaches the auditor, a `Ping` never leaves, and after a stop nothing more does. What a worker still chooses is
 whether and where a session stops: a refusal it provokes, or a session that ends without `Finish` (a crash, a hang, a cut
 connection). The auditor sees every stop:
 - inner phase: `rec_live` writes every session it serves, with `end` `finish` or `stop` (a refusal and a session that ends
