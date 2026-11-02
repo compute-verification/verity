@@ -945,6 +945,7 @@ def target_row(on: list[dict], f: float, l_star: float) -> dict:
     h, ref = of(t["honest_of"]), of(t["honest_reference_of"])
     row = {"drop": f, "l_star": l_star, "bound": t["bound"], "honest_macs": t["honest"], "honest_id": h and h["id"],
            "honest_cp": h and h["cp"], "honest_direction": h and h["direction"], "honest_seeds": h and h.get("seeds"),
+           "honest_split": h and h.get("split"),
            "honest_reference_macs": t["honest_reference"], "honest_reference_id": ref and ref["id"],
            "honest_reference_cp": ref and ref["cp"], "cells": {}}
     for key, c in t["cells"].items():
@@ -952,7 +953,7 @@ def target_row(on: list[dict], f: float, l_star: float) -> dict:
         row["cells"][key] = {
             "w_star": c["w_star"], "effective_slowdown": c["effective_slowdown"], "id": w and w["id"], "cp": w and w["cp"],
             "rho": c["rho"], "direction": w and w["direction"], "counted": w and w.get("counted"),
-            "seeds": w and w.get("seeds"), "phi": w and (w.get("phi") or {}).get(key),
+            "seeds": w and w.get("seeds"), "split": w and w.get("split"), "phi": w and (w.get("phi") or {}).get(key),
             "phi_position": w and w.get("phi_position"),
             "vs_reference": c["w_star"] / t["honest_reference"] if c["w_star"] and t["honest_reference"] else None}
     return row
