@@ -87,7 +87,8 @@ DEP = {"lakefile.toml": 'name = "dep"\ndefaultTargets = ["Dep"]\n\n[[require]]\n
 #: theorem the kernel checks at once where `big` is an axiom, and only by evaluating `big` where it has its body
 DEEP = {"Deep": "module\n\nprelude\npublic import Init.Prelude\n\npublic noncomputable def big : Nat :=\n"
                 "  Nat.rec (motive := fun _ => Nat → Nat) (fun acc => acc) (fun _ r acc => r (Nat.succ acc)) 100000 0\n",
-        "Evil": "module\n\nprelude\npublic import Deep\n\npublic theorem t (h : big = 100000) : id big = 100000 := h\n"}
+        "Evil": "module\n\nprelude\npublic import Deep\n\n"
+                "public theorem t (h : Eq big 100000) : Eq (id big) 100000 := h\n"}
 
 
 @pytest.fixture(scope="module")
@@ -391,7 +392,7 @@ def test_a_declaration_the_kernel_stops_on_passes_on_the_imports_lean_checked_it
     module_runner.program("Replay", module_runner.toolchain_dir(TOOLCHAIN), tmp_path)
     fetched = {"public": DEEP, "all": DEEP | {"Evil": "module\n\nprelude\nimport all Deep\n\n"
                                                      "set_option maxRecDepth 100000000 in\n"
-                                                     "theorem t (h : big = 100000) : id big = 100000 := h\n"}}
+                                                     "theorem t (h : Eq big 100000) : Eq (id big) 100000 := h\n"}}
     got = {}
     for k, sources in fetched.items():
         fetched_env(tree, sources=sources)
