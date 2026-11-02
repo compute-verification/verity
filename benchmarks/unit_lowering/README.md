@@ -20,7 +20,7 @@ is one lane. Every lowering runs with `HZ_STAGE=fast` and with `H1_TMPL` unset (
 1. **Peak RSS in GiB** to write the K 2048 lane file, and the combine file, the lowering child's `ru_maxrss`, at each leaf.
 2. **Wall minutes** of the same child.
 
-Each file's META `k_log` must be at most 27, C-Flock's block cap (compose's `K_MAX`, the prover's `IN_RANGE_K_LOG`, Lean's
+Each file's META `k_log` must be at most 27, Flock's block cap (compose's `K_MAX`, the prover's `IN_RANGE_K_LOG`, Lean's
 `Stmt.InRange`). Compose gives the unit section a power-of-two slot beside the SHA and hm96 ranges (`circuit._ranges`), so
 k_log ≤ 27 needs the unit under 2^26 rows. A record whose k_log is past 27 makes `run.py` exit 1.
 
@@ -64,7 +64,7 @@ research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sy
   - tile: 1, R C, R C K and (R + C) K, projected to (2048, 32 × 32), (8192, 32 × 32) and (128, 32 × 32).
 - `mem_profile.py --k K --tile R,C [--unit tile|lane|combine] --scratch DIR --out DIR [--frames N]` runs the lowering
   in-process. It reports:
-  - each phase's peak: `unit_lowering`, `ir_lower.lower`, `ir_lower.layout`, `circuit.compose`, the netlist, the digests;
+  - each phase's peak: `unit_lowering`, `ir_lower.lower`, `ir_lower.layout`, `circuit.compose`, the circuit's description, the digests;
   - a census of live objects by type at the peak;
   - with `--frames`, tracemalloc's allocation sites.
 - `verity bench unit_lowering ...` is `run.py ...`.
