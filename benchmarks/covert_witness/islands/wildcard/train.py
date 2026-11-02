@@ -246,7 +246,8 @@ def channel_bits(log_sd: torch.Tensor, mean_bits: int) -> torch.Tensor:
 def channel_code(y: torch.Tensor, bits: int) -> torch.Tensor:
     """`q<bits>c`: per SESSION-token session of y (windows, ctx, d), each coordinate's mean μ and RMS σ about it (bf16,
     sent once a session), integer bits per coordinate from σ (`channel_bits`, mean `bits`), one bf16 scale per token,
-    and each coordinate's (h − μ)/σ on the Gaussian-optimal uniform grid for its bits (0 bits: μ)."""
+    and each coordinate's (h − μ)/σ on the Gaussian-optimal uniform grid for its bits (0 bits: μ). It is elementwise
+    (no rotation), so it declares no code FLOPs, as the counter counts only linear algebra."""
     n, t, d = y.shape
     per = min(max(1, SESSION // t), n)
     while n % per:
@@ -565,7 +566,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     crossed = [c for c in cuts if low is not None and low < c["boundary"]]
     top_delta = max((c["boundary"] for c in cuts if c["delta"]), default=None)
     refresh = frozen_flops(rec, low, top_delta) if top_delta is not None else 0
-    code_fwd = 4 * d * d * len(cuts) + refresh
+    code_fwd = 4 * d * d * sum(not c["alloc"] for c in cuts) + refresh
     code_train = code_fwd + 4 * d * d * len(crossed)
     if cuts:
         install_cuts(net, cuts, theta, low)
