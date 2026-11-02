@@ -122,6 +122,10 @@ print(" ".join(out))' "$P" "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
 fi
 
 start=${1:?candidate: candidate.sh START [TRAIN_ARGS...]}
+if [ ! -d "$STARTS/$start" ] && [ -n "${2:-}" ] && [ -d "$STARTS/$2" ]; then
+  echo "candidate: harness v3 takes START with no class (given $1 $2): merge origin/cursor/covert-witness-4207 and launch with launch.py START --island NAME"
+  exit 2
+fi
 shift
 island=${CW_ISLAND:?candidate: name the island (CW_ISLAND; launch.py sets it)} program=${CW_PROGRAM:-train.py}
 case "$island/$program" in

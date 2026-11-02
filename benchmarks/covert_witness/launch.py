@@ -50,6 +50,8 @@ sys.path.insert(0, str(HERE))
 from pin import source  # noqa: E402
 from te_core.frontier import REF_DIRECTIONS  # noqa: E402
 from te_core.launch import Node, nodes  # noqa: E402
+#: the harness this launcher drives (prepare.VERSION, read without importing prepare's torch)
+VERSION = re.search(r'^VERSION = "([^"]+)"', (HERE / "prepare.py").read_text(), re.M).group(1)
 DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
 #: candidate.sh's GPU lease (1.2x prepare.GPU_SECONDS_CAP plus 30 minutes for both jobs) and a margin
 TIMEOUT = "110m"
@@ -147,6 +149,10 @@ def main() -> int:
     island = island_of(a.island, a.program, direction)
     mechanism = tag(a.mechanism or (a.note.split() or [island["name"]])[0]) or island["name"]
     pin, src = source()
+    if str(pin.get("version", "")).split(".")[0] != VERSION.split(".")[0]:
+        raise SystemExit(f"launch: this launcher is harness v{VERSION} and the pin is v{pin.get('version')} "
+                         f"({pin['commit'][:11]}): launch from a checkout at the pin's version until the integrator "
+                         f"pins v{VERSION} (the board's [TOOL] line), then merge origin/cursor/covert-witness-4207")
     node = pick_node(a.node, Path(os.environ.get("CW_NODES", src / "benchmarks/covert_witness/nodes.txt")))
     with tempfile.TemporaryDirectory() as tmp:
         tar = Path(tmp) / "island.tar"
