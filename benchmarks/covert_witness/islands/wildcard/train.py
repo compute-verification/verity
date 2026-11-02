@@ -350,7 +350,8 @@ def spectrum_add(acc: dict, delta: torch.Tensor, h: torch.Tensor):
     per = min(max(1, SESSION // delta.shape[1]), delta.shape[0])
     n = delta.shape[0] // per * per
     x = delta[:n].reshape(n // per, -1, d)
-    ev = torch.linalg.eigvalsh(x.transpose(1, 2) @ x).flip(-1).clamp_min(0)
+    with torch.autocast(x.device.type, enabled=False):
+        ev = torch.linalg.eigvalsh(x.transpose(1, 2) @ x).flip(-1).clamp_min(0)
     share = ev.cumsum(-1) / ev.sum(-1, keepdim=True).clamp_min(1e-30)
     acc["sessions"] = acc.get("sessions", 0) + share.shape[0]
     for r in RANKS:
