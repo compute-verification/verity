@@ -18,7 +18,7 @@ registration of `prog` at window 0, the 64-byte digests both ends' certificates 
 blobs of a proof of link-window 0 under those certificates pass one-stage v2 and open to the verifier's own public row:
 N2's completeness on that link-window, which needs a proof v2 accepts, and the kernel runs no prover. -/
 def HonestWindowProved : Prop :=
-  ∃ (l : ClockLink) (prog : String) (reg : Registration) (de di : ByteArray) (s : Salts)
+  ∃ (l : ClockLink) (prog : String) (reg : Lean.Json) (de di : ByteArray) (s : Salts)
     (ev : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs),
     l.syncSet = honestSyncs ∧ de.size = 64 ∧ di.size = 64 ∧ PeriodWindowRegistered (honestParams l prog) 0 reg ∧
       PeriodWindowV2 (honestParams l prog) l #[] 0 reg (honestWindow de di s ev) bs ∧
