@@ -4,6 +4,7 @@ throughput on one RTX PRO 6000.
 
     python plan.py [--sizes m,s,l] [--budget-tpp 2] [--json FILE]
     python plan.py --chain m 0.25 lora 1e6      # the shell loop one `research run` runs: that configuration at its 3 rates
+    python plan.py --chain l 0.5 adamw 0 --rates 5e-4    # ... at the given rates only
 
 The estimate takes each class's achieved FLOP/s as dense AdamW's times a factor (`EFFICIENCY`: LoRA's small factor matmuls and
 Muon's Newton-Schulz run below the dense matmuls' rate), plus one held-out evaluation at each of the 21 marks at three times the
@@ -75,9 +76,10 @@ def matrix_list(size) -> list[tuple[int, int]]:
     return [s for _ in range(size.n_layer) for s in matrix_shapes(size)[:7]]
 
 
-def chain(size: str, fraction: float, method: str, update_bytes: float) -> str:
-    """The workload of one `research run`: the configuration at each of its rates, one after another, each a chain of leases."""
-    [rates] = [r for m, b, r in CONFIGS if m == method and b == update_bytes] or [()]
+def chain(size: str, fraction: float, method: str, update_bytes: float, rates: tuple[float, ...] = ()) -> str:
+    """The workload of one `research run`: the configuration at each of its rates (`rates`, else its 3), one after another,
+    each a chain of leases."""
+    rates = rates or next((r for m, b, r in CONFIGS if m == method and b == update_bytes), ())
     tag = f"{size}-p{round(100 * fraction):03d}-{label(method, update_bytes)}"
     extra = f" --update-bytes {update_bytes:g}" if method == "lora" else ""
     one = ('LEASED_SCRIPT=speedrun.py bash benchmarks/learning_frontier/leased.sh "$P" --data "$D" --start "$S" '
@@ -94,9 +96,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--budget-tpp", type=float, default=2.0)
     ap.add_argument("--json", type=Path, default=None)
     ap.add_argument("--chain", nargs=4, metavar=("SIZE", "FRACTION", "METHOD", "UPDATE_BYTES"), default=None)
+    ap.add_argument("--rates", default="", help="with --chain: these learning rates instead of the configuration's 3 (e.g. "
+                                                "the best at a smaller size)")
     a = ap.parse_args(argv)
     if a.chain:
-        print(chain(a.chain[0], float(a.chain[1]), a.chain[2], float(a.chain[3])))
+        rates = tuple(float(r) for r in a.rates.split(",") if r)
+        print(chain(a.chain[0], float(a.chain[1]), a.chain[2], float(a.chain[3]), rates))
         return 0
     rows, total = [], {}
     print("| size | class | config | runs | steps | tokens (M) | FLOPs/run | update | est. GPU-min/run | est. GPU-h |")
