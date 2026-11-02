@@ -2605,6 +2605,53 @@ def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_
     assert [reps[p]["failures"] for p in "ab"] == [["build: exit 1\nfake build"]] * 2
 
 
+def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for_it(tmp_path, monkeypatch):
+    """Lake finds a module in a cache by its 64-bit input hash alone, so no build reads the node's artifact cache: each
+    step reads a directory staged inside it for this build (`LAKE_CACHE_DIR`, with `LAKE_ARTIFACT_CACHE` unset: read,
+    never written), holding the modules the cache indexes under their sha256 keys, and gone once the build ends."""
+    mk = A.sibling("module_keys")
+    pkg, store = tmp_path / "p", tmp_path / "store"
+    (pkg / "P").mkdir(parents=True)
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (pkg / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
+    (pkg / "P.lean").write_text("theorem p : True := trivial\n")
+    k = mk.keys(pkg)["P"]
+    (store / "artifacts").mkdir(parents=True)
+    (store / "artifacts" / ("a" * 16 + ".olean")).write_bytes(b"P")
+    (store / mk.INDEX).mkdir()
+    (store / mk.INDEX / f"{k.key}.json").write_text(json.dumps({
+        "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
+        "sha256": {"a" * 16 + ".olean": hashlib.sha256(b"P").hexdigest()}}))
+    cache = store / mk.STAGE / f"{os.getpid()}-p"
+    seen = []
+
+    def fake_run(argv, cwd, log=None, timeout=0):
+        seen.append((argv, (cache / "outputs" / "p" / f"{'1' * 16}.json").is_file()))
+        return (1, "fake build") if len(seen) == 2 else (0, "")
+
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", fake_run)
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
+    assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
+                    (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
+    assert rep["staged"] == {"modules": 1, "keyed": 1} and "stage" in rep["seconds"] and not cache.exists()
+    assert rep["failures"] == ["build-roots: exit 1\nfake build"]
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    lib.mkdir(parents=True)
+    (pkg / "P" / "Q.lean").write_text("")
+    (lib / "P").mkdir()
+    (lib / "P" / "Q.trace").write_text(json.dumps({"depHash": "1" * 16}))   # Lake took P's entry for it
+    seen.clear()
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (0, ""))
+    rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
+    assert [f.code for f in rep["failures"]] == ["build"] and "P.Q (P's)" in rep["failures"][0]
+    assert not (lib / "P" / "Q.trace").exists() and not cache.exists()
+
+
 def test_a_guarantee_is_proved_by_exactly_one_package():
     spec = facts(modules=["P.Defs"], pins={"P.t": {"kind": "missing"}, "P.u": fact() | {"module": "P.Defs"},
                                             "P.v": {"kind": "missing"}, "P.w": {"kind": "missing"}})
