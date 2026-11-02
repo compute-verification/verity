@@ -63,10 +63,12 @@ SHORT = {
 }
 BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
 LEAN = ("start_id", "checkpoint", "method", "family")
-RUNS_LEAN = ("start_id", "record", "checkpoint", "size", "saturation", "compute_frac", "g", "seeds")
+RUNS_LEAN = ("start_id", "record", "checkpoint", "compute_frac", "g", "seeds")
+SIZE_SAT = ("size", "saturation")
+FIT_K = ("fit_run_k_bits", "fit_train_k_bits")
 PER_RUN_PANELS = ("a2-efficiency-floor", "p4-decomposition")
 FINAL_TITLE = "FINAL (sealed shard: FINAL entries' 3-seed means, other records at the same drop): "
-VARIANT_LABEL = 40
+VARIANT_LABEL = 24
 
 
 def fmt(x) -> str:
@@ -199,16 +201,19 @@ def console(P: dict, final: bool = False) -> dict:
                       (" Here -1% only, no record, g, k_bytes or p (= S/rho).", ref,
                        (*LEAN, "record", "g", "k_bytes", "p"), None)]
         elif pid == "a2-efficiency-floor":
+            lean = (*RUNS_LEAN, *SIZE_SAT)
             tries = [("", lambda r: True, RUNS_LEAN, variant_label),
-                     (" Rows: reading both (A2 reads no rho).", one, RUNS_LEAN, both),
-                     (" Rows: reading both (A2 reads no rho); here -1% only.", lambda r: one(r) and ref(r), RUNS_LEAN,
-                      both)]
+                     (" No size, saturation (in start).", lambda r: True, lean, variant_label),
+                     (" No size, saturation; rows: reading both (A2 reads no rho).", one, lean, both),
+                     (" No size, saturation; rows: reading both (A2 reads no rho); -1% only.",
+                      lambda r: one(r) and ref(r), lean, both)]
         elif pid == "p4-decomposition":
+            lean = (*RUNS_LEAN, *SIZE_SAT, *FIT_K)
             tries = [("", lambda r: True, RUNS_LEAN, variant_label),
-                     (" No fit_*_k_bits here (A2 has them).", lambda r: True,
-                      (*RUNS_LEAN, "fit_run_k_bits", "fit_train_k_bits"), variant_label),
-                     (" Here -1% only.", ref, RUNS_LEAN, variant_label),
-                     (" Here -1% only, no variant.", ref, (*RUNS_LEAN, "variant"), None)]
+                     (" No fit_*_k_bits (in A2).", lambda r: True, (*RUNS_LEAN, *FIT_K), variant_label),
+                     (" No fit_*_k_bits (in A2), size, saturation (in start).", lambda r: True, lean, variant_label),
+                     (" No fit_*_k_bits, size, saturation; -1% only.", ref, lean, variant_label),
+                     (" No fit_*_k_bits, size, saturation, variant; -1% only.", ref, (*lean, "variant"), None)]
         common = COMMON.replace(" One seed.", "") if final else COMMON
         for why, keep, drop, fix in tries:
             q = compact(p, keep, drop, fix)
