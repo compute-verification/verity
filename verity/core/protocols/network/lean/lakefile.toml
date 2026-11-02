@@ -33,6 +33,11 @@ path = "../../../primitives/lms/lean"
 name = "core_identity"
 path = "../../../primitives/identity"
 
+# The period check runs one-stage v2 on each link-window's proof (`SampledProofs.OneStageZk`).
+[[require]]
+name = "core_sampled_proofs"
+path = "../../../service/sampled_proofs"
+
 [[lean_lib]]
 name = "NetworkCheck"
 

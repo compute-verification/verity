@@ -71,7 +71,7 @@ theorem link_short {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) : h
   obtain ⟨enc, -, he, -⟩ := digest_ok e
   exact encode_link he
 
-theorem zip_index {p : Params} {e : Evidence} (hfit : EvidenceFits p e) (ℓ : Fin p.egress.size) {link : Link}
+theorem zip_index {p : Params} {e : Evidence} (hfit : EvidenceFits p e) (ℓ : Fin p.egress.size) {link : LinkOpening}
     (hl : e.links[ℓ.1]? = some link) : (p.egress[ℓ], link) ∈ p.egress.toList.zip e.links.toList := by
   have h1 : ℓ.1 < e.links.size := by rw [hfit.1]; exact ℓ.2
   have hz : ℓ.1 < (p.egress.toList.zip e.links.toList).length := by
