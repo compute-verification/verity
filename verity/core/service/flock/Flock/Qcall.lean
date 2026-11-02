@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7: `Q_call` v1 (core's `verity/ir/PROTOCOL.md` §11, `verity.ir.cut`'s "Q_call v1", `partition_object.CallPartition`)
+`Flock.Partition`: `Q_call` v1 (core's `verity/ir/PROTOCOL.md` §11, `verity.ir.cut`'s "Q_call v1", `partition_object.CallPartition`)
 over the verifier's own copy of the program (`Flock.Program`): each Call's gates (`CallGates`), its cut (`call_units`), owners and
 derived committed set, and its cut checked as `partition_object.verify` checks it (`check_call_cut`: the invariant with recomputes
 reported, and at most X bits out of every unit).

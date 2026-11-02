@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §8: the proof container, `bincode 1.3` of `(Commitment, R1csProofLigerito)`.
+The proof container, `bincode 1.3` of `(Commitment, R1csProofLigerito)`.
 -/
 import Flock.Bytes
 import Flock.Schedule
@@ -65,13 +65,13 @@ structure Proof where
   ligerito : LigeritoProof
   deriving Inhabited
 
-/-- The shape a proof must have (§8.3). -/
+/-- The shape a proof must have. -/
 structure Shape where
   m : Nat
   kLog : Nat
   claims : Nat
   sched : Schedule
-  /-- the Merkle digest width (§14): every cap entry and sibling -/
+  /-- the Merkle digest width (`Flock.Merkle`): every cap entry and sibling -/
   hashLen : Nat := 32
   /-- each level's openings carry `opened_salts` (the circuit prover's Flock patch from `2908d078`): this many bytes per opened row -/
   saltLen : Option Nat := none
@@ -80,7 +80,7 @@ structure Shape where
   holo : Bool := false
   deriving Inhabited
 
-/-! ## A plain proof's one file (§8.1)
+/-! ## A plain proof's one file
 
 `Wire.proofFile sh p` is the file a prover writes for `p` at `sh`: `bincode 1.3` of the pair, each `Vec` as its `u64`
 length then its elements, each `F128` as `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty empty, every
@@ -131,7 +131,7 @@ def wLigerito (sh : Shape) (l : LigeritoProof) : ByteArray :=
     wLen 0 ++ wVec (fun m : F256 × F256 => wF256 m.1 ++ wF256 m.2) l.messages ++ wVec le64 l.queryNonces ++
     wVec F128.toBytes l.oodValues ++ wLen 0 ++ wVec le64 l.claimNonces ++ wVec le64 l.consistencyNonces
 
-/-- The commitment and `R1csProofLigerito` (§8's pair, which a `--zk` file's proof also starts with). -/
+/-- The commitment and `R1csProofLigerito` (the plain pair, which a `--zk` file's proof also starts with). -/
 def wProof (sh : Shape) (p : Proof) : ByteArray :=
   wVec id p.cap ++ wParams p.params ++
     (wVec F128.toBytes p.zerocheck.round1ab ++ wVec F128.toBytes p.zerocheck.round1c ++ wVec wPair p.zerocheck.rounds ++
@@ -150,7 +150,7 @@ def proofFile (sh : Shape) (p : Proof) : ByteArray := wProof sh p ++ plainEnd
 end Wire
 
 open Reader in
-/-- The pair's reader (§8.1): every length at its value for the shape, then nothing or the zk patch's `None` tag
+/-- The pair's reader: every length at its value for the shape, then nothing or the zk patch's `None` tag
 (`Reader.runPlain`). `decodeProof` pins the second. -/
 def decodeRead (sh : Shape) (bytes : ByteArray) : V Proof := do
   let s := sh.sched
@@ -232,7 +232,7 @@ def fileMismatch (file bytes : ByteArray) : String :=
     "zk_level0: the file ends without the `None` tag every deployed prover writes after a plain proof (upstream's form: --upstream-plain)"
   else "proof: the file is not the one encoding of the proof it decodes to"
 
-/-- **The plain proof file** (§8.1): what `decodeRead` reads, if the file is its one encoding at the shape
+/-- **The plain proof file**: what `decodeRead` reads, if the file is its one encoding at the shape
 (`Wire.proofFile`), so a file's digest is a function of what it decodes to (`decodeProof_canonical`). -/
 def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof :=
   match decodeRead sh bytes with
@@ -262,7 +262,7 @@ theorem decodeProof_canonical {sh : Shape} {b b' : ByteArray} {p : Proof} (h : d
   (decodeProof_read h).2.symm.trans (decodeProof_read h').2
 
 /-- **What the verifier decodes from a plain proof file** under its statement's `Tags.upstreamPlain` (`flock-verify verify
---upstream-plain`, §8.1; `verifyFiles`, whose S17 hashes the file itself): upstream's form ends after the pair, so the
+--upstream-plain`; `verifyFiles`, whose S17 hashes the file itself): upstream's form ends after the pair, so the
 file then the zk patch's `None` tag; by default the file itself, the deployed form (`verify`). Each form is refused where the other is pinned: a file without the tag by default
 (`fileMismatch`), and one with it under the flag, which then ends in a second `0` (`Reader.runPlain`). -/
 def plainBytes (upstream : Bool) (file : ByteArray) : ByteArray := if upstream then file ++ Wire.plainEnd else file

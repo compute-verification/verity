@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 /-!
 # A hidden-output statement (`Stmt.setupHidden`): what it is, and its frozen statements
 
-With hidden outputs (`Tags.hiddenOutputs`, PROTOCOL.md §16.13) flock-verify sets a table up with `Stmt.setupHidden`,
+With hidden outputs (`Tags.hiddenOutputs`, `HmOut`) flock-verify sets a table up with `Stmt.setupHidden`,
 `Stmt.setupH`'s checks on `HmOut`'s rows: the input rows, then one output row per output port. The public file holds no
 output word; every row's `b ‖ c` is a region; Δ is `HmRow.delta`'s, then each output row's message bits copied from
 the output bits the circuit computes (`outPairs`), zero past the port's words, then each pinned output bit's copy of the

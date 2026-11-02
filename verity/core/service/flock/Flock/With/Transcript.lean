@@ -1,5 +1,5 @@
 /-
-§5–§6 over the hash oracle (`Flock.With.Hashes`): the replay transcript's squeeze checks a round's digest through the oracle,
+`Flock.Record`, `Flock.Transcript` over the hash oracle (`Flock.With.Hashes`): the replay transcript's squeeze checks a round's digest through the oracle,
 and the session record's digests are the oracle's. A transcript action that hashes nothing is the compiled verifier's own,
 lifted (`liftTM`).
 -/
@@ -84,7 +84,7 @@ def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M RunRecord :=
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
-  -- U1–U3 (§7.3): a null draw is no draw
+  -- U1–U3 (`Flock.Draw`): a null draw is no draw
   let recDraw := match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some d
@@ -127,7 +127,7 @@ def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M RunRecord :=
       let sha ← unhex (← str r s!"msg_{dk}")
       let coins ← f128s (← arr r "coins")
       check (1 ≤ n && n ≤ 65536 && coins.size == n && sha.size == (← spec.dgWith hs ByteArray.empty).size) s!"S12: {name} round {k} is malformed"
-      -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (§6.2)
+      -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (`Flock.Transcript`)
       check (!spec.retainRounds || !isNull r "msg") s!"S12: {name} round {k}: the statement retains round bytes and the record has none"
       let bytes ← if isNull r "msg" then pure none else do
         let b ← unhex (← str r "msg")

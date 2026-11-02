@@ -1,5 +1,5 @@
 /-
-Level 3: a lookup slot's rows compute `table[index]` (`Lookup.build`, PROTOCOL.md §16.5). Over any field of
+Level 3: a lookup slot's rows compute `table[index]` (`Lookup.build`, `Flock.Circuit`). Over any field of
 characteristic 2, a witness satisfying every row of the slot (each row `z_r = (A_r·z)(B_r·z)`, the product rows' B side
 the table's, as `foldB` folds it), with the constant 1, has bit `j` of the output word equal to bit `j` of the table word
 the index bits name. The rows force it: the index bits are bits (`z = z·z`), each decoder is one-hot on its bits, each

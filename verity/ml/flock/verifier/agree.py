@@ -1,4 +1,4 @@
-"""The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
+"""The agreement check (`verity/ml/flock/verifier/README.md`): the Lean verifier and upstream's Rust verifier on the same sessions.
 
     python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] [--program F] \
         --public F [--registered F] [--tables DIR] [--stratified K] [--zk] [--session-tables J] [--expect FILE]... [--lean-refuses WHY] \
@@ -8,8 +8,8 @@
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
-`upstream_accepted` for an intended divergence (PROTOCOL.md §17.1's D list): upstream must then return that verdict instead
-of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim draws by, which the Lean
+`upstream_accepted` for an intended divergence (`verity/ml/flock/verifier/README.md`'s D list): upstream must then return that
+verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim draws by, which the Lean
 verifier refuses at setup: it must reject every session whose record carries a unit sample, one expected accepted with a
 reason starting `WHY` and one expected rejected with `WHY` or its expected reason (a statement that does not set up is
 refused for that first), and upstream must return each session's expected verdict; a session with none (a fuzz case) only
@@ -18,11 +18,10 @@ needs the refusal. `--lean-refuses WHY` is D12 at a statement whose form the sou
 has passed (the form's first): a session they cover (every session, and each without a sample; neither a drawn session of
 `--lean-refuses-drawn`) refused with their `WHY` passed every check, and is compared as accepted, any other verdict as it
 is, and the Lean verifier must accept none of them. So is every session of a set without `--program`, which the Lean
-verifier refuses last (`NO_PROGRAM`), and every plain session not under `--coins tree`, on its committed seed's coins
-(`SEEDED`). A session directory may carry its own public file (`pub.bin`, a forgery's false
+verifier refuses last (`NO_PROGRAM`). A session directory may carry its own public file (`pub.bin`, a forgery's false
 statement), the verifier's own registered reads (`registered.json`, in place of `--registered`; null for none; upstream
 reads none) and its expected verdict (`case.json`, from the vectors patch's `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
-their digests (PROTOCOL.md §16.8); upstream reads the paths. Writes DIR/agreement.tsv, the two
+their digests (`flock-verify --archive`); upstream reads the paths. Writes DIR/agreement.tsv, the two
 verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
 """
 import argparse, hashlib, json, os, shutil, subprocess, sys
@@ -58,7 +57,7 @@ def drawn(s):
 
 def archived(a, path):
     """Hold `path` in the run's archive, `OUT/archive/sha512/<hex>`, and return its SHA-512: the Lean verifier loads the
-    statement's objects by content (PROTOCOL.md §16.8)."""
+    statement's objects by content (`flock-verify --archive`)."""
     h = hashlib.sha512(Path(path).read_bytes()).hexdigest()
     d = a.out / "archive" / "sha512"
     d.mkdir(parents=True, exist_ok=True)
@@ -73,10 +72,6 @@ def archived(a, path):
 #: the Lean verifier's refusal of a session verified without `--program` (`FlockVerify.NO_PROGRAM`), last like D12's:
 #: every session of a set with no program (upstream reads none) is refused with it once every check has passed
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
-
-#: the Lean verifier's refusal of a plain session on its committed seed's coins (`ProvedScope.SEEDED`), last like D12's:
-#: every plain session not under `--coins tree` (upstream's seeded sessions) is refused with it once every check has passed
-SEEDED = "refused: a plain session on a committed seed's coins"
 
 
 #: `--upstream live`: upstream's verdicts are its own live ones, recorded in each selftest session's `case.json`, for a
@@ -98,7 +93,7 @@ def chunks(xs, k):
 def lean_cmd(a, public, registered=None):
     """The Lean verifier's command for a public file and the verifier's registered reads: every statement object from the
     run's archive, by SHA-512. An upstream binary's plain sessions are upstream's form (`--upstream-plain`: no zk patch,
-    so no `zk_level0` tag after the pair, PROTOCOL.md §8.1); `--zk` sessions are the zk patch's."""
+    so no `zk_level0` tag after the pair, `Flock.Proof`); `--zk` sessions are the zk patch's."""
     if a.tables:
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
@@ -239,8 +234,7 @@ def main(argv=None, slots=None, quiet=False):
         shown = L
         refuses = [a.lean_refuses_drawn] if a.lean_refuses_drawn is not None and drawn(s) else []
         last = [] if refuses else [w for w, on in ((a.lean_refuses, True), (a.lean_refuses_drawless, not drawn(s)),
-                                                   (NO_PROGRAM, a.program is None),
-                                                   (SEEDED, not a.zk and a.coins != "tree")) if w is not None and on]
+                                                   (NO_PROGRAM, a.program is None)) if w is not None and on]
         if last and L is not None:
             if L["accepted"]:
                 bad.append(name)

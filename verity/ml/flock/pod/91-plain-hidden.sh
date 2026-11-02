@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The plain hidden-output fixture (tests/plain_hidden.py, tests/test_lean_plain_hidden.py): a RoPE d64 statement with hidden
 # outputs, no shared rows and no registered value, proved in one loopback session without --zk under a subset sample on OS
-# coins, then Lean's `flock-verify verify --coins os` on it with the verifier's own program and partition (PROTOCOL.md
-# §16.15: the plain claim at hidden outputs draws by the subset law at one table, FailClosed.SoundExecH at its subset sample design). The staged files
+# coins, then Lean's `flock-verify verify --coins os` on it with the verifier's own program and partition
+# (`Flock.ProvedScope`: the plain claim at hidden outputs draws by the subset law at one table, FailClosed.SoundExecH at its subset sample design). The staged files
 # and the session go into the evidence store as a fixture (`research data put --kind fixture/v1 --preserve`), whose id
 # `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only. Outputs under out/: host.txt,
 # stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), lean-honest.log (its VERDICT

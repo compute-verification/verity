@@ -30,7 +30,7 @@ certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boo
 Its proof coins are the model's: uniform, drawn each round after the prover's message. That the challenger's round
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis
 states, and which covers the challenger's keyed coin tree: `verify` refuses a session on a committed seed's coins
-(`ProvedScope.coinsTree`).
+(`ProvedScope.servedForm`).
 -/
 
 namespace FlockSoundness.Audit

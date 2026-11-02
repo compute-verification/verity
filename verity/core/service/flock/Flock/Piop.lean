@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §9–§11: statement binding, zerocheck, lincheck, and the claims handed to the opening.
+Statement binding, zerocheck, lincheck, and the claims handed to the opening.
 -/
 import Flock.Transcript
 import Flock.Proof
@@ -66,7 +66,7 @@ def lagrange (nodes : Array F128) (denInv : F128) (z : F128) : Array F128 :=
 /-- `L_s(ζ)` over `S = φ8({0…63})`. -/
 def skipWeights (z : F128) : Array F128 := lagrange nodesS den6Inv z
 
-/-- The weights of `Pcomb(z)` (§9.2): zero on `S`; the indicator at a node of `Λ`; else
+/-- The weights of `Pcomb(z)`: zero on `S`; the indicator at a node of `Λ`; else
 `Z_{S∪Λ}(z) · den_7⁻¹ · (z + φ8(64+i))⁻¹`. -/
 def combWeights (z : F128) : Array F128 :=
   match nodesS.findIdx? (fun n => decide (n = z)), nodesL.findIdx? (fun n => decide (n = z)) with
@@ -82,7 +82,7 @@ def dot (a b : Array F128) : F128 := Id.run do
   for i in [0:min a.size b.size] do acc := acc + a[i]! * b[i]!
   return acc
 
-/-- The seven pinned zerocheck coordinates (address bits 6–12), §9.2. -/
+/-- The seven pinned zerocheck coordinates (address bits 6–12). -/
 def pinned : Array F128 :=
   let frac := fun (y : F128) => y * (y + 1).inv
   let x := F128.monomial 1
@@ -99,7 +99,7 @@ structure ZcOut where
 
 def check (b : Bool) (why : String) : TM Unit := if b then pure () else throw why
 
-/-- §9.1 then §9.2. -/
+/-- Statement binding, then the zerocheck. -/
 def bindAndZerocheck (m : Nat) (digest : ByteArray) (cap : ByteArray) (p : ZerocheckProof) : TM ZcOut := do
   label "flock-r1cs-v0"
   absorbBytes digest
@@ -135,7 +135,7 @@ def bindAndZerocheck (m : Nat) (digest : ByteArray) (cap : ByteArray) (p : Zeroc
 def halve (t : F128) (comb : Array F128) : Array F128 :=
   (Array.range (comb.size / 2)).map fun i => comb[i]! + t * (comb[i + comb.size / 2]! + comb[i]!)
 
-/-- What the lincheck needs from a statement's circuit (§16.1). -/
+/-- What the lincheck needs from a statement's circuit (`Flock.Statement`). -/
 structure CircuitFold where
   kLog : Nat
   pin : Nat
@@ -152,7 +152,7 @@ structure LcOut where
   rIn : Array F128
   deriving Inhabited
 
-/-- §10. -/
+/-- The lincheck. -/
 def lincheck (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) : TM LcOut := do
   let kLog := c.kLog
   let rhoIn := zc.rho.extract 0 (kLog - 6)
@@ -180,7 +180,7 @@ def lincheck (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) : TM LcOut := do
   let w := dot (skipWeights rPrime) p.zPartial
   return { w, rPrime, rIn := ts.reverse }
 
-/-- A claim handed to the opening (§11, §12): value, 64 skip weights, `m − 6` coordinates. -/
+/-- A claim handed to the opening (`Flock.Opening`): value, 64 skip weights, `m − 6` coordinates. -/
 structure Claim where
   value : F128
   skip : Array F128

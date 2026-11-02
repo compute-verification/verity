@@ -1,11 +1,11 @@
-"""The warden's bucket rows with reads tied to the layout (`warden_rows`), held as regressions: a proof block reads only
-its connection's own cells, and a PAD cell is no content channel.
+"""The network certifier's bucket rows with reads tied to the layout (`warden_rows`), held as regressions: a proof block
+reads only its connection's own cells, and a PAD cell is no content channel.
 
 With the reads (the proof blocks' wiring) unconstrained, a proof block could open any of the N = T·S rows of the correct
 execution phase — a foreign connection's cell, a cell twice, or an empty/padding slot — an ≈ log2(N) bits a read
-channel. The warden signs the wiring in its head, and `Wiring.place`/`port` confine every read to a connection's own
-cells, refusing a foreign connection, a cell past the connection's, a read twice, an empty slot and a wiring the head
-didn't sign. Here each is run against the v2 layout, with ordinals from 1, and shown refused.
+channel. The network certifier signs the wiring in its head, and `Wiring.place`/`port` confine every read to a
+connection's own cells, refusing a foreign connection, a cell past the connection's, a read twice, an empty slot and a
+wiring the head didn't sign. Here each is run against the v2 layout, with ordinals from 1, and shown refused.
 
 A PAD cell carries its connection's ordinal (`cell(PAD, q, b"")`) and sits in the connection's own slots, so it counts
 toward the connection's cells and `place` will open it. These cases show it is not a *content* channel — a pad's bytes

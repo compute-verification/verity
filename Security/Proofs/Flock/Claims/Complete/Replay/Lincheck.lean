@@ -5,7 +5,7 @@ import Proofs.Flock.VBridge.Algebra.Lincheck
 # Lincheck replays the honest prover's rounds
 
 `lincheckWith_of`: from the honest prover's lincheck (`lincheckP`) in the pure session, the verifier's lincheck
-(`lincheckWith`, PROTOCOL.md §10) replayed on rounds that carry the prover's returns the prover's `LcOut`, consuming
+(`lincheckWith`, `Flock.Piop`) replayed on rounds that carry the prover's returns the prover's `LcOut`, consuming
 exactly the prover's rounds, when the statement's circuit fold at the prover's coins is some `comb` of width 64 and the
 rounds' claim from `α·v_A + v_B + β` ends at `dot comb z_partial` (the lincheck's algebra).
 

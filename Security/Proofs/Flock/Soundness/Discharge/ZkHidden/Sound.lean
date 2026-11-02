@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.Defs
 # The soundness of one hidden-output `--zk` sampled session
 
 `zk_session_soundH`: `Composed.zk_session_sound` for the sessions production `--zk` writes, whose tables
-`Stmt.setupTables` sets up with `Stmt.setupHidden` (hidden outputs, the default `--statement`, PROTOCOL §16.13), at the
+`Stmt.setupTables` sets up with `Stmt.setupHidden` (hidden outputs, the default `--statement`, `HmOut`), at the
 same law and parameters, with the same proof. For any live prover `τ` of a hidden-output one-table `--zk` session,
 `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
 partition (`keyProg c hU n`), each read at its `--zk` site in its hidden-output table and bound to the rows it commits,
@@ -19,7 +19,7 @@ carried to flock-verify's acceptance by `zk_headline_exec_on`. `RunsZC` at the l
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and the challenger
 (`RecordsLiveZK`, and `DrawOkZKH` at each of the law's draws), as `zk_session_sound`. Its circuit hypotheses are the
 hidden-output path's: `HmOut.parse` and `HmOut.loadPublic` for `HmRow.parse` and `HmRow.loadPublic`; the unit
-returning the outputs comes from `scopeOk`. flock-verify refuses a statement failing any of them (PROTOCOL.md §16.15), and
+returning the outputs comes from `scopeOk`. flock-verify refuses a statement failing any of them (`Flock.ProvedScope`), and
 `FailClosed.zk_session_soundH` takes none.
 
 `tagsOkH_circuit`: the citation of its tag hypotheses. Under the default `--statement` (`verity/flock-circuit`,

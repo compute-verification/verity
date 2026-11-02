@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §15: the `fast100` Ligerito schedule, as data.
+The `fast100` Ligerito schedule, as data.
 -/
 namespace Flock
 
@@ -43,7 +43,7 @@ def decompose (q d : Nat) : Array Nat := Id.run do
 
 def queriesAt : Array Nat := #[218, 106, 71, 53, 43, 36, 32]
 
-/-- The schedule for `m ∈ [22, 35]`; none otherwise (§15: no schedule, reject). -/
+/-- The schedule for `m ∈ [22, 35]`; none otherwise (no schedule: reject). -/
 def fast100 (m : Nat) : Option Schedule := do
   if m < 22 || m > 35 then none
   let levels := if m ≤ 24 then 3 else if m ≤ 27 then 4 else if m ≤ 30 then 5 else if m ≤ 33 then 6 else 7
