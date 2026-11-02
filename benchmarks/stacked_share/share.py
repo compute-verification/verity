@@ -72,7 +72,7 @@ PAD = 32
 #: bytes a second the audit certifies (`P·N·4096/T` at 61 ms a pass):
 #: c = caps.total is R_cap over it
 CERTIFIED_B_PER_S = 1.294e13
-#: `Security/Proofs/Accounting/DeclaredCircuit/Witness.lean`'s `bounds_8b` and `bounds_70b`, at the thin-lane prices: c at most
+#: `Security/Proofs/Accounting/RegisteredCircuit/Witness.lean`'s `bounds_8b` and `bounds_70b`, at the thin-lane prices: c at most
 #: `c`, E at least `E`, the life `L` windows, and γ = γ0 + (8 L R0 + 1) / (N0 32768) + 128 L P0 c / E (`gamma_bound`)
 WITNESS = {"c": {"8B": Fraction(221, 500), "70B": Fraction(459, 5000)}, "E": 364_497, "L": {"8B": 6, "70B": 30},
            "P0": 984, "R0": 6_000_000, "N0": 1 << 24, "gamma0": Fraction(835, 100_000)}

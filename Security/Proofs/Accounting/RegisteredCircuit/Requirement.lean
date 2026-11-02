@@ -1,12 +1,12 @@
 import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Credit
-import Proofs.Accounting.DeclaredCircuit.Session
+import Proofs.Accounting.RegisteredCircuit.Credit
+import Proofs.Accounting.RegisteredCircuit.Session
 
 /-!
 # A declared circuit's space and bandwidth from an accepted audit
 
-`Accounting.SecurityProofs.DeclaredCircuitRequirement`, the theorem of
-`Accounting.Guarantees.DeclaredCircuitRequirement`. A carrier of the declared circuit's over at most `L` of the audit's
+`Accounting.SecurityProofs.RegisteredCircuitRequirement`, the theorem of
+`Accounting.Guarantees.RegisteredCircuitRequirement`. A carrier of the declared circuit's over at most `L` of the audit's
 windows carries at most `C` bits (`Carrier.card_le_census`), so every pass rebuilds at most `X_r·τ + C` bits of its
 appended tiles, and its tiles of `W` are appended tiles. Each window's reads in its passes' tiles of `W`, with each
 pass's tiles short of the store counted as read, against the window's correct receipts: a window short by more than a
@@ -182,8 +182,8 @@ open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the deployed parameters**,
-`Accounting.Guarantees.DeclaredCircuitRequirement`. -/
-theorem DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequirement := by
+`Accounting.Guarantees.RegisteredCircuitRequirement`. -/
+theorem RegisteredCircuitRequirement : Accounting.Guarantees.RegisteredCircuitRequirement := by
   intro n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose layout steer
     joined A V Kg Dv _ _ W pl ℓ grp bind mm plan addr hn hP hN hE0 hrank hKB hSq hCs hEle hε hB hCC hslot hlife _hres
     hprop hreads hx RL C γ owned credit tiles store win

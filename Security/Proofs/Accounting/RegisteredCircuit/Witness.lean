@@ -1,11 +1,11 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.DeclaredCircuit
+import Definitions.Accounting.Guarantees.RegisteredCircuit
 import Proofs.Accounting.RateAudit.SketchHonest
 
 /-!
-# An honest run meets every hypothesis of `DeclaredCircuitRequirement`
+# An honest run meets every hypothesis of `RegisteredCircuitRequirement`
 
-The non-vacuity witness of `Accounting.Guarantees.DeclaredCircuitRequirement` (`G`): one honest run, generic in the
+The non-vacuity witness of `Accounting.Guarantees.RegisteredCircuitRequirement` (`G`): one honest run, generic in the
 session's parameters (`n` windows of `P` passes over `N` tiles of 128 sectors at 16 sketch rows, the link, the hash
 budget, the carrier life `L`, the caps), meets every hypothesis of `G` but the world's: `SketchRank`, `KeyBinding`,
 `SquaringFloor`, `ChainSum` and their floor `εden ≤ 2^64·εnum` (`meets`). So `G` bounds the run (`applies`), every pass's credit
@@ -35,7 +35,7 @@ is at least its `N` tiles' bits (`credit_ge`), and the session's credit is at le
   are one circuit is the code's to hold, not `G`'s, and the run's carriers are empty whatever `Wc` is.
 -/
 
-namespace Accounting.SecurityProofs.DeclaredCircuitWitness
+namespace Accounting.SecurityProofs.RegisteredCircuitWitness
 
 open Pous (pr)
 open scoped ENNReal
@@ -686,7 +686,7 @@ theorem property (caps : Gates.Caps)
 
 /-! ## The witness -/
 
-/-- **An honest run meets every hypothesis of `DeclaredCircuitRequirement`** but the world's (`SketchRank`,
+/-- **An honest run meets every hypothesis of `RegisteredCircuitRequirement`** but the world's (`SketchRank`,
 `KeyBinding`, `SquaringFloor`, `ChainSum` and their floor), at every value of the session's parameters with the link
 carrying the stream (`ρ·256 ≤ L_r·τ`), `N` queries within the caps and a carrier life `L ≥ 1`, at any nonnegative
 caps, codec and append choices, and any token bits. -/
@@ -727,7 +727,7 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     fun _ => ⟨deadlines val, fun _ _ _ _ h => passBind_lt h, fun w j => requirement val hval w j⟩⟩
 
 /-- **`G` at the honest run**: given `G` and the world's assumptions, its conclusion holds at the run of `meets`. -/
-theorem applies (hG : Guarantees.DeclaredCircuitRequirement) (n P N ρ S q Xr Lr qr τ k L E es B εnum εden : ℕ)
+theorem applies (hG : Guarantees.RegisteredCircuitRequirement) (n P N ρ S q Xr Lr qr τ k L E es B εnum εden : ℕ)
     (ε δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin (1 + n * P * (N + 2)) → Ch → (Fin (1 + n * P * (N + 2)) → Ca) → Fin 1 →
       (Fin 128 → RateSketch.Sector))
@@ -1027,4 +1027,4 @@ theorem bounds_70b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Ga
     norm_num at hγ
     linarith
 
-end Accounting.SecurityProofs.DeclaredCircuitWitness
+end Accounting.SecurityProofs.RegisteredCircuitWitness
