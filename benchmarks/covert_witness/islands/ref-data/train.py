@@ -1,25 +1,35 @@
-"""Island `ref-data` (class `reference`, no cap on the update): the seed's Muon + AdamW continuation of every tensor, with the
-data it trains on and their order as the variable. Every FLOP spent choosing data is in the step log.
+"""Island `ref-data` (class `reference`, no cap on the update): ref-optim's train.py (cursor/te-ref-optim-4207 at eb8365f3162:
+every optimizer knob a flag, the seed's shape by default) with the data it trains on and their order as the variable. Every
+FLOP spent choosing data is in the step log. The launcher runs `islands/reference/train.py`, a symlink to this file.
 
-The launcher runs `islands/reference/train.py`, a symlink to this file. Data flags (all off by default, which is the seed):
+Optimizer (ref-optim's): Muon or AdamW on the block matrices, AdamW on the embedding and norms, `--sched linear|wsd|cosine|const`
+with warmup and `--final-frac`, EMA (`--ema-frac`) chosen against raw weights on held-back training-stream windows (priced
+forwards), snapshots at `--snap-at`.
 
-- `--windows random|fresh|seen`: the 1024-token windows drawn from TrainData's stream. `fresh` drops the windows the start
-  read (its provenance's step x batch first windows of the seed-0 order, `starts.py`), `seen` keeps only those.
-- `--short-ctx C --short-frac F`: the first F of the steps at context C (C divides 1024; the same tokens per step), priced
-  at that context; the rest at 1024.
-- `--score-len P --keep K --select drop-high|drop-low|mid`: θ scores a pool of windows by its mean loss on each window's
-  first P tokens (a `forward` pass at context P, priced) and K of the pool is kept.
+Data (all off by default: TrainData's stream permuted by `--data-seed`, the seed's):
+
+- `--windows random|fresh|seen`: the 1024-token windows drawn. `fresh` drops the windows the start read (its provenance's
+  step x batch first windows of the seed-0 order, `starts.py`), `seen` keeps only those. `--fresh` (ref-optim's) is the
+  start's own order past what it read.
+- `--short-ctx C --short-frac F`: the first F of the steps at context C (C divides 1024; the same tokens per step), priced at
+  that context; the rest at 1024.
+- `--score-len P --keep K --select drop-high|drop-low|mid`: θ scores a pool of windows by its mean loss on each window's first
+  P tokens (a `forward` pass at context P, priced) and K of the pool is kept.
 - `--order random|easy-first|hard-first`: the kept windows' order by θ's score (needs `--score-len`).
-- `--trunc Q`: in each micro-batch the Q of the sequences with the highest loss get no gradient (loss truncation; no
-  extra FLOPs, their pass is still priced).
+- `--trunc Q`: in each micro-batch the Q of the sequences with the highest loss get no gradient (loss truncation; no extra
+  FLOPs, their pass is still priced).
 
-    python guard.py islands/reference/train.py --start s100 --out SUB [--lr-scale 1] [--budget-fraction 0.98] [data flags]
+E is the trained tensors in full (`prepare.encode_full`). prepare.py, evaluate.py, guard.py and candidate.sh are fixed.
+
+    python guard.py islands/reference/train.py --start m100 --out SUB [--mat-lr 0.004] [--windows fresh] [--short-ctx 256 ...]
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -50,8 +60,13 @@ def ns_flops(shape: tuple[int, int], steps: int = 5) -> int:
 
 
 class Muon(torch.optim.Optimizer):
-    def __init__(self, params, lr: float, momentum: float = 0.95, wd: float = 0.0):
-        super().__init__(params, {"lr": lr, "momentum": momentum, "wd": wd})
+    """Muon: momentum, Newton-Schulz orthogonalized. `scale` "shape" is the seed's sqrt(max(1, rows/cols)); "rms" is
+    0.2 sqrt(max(rows, cols)), an update RMS of 0.2 like AdamW's, so its rate is on AdamW's scale."""
+
+    def __init__(self, params, lr: float, momentum: float = 0.95, nesterov: bool = True, wd: float = 0.0,
+                 scale: str = "shape", ns_steps: int = 5):
+        super().__init__(params, {"lr": lr, "momentum": momentum, "nesterov": nesterov, "wd": wd, "scale": scale,
+                                  "ns_steps": ns_steps})
 
     @torch.no_grad()
     def step(self):
@@ -61,16 +76,35 @@ class Muon(torch.optim.Optimizer):
                     continue
                 st = self.state.setdefault(p, {"buf": torch.zeros_like(p)})
                 buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
-                u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
+                u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]) if g["nesterov"] else buf, g["ns_steps"])
+                rows, cols = p.shape
+                s = max(1.0, rows / cols) ** 0.5 if g["scale"] == "shape" else 0.2 * max(rows, cols) ** 0.5
                 if g["wd"]:
                     p.mul_(1 - g["lr"] * g["wd"])
-                p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5)
+                p.add_(u, alpha=-g["lr"] * s)
+
+
+def lr_mult(step: int, n: int, a: argparse.Namespace) -> float:
+    warm = a.warmup * n if a.warmup < 1 else a.warmup
+    ramp = min(1.0, (step + 1) / warm) if warm > 0 else 1.0
+    t = step / n
+    if a.sched == "linear":
+        d = 1 - t
+    elif a.sched == "cosine":
+        d = 0.5 * (1 + math.cos(math.pi * t))
+    elif a.sched == "const":
+        d = 1.0
+    else:
+        start = 1 - a.decay_frac
+        p = 0.0 if t < start else (t - start) / a.decay_frac
+        d = 1 - math.sqrt(p) if a.decay_shape == "sqrt" else 1 - p
+    return ramp * (a.final_frac + (1 - a.final_frac) * d)
 
 
 def seen_windows(rec: dict, n_windows: int) -> np.ndarray:
     """The 1024-token windows the start read: its run's seed-0 order, the first step x batch (starts.py)."""
     p = rec["provenance"]
-    if "step" not in p or "batch" not in p:
+    if rec["config"]["family"] != "lf" or "step" not in p or "batch" not in p:
         return np.zeros(0, dtype=np.int64)
     return np.random.default_rng(p.get("data_seed", 0)).permutation(n_windows)[: int(p["step"]) * int(p["batch"])]
 
@@ -87,44 +121,50 @@ class Windows:
         self.at = (self.at + n_ids) % len(self.ids)
         return self.ids[pos]
 
-    def rows(self, ids: np.ndarray, ctx: int, device: str) -> torch.Tensor:
-        k = CTX // ctx
-        sub = (ids[:, None] * k + np.arange(k)[None, :]).reshape(-1)
-        last = (len(self.tokens) - 1) // ctx
-        sub = sub[sub < last]
-        rows = np.stack([self.tokens[j * ctx: j * ctx + ctx + 1] for j in sub]).astype(np.int64)
-        return torch.from_numpy(rows).to(device, non_blocking=True)
-
-
-@torch.no_grad()
-def score_windows(fwd, win: Windows, ids: np.ndarray, plen: int, micro: int) -> np.ndarray:
-    """θ's mean next-token loss on each window's first `plen` tokens."""
-    out = np.empty(len(ids), dtype=np.float32)
-    rows_per = max(1, micro * CTX // plen)
-    for i in range(0, len(ids), rows_per):
-        chunk = ids[i: i + rows_per]
-        x = torch.from_numpy(np.stack([win.tokens[j * CTX: j * CTX + plen + 1] for j in chunk]).astype(np.int64))
-        x = x.to(prepare.DEVICE, non_blocking=True)
-        with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
-            logits = fwd(x[:, :-1])
-        nll = F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), x[:, 1:].reshape(-1), reduction="none")
-        out[i: i + len(chunk)] = nll.view(len(chunk), -1).mean(1).cpu().numpy()
-    return out
+    def rows(self, ids: np.ndarray, ctx: int, length: int | None = None) -> torch.Tensor:
+        """Each id's 1024 // ctx sub-windows of ctx + 1 tokens, or (`length`) only its first length + 1 tokens."""
+        if length is not None:
+            r = np.stack([self.tokens[j * CTX: j * CTX + length + 1] for j in ids])
+        else:
+            k = CTX // ctx
+            sub = (ids[:, None] * k + np.arange(k)[None, :]).reshape(-1)
+            r = np.stack([self.tokens[j * ctx: j * ctx + ctx + 1] for j in sub])
+        return torch.from_numpy(r.astype(np.int64)).to(prepare.DEVICE, non_blocking=True)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--muon-lr", type=float, default=0.01)
-    ap.add_argument("--adam-lr", type=float, default=3e-4)
-    ap.add_argument("--lr-scale", type=float, default=1.0, help="multiplies both learning rates (the screens' sweep)")
-    ap.add_argument("--warmup", type=int, default=50)
+    ap.add_argument("--mat-opt", choices=("muon", "adamw"), default="muon")
+    ap.add_argument("--mat-lr", type=float, default=0.01, help="the block matrices' rate (Muon's or AdamW's)")
+    ap.add_argument("--embed-lr", type=float, default=3e-4)
+    ap.add_argument("--norm-lr", type=float, default=None, help="default: --embed-lr")
+    ap.add_argument("--wd", type=float, default=0.0, help="decoupled weight decay on the block matrices")
+    ap.add_argument("--embed-wd", type=float, default=0.0)
+    ap.add_argument("--beta1", type=float, default=0.9)
+    ap.add_argument("--beta2", type=float, default=0.95)
+    ap.add_argument("--momentum", type=float, default=0.95, help="Muon's")
+    ap.add_argument("--no-nesterov", action="store_true")
+    ap.add_argument("--muon-scale", choices=("shape", "rms"), default="shape")
+    ap.add_argument("--ns-steps", type=int, default=5)
+    ap.add_argument("--freeze-embed", action="store_true")
+    ap.add_argument("--freeze-norms", action="store_true")
+    ap.add_argument("--clip", type=float, default=1.0)
+    ap.add_argument("--sched", choices=("linear", "wsd", "cosine", "const"), default="linear")
+    ap.add_argument("--warmup", type=float, default=50, help="steps, or a fraction of the steps when below 1")
+    ap.add_argument("--decay-frac", type=float, default=0.2, help="wsd: the decaying share of the steps")
+    ap.add_argument("--decay-shape", choices=("linear", "sqrt"), default="linear")
+    ap.add_argument("--final-frac", type=float, default=0.0)
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
+    ap.add_argument("--fresh", action="store_true", help="continue the start's own data order past what it trained on")
+    ap.add_argument("--ema-frac", type=float, default=0.0)
+    ap.add_argument("--val-rows", type=int, default=64, help="held-back training-stream windows per validation")
+    ap.add_argument("--snap-at", default="0.25,0.5,0.75", help="fractions of the steps (comma-separated; empty: none)")
     ap.add_argument("--budget-fraction", type=float, default=0.98)
-    ap.add_argument("--snapshots", type=int, default=3)
+    ap.add_argument("--no-compile", action="store_true")
     ap.add_argument("--windows", choices=("random", "fresh", "seen"), default="random")
     ap.add_argument("--short-ctx", type=int, default=CTX)
     ap.add_argument("--short-frac", type=float, default=0.0)
@@ -134,25 +174,42 @@ def main() -> int:
     ap.add_argument("--order", choices=("random", "easy-first", "hard-first"), default="random")
     ap.add_argument("--trunc", type=float, default=0.0)
     a = ap.parse_args()
+    a.norm_lr = a.embed_lr if a.norm_lr is None else a.norm_lr
     if CTX % a.short_ctx or not 0 <= a.short_frac <= 1:
         raise SystemExit("train: --short-ctx must divide 1024 and --short-frac lie in [0, 1]")
     if a.order != "random" and not a.score_len:
         raise SystemExit("train: --order needs --score-len (θ's scores)")
+    if a.fresh and a.windows != "random":
+        raise SystemExit("train: --fresh is ref-optim's fresh windows; give it or --windows, not both")
     torch.backends.cuda.matmul.allow_tf32 = True
+    dev = prepare.DEVICE.split(":")[0]
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
     for p in params.values():
         p.data = p.data.float()
     embed = "embed" if rec["config"]["family"] == "lf" else "model.embed_tokens.weight"
     mats = [n for n, p in params.items() if p.ndim == 2 and n != embed]
-    rest = [n for n in params if n not in mats]
-    muon_lr, adam_lr = a.muon_lr * a.lr_scale, a.adam_lr * a.lr_scale
-    muon = Muon([params[n] for n in mats], lr=muon_lr)
-    adam = torch.optim.AdamW([params[n] for n in rest], lr=adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
-                             fused=prepare.DEVICE.startswith("cuda"))
-    trainable = {"full": sorted(params)}
+    norms = [n for n, p in params.items() if p.ndim == 1]
+    trained = mats + ([] if a.freeze_embed else [embed]) + ([] if a.freeze_norms else norms)
+    for n, p in params.items():
+        p.requires_grad_(n in trained)
+    opts = []
+    adam_groups = []
+    if a.mat_opt == "muon":
+        opts.append(Muon([params[n] for n in mats], lr=a.mat_lr, momentum=a.momentum, nesterov=not a.no_nesterov,
+                         wd=a.wd, scale=a.muon_scale, ns_steps=a.ns_steps))
+        opts[0].param_groups[0]["base_lr"] = a.mat_lr
+    else:
+        adam_groups.append({"params": [params[n] for n in mats], "lr": a.mat_lr, "base_lr": a.mat_lr, "weight_decay": a.wd})
+    if not a.freeze_embed:
+        adam_groups.append({"params": [params[embed]], "lr": a.embed_lr, "base_lr": a.embed_lr, "weight_decay": a.embed_wd})
+    if not a.freeze_norms:
+        adam_groups.append({"params": [params[n] for n in norms], "lr": a.norm_lr, "base_lr": a.norm_lr, "weight_decay": 0.0})
+    if adam_groups:
+        opts.append(torch.optim.AdamW(adam_groups, betas=(a.beta1, a.beta2), fused=dev == "cuda"))
+    trainable = {"full": sorted(trained)}
     tokens = a.batch * CTX
-    extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
+    extra = sum(ns_flops(tuple(params[n].shape), a.ns_steps) for n in mats) if a.mat_opt == "muon" else 0
 
     def flops(op: str, ctx: int, n_tokens: int) -> int:
         return prepare.train_flops(rec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])["flops"]
@@ -160,32 +217,90 @@ def main() -> int:
     step_long = flops("train", CTX, tokens) + extra
     step_short = flops("train", a.short_ctx, tokens) + extra
     per_step = a.short_frac * step_short + (1 - a.short_frac) * step_long
-    available = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET
+    snap_at = [float(x) for x in a.snap_at.split(",") if x.strip()]
+    val_tokens = a.val_rows * CTX
+    n_val = (len(snap_at) + 1) * (2 if a.ema_frac else 1) if a.val_rows else 0
+    val_flops = n_val * flops("forward", CTX, val_tokens)
     score_per_window = flops("forward", a.score_len, a.score_len) if a.score_len else 0
     pool_per_step = a.batch / a.keep if a.score_len else 0
-    n_steps = int(available // (per_step + pool_per_step * score_per_window))
+    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - val_flops) // (per_step + pool_per_step * score_per_window))
     n_short = round(a.short_frac * n_steps)
 
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     n_windows = len(data.order)
     seen = seen_windows(rec, n_windows)
-    ids = np.random.default_rng(a.data_seed).permutation(n_windows)
-    if a.windows != "random":
-        mask = np.isin(ids, seen)
-        ids = ids[mask] if a.windows == "seen" else ids[~mask]
+    if a.fresh:
+        prov = rec["provenance"]
+        if rec["config"]["family"] != "lf" or prov.get("data_seed") != 0:
+            raise SystemExit("train: --fresh needs an lf start trained on data order 0")
+        ids = np.random.default_rng(0).permutation(n_windows)[int(prov["step"]) * int(prov["batch"]):]
+    else:
+        ids = np.asarray(data.order)
+    unseen = ~np.isin(ids, seen)
+    val_idx = ids[np.flatnonzero(unseen)[len(np.flatnonzero(unseen)) - a.val_rows:]] if a.val_rows else ids[:0]
+    keep_mask = ~np.isin(ids, val_idx)
+    if a.windows == "fresh":
+        keep_mask &= unseen
+    elif a.windows == "seen":
+        keep_mask &= ~unseen
+    ids = ids[keep_mask]
     win = Windows(data.tokens, ids)
-    fwd = torch.compile(net)
-    steps, snaps = [], []
+
+    def seq_loss(x: torch.Tensor) -> torch.Tensor:
+        with torch.autocast(dev, dtype=torch.bfloat16):
+            logits = net(x[:, :-1])
+        nll = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1), reduction="none")
+        return nll.view(x.shape[0], -1).mean(1)
+
+    seqf = seq_loss if a.no_compile else torch.compile(seq_loss)
+    steps: list[dict] = []
+
+    @torch.no_grad()
+    def validate() -> float:
+        total = 0.0
+        for i in range(0, a.val_rows, a.micro):
+            idx = np.sort(val_idx[i: i + a.micro])
+            total += float(seqf(win.rows(idx, CTX)).sum())
+        steps.append({"op": "forward", "tokens": val_tokens, "what": "validation on held-back training windows"})
+        return total / a.val_rows
+
+    ema = [p.detach().clone() for p in params.values()] if a.ema_frac else None
+    plist = list(params.values())
+
+    def swap_ema() -> None:
+        for p, e in zip(plist, ema):
+            tmp = p.data.clone()
+            p.data.copy_(e)
+            e.copy_(tmp)
+
+    def choose() -> tuple[str, dict]:
+        """The weights to submit: raw, or EMA when its held-back loss is lower; logs both losses."""
+        if not a.val_rows:
+            return "raw", {}
+        raw = validate()
+        if ema is None:
+            return "raw", {"val_raw": raw}
+        swap_ema()
+        ev = validate()
+        if ev < raw:
+            m = model_of(params, theta, trained)
+            swap_ema()
+            return "ema", {"val_raw": raw, "val_ema": ev, "model": m}
+        swap_ema()
+        return "raw", {"val_raw": raw, "val_ema": ev}
+
     info = {"steps": n_steps, "short_steps": n_short, "flops_per_step_long": step_long, "flops_per_step_short": step_short,
-            "tokens_per_step": tokens, "windows_total": n_windows, "windows_seen_by_start": int(len(seen)),
-            "windows_drawable": int(len(ids))}
+            "tokens_per_step": tokens, "val_flops": val_flops, "trained": len(trained), "windows_total": n_windows,
+            "windows_seen_by_start": int(len(seen)), "windows_drawable": int(len(ids))}
     t0 = time.perf_counter()
-    plan = win.take(n_steps * a.batch) if not a.score_len else None
     if a.score_len:
         pool = win.take(int(round(n_steps * pool_per_step)))
-        net.eval()
-        sc = score_windows(fwd, win, pool, a.score_len, a.micro)
-        net.train()
+        sc = np.empty(len(pool), dtype=np.float32)
+        rows_per = max(1, a.micro * CTX // a.score_len)
+        with torch.no_grad():
+            for i in range(0, len(pool), rows_per):
+                chunk = pool[i: i + rows_per]
+                sc[i: i + len(chunk)] = seqf(win.rows(chunk, CTX, length=a.score_len)).float().cpu().numpy()
         steps.append({"op": "forward", "tokens": int(len(pool)) * a.score_len, "ctx": a.score_len,
                       "what": f"theta scores {len(pool)} windows on their first {a.score_len} tokens"})
         n_keep = n_steps * a.batch
@@ -200,29 +315,32 @@ def main() -> int:
         else:
             kept = np.random.default_rng(a.data_seed + 3).permutation(kept)
         plan = pool[kept]
-        q = np.quantile(sc, [0.1, 0.5, 0.9])
         info |= {"pool": int(len(pool)), "kept": int(n_keep), "pool_loss": float(sc.mean()),
-                 "kept_loss": float(sc[kept].mean()), "pool_loss_q10_50_90": [float(v) for v in q],
+                 "kept_loss": float(sc[kept].mean()),
+                 "pool_loss_q10_50_90": [float(v) for v in np.quantile(sc, [0.1, 0.5, 0.9])],
                  "score_seconds": round(time.perf_counter() - t0, 1)}
+    else:
+        plan = win.take(n_steps * a.batch)
     info["plan_seen_share"] = float(np.isin(plan, seen).mean()) if len(seen) else 0.0
+    info["plan_repeats"] = int(len(plan) - len(np.unique(plan)))
+
+    marks = {max(1, round(n_steps * f)) for f in snap_at if 0 < f < 1}
+    out = Path(a.out)
+    snap_log = []
     print(json.dumps(info), flush=True)
-    marks = {round(n_steps * k / (a.snapshots + 1)) for k in range(1, a.snapshots + 1)}
+    trained_params = [params[n] for n in trained]
     for step in range(n_steps):
-        frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
-        for o, lr in ((muon, muon_lr), (adam, adam_lr)):
+        m = lr_mult(step, n_steps, a)
+        for o in opts:
             for g in o.param_groups:
-                g["lr"] = lr * frac
+                g["lr"] = g["base_lr"] * m
         ctx = a.short_ctx if step < n_short else CTX
-        rows = win.rows(plan[step * a.batch: (step + 1) * a.batch], ctx, prepare.DEVICE)
+        rows = win.rows(plan[step * a.batch: (step + 1) * a.batch], ctx)
         micro = a.micro * (CTX // ctx)
-        n_rows = len(rows)
-        chunks = [rows[i: i + micro] for i in range(0, n_rows, micro)]
+        chunks = [rows[i: i + micro] for i in range(0, len(rows), micro)]
         n_kept = sum(len(x) - int(a.trunc * len(x)) for x in chunks)
         for x in chunks:
-            with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
-                logits = fwd(x[:, :-1])
-            nll = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1), reduction="none")
-            raw = nll.view(len(x), -1).mean(1)
+            raw = seqf(x)
             seq = raw
             n_drop = int(a.trunc * len(x))
             if n_drop:
@@ -230,26 +348,43 @@ def main() -> int:
                 keep[torch.topk(seq.detach(), n_drop).indices] = 0.0
                 seq = seq * keep
             (seq.sum() / n_kept).backward()
-        torch.nn.utils.clip_grad_norm_(list(params.values()), 1.0)
-        muon.step()
-        adam.step()
-        muon.zero_grad(set_to_none=True)
-        adam.zero_grad(set_to_none=True)
-        steps += [{"op": "train", "tokens": tokens, "ctx": ctx}, {"op": "extra", "flops": extra, "what": "muon newton-schulz"}]
+        if a.clip:
+            torch.nn.utils.clip_grad_norm_(trained_params, a.clip)
+        for o in opts:
+            o.step()
+        for o in opts:
+            o.zero_grad(set_to_none=True)
+        steps.append({"op": "train", "tokens": tokens, "ctx": ctx})
+        if extra:
+            steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+        if ema is not None:
+            beta = 1 - 1 / max(1.0, a.ema_frac * (step + 1))
+            torch._foreach_lerp_(ema, [p.detach() for p in plist], 1 - beta)
         if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "ctx": ctx, "loss": float(raw.detach().mean()),
+            print(json.dumps({"step": step + 1, "ctx": ctx, "loss": float(raw.detach().mean()), "lr_mult": round(m, 4),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
-            snaps.append((prepare.encode_full(model_of(params, theta)), len(steps)))
-    model = model_of(params, theta)
-    prepare.submit(prepare.Path(a.out), a.start, KLASS, prepare.encode_full(model), model, trainable, steps,
-                   changed=sorted(params), notes={"optimizer": "muon+adamw", "args": vars(a), "data": info},
-                   snapshots=snaps)
+            which, vinfo = choose()
+            model = vinfo.pop("model", None) or model_of(params, theta, trained)
+            i = len(snap_log)
+            d = out / "snap" / f"{i:03d}"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "E.bin").write_bytes(prepare.encode_full(model))
+            (d / "meta.json").write_text(json.dumps({"steps_prefix": len(steps)}) + "\n")
+            snap_log.append({"step": step + 1, "weights": which, **vinfo})
+            print(json.dumps({"snapshot": i, **snap_log[-1]}), flush=True)
+    which, vinfo = choose()
+    model = vinfo.pop("model", None) or model_of(params, theta, trained)
+    final = {"step": n_steps, "weights": which, **vinfo}
+    print(json.dumps({"final": final, "s": round(time.perf_counter() - t0, 1)}), flush=True)
+    prepare.submit(out, a.start, KLASS, prepare.encode_full(model), {**theta, **model}, trainable, steps,
+                   changed=sorted(trained), notes={"direction": "ref-data", "args": vars(a), "steps": n_steps,
+                                                   "data": info, "snapshots": snap_log, "final": final})
     return 0
 
 
-def model_of(params: dict, theta: dict) -> dict:
-    return {n: p.detach().to(theta[n].dtype).cpu() for n, p in params.items()}
+def model_of(params: dict, theta: dict, trained: list[str]) -> dict:
+    return {n: params[n].detach().to(theta[n].dtype).cpu() for n in trained}
 
 
 if __name__ == "__main__":
