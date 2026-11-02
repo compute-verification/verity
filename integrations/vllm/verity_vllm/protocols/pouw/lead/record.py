@@ -1,12 +1,23 @@
-"""The lead's pass record on the serving side: each call's header, root(A_j) and words root in call order, published as
-core's `PassCommitment` before any sample.
+"""The lead's pass record on the serving side. A pass is one window: one engine step's forward, its calls' root(A_j)s and
+the one root of its words.
 
-Both roots are the committer's (A_j's and the words' frame-v3 leaves, each at its own position), which the record never
-recomputes: it fixes their order. A call's A root comes before its words, and calls come in order. `publish` freezes
-the record: activation_roots is the SHA-512 over the A roots in call order, transcript_root over the words roots,
-records_root over the calls' headers (six u64be each: pass, call, linear, m, K, n), units the calls and tiles their
-committed MMA tiles of words, (R/16)·(C/8)·S a call. A call after publication, and a sample before it (`commitment`),
-are refused.
+The window opens in this order. The record takes the weights' root, the committer's hm96 leaf over the window's key
+(``key_leaf``: with salt_w, the key derives the hiding of the committer's leaves) and the window's call count
+(``calls``), all three fixed before the certifier samples the window's salt salt_w. Then the record takes salt_w
+(`salted`). Then come the calls, in order: each one's root(A_j), at a position j below ``calls`` (`a_root`), so the
+committer's positions are injective. Once every call is in, the forward's words root comes (`words`): one words
+instance a forward, its calls' words in call order.
+
+Both kinds of root are the committer's, and the record never recomputes them: it fixes their order. `publish` freezes
+the record as core's `PassCommitment`:
+
+- ``salt`` is salt_w;
+- ``activation_roots`` is the SHA-512 over the A roots in call order, and ``transcript_root`` the words root;
+- ``records_root`` is the SHA-512 over the window's header (``key_leaf``, then ``calls`` as a u64be) and the calls'
+  headers (six u64be each: pass, call, linear, m, K, n);
+- ``units`` counts the calls, and ``tiles`` their committed MMA tiles of words, (R/16)·(C/8)·S a call.
+
+A sample before publication (`commitment`) is refused, and so is anything recorded after it.
 """
 from __future__ import annotations
 
@@ -18,6 +29,8 @@ from verity.core.protocols.pouw.serving import PassCommitment
 from verity_vllm.protocols.pouw.lead.feed import Call, Shape
 
 ROOT_BYTES = 64
+#: a window's A positions f·calls + j stay below 2^63, where its words positions begin
+MAX_CALLS = 2**63
 
 
 class RecordError(ValueError):
@@ -37,59 +50,83 @@ def _sha512(parts: Sequence[bytes]) -> bytes:
     return hashlib.sha512(b"".join(parts)).digest()
 
 
-def _root(call: Call, what: str, root: bytes) -> bytes:
-    if len(root) != ROOT_BYTES:
-        raise RecordError(f"call {call.index}: {what} root of {len(root)} bytes; it is {ROOT_BYTES}")
-    return bytes(root)
-
-
 class PassRecord:
-    """Pass ``pass_index``'s record on rank ``rank`` of ``world``; ``scheme``, ``salt``, ``weights_root``, ``kernel`` and
-    ``controls`` go into its `PassCommitment` as given."""
+    """Pass ``pass_index``'s record on rank ``rank`` of ``world``: one window of at most ``calls`` calls, under the
+    weights' root ``weights_root`` and the key's leaf ``key_leaf``. ``scheme``, ``kernel`` and ``controls`` go into its
+    `PassCommitment` as given."""
 
-    def __init__(self, scheme: str, rank: int, world: int, pass_index: int, salt: bytes, weights_root: bytes,
-                 kernel: str | None = None, controls: Sequence[str] = ()) -> None:
+    def __init__(self, scheme: str, rank: int, world: int, pass_index: int, weights_root: bytes, key_leaf: bytes,
+                 calls: int, kernel: str | None = None, controls: Sequence[str] = ()) -> None:
         self.scheme, self.rank, self.world, self.pass_index = scheme, rank, world, pass_index
-        self.salt, self.weights_root = bytes(salt), bytes(weights_root)
+        if not 1 <= calls < MAX_CALLS:
+            raise RecordError(f"pass {pass_index}: a window of {calls} calls; it holds 1 to 2^63 - 1")
+        self.weights_root = self._digest("weights' root", weights_root)
+        self.key_leaf = self._digest("key leaf", key_leaf)
+        self.window_calls = calls
         self.kernel, self.controls = kernel, tuple(controls)
+        self.salt: bytes | None = None
         self.calls: list[Call] = []
         self.a_roots: list[bytes] = []
-        self.words_roots: list[bytes] = []
+        self.words_root: bytes | None = None
         self.published: PassCommitment | None = None
 
-    def _open(self, call: Call, what: str) -> None:
+    def _digest(self, what: str, value: bytes) -> bytes:
+        if len(value) != ROOT_BYTES:
+            raise RecordError(f"pass {self.pass_index}: a {what} of {len(value)} bytes; it is {ROOT_BYTES}")
+        return bytes(value)
+
+    def _open(self, what: str) -> None:
         if self.published is not None:
-            raise RecordError(f"pass {self.pass_index}: {what} of call {call.index} after the pass's record was published")
-        if call.pass_index != self.pass_index:
-            raise RecordError(f"call {call.index} of pass {call.pass_index} in pass {self.pass_index}'s record")
+            raise RecordError(f"pass {self.pass_index}: {what} after the pass's record was published")
+
+    def salted(self, salt: bytes) -> None:
+        """The window's salt salt_w, which the certifier sampled once it held the weights' root, the key leaf and the
+        call count: once, before any A root."""
+        self._open("the window's salt")
+        if self.salt is not None:
+            raise RecordError(f"pass {self.pass_index}: the window's salt comes once")
+        self.salt = self._digest("salt", salt)
 
     def a_root(self, call: Call, root: bytes) -> None:
-        """The call's root(A_j): the next call's, once, before its words."""
-        self._open(call, "A")
-        if call.index != len(self.a_roots) or len(self.a_roots) != len(self.words_roots):
-            raise RecordError(f"pass {self.pass_index}: A of call {call.index}, the record's next is call "
-                              f"{len(self.words_roots)} and its A comes once, before its words")
-        root = _root(call, "an A", root)
+        """The call's root(A_j): the next call's, after the window's salt and before the words root, at a position below
+        the window's call count."""
+        what = f"A of call {call.index}"
+        self._open(what)
+        if call.pass_index != self.pass_index:
+            raise RecordError(f"call {call.index} of pass {call.pass_index} in pass {self.pass_index}'s record")
+        if self.salt is None:
+            raise RecordError(f"pass {self.pass_index}: {what} before the window's salt")
+        if self.words_root is not None:
+            raise RecordError(f"pass {self.pass_index}: {what} after the forward's words root")
+        if call.index != len(self.calls):
+            raise RecordError(f"pass {self.pass_index}: {what}; the record's next is call {len(self.calls)}")
+        if call.index >= self.window_calls:
+            raise RecordError(f"pass {self.pass_index}: {what} is past the window's {self.window_calls} calls, fixed "
+                              "before its salt")
+        root = self._digest("call's A root", root)
         self.calls.append(call)
         self.a_roots.append(root)
 
-    def words(self, call: Call, root: bytes) -> None:
-        """The call's words root, after its root(A_j)."""
-        self._open(call, "words")
-        if len(self.a_roots) != len(self.words_roots) + 1 or self.calls[-1] != call:
-            raise RecordError(f"pass {self.pass_index}: words of call {call.index} before its A root")
-        self.words_roots.append(_root(call, "a words", root))
+    def words(self, root: bytes) -> None:
+        """The forward's words root: once, after its calls' A roots."""
+        self._open("the words root")
+        if not self.calls:
+            raise RecordError(f"pass {self.pass_index}: the words root before any call's A root")
+        if self.words_root is not None:
+            raise RecordError(f"pass {self.pass_index}: the words root comes once")
+        self.words_root = self._digest("words root", root)
 
     def publish(self) -> PassCommitment:
-        """The pass's `PassCommitment`, once every call's words are recorded; published once."""
+        """The pass's `PassCommitment`, once the words root is recorded; published once."""
         if self.published is not None:
             raise RecordError(f"pass {self.pass_index}: its record is published once")
-        if len(self.a_roots) != len(self.words_roots):
-            raise RecordError(f"pass {self.pass_index}: call {self.calls[-1].index} has its A root and no words")
+        if self.words_root is None or self.salt is None:
+            raise RecordError(f"pass {self.pass_index}: published before its forward's words root")
+        window = self.key_leaf + self.window_calls.to_bytes(8, "big")
         self.published = PassCommitment(
             self.scheme, self.rank, self.world, self.pass_index, self.salt, self.weights_root,
-            transcript_root=_sha512(self.words_roots), activation_roots=_sha512(self.a_roots), units=len(self.calls),
-            tiles=sum(tiles(c.shape) for c in self.calls), records_root=_sha512([header(c) for c in self.calls]),
+            transcript_root=self.words_root, activation_roots=_sha512(self.a_roots), units=len(self.calls),
+            tiles=sum(tiles(c.shape) for c in self.calls), records_root=_sha512([window, *map(header, self.calls)]),
             kernel=self.kernel, controls=self.controls)
         return self.published
 
