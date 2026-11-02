@@ -13,13 +13,12 @@ A goal is an outcome Daniel would recognize and could check himself: a one-line 
 (will it be true by its due date?), a due date (2026-11-05, the end of that day, or 2026-11-05T10:00-08:00), lowercase
 tags (demos, proofs, ci, infra, cleanup, accounting, pm), and Markdown for him: a description of what will be true and how
 to check it, and blockers only while something blocks it (a link to "#<id>" opens that goal). The site checks every write
-and answers which field is wrong. $RESEARCH_GOALS_URL points the command at another server (the tests' fake).
+and answers which field is wrong. --url points the command at another server; the token's audience stays the route's.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import urllib.error
 from datetime import datetime
@@ -35,8 +34,8 @@ STORED_ONLY = ("updatedAt", "updatedBy", "wasDue")
 
 
 class Route:
-    def __init__(self) -> None:
-        self.base = os.environ.get("RESEARCH_GOALS_URL") or GOALS
+    def __init__(self, url: str = GOALS) -> None:
+        self.base = url
         self._oidc = _Identity(GOALS)
 
     def call(self, body: dict | None = None) -> list[dict]:
@@ -115,6 +114,7 @@ def edited(current: dict | None, ns: argparse.Namespace) -> dict:
 
 def main(argv: list[str], route: Route | None = None) -> int:
     p = argparse.ArgumentParser(prog="research goals", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--url", default=GOALS, help="the route (default: the console's)")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("show")
     s.add_argument("--json", action="store_true")
@@ -132,7 +132,7 @@ def main(argv: list[str], route: Route | None = None) -> int:
         sub.add_parser(name).add_argument("id")
     sub.add_parser("replace").add_argument("file")
     ns = p.parse_args(argv)
-    route = route or Route()
+    route = route or Route(ns.url)
     try:
         if ns.cmd == "show":
             goals = route.call()
