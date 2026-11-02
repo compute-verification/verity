@@ -1034,28 +1034,11 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
     if append and lines:
         append_board(lines)
         if promote:
-            ledger_promote(pr["new"], rows)
             for i, b in (pr.get("decided") or {}).items():
                 promoted[i] = {"at": hhmm, "promote": (b or {}).get("promote"), "sealed": b}
             ppath.write_text(json.dumps(promoted, indent=1) + "\n")
             (STATE / "rescreens.json").write_text(json.dumps(sorted({x["id"] for x in pr["rescreens"]})) + "\n")
     return lines
-
-
-def ledger_promote(new: list[dict], rows: list[dict]) -> list[str]:
-    """A promoted te_core entry at tier 0 gets the scorer's promotion record to tier 1 in the te_core ledger (published),
-    which tier 1's launch gate reads; tier 2 is final scoring's."""
-    from te_core.ledger import Ledger
-
-    ents = {x["id"]: x for x in entries(rows)}
-    led = Ledger(agent="scorer", publish=True)
-    out = []
-    for p in new:
-        x = ents.get(p["id"])
-        if x and x.get("te_id") and int(x.get("tier") or 0) < 1:
-            led.promote(x["te_id"], 1, "; ".join(p["reasons"]))
-            out.append(x["te_id"])
-    return out
 
 
 def frontier_lines(part: dict) -> list[str]:
@@ -1068,12 +1051,13 @@ def frontier_lines(part: dict) -> list[str]:
             cells = t["cells"]
             if h is None and all(c["w_star"] is None for c in cells.values()):
                 continue
-            eff = [cells[k]["effective_slowdown"] for k in KEYS]
+            eff = [cells[k]["effective_slowdown"] if h else cells[k]["w_star"] and 2 * cells[k]["w_star"] for k in KEYS]
             vec = " | ".join(", ".join(fmt(e, ".3g") for e in eff[i: i + 3]) for i in (0, 3, 6))
             ids = sorted({short(c["id"]) + (" (c)" if c.get("counted") else " (a)") for c in cells.values() if c["id"]})
             parts.append(f"-{100 * t['drop']:g}% (l* {t['l_star']:.4f}): honest {fmt(h and 2 * h)}"
                          + (f" ({short(t['honest_id'])}@{t['honest_cp']})" if t["honest_id"] else "")
-                         + (f"; W*/honest [{vec}] via {', '.join(ids)}" if ids else "; no covert entry reaches it"))
+                         + (f"; {'W*/honest' if h else 'W* FLOPs (no reference reaches it)'} [{vec}] via {', '.join(ids)}"
+                            if ids else "; no covert entry reaches it"))
         if parts:
             out.append(f"{s}: " + "; ".join(parts) + ".")
     return out
