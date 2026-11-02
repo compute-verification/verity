@@ -29,7 +29,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -63,7 +63,7 @@ def entries(repo: Path, ref: str, path: str) -> set[tuple[datetime, str]]:
     out, added = set(), None
     for row in git(repo, "blame", "-M", "--line-porcelain", ref, "--", path).split("\n"):
         if row.startswith("author-time "):
-            added = datetime.fromtimestamp(int(row.split()[1]), timezone.utc)
+            added = datetime.fromtimestamp(int(row.split()[1]), UTC)
         elif row.startswith("\t") and (m := ENTRY.match(row[1:])):
             out.add((when(int(m[1]), int(m[2]), added), row[1:]))
     return out
