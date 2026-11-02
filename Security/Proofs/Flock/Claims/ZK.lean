@@ -185,6 +185,7 @@ import Proofs.Flock.Claims.ZK.RepFree
 import Proofs.Flock.Claims.ZK.RepReplay
 import Proofs.Flock.Claims.ZK.RepInner
 import Proofs.Flock.Claims.ZK.RepCutFw
+import Proofs.Flock.Claims.ZK.RepRet
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -740,6 +741,10 @@ import Proofs.Flock.Claims.ZK.RepCutFw
 * `RepCutFw`: the cut rep returns on its coins alone. Where the firewall's rep returned and the cut's rank check passes,
   the cut rep from any hash, commitments and source returns, with a log of the firewall's size
   (**`CutFree.repCut_of_repFwC`**).
+* `RepRet`: a rep returns on its coins alone. Each phase returns from any source wherever the coins it draws pass its
+  checks (`CutFree.piopCut_ret`, `CutFree.ligeritoCut_ret`, `CutFree.innerCut_ret`, `CutFree.repCut_ret`), so at a
+  `Live` statement, table `k / 2`'s rep `k % 2` returns from `repBase x k` to `repBase x (k + 1)` wherever the coins
+  below round `n`, past its `β` round, show no refusal (**`Masked.repCut_ret`**).
 * `L0PinFrame`: the firewall's scheduled opening, fed the stream's coins, is the cut run. Fed coins one round at a
   time (`Fed.feedR`), a run over `Drive.OpenM` is the cut run over `PS` at those coins (`Fed.feedSim`), so the opening
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies
