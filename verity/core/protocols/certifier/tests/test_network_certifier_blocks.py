@@ -17,9 +17,9 @@ import pytest
 from verity.ml.crypto import lms
 from verity.ml.windows import interface as IF
 from verity.core.protocols.certifier import blocks as BK
+from verity.core.protocols.certifier.blocks import SCAN_STATE
 from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, LmsKey
-from verity.ml.protocols.certifier.ingress_scan import SCAN_STATE
 
 import signers
 
