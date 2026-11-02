@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The `--zk` schedule's dimensions

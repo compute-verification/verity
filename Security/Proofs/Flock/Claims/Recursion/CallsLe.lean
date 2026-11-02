@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.LogWalk
+import all Init.Data.List.Control
 
 /-!
 # Bounding a logged run's SHA-512 calls on every run

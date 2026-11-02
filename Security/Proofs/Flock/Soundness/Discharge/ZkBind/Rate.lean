@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkBind.At
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The planned rate of the `--zk` plan, at every draw

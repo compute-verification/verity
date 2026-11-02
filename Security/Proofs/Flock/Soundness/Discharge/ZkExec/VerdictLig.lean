@@ -5,6 +5,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigMain
 public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `ZkRepAccepts`'s Ligerito half: a `--zk` rep's Ligerito verdict accepts the proof's rows

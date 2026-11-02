@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+import all Init.Data.Array.Basic
 
 /-!
 # The registered check at an accepted hidden-output `--zk --registered` outcome of `J` tables

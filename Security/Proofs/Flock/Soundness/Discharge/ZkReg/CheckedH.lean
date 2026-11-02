@@ -4,6 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import all Init.Data.Array.Basic
 
 /-!
 # The registered check at an accepted hidden-output `--zk --registered` outcome
