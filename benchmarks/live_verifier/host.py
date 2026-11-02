@@ -76,9 +76,12 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   (`<root>/parties/pous/salts`, `setups/<id>.json`), so a caller names a window and never a session. With `--fixture`,
   the fixture store's in the pinned tree (`PARTY_FIXED`), and with neither the gate refuses it, so a forced command that
   drops the caller's words can't hold a store the caller didn't name. `party_key wipe|pous` prints the public half,
-  which the lane pins as `--trusted`, and `party_log wipe|pous [LOG]` lets any key read the sessions and each one's
-  stdout as the host kept it (its signed t0 and t1). A lane never names a path, an address or an egress count: a
-  session signs `UNCOUNTED` egress until the network certifier's count reaches the host. A session waits for no
+  which the lane pins as `--trusted`, `party_log wipe|pous|bw [LOG]` lets any key read the sessions and each one's
+  stdout as the host kept it (its signed t0 and t1), and `party_log bw answers AUDIT` the bandwidth party's own answers
+  of its sessions under the window's binding AUDIT, which the composed run's collector credits a window's bandwidth
+  answer by (`benchmarks/one_stage/served_bandwidth.py collect`); the party's cases (`private/`) never leave the host.
+  A lane never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network
+  certifier's count reaches the host. A session waits for no
   verifier unit to run, each party serves one session at a time, and the gate kills a party after its session's
   `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
@@ -678,13 +681,31 @@ def gate_party(verb: str, rest: list[str], host: Host, *, by: str, now: datetime
 LOG_NAME = re.compile(r"\d{8}T\d{6}Z\.jsonl")
 
 
+def _jsonl(f: Path) -> list:
+    lines = []
+    for ln in f.read_text(errors="replace").splitlines():
+        try:
+            lines.append(json.loads(ln))
+        except ValueError:
+            lines.append(ln)
+    return lines
+
+
 def gate_party_log(rest: list[str], host: Host) -> dict:
-    """`party_log wipe|pous [LOG]`: a party's sessions (each request and end, `requests.jsonl`), or one session's stdout as the
-    host kept it (`log/LOG`: `{"listening"}` and the signed report, whose `window` is t0 and t1 on this host's clock), so a
-    reader takes them from the challenger's host and never through the card. Any key reads it."""
+    """`party_log wipe|pous|bw [LOG]`: a party's sessions (each request and end, `requests.jsonl`), or one session's stdout as
+    the host kept it (`log/LOG`: `{"listening"}` and the signed report, whose `window` is t0 and t1 on this host's clock), so a
+    reader takes them from the challenger's host and never through the card. `party_log bw answers AUDIT`: the bandwidth
+    party's own answers (`answers.jsonl`, in order) of its sessions held by the PoUS session of the window's binding AUDIT,
+    which a collector credits a window's bandwidth answer by, never the prover's copy; never its cases (`private/`). Any
+    key reads it."""
     names = {n for n, _, _ in PARTIES.values()}
+    if len(rest) == 3 and rest[:2] == ["bw", "answers"] and POUS_AUDIT.fullmatch(rest[2]):
+        f = host.parties / "bw" / "answers.jsonl"
+        kept = _jsonl(f) if f.is_file() else []
+        return {"party": "bw", "audit": rest[2],
+                "answers": [a for a in kept if isinstance(a, dict) and a.get("audit") == rest[2]]}
     if not rest or rest[0] not in names or len(rest) > 2 or (len(rest) == 2 and not LOG_NAME.fullmatch(rest[1])):
-        raise Refused(f"party_log {'|'.join(sorted(names))} [LOG]")
+        raise Refused(f"party_log {'|'.join(sorted(names))} [LOG] | party_log bw answers AUDIT")
     d = host.parties / rest[0]
     if len(rest) == 1:
         reqs = d / "requests.jsonl"
@@ -693,13 +714,7 @@ def gate_party_log(rest: list[str], host: Host) -> dict:
     f = d / "log" / rest[1]
     if not f.is_file():
         raise Refused(f"no session log {rest[1]} for {rest[0]}")
-    lines = []
-    for ln in f.read_text(errors="replace").splitlines():
-        try:
-            lines.append(json.loads(ln))
-        except ValueError:
-            lines.append(ln)
-    return {"party": rest[0], "log": rest[1], "lines": lines}
+    return {"party": rest[0], "log": rest[1], "lines": _jsonl(f)}
 
 
 KEYGEN = "import sys; from verity.core.protocols.pous import period; print(period.challenger(sys.argv[1]).public_key.hex())"
@@ -736,7 +751,7 @@ USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC 
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
          "| bw_party (--pous-audit AUDIT | --fixture) [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
-         "| party_log wipe|pous [LOG]")
+         "| party_log wipe|pous|bw [LOG] | party_log bw answers AUDIT")
 
 
 def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **hooks: Any) -> int:

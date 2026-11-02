@@ -746,6 +746,27 @@ def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_f
     assert "no session log" in refused(call(svc, ["party_log", "pous", "20261026T000000Z.jsonl"], key="-"))
 
 
+def test_party_log_bw_answers_gives_any_key_the_bandwidth_partys_own_answers_under_one_audit_and_never_its_cases(svc):
+    """The answers `p2_party --device` kept (`answers.jsonl`) of sessions held by the PoUS session of AUDIT, in order: no
+    other audit's, no fixture session's (it names none) and no case (`private/cases.jsonl`); none before any session."""
+    audit, other = "a" * 128, "b" * 128
+    assert call(svc, ["party_log", "bw", "answers", audit], key="-") == (
+        0, json.dumps({"answers": [], "audit": audit, "party": "bw"}, sort_keys=True).encode() + b"\n")
+    d = svc.parties / "bw"
+    (d / "private").mkdir(parents=True)
+    (d / "private" / "cases.jsonl").write_text(json.dumps({"commitment": "c4" * 32}) + "\n")
+    kept = [{"verdict": "reject", "audit": audit}, {"verdict": "accept", "audit": other}, {"verdict": "accept"},
+            {"verdict": "accept", "audit": audit, "q_bytes": 8224}]
+    (d / "answers.jsonl").write_text("".join(json.dumps(a) + "\n" for a in kept) + '{"verdict": "acc\n')
+    rc, out = call(svc, ["party_log", "bw", "answers", audit], key="-")
+    assert rc == 0 and json.loads(out) == {"party": "bw", "audit": audit, "answers": [kept[0], kept[3]]}
+    assert "c4" * 32 not in out.decode() and other not in out.decode()
+    for words in (["party_log", "bw", "answers"], ["party_log", "bw", "answers", "A" * 128],
+                  ["party_log", "bw", "answers", "../" + "a" * 125], ["party_log", "pous", "answers", audit],
+                  ["party_log", "bw", "answers", audit, "x"], ["party_log", "bw", "private"]):
+        assert "party_log bw answers AUDIT" in refused(call(svc, words, key="-")), words
+
+
 def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):
     (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
     assert rc == 0 and ran[0][-9:] == ["-m", "verity.core.protocols.remote_bandwidth.p2_party", "--device", str(svc.parties / "bw"),
