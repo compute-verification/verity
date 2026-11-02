@@ -1340,11 +1340,13 @@ def soft_spots(rows: list[dict]) -> list[dict]:
     record's checkpoints."""
     out: dict[str, dict] = {}
     runs = run_rows(rows)
+    fam = {runs[x["run"]]["id"] for x in rows if x["source"] == "te_core" and x.get("run") in runs
+           and any(f["covers"] for f in x.get("families") or [])}
     for x in rows:
         rec = runs.get(x.get("run")) if x["source"] == "te_core" and x.get("rho") else None
         if not rec or is_audit(rec) or rec.get("final") or (rec.get("phi") or 0) < SOFT_PHI:
             continue
-        if any(f["covers"] for f in rec.get("families") or []) or any(
+        if rec["id"] in fam or any(
                 f.startswith(("priced wrong", "replay:", "counted:")) for f in rec["failed_checks"]):
             continue
         s = out.setdefault(rec["id"], {"rec": rec, "phi_w": rec["phi"], "phi_c": 0.0, "rho": 1.0})
@@ -1628,8 +1630,10 @@ WAITING_PER_NODE = 2
 
 def rerun_state(run: str) -> str:
     """A launched rerun's state, `waiting` while its pool hasn't given it a GPU slot (slot.py's slot.json not `held`)."""
-    research("fetch", run)
     d = RUNS / run
+    if (d / "status.json").exists() and (st := json.loads((d / "status.json").read_text()).get("state")) in ENDED:
+        return st
+    research("fetch", run)
     st = json.loads((d / "status.json").read_text()).get("state") if (d / "status.json").exists() else "submitted"
     slot = json.loads((d / "slot.json").read_text()) if (d / "slot.json").exists() else {}
     return "waiting" if st in ("submitted", "running") and slot.get("state") != "held" else st
