@@ -1,5 +1,5 @@
 """`tools/verity/lean/modules.py`: the port it makes of a plain file (which reads back as a module and which a rerun leaves
-alone), the transition options, and which files of a package are its modules."""
+alone), the transition options, each package's lakefile option, and which files of a package are its modules."""
 from __future__ import annotations
 
 import importlib.util
@@ -69,7 +69,22 @@ def test_with_option_adds_a_transition_option_after_the_section_once():
                                                          "\nset_option backward.privateInPublic.warn false")
     assert M.with_option(once, "backward.privateInPublic") == once
     with pytest.raises(ValueError, match="not ported"):
-        M.with_option("import A\n", "backward.proofsInPublic")
+        M.with_option("import A\n", "backward.privateInPublic")
+
+
+def test_a_package_keeps_a_public_statement_s_proofs_in_it():
+    """`backward.proofsInPublic` goes after the last key of the lakefile's `[leanOptions]`, above a comment that opens the
+    next table, once; a lakefile without the table gets one; one whose leanOptions can't take the line is left to a hand."""
+    text = 'name = "p"\n\n[leanOptions]\nautoImplicit = false\n\n# its dependency\n[[require]]\nname = "q"\npath = "../q"\n'
+    want = text.replace("autoImplicit = false\n", f"autoImplicit = false\n{M.LAKE_OPTION}\n")
+    assert M.with_lake_option(text) == want and M.with_lake_option(want) == want
+    assert M.has_lake_option(want) and not M.has_lake_option(text)
+    assert M.with_lake_option('name = "p"\n[[lean_lib]]\nname = "P"') == \
+        f'name = "p"\n[[lean_lib]]\nname = "P"\n\n[leanOptions]\n{M.LAKE_OPTION}\n'
+    for odd in ('[leanOptions]\nbackward.proofsInPublic = false\n', 'leanOptions = [{name = "autoImplicit", value = false}]\n',
+                'leanOptions = {autoImplicit = false}\n'):
+        with pytest.raises(ValueError, match="by hand"):
+            M.with_lake_option(odd)
 
 
 def test_a_package_s_modules_are_its_libraries_and_executable_roots(tmp_path, monkeypatch, capsys):
@@ -90,9 +105,12 @@ def test_a_package_s_modules_are_its_libraries_and_executable_roots(tmp_path, mo
     assert M.modules([], sorted(files)) == ["p/inner/I.lean", "p/src/Main.lean", "p/src/P.lean", "p/src/P/A.lean"]
     assert M.main(["--check", "p/src"]) == 1
     assert capsys.readouterr().out.splitlines() == [f"{f}: not a module: run `{M.FIX} {f}`"
-                                                    for f in ("p/src/Main.lean", "p/src/P.lean", "p/src/P/A.lean")]
-    assert M.main(["p"]) == 0 and "4 of 4 module(s) ported" in capsys.readouterr().out
-    assert M.main(["p"]) == 0 and "0 of 4 module(s) ported" in capsys.readouterr().out
+                                                    for f in ("p/src/Main.lean", "p/src/P.lean", "p/src/P/A.lean")] + \
+        [f"p/lakefile.toml: its [leanOptions] lack `{M.LAKE_OPTION}`: run `{M.FIX} p`"]
+    assert M.main(["p"]) == 0 and "4 of 4 module(s) ported, 2 lakefile(s)" in capsys.readouterr().out
+    assert M.main(["p"]) == 0 and "0 of 4 module(s) ported, 0 lakefile(s)" in capsys.readouterr().out
     assert M.main(["--check"]) == 0
+    assert (tmp_path / "p/lakefile.toml").read_text() == files["p/lakefile.toml"] + f"\n[leanOptions]\n{M.LAKE_OPTION}\n"
     assert (tmp_path / "p/scripts/Gen.lean").read_text() == "def g := 1\n"
     assert (tmp_path / M.FIXTURES / "control/Control.lean").read_text() == "import Control.Defs\n"
+    assert (tmp_path / M.FIXTURES / "control/lakefile.toml").read_text() == files[M.FIXTURES + "control/lakefile.toml"]

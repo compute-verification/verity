@@ -382,6 +382,7 @@ defaultTargets = ["Definitions", "Specs"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "mathlib"
@@ -404,6 +405,7 @@ defaultTargets = ["Proofs"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "Arklib"
@@ -429,6 +431,7 @@ defaultTargets = ["flock-verify", "flock-rows"]
 
 [leanOptions]
 autoImplicit = false
+backward.proofsInPublic = true
 
 [[lean_lib]]
 name = "Flock"
@@ -449,6 +452,7 @@ defaultTargets = ["Grader", "pous-grader"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[lean_lib]]
 name = "Grader"

@@ -12,6 +12,7 @@ defaultTargets = ["PouwCheck", "pouw-check", "pouw-check-difftest", "pouw-leaf-o
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "core_protocol"

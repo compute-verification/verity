@@ -19,6 +19,12 @@ changes nothing and a branch made before the port takes it by running this on it
 - in a file that runs code while it compiles (`#eval`, `#guard`, `run_cmd`, ...), adds `meta import M` for each `M` it
   imports: a module runs that code at the `meta` phase, which reads only what it meta-imports.
 
+Each package's `lakefile.toml` sets `backward.proofsInPublic` under `[leanOptions]` (`LAKE_OPTION`): a proof inside a public
+statement or an exposed definition (a `by decide` argument, a derived `DecidableEq`'s) stays in it, as without the module
+system, instead of becoming an auxiliary theorem, so every declaration elaborates to the term it did and its records in
+`lean-audit.json` don't move. A proof's body is private either way. What still differs is a matcher: a derived `Repr`'s
+function is never exposed, so a public definition matching as it does gets a matcher of its own instead of sharing its.
+
 What the module system refuses beyond that is fixed by hand in the file, which this then leaves alone: a tactic's helper
 gets `meta`; a proof that unfolds a core definition the toolchain doesn't expose rewrites by core's lemma for it or gets
 `import all` of that definition's module (never of an in-tree module: a module's build reads only its imports' public
@@ -26,9 +32,9 @@ parts), and when that `import all` slows the file's other proofs past their budg
 own (`CallsFast100`); a theorem whose statement names another module's private declaration (core's `Array.qsort.sort`)
 is private, beside a public theorem over the public definition for other files; an exported `:= rfl` theorem whose `rfl`
 unfolds an unexposed definition is `:= (rfl)`, which isn't inferred `@[defeq]`; a tactic block in a statement gets its
-type ascribed. `--option` adds one of the transition options to a file that needs it: `backward.privateInPublic` (a
-public definition reads a private declaration that isn't a definition, or another module opens one with `open private …
-from`; the private one keeps its name, and the warning is turned off) or `backward.proofsInPublic`.
+type ascribed. `--option backward.privateInPublic` adds that transition option to a file whose public definition reads a
+private declaration that isn't a definition, or whose private declaration another module opens with `open private … from`;
+the private one keeps its name, and the warning is turned off.
 
 It reads each header with `headers.py`, the one reading of a Lean header, and edits it where that says each import starts.
 Stdlib only."""
@@ -46,8 +52,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 SECTION = "@[expose] public section"
 #: each transition option `--option` takes, and the `set_option` lines it adds
-OPTIONS = {"backward.privateInPublic": ("backward.privateInPublic true", "backward.privateInPublic.warn false"),
-           "backward.proofsInPublic": ("backward.proofsInPublic true",)}
+OPTIONS = {"backward.privateInPublic": ("backward.privateInPublic true", "backward.privateInPublic.warn false")}
+#: the line each package's `[leanOptions]` holds
+LAKE_OPTION = "backward.proofsInPublic = true"
 #: a command that runs code while its file compiles
 EVALUATES = re.compile(r"(?m)(?:^[ \t]*|\bin[ \t]+)(?:#eval!?|#guard|run_cmd|run_meta|run_elab)(?![\w!?'])")
 #: a private definition, which an exposed body reads only under `backward.privateInPublic`
@@ -152,6 +159,44 @@ def with_option(src: str, name: str) -> str:
     return src[:eol] + "".join("\n" + s for s in lines) + src[eol:]
 
 
+def has_lake_option(text: str) -> bool:
+    """Whether the lakefile ``text``'s `[leanOptions]` holds `LAKE_OPTION`."""
+    opts = tomllib.loads(text).get("leanOptions", {})
+    return isinstance(opts, dict) and isinstance(b := opts.get("backward"), dict) and b.get("proofsInPublic") is True
+
+
+def with_lake_option(text: str) -> str:
+    """The lakefile ``text`` with `LAKE_OPTION` after the last key of its `[leanOptions]` table, or in a table of its own at
+    the end when it has none; ``text`` itself when it holds it. Raises ValueError when the result wouldn't read back as
+    holding it (the option set to something else, leanOptions written as an array or inline)."""
+    if has_lake_option(text):
+        return text
+    lines = text.splitlines(keepends=True)
+    heads = [i for i, s in enumerate(lines) if re.fullmatch(r"\[leanOptions\][ \t]*(?:#.*)?", s.strip())]
+    if heads:
+        end = next((j for j in range(heads[0] + 1, len(lines)) if lines[j].lstrip().startswith("[")), len(lines))
+        while end > heads[0] + 1 and (not lines[end - 1].strip() or lines[end - 1].lstrip().startswith("#")):
+            end -= 1
+        before = "".join(lines[:end])
+        new = before + ("" if before.endswith("\n") else "\n") + LAKE_OPTION + "\n" + "".join(lines[end:])
+    else:
+        new = text.rstrip("\n") + f"\n\n[leanOptions]\n{LAKE_OPTION}\n"
+    try:
+        ok = has_lake_option(new)
+    except tomllib.TOMLDecodeError:
+        ok = False
+    if not ok:
+        raise ValueError(f"its leanOptions don't take `{LAKE_OPTION}` as a line of a `[leanOptions]` table: set it by hand")
+    return new
+
+
+def lake_option_missing(files: list[str], paths: list[str] = ()) -> list[str]:
+    """The lakefiles of the packages under (or holding) ``paths`` (all when there is none) without `LAKE_OPTION`."""
+    pkgs = [p for p in packages(files)
+            if not paths or any(p == q.rstrip("/") or p.startswith(q.rstrip("/") + "/") or q.startswith(p + "/") for q in paths)]
+    return [f"{p}/lakefile.toml" for p in pkgs if not has_lake_option((ROOT / p / "lakefile.toml").read_text())]
+
+
 def _lakefile(d: Path) -> dict | None:
     f = d / "lakefile.toml"
     return tomllib.loads(f.read_text()) if f.is_file() else None
@@ -209,13 +254,24 @@ def main(argv: list[str]) -> int:
             p = ROOT / f
             p.write_text(with_option(p.read_text(), a.option))
         return 0
-    todo = modules(a.paths, tracked())
+    files = tracked()
+    todo, lakefiles = modules(a.paths, files), lake_option_missing(files, a.paths)
     if a.check:
         left = [f for f in todo if not is_module((ROOT / f).read_text())]
         for f in left:
             print(f"{f}: not a module: run `{FIX} {f}`")
-        return 1 if left else 0
-    changed = failed = 0
+        for f in lakefiles:
+            print(f"{f}: its [leanOptions] lack `{LAKE_OPTION}`: run `{FIX} {f.rsplit('/', 1)[0]}`")
+        return 1 if left or lakefiles else 0
+    changed = failed = optioned = 0
+    for f in lakefiles:
+        p = ROOT / f
+        try:
+            p.write_text(with_lake_option(p.read_text()))
+            optioned += 1
+        except ValueError as e:
+            print(f"{f}: {e}", file=sys.stderr)
+            failed += 1
     for f in todo:
         p = ROOT / f
         src = p.read_text()
@@ -228,7 +284,8 @@ def main(argv: list[str]) -> int:
         if new != src:
             p.write_text(new)
             changed += 1
-    print(f"{changed} of {len(todo)} module(s) ported, {failed} left to port by hand")
+    print(f"{changed} of {len(todo)} module(s) ported, {optioned} lakefile(s) given `{LAKE_OPTION}`, {failed} left to port "
+          "by hand")
     return 1 if failed else 0
 
 

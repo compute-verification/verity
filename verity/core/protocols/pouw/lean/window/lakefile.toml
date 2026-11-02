@@ -13,6 +13,7 @@ defaultTargets = ["PouwWindow", "pouw-window-difftest", "pouw-leaf-own"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "verity_difftest"

@@ -31,7 +31,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   proof-only definitions is not a guarantee.
 - **Every module is on Lean's module system** (`tests/test_lean_packages.py`): a new file starts `module`, imports with
   `public import M`, and opens `@[expose] public section` after its header; `python3 tools/verity/lean/modules.py FILE`
-  writes that, with `backward.privateInPublic` when the file declares a private definition. A proof's body is private,
+  writes that, with `backward.privateInPublic` when the file declares a private definition, and puts
+  `backward.proofsInPublic = true` in each package's `[leanOptions]`, so a proof inside a statement or an exposed body
+  stays in it and the lock's records don't move. A proof's body is private,
   so an edit to it rebuilds no importer. What the module system refuses is fixed
   in the file (the codemod's docstring): a tactic's helper is `meta`; a proof that unfolds a core definition the
   toolchain doesn't expose (`decide`, `rfl`, `unfold`) rewrites by core's lemma for it or has `import all` of its

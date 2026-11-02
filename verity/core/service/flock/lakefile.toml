@@ -4,6 +4,7 @@ defaultTargets = ["flock-verify", "flock-rows", "flock-firewall", "flock-witness
 
 [leanOptions]
 autoImplicit = false
+backward.proofsInPublic = true
 
 [[lean_lib]]
 name = "Flock"
