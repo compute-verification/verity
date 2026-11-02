@@ -1127,14 +1127,40 @@ def sealed_bits(cands: list[dict]) -> dict:
     src = official_src()
     d = STATE / "sealed"
     d.mkdir(parents=True, exist_ok=True)
+    got, queued = queued_bits(d / "pending.json")
+    waiting = {i for q in queued for i in q["ids"]}
+    cands = [c for c in cands if c["id"] not in got and c["id"] not in waiting]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
     inp, out = d / f"candidates-{stamp}.json", d / f"bits-{stamp}.json"
     inp.write_text(json.dumps(cands, indent=1) + "\n")
     p = subprocess.run([sys.executable, "benchmarks/covert_witness/promote.py", "--in", str(inp), "--out", str(out)],
-                       cwd=src, env=tool_env(), capture_output=True, text=True)
-    if p.returncode or not out.exists():
-        raise SystemExit(f"scorer: promote.py failed ({p.returncode}): {(p.stderr or p.stdout)[-800:]}")
-    return json.loads(out.read_text())
+                       cwd=src, env=tool_env(), capture_output=True, text=True) if cands else None
+    if p and (p.returncode or not out.exists()):
+        text = p.stdout + p.stderr
+        going = set(re.findall(r"run (r\d{8}-\d{6}-[0-9a-f]{4}) \(waiting\) is still going", text))
+        launched = dict(re.findall(r"run (r\d{8}-\d{6}-[0-9a-f]{4}) launched on (\S+)", text))
+        if not going:
+            raise SystemExit(f"scorer: promote.py failed ({p.returncode}): {text[-800:]}")
+        default = listed_nodes()[0]
+        queued += [{"run": r, "node": n, "at": stamp, "ids": [c["id"] for c in cands if (c.get("node") or default) == n]}
+                    for r, n in launched.items() if r in going]
+    (d / "pending.json").write_text(json.dumps(queued, indent=1) + "\n")
+    return got | (json.loads(out.read_text()) if p else {}) | {
+        i: {"queued": q["run"], "node": q["node"]} for q in queued for i in q["ids"]}
+
+
+def queued_bits(path: Path) -> tuple[dict, list[dict]]:
+    """The bits of decision runs promote.py stopped waiting on (research run's 20-minute cap: on a node whose CPU pool is
+    its gpu line, `sealed.py decide` waits behind training runs) that have since ended, and the ones still queued."""
+    got, still = {}, []
+    for q in json.loads(path.read_text()) if path.exists() else []:
+        research("fetch", q["run"], "--all")
+        f = RUNS / q["run"] / "out" / "bits.json"
+        if f.is_file():
+            got |= {k: v | {"node": q["node"], "run": q["run"]} for k, v in json.loads(f.read_text()).items()}
+        else:
+            still.append(q)
+    return got, still
 
 
 def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) -> list[str]:
@@ -1165,7 +1191,12 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
             if yes:
                 lines.append(f"{hhmm} scorer [PROMOTED] " + ", ".join(f"{short(i)} ({'; '.join(why[i])})" for i in yes)
                              + f"; promoted by the sealed promotion set ({', '.join(runs)}).")
-            no = [i for i in why if i not in yes and i not in pending]
+            queued = {i: bits[i] for i in why if (bits.get(i) or {}).get("queued")}
+            if queued:
+                lines.append(f"{hhmm} scorer [DIGEST] promotion candidates the sealed set hasn't decided yet: " + ", ".join(
+                    f"{short(i)} ({'; '.join(why[i])}; decision run {b['queued']} waits in {b['node']}'s gpu line)"
+                    for i, b in queued.items()) + "; read next hour.")
+            no = [i for i in why if i not in yes and i not in pending and i not in queued]
             if no:
                 lines.append(f"{hhmm} scorer [DIGEST] promotion candidates the sealed set did not promote: " + ", ".join(
                     f"{short(i)} ({'no sealed value' if (bits.get(i) or {}).get('promote') is None else 'gain not held'})"
@@ -1175,7 +1206,7 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
                     f"{short(i)} ({'; '.join(why[i])}; its value is on {n}, which {nodes_file()} doesn't list, "
                     f"so promote.py can't run there)" for i, n in pending.items()) + "; candidates again next hour.")
             pr["new"] = [p for p in pr["new"] if p["id"] in yes]
-            pr["decided"] = {i: bits.get(i) for i in why if i not in pending}
+            pr["decided"] = {i: bits.get(i) for i in why if i not in pending and i not in queued}
         old = set(json.loads((STATE / "rescreens.json").read_text())) if (STATE / "rescreens.json").exists() else set()
         rs = [x for x in pr["rescreens"] if x["id"] not in old]
         if rs:
