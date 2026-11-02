@@ -20,9 +20,11 @@ Data (all off by default: TrainData's stream permuted by `--data-seed`, the seed
 - `--trunc Q`: in each micro-batch the Q of the sequences with the highest loss get no gradient (loss truncation; no extra
   FLOPs, their pass is still priced).
 
-E is the trained tensors in full (`prepare.encode_full`). prepare.py, evaluate.py, guard.py and candidate.sh are fixed.
+E is the trained tensors in full (`prepare.encode_full`). It runs inside the harness (candidate.sh's script mode), and
+since it reads windows by id rather than through `TrainData.next`, it marks its steps itself
+(`hooks.step()`): θ's scoring pass, each training step with its snapshots and forks, and the final validation and submit.
 
-    python guard.py islands/reference/train.py --start m100 --out SUB [--mat-lr 0.004] [--windows fresh] [--short-ctx 256 ...]
+    launch.py reference m100 --note "MECHANISM ..." -- [--mat-lr 0.004] [--windows fresh] [--score-len 64 --keep 0.75 ...]
 """
 from __future__ import annotations
 
@@ -35,6 +37,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
+from te_core import hooks
 
 import prepare
 
@@ -313,7 +316,7 @@ def main() -> int:
         pool = win.take(int(round(n_steps * pool_per_step)))
         sc = np.empty(len(pool), dtype=np.float32)
         rows_per = max(1, a.micro * CTX // a.score_len)
-        with torch.no_grad():
+        with hooks.step(), torch.no_grad():
             for i in range(0, len(pool), rows_per):
                 chunk = pool[i: i + rows_per]
                 sc[i: i + len(chunk)] = seqf(win.rows(chunk, CTX, length=a.score_len)).float().cpu().numpy()
@@ -412,28 +415,30 @@ def main() -> int:
             o.state.update(st)
 
     for step in range(n_steps):
-        m = lr_mult(step, n_steps, a)
-        ctx = a.short_ctx if step < n_short else CTX
-        loss = train_step(m, plan[step * a.batch: (step + 1) * a.batch], ctx)
-        if ema is not None:
-            beta = 1 - 1 / max(1.0, a.ema_frac * (step + 1))
-            torch._foreach_lerp_(ema, [p.detach() for p in plist], 1 - beta)
-        if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "ctx": ctx, "loss": loss, "lr_mult": round(m, 4),
-                              "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step + 1 in marks:
-            which, vinfo = choose()
-            model = vinfo.pop("model", None) or model_of(params, theta, trained)
-            snapshot(model, {"step": step + 1, "weights": which, **vinfo})
-        if step + 1 in forks:
-            fork(step + 1, forks[step + 1])
-    which, vinfo = choose()
-    model = vinfo.pop("model", None) or model_of(params, theta, trained)
-    final = {"step": n_steps, "weights": which, **vinfo}
-    print(json.dumps({"final": final, "s": round(time.perf_counter() - t0, 1)}), flush=True)
-    prepare.submit(out, a.start, KLASS, prepare.encode_full(model), {**theta, **model}, trainable, steps,
-                   changed=sorted(trained), notes={"direction": "ref-data", "args": vars(a), "steps": n_steps,
-                                                   "data": info, "snapshots": snap_log, "final": final})
+        with hooks.step():
+            m = lr_mult(step, n_steps, a)
+            ctx = a.short_ctx if step < n_short else CTX
+            loss = train_step(m, plan[step * a.batch: (step + 1) * a.batch], ctx)
+            if ema is not None:
+                beta = 1 - 1 / max(1.0, a.ema_frac * (step + 1))
+                torch._foreach_lerp_(ema, [p.detach() for p in plist], 1 - beta)
+            if (step + 1) % 100 == 0:
+                print(json.dumps({"step": step + 1, "ctx": ctx, "loss": loss, "lr_mult": round(m, 4),
+                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+            if step + 1 in marks:
+                which, vinfo = choose()
+                model = vinfo.pop("model", None) or model_of(params, theta, trained)
+                snapshot(model, {"step": step + 1, "weights": which, **vinfo})
+            if step + 1 in forks:
+                fork(step + 1, forks[step + 1])
+    with hooks.step():
+        which, vinfo = choose()
+        model = vinfo.pop("model", None) or model_of(params, theta, trained)
+        final = {"step": n_steps, "weights": which, **vinfo}
+        print(json.dumps({"final": final, "s": round(time.perf_counter() - t0, 1)}), flush=True)
+        prepare.submit(out, a.start, KLASS, prepare.encode_full(model), {**theta, **model}, trainable, steps,
+                       changed=sorted(trained), notes={"direction": "ref-data", "args": vars(a), "steps": n_steps,
+                                                       "data": info, "snapshots": snap_log, "final": final})
     return 0
 
 
