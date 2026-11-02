@@ -136,6 +136,7 @@ import json
 import os
 import platform
 import sys
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Iterator
@@ -1985,19 +1986,53 @@ def _code(p: Path) -> bytes:
     return _CODE[data]
 
 
+#: `version` as last computed: the places it was computed for, each directory and file it read with its stat (`_stat`), and the
+#: digest
+_VERSION: list[tuple[tuple, list[tuple[str, tuple[int, ...] | None]], str]] = []
+#: a file or directory whose stat changed within this many nanoseconds before `version` read it may change again in the same
+#: timestamp tick and keep its stat: past every filesystem's timestamp granularity (FAT's 2 s)
+RACY_NS = 2_000_000_000
+#: the clock `version` reads, on the scale of a stat's times (a test sets its own)
+_clock = time.time_ns
+
+
+def _stat(p: str | Path) -> tuple[int, ...] | None:
+    """What a write to ``p``, or an entry added to or removed from it, changes of its stat: its inode, size, and modification
+    and change times (a change time no program sets); None when it is gone."""
+    try:
+        st = os.stat(p)
+    except OSError:
+        return None
+    return st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns
+
+
 def version() -> str:
     """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
-    ``pins/`` (each target holds its own parts of them), `HEAVY`, `KNOWN` and `SHARD` (no target's input)."""
-    h = hashlib.sha512()
+    ``pins/`` (each target holds its own parts of them), `HEAVY`, `KNOWN` and `SHARD` (no target's input).  Computed once a
+    process (`key` asks for it once for every target), and again only when a directory or file it read has another stat
+    now (an edit in this process, as a test makes), or had one that changed within `RACY_NS` of when it was read."""
+    where = (_HERE, TARGETS, PINS, HEAVY, KNOWN, SHARD)
     _INTERNAL.append(True)
     try:
-        for p in sorted(_HERE.rglob("*")):
-            if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, KNOWN[0], SHARD)
-                    and PINS not in p.parents and KNOWN[1] not in p.parents):
+        if _VERSION and _VERSION[0][0] == where and all(_stat(p) == s for p, s in _VERSION[0][1]):
+            return _VERSION[0][2]
+        at = _clock()
+        seen: list[tuple[str, tuple[int, ...] | None]] = []
+        files: list[Path] = []
+        for d, dirs, names in os.walk(_HERE):
+            dirs[:] = [x for x in dirs if x != "__pycache__" and Path(d, x) not in (PINS, KNOWN[1])]
+            seen.append((d, _stat(d)))
+            files += [Path(d, n) for n in names]
+        h = hashlib.sha512()
+        for p in sorted(files):
+            if p not in (TARGETS, HEAVY, KNOWN[0], SHARD):
+                seen.append((str(p), _stat(p)))
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
+        _VERSION[:] = [] if any(s is None or max(s[2], s[3]) >= at - RACY_NS for _p, s in seen) else \
+            [(where, seen, h.hexdigest())]
+        return h.hexdigest()
     finally:
         _INTERNAL.pop()
-    return h.hexdigest()
 
 
 #: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
