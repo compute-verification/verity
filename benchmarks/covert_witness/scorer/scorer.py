@@ -508,17 +508,18 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
     out = []
     launched = run_rows(rows)
     for x in rows:
+        rec = launched.get(x.get("run")) if x["source"] == "te_core" else None
+        if rec:
+            if not rec["valid"]:
+                continue
+            x = x | {"direction": rec["direction"], "start": rec["start"], "note": rec["note"]}
         if not x.get("valid") or x.get("start") not in starts or is_audit(x):
             continue
         if x["source"] == "te_core":
-            rec = launched.get(x.get("run"))
-            if rec and (not rec["valid"] or is_audit(rec)):
-                continue
             if x.get("te_kind") == "submission" and x.get("rho"):
-                y = x | ({"direction": rec["direction"]} if rec else {})
                 out.append({"id": rec["id"] if rec else x["id"], "te_id": x["te_id"], "cp": x.get("fraction"),
                             "start": x["start"], "macs": x["macs"], "val_bpb": x["bpb"], "rho": x["rho"], "phi": x["phi"],
-                            "depth": x["D"], "reference": is_reference(y), "direction": y["direction"], "counted": True,
+                            "depth": x["D"], "reference": is_reference(x), "direction": x["direction"], "counted": True,
                             "E_bytes": x.get("E_bytes")})
             continue
         if x.get("counted"):
@@ -878,7 +879,7 @@ def source_at(commit: str) -> Path:
 def final_run(commit: str, args: list[str], what: dict, dry_run: bool = False) -> dict:
     src = source_at(commit)
     argv = ["research", "run", "--on", FINAL_NODE, "--project", "verity", "--source", str(src), "--cwd", "source",
-            "--pool", "gpu", "--as", "training", "--pool-wait", "7200", "--timeout", "45m", "--declared-output", "out/*",
+            "--pool", "gpu", "--as", "training", "--pool-wait", "7200", "--timeout", "120m", "--declared-output", "out/*",
             "--send", str(FINAL_SH), "--", "bash", "-c", 'bash "$RESEARCH_RUN_DIR/inputs/final.sh" ' + shlex.join(args)]
     row = what | {"commit": commit, "args": args, "at": now(), "argv": argv, "run": ""}
     if not dry_run:
@@ -907,7 +908,9 @@ def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False) -> li
         if x is None or x["source"] != "launch.py" or not x.get("commit"):
             raise SystemExit(f"scorer: {i} is not a launch.py record with a commit")
         for seed in seeds:
-            args = [x["class"], x["start"], *shlex.split(x.get("args") or ""), *seed_args(x, seed)]
+            args = ["--seed", str(seed), "--direction", re.sub(r"[^a-z0-9_-]", "-", x["direction"].lower()) or "scorer-final",
+                    "--mechanism", x["mechanism"], *(["--reference"] if is_reference(x) else []), x["class"], x["start"],
+                    *shlex.split(x.get("args") or ""), *seed_args(x, seed)]
             out.append(final_run(x["commit"], args, {"kind": "rerun", "id": x["id"], "seed": seed}, dry_run))
     return out
 
@@ -942,6 +945,9 @@ def final_collect() -> list[dict]:
                 elif f.name.startswith("start."):
                     _, s, sp, _ = f.name.split(".")
                     row.setdefault("starts", {}).setdefault(s, {})[sp] = (d.get("score") or {}).get("bpb")
+            led = sorted((o / "ledger" / "records").glob("*/*.json")) if o.is_dir() else []
+            row["ledger"] = [r for r in (te_rec_row(json.loads(p.read_text()), "", "") for p in led)
+                             if r["te_kind"] == "submission"]
         out.append(row)
     FINAL.mkdir(parents=True, exist_ok=True)
     (FINAL / "results.jsonl").write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in out))
@@ -1073,6 +1079,13 @@ def final_table(write: bool = True) -> dict:
     for r in res:
         x, w = rows.get(r.get("id")), r.get("final")
         if r.get("kind") != "rerun" or not x or not w or not w.get("valid"):
+            continue
+        if r.get("ledger"):
+            # the harness's tier-2 checkpoints, each scored on the final set (final_bpb) and priced by its count
+            rec = x | {"run": r["run"], "counted": True}
+            led = [t | {"run": r["run"], "valid": not t["failed_checks"], "bpb": t["test_bpb"], "direction": x["direction"]}
+                   for t in r["ledger"] if t.get("test_bpb") is not None]
+            subs += [s | {"seed": r["seed"]} for s in submissions([rec, *led], starts)]
             continue
         rr = x | {k: w[k] for k in ("train_flops", "tokens", "curve", "E_bytes", "phi") if w.get(k) is not None} | {
             "steps": w.get("steps") or x.get("steps")}
