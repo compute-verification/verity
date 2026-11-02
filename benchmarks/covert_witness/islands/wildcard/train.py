@@ -360,9 +360,9 @@ COORDS = (1, 2, 4, 8, 16, 32)
 def spectrum_add(acc: dict, delta: torch.Tensor, h: torch.Tensor):
     """Accumulate, per SESSION-token session of `delta` (windows, ctx, d; δ = h for a whole-state code): the share of
     its energy that its top r directions hold (eigenvalues λ of δᵀδ), the transform-coding gain ½·log2(mean λ / geomean
-    λ) (bits per coordinate a fixed basis with bits allocated by variance saves over a flat code at high rate), the share
-    of a session's energy in its largest token, the share of a token's energy in its largest k coordinates, and |δ|²
-    against |h|²."""
+    λ) (bits per coordinate a fixed basis with bits allocated by variance saves over a flat code at high rate) and the
+    same over the coordinates' own variances (`channel_gain_bits`, the gain without a basis), the share of a session's
+    energy in its largest token, the share of a token's energy in its largest k coordinates, and |δ|² against |h|²."""
     d = delta.shape[-1]
     e = delta.float().pow(2)
     tok = e.sum(-1)
@@ -382,9 +382,12 @@ def spectrum_add(acc: dict, delta: torch.Tensor, h: torch.Tensor):
         ev = torch.linalg.eigvalsh(x.transpose(1, 2) @ x).flip(-1).clamp_min(0)
     share = ev.cumsum(-1) / ev.sum(-1, keepdim=True).clamp_min(1e-30)
     lam = (ev / ev.mean(-1, keepdim=True).clamp_min(1e-30)).clamp_min(1e-9)
+    var = x.pow(2).mean(1)
+    var = (var / var.mean(-1, keepdim=True).clamp_min(1e-30)).clamp_min(1e-9)
     peak = x.pow(2).sum(-1)
     acc["sessions"] = acc.get("sessions", 0) + share.shape[0]
     acc["gain_bits"] = acc.get("gain_bits", 0.0) + float((-0.5 * torch.log2(lam).mean(-1)).sum())
+    acc["channel_gain_bits"] = acc.get("channel_gain_bits", 0.0) + float((-0.5 * torch.log2(var).mean(-1)).sum())
     acc["token_peak"] = acc.get("token_peak", 0.0) + float((peak.amax(-1) / peak.sum(-1).clamp_min(1e-30)).sum())
     for r in RANKS:
         if r <= d:
@@ -397,8 +400,8 @@ def spectrum_report(spec: dict) -> dict:
         s, t = acc.get("sessions", 0), acc.get("tokens", 0)
         out[str(b)] = {"of": acc.get("of"), "sessions": s,
                        "delta_rms_over_h_rms": (acc["delta_sq"] / max(acc["h_sq"], 1e-30)) ** 0.5,
-                       **{k: v / s for k, v in acc.items() if s and (k.startswith("top") or k in ("gain_bits",
-                                                                                                   "token_peak"))},
+                       **{k: v / s for k, v in acc.items()
+                          if s and (k.startswith("top") or k in ("gain_bits", "channel_gain_bits", "token_peak"))},
                        **{k: v / t for k, v in acc.items() if t and k.startswith("coord_top")}}
     return out
 
