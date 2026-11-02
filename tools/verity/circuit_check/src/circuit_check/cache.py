@@ -75,7 +75,9 @@ An installed distribution is a read, not part of the key (``dists``, `_outside_t
 from outside the tree, held by the versions of the distributions that provide it and by no file in the tree resolving its
 name, so a new workspace member or a lock entry no check imports reuses every target, and a version a check loaded reruns it.
 A module in the tree is held by its name and resolved again at lookup (``modules``), so a new ``sys.path`` entry or editable
-redirect that shadows it reruns what holds it, without ``sys.path`` in the key.
+redirect that shadows it reruns what holds it, without ``sys.path`` in the key.  A module whose ``__file__`` is no absolute path
+(a module object made by hand: `torch.ops`'s ``_ops.py``), like a code object whose file is none (``<string>``), has no file
+(`_module_file`): it is neither in the tree nor outside it, whatever the working directory (torch's are held with torch).
 
 A hit means every file, listing, probe, library, ``pins/`` pin and registration (a kernel's, a Definition's) this target's check
 read is unchanged (the tree as git has it, `visible`: a file git does not track, bytecode, a build or a fetched file inside the
@@ -584,9 +586,24 @@ def recording(merge: bool = True) -> Iterator[Frame]:
             _FRAMES[-1].merge(fr)
 
 
+def _module_file(m: Any) -> str | None:
+    """Module ``m``'s file: its ``__file__`` when that is an absolute path, as the import system gives every module it loads
+    from a file.  A module object made by hand may carry a bare name (`torch.ops`'s ``_ops.py``, `torch.classes`'s
+    ``_classes.py``), which names no file: resolved, it would be a file in the working directory, so that whether a check's
+    result is stored, and what it holds, would depend on where the check ran."""
+    f = getattr(m, "__file__", None)
+    return f if isinstance(f, str) and os.path.isabs(f) else None
+
+
+def _code_rel(code: Any) -> str | None:
+    """The tree's path of the file ``code`` was compiled from; None for a name that is no path (``<string>``, ``<frozen ...>``),
+    like a bare ``__file__`` (`_module_file`)."""
+    return _rel(code.co_filename) if os.path.isabs(code.co_filename) else None
+
+
 def _imported(mods: list) -> None:
     for m in mods:
-        if (f := getattr(m, "__file__", None)) and isinstance(f, str) and isinstance(m, type(sys)):
+        if (f := _module_file(m)) and isinstance(m, type(sys)):
             _FRAMES[-1].code.add(f)
 
 
@@ -698,7 +715,7 @@ def _instrument() -> None:
             # makes the registries register it
             mods, f = [*_LOADING], sys._getframe(1)
             while f is not None:
-                if f.f_code.co_name == "<module>" and _rel(f.f_code.co_filename) is not None:
+                if f.f_code.co_name == "<module>" and _code_rel(f.f_code) is not None:
                     mods.append(f.f_globals.get("__name__"))
                 f = f.f_back
             if mods:
@@ -1188,8 +1205,8 @@ def _loaded(root: Path) -> dict[str, list[str]]:
     if not _LOADED:
         ix: dict[str, list[str]] = {}
         for name, m in list(sys.modules.items()):
-            f = getattr(m, "__file__", None)
-            if not (isinstance(f, str) and _rel(f) is not None):
+            f = _module_file(m)
+            if not (f and _rel(f) is not None):
                 continue
             side = _side(name)
             p = _resolve(root, name) if side is None else root / r if (r := _sidecar(root, side, ".py")) is not None else None
@@ -1211,7 +1228,7 @@ class _RecordedKernels(dict):
 
     def setdefault(self, key, default=None):
         f = sys._getframe(1)
-        while f is not None and not (f.f_code.co_name == "<module>" and _rel(f.f_code.co_filename) is not None):
+        while f is not None and not (f.f_code.co_name == "<module>" and _code_rel(f.f_code) is not None):
             f = f.f_back
         if f is not None:
             self.by.setdefault(str(key), set()).add(f.f_code.co_filename)
@@ -1269,7 +1286,7 @@ def _where(fn: Any) -> str | None:
     code = getattr(fn, "__code__", None) or getattr(getattr(fn, "__call__", None), "__code__", None)
     if code is None:
         return f"{type(fn).__module__}.{type(fn).__qualname__}"
-    rel = _rel(code.co_filename)
+    rel = _code_rel(code)
     if rel is None or not _ROOT:
         return f"{code.co_filename}:{code.co_firstlineno}"
     p, v = _ROOT[0] / rel, visible(_ROOT[0])
@@ -1415,7 +1432,7 @@ def _registrations() -> dict[str, Any]:
 
     names = {}
     for name, m in list(sys.modules.items()):
-        if isinstance(f := getattr(m, "__file__", None), str):
+        if (f := _module_file(m)) is not None:
             names.setdefault(os.path.abspath(f), name)
     defs: dict[str, list[str | None]] = {}
     words: dict[str, list[str]] = {}
@@ -1638,11 +1655,11 @@ def _outside_modules() -> tuple[set[tuple[str, str]], list[tuple[str, Any]]]:
     looked = _LOOKED.setdefault(inside, set())
     out = []
     for name, m in list(sys.modules.items()):
-        f = getattr(m, "__file__", None)
-        if isinstance(f, str) and (name, f) in looked:
+        f = _module_file(m)
+        if f and (name, f) in looked:
             continue
         if not f or _rel(f) is not None or not inside or any(p.startswith(inside) for p in (os.path.abspath(f), os.path.realpath(f))):
-            if isinstance(f, str):
+            if f:
                 looked.add((name, f))
             continue
         out.append((name, f))
@@ -1671,7 +1688,7 @@ def warm() -> None:
         _outside_modules()
         own = os.path.join(str(_HERE), "")
         for name, m in list(sys.modules.items()):
-            if isinstance(f := getattr(m, "__file__", None), str) and _rel(a := _abspath(f)) is not None \
+            if (f := _module_file(m)) is not None and _rel(a := _abspath(f)) is not None \
                     and a.endswith(".py") and not a.startswith(own):
                 if os.path.isfile(a):
                     _parsed(Path(a))
@@ -1764,8 +1781,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any], sidecars:
     _check_outside()
     by_file = {}
     for name, m in list(sys.modules.items()):
-        f = getattr(m, "__file__", None)
-        if f:
+        if f := _module_file(m):
             by_file.setdefault(_abspath(f), name)
     acc = Frame()
     acc.merge(fr)
@@ -1848,7 +1864,9 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any], sidecars:
         expand()
         if not work:
             break
-        f = os.path.abspath(work.pop())
+        if not os.path.isabs(f := work.pop()):
+            continue                                   # a code object's `<string>` or `<frozen ...>`: no file (`_module_file`)
+        f = os.path.abspath(f)
         if f in done:
             continue
         done.add(f)
@@ -1863,8 +1881,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any], sidecars:
             take(_MODULES[name])
         parts = name.split(".")
         for imp in _top_imports(f, name) + [".".join(parts[:i]) for i in range(1, len(parts))]:
-            m = sys.modules.get(imp)
-            if (mf := getattr(m, "__file__", None)) is not None:
+            if (mf := _module_file(sys.modules.get(imp))) is not None:
                 work.append(mf)
     # a unit is named by its file (`_named_file`): `targets.py`'s bare, a sidecar's as ``<module>.circuit-check#<unit>``; each
     # file's ``common`` comes with it
@@ -1939,8 +1956,8 @@ def _outside_tops() -> list[str]:
     the versions of the distributions that provide it (`_dist`). The interpreter's own modules are the key's ``python``."""
     out = set()
     for name, m in list(sys.modules.items()):
-        f = getattr(m, "__file__", None)
-        if "." not in name and isinstance(f, str) and _rel(f) is None and _packages().get(name):
+        f = _module_file(m)
+        if "." not in name and f and _rel(f) is None and _packages().get(name):
             out.add(name)
     return sorted(out)
 
@@ -2430,7 +2447,7 @@ def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
         root = _ROOT[0]
         by_file: dict[str, str] = {}
         for name, m in list(sys.modules.items()):
-            if isinstance(f := getattr(m, "__file__", None), str):
+            if (f := _module_file(m)) is not None:
                 by_file.setdefault(os.path.abspath(f), name)
         mods = {name for f, name in by_file.items() if _rel(f) is not None and not f.startswith(os.path.join(str(_HERE), ""))
                 and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}

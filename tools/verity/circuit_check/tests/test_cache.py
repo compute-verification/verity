@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -323,10 +324,10 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _run(root: Path, harness: str = HARNESS) -> dict:
+def _run(root: Path, harness: str = HARNESS, cwd: Path = REPO) -> dict:
     # no bytecode: an edit that keeps a file's size within the second its bytecode was written would run the old code
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
+    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=cwd, env=env)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert not out["stats"]["untraced"] and not out["stats"]["errors"] and not out["stats"]["changed"], out
@@ -439,6 +440,32 @@ def test_a_package_in_the_tree_that_shadows_a_loaded_distribution_reruns_what_ho
         assert CC._dist(root, top) == "tree"
     finally:
         sys.path.remove(str(root))
+
+
+#: the harness with a module object made by hand whose ``__file__`` is a bare name, as torch makes `torch.ops` (``_ops.py``),
+#: imported by every check
+BARE = HARNESS.replace("CC.trace(root)", "import types\n"
+                                         "sys.modules['syn_bare'] = types.ModuleType('syn_bare')\n"
+                                         "sys.modules['syn_bare'].__file__ = '_bare.py'\n"
+                                         "CC.trace(root)")
+
+
+def test_a_module_whose_file_is_a_bare_name_names_no_file_wherever_the_check_runs(tmp_path):
+    """Resolved against the working directory, a bare ``__file__`` would be a module imported from outside the tree for a check
+    run outside it (storing nothing) and a file of the tree for one run at its root, so where a check ran would decide whether
+    its verdict is stored and what it holds.  It names no file: stored from either, reused from the other, and no entry holds
+    it."""
+    root, elsewhere = _tree(tmp_path / "tree"), tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import reg\n    import syn_bare  # noqa: F401")
+    assert BARE != HARNESS
+    for first, then in ((elsewhere, root), (root, elsewhere)):
+        shutil.rmtree(root / "cache", ignore_errors=True)
+        assert _run(root, BARE, cwd=first)["hits"] == [], first
+        for t in ("SynTop_v1", "SynOther_v1"):
+            reads = _entry(root, t)["reads"]
+            assert not [f for f in [*reads["files"], *reads["probes"]] if "_bare" in f or "<" in f], (first, reads)
+        assert _run(root, BARE, cwd=then)["hits"] == ["SynOther_v1", "SynTop_v1"], then
 
 
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):
