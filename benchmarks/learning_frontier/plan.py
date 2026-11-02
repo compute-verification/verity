@@ -78,12 +78,13 @@ def matrix_list(size) -> list[tuple[int, int]]:
     return [s for _ in range(size.n_layer) for s in matrix_shapes(size)[:7]]
 
 
-def chain(size: str, fraction: float, method: str, update_bytes: float, rates: tuple[float, ...] = ()) -> str:
+def chain(size: str, fraction: float, method: str, update_bytes: float, rates: tuple[float, ...] = (), seed: int = 0) -> str:
     """The workload of one `research run`: the configuration at each of its rates (`rates`, else its 3), one after another,
-    each a chain of leases."""
+    each a chain of leases. A nonzero `seed` sets both speedrun.py seeds (initialization and data order)."""
     rates = rates or next((r for m, b, r in CONFIGS if m == method and b == update_bytes), ())
-    tag = f"{size}-p{round(100 * fraction):03d}-{label(method, update_bytes)}"
+    tag = f"{size}-p{round(100 * fraction):03d}-{label(method, update_bytes)}" + (f"-seed{seed}" if seed else "")
     extra = (f" --update-bytes {update_bytes:g}" if method == "lora" else "") + (f" --micro {MICRO[size]}" if size in MICRO else "")
+    extra += f" --seed {seed} --data-seed {seed}" if seed else ""
     one = ('LEASED_SCRIPT=speedrun.py bash benchmarks/learning_frontier/leased.sh "$P" --data "$D" --start "$S" '
            '--start-sha256 "$H" --ckpt-root "$C" --method ' + method + extra)
     if method == "icl":
@@ -100,10 +101,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--chain", nargs=4, metavar=("SIZE", "FRACTION", "METHOD", "UPDATE_BYTES"), default=None)
     ap.add_argument("--rates", default="", help="with --chain: these learning rates instead of the configuration's 3 (e.g. "
                                                 "the best at a smaller size)")
+    ap.add_argument("--seed", type=int, default=0, help="with --chain: a further seed of the configuration")
     a = ap.parse_args(argv)
     if a.chain:
         rates = tuple(float(r) for r in a.rates.split(",") if r)
-        print(chain(a.chain[0], float(a.chain[1]), a.chain[2], float(a.chain[3]), rates))
+        print(chain(a.chain[0], float(a.chain[1]), a.chain[2], float(a.chain[3]), rates, a.seed))
         return 0
     rows, total = [], {}
     print("| size | class | config | runs | steps | tokens (M) | FLOPs/run | update | est. GPU-min/run | est. GPU-h |")

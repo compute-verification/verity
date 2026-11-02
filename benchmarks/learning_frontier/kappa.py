@@ -4,7 +4,7 @@
 
 A RUN_DIR is a fetched `research run` directory (`research fetch --all RUN`), whose `out/*/witness.json` are speedrun.py's
 records and whose `gpu-lease-usage.jsonl` is the GPU time it held, or a directory holding `witness.json` itself. Per start (a
-size and a registered θ, by digest):
+size and a registered θ, by digest) and seed:
 
 - each configuration (a method with its structural knob) takes its best learning rate: the lowest held-out loss within the
   budget. The sweep's cost (every rate's FLOPs and GPU-seconds) is written beside it;
@@ -138,7 +138,7 @@ def analyze_start(entries: list[dict]) -> dict:
                         "sweep_gpu_seconds": sum(e["witness"]["gpu_seconds"]["wall"] for e in es),
                         "series": series(best["witness"])}
     out = {"size": w0["size"], "theta_sha256": w0["start"]["theta_sha256"], "fraction": w0["start"]["fraction"],
-           "l0": l0, "l0_recorded": w0["start"]["val_nats_per_byte_recorded"], "l0_spread": float(np.ptp(l0s)),
+           "seed": w0["seed"], "l0": l0, "l0_recorded": w0["start"]["val_nats_per_byte_recorded"], "l0_spread": float(np.ptp(l0s)),
            "budget_flops": budget, "s3": s3, "configs": {}, "targets": [], "kappa": {}}
     refs = [lab for lab, c in configs.items() if c["class"] == "S0"]
     if not refs or budget is None:
@@ -183,6 +183,10 @@ def fmt(x: float | None, spec: str = ".2f") -> str:
     return "-" if x is None else format(x, spec)
 
 
+def where(s: dict) -> str:
+    return f"{round(100 * (s['fraction'] or 0))}%" + (f" seed {s['seed']}" if s.get("seed") else "")
+
+
 def kcell(c: dict) -> str:
     if c.get("kappa_flops") is not None:
         return fmt(c["kappa_flops"])
@@ -209,7 +213,7 @@ def order_key(lab: str) -> tuple:
 def tables(report: dict) -> str:
     out = []
     for st in report["starts"]:
-        head = (f"## Size {st['size']}, start at {round(100 * (st['fraction'] or 0))}% (θ {st['theta_sha256'][:12]}), "
+        head = (f"## Size {st['size']}, start at {where(st)} (θ {st['theta_sha256'][:12]}), "
                 f"ℓ₀ = {st['l0']:.4f} (recorded {fmt(st['l0_recorded'], '.4f')}, spread across runs {st['l0_spread']:.1e})")
         out += [head, ""]
         if st.get("note"):
@@ -242,7 +246,7 @@ def tables(report: dict) -> str:
                            f"{p['least_context']} | {p['inference_multiplier']:.2f} | {p['fresh_input_bits_per_window']} |")
         out.append("")
     out += ["## Across starts: κ (FLOPs) at Δ_max, and the ceiling's gain (nats per byte)", "",
-            "| config | " + " | ".join(f"{s['size']} {round(100 * (s['fraction'] or 0))}%" for s in report["starts"]) + " |",
+            "| config | " + " | ".join(f"{s['size']} {where(s)}" for s in report["starts"]) + " |",
             "|---|" + "---|" * len(report["starts"])]
     labs = sorted({lab for s in report["starts"] for lab in s["configs"]}, key=order_key)
     for lab in labs:
@@ -265,7 +269,7 @@ def plots(out: Path, report: dict) -> list[str]:
 
     names = []
     for size in sorted({s["size"] for s in report["starts"]}):
-        starts = sorted((s for s in report["starts"] if s["size"] == size), key=lambda s: s["fraction"] or 0)
+        starts = sorted((s for s in report["starts"] if s["size"] == size), key=lambda s: (s["fraction"] or 0, s["seed"]))
         labs = sorted({lab for s in starts for lab in s["configs"]}, key=order_key)
         colors = {lab: plt.cm.tab10(i % 10) for i, lab in enumerate(labs)}
         fig, axes = plt.subplots(1, len(starts), figsize=(5.2 * len(starts), 4.2), squeeze=False)
@@ -283,7 +287,7 @@ def plots(out: Path, report: dict) -> list[str]:
             ax.set_ylim(lo - 0.005, s["l0"] + 0.4 * (s["l0"] - lo) + 0.005)
             ax.set_xlabel("FLOPs / budget")
             ax.set_ylabel("held-out nats per byte")
-            ax.set_title(f"{size}, start at {round(100 * (s['fraction'] or 0))}%", fontsize=10)
+            ax.set_title(f"{size}, start at {where(s)}", fontsize=10)
         axes[0][0].legend(fontsize=7)
         fig.tight_layout()
         name = f"loss-budget-{size}.png"
@@ -308,7 +312,7 @@ def plots(out: Path, report: dict) -> list[str]:
             ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(5))
             ax.set_xlabel("Δ (nats per byte below ℓ₀)")
             ax.set_ylabel("κ (FLOPs over the reference's)")
-            ax.set_title(f"{size}, start at {round(100 * (s['fraction'] or 0))}%; hollow: never reached (>)", fontsize=9)
+            ax.set_title(f"{size}, start at {where(s)}; hollow: never reached (>)", fontsize=9)
         axes[0][0].legend(fontsize=7)
         fig.tight_layout()
         name = f"kappa-{size}.png"
@@ -322,7 +326,7 @@ def plots(out: Path, report: dict) -> list[str]:
         for s in starts:
             pts = sorted((c["update_bits"], c["gain"], lab) for lab, c in s["configs"].items() if c.get("gain") is not None)
             line, = ax.plot([p[0] for p in pts], [p[1] for p in pts], marker="o", ms=4,
-                            label=f"start at {round(100 * (s['fraction'] or 0))}%")
+                            label=f"start at {where(s)}")
             for b, g, lab in pts:
                 ax.annotate(lab.split(" ", 1)[1], (b, g), fontsize=6, xytext=(2, 2), textcoords="offset points")
             if s["s3"]:
@@ -353,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
     for r in runs:
         w = r["witness"]
         by_start.setdefault((w["size"], w["start"]["theta_sha256"], w["seed"]), []).append(r)
-    starts = sorted((analyze_start(es) for es in by_start.values()), key=lambda s: (s["size"], s["fraction"] or 0))
+    starts = sorted((analyze_start(es) for es in by_start.values()), key=lambda s: (s["size"], s["fraction"] or 0, s["seed"]))
     report = {"schema": "covert-speedrun/analysis/v1", "qs": QS, "skipped": skipped, "gpu": gpu,
               "gpu_held_hours": sum(g["held_hours"] for g in gpu.values()),
               "witness_gpu_seconds": sum(r["witness"]["gpu_seconds"]["wall"] for r in runs), "starts": starts}
