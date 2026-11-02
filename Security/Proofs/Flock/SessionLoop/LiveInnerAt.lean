@@ -376,7 +376,7 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
   have hrep : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) =
       2 * jf.val + rf.val := by
     show Loop.repOf x (ops.length + 1) = _
-    rw [show ops.length + 1 = q + 2 by omega, Loop.repOf_add_two hxs, hloc]
+    rw [show ops.length + 1 = q + 2 by omega, repOf_add_two hxs, hloc]
     exact hk
   obtain ⟨lay, mask, hst⟩ := ofLoop_start_at Masked.dataE
     (withFiles (withLink (withInner Masked.dataE L₁ real fin) src) src) real x (ν, t) (m₀, ρ₀) ops ha rfl hxs hq1 hloc
@@ -428,7 +428,9 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
       have := Masked.lt_hab (Masked.layE x jf) (le_refl _)
       show _ < (Masked.layE x jf).hab + 3 + 1
       omega
-    rw [Masked.innerLayE_layE, Loop.swSrcE_masked_vsWord vs x w ν _ t jf rf hfcE, ← hTF,
+    rw [Masked.innerLayE_layE, Loop.swSrcE_masked_vsWord vs x w ν
+        ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+          (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t jf rf hfcE, ← hTF,
       FlockSoundness.Refine.getD_of_lt hfcL, FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self]
     rfl
   · -- round 1: the pair's openings
@@ -441,8 +443,11 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
         (p := Masked.repSlot x (2 * jf.val + rf.val) (Masked.innerOff 0)) (by omega) (by omega)
         (by rw [hnr 0 (by decide)]; decide),
       innerCutBody_one, (Masked.swSrcE_inner x _ w (vs x w ν _) t jf rf).1,
-      (Masked.swSrcE_inner x _ w (vs x w ν _) t jf rf).2, (Masked.innerTripleE x _ w t jf rf rfl).1,
-      (Masked.innerTripleE x _ w t jf rf rfl).2]
+      (Masked.swSrcE_inner x _ w (vs x w ν _) t jf rf).2,
+      (Masked.innerTripleE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) w t jf rf rfl).1,
+      (Masked.innerTripleE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) w t jf rf rfl).2]
     rfl
   · -- round 2: `τ`'s commitment
     obtain ⟨-, hin2, -⟩ := ofLoop_answered_inner Masked.dataE
