@@ -783,8 +783,10 @@ def final_collect() -> list[dict]:
                 if f.name.startswith("witness."):
                     sp = f.name.split(".")[1]
                     row[sp] = {"valid": d.get("valid"), "bpb": (d.get("score") or {}).get("bpb"), "curve": d.get("curve"),
-                               "train_flops": (d.get("train") or {}).get("flops"), "E_bytes": (d.get("E") or {}).get("bytes"),
-                               "phi": (d.get("structure") or {}).get("phi"),
+                               "train_flops": (d.get("train") or {}).get("flops"),
+                               "tokens": (d.get("train") or {}).get("tokens"), "E_bytes": (d.get("E") or {}).get("bytes"),
+                               "E_format": (d.get("E") or {}).get("format"), "phi": (d.get("structure") or {}).get("phi"),
+                               "steps": (d.get("notes") or {}).get("steps"), "gpu_seconds": d.get("gpu_seconds"),
                                "failed_checks": sorted(k for k, v in (d.get("checks") or {}).items() if v is not True)}
                 elif f.name.startswith("start."):
                     _, s, sp, _ = f.name.split(".")
@@ -793,6 +795,151 @@ def final_collect() -> list[dict]:
     FINAL.mkdir(parents=True, exist_ok=True)
     (FINAL / "results.jsonl").write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in out))
     return out
+
+
+def seed_mean(subs: list[dict]) -> list[dict]:
+    """One submission per (entry, checkpoint) over its seeds: mean |C| and bpb, and ρ such that |C|·ρ is the mean |C|·ρ."""
+    by: dict[tuple, list[dict]] = {}
+    for s in subs:
+        by.setdefault((s["id"], round(s["cp"], 2)), []).append(s)
+    out = []
+    for (i, cp), ss in sorted(by.items()):
+        macs = sum(s["macs"] for s in ss) / len(ss)
+        bpbs = [s["val_bpb"] for s in ss]
+        out.append(ss[0] | {"cp": cp, "macs": macs, "val_bpb": sum(bpbs) / len(bpbs), "bpb_min": min(bpbs),
+                            "bpb_max": max(bpbs), "seeds": sorted(s.get("seed") for s in ss),
+                            "rho": {k: sum(s["macs"] * s["rho"][k] for s in ss) / len(ss) / macs for k in KEYS}})
+    return out
+
+
+def table(subs: list[dict], l0: dict[str, float]) -> dict:
+    """W*(l*), honest(l*) and W*/honest per start, target and (k, r), with the entries that attain them."""
+    out = {}
+    for s in STARTS:
+        on = [x for x in subs if x["start"] == s]
+        if s not in l0 or not on:
+            continue
+        refs, cov = [x for x in on if x["reference"]], [x for x in on if not x["reference"]]
+        rows = []
+        for f in TARGETS:
+            l_star = l0[s] * (1 - f)
+            h = min((x for x in refs if x["val_bpb"] <= l_star), key=lambda x: x["macs"], default=None)
+            cells = {}
+            for key in KEYS:
+                arg = min((x for x in cov if x["val_bpb"] <= l_star), key=lambda x: x["macs"] * x["rho"][key], default=None)
+                cells[key] = {"w_star": w_star(cov, l_star, key), "effective_slowdown": effective_slowdown(cov, refs, l_star, key),
+                              "id": arg and arg["id"], "cp": arg and arg["cp"], "rho": arg and arg["rho"][key],
+                              "direction": arg and arg["direction"], "seeds": arg and arg.get("seeds")}
+            rows.append({"drop": f, "l_star": l_star, "honest_macs": honest(refs, l_star), "honest_id": h and h["id"],
+                         "honest_cp": h and h["cp"], "honest_seeds": h and h.get("seeds"), "cells": cells})
+        out[s] = {"start_bpb": l0[s], "targets": rows, "entries": sorted({x["id"] for x in on})}
+    return out
+
+
+def table_md(tab: dict, split: str, seeds: str) -> str:
+    lines = [f"W* and the effective slowdown W*/honest on the {split} set (te_core {TE_CORE_VERSION} ρ on the scorer's analytic "
+             f"annotation, p = {P_BITS}; FLOPs = 2 MACs; {seeds})", ""]
+    for s, st in tab.items():
+        lines += [f"### {s} (start {st['start_bpb']:.4f} bpb)", "",
+                  "| target | l* | honest FLOPs (entry) | k | W* r1 | W* r10 | W* r100 | W*/honest r1 | r10 | r100 | W* entries |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for t in st["targets"]:
+            h = t["honest_macs"]
+            for k in K_BITS:
+                cs = [t["cells"][f"{k}/r{r}"] for r in R]
+                ids = ", ".join(sorted({f"{short(c['id'])}@{c['cp']}" for c in cs if c["id"]})) or "—"
+                lines.append(f"| -{100 * t['drop']:g}% | {t['l_star']:.4f} | "
+                             + (f"{fmt(h and 2 * h)} ({short(t['honest_id'])}@{t['honest_cp']})" if h else "—")
+                             + f" | {k} | " + " | ".join(fmt(c["w_star"] and 2 * c["w_star"]) for c in cs) + " | "
+                             + " | ".join(fmt(c["effective_slowdown"]) for c in cs) + f" | {ids} |")
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None:
+    """Per start, bpb against FLOPs: the reference checkpoints at |C|, every other at |C|·ρ for k = 10 kB, 100 kB, 1 MB (r = 1,
+    solid; r = 10, dashed), each with its frontier, and the targets."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    starts = [s for s in STARTS if s in l0 and any(x["start"] == s for x in subs)]
+    if not starts:
+        return
+    fig, axes = plt.subplots(len(starts), 3, figsize=(15, 4.2 * len(starts)), squeeze=False)
+    dirs = sorted({x["direction"] for x in subs if not x["reference"]})
+    color = {d: plt.cm.tab20(i % 20) for i, d in enumerate(dirs)}
+    for row, s in zip(axes, starts):
+        on = [x for x in subs if x["start"] == s]
+        refs, cov = [x for x in on if x["reference"]], [x for x in on if not x["reference"]]
+        for ax, k in zip(row, K_BITS):
+            for f in TARGETS:
+                ax.axhline(l0[s] * (1 - f), color="0.8", lw=0.8, zorder=0)
+                ax.text(1.0, l0[s] * (1 - f), f" -{100 * f:g}%", transform=ax.get_yaxis_transform(), fontsize=7, va="center")
+            if refs:
+                ax.scatter([2 * x["macs"] for x in refs], [x["val_bpb"] for x in refs], c="k", marker="s", s=18,
+                           label="reference |C|")
+                fr = pareto([(x["macs"], x["val_bpb"], x) for x in refs])
+                ax.step([2 * x["macs"] for x in fr], [x["val_bpb"] for x in fr], where="post", c="k", lw=1)
+            for r, ls in ((1, "-"), (10, "--")):
+                key = f"{k}/r{r}"
+                for d in dirs:
+                    xs = [x for x in cov if x["direction"] == d]
+                    if xs and r == 1:
+                        ax.scatter([2 * x["macs"] * x["rho"][key] for x in xs], [x["val_bpb"] for x in xs], color=color[d],
+                                   s=14, label=d)
+                fr = pareto([(x["macs"] * x["rho"][key], x["val_bpb"], x) for x in cov])
+                if fr:
+                    ax.step([2 * x["macs"] * x["rho"][key] for x in fr], [x["val_bpb"] for x in fr], where="post",
+                            c="tab:red", ls=ls, lw=1, label=f"covert frontier r{r}")
+            ax.set_xscale("log")
+            ax.set_ylim(l0[s] * 0.93, l0[s] * 1.01)
+            ax.set_title(f"{s}, k = {k}", fontsize=9)
+            ax.set_xlabel("FLOPs (reference: |C|; covert: |C| rho)", fontsize=8)
+            ax.set_ylabel("bpb", fontsize=8)
+            ax.tick_params(labelsize=7)
+    h, lab = axes[0][0].get_legend_handles_labels()
+    seen = dict(zip(lab, h))
+    fig.legend(seen.values(), seen.keys(), loc="lower center", ncol=min(8, len(seen)), fontsize=7)
+    fig.suptitle(title, fontsize=10)
+    fig.tight_layout(rect=(0, 0.05, 1, 0.97))
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
+def final_table(write: bool = True) -> dict:
+    """The final-set table and plot from the reruns, beside the search-set ones from every record."""
+    rows = {x["id"]: x for x in (json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip())}
+    starts = json.loads((STATE / "starts.json").read_text())
+    res = [json.loads(l) for l in (FINAL / "results.jsonl").read_text().splitlines() if l.strip()] \
+        if (FINAL / "results.jsonl").exists() else []
+    l0 = {}
+    for r in res:
+        for s, v in (r.get("starts") or {}).items():
+            if v.get("final") is not None:
+                l0.setdefault(s, v["final"])
+    subs = []
+    for r in res:
+        x, w = rows.get(r.get("id")), r.get("final")
+        if r.get("kind") != "rerun" or not x or not w or not w.get("valid"):
+            continue
+        rr = x | {k: w[k] for k in ("train_flops", "tokens", "curve", "E_bytes", "phi") if w.get(k) is not None} | {
+            "steps": w.get("steps") or x.get("steps")}
+        subs += [s | {"seed": r["seed"]} for s in submissions([rr], starts)]
+    fin = seed_mean(subs)
+    search_subs = json.loads((STATE / "submissions.json").read_text())
+    l0_search = {s: starts[s]["bpb"] for s in STARTS}
+    rep = {"at": now(), "te_core": TE_CORE_VERSION, "final": table(fin, l0), "search": table(search_subs, l0_search),
+           "final_starts": l0, "reruns": len(subs), "entries": sorted({x["id"] for x in fin})}
+    if write:
+        FINAL.mkdir(parents=True, exist_ok=True)
+        (FINAL / "table.json").write_text(json.dumps(rep, indent=1) + "\n")
+        (FINAL / "final_submissions.json").write_text(json.dumps(fin) + "\n")
+        (FINAL / "table.md").write_text(table_md(rep["final"], "final", "seeds averaged per checkpoint") + "\n"
+                                         + table_md(rep["search"], "search", "the search run's one seed"))
+        plot(fin, l0, "final set, seeds averaged", FINAL / "frontier-final.png")
+        plot(search_subs, l0_search, "search set, one seed", FINAL / "frontier-search.png")
+    return rep
 
 
 def main(argv=None) -> int:
@@ -810,7 +957,7 @@ def main(argv=None) -> int:
     p.add_argument("tag")
     p.add_argument("text")
     f = sub.add_parser("final", help="final-set reruns: starts, launch IDS, collect")
-    f.add_argument("what", choices=("starts", "launch", "collect"))
+    f.add_argument("what", choices=("starts", "launch", "collect", "table"))
     f.add_argument("ids", nargs="*", help="launch: record ids (12-hex prefixes); starts: start names")
     f.add_argument("--commit", default=None, help="starts: the commit to run in (default: HEAD's fixed side)")
     f.add_argument("--seeds", default=",".join(map(str, FINAL_SEEDS)))
@@ -823,6 +970,10 @@ def main(argv=None) -> int:
             res = [final_run(commit, ["--starts", *(a.ids or STARTS)], {"kind": "starts"}, a.dry_run)]
         elif a.what == "launch":
             res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run)
+        elif a.what == "table":
+            final_table()
+            print((FINAL / "table.md").read_text())
+            return 0
         else:
             res = final_collect()
         for r in res:
