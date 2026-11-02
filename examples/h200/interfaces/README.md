@@ -52,7 +52,9 @@ for one server-time block and what the composed verdict reads. It extends the al
   S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
   and 1/10^6, its run ids, and `source: real|fixture`;
 - the composed verdict and the error of `Accounting.Guarantees.JointHorizonLive` over the block: the accepted
-  subprotocols' errors summed;
+  subprotocols' errors summed. It composes the subprotocols of one product (`PRODUCTS`): onsite's, every one, unless
+  `composed.product` names remote's, sampled proofs and PoUW, whose other subprotocols are `dropped`: not run and not
+  composed;
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizonLive's
   union bound over that many blocks and the per-block error each δ needs.
 
