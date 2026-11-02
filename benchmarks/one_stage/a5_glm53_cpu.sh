@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, its CPU half over GLM-5.3's TP8 Commit (a5_glm53_commit.sh), run from a VM that reaches both machines
-# (`research pods ssh`): the Commit's handoff (its record and served windows, private bodies included: prover only) copied from the
-# GPU machine to the CPU machine, every file's sha256 compared on both ends, then ONE research run there, a5_tp.sh: flock-circuit
+# over ssh: the Commit's handoff (its record and served windows, private bodies included: prover only) copied from the
+# GPU machine to the CPU machine, every file's sha256 compared on both ends, then ONE run there, a5_tp.sh: flock-circuit
 # and flock-verify built from this tree, each rank's window of record, its Lean draw, M0's --zk sessions and Lean verify --zk.
-#   bash benchmarks/one_stage/a5_glm53_cpu.sh GPU_RUN [GPU_MACHINE]      (GPU_MACHINE: vy-glm53-eu2)
-#   A5_ON=vy-glm53-cpu-2 | vy-nebius-cpu-2 (the CPU machine)   A5_JOBS=2 (ranks at once, ~56 GB each)   RESEARCH=research
-# Each rank's Programs of record are read in place: the row's build/ on vy-glm53-cpu-2, the staged copy on vy-nebius-cpu-2
-# (A5_BUILD elsewhere). `research run` waits up to --mem-wait for the machine's memory and returns once the run starts.
+#   bash benchmarks/one_stage/a5_glm53_cpu.sh GPU_RUN [GPU_MACHINE]      (GPU_MACHINE: the Commit's)
+#   A5_ON=MACHINE (the CPU machine)   A5_JOBS=2 (ranks at once, ~56 GB each)   RESEARCH=research
+# Each rank's Programs of record are read in place: the row's build/ on the machine that built it, a staged copy
+# on the other (A5_BUILD elsewhere). The run waits up to --mem-wait for the machine's memory and returns once the run starts.
 set -euo pipefail
 RUN=${1:?the GPU Commit run id}; FROM=${2:-vy-glm53-eu2}; ON=${A5_ON:-vy-glm53-cpu-2}; JOBS=${A5_JOBS:-2}; R=${RESEARCH:-research}
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager

@@ -29,13 +29,13 @@ open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
-/-- An untyped `setupHidden` statement is a `MaskSetup`: `Layout` (`hidden_layout'`), `HmRow.check` on the circuit
-`HmOut.parse` reads with `HmRow.parse`, and `m`. -/
+/-- An untyped `setupHidden` statement is a `MaskSetup`: `Layout` at its flat twin's Δ (`HiddenExec.flat_layout`),
+`HmRow.check` on the circuit the session commits (`parseCommit_check`), and `m`. -/
 theorem maskSetup_of_setupHidden {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : MaskSetup st :=
-  ⟨Hidden.hidden_layout' ht h,
-    let ⟨ls, hc⟩ := Refine.hm_parse_check (Hidden.parse_untyped ht (Hidden.setupHidden_spec' h).parse).1; ⟨_, ls, hc⟩,
+  ⟨⟨_, _, HiddenExec.flat_layout ht h⟩,
+    let ⟨ls, hc⟩ := Hidden.parseCommit_check ht (Hidden.setupHidden_parseCommit h); ⟨_, ls, hc⟩,
     (Hidden.setupHidden_spec' h).m⟩
 
 theorem tableZKH_eq {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y₁ y₂ : DrawSetupZKH I mPts S d) :

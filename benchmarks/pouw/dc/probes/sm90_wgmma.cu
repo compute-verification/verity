@@ -1,4 +1,4 @@
-// EPS1 DC on Hopper (sm_90a, H100/H200): TENSOR's M3 (note:20261017T0321Z-draft-eps1-tensor §5) as opcode probes.
+// The tensor measurement M3 on Hopper (sm_90a, H100/H200) as opcode probes.
 // Build with ../opcode_probe/probe.py build --arch sm_90a; every probe passes the SASS gate, the poisoned sink and its
 // no-write control before it is timed (probe.cuh). Accumulators stay in registers; A and B come from one shared-memory
 // tile through no-swizzle K-major descriptors (dc.cuh). Each iteration's first wgmma overwrites D (scale-d 0), so FP
@@ -156,12 +156,12 @@ DC_DEV void wg_mix(const OpArgs& a) {
 }
 
 // The honest LI-CP-W loop, static-trip (OP_LOOP, so a warp-collective redux gates on sm_90, unlike the dynamic-trip
-// OP_UNTIL loop the gate refuses, DC EPS1 r9): each warpgroup issues its 4 wgmma, then folds the four segments' 512
+// OP_UNTIL loop the gate refuses): each warpgroup issues its 4 wgmma, then folds the four segments' 512
 // committed words with LI (LOP3 to absorb a word, IMAD to multiply by an odd a) and, for CP > 0, LI-CP-W's per-segment
 // checkpoint (4 LOP3 to XOR a lane's 8 chains, then the warp reduces once by `redux.sync.xor.b32` (CP 1) or the 5-shuffle
 // butterfly fallback (CP 2)), then waits. No filler (that is the design's). The fold reads the Lane's registers, not
 // the wgmma's accumulators, so it overlaps its own wgmma, which the receipt can't: dc90-licpw-redux-l32 is timed from
-// RT-HOPPER's wgli_db_w2, which folds the accumulators (RT-HOPPER-8, r20261019-070001-df11).
+// rt_hopper's wgli_db_w2, which folds the accumulators.
 template <int CP>
 DC_DEV void li_fold(Lane& l) {
 #pragma unroll
@@ -224,7 +224,7 @@ DC_DEV void wg_li_fill(const OpArgs& a) {
   OP_SINK(fold_acc(d) ^ l.fold() ^ __float_as_uint(ff.x) ^ __float_as_uint(ff.y) ^ threadIdx.x)
 }
 
-// TMA bulk-async copies beside the saturated wgmma (DC EPS1 r10): one side warp's lane 0 issues cp.async.bulk (SASS
+// TMA bulk-async copies beside the saturated wgmma: one side warp's lane 0 issues cp.async.bulk (SASS
 // UBLKCP, a move) or cp.reduce.async.bulk.add.u32 (UBLKRED, a combine), 4 KB (1024 words) an op, DC_BULK_R a trip, into
 // the block's own global region, with a group bound (wait_group.read 2) so the queue stays full. The two wgmma
 // warpgroups run flat out (OP_LOOP), the bulk warp only while they do (OP_UNTIL), so neither rate counts barrier time. A

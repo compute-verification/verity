@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The device reader (reader.py) on one GPU (cwd = the source tree). Everything runs under one gpu-lease 1 --wait, which
-# also waits out node 2's booked windows: build reader.cu, gate it byte for byte against the remote bandwidth driver
+# also waits out node 2's booked windows: build reader.cu, gate it byte for byte against the PoUB driver
 # (small, under compute-sanitizer, then at --gate-blocks), then time one pass. Results go to $RESEARCH_RUN_DIR/out.
 #
 #   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-codec-tensor taskset -c 48-95 bash benchmarks/codec_tensor/reader.sh
