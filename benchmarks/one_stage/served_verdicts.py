@@ -105,8 +105,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import gzip
-import io
 import json
 import os
 import re
@@ -116,7 +114,6 @@ import socket
 import subprocess
 import sys
 import tarfile
-import zlib
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
@@ -263,6 +260,10 @@ _FIELD = re.compile(r'\\?"(?:%s)\\?":' % "|".join(sorted(OWN | NUMBERED)))
 CUT = "{…} (cut short; in full in the serve dir's private/verdicts.txt)"
 #: a file `publish` reads larger than this is held whole
 PUBLISH_MAX = 256 << 20
+#: The files under the published dir that `publish` leaves as they are, unread: the serve dir's declared Program, the
+#: window's class Program, which is public structure. Its JSON runs to hundreds of MB, beyond what `PUBLISH_MAX` lets
+#: `publish` read.
+PUBLIC_FILES = frozenset({"serve/h1/window-program.json.gz"})
 
 
 def _numbered(v: Any) -> bool:
@@ -352,31 +353,18 @@ def public_doc(text: str) -> str:
     return text if pub == doc else json.dumps(pub, indent=1) + "\n"
 
 
-def _public_gzip(data: bytes) -> bool:
-    """Whether ``data`` is a gzip stream of at most `PUBLISH_MAX` bytes of UTF-8 text that is its own public form
-    (`public_doc`), as the serve dir's declared Program (``h1/window-program.json.gz``), public structure, is."""
-    if data[:2] != b"\x1f\x8b":
-        return False
-    try:
-        with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
-            raw = f.read(PUBLISH_MAX + 1)
-    except (OSError, EOFError, zlib.error):
-        return False
-    text = raw.decode(errors="replace")
-    return len(raw) <= PUBLISH_MAX and text.encode() == raw and public_doc(text) == text
-
-
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
     `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window (`public_doc`) held in
     full, under ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text is
-    held whole unless it is a gzip stream of text that is its own public form (`_public_gzip`), which stays byte for byte.
-    The paths held, in order."""
+    held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
             continue
         rel = p.relative_to(out).as_posix()
+        if rel in PUBLIC_FILES:
+            continue
         dst = private / rel
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -387,9 +375,8 @@ def publish(out: Path, private: Path) -> list[str]:
             continue
         text = data.decode(errors="replace")
         if text.encode() != data:
-            if not _public_gzip(data):
-                shutil.move(p, dst)
-                held.append(rel)
+            shutil.move(p, dst)
+            held.append(rel)
             continue
         pub = public_doc(text)
         if pub != text:
