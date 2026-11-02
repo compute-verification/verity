@@ -56,8 +56,9 @@ DIR``).
    and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``, 0700), held to PoUS's run case as
    one store (`p2_case.same_store`); its public answer, under a hiding commitment to the case's digest, to ``--bw-out``
    (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth piece's,
-   `served_bandwidth.py collect`, which credits it only when the party's own answer names the window's binding as the
-   audit it held the store by). ``--bw-windows``, ``--bw-passes``, ``--bw-samples`` and ``--bw-window-s`` set its
+   `served_bandwidth.py collect`, which credits it only by the party's own answer of the window's binding as the
+   auditor's host kept it, read through that host's gate, never this piece's copy). ``--bw-windows``, ``--bw-passes``,
+   ``--bw-samples`` and ``--bw-window-s`` set its
    length (`held_bandwidth`'s defaults: two minutes); ``--no-bandwidth`` runs none.
 
 Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes and the phases' timings) and prints one ``POUS`` line.

@@ -3,8 +3,9 @@ window and the SHA-512 of the serve dir's weights registration (None without one
 binds its hiding commitment to it and the memory challenger logs the window's salt under it, so it is the audit the
 bandwidth party holds that window's PoUS store by (the gate's ``bw_party --pous-audit AUDIT``, `p2_party.pous_record`).
 `of_serve_dir` derives it from the serve dir as `served_piece.run` does, which
-`benchmarks/one_stage/served_bandwidth.py collect` does too, to credit a bandwidth answer only when the audit its
-session ran under is the window's own. It imports no torch, so the collector loads it by its path.
+`benchmarks/one_stage/served_bandwidth.py collect` does too, to credit a bandwidth answer only by the party's own answer
+of a session under the window's own audit, as the auditor's host kept it. It imports no torch, so the collector loads it
+by its path.
 """
 from __future__ import annotations
 

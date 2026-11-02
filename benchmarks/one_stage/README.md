@@ -82,8 +82,9 @@ negatives.
   the tree has its piece and the node holds what the piece reads (its auditor key, the bandwidth audit's registered store).
   The bandwidth audit's session runs inside PoUS's piece, over the store that piece holds
   (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_bandwidth.py collect`). It
-  credits an accept only when the bandwidth party's own answer names this window's binding as the audit it held the
-  store by, so a session run under another window's PoUS session is undecided.
+  credits an accept only by the bandwidth party's own answer of a session under this window's binding as the auditor's
+  host kept it (its gate's `party_log bw answers AUDIT`), never by the copy the prover's process relayed, so a session
+  run under another window's PoUS session, a forged record or a host that kept no answer is undecided.
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
   run, credits nothing). An accept's clause says when its weights were held and their share of the checkpoint, where its

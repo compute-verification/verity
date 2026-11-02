@@ -34,8 +34,9 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span. It names the verifier's host and, held by a PoUS record, the `audit` whose
-  session's store it held, so whoever credits the session holds it to the window's own binding
-  (`benchmarks/one_stage/served_bandwidth.py collect`). `core_answer` puts it in the core interface's form.
+  session's store it held, so whoever credits the session holds it to the window's own binding, reading it as this
+  host kept it (`answers.jsonl`, the gate's ``party_log bw answers AUDIT``; `benchmarks/one_stage/served_bandwidth.py
+  collect`). `core_answer` puts it in the core interface's form.
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
 untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,

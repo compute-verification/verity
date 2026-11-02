@@ -16,6 +16,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shlex
 import shutil
 import socket
 import stat
@@ -462,6 +463,23 @@ def _bandwidth(tmp_path, record=lambda request: request, **kw):
                                         deadline_s=0.001)} | kw
 
 
+def _gate(root: Path) -> str:
+    """The command that reaches the auditor's host's gate (`benchmarks/live_verifier/host.py`'s) over `root`, where
+    `_bandwidth`'s party keeps its answers (``parties/bw``), under a read-only key."""
+    script = root / "gate.py"
+    script.write_text(f"import sys\nfrom pathlib import Path\n"
+                      f"sys.path.insert(0, {str(ROOT / 'benchmarks' / 'live_verifier')!r})\nimport host\n"
+                      f"host_ = host.Host(root=Path({str(root)!r}))\n"
+                      "sys.exit(host.gate(['--ssh', sys.argv[1], '--key', '-'], host_))\n")
+    return shlex.join([sys.executable, str(script)])
+
+
+def test_the_collector_reads_the_answers_where_the_piece_starts_the_bandwidth_party():
+    """The composed run's collector reads the party's own answers through the gate whose ``bw_party`` the piece starts
+    the party with, under the same key (`served_bandwidth.BW_GATE`)."""
+    assert SP.BW_PARTY == f"{SB.BW_GATE} bw_party"
+
+
 def test_the_held_sessions_request_is_the_auditors_session():
     """The held session requests, by default, the session the auditor's party holds every request to
     (`p2_party.SESSION`), so V3's served run is never refused for its parameters."""
@@ -479,9 +497,9 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
     PoUS's store (`p2_case.same_store` against the run's case), and `remote-audit-p2-protocol` answers it as the session
-    did; the party's own answer names the window's binding as its audit, so the composed run's collector credits the
-    public answer, which names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the
-    only point a P2 registration names."""
+    did; the party's own answer, which its host's gate gives under the window's binding, is the session's record and
+    says what the public answer does, so the composed run's collector credits the public answer, which names none of the
+    store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point a P2 registration names."""
     s = registered
     answer, calls = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
     assert answer["verdict"] == "accept", answer["reason"]
@@ -518,7 +536,8 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     kept = json.loads((private / "session.json").read_text())
     bind = json.loads((s.out / "pous.json").read_text())["binding"]
     assert kept["verifier_record"]["audit"] == kept["answer"]["audit"] == bind == SP.SW.of_serve_dir(s.serve, 3).hex()
-    assert SB.collect(public, 3, s.serve) == bw
+    assert SB.collect(public, 3, s.serve, gate=_gate(tmp_path)) == bw
+    assert SB.host_answer(_gate(tmp_path), bytes.fromhex(bind)) == kept["verifier_record"]
     row = SV.piece_row("bandwidth", s.out.parent)
     assert row["verdict"] == "accept" and row["protocol"] == p2_case.PROTOCOL
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": bw["public"]["q_bytes"], "unit": "bytes"}
