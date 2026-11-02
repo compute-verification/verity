@@ -1,6 +1,6 @@
 """The Lean runners on real Lean, in a toy checkout the Lean families list and the reference executor runs: the auditor's
 control package (`tools/verity/lean/tests/fixtures/control`), a package under the module system, one with a `sorry`, an
-axiom and `native_decide` in private proofs, and one that doesn't compile. Each module compiles from its reads alone to Lake's bytes and
+axiom and `native_decide` in private proofs and a private theorem that skipped the kernel, and one that doesn't compile. Each module compiles from its reads alone to Lake's bytes and
 gets its replay and its declarations' axiom sets, an importer's taken through its import's record; a lock passes, is
 stale with the command that regenerates it, or names a root no task builds. Skipped where the fixture's toolchain isn't
 installed. Slow (`lean` for each module, `Facts.lean` compiled for each `check.py`): only real Lean shows that the setup
@@ -47,13 +47,18 @@ MS = {
                      'roots = ["A", "B", "C", "D", "F", "G", "Ms"]\n',
     "lake-manifest.json": manifest("ms"),
 }
-#: a `sorry`, an axiom and `native_decide` in proofs only `A`'s private part holds, and `B`, whose public theorem rests on them
+#: a `sorry`, an axiom and `native_decide` in proofs only `A`'s private part holds; `B`, whose public theorem rests on them;
+#: and `K`, whose private theorem skipped the kernel (`debug.skipKernelTC`, spelled so that no source scan finds it)
 AX = {
     "A.lean": "module\npublic def a : Nat := 1\ntheorem p : a = 1 := by sorry\naxiom hidden : a = 1\n"
               "public theorem h2 : a = 1 := hidden\npublic theorem h3 : a = 1 := by sorry\n"
               "public theorem h4 : 2 + 2 = 4 := by native_decide\n",
     "B.lean": "module\npublic import A\npublic theorem b : a = 1 ∧ a = 1 ∧ 2 + 2 = 4 := ⟨h2, h3, h4⟩\n",
-    "lakefile.toml": 'name = "ax"\ndefaultTargets = ["Ax"]\n\n[[lean_lib]]\nname = "Ax"\nroots = ["A", "B"]\n',
+    "K.lean": "module\nmeta import Lean\nopen Lean Elab Command in\n#eval show CommandElabM Unit from liftCoreM do\n"
+              "  let opt := Name.mkStr (Name.mkStr .anonymous \"debug\") (\"skipKernel\" ++ \"TC\")\n"
+              "  let n := Name.mkNum (`_private ++ `K) 0 ++ `bogus\n  withOptions (fun o => o.setBool opt true) <| addDecl\n"
+              "    (.thmDecl { name := n, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro })\n",
+    "lakefile.toml": 'name = "ax"\ndefaultTargets = ["Ax"]\n\n[[lean_lib]]\nname = "Ax"\nroots = ["A", "B", "K"]\n',
     "lake-manifest.json": manifest("ax"),
 }
 BAD = {"lakefile.toml": 'name = "bad"\ndefaultTargets = ["Bad"]\n\n[[lean_lib]]\nname = "Bad"\n',
@@ -176,6 +181,12 @@ def test_axioms_in_private_proofs_fail_their_module_and_reach_an_importer_throug
         "A's public part and its record alone: B's theorem carries the axioms A's private proofs use"
     assert importer(("olean",), "unrecorded") == {"b": ["a", "h2", "h3", "h4"]}, \
         "without A's record, what B uses of A's public part counts as axioms: the task fails rather than miss one"
+
+
+def test_a_private_declaration_that_skipped_the_kernel_fails_its_own_module(tree, tmp_path):
+    doc = graph.task_graph(tree, "lean-module:ax/K.lean", listers=LISTERS)
+    res = runners.execute(next(t for t in doc["tasks"] if t["id"] == "lean-module:ax/K.lean"), doc, tmp_path / "k")
+    assert res["status"] == "fail" and res["detail"].get("rejected") == ["K"], res["detail"]
 
 
 def test_a_module_that_does_not_compile_fails_with_lean_s_errors(tree, tmp_path):
