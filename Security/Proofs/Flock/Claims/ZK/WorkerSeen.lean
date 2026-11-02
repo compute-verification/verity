@@ -14,9 +14,14 @@ randomness that keeps what the workers see moves the switched view at constant v
 stays (`swView_fix`), elsewhere it is `shift`. Then level 0's hidden leaves go ideal and Lemma B is the honest prover's.
 
 * `constVals`, `fixAmt`, `fixE`: the constant values, the move of the inner proof's pads and the bijection.
-* `realCore_fix`, `swView_fix`, `swViewWith_fix`, `swDig_inl_fix`, `swPre_fix`: the switched view, with its hidden
-  leaves given, its level-0 digests and its pre-final view at constant values, at the moved randomness, are the honest
-  prover's.
+* `realCore_fix`, `swView_fix`, `swViewWith_fix`, `swDig_inl_fix`: the switched view, with its hidden leaves given, and
+  its level-0 digests at constant values, at the moved randomness, are the honest prover's.
+* `fixP`, `cut_swPre_fixP`: before the last coin the view shows no `C_h`, so a fix map that moves the free pads and `μ`
+  alone makes the switched pre-final view, cut, the honest one at every coin vector.
+* `swPre_congr`, `Hm96.swViewR_congr`: the switched views read the values at their own mask slot and level 0's hiding
+  alone, so values read from what the workers see are constant values on each fiber of what they see.
+* `mix_shvzk_hm96`, `fam_sw_shvzk_hm96`: Lemma B in that order, for one table and jointly at `J` tables, whose values
+  read every table's seen randomness.
 -/
 
 namespace FlockSoundness.ZK.Table
@@ -96,6 +101,34 @@ theorem fixE_of_not_rows (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 
     exact ite_eq_right hr
   rw [fixE_apply, h0]
   simp only [Prod.fst_zero, Prod.snd_zero, add_zero]
+  rfl
+
+/-- **The pre-final fix map** at constant values `c`: the free pads moved by `padShift` and `μ` as `fixE` moves it;
+the mask slot, level 0's hiding, `pad_h`, `pad_μ` and every salt and seed kept. The pre-final view shows no `C_h`, so it
+needs no move of `pad_h` and holds at every coin vector. -/
+noncomputable def fixP (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) : T.Rand ≃ T.Rand where
+  toFun ω := (ω.1, ω.2.1, ω.2.2.1 + T.padShiftC w c ω.1 ω.2.1, ω.2.2.2.1, ω.2.2.2.2.1,
+    ω.2.2.2.2.2.1 + (T.fixAmt w c ω.1 ω.2.1 ω.2.2.1).2.2, ω.2.2.2.2.2.2)
+  invFun ω := (ω.1, ω.2.1, ω.2.2.1 - T.padShiftC w c ω.1 ω.2.1, ω.2.2.2.1, ω.2.2.2.2.1,
+    ω.2.2.2.2.2.1 - (T.fixAmt w c ω.1 ω.2.1 (ω.2.2.1 - T.padShiftC w c ω.1 ω.2.1)).2.2, ω.2.2.2.2.2.2)
+  left_inv ω := by
+    obtain ⟨u, V, h, padh, padμ, μ, s⟩ := ω
+    simp only [add_sub_cancel_right]
+  right_inv ω := by
+    obtain ⟨u, V, h, padh, padμ, μ, s⟩ := ω
+    simp only [sub_add_cancel]
+
+/-- Where `c`'s rows fail, the pre-final fix map is `shift`. -/
+theorem fixP_of_not_rows (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand)
+    (hr : ¬ T.onVals.RowsAt (w, T.constVals c) ω.1 ω.2.1) :
+    T.fixP w c ω = T.onVals.shift (w, T.constVals c) (w, T.vals) ω := by
+  have h0 : T.fixAmt w c ω.1 ω.2.1 ω.2.2.1 = 0 := by
+    unfold fixAmt
+    exact ite_eq_right hr
+  show (ω.1, ω.2.1, ω.2.2.1 + T.padShiftC w c ω.1 ω.2.1, ω.2.2.2.1, ω.2.2.2.2.1,
+    ω.2.2.2.2.2.1 + (T.fixAmt w c ω.1 ω.2.1 ω.2.2.1).2.2, ω.2.2.2.2.2.2) = _
+  rw [h0]
+  simp only [Prod.snd_zero, add_zero]
   rfl
 
 omit [CharP F 2] in
@@ -206,21 +239,42 @@ theorem swView_fix (T : Table F K W Salt Seed D Hi VL) (hW : ∀ r, Function.Bij
     rw [T.fixE_of_not_rows w c ω hr]
     exact T.toBase_view w _
 
+omit [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] in
+open Classical in
 set_option smartUnfolding false in
-/-- **The switched pre-final view at constant values is the honest one at the moved randomness**, which keeps every
-salt and seed. -/
-theorem swPre_fix (T : Table F K W Salt Seed D Hi VL) (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2)
-    (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w)
+/-- **The switched pre-final view at constant values, cut, is the honest one at the pre-final fix map**, at every coin
+vector: the masked values by `padShift`, `ρ_in`, `σ_in` kept by it, and `Y₁` by `μ`'s move wherever it is sent, which
+is where `β ≠ 0` (`Admits`). -/
+theorem cut_swPre_fixP (T : Table F K W Salt Seed D Hi VL) (S : T.Sent) (hS : T.Admits S) (w : W)
     (c : Fin 2 → Fin T.nE → F) (ω : T.Rand) :
-    T.swPre w (T.constVals c) ω = T.preView w (T.fixE w c ω) := by
-  have h := T.swView_fix hW hpads hβ w hreg hinner c ω
+    T.cut S (T.swPre w (T.constVals c) ω) = T.cut S (T.preView w (T.fixP w c ω)) := by
   by_cases hr : T.onVals.RowsAt (w, T.constVals c) ω.1 ω.2.1
-  · simp only [swView, hr, ↓reduceIte] at h
-    simp only [swPre, hr, ↓reduceIte, preView]
-    rw [← h]
-    rfl
-  · simp only [swPre, hr, ↓reduceIte]
-    rw [T.fixE_of_not_rows w c ω hr]
+  · rw [swPre, ite_eq_left hr]
+    obtain ⟨u, V, h, padh, padμ, μ, s⟩ := ω
+    dsimp only at hr
+    have hA : T.fixAmt w c u V h = _ := ite_eq_left hr
+    refine Cut.ext rfl rfl ?_ rfl rfl rfl ?_ ?_ rfl rfl rfl rfl
+    · funext r i
+      show c r i + (h r).1 i = T.vals r w u V i + (h r + T.padShiftC w c u V r).1 i
+      rw [padShiftC_apply, Prod.fst_add, Pi.add_apply]
+      ring
+    · funext r
+      show T.innerMsg r (h r) = T.innerMsg r (h r + T.padShiftC w c u V r)
+      rw [padShiftC_apply]
+      simp only [innerMsg, Prod.fst_add, Prod.snd_add, Pi.add_apply]
+      refine Prod.ext ?_ ?_ <;> ring
+    · funext r
+      show (if S.fin r then some (fun i => T.hFull (h r) i + T.β r * μ r i) else none) =
+        if S.fin r then some (fun i => T.hFull (h r + T.padShiftC w c u V r) i +
+          T.β r * (μ r i + (T.fixAmt w c u V h).2.2 r i)) else none
+      by_cases hf : S.fin r
+      · have hβ := hS.2.2 r hf
+        rw [ite_eq_left hf, ite_eq_left hf, hA]
+        refine congrArg some (funext fun i => ?_)
+        field_simp
+        ring
+      · rw [ite_eq_right hf, ite_eq_right hf]
+  · rw [swPre, ite_eq_right hr, T.fixP_of_not_rows w c ω hr]
 
 /-- **What a worker sees of a table's randomness** before its algebraic phase: the mask slot, level 0's hiding, and
 level 0's salts at the opened positions and at the others. -/
