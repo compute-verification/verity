@@ -23,7 +23,7 @@ Subcommands (each on the node, once, by the integrator):
     prepare.py show                          every registered start
 
 The evaluator (`evaluate_bpb`) loads an entry onto its start's architecture (strict: the same parameters, the same shapes),
-counts the forward FLOPs of one 1024-token window with torch's FlopCounterMode and refuses an entry over its start's (the
+counts the forward FLOPs of one 1024-token window (torch's FlopCounterMode formulas, `flop_counter`) and refuses an entry over its start's (the
 eval-compute cap per byte: the same tokenizer and windows, so per window is per byte), then scores every full window of the
 split at context 1024: bits per byte = summed target cross-entropy / ln 2 / the targets' UTF-8 bytes.
 """
@@ -256,11 +256,48 @@ def build_model(info: dict, root: Path = ROOT, device: str = "cuda"):
     return model.to(device)
 
 
+def flop_counter():
+    """torch's FlopCounterMode count (its formulas, `flop_registry`, and its decomposition of ops it has none for) without its
+    per-module tracking, which costs more than the step at these sizes. `with flop_counter() as fc: ...; fc.flops`."""
+    import torch
+    from torch.utils._python_dispatch import TorchDispatchMode
+    from torch.utils.flop_counter import flop_registry
+    aten = torch.ops.aten
+    skip = {aten.sym_is_contiguous.default, aten.is_contiguous.default, aten.is_contiguous.memory_format,
+            aten.is_strides_like_format.default, aten.is_non_overlapping_and_dense.default, aten.size.default,
+            aten.sym_size.default, aten.stride.default, aten.sym_stride.default, aten.storage_offset.default,
+            aten.sym_storage_offset.default, aten.numel.default, aten.sym_numel.default, aten.dim.default,
+            torch.ops.prim.layout.default}
+
+    class Count(TorchDispatchMode):
+        def __init__(self):
+            super().__init__()
+            self.flops = 0
+
+        def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+            kwargs = kwargs or {}
+            if func in skip:
+                return NotImplemented
+            if isinstance(func, torch._ops.HigherOrderOperator):
+                raise RuntimeError(f"flop_counter: {func} (a higher-order operator) can't be counted")
+            if func not in flop_registry and func is not torch.ops.prim.device.default:
+                with self:
+                    r = func.decompose(*args, **kwargs)
+                    if r is not NotImplemented:
+                        return r
+            out = func(*args, **kwargs)
+            f = flop_registry.get(func._overloadpacket)
+            if f is not None:
+                self.flops += int(f(*args, **kwargs, out_val=out))
+            return out
+
+    return Count()
+
+
 def count_flops(fn) -> int:
-    from torch.utils.flop_counter import FlopCounterMode
-    with FlopCounterMode(display=False) as fc:
+    with flop_counter() as fc:
         fn()
-    return int(fc.get_total_flops())
+    return fc.flops
 
 
 def measure(model, vocab: int, device: str) -> dict:

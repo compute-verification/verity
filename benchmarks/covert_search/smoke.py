@@ -62,7 +62,24 @@ def run(root: Path, island: Path, cls: str, *extra: str) -> tuple[int, dict]:
     return rc, json.loads((out / "witness.json").read_text())
 
 
+def check_counter() -> None:
+    """prepare.flop_counter counts what FlopCounterMode counts, on a forward and backward."""
+    from torch.utils.flop_counter import FlopCounterMode
+    model = LM(SIZES["tiny"], vocab=VOCAB)
+    x = torch.zeros(2, prepare.CTX, dtype=torch.long)
+
+    def step():
+        with torch.autocast("cpu", dtype=torch.bfloat16):
+            model(x).float().sum().backward()
+    with FlopCounterMode(display=False) as fc:
+        step()
+    lean = prepare.count_flops(step)
+    print(f"smoke: flop_counter {lean} FLOPs, FlopCounterMode {fc.get_total_flops()}")
+    assert lean == fc.get_total_flops()
+
+
 def main() -> int:
+    check_counter()
     with tempfile.TemporaryDirectory() as t:
         root = Path(t)
         make_root(root)

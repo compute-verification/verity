@@ -7,8 +7,8 @@ A block is one call of the island's `block(ctx, carry) -> carry` (block 0 gets `
 `export(ctx, carry) -> {parameter name: tensor}`, the entry: overrides on theta, which the evaluator loads onto the start.
 
 - **Compute.** Each block may do at most c FLOPs: c is its start's forward and backward over 64 sequences of 1024 tokens
-  (`start.json` `c_flops`), and both are counted by torch's FlopCounterMode (matrix products and attention, forward and
-  backward). Charged compute is blocks x c, whatever a block used. torch.compile is off (TORCH_COMPILE_DISABLE=1): the
+  (`start.json` `c_flops`), and both are counted with torch's FlopCounterMode formulas (matrix products and attention,
+  forward and backward; `prepare.flop_counter`). Charged compute is blocks x c, whatever a block used. torch.compile is off (TORCH_COMPILE_DISABLE=1): the
   counter can't see inside a compiled graph. Real counted FLOPs and GPU-seconds are recorded beside the charge.
 - **Fresh input.** A block may import at most k bits beyond theta (`--class`: ref = unlimited, 10MB, 1MB, 100kB; MB = 10^6
   bytes). Everything crossing into a block is counted: the carry (the previous block's output: the update, optimizer state,
@@ -48,10 +48,9 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.flop_counter import FlopCounterMode
 
 import prepare
-from prepare import CLASSES, CTX, ROOT, TOKEN_BITS, TrainStream, build_model, start_info
+from prepare import CLASSES, CTX, ROOT, TOKEN_BITS, TrainStream, build_model, flop_counter, start_info
 
 HERE = Path(__file__).resolve().parent
 BUDGET_BLOCKS = 1000             # the fixed charged budget per candidate: 1000 c (about 10 GPU-minutes at m)
@@ -225,11 +224,11 @@ class Meter:
             raise Violation(f"block {block}'s carry is {ctx.carry_in_bits} bits (+{SEED_BITS} seed), over k = {self.k}")
         self.sync()
         t0 = time.perf_counter()
-        with FlopCounterMode(display=False) as fc:
+        with flop_counter() as fc:
             out = self.mod.export(ctx, carry) if export else self.mod.block(ctx, carry)
         self.sync()
         dt = time.perf_counter() - t0
-        flops = int(fc.get_total_flops())
+        flops = fc.flops
         rec = {"block": block, "export": export, "carry_in_bits": ctx.carry_in_bits, "token_bits": ctx.token_bits_in,
                "seed_bits": SEED_BITS, "imported_bits": ctx.imported_bits, "flops": flops, "seconds": round(dt, 4)}
         self.records.append(rec)
@@ -263,11 +262,11 @@ class Meter:
     def eval_export(self, carry: dict, block: int, scratch: Path) -> dict:
         """An evaluation side-computation, outside the chain and its charge: export the current carry and score it."""
         self.reset(block)
-        with FlopCounterMode(display=False) as fc:
+        with flop_counter() as fc:
             overrides = self.mod.export(Ctx(self, block, carry_bits(carry)), carry)
         self.check_clean(block)
         ev = self.evaluate({k: v.detach() for k, v in overrides.items()}, scratch, f"b{block}")
-        return ev | {"export_flops_uncharged": int(fc.get_total_flops())}
+        return ev | {"export_flops_uncharged": fc.flops}
 
 
 def git_commit() -> str:
