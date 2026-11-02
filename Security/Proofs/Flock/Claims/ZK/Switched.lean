@@ -716,8 +716,8 @@ end Proto
 
 /-- **Flock's zero knowledge at the switched prover, at the tables the session sets up**: `Flock.zk_deployZk_of_tables`
 with `TMsgLink` replaced by `TSwLink`. At `P_zk = G.prover`, a prover whose messages on each witness are the switched
-prover's at whatever values the workers supply (read from the mask slot and level 0's hiding, never the pads), and the
-honest prover's simulator, `Claims.Flock.ZKAt` holds at the same `ε_zk` and `γ`. -/
+prover's at whatever values the workers supply (read from every table's mask slot, level 0's hiding and level 0's salts,
+never the pads), and the honest prover's simulator, `Claims.Flock.ZKAt` holds at the same `ε_zk` and `γ`. -/
 theorem Flock.zk_deployZk_of_tables_sw (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
     (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
