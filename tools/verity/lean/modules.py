@@ -181,12 +181,13 @@ def with_lake_option(text: str) -> str:
         new = before + ("" if before.endswith("\n") else "\n") + LAKE_OPTION + "\n" + "".join(lines[end:])
     else:
         new = text.rstrip("\n") + f"\n\n[leanOptions]\n{LAKE_OPTION}\n"
+    why = f"its leanOptions don't take `{LAKE_OPTION}` as a line of a `[leanOptions]` table: set it by hand"
     try:
         ok = has_lake_option(new)
-    except tomllib.TOMLDecodeError:
-        ok = False
+    except tomllib.TOMLDecodeError as e:
+        raise ValueError(why) from e
     if not ok:
-        raise ValueError(f"its leanOptions don't take `{LAKE_OPTION}` as a line of a `[leanOptions]` table: set it by hand")
+        raise ValueError(why)
     return new
 
 
