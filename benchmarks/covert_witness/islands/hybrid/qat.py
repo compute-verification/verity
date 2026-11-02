@@ -286,7 +286,7 @@ class Schedule:
     def __init__(self, total: int):
         self.total = total
         hooks.plan(total)
-        self.cps = {max(0, math.ceil(total * b / CHECKPOINTS) - 1) for b in range(1, CHECKPOINTS + 1)}
+        self.cps = {max(0, total * b // CHECKPOINTS - 1) for b in range(1, CHECKPOINTS + 1)}
 
     def due(self, g: int) -> bool:
         return g in self.cps or g == self.total - 1
