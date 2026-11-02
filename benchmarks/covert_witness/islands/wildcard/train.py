@@ -353,6 +353,26 @@ def train_kfac(a, net, rec, theta, params, tuned, data, fwd):
             {"steps": n_steps, "line_search": results, "eta": best})
 
 
+def train_scale(a, net, rec, theta, params, tuned, data):
+    """Every tensor of the set times one scalar α, line-searched on fresh batches (the final norm's gain: a temperature);
+    a second search refines around the first's best."""
+    trainable = {"full": tuned}
+    start = {n: params[n].detach().clone() for n in tuned}
+
+    @torch.no_grad()
+    def apply(al):
+        for n in tuned:
+            params[n].copy_(start[n] * al)
+
+    steps = []
+    best, coarse = line_search(a, net, data, steps, apply, [1.0] + a.scales)
+    width = min([abs(x - best) for x in [1.0] + a.scales if x != best] or [0.05]) / 2
+    best, fine = line_search(a, net, data, steps, apply, [best, best - width, best + width, best - width / 2,
+                                                          best + width / 2])
+    return (prepare.encode_full(delta_of(params, theta, tuned)), trainable, steps, [],
+            {"alpha": best, "coarse": coarse, "fine": fine})
+
+
 CACHED_OK = ("w_gate", "w_up", "w_down")
 
 
@@ -386,7 +406,7 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     seqs = max(chunks, n_pos // prepare.EVAL_CTX) // chunks * chunks
     n_pos = seqs * prepare.EVAL_CTX
     n_steps = max(chunks, int(a.epochs * n_pos) // P) // chunks * chunks
-    gb = n_pos * (4 * d + 2 * K + 9) / 2 ** 30
+    gb = n_pos * (4 * d + 2 * K + 13) / 2 ** 30
     print(json.dumps({"positions": n_pos, "steps": n_steps, "cache_gb": round(gb, 2), "per_position_step": per_pos,
                       "fill_per_token": fill_tok, "top_k": K}), flush=True)
     if gb > a.cache_gb:
@@ -398,6 +418,7 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     tgt = torch.empty(n_pos, dtype=torch.int32, device=dev)
     cs = torch.empty(n_pos, dtype=torch.float32, device=dev)
     dup = torch.empty(n_pos, dtype=torch.bool, device=dev)
+    ce0 = torch.empty(n_pos, dtype=torch.float32, device=dev)
     grab = {}
     hooks = [top.register_forward_pre_hook(lambda m, i: grab.__setitem__("x", i[0])),
              top.wo.register_forward_hook(lambda m, i, o: grab.__setitem__("o", o)),
@@ -430,13 +451,12 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             ids[at: at + n] = (k_ids - 32768).to(torch.int16)
             tgt[at: at + n] = t.int()
             cs[at: at + n] = lse + mass.log() - (es[at: at + n].float() * y).sum(-1)
-            if at < a.cached_micro:
-                true_ce.append((lse - logits_t)[: a.cached_micro - at])
+            ce0[at: at + n] = lse - logits_t
             dup[at: at + n] = (k_ids == t[:, None]).any(-1)
             steps += [{"op": "forward", "tokens": n}, {"op": "extra", "flops": 2 * V * d * n, "what": "cache: rest mean"}]
             at += n
 
-    def cached_loss(ix: torch.Tensor) -> torch.Tensor:
+    def cached_loss(ix: torch.Tensor, w: torch.Tensor | None = None) -> torch.Tensor:
         x = xs[ix].float()
         with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
             h = F.rms_norm(x, (d,), top.mlp_norm)
@@ -447,7 +467,7 @@ def train_cached(a, net, rec, theta, params, tuned, data):
         rest = cs[ix] + (es[ix].float() * z).sum(-1)
         own_slot = torch.where(dup[ix], torch.full_like(own, -torch.inf), own)
         lse = torch.logsumexp(torch.cat([sub, own_slot[:, None], rest[:, None]], dim=-1), dim=-1)
-        return (lse - own).mean()
+        return (lse - own).mean() if w is None else ((lse - own) * w).mean()
 
     groups = [{"params": [params[n] for n in mats], "lr": a.lr}, {"params": [params[n] for n in gains], "lr": a.norm_lr}]
     groups = [g for g in groups if g["params"]]
@@ -458,24 +478,36 @@ def train_cached(a, net, rec, theta, params, tuned, data):
     gen = torch.Generator(device=dev).manual_seed(a.data_seed)
     per_chunk, step_per_chunk, filled, step = n_pos // chunks, n_steps // chunks, 0, 0
     t0 = time.perf_counter()
-    true_ce = []
+    m = min(per_chunk // 2, a.cached_micro)
+    held = torch.arange(m, device=dev)
+
+    @torch.no_grad()
+    def held_loss(what: str) -> float:
+        steps.append({"op": "extra", "flops": fwd_mm * m, "what": f"cached: held-out loss, {what}"})
+        return float(cached_loss(held))
+
     for c in range(chunks):
         fill(filled, filled + per_chunk, steps)
         filled += per_chunk
         if c == 0:
-            m = min(per_chunk, a.cached_micro)
-            with torch.no_grad():
-                at_theta = float(cached_loss(torch.arange(m, device=dev)))
-            steps.append({"op": "extra", "flops": fwd_mm * m, "what": "cached: loss check at theta"})
-            print(json.dumps({"cached_loss_at_theta": at_theta, "true_loss": float(torch.cat(true_ce)[:m].mean()),
-                              "positions_checked": m}), flush=True)
+            print(json.dumps({"cached_loss_at_theta": held_loss("at theta"), "true_loss": float(ce0[:m].mean()),
+                              "held_out_positions": m}), flush=True)
+        if a.sample == "loss":
+            q = ce0[m:filled].clamp_min(0.05 * float(ce0[m:filled].mean()))
+            cdf = q.cumsum(0)
+            weight = float(q.mean()) / q
         for _ in range(step_per_chunk):
             frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
             for g, lr in zip(opt.param_groups, base):
                 g["lr"] = lr * frac
-            ix = torch.randint(filled, (P,), device=dev, generator=gen)
+            if a.sample == "loss":
+                j = torch.searchsorted(cdf, torch.rand(P, device=dev, generator=gen) * cdf[-1]).clamp_max(len(q) - 1)
+                ix, w = j + m, weight[j]
+            else:
+                ix, w = m + torch.randint(filled - m, (P,), device=dev, generator=gen), None
             for i in range(0, P, a.cached_micro):
-                loss = cached_loss(ix[i: i + a.cached_micro]) * (len(ix[i: i + a.cached_micro]) / P)
+                wi = None if w is None else w[i: i + a.cached_micro]
+                loss = cached_loss(ix[i: i + a.cached_micro], wi) * (len(ix[i: i + a.cached_micro]) / P)
                 loss.backward()
             torch.nn.utils.clip_grad_norm_(trained, a.clip)
             opt.step()
@@ -485,6 +517,7 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             if step % 100 == 0:
                 print(json.dumps({"step": step, "chunk": c, "loss": float(loss.detach()) * P / a.cached_micro,
                                   "s": round(time.perf_counter() - t0, 1)}), flush=True)
+        print(json.dumps({"chunk": c, "filled": filled, "held_out_loss": held_loss(f"chunk {c}")}), flush=True)
         if c < chunks - 1:
             snaps.append((prepare.encode_full(delta_of(params, theta, tuned)), len(steps)))
     for h in hooks:
@@ -504,7 +537,7 @@ def main() -> int:
     ap.add_argument("--mechanism", default="", help="the --note's mechanism name, kept in the notes")
     ap.add_argument("--set", dest="tset", default="mlp-in:-1")
     ap.add_argument("--allow-deep", action="store_true")
-    ap.add_argument("--method", default="adamw", choices=("adamw", "muon", "kfac", "cached"))
+    ap.add_argument("--method", default="adamw", choices=("adamw", "muon", "kfac", "cached", "scale"))
     ap.add_argument("--lora-rank", type=int, default=0,
                     help="train the set's matrices through rank-r adapters (E `encode_lora`); -1 fits the class's cap")
     ap.add_argument("--lr", type=float, default=1e-3)
@@ -519,10 +552,13 @@ def main() -> int:
     ap.add_argument("--damping", type=float, default=1e-2)
     ap.add_argument("--etas", default="1e-4,3e-4,1e-3,3e-3,1e-2", help="kfac: per-element RMS step sizes searched")
     ap.add_argument("--extrapolate", default="", help="adamw/muon: α values searched for θ + α Δ after training (1 is kept)")
+    ap.add_argument("--scales", default="0.9,0.95,1.05,1.1,1.2", help="scale: α values searched (1 is kept)")
     ap.add_argument("--top-k", type=int, default=256, help="cached: θ's top-K tokens kept per position")
     ap.add_argument("--epochs", type=float, default=8.0, help="cached: training positions per cached position")
     ap.add_argument("--cache-gb", type=float, default=80.0)
     ap.add_argument("--cached-micro", type=int, default=8192, help="cached: positions per backward")
+    ap.add_argument("--sample", default="uniform", choices=("uniform", "loss"),
+                    help="cached: draw positions uniformly, or in proportion to θ's loss there with importance weights")
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
@@ -531,6 +567,7 @@ def main() -> int:
     a = ap.parse_args()
     a.etas = [float(x) for x in a.etas.split(",")]
     a.extrapolate = [float(x) for x in a.extrapolate.split(",") if x]
+    a.scales = [float(x) for x in a.scales.split(",") if x]
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
@@ -547,6 +584,8 @@ def main() -> int:
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     if a.method == "kfac":
         blob, trainable, steps, snaps, info = train_kfac(a, net, rec, theta, params, tuned, data, net)
+    elif a.method == "scale":
+        blob, trainable, steps, snaps, info = train_scale(a, net, rec, theta, params, tuned, data)
     elif a.method == "cached":
         blob, trainable, steps, snaps, info = train_cached(a, net, rec, theta, params, tuned, data)
     else:
