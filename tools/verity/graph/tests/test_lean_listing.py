@@ -1,6 +1,6 @@
 """The lean-module and lean-lock listings on a toy checkout of Lake packages laid out as Security's are: a package whose
 `srcDir` is its parent, a requirement by path, a `proved_in`, a lock's `roots`, every import form, `module` files and the
-legacy files importing them, transitive reads, and the trees that make no graph."""
+legacy files importing them, what each loads of its imports at each level, and the trees that make no graph."""
 from __future__ import annotations
 
 import json
@@ -15,8 +15,11 @@ from verity_graph.runners.lean_module import TOOLS
 
 LISTERS = {"lean-module": lean_module.tasks, "lean-lock": lean_lock.tasks}
 TOOLCHAIN = "leanprover/lean4:v4.34.0\n"
-#: the toy's `module` files: Lean refuses a `module` importing a legacy file, so B imports only these
-MODULES = ("Sec/Definitions.lean", "Sec/Definitions/A.lean", "Sec/Proofs/B.lean", "Sec/Proofs/C.lean", "Sec/Proofs/D.lean")
+#: the toy's `module` files: Lean refuses a `module` importing a legacy file, so these import only each other
+MODULES = ("Sec/Definitions.lean", "Sec/Definitions/A.lean", "Sec/Proofs/B.lean", "Sec/Proofs/C.lean", "Sec/Proofs/D.lean",
+           "Sec/Proofs/H.lean", "Sec/Proofs/J.lean")
+#: what a task reads of a `module` file's build at each level it loads it at
+AT = {"public": ("olean",), "code": ("olean", "ir.sig", "ir"), "all": ("olean", *lean_module.PARTS)}
 
 
 def manifest(name: str, *paths: tuple[str, str]) -> str:
@@ -38,16 +41,18 @@ FILES = {
                                 'path = ".."\n\n[[lean_lib]]\nname = "Proofs"\n',
     "Sec/Proofs/lake-manifest.json": manifest("proofs", ("sec", "..")),
     "Sec/Proofs/lean-toolchain": TOOLCHAIN,
-    "Sec/Proofs/lean-audit.json": json.dumps({"guarantees": [], "roots": ["Proofs.G"]}),
+    "Sec/Proofs/lean-audit.json": json.dumps({"guarantees": [], "roots": ["Proofs.G", "Proofs.H", "Proofs.J"]}),
     "Sec/Proofs.lean": "import Proofs.B\nimport Proofs.E\nimport Mathlib.Logic.Basic\n",
     "Sec/Proofs/B.lean": "module -- the module system\n/- not a doc comment, which would end the header -/\n"
-                         "public import Definitions.A\nmeta import Proofs.C\nimport all Proofs.D\n"
+                         "public import Definitions.A\nmeta import Proofs.C\nimport all Definitions\n"
                          "public meta import Init.Data.List\n\ntheorem b : True := trivial\n",
     "Sec/Proofs/C.lean": "module\n\npublic import Definitions\nimport Proofs.D\n",
     "Sec/Proofs/D.lean": "module\n\nprelude\n",
     "Sec/Proofs/E.lean": "import Scratch\nimport Proofs.Missing\n",
     "Sec/Proofs/F.lean": "theorem f : True := trivial\n",
     "Sec/Proofs/G.lean": "import Proofs.D\n",
+    "Sec/Proofs/H.lean": "module\n\nimport Proofs.C\n",
+    "Sec/Proofs/J.lean": "module\n\nimport all Proofs.C\n",
     "tools/verity/lean/tests/fixtures/ctl/lakefile.toml": 'name = "ctl"\n\n[[lean_lib]]\nname = "Ctl"\n',
     "tools/verity/lean/tests/fixtures/ctl/lean-audit.json": "{}",
     "tools/verity/lean/tests/fixtures/ctl/Ctl.lean": "def c := 0\n",
@@ -64,28 +69,40 @@ def listed(tmp_path, **changes) -> dict:
     return {t["id"]: t for t in graph.listing(tree, listers=LISTERS)["tasks"]}
 
 
+def ordered(rs) -> list[dict]:
+    return sorted(rs, key=lambda r: (r["task"], r["output"]))
+
+
 def built(*files: str) -> list[dict]:
-    """What an importer reads of each of ``files``' tasks, in the core's order: every part of a `module` file (`MODULES`),
-    the `olean` of a legacy one."""
-    return sorted(({"task": f"lean-module:{f}", "output": o} for f in files
-                   for o in (("olean", *lean_module.PARTS) if f in MODULES else ("olean",))),
-                  key=lambda r: (r["task"], r["output"]))
+    """What a lock reads of each of ``files``' tasks, in the core's order: every part of a `module` file (`MODULES`), the
+    `olean` of a legacy one."""
+    return ordered({"task": f"lean-module:{f}", "output": o} for f in files
+                   for o in (AT["all"] if f in MODULES else ("olean",)))
+
+
+def loaded(at: dict[str, str]) -> list[dict]:
+    """What a module's task reads of each task of ``at`` at its level there (`AT`), in the core's order: of a `module` file
+    that level's parts, of a legacy one its `olean`, and of each its `axioms`."""
+    return ordered({"task": f"lean-module:{f}", "output": o} for f, level in at.items()
+                   for o in (*(AT[level] if f in MODULES else ("olean",)), "axioms"))
 
 
 def test_modules_of_packages_with_a_parent_src_dir_read_their_imports_transitively(tmp_path):
     ts = listed(tmp_path)
     assert sorted(i for i in ts if i.startswith("lean-module:")) == [f"lean-module:Sec/{f}" for f in (
         "Definitions.lean", "Definitions/A.lean", "Proofs.lean", "Proofs/B.lean", "Proofs/C.lean", "Proofs/D.lean",
-        "Proofs/E.lean", "Proofs/G.lean")], \
-        "the default targets and the lock's roots (Proofs.G) are built; a file no library claims (Scratch), a module " \
-        "nothing builds (Proofs.F) and the auditor's fixtures have no task"
+        "Proofs/E.lean", "Proofs/G.lean", "Proofs/H.lean", "Proofs/J.lean")], \
+        "the default targets and the lock's roots (Proofs.G, H and J) are built; a file no library claims (Scratch), a " \
+        "module nothing builds (Proofs.F) and the auditor's fixtures have no task"
     b = ts["lean-module:Sec/Proofs/B.lean"]
     assert b["vars"] == {"module": "Proofs.B", "package": "proofs", "options": "{}"}
     assert ts["lean-module:Sec/Definitions/A.lean"]["vars"]["options"] == '{"autoImplicit":false}'
     assert b["inputs"] == sorted(["Sec/Proofs/B.lean", "Sec/Proofs/lakefile.toml", *TOOLS,
                                   *graph.runner_sources("lean-module")])
-    assert b["reads"] == built("Sec/Definitions.lean", "Sec/Definitions/A.lean", "Sec/Proofs/C.lean", "Sec/Proofs/D.lean"), \
-        "public, meta and all imports are read, each with what it imports; the toolchain's are the env's"
+    assert b["reads"] == loaded({"Sec/Definitions.lean": "all", "Sec/Definitions/A.lean": "code", "Sec/Proofs/C.lean": "code",
+                                 "Sec/Proofs/D.lean": "code"}), \
+        "`import all` loads every part of Definitions; `meta import` loads the code of C and of all C imports, privately " \
+        "too (Proofs.D); the toolchain's are the env's"
     assert b["outputs"] == [{"name": n, "path": f"out/{p}"} for n, p in (
         ("axioms", "axioms/Proofs/B.json"), ("ilean", "lean/Proofs/B.ilean"), ("ir", "lean/Proofs/B.ir"),
         ("ir.sig", "lean/Proofs/B.ir.sig"), ("olean", "lean/Proofs/B.olean"),
@@ -99,11 +116,25 @@ def test_modules_of_packages_with_a_parent_src_dir_read_their_imports_transitive
     assert ts["lean-module:Sec/Proofs/D.lean"]["key"] is not None, "a module that reads nothing is keyed when listed"
     assert ts["lean-module:Sec/Proofs/G.lean"]["reads"] == [
         {"task": "lean-module:Sec/Proofs/D.lean", "output": o}
-        for o in ("ir", "ir.sig", "olean", "olean.private", "olean.server")], \
-        "a legacy file reads every part of a `module` file it imports, as Lake gives it them"
-    assert ts["lean-module:Sec/Proofs.lean"]["reads"] == built(
-        *(f"Sec/{f}" for f in ("Definitions.lean", "Definitions/A.lean", "Proofs/B.lean", "Proofs/C.lean", "Proofs/D.lean",
-                               "Proofs/E.lean"))), "Mathlib's imports are the env's"
+        for o in ("axioms", "ir", "ir.sig", "olean", "olean.private", "olean.server")], \
+        "a legacy file reads every part of a `module` file it imports, as Lake gives it them, and its record"
+    assert ts["lean-module:Sec/Proofs.lean"]["reads"] == loaded({f"Sec/{f}": "all" for f in (
+        "Definitions.lean", "Definitions/A.lean", "Proofs/B.lean", "Proofs/C.lean", "Proofs/D.lean", "Proofs/E.lean")}), \
+        "and of every module it imports, transitively; Mathlib's imports are the env's"
+
+
+def test_a_module_file_reads_the_public_part_of_what_it_imports(tmp_path):
+    reads = {i.removeprefix("lean-module:Sec/"): t["reads"] for i, t in listed(tmp_path).items()}
+    assert reads["Proofs/C.lean"] == loaded({"Sec/Definitions.lean": "public", "Sec/Definitions/A.lean": "public",
+                                            "Sec/Proofs/D.lean": "public"}), \
+        "a `module` file loads the public part of each module it imports and of what those import by `public import`"
+    assert reads["Proofs/H.lean"] == loaded({"Sec/Proofs/C.lean": "public", "Sec/Definitions.lean": "public",
+                                            "Sec/Definitions/A.lean": "public"}), \
+        "and nothing of what they import privately (C's Proofs.D)"
+    assert reads["Proofs/J.lean"] == loaded({"Sec/Proofs/C.lean": "all", "Sec/Definitions.lean": "public",
+                                            "Sec/Definitions/A.lean": "public", "Sec/Proofs/D.lean": "public"}), \
+        "`import all` loads every part of the module it names and the public part of all that one imports"
+    assert reads["Definitions.lean"] == loaded({"Sec/Definitions/A.lean": "public"})
 
 
 def test_a_lock_reads_every_package_its_records_read(tmp_path):
@@ -136,7 +167,7 @@ def test_this_tree_s_modules_and_imports_are_those_the_lean_build_cache_keys():
         ks = lean_module.mk.keys(ROOT / d, lean_module.mk.policy_roots(ROOT / d))
         keyed |= {os.path.relpath(k.package.file(m), ROOT): sorted(os.path.relpath(ks[i].package.file(i), ROOT)
                                                                    for i in k.imports) for m, k in ks.items()}
-    assert keyed == direct
+    assert keyed == {f: list(edges) for f, edges in direct.items()}
 
 
 @pytest.mark.slow
