@@ -127,7 +127,7 @@ def test_each_module_compiles_from_its_reads_alone_to_lake_s_bytes(tree, tmp_pat
     differ = []
     for t in doc["tasks"]:
         res, src = got[t["id"]], t["id"].partition(":")[2]
-        assert res["status"] == "pass" and res["detail"]["imports"] == len(t["reads"]), res
+        assert res["status"] == "pass" and res["detail"]["imports"] == sum(r["output"] == "olean" for r in t["reads"]), res
         for o in t["outputs"]:
             if o["name"] != "axioms" and (mine := artifact(tmp_path / "x", res, o["name"])) != (
                     theirs := lib(built, o["path"]).read_bytes()):
