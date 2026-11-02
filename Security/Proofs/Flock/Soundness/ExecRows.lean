@@ -4,6 +4,7 @@ import Flock.Net
 -- reused rather than declared a second time, which the audit's kernel replay refuses
 import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.SparseRows
+import Properties.Flock.Circuit.Rows
 
 /-!
 # The rows the verifier parses, as the audit's `Rows`
@@ -18,130 +19,6 @@ have it, with `topo` proved: the parser checks it.
 namespace FlockSoundness
 
 open Flock
-
-/-! ## Loops that only continue or throw -/
-
-theorem forIn_list_yield_ok {α ε : Type} {l : List α} {f : α → PUnit → Except ε (ForInStep PUnit)}
-    (hf : ∀ a s, f a PUnit.unit = .ok s → s = .yield PUnit.unit)
-    (h : forIn l PUnit.unit f = .ok PUnit.unit) : ∀ a ∈ l, f a PUnit.unit = .ok (.yield PUnit.unit) := by
-  induction l with
-  | nil => intro a ha; cases ha
-  | cons x l ih =>
-    rw [List.forIn_cons] at h
-    rcases hx : f x PUnit.unit with e | s
-    · rw [hx] at h; cases h
-    · have hs := hf x s hx
-      subst hs
-      rw [hx] at h
-      intro a ha
-      rcases List.mem_cons.1 ha with rfl | ha
-      · exact hx
-      · exact ih h a ha
-
-theorem forIn_array_yield_ok {α ε : Type} {xs : Array α} {f : α → PUnit → Except ε (ForInStep PUnit)}
-    (hf : ∀ a s, f a PUnit.unit = .ok s → s = .yield PUnit.unit)
-    (h : forIn xs PUnit.unit f = .ok PUnit.unit) : ∀ a ∈ xs.toList, f a PUnit.unit = .ok (.yield PUnit.unit) :=
-  forIn_list_yield_ok hf (by rw [Array.forIn_toList]; exact h)
-
-theorem forIn_range_yield_ok {ε : Type} {lo hi : ℕ} {f : ℕ → PUnit → Except ε (ForInStep PUnit)}
-    (hf : ∀ a s, f a PUnit.unit = .ok s → s = .yield PUnit.unit)
-    (h : forIn [lo:hi] PUnit.unit f = .ok PUnit.unit) :
-    ∀ r, lo ≤ r → r < hi → f r PUnit.unit = .ok (.yield PUnit.unit) := by
-  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
-  intro r hlo hhi
-  refine forIn_list_yield_ok hf h r ?_
-  simp only [Std.Legacy.Range.size, List.mem_range'_1]
-  omega
-
-/-! ## The order `Net.checkOrder` checks -/
-
-/-- Column `c` is **input padding**: an input column whose rows are empty in `A` and in `B`. -/
-def InputPadding (inCols : ℕ) (ra rb : Array (Array ℕ)) (c : ℕ) : Prop :=
-  c < inCols ∧ (ra.getD c #[]).isEmpty = true ∧ (rb.getD c #[]).isEmpty = true
-
-/-- **Row order** (`Rows.topo`, as the parser checks it): every computed row
-`inCols ≤ r < constPos` reads, in `A` and in `B`, only the constant or an earlier column that is not
-input padding. -/
-def RowOrder (inCols constPos : ℕ) (ra rb : Array (Array ℕ)) : Prop :=
-  ∀ r, inCols ≤ r → r < constPos → ∀ c ∈ (ra.getD r #[]).toList ++ (rb.getD r #[]).toList,
-    c = constPos ∨ (c < r ∧ ¬ InputPadding inCols ra rb c)
-
-/-- **The parser's order check, accepted, is `RowOrder`.** -/
-theorem checkOrder_ok {name : String} {inCols constPos : ℕ} {ra rb : Array (Array ℕ)}
-    (h : Net.checkOrder name inCols constPos ra rb = .ok ()) : RowOrder inCols constPos ra rb := by
-  unfold Net.checkOrder at h
-  simp only [bind, Except.bind] at h
-  split at h
-  · cases h
-  · rename_i v hloop
-    cases v
-    have hout := forIn_range_yield_ok (fun a s hs => by
-      split at hs
-      · cases hs
-      · cases hs; rfl) hloop
-    intro r hlo hhi c hc
-    have hr := hout r hlo hhi
-    split at hr
-    · cases hr
-    · rename_i w hinner
-      cases w
-      have hin := forIn_array_yield_ok (fun a s hs => by
-        split at hs
-        · cases hs; rfl
-        · split at hs
-          · simp [throw, throwThe, MonadExceptOf.throw] at hs
-          · split at hs
-            · simp [throw, throwThe, MonadExceptOf.throw] at hs
-            · cases hs; rfl) hinner c (by rw [Array.toList_append]; exact hc)
-      by_cases hk : c = constPos
-      · exact Or.inl hk
-      · refine Or.inr ?_
-        simp only [hk, beq_iff_eq, ite_false] at hin
-        split at hin
-        · simp [throw, throwThe, MonadExceptOf.throw] at hin
-        · rename_i hlt
-          split at hin
-          · simp [throw, throwThe, MonadExceptOf.throw] at hin
-          · rename_i hpad
-            refine ⟨by omega, fun ⟨h1, h2, h3⟩ => hpad ?_⟩
-            rw [h2, h3]
-            simp [h1]
-
-/-! ## The audit's `Rows` from ordered rows -/
-
-/-- A column a computed row reads is the constant or an earlier column, so below `constPos + 1`. -/
-theorem RowOrder.lt {inCols constPos : ℕ} {ra rb : Array (Array ℕ)} (h : RowOrder inCols constPos ra rb)
-    {r : ℕ} (hlo : inCols ≤ r) (hhi : r < constPos) {c : ℕ}
-    (hc : c ∈ (ra.getD r #[]).toList ++ (rb.getD r #[]).toList) : c = constPos ∨ c < r :=
-  (h r hlo hhi c hc).imp id And.left
-
-/-- **The template's rows, from rows the parser ordered**: columns below `min inCols constPos` are
-its inputs, rows from there to `constPos − 1` are computed, and column `constPos` is its constant.
-(A net whose constant sits among its input rows has no computed rows.) -/
-def Rows.ofOrdered (inCols constPos : ℕ) (ra rb : Array (Array ℕ)) (h : RowOrder inCols constPos ra rb) :
-    Rows where
-  nIn := min inCols constPos
-  nComp := constPos - min inCols constPos
-  a i := (ra.getD (min inCols constPos + i.val) #[]).toList.pmap (fun c hc => ⟨c, hc⟩) fun c hc => by
-    have hi := i.isLt
-    rcases h.lt (r := min inCols constPos + i.val) (by omega) (by omega) (List.mem_append_left _ hc) with
-      hc' | hc' <;> omega
-  b i := (rb.getD (min inCols constPos + i.val) #[]).toList.pmap (fun c hc => ⟨c, hc⟩) fun c hc => by
-    have hi := i.isLt
-    rcases h.lt (r := min inCols constPos + i.val) (by omega) (by omega) (List.mem_append_right _ hc) with
-      hc' | hc' <;> omega
-  topo i c hc := by
-    have hi := i.isLt
-    have hlo : inCols ≤ min inCols constPos + i.val := by omega
-    have hhi : min inCols constPos + i.val < constPos := by omega
-    have hone : min inCols constPos + (constPos - min inCols constPos) = constPos := by omega
-    rcases List.mem_append.1 hc with hc | hc <;>
-    · obtain ⟨c₀, hc₀, rfl⟩ := List.mem_pmap.1 hc
-      rcases h.lt hlo hhi
-          (by first | exact List.mem_append_left _ hc₀ | exact List.mem_append_right _ hc₀) with
-        h' | h'
-      · exact Or.inr (by show c₀ = _; rw [hone]; exact h')
-      · exact Or.inl h'
 
 section ofOrdered
 
@@ -196,11 +73,6 @@ theorem parse_tail {α : Type} {x y : Except String Sparse} {mk : Sparse → Spa
   cases h
   exact ⟨a, b, ha, hb, rfl⟩
 
-/-- **A net `Net.ofRows` built**: the parser's (`parse_built`), or a typed class's from `derive`'s rows
-(`Typed.netOfD`). -/
-def Built (net : Net) : Prop :=
-  ∃ name useful constPos ig og ra rb, Net.ofRows name useful constPos ig og ra rb = .ok net
-
 set_option maxHeartbeats 1000000 in
 /-- **`Net.parse` builds its net with `Net.ofRows`**, after reading its rows and trailing lines. -/
 theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) : Built net := by
@@ -223,21 +95,6 @@ theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .o
   · rw [ite_eq_right_of_eq_false _ _ (eq_false hL)] at h
     exact ite_throw_ok (ite_throw_ok h)
 
-/-- **What `Net.ofRows` built**: its order check passed on the very rows it stored as `A` and `B`. -/
-theorem built_checkOrder {net : Net} (h : Built net) :
-    ∃ ra rb, Net.checkOrder "flock-ir-unit/v2" (net.inWords * WORD) net.constPos ra rb = .ok () ∧
-      Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b := by
-  obtain ⟨_, _, _, _, _, ra, rb, ho⟩ := h
-  obtain ⟨-, ha, hb, -, hc, -, -, -, -, -, hco, -, -, -⟩ := Net.ofRows_ok ho
-  exact ⟨ra, rb, by rw [hc]; exact hco, ha, hb⟩
-
-/-- **Every net `Net.ofRows` builds is ordered**: the rows it stored as `A` and `B` have `RowOrder`. -/
-theorem built_rowOrder {net : Net} (h : Built net) :
-    ∃ ra rb, RowOrder (net.inWords * WORD) net.constPos ra rb ∧
-      Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=
-  let ⟨ra, rb, hco, ha, hb⟩ := built_checkOrder h
-  ⟨ra, rb, checkOrder_ok hco, ha, hb⟩
-
 /-- **The parser orders every net it accepts**: the rows it stored as `A` and `B` have `RowOrder`,
 so `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
 theorem parse_rowOrder {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
@@ -252,14 +109,6 @@ export SparseRows (le32 pushLe32_data getElem!_of_some testBit_mod256 le32_or rd
   flatMap_le32_getElem? flatMap_encRow_length ofRows_row)
 
 /-! ## The audit's `Rows` for a built net -/
-
-/-- **The rows of a net `Net.ofRows` built** (the parser's, or a typed class's), as the audit's `Rows`: its computed rows
-are `net.a.row r`, `net.b.row r` (`Rows.ofNet_a`, `Rows.ofNet_b`), and `topo` holds because `Net.ofRows` checked it
-(`built_rowOrder`). -/
-noncomputable def Rows.ofNet {net : Net} (h : Built net) : Rows :=
-  Rows.ofOrdered (net.inWords * WORD) net.constPos (Classical.choose (built_rowOrder h))
-    (Classical.choose (Classical.choose_spec (built_rowOrder h)))
-    (Classical.choose_spec (Classical.choose_spec (built_rowOrder h))).1
 
 section ofNet
 
@@ -289,87 +138,6 @@ theorem Rows.ofNet_b (hu : net.unitLog ≤ 32) (i : Fin (Rows.ofNet h).nComp) :
   rfl
 
 end ofNet
-
-/-! ## An instance's rows: `k` copies of the template's, stacked -/
-
-namespace Rows
-
-variable (R : Rows) (k : ℕ)
-
-theorem mul_add_lt {u k n c : ℕ} (hu : u < k) (hc : c < n) : u * n + c < k * n := by
-  have : u * n + n ≤ k * n := by
-    calc u * n + n = (u + 1) * n := by ring
-      _ ≤ k * n := Nat.mul_le_mul_right _ hu
-  omega
-
-/-- The columns of `k` stacked copies. -/
-abbrev stackW : ℕ := k * R.nIn + k * (R.nComp + 1) + 1
-
-/-- **Copy `u`'s column `c`, in the stacked order**: its input `c` is input `u·nIn + c`; its computed
-row `c − nIn` follows the copy's constant row; its constant is the copy's constant row. -/
-def stackCol {u : ℕ} (hu : u < k) (c : Fin R.w) : Fin (R.stackW k) :=
-  if hc : c.val < R.nIn then ⟨u * R.nIn + c.val, by
-    have := mul_add_lt hu hc; show _ < k * R.nIn + k * (R.nComp + 1) + 1; omega⟩
-  else if hc' : c.val < R.nIn + R.nComp then
-    ⟨k * R.nIn + (u * (R.nComp + 1) + (1 + (c.val - R.nIn))), by
-      have := mul_add_lt hu (show 1 + (c.val - R.nIn) < R.nComp + 1 by omega)
-      show _ < k * R.nIn + k * (R.nComp + 1) + 1; omega⟩
-  else ⟨k * R.nIn + (u * (R.nComp + 1) + 0), by
-      have := mul_add_lt hu (show 0 < R.nComp + 1 by omega)
-      show _ < k * R.nIn + k * (R.nComp + 1) + 1; omega⟩
-
-theorem stack_copy_lt {i : ℕ} (hi : i < k * (R.nComp + 1)) : i / (R.nComp + 1) < k :=
-  (Nat.div_lt_iff_lt_mul (by omega)).2 hi
-
-/-- Row `i` of the stack, from a copy's rows `f`: the copy's constant row reads the shared constant,
-and the copy's computed row `j` reads its own columns. -/
-def stackRow (f : Fin R.nComp → List (Fin R.w)) (i : Fin (k * (R.nComp + 1))) : List (Fin (R.stackW k)) :=
-  if hj : i.val % (R.nComp + 1) = 0 then [⟨k * R.nIn + k * (R.nComp + 1), by
-    show _ < k * R.nIn + k * (R.nComp + 1) + 1; omega⟩]
-  else (f ⟨i.val % (R.nComp + 1) - 1, by have := Nat.mod_lt i.val (show 0 < R.nComp + 1 by omega); omega⟩).map
-    (R.stackCol k (R.stack_copy_lt k i.isLt))
-
-theorem stackRow_topo (f : Fin R.nComp → List (Fin R.w))
-    (hf : ∀ j, ∀ c ∈ f j, c.val < R.nIn + j.val ∨ c.val = R.nIn + R.nComp)
-    (i : Fin (k * (R.nComp + 1))) (c : Fin (R.stackW k)) (hc : c ∈ R.stackRow k f i) :
-    c.val < k * R.nIn + i.val ∨ c.val = k * R.nIn + k * (R.nComp + 1) := by
-  have hdm := Nat.div_add_mod' i.val (R.nComp + 1)
-  have hmod := Nat.mod_lt i.val (show 0 < R.nComp + 1 by omega)
-  unfold stackRow at hc
-  split at hc
-  · simp only [List.mem_singleton] at hc
-    exact Or.inr (by rw [hc])
-  · rename_i hj
-    obtain ⟨c₀, hc₀, rfl⟩ := List.mem_map.1 hc
-    refine Or.inl ?_
-    have ht := hf _ c₀ hc₀
-    simp only at ht
-    unfold stackCol
-    split
-    · rename_i h1
-      have := mul_add_lt (R.stack_copy_lt k i.isLt) h1
-      simp only
-      omega
-    · split
-      · simp only
-        omega
-      · simp only
-        omega
-
-/-- **An instance's rows**: `k` copies of the template's rows `R`, in the order `Rows` needs. First
-every copy's inputs; then, copy by copy, the copy's constant (a computed row reading the shared
-constant) and its computed rows; then the shared constant. -/
-def stack : Rows where
-  nIn := k * R.nIn
-  nComp := k * (R.nComp + 1)
-  a := R.stackRow k R.a
-  b := R.stackRow k R.b
-  topo i c hc := by
-    rcases List.mem_append.1 hc with hc | hc
-    · exact R.stackRow_topo k R.a (fun j c hc => R.topo j c (List.mem_append_left _ hc)) i c hc
-    · exact R.stackRow_topo k R.b (fun j c hc => R.topo j c (List.mem_append_right _ hc)) i c hc
-
-end Rows
 
 /-! ## An instance placed in a statement -/
 
@@ -514,5 +282,223 @@ theorem placement_stack
     hB₁ := fun j => by rw [stackPlace_one]; exact hpinB j }
 
 end Place
+
+/-! ## An instance placed through a column map
+
+A templated unit's committed net is its logical net with every column moved (`Net.ofRowsAt`): copy `u`'s logical column
+`c` sits at `base u + pos c`. -/
+
+section PlaceAt
+
+variable (S : Model.Statement) (R : Rows) (k : ℕ) (base : ℕ → ℕ) (pos : Fin R.w → ℕ)
+  (hb : ∀ u < k, ∀ c : Fin R.w, base u + pos c < 2 ^ S.kLog)
+
+/-- Copy `u`'s column `c` in the block: `base u + pos c`. -/
+def posInAt {u : ℕ} (hu : u < k) (c : Fin R.w) : Fin (2 ^ S.kLog) := ⟨base u + pos c, hb u hu c⟩
+
+/-- The copy a stacked column belongs to. -/
+def stackCopy (x : ℕ) : ℕ :=
+  if x < k * R.nIn then x / R.nIn else (x - k * R.nIn) / (R.nComp + 1)
+
+/-- A stacked column's column in its copy: an input, the copy's constant, or a computed row. -/
+def stackLocal (x : ℕ) : ℕ :=
+  if x < k * R.nIn then x % R.nIn
+  else if (x - k * R.nIn) % (R.nComp + 1) = 0 then R.nIn + R.nComp
+  else R.nIn + ((x - k * R.nIn) % (R.nComp + 1) - 1)
+
+theorem stackCopy_lt {x : ℕ} (h : x < R.stackW k - 1) : stackCopy R k x < k := by
+  have hw : R.stackW k = k * R.nIn + k * (R.nComp + 1) + 1 := rfl
+  unfold stackCopy
+  split
+  · rename_i h1
+    have hn : 0 < R.nIn := Nat.pos_of_ne_zero fun h0 => by simp [h0] at h1
+    exact (Nat.div_lt_iff_lt_mul hn).2 h1
+  · exact (Nat.div_lt_iff_lt_mul (by omega)).2 (by omega)
+
+theorem stackLocal_lt (x : ℕ) : stackLocal R k x < R.w := by
+  show _ < R.nIn + R.nComp + 1
+  unfold stackLocal
+  split
+  · rename_i h1
+    have hn : 0 < R.nIn := Nat.pos_of_ne_zero fun h0 => by simp [h0] at h1
+    have := Nat.mod_lt x hn
+    omega
+  · split
+    · omega
+    · have := Nat.mod_lt (x - k * R.nIn) (show 0 < R.nComp + 1 by omega)
+      omega
+
+/-- **Where the stacked columns sit in the block, through `pos`**: copy `u`'s column `c` at `base u + pos c`, and the
+shared constant at the pin. -/
+def stackPlaceAt (x : Fin (R.stackW k)) : Fin (2 ^ S.kLog) :=
+  if h : x.val < R.stackW k - 1 then
+    posInAt S R k base pos hb (stackCopy_lt R k h) ⟨stackLocal R k x.val, stackLocal_lt R k x.val⟩
+  else S.pin
+
+/-- A stacked copy column decodes to its copy and its column. -/
+theorem stackCol_copy_local {u : ℕ} (hu : u < k) (c : Fin R.w) :
+    (R.stackCol k hu c).val < R.stackW k - 1 ∧ stackCopy R k (R.stackCol k hu c).val = u ∧
+      stackLocal R k (R.stackCol k hu c).val = c.val := by
+  have hc := c.isLt
+  simp only [Rows.w] at hc
+  have hw : R.stackW k = k * R.nIn + k * (R.nComp + 1) + 1 := rfl
+  by_cases h : c.val < R.nIn
+  · have hlt := Rows.mul_add_lt hu h
+    obtain ⟨hd, hm⟩ := div_mod_copy (u := u) h
+    rw [Rows.stackCol, dif_pos h]
+    refine ⟨show u * R.nIn + c.val < R.stackW k - 1 by omega, ?_, ?_⟩
+    · show stackCopy R k (u * R.nIn + c.val) = u
+      rw [stackCopy, if_pos hlt, hd]
+    · show stackLocal R k (u * R.nIn + c.val) = c.val
+      rw [stackLocal, if_pos hlt, hm]
+  · by_cases h' : c.val < R.nIn + R.nComp
+    · have hlt := Rows.mul_add_lt hu (show 1 + (c.val - R.nIn) < R.nComp + 1 by omega)
+      obtain ⟨hd, hm⟩ := div_mod_copy (u := u) (show 1 + (c.val - R.nIn) < R.nComp + 1 by omega)
+      have h1 : ¬ (k * R.nIn + (u * (R.nComp + 1) + (1 + (c.val - R.nIn))) < k * R.nIn) := by omega
+      rw [Rows.stackCol, dif_neg h, dif_pos h']
+      refine ⟨show k * R.nIn + (u * (R.nComp + 1) + (1 + (c.val - R.nIn))) < R.stackW k - 1 by omega, ?_, ?_⟩
+      · show stackCopy R k (k * R.nIn + (u * (R.nComp + 1) + (1 + (c.val - R.nIn)))) = u
+        rw [stackCopy, if_neg h1, Nat.add_sub_cancel_left, hd]
+      · show stackLocal R k (k * R.nIn + (u * (R.nComp + 1) + (1 + (c.val - R.nIn)))) = c.val
+        rw [stackLocal, if_neg h1, Nat.add_sub_cancel_left, hm,
+          if_neg (show ¬ (1 + (c.val - R.nIn) = 0) by omega)]
+        omega
+    · have hlt := Rows.mul_add_lt hu (show 0 < R.nComp + 1 by omega)
+      obtain ⟨hd, hm⟩ := div_mod_copy (u := u) (show 0 < R.nComp + 1 by omega)
+      have h1 : ¬ (k * R.nIn + (u * (R.nComp + 1) + 0) < k * R.nIn) := by omega
+      rw [Rows.stackCol, dif_neg h, dif_neg h']
+      refine ⟨show k * R.nIn + (u * (R.nComp + 1) + 0) < R.stackW k - 1 by omega, ?_, ?_⟩
+      · show stackCopy R k (k * R.nIn + (u * (R.nComp + 1) + 0)) = u
+        rw [stackCopy, if_neg h1, Nat.add_sub_cancel_left, hd]
+      · show stackLocal R k (k * R.nIn + (u * (R.nComp + 1) + 0)) = c.val
+        rw [stackLocal, if_neg h1, Nat.add_sub_cancel_left, hm, if_pos (rfl : (0 : ℕ) = 0)]
+        omega
+
+/-- A copy's column, stacked and then placed, is `base u + pos c`. -/
+theorem stackPlaceAt_stackCol {u : ℕ} (hu : u < k) (c : Fin R.w) :
+    stackPlaceAt S R k base pos hb (R.stackCol k hu c) = posInAt S R k base pos hb hu c := by
+  obtain ⟨hlt, hcp, hl⟩ := stackCol_copy_local R k hu c
+  have hpc : (⟨stackLocal R k (R.stackCol k hu c).val, stackLocal_lt R k _⟩ : Fin R.w) = c := Fin.ext hl
+  unfold stackPlaceAt
+  rw [dif_pos hlt]
+  apply Fin.ext
+  simp only [posInAt, hcp, hpc]
+
+/-- **A stacked input, placed**: input `x` of the stack is copy `x / nIn`'s input `x % nIn`. -/
+theorem stackPlaceAt_val_in (x : Fin (R.stackW k)) (hx : x.val < k * R.nIn) :
+    ∃ hu : x.val / R.nIn < k, ∃ hc : x.val % R.nIn < R.w,
+      (stackPlaceAt S R k base pos hb x).val = base (x.val / R.nIn) + pos ⟨x.val % R.nIn, hc⟩ := by
+  have hn : 0 < R.nIn := Nat.pos_of_ne_zero fun h0 => by simp [h0] at hx
+  have hu : x.val / R.nIn < k := (Nat.div_lt_iff_lt_mul hn).2 hx
+  have hc : x.val % R.nIn < R.nIn := Nat.mod_lt _ hn
+  have hcw : x.val % R.nIn < R.w := by simp only [Rows.w]; omega
+  refine ⟨hu, hcw, ?_⟩
+  have e : x = R.stackCol k hu ⟨x.val % R.nIn, hcw⟩ := by
+    apply Fin.ext
+    simp only [Rows.stackCol, hc, ↓reduceDIte]
+    exact (Nat.div_add_mod' x.val R.nIn).symm
+  calc (stackPlaceAt S R k base pos hb x).val
+      = (stackPlaceAt S R k base pos hb (R.stackCol k hu ⟨x.val % R.nIn, hcw⟩)).val := by rw [← e]
+    _ = _ := by rw [stackPlaceAt_stackCol]; rfl
+
+/-- **Copy `u'`'s computed column `c0`, stacked and placed**, is `base u' + pos c0`. -/
+theorem stackPlaceAt_val_comp {u' c0 : ℕ} (hu' : u' < k) (h1 : R.nIn ≤ c0) (h2 : c0 < R.nIn + R.nComp)
+    (x : Fin (R.stackW k)) (hx : x.val = k * R.nIn + (u' * (R.nComp + 1) + (1 + (c0 - R.nIn)))) :
+    ∃ hc : c0 < R.w, (stackPlaceAt S R k base pos hb x).val = base u' + pos ⟨c0, hc⟩ := by
+  have hc0 : c0 < R.w := by simp only [Rows.w]; omega
+  refine ⟨hc0, ?_⟩
+  have e : x = R.stackCol k hu' ⟨c0, hc0⟩ := by
+    apply Fin.ext
+    simp only [Rows.stackCol, show ¬ c0 < R.nIn by omega, h2, ↓reduceDIte]
+    exact hx
+  rw [e, stackPlaceAt_stackCol]
+  rfl
+
+theorem stackPlaceAt_last (h : k * R.nIn + k * (R.nComp + 1) < R.stackW k) :
+    stackPlaceAt S R k base pos hb ⟨k * R.nIn + k * (R.nComp + 1), h⟩ = S.pin := by
+  unfold stackPlaceAt
+  exact dif_neg (show ¬ (k * R.nIn + k * (R.nComp + 1) < k * R.nIn + k * (R.nComp + 1) + 1 - 1) by omega)
+
+theorem stackPlaceAt_one : stackPlaceAt S R k base pos hb (R.stack k).one = S.pin :=
+  stackPlaceAt_last S R k base pos hb _
+
+/-- Stacked computed row `i` of copy `u = i / (nComp + 1)` sits at the copy's constant when it is the copy's constant
+row, and at the copy's computed row otherwise, each through `pos`. -/
+theorem stackPlaceAt_comp (i : Fin (R.stack k).nComp) :
+    stackPlaceAt S R k base pos hb ((R.stack k).comp i) =
+      if hj : i.val % (R.nComp + 1) = 0 then posInAt S R k base pos hb (R.stack_copy_lt k i.isLt) R.one
+      else posInAt S R k base pos hb (R.stack_copy_lt k i.isLt)
+        (R.comp ⟨i.val % (R.nComp + 1) - 1, by
+          have := Nat.mod_lt i.val (show 0 < R.nComp + 1 by omega); omega⟩) := by
+  have hi : i.val < k * (R.nComp + 1) := i.isLt
+  have hc : ((R.stack k).comp i).val = k * R.nIn + i.val := rfl
+  have h1 : ¬ (k * R.nIn + i.val < k * R.nIn) := by omega
+  have hlt : ((R.stack k).comp i).val < R.stackW k - 1 := by
+    rw [hc]
+    show _ < k * R.nIn + k * (R.nComp + 1) + 1 - 1
+    omega
+  have hcp : stackCopy R k ((R.stack k).comp i).val = i.val / (R.nComp + 1) := by
+    rw [hc, stackCopy, if_neg h1, Nat.add_sub_cancel_left]
+  unfold stackPlaceAt
+  rw [dif_pos hlt]
+  apply Fin.ext
+  by_cases hj : i.val % (R.nComp + 1) = 0
+  · rw [dif_pos hj]
+    have hl : stackLocal R k ((R.stack k).comp i).val = R.nIn + R.nComp := by
+      rw [hc, stackLocal, if_neg h1, Nat.add_sub_cancel_left, if_pos hj]
+    simp only [posInAt, hcp, hl, Rows.one]
+  · rw [dif_neg hj]
+    have hl : stackLocal R k ((R.stack k).comp i).val = R.nIn + (i.val % (R.nComp + 1) - 1) := by
+      rw [hc, stackLocal, if_neg h1, Nat.add_sub_cancel_left, if_neg hj]
+    simp only [posInAt, hcp, hl]
+    rfl
+
+/-- **An instance's rows placed in a statement through `pos`**: `placement_stack` with copy `u`'s column `c` at
+`base u + pos c`. -/
+theorem placement_stackAt
+    (hrowA : ∀ u (hu : u < k) (i : Fin R.nComp) (j : Fin (2 ^ S.kLog)),
+      S.A₀ (posInAt S R k base pos hb hu (R.comp i)) j =
+        (((R.a i).map (posInAt S R k base pos hb hu)).count j : ZMod 2))
+    (hrowB : ∀ u (hu : u < k) (i : Fin R.nComp) (j : Fin (2 ^ S.kLog)),
+      S.B₀ (posInAt S R k base pos hb hu (R.comp i)) j =
+        (((R.b i).map (posInAt S R k base pos hb hu)).count j : ZMod 2))
+    (hconstA : ∀ u (hu : u < k) (j : Fin (2 ^ S.kLog)),
+      S.A₀ (posInAt S R k base pos hb hu R.one) j = if j = S.pin then 1 else 0)
+    (hconstB : ∀ u (hu : u < k) (j : Fin (2 ^ S.kLog)),
+      S.B₀ (posInAt S R k base pos hb hu R.one) j = if j = S.pin then 1 else 0)
+    (hpinA : ∀ j, S.A₀ S.pin j = if j = S.pin then 1 else 0)
+    (hpinB : ∀ j, S.B₀ S.pin j = if j = S.pin then 1 else 0) :
+    Placement S (R.stack k) (stackPlaceAt S R k base pos hb) := by
+  have key : ∀ (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2)) (f : Fin R.nComp → List (Fin R.w))
+      (hrow : ∀ u (hu : u < k) (i : Fin R.nComp) (j : Fin (2 ^ S.kLog)),
+        M (posInAt S R k base pos hb hu (R.comp i)) j =
+          (((f i).map (posInAt S R k base pos hb hu)).count j : ZMod 2))
+      (hconst : ∀ u (hu : u < k) (j : Fin (2 ^ S.kLog)),
+        M (posInAt S R k base pos hb hu R.one) j = if j = S.pin then 1 else 0)
+      (i : Fin (R.stack k).nComp) (j : Fin (2 ^ S.kLog)),
+      M (stackPlaceAt S R k base pos hb ((R.stack k).comp i)) j =
+        (((R.stackRow k f i).map (stackPlaceAt S R k base pos hb)).count j : ZMod 2) := by
+    intro M f hrow hconst i j
+    rw [stackPlaceAt_comp]
+    unfold Rows.stackRow
+    split
+    · rename_i hj
+      rw [hconst]
+      simp only [List.map_cons, List.map_nil, stackPlaceAt_last, List.count_singleton]
+      by_cases h : j = S.pin
+      · simp [h]
+      · simp [h, Ne.symm h]
+    · rename_i hj
+      rw [hrow, List.map_map]
+      congr 3
+      funext c
+      exact (stackPlaceAt_stackCol S R k base pos hb _ c).symm
+  exact {
+    hA := key S.A₀ R.a hrowA hconstA
+    hB := key S.B₀ R.b hrowB hconstB
+    hA₁ := fun j => by rw [stackPlaceAt_one]; exact hpinA j
+    hB₁ := fun j => by rw [stackPlaceAt_one]; exact hpinB j }
+
+end PlaceAt
 
 end FlockSoundness

@@ -3,7 +3,7 @@
 `compose` reads a dim-0 shard (column-parallel fields, the fused experts' w13) as the rank's row range of each checkpoint tensor, a
 positioned read of a contiguous byte sub-range; the TP driver hashes the checkpoint's shards once and hands every rank the pin; the
 record reads the Program's header and its rows up to the first attention row.  GOLDEN holds the sha256 of each canonical record as the
-whole-tensor implementation wrote it (base f8276b680) on the checkpoint below: BF16 and block-FP8 experts (the refined scale grid at
+whole-tensor implementation wrote it on the checkpoint below: BF16 and block-FP8 experts (the refined scale grid at
 world 4), F32 parts cast to bf16, fused / 1:1 / tied / pre-fused (Phi-3) / replicated-kv-head fields, and a fused field whose part is
 not divisible by the world (its named refusal is part of the record).
 """

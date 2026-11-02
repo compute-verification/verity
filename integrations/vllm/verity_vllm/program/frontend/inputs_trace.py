@@ -1,5 +1,5 @@
 """Record-freeness evidence: an audit hook that logs every file `open` (and `os.listdir`/`glob`) the construction performs,
-so a reviewer can verify no execution record / accepted Program / hand-written emitter was read (R8 REF-lane practice).
+so a reviewer can verify no execution record / accepted Program / hand-written emitter was read.
 
 The predictor (`verity_vllm.program.predict`) is a forbidden input of the trace: a switched row's Build is the AOT Build
 (`predict.aot`), and the trace is what checks it (its comparison, `pipeline.neutrality`'s heavy tier), so a trace that read the

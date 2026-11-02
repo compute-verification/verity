@@ -4,7 +4,7 @@ in /etc/vy/peers) running a client there that connects through the forward. Each
 PACE ms with nothing sent back, each record's delay over the stream's least (the two clocks' offset cancels).
 Prints one JSON line a variant.
 
-    python tunnel_rtt.py --peer vy-nebius-2 --port 7795 [--pings 200 --pace-ms 12.8 --records 2000]
+    python tunnel_rtt.py --peer PEER --port 7795 [--pings 200 --pace-ms 12.8 --records 2000]
 """
 from __future__ import annotations
 

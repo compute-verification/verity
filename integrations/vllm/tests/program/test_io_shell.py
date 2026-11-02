@@ -1,17 +1,22 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
-Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, a slot's `SlotRow_v1` and
-`SlotMask_v1`, and the network certifier's scan state read (`ScanSlots_v1`), output collection (`OutCollect_v1`) and
-entry (`SlotEntry_v1`)."""
+Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network certifier's scan
+state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
+bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`)."""
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity_vllm.program.predict import scan_state as SS
+
+from verity.core.protocols.certifier import ingress_scan as IS
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.registry import boolean_io_shell as BX
 from verity.ml.definitions.registry import io_shell as X
+from verity.ml.definitions.registry.dead_free import TokenSelectCombineV2
 
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
@@ -149,56 +154,46 @@ def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
             bind(X.TokenFeed, **kw)
 
 
-def test_a_slots_row_opens_into_its_occupancy_and_feed_and_an_empty_slot_outputs_no_token():
-    """`SlotRow_v1` copies a slot's ingress row (occupancy, lp, ids) out as its occupancy word and the first `TokenFeed_v1`'s
-    slot; `SlotMask_v1` passes the select through while the occupancy word's low bit is 1 and otherwise outputs `EMPTY`,
-    which no token id is, at every occupancy word and token tried."""
-    def run(fn, *rows):
-        args = [np.array([r], dtype=np.uint64).astype(np.uint32) for r in rows]
-        return [int(v) for v in np.asarray(evaluate_batch(fn, *args, kernel="reference"), dtype=np.uint64).reshape(-1)]
-
-    row, ids = bind(X.SlotRow, NP=3), [7, 0, 0xFFFFFFFF]
-    for occ, lp in ((1, 3), (0, 0), (0xFFFFFFFE, 1)):
-        assert run(row, [occ, lp, *ids]) == [occ, lp, *ids]
-    mask = bind(X.SlotMask)
-    for occ in (0, 1, 2, 3, 0x80000000, 0xFFFFFFFF):
-        for tok in (0, 5, 128255, 0xFFFFFFFF):
-            assert run(mask, [occ], [tok]) == [X.mask_reference(occ, tok)] == [tok if occ & 1 else X.EMPTY]
-    assert X.EMPTY >= 1 << 31
-    with pytest.raises(ValueError, match="refuses this binding"):
-        bind(X.SlotRow, NP=0)
-
-
 def _run(fn, *rows):
     args = [np.array([r], dtype=np.uint64).astype(np.uint32) for r in rows]
     return [int(v) for v in np.asarray(evaluate_batch(fn, *args, kernel="reference"), dtype=np.uint64).reshape(-1)]
 
 
+def _lane(tok: int, slot: list[int], occ: int, head: list[int]) -> list[int]:
+    return [tok, *slot, occ, *head]
+
+
 def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_packed():
-    """`ScanSlots_v1` on a 40-word row with two lanes: random rows give `slots_reference`'s rows and heads, and a row packed
-    field by field (occupancy, lp, max_tokens, and ids at `position`'s index, K0 = 2 in the first cell and K = 3 in each
-    later one) reads each lane's fields back, ids cut to IDB bits.  A field past the row is refused."""
+    """`ScanSlots_v2` on a 40-word row with two lanes: random rows give `scan_reference`'s lanes, and a row packed field by
+    field (occupancy, lp, max_tokens, and ids at `position`'s index, K0 = 2 in the first cell and K = 3 in each later one)
+    gives each lane its first position's `TokenFeed_v1{FIRST}` on its row (ids cut to IDB bits), its occupancy word and its
+    head, at the prompt lengths where the decrement's borrow runs furthest (0, 1, 2^31 and 2^32 − 1). A field past the
+    row is refused, and its gates are the decrements' 30 ANDs a lane."""
     NS, NP, IDB, K0, K = 40, 4, 17, 2, 3
     OCC, LP, MAX, IDS = (3, 300), (40, 340), (80, 380), (120, 420)
     st = {"NS": NS, "NP": NP, "IDB": IDB, "K0": K0, "K": K, "OCC": OCC, "LP": LP, "MAX": MAX, "IDS": IDS}
-    fn = bind(X.ScanSlots, **st)
+    fn = bind(BX.ScanSlotsV2, **st)
+    assert BX.ScanSlotsV2.traced(SimpleNamespace(**st)).counts["and"] == 30 * 2
     state = np.random.default_rng(1).integers(0, 1 << 16, size=(3, NS), dtype=np.uint64)
     got = np.asarray(evaluate_words(fn, state.astype(np.uint32)), dtype=np.uint64)
     for i in range(3):
-        ref = X.slots_reference([int(w) for w in state[i]], NP, IDB, K0, K, OCC, LP, MAX, IDS)
-        assert [int(v) for v in got[i].reshape(-1)] == [v for row, head in ref for v in (*row, *head)]
-    lanes = [(1, 3, 64, [5, (1 << IDB) - 1, 0, 77]), (0, 0, 9, [0, 0, 0, 0])]
-    x = 0
-    for (occ, lp, m, ids), o, l, mx, at in zip(lanes, OCC, LP, MAX, IDS):
-        x |= occ << o | lp << l | m << mx
-        x |= sum(v << at + IDB * X.position(K0, K, p) for p, v in enumerate(ids))
-    words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
-    out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]
-    assert out == [v for occ, lp, m, ids in lanes for v in (occ, lp, *ids, lp, m)]
+        ref = X.scan_reference([int(w) for w in state[i]], NP, IDB, K0, K, OCC, LP, MAX, IDS)
+        assert [int(v) for v in got[i].reshape(-1)] == [v for lane in ref for v in _lane(*lane)]
+    for lp0, lp1 in ((3, 0), (1, 1 << 31), (X.M32, 2)):
+        lanes = [(1, lp0, 64, [5, (1 << IDB) - 1, 0, 77]), (0, lp1, 9, [0, 0, 0, 0])]
+        x = 0
+        for (occ, lp, m, ids), o, l, mx, at in zip(lanes, OCC, LP, MAX, IDS):
+            x |= occ << o | lp << l | m << mx
+            x |= sum(v << at + IDB * X.position(K0, K, p) for p, v in enumerate(ids))
+        words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
+        out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]
+        assert out == [v for occ, lp, m, ids in lanes
+                       for v in _lane(*X.feed_reference([lp, *ids], None, NP), occ, [lp, m])]
+        assert out[1] == (lp0 - 1) & X.M32 and out[2:NP + 1] == lanes[0][3][1:] and out[NP + 1] == 0
     assert [X.position(K0, K, p) for p in range(NP)] == [0, 1, 3, 4]
     for bad in ({"IDS": (120, 16 * NS - IDB)}, {"IDB": 33}, {"OCC": (3,)}):
         with pytest.raises(ValueError, match="refuses this binding"):
-            bind(X.ScanSlots, **{**st, **bad})
+            bind(BX.ScanSlotsV2, **{**st, **bad})
 
 
 @pytest.mark.parametrize("KO", [1, 2, 5])
@@ -221,10 +216,10 @@ def test_the_output_collector_keeps_the_ko_samples_from_the_prompts_last_positio
 @pytest.mark.parametrize("KO, STOP", [(2, ()), (5, (103,)), (5, (102, 104))], ids=["no-stop", "one-stop", "two-stops"])
 def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO, STOP):
     """`SlotEntry_v1` against `entry_reference` at each occupancy word, ``max_tokens`` (2^31 and 2^32 − 1 unsigned) and
-    prompt length lp (the last state's w = lp − NP − KO): an empty slot's every word is zero; an occupied slot's n is
-    min(max_tokens, the first stop's index + 1) and its ids output i's low 17 bits for i < n, zeros past it (ids carry a bit
-    at 2^20 the cut drops), except that a request the class can't hold, its prompt not 1 to NP ids or that n past KO, has
-    n = KO + 1 and no ids."""
+    prompt length lp (the last state's w = lp − NP − KO): an empty slot's every word is zero; an occupied slot's read bit
+    is 1, its n min(max_tokens, the first stop's index + 1) and its ids output i's low 17 bits for i < n, zeros past it
+    (ids carry a bit at 2^20 the cut drops), except that a request the class can't hold, its prompt not 1 to NP ids or
+    that n past KO, has n = KO + 1 and no ids."""
     NP = 3
     e, ids = bind(X.SlotEntry, KO=KO, IDB=17, NP=NP, STOP=STOP), [100 + i for i in range(KO)]
     for occ in (0, 1, 2, 3):
@@ -237,11 +232,56 @@ def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO
                 n = min([m, *[i + 1 for i, x in enumerate(ids) if x in STOP]]) if 1 <= lp <= NP else KO + 1
                 n = 0 if not occ & 1 else n if n <= KO else KO + 1
                 packed = sum(w << 16 * k for k, w in enumerate(words))
-                assert packed == n | sum(x << 32 + 17 * i for i, x in enumerate(ids[:n] if n <= KO else ()))
-    assert X.entry_words(64, 17) == 70
+                assert packed == occ & 1 | n << 1 | sum(x << 33 + 17 * i for i, x in enumerate(ids[:n] if n <= KO else ()))
+    assert X.entry_words(64, 17) == 71 and X.entry_words(4, 17) == 7
     for bad in ({"STOP": (1, 1)}, {"NP": 0}):
         with pytest.raises(ValueError, match="refuses this binding"):
             bind(X.SlotEntry, **{"KO": 2, "IDB": 17, "NP": 4, "STOP": (), **bad})
+
+
+@pytest.mark.parametrize("KO, NP, STOP", [(2, 4, ()), (4, 32, (128001,)), (64, 1024, (128001,))],
+                         ids=["small", "ko4", "record"])
+def test_a_slots_entry_is_the_scans_entry_bit_for_bit(KO, NP, STOP):
+    """`SlotEntry_v1`'s row is the network certifier's entry at the scan's class of its KO (`ingress_scan.entry_encode`,
+    in `entry_layout`'s order: read at bit 0, n from bit 1 and the ids from bit 33, 33 + KO·IDB bits a request, 1,121 at
+    KO 64), so the scan reads an honest slot as its Program wrote it: an empty slot's entry is `NONE`, an occupied
+    slot's read 1 with its n and ids, and a request the class can't hold read 1 and n = KO + 1, which the scan refuses.
+    At KO 4 a row without the read bit is as long, so only the bits tell them apart."""
+    cls, e, ids = SS.scan_class(4, KO, 16), bind(X.SlotEntry, KO=KO, IDB=17, NP=NP, STOP=STOP), [100 + i for i in range(KO)]
+    assert 16 * X.entry_words(KO, 17) == IS.entry_bits(cls)
+    for occ, lp, m, want in ((0, 1, KO, IS.NONE), (2, 1, KO, IS.NONE), (1, 1, 1, IS.entry(1, ids[:1])),
+                             (3, NP, KO, IS.entry(KO, ids)), (1, NP + 1, 1, (1, KO + 1, ())),
+                             (1, 1, KO + 1, (1, KO + 1, ()))):
+        assert _run(e, [occ], [(lp - NP - KO) & X.M32, m, *ids]) == IS.entry_encode(cls, want), (occ, lp, m)
+
+
+@pytest.mark.parametrize("first", [True, False], ids=["first", "later"])
+def test_a_select_collected_and_the_last_ones_entry_are_the_combine_then_the_collector_and_the_entry(first):
+    """`SelectCollect_v1` is `TokenSelectCombine_v2`'s select and `OutCollect_v1` over it, and `SelectEntry_v1` those and
+    `SlotEntry_v1` over the state, on groups' bests drawn from a few bf16 values (ties and -inf among them), their indices,
+    heads or states whose w is in and out of the collector's KO, and both occupancy words."""
+    V, C, KO, NP, STOP = 200, 64, 3, 3, (107,)
+    combine = bind(TokenSelectCombineV2, V=V, C=C)
+    sc = bind(X.SelectCollect, V=V, C=C, KO=KO, FIRST=first)
+    se = bind(X.SelectEntry, V=V, C=C, KO=KO, FIRST=first, IDB=17, NP=NP, STOP=STOP)
+    words = (np.array([-1.0, 0.0, 1.0, 2.0, -np.inf], dtype=np.float32).view(np.uint32) >> 16).tolist()
+    rng = np.random.default_rng(5)
+    for _ in range(24):
+        x0, best = int(rng.choice(words)), [int(w) for w in rng.choice(words, 4)]
+        idx = [int(i) for i in rng.integers(0, C, 4)]
+        w = int(rng.integers(-NP - KO, 3)) & X.M32
+        a = [int(rng.integers(1, 5)), 9] if first else [w, 9, *[100 + i for i in range(KO)]]
+        tok = _run(combine, [x0], best, idx)[0]
+        state = X.collect_reference(a, tok, KO, first)
+        assert _run(sc, [x0], best, idx, a) == [tok, *state]
+        for occ in (0, 1):
+            bits = _run(se, [x0], best, idx, a, [occ])
+            got = [sum(bits[16 * k + b] << b for b in range(16)) for k in range(len(bits) // 16)]
+            assert got == X.entry_reference(occ, state, KO, 17, NP, STOP)
+    for fn, bad in ((X.SelectCollect, {"V": 1, "C": 1, "KO": 2, "FIRST": True}),
+                    (X.SelectEntry, {"V": 200, "C": 64, "KO": 2, "FIRST": True, "IDB": 17, "NP": 4, "STOP": (1, 1)})):
+        with pytest.raises(ValueError, match="refuses this binding"):
+            bind(fn, **bad)
 
 
 @pytest.mark.parametrize("st", [SMALL, {"MODEL": MODEL, "LP": 2, "V": V}], ids=["small", "served"])

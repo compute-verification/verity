@@ -114,7 +114,7 @@ class Challenger:
             self.phase.expect("Coins")
             return [Send("coins", Message("CoinsDraw", {"n": 32}))]
         if m.type == "Coins":
-            # The coin secret `serve` draws from the OS on revealing the first batch, drawn from this party's coins.
+            # The coin secret `serve` draws from the OS on revealing the first batch, sampled from this party's coins.
             self.c._coin_secret = m.body
             self.phase.expect()
             return self._after_reading(self._challenge)

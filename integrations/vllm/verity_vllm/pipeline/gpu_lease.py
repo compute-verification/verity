@@ -27,7 +27,7 @@ A grouped Commit (`commit_group`: the Commits of several rows of one engine in o
 A TP Commit (`pipeline.tp.lease`) takes all its GPUs with one ``acquire`` and gives them back together after its last run's
 finalize, its ranks off their devices first (``give_back`` is either release, over the engine in this process or over the ranks).
 A TP Match's capture and its control (`row_tp.TpRow.match`) each take all their GPUs the same way, right before their engine, and
-hold them to their exit (their record in ``match/lease/<leg>/``); the Match's check, its served-shape derives and its fold Match see
+hold them to their exit (their record in ``match/lease/<stage>/``); the Match's check, its served-shape derives and its fold Match see
 no device and hold no lease.
 A single-GPU Match (`row_stages.SingleRow.match`) runs as its two phases: the GPU phase (``match --phase gpu``: the capture, the
 control and the rest of `match.GPU_STAGES`) takes the lease the same way and holds it to its exit (its record in ``match/lease/``),
@@ -54,7 +54,7 @@ import traceback
 from typing import Any, Callable, MutableMapping
 
 RECORD = "gpu_lease.json"
-MATCH_LEG_KEPT = "a Match leg holds its GPUs to its exit: its engine is its last work"
+MATCH_LEG_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
 HEARTBEAT_S = 60
 WATCH_S = 0.2                      # after the release, how often the Commit checks that no CUDA context reappeared
 STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease

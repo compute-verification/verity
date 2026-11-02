@@ -105,14 +105,14 @@ class WorkloadSampling:
     seed: int | None                                  # every writer writes it, null for greedy
     n: int | None                                     # absent: 1 (the driver's default)
     ignore_eos: bool | None                           # true: every request runs to its cap (`config.done_source`)
-    # explicit parameters beside the variant's table: no writer writes them; GM-01's G1 compares them when a hand edit adds them
+    # explicit parameters beside the variant's table: no writer writes them; the global match's G1 compares them when a hand edit adds them
     temperature: float | None
     top_p: float | None
     top_k: int | None
-    # stops before the cap: no writer writes them; `config.done_source_refusal` refuses them on a row of record
+    # stops before the cap: no writer writes them; `config.done_source_refusal` refuses them on a workload of record
     stop_token_ids: Sequence[Any] | None
     stop: Sequence[Any] | str | None
-    # the EOS set pinned into the workload: no writer writes it; GP-01's stop rule takes it as the declaration of record, and a
+    # the EOS set pinned into the workload: no writer writes it; the global Program's stop rule takes it as the declaration of record, and a
     # checkpoint given beside it must agree (`pipeline.global_program.stop_rule`)
     eos_token_ids: tuple[int, ...] | None = None
 
@@ -147,7 +147,7 @@ class Workload:
     case: str | None                                  # the checkpoint's role; `pipeline.workload` writes null for a row without one
     engine: Mapping[str, Any] | None                  # v2's pinned engine block (`config.RowEngine`); a v1 workload has the flat keys
     sampling: WorkloadSampling | None                 # `properties.holdout` writes none: the driver's greedy default
-    sweep: Mapping[str, Any] | None                   # the sweep plan the requests were drawn from (`pipeline.workload`), else none
+    sweep: Mapping[str, Any] | None                   # the sweep plan the requests were sampled from (`pipeline.workload`), else none
     info: Mapping[str, Any]                           # the `INFO` fields it carries (and `V1_INFO`, for a v1 workload)
     # the document's sha256 as the driver records it (RunHeader.workload.sha256: sort_keys, compact separators), of the JSON as read
     doc_sha256: str = field(default="", compare=False)

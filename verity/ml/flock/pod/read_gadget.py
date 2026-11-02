@@ -1,5 +1,5 @@
 """The hidden-read kill experiment (hiding model architectures): today's ``GemmCoordinate<K>`` class statement, and the same
-statement with R hidden-index Merkle reads of depth D per VU, as ``verity/flock-circuit`` statements for C-Flock's CPU prover
+statement with R hidden-index Merkle reads of depth D per VU, as ``verity/flock-circuit`` statements for Flock's CPU prover
 (``76-read-gadget.sh``).
 
     python read_gadget.py check                                       a level slot against `verity.ml.commitments.gates.merkle.root_ref`

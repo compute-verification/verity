@@ -1,4 +1,4 @@
-"""R19 REFERENCE REGRESSION -- does the vLLM integration (v2, the default since the flip) still reproduce its contract?
+"""REFERENCE REGRESSION -- does the vLLM integration (v2, the default since the flip) still reproduce its contract?
 
 THE ORACLE (`VERITY_REGRESSION_ORACLE`, `resolver.oracle()`).  `expected` (default): `expected/<row>.json`, RE-BASELINED on v2's own
 outputs (`rebaseline.py write`, reference `v2-reference`; the v1-reference block is kept under `reference.frozen`) -- a difference is a
@@ -7,14 +7,14 @@ historical "does v2 reproduce v1" comparison, where the labelled decisions below
 tests.regression.rebaseline run --record DIR --oracle frozen|expected` runs either and records every result for `write` / `table`.
 
 THE REFERENCE.  v1 = `lane/vllm-integration` at release tag `r19-int-21` (commit 89af272a8c1d37a44b3e8f3253378d7a152fc281, tagged
-`v1-reference`) and the R19 rows it recorded.  Twelve rows are frozen in `files.toml` (row -> files -> sha256/bytes) and
+`v1-reference`) and the rows it recorded.  Twelve rows are frozen in `files.toml` (row -> files -> sha256/bytes) and
 `expected/<row>.json` (the contract: lifted from each row's OWN documents by `lift_expected.py`, then re-baselined on v2 by
 `rebaseline.py` -- never typed by hand):
 
     GREEN   #11 llama32-1b B1 i4096/o512 (l40s)   #23 llama32-1b B64 (l40s)   #39 qwen25-15b B1 i4096/o512 (l40s)   #60 mistral-7b B8 (l40s)
             #67 olmoe-1b-7b B32 (l40s)            #68 olmoe-1b-7b B32 mixed-arrivals (l40s)   #73 qwen3-4b B8 (h100)   #74 qwen3-4b-fp8 B8 (h100)
-    BY NAME #4 smollm2-135m (R17 row; only the CPU record audit exists)   #57 gemma2-2b B8 -- the NEGATIVE: Commit REFUSED at manifest build
-            (unmodelled Bf16MulScalarTensor_v1 unnamed crossing) and that refusal must reproduce -- or the F-r19-int-20 decision below
+    BY NAME #4 smollm2-135m (an older record; only the CPU record audit exists)   #57 gemma2-2b B8 -- the NEGATIVE: Commit REFUSED at manifest build
+            (unmodelled Bf16MulScalarTensor_v1 unnamed crossing) and that refusal must reproduce -- or the promotion decision below
             #70 olmoe TP2 B8 (no fold Match, Commit rc=1)   #75 qwen3-30b-a3b TP2 B2 (rank Programs only, no manifest)
 
 WHAT "REPRODUCES" MEANS (one check module per oracle under `checks/`; each lifts `expected` from the record and recomputes `actual`
@@ -36,14 +36,14 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           G6 lengths, eos_stop_requests                                                                               weak*   T0
     coverage              coverage_check(manifest of record, instrumented layouts) == the Commit's recorded coverage                    STRONG   T0(+manifest)
     commit_summary        commit_summary.summarize re-derivation == recorded (stable fields) + commit/verdict.json lifted as the verdict   STRONG   T0
-                          (commit_summary.json is deprecated as a verdict, F-r19-int-21; its execution-configuration fields stay the contract)
+                          (commit_summary.json is deprecated as a verdict in favour of verdict.json; its execution-configuration fields stay the contract)
     verdict               verdict.json (vllm-verdict/v1; read, or rebuilt in memory from the Commit evidence): outcome == the fixture
                           class, compat.commit_pass == v1, every check group == the v1 facts of runs.jsonl, #57 names fa2_layers_bad     STRONG   T0
     decomp_hashes         per-request canonical_sha256{a,b}, derived_digest, n_instances, LP / T / steps / prefill chunks, XREQ counts
                           and the attribution table of match_decomp.json recomputed over the 0.6-5.8 GB fold record by the v2 path
                           (observe.iter_observations -> resolve -> resolve_decomp; batch_decomp.Projection / compare_steps wrapped)     STRONG   T1
     replay_partition      the sampled-replay PARTITION of sampled_replay_p0.json (population by family / not-evaluable by name / strata
-                          sizes / lifetime split / R17-1 not-executed split / the seeded draw's per-stratum counts and picks per
+                          sizes / lifetime split / not-executed split / the seeded draw's per-stratum counts and picks per
                           (request, step) / phase anchors) recomputed over the Programs + manifest of record; the evaluations
                           themselves (binding map, vault only) are carried as facts, not recomputed                                   STRONG   T1
 
@@ -52,7 +52,7 @@ with the current code, and the two are diffed as canonical JSON on every field t
 
 CPU-ONLY.  Every check here runs without a GPU.  T0 inputs are <= ~100 MB per row (the small records); `manifest_digest` needs the
 row's request Programs (50-300 MB of instances.json.gz) and rebuilds for minutes; `coverage` needs the 39-222 MB manifest.json.  T1
-needs the multi-GB fold records / binding maps; T2 the Build rebuild.  NONE of it is meant for the laptop tonight: run on a pod.
+needs the multi-GB fold records / binding maps; T2 the Build rebuild.  NONE of it is meant for a laptop: run on a pod.
 
 NOT PINNED BY ANY RECORD (gaps -- do not read a green run as covering these): committed bytes / the arena, opening proofs (counts only),
 challenge derivation, C2 replay inputs, the weights root beyond `weights_pin`, Match per-instance attribution tables, fast-vs-record
@@ -67,7 +67,7 @@ neither v1 nor a decision reproduced -> FAIL naming both.  Malformed / `expected
 A decision's `status` is `accepted` (absent = accepted: confirmed) or `pending_review` (labelled, awaiting review);
 both sanction, and which side reproduced is recorded as junit property `matched`; `python -m tests.regression.decisions --pending`
 lists the pending ones.  A decision may also own an INPUT pin (`pins."manifest.json" = { bytes,
-sha256 }`: F-r19-int-20's r19-int-22 manifest) -- `resolver.Row._checked` accepts it where the frozen v1 pin fails, junit property
+sha256 }`: #57's promoted r19-int-22 manifest) -- `resolver.Row._checked` accepts it where the frozen v1 pin fails, junit property
 `pinned_by`.  `python -m tests.regression.decisions` (or `-k decisions -s`) lists them all with their status.  Decisions are
 hand-written and carried over when lift_expected.py regenerates fixtures.toml.
 
@@ -89,8 +89,8 @@ instead of recomputing, and diffs it against the frozen expected:
 
     cd integrations/vllm && VERITY_REGRESSION=1 VERITY_REGRESSION_CANDIDATE=/path/to/v2/rows python -m pytest tests/regression -m regression -q
 
-Markers: `regression` (all of these), `pod` (T1/T2 and anything reading > 100 MB), `weak` (PASS-side / unexercised).  Green tonight =
-T0 byte-equal on every row where the inputs resolve + the #57 refusal reproduces + tests/program green.
+Markers: `regression` (all of these), `pod` (T1/T2 and anything reading > 100 MB), `weak` (PASS-side / unexercised).  Green =
+T0 byte-equal on every row where the inputs resolve + workload 57's refusal reproduces + tests/program green.
 """
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def _skip_retired(row: resolver.Row, check_name: str, record_property) -> None:
 @pytest.mark.parametrize("row_key,check_name", _params())
 def test_reproduces(row_key: str, check_name: str, store_state: dict, record_property) -> None:
     if not ENABLED:
-        pytest.skip("set VERITY_REGRESSION=1 to run the R19 reference regression")
+        pytest.skip("set VERITY_REGRESSION=1 to run the reference regression")
     chk = checks.load(check_name)
     if chk.TIER not in _tiers():
         pytest.skip(f"{check_name} is tier {chk.TIER}; set {TIER_ENV}={chk.TIER} to run it")
@@ -215,9 +215,9 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     """#57 gemma2-2b: the v1 Commit REFUSED to build the manifest (unmodelled `Bf16MulScalarTensor_v1` unnamed crossing) -- the negative
     case.  The current code, rebuilding from #57's Programs, must refuse the same way (no complete manifest; the unmodelled family named)
     OR state exactly what a labelled decision on the fixture sanctions (`[[rows.<row>.decisions]]`, check `manifest_digest`:
-    F-r19-int-20's promoted, complete manifest; S1's Q_word manifest of record) -- anything else fails naming both."""
+    the promoted, complete manifest; the Q_word v1 manifest of record) -- anything else fails naming both."""
     if not ENABLED:
-        pytest.skip("set VERITY_REGRESSION=1 to run the R19 reference regression")
+        pytest.skip("set VERITY_REGRESSION=1 to run the reference regression")
     _skip_rebuild("the #57 negative", os.environ.get(resolver.CANDIDATE_ENV))
     row = next((r for r in resolver.rows() if r.number == 57), None)
     if row is None:

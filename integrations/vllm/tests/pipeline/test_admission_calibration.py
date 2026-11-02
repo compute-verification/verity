@@ -1,5 +1,4 @@
-"""The admission planner's facts live in `engine.profiles.admission_calibration`, and the planner plans exactly as it did
-with them inline: the tables, the unknown-model notes and the plans here are pinned from the planner before the move."""
+"""The admission planner reads its facts from `engine.profiles.admission_calibration`; its tables, notes and plans are pinned here."""
 from __future__ import annotations
 
 import hashlib
@@ -23,7 +22,7 @@ def _workload(row: str) -> dict:
 
 def test_the_planner_reads_the_profile_tables():
     assert (A.MODELS, A.DENSE_DEFAULT, A.CALIBRATION) == (C.MODELS, C.DENSE_DEFAULT, C.CALIBRATION)
-    assert _digest({"MODELS": C.MODELS, "DENSE_DEFAULT": C.DENSE_DEFAULT, "CALIBRATION": C.CALIBRATION}) == "118a90b99cd0cf91"
+    assert _digest({"MODELS": C.MODELS, "DENSE_DEFAULT": C.DENSE_DEFAULT, "CALIBRATION": C.CALIBRATION}) == "6f09421a2da6b859"
     assert C.DEFAULT_MODEL in C.MODELS
 
 
@@ -39,4 +38,4 @@ def test_unknown_model_notes_name_the_dense_default(tmp_path: Path):
 
 def test_plans_are_pinned():
     plans = {"unknown": A.predict(A.row_config_from_workload(_workload(UNKNOWN))), "known": A.predict(A.row_config_from_workload(_workload(KNOWN)))}
-    assert _digest(plans) == "89d100b75a825912"
+    assert _digest(plans) == "c2a0afa54837461f"

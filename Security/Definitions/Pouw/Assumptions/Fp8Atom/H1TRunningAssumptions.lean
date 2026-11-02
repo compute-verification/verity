@@ -3,8 +3,8 @@ import Definitions.Pouw.Fp8Atom.H1TLemmas
 /-!
 # H-1T's running words (a named assumption, M4b and M4c)
 
-* **`H1TRunningWords`** is `DistinctLiveH1T` on the pairs of words the one-flip argument does not cover (`Hard`): O1
-  and O2 of `internal/pouw-fp8/lean-atom-m2-plan.md` §0.4, less what one flip separates by column and near the start
+* **`H1TRunningWords`** is `DistinctLiveH1T` on the pairs of words the one-flip argument does not cover (`Hard`): the
+  running words, less what one flip separates by column and near the start
   of block 2. On a legal unit, two distinct credited words of one row are distinct functions of the salt if they are
   two block-1 running words at one position of columns whose tuples are less than 72 apart in every lane and have no
   lane of opposite signs where either is at least 36 in magnitude, or a block-2 running word against any word but a
@@ -20,7 +20,7 @@ to 512 of it; the worst case is `2T − 3`, at `s = 0` and `p = 2T − 3`. From 
 `p − T + 2`, so a large tag lane still moves `R_p` near the start of block 2 (`Early`). Otherwise it separates the word only from a word that moves strictly the other
 way: a block-1 word of a later slice and of a column whose tuple has the opposite sign in the flipped lane. It is
 implied by `DistinctLiveH1T` (`h1tRunningOfDistinct`), and with `H1TOneFlip` it implies `DistinctLiveH1T`
-(`h1tDistinctLive`): the two are equivalent. It is Assumed, with the red team's simulation evidence (pair frequencies
+(`h1tDistinctLive`): the two are equivalent. It is Assumed, with simulation evidence (pair frequencies
 at most 0.375), and it is a hypothesis of the pins that use it.
 -/
 

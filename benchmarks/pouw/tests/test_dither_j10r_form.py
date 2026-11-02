@@ -1,9 +1,9 @@
 """Dither's J10-R units ($DITHER_SO_UNITS=j10r: `benchmarks/hash/dither/j10r_units.py`, the host units the gate holds the
-GPU's receipts to word for word) in RT-ALGO-16's verifier form (#3574): a call's first position u0 is credit's (the
+GPU's receipts to word for word) in the verifier's form: a call's first position u0 is credit's (the
 window's earlier calls' units), its unit u = ri (N / 32) + cj at position u0 + u reads its call's seed_c at u0 and the
 blocks core's credit derives for tile t = u at the call's slot M (`core_check.j10r_blocks`), so its public rows are
 credit's `public_table` and its receipt `h1tile.j10r_reference`'s at them; and `forms.form_of` labels such an arm by
-#3574 when it is on credit's layout (`forms.j10r_part`)."""
+J10-R's adopted basis (`forms.ADOPTED_PARTS['j10r']`) when it is on credit's layout (`forms.j10r_part`)."""
 from __future__ import annotations
 
 import functools
@@ -140,13 +140,14 @@ def test_the_arms_receipts_at_llamas_k():
 
 
 def test_a_j10r_arm_in_the_order_is_ask71_a_with_3574_as_its_basis():
-    """J10-R is an adopted part (`forms.ADOPTED_PARTS`, #3574): a -so -zy arm under it is form A with J10-R's basis after
+    """J10-R is an adopted part (`forms.ADOPTED_PARTS`): a -so -zy arm under it is form A with J10-R's basis after
     the z's, and an arm with an unadopted part stays unadopted."""
     F = dither("forms")
     assert "j10r" not in F.UNADOPTED_PARTS
     lab = F.form_of("dither-a", "zy", True, (), ("j10r",))
     assert lab["form"] == F.FORM_A
-    assert lab["form_basis"] == f"{F.Z_FORMS['zy'][1]}; {F.ADOPTED_PARTS['j10r']}" and "#3574" in lab["form_basis"]
+    assert lab["form_basis"] == f"{F.Z_FORMS['zy'][1]}; {F.ADOPTED_PARTS['j10r']}"
+    assert "credit.SHARED_J10R" in lab["form_basis"]
     assert F.form_of("dither-a", "zy", True, ("ov",), ("j10r",))["form"] == F.UNADOPTED
     assert F.form_of("dither-a", "zy", True) == {"form": F.FORM_A, "form_basis": F.Z_FORMS["zy"][1]}
 

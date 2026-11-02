@@ -1,14 +1,14 @@
-// EPS1 DC red-team (RT-ISA round 2): the uniform datapath beside a *saturated asynchronous* wgmma on sm_90a (H100/H200).
-// The committed-word model prices a uniform instruction at an issue slot (decision 73/84; sm_90 census UNI,issue 0.924,
+// Red-team probe: the uniform datapath beside a *saturated asynchronous* wgmma on sm_90a (H100/H200).
+// The committed-word model prices a uniform instruction at an issue slot (sm_90 census UNI,issue 0.924,
 // UNI,JI90_0 0.965), measured beside the synchronous honest step (mma.sync, uniform.cuh's F_M) and beside issue-saturated
 // lane streams (uniform.cuh's us_/uv_ families). It has never been measured beside a saturated async wgmma, whose issue
 // slot is one instruction but whose tensor pipe runs for ~128 clocks after it, so the warp scheduler's issue slots sit
-// mostly idle: the WATCH (note:20261017T1834Z-draft-rt-isa) is whether ptxas/hardware dual-issues a uniform instruction
+// mostly idle: the question is whether ptxas/hardware dual-issues a uniform instruction
 // into that shadow at less than an issue slot.
 //
 //   uwg_<S>_<K>   bare: each of 2 warpgroups issues 4 wgmma s8 m64n256k32 a commit group (saturating the tensor pipe, as
 //                 wg_mix), waits, and carries K warp-uniform chain instructions a iteration (uchain.cuh). Nothing reads
-//                 the accumulators inside the loop, so -- the FACET-BREAK finding -- ptxas 13.0 lowers the chain to the
+//                 the accumulators inside the loop, so -- the facet_break finding -- ptxas 13.0 lowers the chain to the
 //                 vector lanes (IMAD/LOP3/IADD3), not the uniform datapath: a co-located uniform chain gets no free ride.
 //                 The gate pins the lane counts; the K-slope is the lane cost beside a saturated async wgmma.
 //   uwgf_<S>_<K>  folded: as uwg, but each iteration folds the 8 leading wgmma accumulators by duo (honest.cuh's fold,

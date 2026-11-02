@@ -3,7 +3,7 @@ the evidence store only. It measures nothing: the runs it reads are `benchmarks/
 G2 has no pass/fail number: it is this curve.
 
 Where the numbers come from:
-- Runs labeled campaign=g2 (`research data label RUN campaign g2 --by LANE --ref RUN`). The run's record
+- Runs labeled campaign=g2 in the store (a run counts once it carries that label). The run's record
   (`outputs.run_record`) holds verity-bench result docs (`*bench/result.json`, schema verity-bench/vllm-overhead/v1, from
   served_commit's `run.sh` or `prof.sh`: TP1 engines under vLLM's serving defaults) or tp_decode summaries
   (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's workload of record). A tp_decode arm's value
@@ -46,7 +46,7 @@ exists. Beside them, the lowest vllm-v1 ratio under the same rules but the hash.
     uv run --no-project --with matplotlib python3 benchmarks/g2/curve.py [--out DIR] [--no-refresh]
 
 Writes DIR/g2-curve.md (the curve, then every measure), DIR/g2-curve.png and DIR/g2-curve.json (every measure); DIR defaults
-to $OUT, else ./out. `research data refresh` first (a run publishes from its node), unless --no-refresh.
+to $OUT, else ./out. It refreshes the store's catalog first (a run publishes from its node), unless --no-refresh.
 """
 from __future__ import annotations
 
@@ -583,7 +583,7 @@ def load(refresh: bool = True) -> list[Measure]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
-    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is (no `research data refresh`)")
+    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is, without refreshing it first")
     a = ap.parse_args()
     measures = load(refresh=not a.no_refresh)
     if not measures:

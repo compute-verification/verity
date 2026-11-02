@@ -3,7 +3,7 @@ import Definitions.Pouw.PearlC.Tile
 import Definitions.Pouw.PearlC.Device
 
 /-!
-# The named assumption TT_OUT (trusted; the cheap-binding lane's file)
+# The named assumption TT_OUT (trusted)
 
 `Prop`s taken as hypotheses by the statements that use them, never `axiom`s.
 -/
@@ -51,11 +51,11 @@ its repair.
   charges every operation a program executes, at its price, and it is the same `CostModel` for the honest reference
   (`AdmitsRef`) and for every adversary. A tensor-core instruction (`wgmma`, `mma.sync`, of any kind, shape, precision
   or sparsity) is charged its whole fragment shape, however few of its output words or lanes a program uses, never per
-  output word; per-word pricing would make per-word joint skip sets count (`repair-rows-rev1-and-v2-cap.md`). The
+  output word; per-word pricing would make per-word joint skip sets count. The
   unit's input is the model's clean quantizer output (the scaled activations
   and weights as FP32 words); whatever that quantizer computes is outside the unit for both programs, and nothing inside
   the unit is free for either. Excluding glue changes only the unit boundary, never an executed operation's price.
-  That the honest H100 program fits `W_ref` under this `CM` is a measured claim, the kernel lane's, not part of this
+  That the honest H100 program fits `W_ref` under this `CM` is the kernel's measured claim, not part of this
   assumption.
 - **The costs `c`.** `Costs.adopted` when the model adopts Pearl's headroom scale as its quantizer, even with PoUW off;
   `Costs.current` otherwise. The salt-dependent cast `A′ = e4m3(D)` is protocol forming in both.
@@ -100,7 +100,7 @@ def TTOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMode
 
 /-- **The named assumption TT_OUT(1/400) for Pearl-C, per audit tile**: `TTOutTile` at `pearlCProtocol sem c ρ`, its
 tiles `pearlCTiles sem c ρ` (the audit's `64 × 64` grid), `pearlCDomain Params.pi`, `γ₀ = 1/400` and `εPearlC`. It is
-`TTOutPearlC` with three changes, for a verifier that checks drawn tiles only (the red team's F1). It is falsified as
+`TTOutPearlC` with three changes, for a verifier that checks drawn tiles only. It is falsified as
 `TTOutPearlC` is, by the first-promotion skip (rating D), and rev1 per tile (`TTOutTilePearlCDevRev1`) is its repair.
 
 - **Tiles, not units.** It credits the good tiles of any committed unit, including a unit some of whose other tiles are

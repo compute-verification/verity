@@ -175,7 +175,7 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                   inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None,
                   row: int | None = None, plan: bool = False) -> dict[str, np.ndarray]:
     """F_row on the row's resolved inputs: committed member words, registered weight slices, committed prompt ids -- or, for an arg that
-    names an INTERIOR producer row (a member-less row such as the pre-bias Gemm of a biased linear, MAN-07, or the Fp8GroupQuant of an
+    names an INTERIOR producer row (a member-less row such as the pre-bias Gemm of a biased linear, or the Fp8GroupQuant of an
     FP8 linear whose two ports the GEMM reads as two arg slices), that row's OWN evaluation from ITS committed inputs (bounded depth;
     `interior` memoises it per VU).  Raises _Unresolved with the slice named when an input is not available.  ``plan``: every committed
     input is read and nothing is evaluated (no weights, no relation; `plan_vu`)."""
@@ -372,7 +372,7 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
     if len(got) > 1:
         got = by_member(got, pi.member_of_port(vu["i"]) or plane_ports(d))
     if d.get("plane") and d["plane"] not in got and len(got) == 1:
-        got = {d["plane"]: next(iter(got.values()))}                             # [MAN-06f v3] a dense relation's `out` IS this row's plane (act = SiluMul out)
+        got = {d["plane"]: next(iter(got.values()))}                             # a dense relation's `out` IS this row's plane (act = SiluMul out)
         rec["plane"] = d["plane"]
     # the committed outputs: every member the manifest requires of this row
     outs, mism = [], []
@@ -415,13 +415,13 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
                 # (iii) the plane must be COMMITTED at the lifted word's width (u32 / u64): a bf16 plane whose values happen to equal the Active
                 # payloads is a different representation of the identity -- refused by name, never read as Active words
                 rec["why"] = (f"{member}: committed as {why!r} ({_ITEMSIZE.get(str(why))} B words), the query requires the lifted word {dtype} "
-                              f"({RM.LIFTED_DTYPES[dtype][1]} B: Value<{RM.LIFTED_DTYPES[dtype][0] + 1}>) -- representation mismatch (F-r17b-52 (iii))")
+                              f"({RM.LIFTED_DTYPES[dtype][1]} B: Value<{RM.LIFTED_DTYPES[dtype][0] + 1}>) -- representation mismatch")
                 return rec | {"result": None}
             eq, nd, first, verdict = lifted_compare(have, want, active, dtype)
             outs.append({"member": member, "width": width, "equal": eq, "differing_elements": nd, "first_diff": first, "lifted": dtype,
                          "slot_enable": int(active), "verdict": verdict})
         else:
-            if _ITEMSIZE.get(dtype, 2) == 4:                                     # [MAN-06f v3] f32 / i32 plane members (router_w / router_ids): whole words
+            if _ITEMSIZE.get(dtype, 2) == 4:                                     # f32 / i32 plane members (router_w / router_ids): whole words
                 have16 = have.astype(np.uint32) if have.dtype != np.uint32 else have
                 want = np.asarray(want, dtype=np.uint32)
             else:

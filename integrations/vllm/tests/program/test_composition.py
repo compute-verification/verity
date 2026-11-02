@@ -1,4 +1,4 @@
-"""Compositional reuse (lane CF1): the Ampere and Hopper B1 programs are two binding
+"""Compositional reuse: the Ampere and Hopper B1 programs are two binding
 records of one `Serve_v2`, and the factored functions evaluated standalone on *captured* operands give the profile's
 words under the profile's statics.
 
@@ -471,7 +471,7 @@ def test_serve_v1_is_untouched_and_serve_v4_is_registered_beside_it():
     assert dict(bind(b1.AttnBlock, D=64, NVIS=1, FIRST=True).signature()[0])["k"].n == 64
     assert dict(bind(b1.AttnBlockV3, D=64, NVIS=1, FIRST=True, BN=128).signature()[0])["k"].n == 128
     assert dict(bind(b1.AttnBlockV3, D=64, NVIS=1, FIRST=True, BN=64).signature()[0])["k"].n == 64
-    # the identity binder (D57): no geometry -> Serve_v1; a geometry -> Serve_v4{..., BN}; mismatched pairs refused
+    # the identity binder: no geometry -> Serve_v1; a geometry -> Serve_v4{..., BN}; mismatched pairs refused
     G = {"kernel": "fa2-splitkv-align", "kBlockM": 64, "kBlockN": 128, "num_splits": 1}
     assert serve_families.serve_program(TINY, 3, 2).id == bind(b1.Serve, C=TINY, LP=3, STEPS=2).id
     assert serve_families.serve_program(TINY, 3, 2, family="Serve_v4", attention=G).id == bind(b1.ServeV4, C=TINY, LP=3, STEPS=2, BN=128).id

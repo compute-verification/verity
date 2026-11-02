@@ -3,7 +3,7 @@
 
 It owns ``UNITS_``: a variable with it that nothing here declares is refused when the registry loads.  build.sh ships this
 file with the modules, and `verity_config.settings.of` finds it beside them in session.sh's scratch directory, where no
-pyproject.toml is above them; a research run's PYTHONPATH, which session.sh keeps, brings the engine.  build.sh's and
+pyproject.toml is above them; the caller's PYTHONPATH, which session.sh keeps, brings the engine.  build.sh's and
 session.sh's own variables (CUDA, CUBIN_ONLY, REPLAY, ROWS, VERITY_BENCH_VENV, LEASE_MIN) are the shell's.
 """
 from __future__ import annotations

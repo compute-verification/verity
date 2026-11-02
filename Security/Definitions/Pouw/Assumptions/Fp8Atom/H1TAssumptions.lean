@@ -7,16 +7,16 @@ import Definitions.Pouw.Fp8Atom.H1T
 # H-1T's named assumptions
 
 * **`DistinctLiveH1T`** is Target A for H-1T, one unit at a time. It is §5.3 of `docs/pouw/hardness-shaped-matrices.md`
-  with red team Phase 19c's 9 changes (X-H1T-8): the salt is the fields of the raw XOF words that the kernel reads
+  with 9 changes: the salt is the fields of the raw XOF words that the kernel reads
   (`extract`); the credited words are the `4T − 3` of `Pos`; B′ is the real codes plus the fixed tag table; `n ≤ 88,412`
   per unit, whose salt is its own; `X_q` and B′ are any finite codes; `T = ⌈k/29⌉` with zero padding. On a legal
   unit, no two credited words are equal as functions of the salt, and no credited word is free (a constant or a raw
-  XOF word). This is the statement the Lean proves (M3 to M5 of `internal/pouw-fp8/lean-atom-m2-plan.md`). Until then
+  XOF word). This is the statement the Lean is to prove. Until then
   it is Assumed, and it is a hypothesis of the pins that use it.
-* **`HalfApartH1T`** is the half-salt clause (X-H1T-7). It is stronger than Target A, and it is not the target: it is
+* **`HalfApartH1T`** is the half-salt clause. It is stronger than Target A, and it is not the target: it is
   the input to the lifting and branching arguments. Two distinct credited words of one row are equal on at most half of
   that row's salts, and a credited word takes any one value on at most half of them. It is Derived for `I` words (one
-  flip separates them) and Simulated for `R` words (red team pair frequencies at most 0.375). `census` does not measure
+  flip separates them) and Simulated for `R` words (pair frequencies at most 0.375). `census` does not measure
   it.
 -/
 

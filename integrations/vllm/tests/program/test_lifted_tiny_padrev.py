@@ -1,12 +1,12 @@
-"""padrev's adversarial tests for lane `pad`'s stage TINY CIRCUITS (lane/r16-pad e6ac4a075) — **padded baseline (experimental)**.
+"""Adversarial tests for stage TINY CIRCUITS — **padded baseline (experimental)**.
 
-Independent of pad's own suite (`test_lifted_tiny.py`): the oracle for the specified class is padrev's reading of LIFTING-SPEC
-v0.4 §2/§3.2/§9(a) written from the spec's letter (`_Ref` below), not pad's code; the vectors are padrev's grid (Active
-extremes, ⊥, INV, three other `1‖nonzero` words) and a fresh RNG seed.  Each test names the attack of LIFTING-REVIEW §3 it
-runs.  A test marked `xfail(strict=True)` documents an OPEN finding (F-pad-NN in LIFTING-REVIEW §5): it flips to a failure
-the moment pad fixes it, so the marker must then be removed.
+Independent of `test_lifted_tiny.py`: the oracle for the specified class is a reading of the lifting spec's §2/§3.2/§9(a)
+written from the spec's letter (`_Ref` below), not from `lifted.py`; the vectors are this module's own grid (Active
+extremes, ⊥, INV, three other `1‖nonzero` words) and a fresh RNG seed.  Each test names the attack it runs.  A test marked
+`xfail(strict=True)` documents an OPEN finding: it flips to a failure the moment the finding is fixed, so the marker must then
+be removed.
 
-Skips cleanly on a tree without `verity.ml.definitions.registry.lifted` (the module lives on lane/r16-pad); needs the in-tree MUFU
+Skips cleanly on a tree without `verity.ml.definitions.registry.lifted`; needs the in-tree MUFU
 tables like `test_serve3.py` for the LServe_v1 cases.
 """
 
@@ -27,7 +27,7 @@ from verity.ml.circuits import Program  # noqa: E402
 from verity.ml.definitions.registry import b1, pad_prims as PP, prims as P, ref_prims as R  # noqa: E402
 from verity.ml.definitions.numerics import serve3_reference as ref  # noqa: E402
 from verity.ml.definitions.registry.b1 import weights_type  # noqa: E402
-from tests.program import test_lifted_tiny as T  # noqa: E402  (pad's fixture harness: _lserve, EOS_FOR, Y_RAW, ...)
+from tests.program import test_lifted_tiny as T  # noqa: E402  (`test_lifted_tiny`'s fixture harness: _lserve, EOS_FOR, Y_RAW, ...)
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs  # noqa: E402
 from verity.ml.circuits.types import Array, Value  # noqa: E402
 
@@ -35,12 +35,12 @@ RNG = np.random.default_rng(20260920)
 
 
 # ---------------------------------------------------------------------------------------------------------
-# padrev's reference of the spec's letter (§2, §3.1, §3.2, §9a) — the oracle; no code shared with lifted.py
+# a reference of the spec's letter (§2, §3.1, §3.2, §9a) — the oracle; no code shared with lifted.py
 # ---------------------------------------------------------------------------------------------------------
 
 class _V1AndV2:
-    """The lifted relation under test = `Lifted[p]_v1` (the propagation relation, v0.5.2 A3 — FACTS under v0.6 A9.4) and, on the SAME
-    vectors, `Lifted[p]_v2` at `enable = Active(1)` must agree with it (v0.6 A9.3: the enabled result is v0.5.2's relation)."""
+    """The lifted relation under test = `Lifted[p]_v1` (the propagation relation) and, on the SAME
+    vectors, `Lifted[p]_v2` at `enable = Active(1)` must agree with it (the enabled result is the propagation relation)."""
 
     def __init__(self, p):
         self.v1, self.v2 = L.lifted_prim_v1(p), L.lifted_prim(p)
@@ -99,7 +99,7 @@ class _Ref:
 
     @classmethod
     def lgatherrow(cls, w, idx, rows):
-        """In range only: OOR is a boundary fact (SPEC [P3]); the test compares OOR against the registered original."""
+        """In range only: OOR is a boundary fact (P3); the test compares OOR against the registered original."""
         if not cls.valid(32, idx) or any(not cls.valid(w, r) for r in rows):
             return cls.inv(w)
         if idx == cls.bot(32):
@@ -132,7 +132,7 @@ def _rand(w, n):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# A2 / A4 — the specified class against padrev's oracle on the full grid
+# A2 / A4 — the specified class against the reference oracle on the full grid
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -176,7 +176,7 @@ def test_lsteplive_equals_the_spec_letter_on_the_grid_including_eos_set_members(
 def test_lgatherrow_equals_the_spec_letter_and_oor_equals_the_registered_original():
     """Indexing (A2 family): a ⊥ or garbage row that is NOT selected must not change an Active read; a ⊥ selected row is ⊥;
     INV anywhere is INV; a ⊥ index is ⊥; an Active out-of-range index agrees with `GatherBf16x{N}`'s registered extension
-    (payload agreement, F-pad-05) and is never INV/⊥."""
+    (payload agreement) and is never INV/⊥."""
     N = 4
     lg = L.l_gather_row(16, N)
     orig = P.gather_bf16(N)
@@ -200,7 +200,7 @@ def test_lgatherrow_equals_the_spec_letter_and_oor_equals_the_registered_origina
 
 
 # ---------------------------------------------------------------------------------------------------------
-# A7 / carry into the tag — the strict class on padrev's vectors
+# A7 / carry into the tag — the strict class on the reference vectors
 # ---------------------------------------------------------------------------------------------------------
 
 STRICT = [p for p in list(P.ALL_SCALAR) + list(PP.ALL_NEW) if p.id not in ("SelectI32_v1", "SelectF32_v1", "SelectBf16_v1")]
@@ -239,12 +239,12 @@ def test_strict_class_on_padrev_vectors_never_touches_the_tag_and_inv_beats_bot_
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the closed specified list is keyed on the indexing FAMILY, not on one name (F-pad-07)
+# the closed specified list is keyed on the indexing FAMILY, not on one name
 # ---------------------------------------------------------------------------------------------------------
 
 
 def test_every_registered_gather_family_lifts_to_lgatherrow_not_to_the_strict_wrapper():
-    """F-pad-07 (CLOSED lane/r16-pad b68c8797e): was lifted strictly at e6ac4a075 — an unselected ⊥ row poisoned the read."""
+    """A gather lifted strictly would let an unselected ⊥ row poison the read."""
     g = R.gather_f32(4)
     lg = _V1AndV2(g)
     assert lg.lift_class == "specified", lg.id
@@ -255,7 +255,7 @@ def test_every_registered_gather_family_lifts_to_lgatherrow_not_to_the_strict_wr
 
 
 def test_an_out_of_range_extension_cannot_be_invented_for_an_unregistered_width():
-    """F-pad-08 (CLOSED b68c8797e): at e6ac4a075 the kwarg registered X silently for an unregistered width."""
+    """`oor_payload` for an unregistered width is refused, never registered silently."""
     with pytest.raises((TypeError, ValueError)):
         L.l_gather_row(8, 4, oor_payload=0x12)
 
@@ -264,7 +264,7 @@ def test_a_registered_extension_cannot_be_overridden_and_an_unregistered_width_i
     with pytest.raises(ValueError):
         L.l_gather_row(16, 4, oor_payload=0x1234)  # disagrees with GatherBf16x's 0x7FFF
     with pytest.raises(TypeError):
-        L.l_gather_row(8, 4)  # no registered original gather family at payload width 8 (F-pad-05: nothing invented)
+        L.l_gather_row(8, 4)  # no registered original gather family at payload width 8 (nothing invented)
     g32 = L.l_gather_row(32, 4)  # 32 IS a registered family now (GatherF32x): its extension is the original's
     assert g32.evaluate(9, 1, 2, 3, 4) == R.gather_f32(4).evaluate(9, 1, 2, 3, 4) == 0x7FC00000
 
@@ -339,10 +339,10 @@ def test_lifted_program_outputs_are_one_namespace_and_the_step_inputs_are_the_pr
     lives = [c for n, c in named.items() if n.endswith("/live")]
     assert len(lives) == D_MAX and all(prog.circuit.gate(c.lo).prim.ret.w == 2 for c in lives)
     two_bit_roots = [c for c in prog.circuit.root_calls() if all(prog.circuit.gate(g).prim.ret.w == 2 for g in range(c.lo, c.hi))]
-    # the 1-bit lifted root values: the D_MAX `live` guards + the Continuation_v1 controller bits (R17-32: cap `emit`, cap `is_eos`) --
+    # the 1-bit lifted root values: the D_MAX `live` guards + the Continuation_v1 controller bits (cap `emit`, cap `is_eos`) --
     # nothing else; none of them is an OUTPUT (the outputs stay D_MAX+1 lifted i32 words: one value namespace)
     cap = D_MAX + 1
-    # + the root enable constant `enable/one` (v0.6 B7 / A9.1: the root is always enabled)
+    # + the root enable constant `enable/one` (the root is always enabled)
     assert len(two_bit_roots) == D_MAX + 2 * cap + 1
     assert sorted(c.node.name for c in two_bit_roots) == sorted(["enable/one"] + [f"s={s}/live" for s in range(1, D_MAX + 1)] + [f"slot={t}/emit" for t in range(1, cap + 1)]
                                                               + [f"slot={t}/is_eos" for t in range(1, cap + 1)])
@@ -355,7 +355,7 @@ def test_lifted_program_outputs_are_one_namespace_and_the_step_inputs_are_the_pr
         assert t[tok_in.lo] == _Ref.lselect(32, t[live.lo], out[s - 1], L.enc_bot(32))
         if s <= 3:
             assert t[tok_in.lo] == out[s - 1] and L.is_active(32, out[s - 1])
-        elif s == 4:  # the transition: out[3] is the ACTIVE committed EOS, tok_in_4 is the first ⊥ (DP-pad-01 option (a))
+        elif s == 4:  # the transition: out[3] is the ACTIVE committed EOS, tok_in_4 is the first ⊥ (the guard on the input)
             assert L.is_active(32, out[3]) and L.payload(32, out[3]) == EOS_FOR[3] and t[tok_in.lo] == L.enc_bot(32)
         else:
             assert t[tok_in.lo] == out[s - 1] == L.enc_bot(32)
@@ -382,7 +382,7 @@ def test_assign_inactive_refuses_every_shape_of_disguised_deletion():
 
 
 def test_a_bot_or_inv_word_inside_the_served_prefix_is_refused_by_name():
-    """F-pad-09 (CLOSED b68c8797e): at e6ac4a075 only enc_active's bare ValueError caught it."""
+    """Refused by name, not left to enc_active's bare ValueError."""
     for bad in (L.enc_bot(32), L.inv(32), (1 << 32) | 17):
         with pytest.raises((L.ServedPrefixFailure, L.BoundaryFailure)):
             L.assign_inactive("r", [5, bad, 17], (17,), 9, lag=0)  # an EOS follows, so the prefix rule alone does not catch it
@@ -397,24 +397,24 @@ def test_activity_prefix_reads_only_active_members_of_the_set():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# F-pad-10 — the S-migration hook (SPEC §5 [D4], LIFTING-STATUS P4/P5, M-0070): which value counts a live sampler row?
+# the S-migration hook: which value counts a live sampler row?
 # ---------------------------------------------------------------------------------------------------------
 
 
 def test_the_live_count_hook_must_read_the_steps_input_token_not_the_previous_output():
-    """SPEC §5 [D4] writes `n_live_t = Σ_r LIsActive(out_r[t−1])`.  At step `a_r` (the step after the committed EOS) the previous
+    """The spec's §5 writes `n_live_t = Σ_r LIsActive(out_r[t−1])`.  At step `a_r` (the step after the committed EOS) the previous
     output IS the EOS — an Active token — so `LIsActive(out[a_r−1]) = 1` although the request has no sampler row at `a_r`
     (vLLM removes a finished request before the next step; `LStepLive(EOS) = Active(0)`; under `GUARD=in` `tok_in_{a_r} = ⊥`).
     The hook over-counts every EOS-stopped request by exactly one engine step, which changes `S_t` for its batch-mates at that
     step.  Measured here on TINY-PAD with the EOS at event 3 (`a_r = 4`): the per-step liveness the Program itself computes
     (`live_s`, equivalently `LIsActive(tok_in_s)`) is the value that agrees with the served length `n_r = a_r`; the §5 formula
-    does not.  A test that PASSES = the discrepancy is real (F-pad-10, OPEN); it names the hook that must replace it."""
+    does not.  A test that PASSES = the discrepancy is real; it names the hook that must replace it."""
     prog, t, out = T._lserve((EOS_FOR[3],))
     a_r = L.activity_prefix(out, (EOS_FOR[3],), D_MAX + 1)
     assert a_r == 4 and L.served_count(out) == a_r
     named = T._root_named(prog)
     ia = L.l_is_active(32)
-    spec_hook = [1] + [ia.evaluate(out[s - 1]) for s in range(1, D_MAX + 1)]              # SPEC §5 [D4] as written
+    spec_hook = [1] + [ia.evaluate(out[s - 1]) for s in range(1, D_MAX + 1)]              # the spec's §5 as written
     live_from_program = [1] + [t[named[f"s={s}/live"].lo] for s in range(1, D_MAX + 1)]   # LStepLive(out[s−1], E) = live_s
     input_hook = [1] + [ia.evaluate(t[named[f"s={s}/tok_in"].lo]) for s in range(1, D_MAX + 1)]  # LIsActive(tok_in_s)
     served = [1 if s < a_r else 0 for s in range(D_MAX + 1)]  # the sampler rows vLLM actually runs: events 0..a_r−1
@@ -424,12 +424,12 @@ def test_the_live_count_hook_must_read_the_steps_input_token_not_the_previous_ou
 
 
 # ---------------------------------------------------------------------------------------------------------
-# PAD-04 candidate (F-pad-11) — LSplitsFor against padrev's own reading of vLLM's doubling loop; the F-pad-10 hook end to end
+# the S-migration candidate — LSplitsFor against an independent reading of vLLM's doubling loop; the input-token hook end to end
 # ---------------------------------------------------------------------------------------------------------
 
 
 def _splits_ref(n: int, sms: int) -> int:
-    """stoch M-0093 (corrected): the largest power of two S ≤ 32 with S·n ≤ num_SMs; the loop doubles while the NEXT S still fits."""
+    """The largest power of two S ≤ 32 with S·n ≤ num_SMs; the loop doubles while the NEXT S still fits."""
     s = 1
     while s * 2 <= 32 and (s * 2) * n <= sms:
         s *= 2
@@ -455,14 +455,14 @@ def test_lsplitsfor_equals_the_doubling_loop_on_the_whole_domain_and_is_bot_only
         with pytest.raises(ValueError):
             L.assert_splits_domain(bad)
     assert L.assert_splits_domain(64) == 64
-    if sms == 142:  # stoch's table (M-0067), spot-checked independently
+    if sms == 142:  # vLLM's split table, spot-checked independently
         assert [ls.evaluate(n) for n in (4, 5, 8, 9, 17, 18, 35, 36, 64)] == [32, 16, 16, 8, 8, 4, 4, 2, 2]
     if sms == 132:
         assert [ls.evaluate(n) for n in (16, 17, 33, 34, 66 if False else 64)] == [8, 4, 4, 2, 2]
 
 
 def test_the_s_operand_fed_from_the_input_token_hook_is_bot_exactly_at_the_phantom_step():
-    """F-pad-10 end to end on TINY (one request, EOS at event 3): with the corrected hook `Σ LIsActive(tok_in_s)` the S operand is
+    """The input-token hook end to end on TINY (one request, EOS at event 3): with the corrected hook `Σ LIsActive(tok_in_s)` the S operand is
     Active(32) for live steps and ⊥ from `a_r` on; the retired hook `Σ LIsActive(out[s−1])` would have produced S = 32 at `a_r`."""
     if not hasattr(L, "l_splits_for"):
         pytest.skip("PAD-04 candidate not on this tree")
@@ -478,7 +478,7 @@ def test_the_s_operand_fed_from_the_input_token_hook_is_bot_exactly_at_the_phant
 
 
 # ---------------------------------------------------------------------------------------------------------
-# DP-pad-02 — padrev's reference for the guard's LAG (the async-scheduling placeholder step), written BEFORE any ruling
+# a reference for the guard's LAG (the async-scheduling placeholder step), independent of the implementation
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -503,14 +503,14 @@ def test_lag_reference_lag0_equals_the_programs_live_values_and_lag1_shifts_by_e
     live1, a_r1 = padrev_live_ref(out, (EOS_FOR[3],), D_MAX + 1, 1)
     assert a_r == a_r1 == 4 and live0 == live_prog  # the implemented Program IS lag 0
     assert live1 == [1] * 5 + [0] * (D_MAX - 4) and sum(live1) == sum(live0) + 1  # lag 1: one placeholder step, at a_r exactly
-    # the served-prefix rule under a lag: n_r = a_r + lag — exec M-0140's record (12 events, EOS at event 10) is lag 1 and NOTHING else
+    # the served-prefix rule under a lag: n_r = a_r + lag — a record of 12 events with the EOS at event 10 is lag 1 and NOTHING else
     assert 11 + 1 == 12 and 11 + 0 != 12
 
 
 def test_a_lagged_lserve_if_present_matches_the_reference():
-    """DP-pad-02 (b) as built by pad (859dc5d22, `lag=1`): the live values must equal `padrev_live_ref(…, 1)` (one placeholder step at
-    `a_r`), out[a_r] must be an Active token (the placeholder's sample, = the unlifted y_{a_r}) with out[a_r+1:] = ⊥; and — PAD-05
-    sub-question, padrev's acceptance property — NO step whose input token is ⊥ carries an Active(1) live value (the guard reads the
+    """The lagged LServe (`lag=1`): the live values must equal `padrev_live_ref(…, 1)` (one placeholder step at
+    `a_r`), out[a_r] must be an Active token (the placeholder's sample, = the unlifted y_{a_r}) with out[a_r+1:] = ⊥; and — the acceptance
+    property — NO step whose input token is ⊥ carries an Active(1) live value (the guard reads the
     FED token `tok_in_{s−1}`, not `out[s−2]`, which would report a live placeholder-successor)."""
     import inspect
     if "lag" not in inspect.signature(L.lserve).parameters:
@@ -518,7 +518,7 @@ def test_a_lagged_lserve_if_present_matches_the_reference():
     prompt, w = _inputs()
     prog = Program(L.lserve(TINY, LP, D_MAX, (EOS_FOR[3],), lag=1))
     t = ref.materialize(prog, [L.lift_words(Array(LP, Value(32)), list(prompt)), L.lift_words(weights_type(TINY), list(w))])
-    designated = [t[g] for g in prog.circuit.root_outputs()]  # R17-32: the return is the DESIGNATED output o_t = Select(emit_t, y_t, bot)
+    designated = [t[g] for g in prog.circuit.root_outputs()]  # the return is the DESIGNATED output o_t = Select(emit_t, y_t, bot)
     named = T._root_named(prog)
     # the committed events (the raw transcript): prefill's token, then each step's sampled token
     out = [t[named["prefill"].returns[0]]] + [t[named[f"s={s}/step"].returns[0]] for s in range(1, D_MAX + 1)]
@@ -536,7 +536,7 @@ def test_a_lagged_lserve_if_present_matches_the_reference():
     # the placeholder's sample is the unlifted Program's own y_{a_r} (a value of the execution, not invented): compare with lag 0's step count
     p0, t0, out0 = T._lserve((0x7FFFFFFF,))  # never stops: every event is the unlifted transcript
     assert out[:a_r + 1] == out0[:a_r + 1]
-    # PAD-05 acceptance property
+    # the acceptance property
     for s in range(2, D_MAX + 1):
         if tok_in[s] == L.enc_bot(32):
             assert live_raw[s] != 1, (s, live_raw[s])  # never Active(1) on a ⊥ input

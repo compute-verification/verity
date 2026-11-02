@@ -2,8 +2,6 @@ import Definitions.Pouw.Barrier.Defs
 
 /-!
 # The degenerate-input barrier: pinned statements (trusted)
-
-Plain-language map: `internal/pouw/new-crypto/barrier.md` in the project store.
 -/
 
 namespace Pouw.Barrier.Pinned
@@ -64,7 +62,7 @@ def RelationWitness : Prop :=
       (fun i : ℕ => if i = 2 then (-1 : ℤ) else 1) 2 * (fun i : ℕ => if i = 2 then (-1 : ℤ) else 1) 2 = 1
 
 /-- **Class (b) with the lead's noise is a real protocol** (satisfiability of `Relation`'s hypotheses on the protocol
-side, red-team B4): for all factor sources and domains, `relProto` with `t = 3`, `c = (1, 1, −1)` and the lead's noise
+side): for all factor sources and domains, `relProto` with `t = 3`, `c = (1, 1, −1)` and the lead's noise
 is complete, and the abstract model runs a complete `H_ref` at `W_ref = 3·W_mm` (the three checked products, and the
 useful output as their free combination). -/
 def RelationAdmits : Prop :=

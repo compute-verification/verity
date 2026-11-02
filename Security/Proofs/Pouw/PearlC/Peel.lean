@@ -11,7 +11,7 @@ import Proofs.Pouw.Fp8Atom.Fp32Proofs
 /-!
 # P2: Pearl-C's clean-up chain (staging, nothing pinned)
 
-**(a) The cancellation identities, exact.** #311's U with the exact `C̃ = A′·B̃ᵀ` is the product of the denoised
+**(a) The cancellation identities, exact.** Pearl's U with the exact `C̃ = A′·B̃ᵀ` is the product of the denoised
 operands, `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ` (`peelU_cancel`, `peelU_cancel_codes`); the Gram order's right factor is
 `β·E_B·(F_Bᵀ·F_A) − B̃·F_A` (`peelRight_gram`). The whitepaper's raw-A form is `A·Bᵀ` plus `C̃ − (A + N_A)·(B + N_B)ᵀ`
 (`rawU_eq`), so it is `A·Bᵀ` exactly when `C̃` is the exact product of the unquantized noisy operands (`rawU_cancel`).
@@ -25,21 +25,21 @@ them to themselves (`rn_mul_exact`); `bf16Rn` and the E4M3 codes give such value
 `rnAdd` accumulation of exact products (`accum`), the error is at most half an ulp of each step's exact sum
 (`accum_error_ulp`), at most `n/2` ulps of a bound on them (`accum_error_ulp_le`), and at most
 `((1 + 2^−24)^n − 1)·(|s| + Σ|p|)` a priori (`accum_error`). The peel's order is the parameter `ord`, a K order of the
-`2r` columns (`peelAccum`); `peel_error` bounds #311's U in any such order, and `peelAccum_rn_products` says rounding each
+`2r` columns (`peelAccum`); `peel_error` bounds Pearl's U in any such order, and `peelAccum_rn_products` says rounding each
 BF16 product to FP32 first changes nothing.
 
 The pinned order's shape (the Gram order's FP32 factors, cast to BF16, then the BF16 wgmma K16 into the nonzero FP32
 accumulator `C̃`) is `peelSteps`: the K order split into steps, each step one call of a step function within a relative
 error `ε` (`StepBound`). `chunkAccum_error` bounds `n` such steps by `((1 + ε)^n − 1)·(|s| + Σ|p|)`; the BF16 cast moves
 a value by at most `|x|/2^8` (`bf16Rn_sub_le`), so a product of casts by at most `(2^−7 + 2^−16)·|x·y|`
-(`bf16_mul_sub_le`); and `peel_error_pinned` bounds #311's U in that shape. The wgmma K16 step truncates (a 26-bit
+(`bf16_mul_sub_le`); and `peel_error_pinned` bounds Pearl's U in that shape. The wgmma K16 step truncates (a 26-bit
 aligned adder, `HOPPER_BF16_WGMMA_K16` in `verity.ml.tc`), so it is not `rnAdd`. (d) models it bit-exactly
 (`PeelExact.k16Step`, in U's pinned order `PeelExact.peelExact`), but its `ε` is still this file's parameter:
 `StepBound` quantifies over all inputs, and the step's exponent floor drops a lone term below `2^−158` entirely
 (`PeelExactChecks.floor_drops`), so no `ε < 1` holds everywhere and the model's `ε` needs a bound on a range. `rnStep`
 (exact sum, one FP32 rounding) meets the bound with `ε = 2^−24` (`rnStep_bound`).
 
-**(c) Liveness at degenerate inputs.** #311's clean-up splits into the `E_A` term and the `F_B` term (`peel_split`).
+**(c) Liveness at degenerate inputs.** Pearl's clean-up splits into the `E_A` term and the `F_B` term (`peel_split`).
 Each of the four clean-up quantities (`A′·F_B`, `(β·N_B − B̃)·F_A` and the two terms) changes when one entry of one noise
 factor changes sign, with the other factors, and so `A′` or `B̃` where the quantity reads them, unchanged
 (`fused_live`, `gramCols_live`, `cleanE_live`, `cleanF_live`). The hypotheses are nonzero noise entries and a nonzero
@@ -64,7 +64,7 @@ variable {m n k r : Nat}
 
 /-! ## (a) The cancellation identities -/
 
-/-- **#311's cancellation identity**: with `C̃ = A′·B̃ᵀ` exact, #311's U is `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ`. -/
+/-- **Pearl's cancellation identity**: with `C̃ = A′·B̃ᵀ` exact, Pearl's U is `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ`. -/
 theorem peelU_cancel (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ)
     (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) :
     peelU (A' * B'ᵀ) βA βB A' B' z = (A' - rowScale βA z.NA) * (B' - rowScale βB z.NB)ᵀ := by
@@ -73,7 +73,7 @@ theorem peelU_cancel (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (F
     Matrix.mul_assoc]
   abel
 
-/-- #311's cancellation identity on the codes: `peelU (ctExact A′ B̃)` is `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ` on their values. -/
+/-- Pearl's cancellation identity on the codes: `peelU (ctExact A′ B̃)` is `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ` on their values. -/
 theorem peelU_cancel_codes (βA : Fin m → ℚ) (βB : Fin n → ℚ) (Aq : Matrix (Fin m) (Fin k) Code)
     (Bq : Matrix (Fin n) (Fin k) Code) (z : Noise m n k r) :
     peelU (ctExact Aq Bq) βA βB (vals Aq) (vals Bq) z =
@@ -90,7 +90,7 @@ theorem atomMix_lines (αA βA : Fin m → ℚ) (βB : Fin n → ℚ) (X : Matri
   ⟨rfl, fun _ => rfl⟩
 
 /-- **§5's cancellation identity**: with the atom-mix forming, the peel reuses the noise lines `E′` exactly (unit `β`
-on `Noise.atomLines`), and #311's U with the exact `C̃ = A′·B̃ᵀ` is `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`. -/
+on `Noise.atomLines`), and Pearl's U with the exact `C̃ = A′·B̃ᵀ` is `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`. -/
 theorem peelU_cancel_atomMix (αA βA : Fin m → ℚ) (αB βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
     (B : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k 32) :
     peelU (ctExact (FormChain.atomMix.quantA αA βA X z) (FormChain.atomMix.quantB αB βB B z)) (fun _ => 1)
@@ -344,7 +344,7 @@ theorem peelAccum_error {ord : List (Fin r ⊕ Fin r)} (h : IsOrder ord) (Ct : M
   rw [← peelAccum_exact_value h, peelAccum, ← sum_order h (fun t => |L i t * R j t|)]
   exact e
 
-/-- **#311's U in any K order**: the `rnAdd` combine over `C̃` and #311's factors is within the bound of `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ`. -/
+/-- **Pearl's U in any K order**: the `rnAdd` combine over `C̃` and Pearl's factors is within the bound of `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ`. -/
 theorem peel_error {ord : List (Fin r ⊕ Fin r)} (h : IsOrder ord) (βA : Fin m → ℚ) (βB : Fin n → ℚ)
     (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (z : Noise m n k r) (i : Fin m) (j : Fin n) :
     |peelAccum ord (ctExact Aq Bq) (peelLeft βA (vals Aq) z) (peelRight βB (vals Bq) z) i j -
@@ -516,7 +516,7 @@ theorem peelSteps_bf16_error {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε :
         |(Ct + bf16Mat L * (bf16Mat R)ᵀ) i j - (Ct + L * Rᵀ) i j| := abs_sub_le _ _ _
     _ ≤ _ := add_le_add e hc
 
-/-- **#311's U in the pinned order's shape**: FP32 factors `L`, `R` cast to BF16 and combined into `C̃` in wgmma
+/-- **Pearl's U in the pinned order's shape**: FP32 factors `L`, `R` cast to BF16 and combined into `C̃` in wgmma
 steps are within the bound of `(A′ − β·N_A)·(B̃ − β·N_B)ᵀ`, with the step's `ε` a parameter. -/
 theorem peel_error_pinned {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 ≤ ε) (h : StepBound step ε)
     {cs : List (List (Fin r ⊕ Fin r))} (hcs : IsOrder cs.flatten) (βA : Fin m → ℚ) (βB : Fin n → ℚ)
@@ -532,16 +532,16 @@ theorem peel_error_pinned {step : ℚ → List ℚ → ℚ} {ε : ℚ} (hε : 0 
 
 /-! ## (c) Liveness at degenerate inputs -/
 
-/-- #311's `E_A` clean-up term, `(β·E_A)·((β·N_B − B̃)·F_A)ᵀ`. -/
+/-- Pearl's `E_A` clean-up term, `(β·E_A)·((β·N_B − B̃)·F_A)ᵀ`. -/
 def cleanE (βA : Fin m → ℚ) (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) :
     Matrix (Fin m) (Fin n) ℚ :=
   rowScale βA (vals z.EA) * ((rowScale βB z.NB - B') * vals z.FA)ᵀ
 
-/-- #311's `F_B` clean-up term, `(A′·F_B)·(−β·E_B)ᵀ`. -/
+/-- Pearl's `F_B` clean-up term, `(A′·F_B)·(−β·E_B)ᵀ`. -/
 def cleanF (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r) : Matrix (Fin m) (Fin n) ℚ :=
   (A' * vals z.FB) * (-rowScale βB (vals z.EB))ᵀ
 
-/-- #311's clean-up is the sum of its `E_A` term and its `F_B` term. -/
+/-- Pearl's clean-up is the sum of its `E_A` term and its `F_B` term. -/
 theorem peel_split (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (B' : Matrix (Fin n) (Fin k) ℚ)
     (z : Noise m n k r) : peelLeft βA A' z * (peelRight βB B' z)ᵀ = cleanE βA βB B' z + cleanF βB A' z := by
   simp only [peelLeft, peelRight, cleanE, cleanF, transpose_fromCols, fromCols_mul_fromRows]

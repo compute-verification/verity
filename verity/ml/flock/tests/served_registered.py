@@ -1,5 +1,5 @@
-"""A served tree registered as a port (`verity.core.protocols.sampled_proofs.one_stage.served`), on a statement C-Flock
-proves: the end-to-end fixture of `test_lean_served_registered.py`, beside it in C-Flock's tests (which may import core).
+"""A served tree registered as a port (`verity.core.protocols.sampled_proofs.one_stage.served`), on a statement Flock
+proves: the end-to-end fixture of `test_lean_served_registered.py`, beside it in Flock's tests (which may import core).
 
 The program (`program`) is `N` RoPE d64 template instances, instance `i` reading row `POS[i]` of the served tree `cs_table`
 (`ROWS` rows of 64 u16 words) through its `cs` parameter, under `Q_template_instance` v0. `stage` writes, under `out`:

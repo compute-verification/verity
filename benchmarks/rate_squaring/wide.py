@@ -25,14 +25,13 @@ from gamma import GPUS, MHZ, MU, REF, REF_MHZ, X1, rate_of_cycles
 C = {512: 569, 768: 825, 1024: 105}
 CORES = 128
 MAX_CLOCK = 1.16
-#: kv.cu as built, at 2,092 MHz (kv-codec.json of r20261012-183859-2055): roots a
+#: kv.cu as built, at 2,092 MHz (its kv-codec.json): roots a
 #: second (the fastest build of the width), squarings a second, and decode words a second by (lib, k).
 KV_ROOTS = {512: 1.0592e8, 768: 3.6495e7, 1024: 1.5446e7}
 KV_SQ = {512: 5.6012e10, 768: 2.8977e10, 1024: 1.6003e10}
 KV_DECODE = {("p512", 2): 2.2524e10, ("p512", 3): 1.5422e10, ("p512-m", 2): 2.2021e10, ("p512-m", 3): 1.4998e10,
              ("p768-m", 2): 1.2156e10, ("p768-m", 3): 8.2402e9, ("p1024-m", 2): 7.2214e9, ("p1024-m", 3): 4.8782e9}
-#: sq.sh's medians at 4 waves and MHZ, by FOLD: 512 r20261012-175857-517b, -183030-b044, -185914-35f2; 768
-#: r20261012-194528-b277 (13, 14: -201257-9201); 1,024 r20261012-194557-c72f (13, 14: -201349-106e).
+#: sq.sh's medians at 4 waves and MHZ, by width and FOLD.
 SQ = {512: {1: 5.71e10, 5: 6.531e10, 6: 6.40e10, 7: 6.35e10},
       768: {1: 2.9284e10, 5: 3.1857e10, 6: 3.3577e10, 7: 3.1328e10, 11: 2.8857e10, 12: 2.3019e10,
             13: 3.2987e10, 14: 3.1951e10},
@@ -40,11 +39,10 @@ SQ = {512: {1: 5.71e10, 5: 6.531e10, 6: 6.40e10, 7: 6.35e10},
              13: 1.9545e10, 14: 1.8787e10}}
 #: The best form less its MOV and SEL, cycles at the free fit's 1.16 an instruction (`cycle_fit.py --price`).
 LESS_MOV_SEL = {512: 707, 768: 1360, 1024: 2365}
-#: The host's IFMA, squarings a second a physical core, both threads, G = 1 (ifma.sh: r20261012-183544-2d44,
-#: r20261012-195420-b71d, r20261012-195829-3929).
+#: The host's IFMA, squarings a second a physical core, both threads, G = 1 (ifma.sh).
 HOST_CORE = {512: 2.84e8, 768: 1.445e8, 1024: 7.0e7}
 
-#: ra-codec-tensor's step at p512, as codec-mix's STEP: d, W, A, E at k = 1, 2, 3.
+#: the tensor-core codec's step at p512, as codec-mix's STEP: d, W, A, E at k = 1, 2, 3.
 STEP = {
     "8B": {"d": (1.207, 1.360, 1.875), "W": (0.086, 0.114, 0.137), "A": (0.022, 0.127, 0.594),
            "E": (0.026, 0.052, 0.077)},

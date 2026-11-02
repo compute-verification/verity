@@ -1,4 +1,4 @@
-"""FRONTIER's narrow-U check: co32c (CHECKED-STRIP's CO-Dither with committed strip digits) with U on ±N, N = 8, 16, 32,
+"""The narrow-U check: co32c (checked_strip.py's CO-Dither with committed strip digits) with U on ±N, N = 8, 16, 32,
 so that the peeled side keeps 127 − N of its int8 range (the bench's `co32c-u8`, `co32c-u16`, `co32c-u32`), beside
 N = 64, the U that checked_strip.py fixes.
 
@@ -10,16 +10,16 @@ and U's parity varies (the odd top weight, as checked_strip.py's 65). For each N
 - B. co32c's cross ranks: k + r in both orientations at the zero, a random and a structured instance, same-side blocks
   0 over F₂ (checked_strip.py's part B for co32c, at U's narrow planes). Mutation: an even top weight, which makes U's
   parity constant, loses rank.
-- C. Dither-C's cohalf Q Kᵀ (checked_strip.py's design `co` at r = k/2) at U's narrow planes, the Q Kᵀ decision 82
-  puts on H1 (`co32c-u16-cohalf`, Q and K within ±(127 − N)): cross ranks (k, k + r) at k = 64, 96, 128 at the zero, a
+- C. Dither-C's cohalf Q Kᵀ (checked_strip.py's design `co` at r = k/2) at U's narrow planes, the Q Kᵀ H1
+  carries (`co32c-u16-cohalf`, Q and K within ±(127 − N)): cross ranks (k, k + r) at k = 64, 96, 128 at the zero, a
   random and a structured instance, same-side blocks 0, and at Q = K = 0 every committed word varies with the coins.
   Mutation: an even top weight loses rank.
 - H. The tensor–scalar model (checked_strip.py's TS facets and tiles) at A = B = 0 with every committed word bit-sliced
   at once: a T increment is 1 + p binary products (c and U's p planes), D_d is p, O′'s c·b is k/32 (checked_strip.py's
   `word_routes` at p planes). On the Llama-3.1 8B and 70B linears no route gains at the duo fold (3) for x ≥ 4 warp
   instructions per 4,096 bit products, at every N. At folds 1.5 and 1 the breakeven x rises as U narrows (6.77 at
-  N = 64, 9.48 at 16, 11.86 at 8): at QSTAR's measured x = 10.66 (r20261017-055042-7c59) U on ±8 loses, ±16 holds.
-- T. Byte packing for the packed shared-memory table route (SPEC §4.2a, the closest table construction to design A's
+  N = 64, 9.48 at 16, 11.86 at 8): at the measured x = 10.66 U on ±8 loses, ±16 holds.
+- T. Byte packing for the packed shared-memory table route (the closest table construction to design A's
   threshold): a sum of e entries of (c + U)·b spans e(2N + 1) + 1 values, so a byte field holds at most ⌊255/(2N + 1)⌋
   entries' sum, against 255 for design A's c·b. For N ≥ 8 two 8-entry chunks never share a byte (each chunk needs its
   own extracting writer, or halfword fields), where design A's four chunks fit one byte.
@@ -42,7 +42,7 @@ from checked_strip import (MASK, TS_SHAPES, Block, co32c_words, cross_ranks, ins
 from exact_kit.checks import Checks  # noqa: E402
 
 WIDTHS = (8, 16, 32, 64)
-QSTAR_X = 10.66
+MEASURED_X = 10.66
 
 
 def planes(N, even=False):
@@ -190,9 +190,9 @@ def main():
                      f"D at {p}x, O′'s c·b at x·k/32): no gain on the Llama-3.1 linears at the duo fold (3) for x ≥ 4",
                      all(abs(g) < 1e-12 for g in gain3), f"breakeven x {out[f'N={N} breakeven x']}")
     cheap = {N: max(v for k_, v in out[f"N={N} breakeven x"].items() if not k_.startswith("fold=3 ")) for N in WIDTHS}
-    checks.check(f"H at folds 1.5 and 1 the breakeven x falls as U widens; at QSTAR's measured x = {QSTAR_X} a "
+    checks.check(f"H at folds 1.5 and 1 the breakeven x falls as U widens; at the measured x = {MEASURED_X} a "
                  f"bit-sliced cheater gains with U on ±8 and with no wider U",
-                 cheap[8] > QSTAR_X and all(cheap[N] < QSTAR_X for N in WIDTHS if N > 8)
+                 cheap[8] > MEASURED_X and all(cheap[N] < MEASURED_X for N in WIDTHS if N > 8)
                  and all(cheap[a] > cheap[b] for a, b in zip(WIDTHS, WIDTHS[1:])), str(cheap))
 
     fit = {}
@@ -201,7 +201,7 @@ def main():
         fit["A (c·b)" if N == 0 else f"N={N}"] = {"entries a byte": 255 // span,
                                                   "8-entry chunks a byte": (255 // span) // 8}
     out["byte fields"] = fit
-    checks.check("T byte fields: design A's c·b sums all four 8-entry chunks of a segment in one byte (SPEC's ¼ LDS.128 + "
+    checks.check("T byte fields: design A's c·b sums all four 8-entry chunks of a segment in one byte (the ¼ LDS.128 + "
                  "½ IADD3 + 1 IDP.4A core); with U on ±N, N ≥ 8, no two 8-entry chunks share a byte",
                  fit["A (c·b)"]["8-entry chunks a byte"] >= 4
                  and all(fit[f"N={N}"]["8-entry chunks a byte"] <= 1 for N in WIDTHS), str(fit))

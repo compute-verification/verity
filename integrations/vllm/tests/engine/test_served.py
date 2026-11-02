@@ -1,6 +1,6 @@
 """`engine.served`: what sets each kernel-selecting switch of a served engine (vLLM's own config among them), the verdict on what a
-serving process reads back, the read-back itself, that every row file gives a reason for each switch it moves away from vLLM's
-default, and that a row's Build and its engine run under one batch invariance."""
+serving process reads back, the read-back itself, that every workload file gives a reason for each switch it moves away from vLLM's
+default, and that a workload's Build and its engine run under one batch invariance."""
 from __future__ import annotations
 
 import enum
@@ -70,7 +70,7 @@ def test_a_compiled_row_declares_only_vllms_serving_defaults():
 
 
 def test_the_engine_profile_sets_no_switch_but_with_its_reason():
-    assert "VLLM_BATCH_INVARIANT" not in engine_env.ENGINE, "batch invariance is the row's execution label's"
+    assert "VLLM_BATCH_INVARIANT" not in engine_env.ENGINE, "batch invariance is the workload's execution label's"
     assert "VLLM_BATCH_INVARIANT" not in engine_env.EXPORT, "a Build's batch invariance is its target's"
     assert set(engine_env.REASONS) == set(engine_env.ENGINE) and all(engine_env.REASONS.values())
 
@@ -100,7 +100,7 @@ def test_glm53s_row_declares_each_switch_with_its_source_and_reason():
 
 def test_glm53s_commit_of_record_passes_with_its_reasons_and_fails_on_the_one_it_lacked():
     """The rail run over GLM-5.3's Commit of record: everything is vLLM's default or declared with a reason but its MoE backend, which
-    its target declared with none until the row file gave one."""
+    its target declared with none until the workload file gave one."""
     wl, target = _glm()
     assert SV.judge(GLM_SERVED, SV.declared(wl, target)) == []
     bare = {**wl, "engine": {**wl["engine"], "reasons": {}}}
@@ -110,7 +110,7 @@ def test_glm53s_commit_of_record_passes_with_its_reasons_and_fails_on_the_one_it
 
 def test_vllms_batch_invariance_turns_the_custom_all_reduce_off_over_the_row_file():
     """`ParallelConfig._verify_args` sets ``disable_custom_all_reduce`` under ``VLLM_BATCH_INVARIANT`` after every argument, so a
-    batch-invariant row declares it whatever its row file says, and a row that is not batch invariant still may not carry it."""
+    batch-invariant workload declares it whatever its workload file says, and a workload that is not batch invariant still may not carry it."""
     wl = va.load_workload(WORKLOADS / f"{LLAMA_BI}.json")
     d = SV.declared(wl, va.target_of_workload(wl))
     assert d["disable_custom_all_reduce"] == {"value": True, "source": "vLLM ParallelConfig", "reason": SV.BATCH_INVARIANT[1]}

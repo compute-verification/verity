@@ -208,7 +208,7 @@ theorem liveOk_decode_round {T : ℕ} {v : LiveView} (h : liveOk T v) (hd : ∀ 
 /-! ## The named premise -/
 
 /-- `LiveSlotsChecks` (a fact of `circuit.live.PouwLiveSlots_v1{T}`'s circuit, backed by circuit-check and
-`test_circuit_live`'s agreement of its gates with `live_ok`, not proved; owner @compute-accounting; no guarantee takes
+`test_circuit_live`'s agreement of its gates with `live_ok`, not proved; no guarantee takes
 it yet, so it has no claim id or lock entry). **The unit's circuit computes its Definition at its port rows**: at round
 `s`'s session `sess`, whose circuit is `PouwLiveSlots_v1{T}`'s lowering, on every wire assignment `vals` the key
 program's evaluation agrees with on every unit's wires, if the `ok` word `dec` reads from `vals`' port rows

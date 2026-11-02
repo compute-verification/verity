@@ -2,7 +2,7 @@ import Mathlib
 import Proofs.Pouw.RelativeSecurity
 
 /-!
-# Attention's noise at every operand value (ATTN-NOISE)
+# Attention's noise at every operand value
 
 On the design `dP`/`dX` (`Definitions.Pouw.RelativeSecurity`): the peeled side `P̃ = P + U`, `U` of period `L` per
 row from the planes `β_p(i, j)` at weights `w`, and the served side `X = V + b` with a fresh coin per entry. Adopted
@@ -10,7 +10,7 @@ P·V (H1's `peel`: `P̃ = P_prob − 64 + U(·, κ mod 32)`, `X = V + b`) is thi
 
 * `pairDiff_dPrefix_operands`: a committed prefix word's second differences don't read the operands, so every floor
   the chain lemma (`chain_products_ge`, `chainBound_gProd`) gives holds at every `P` and `V` alike: the zero instance,
-  a one-hot or uniform `P`, `V = 0`. A cheater gains nothing on the words by choosing operands, so RT-COMPOSE's B3
+  a one-hot or uniform `P`, `V = 0`. A cheater gains nothing on the words by choosing operands, so the zero-operand case
   (`K = V = 0` for one KV head) leaves the words' floor whole.
 * `dPrefix_split`: the word at `(P, V)` is the noise's own product's word (the word at `P = 0`) plus the clean
   product `Σ P X` (`dClean`), which is bit-affine (`crossRankLe_dClean`: cross rank 0). The peel, the noise's own

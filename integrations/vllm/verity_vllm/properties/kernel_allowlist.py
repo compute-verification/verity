@@ -2,8 +2,8 @@
 launch without any pattern claiming them, because they compute no modeled value (copies, fills, the model runner's integer
 metadata kernels).  Every entry needs a D71-style justification: what the kernel computes and why it is non-semantic under κ.
 
-`census.py` reads THIS tuple; a profile's own `kernel_allowlist` is reported but never used for acceptance (a lane cannot
-allowlist a kernel by editing its profile).  New entries only through an approved decision in `out/capture/decisions.md`
+`census.py` reads THIS tuple; a profile's own `kernel_allowlist` is reported but never used for acceptance (editing a
+profile allowlists no kernel).  New entries only through an approved decision in `out/capture/decisions.md`
 (the sealed verifier counts a modified allowlist as `NEW ALLOWLIST ENTRIES` on the card).
 
 `LAUNCH_COUNT_ALLOWLIST` is the launch-count gate's: declared kernels whose device launch count in a step may differ from

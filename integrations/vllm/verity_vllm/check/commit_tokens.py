@@ -21,7 +21,6 @@ PROTOCOL SUMMARY (Commit stage: the execution extent check's account of record w
     `executed_prefix_len` in the record is a cross-check, recomputed and never trusted; with a Match record beside the Commit both links
     must hold when the row committed its sampled ids, and a row that committed none writes no token record (its Match link alone
     decides, the token-record link recorded as not applied); a link that places no shorter prefix is recorded, not decisive.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 

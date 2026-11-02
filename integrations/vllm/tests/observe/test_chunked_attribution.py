@@ -434,7 +434,7 @@ def test_f_r17_16_a_sync_record_keeps_the_loops_finish_step_when_the_derived_lag
     assert c is not None and c["applied"] is False and c["corrected"]["output_lag_steps"] == 1 and c["corrected"]["engine_steps"] == 10
     assert c["corrected"]["requests"]["r0"]["finish_step"] == 9 and "NOT APPLIED" in c["reason"]
     assert timing["engine_steps"] == 11 and timing["output_lag_steps"] == 0 and timing["requests"]["r0"]["finish_step"] == 10
-    assert not rep["consistent"] and any("contradicts the resolved async_scheduling LAG 0" in p and "F-r17-16" in p for p in rep["problems"])
+    assert not rep["consistent"] and any("contradicts the resolved async_scheduling LAG 0" in p and p.endswith("finish_step values stand") for p in rep["problems"])
     # the served tokens are attributed with the loop's forward map: 11 token-producing forwards 0..10, the last = finish_step
     assert timing["requests"]["r0"]["token_steps"] == list(range(11)) and timing["requests"]["r0"]["first_token_step"] == 0
 
@@ -444,7 +444,7 @@ def test_f_r17_16_without_a_resolved_lag_the_same_record_reverts_the_correction_
     c = rep["corrections"]
     assert c is not None and c["applied"] is False and "REVERTED" in c["reason"]
     assert timing["engine_steps"] == 11 and timing["output_lag_steps"] == 0 and timing["requests"]["r0"]["finish_step"] == 10
-    assert not rep["consistent"] and rep["problems"][0].startswith("scheduler-state correction reverted") and "F-r17-16" in rep["problems"][0]
+    assert not rep["consistent"] and rep["problems"][0].startswith("scheduler-state correction reverted") and rep["problems"][0].endswith("step fields stand")
 
 
 def test_f_r17_16_an_async_record_with_the_matching_resolved_lag_is_unchanged():

@@ -22,7 +22,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("MoeExpertFp8BlockGemm_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False)),
         ("MoeExpertFp8BlockGemmW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmWV2, K=32, N=40, G=32, KB=32, SWAP=True)),
         # the same with the e4m3 step as a static (cc 12.0's): two tiles per scale block over a whole and a partial weight block; the
-        # coordinate at the `_v2` coordinate's shape, small enough for C-Flock to lower whole (its AND count pinned)
+        # coordinate at the `_v2` coordinate's shape, small enough for Flock to lower whole (its AND count pinned)
         ("MoeExpertFp8BlockCoordinate_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32, SWAP=False,
                                                         DOT=BG.BlackwellE4m3QmmaDot32)),
         ("MoeExpertFp8BlockCoordinateW_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV4, K=128, G=64, KB=32, SWAP=False,

@@ -6,7 +6,7 @@
     "bandwidth_bps": 100e9,
     "sources": [
       {
-        "label": "reporting standard (Daniel, 2026-09-25): t = compute + rounds x RTT + bytes / bandwidth; the reference is the same datacenter"
+        "label": "reporting standard: t = compute + rounds x RTT + bytes / bandwidth; the reference is the same datacenter"
       }
     ],
     "role": "reference"
@@ -18,7 +18,7 @@
     "bandwidth_bps": 100e9,
     "sources": [
       {
-        "label": "interaction drill-down sensitivity profile (reporting standard, 2026-09-25)"
+        "label": "interaction drill-down sensitivity profile (reporting standard)"
       }
     ],
     "role": "sensitivity"
@@ -30,7 +30,7 @@
     "bandwidth_bps": 100e9,
     "sources": [
       {
-        "label": "interaction drill-down sensitivity profile (reporting standard, 2026-09-25)"
+        "label": "interaction drill-down sensitivity profile (reporting standard)"
       }
     ],
     "role": "sensitivity"
@@ -42,7 +42,7 @@
     "bandwidth_bps": 10e9,
     "sources": [
       {
-        "label": "interaction drill-down sensitivity profile (reporting standard, 2026-09-25)"
+        "label": "interaction drill-down sensitivity profile (reporting standard)"
       }
     ],
     "role": "sensitivity"

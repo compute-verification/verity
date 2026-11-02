@@ -45,7 +45,6 @@ PROTOCOL SUMMARY (Commit phase: the execution extent check (`executed_prefix`) -
     accepted (condition (a) above): it rests on the Match account or on served tokens opened from the run root, both when both are beside the
     Commit and the row committed its sampled ids; the lag must agree on every account (declared == tokens.json == G6, or declared == the
     token record's == the engine's read-back); the boundary linkage a token record leans on runs over the same executed prefix; a committed Call past the prefix fails by name.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 
@@ -409,7 +408,7 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
                            manifest_identities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """ONE mechanism, checked on the record: the Commit's classification of the manifest
     identities (binding coverage, `commit_class` = load_required_manifest's header `not_executed_by_rule`) and the population's third bucket
-    (`population["not_executed_by_rule"]`: identities at request-relative steps >= n_exec leave the pool before any draw) must
+    (`population["not_executed_by_rule"]`: identities at request-relative steps >= n_exec leave the pool before sampling) must
     name the SAME identities.  Per request: the population's n_exec == the Commit's executed_prefix_len (`epr` = executed_prefix_of_record).
     Per ROW family (kind `row`): the Commit's count == the population's N_excluded.  A NAMED-INPUT family (a per-request family
     by the executed-prefix rule; `kind_by_family[fam] = named-input`): the Commit's count == the population's N_excluded, exactly as

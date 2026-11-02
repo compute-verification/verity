@@ -49,7 +49,7 @@ def rss_kb() -> tuple[int | None, int | None]:
 class Site:
     """Everything the C2 replay of one instrumented run reads.  `weights_of(prefix)`: the weights provider for the Programs' field
     prefix; `weights_check()`: the proof that the slices it serves are the committed weights ({"equal": bool, ...});
-    `after_replay`: the VU export hook (in-process only), called as VUX.after_replay is.  `reads`: when a dict, the replay's draw is made
+    `after_replay`: the VU export hook (in-process only), called as VUX.after_replay is.  `reads`: when a dict, the replay's sample is taken
     again after it, read only, in this process (`plan`), and its record lands here: a forked evaluator's reads of `com` never reach this
     process, so this is what makes `commit.store_dump.touched` see every pick's."""
     args: Any
@@ -259,7 +259,7 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
 
 
 def draw_of(args: Any) -> str:
-    """The config run's draw (`driver.family_strata`): the record's `replay_draw`, `family` when it names none."""
+    """The config run's sampling design (`driver.family_strata`): the record's `replay_draw`, `family` when it names none."""
     return getattr(args, "replay_draw", None) or "family"
 
 
@@ -320,7 +320,7 @@ def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -
         _sr_kw["executed_prefix"] = {} if s.args.replay_k and not _epr_r["any_eos_stop"] else {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
         _flt = {k: v["faults"] for k, v in _sr_kw["executed_prefix"].items() if v.get("faults")}
         if _epr_r["any_eos_stop"] or _flt:
-            print("[delta] not-executed(R17-1) class -> sampled_replay(executed_prefix=): " + ", ".join(
+            print("[delta] not-executed class -> sampled_replay(executed_prefix=): " + ", ".join(
                 f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items())
                   + (f"; FAULTS {_flt}" if _flt else "; no faults"), flush=True)
     elif _epr_r["any_eos_stop"]:
@@ -341,8 +341,8 @@ def live_only(s: Site) -> str | None:
 
 def plan(s: Site, planner: Any = None) -> dict[str, Any]:
     """The replay's and the linkage's committed reads made against `s.com` without evaluating anything (what a slim replay bundle must
-    hold, `commit.store_dump.touched`): the same Programs, readers and draw as `run`.  With a ``planner`` (`replay_plan.Planner`) the
-    Programs, their population and the draw are its, prepared while the engine ran; only the reads are made here."""
+    hold, `commit.store_dump.touched`): the same Programs, readers and sample as `run`.  With a ``planner`` (`replay_plan.Planner`) the
+    Programs, their population and the sample are its, prepared while the engine ran; only the reads are made here."""
     held: dict[str, Any] = {}
     sr, lk = evaluate(s, held, plan=True, planner=planner)
     held.clear()
@@ -353,7 +353,7 @@ def plan(s: Site, planner: Any = None) -> dict[str, Any]:
 def serving_rows(s: Site) -> None:
     """The in-Commit hook (`serving_rows.readers`) at the C2 site of a run whose replay is deferred to its bundle: the window
     committed from `s.com` over the Programs of record, as `evaluate` commits it in process, once the run's roots are final and
-    before any draw (the deferred replay draws on CPU, after the bundle is sealed).  ``served``, as the in-process replay's is."""
+    before sampling (the deferred replay samples on CPU, after the bundle is sealed).  ``served``, as the in-process replay's is."""
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.pipeline import serving_rows as SRW
 
@@ -369,7 +369,7 @@ def serving_rows(s: Site) -> None:
 
 def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
-    ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
+    ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
     from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
@@ -495,7 +495,7 @@ def reconcile(s: Site, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr_kw: dict
         _recon = EPX.reconcile_not_executed(_cc, (sr.get("population") or {}).get("not_executed_by_rule"), _epr_r, manifest_identities=s.ids_full)
         sr["not_executed_reconciliation"] = _recon
         row["commit"]["not_executed_reconciliation"] = _recon
-        print(f"[delta] not-executed(R17-1) reconciliation (pair {pair}): {'AGREE' if _recon['ok'] else 'DISAGREE'} n_exec "
+        print(f"[delta] not-executed reconciliation (pair {pair}): {'AGREE' if _recon['ok'] else 'DISAGREE'} n_exec "
               + ", ".join(f"{k} {v['commit']}/{v['population']}" for k, v in _recon["n_exec"].items())
               + f"; row families {[(f, d['commit'], d['population']) for f, d in _recon['by_family'].items()]}"
               + (f"; outside the population split's reach {[(f, d['commit'], d['population_N_excluded']) for f, d in _recon['outside_population_reach'].items()]}"

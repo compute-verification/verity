@@ -63,7 +63,7 @@ _NEOX_LAYER_RE = re.compile(r"^gpt_neox\.layers\.(\d+)$")
 
 
 def parallel_residual_boundaries(se, by_key: dict, s: int, rec: dict, problems: list[str]) -> None:
-    """[SHARED-CODE lane cov-ln] the (a)-side boundaries of vLLM's GPT-NeoX family (Pythia): `nn.LayerNorm` runs as
+    """The (a)-side boundaries of vLLM's GPT-NeoX family (Pythia): `nn.LayerNorm` runs as
     `aten.layer_norm` (no fused residual op), the MLP's down projection is `mlp.dense_4h_to_h` (no `down_proj` launch) and
     `GPTNeoXLayer.forward` returns ONE tensor, the parallel residual `mlp(ln2(x)) + attn(ln1(x)) + x` formed by two
     `aten.add.Tensor` calls in the layer module itself -- so the Llama and Gemma-2 rules above leave every boundary empty.

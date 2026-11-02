@@ -1,7 +1,7 @@
-"""REDTEAM phase 10, target 2 (cursor/redteam-phase10-warden-061a @a84b43077b), against #3654's `PublisherProcess`:
+"""Adversarial cases against the relay's `PublisherProcess`:
 the spawned process that alone holds the warden's key, rebuilds each record from the rows the warden releases a tick
 at a time, and keeps, certifies and commits it. Every case runs the warden on a `VirtualClock`, with no sleeps and no
-wall clock: the files the process writes are byte for byte the ones #3632's thread publisher writes on the same run
+wall clock: the files the process writes are byte for byte the ones the thread publisher writes on the same run
 and key, a faulted window's status included; a process killed mid-window fails the run at that window's close with
 its exit code, and the check refuses the window; a process a window behind moves no tick and keeps every record whole;
 a truncated file never makes the check accept. And the close marker carries the record's grid's SHA-512: a row lost,
@@ -37,7 +37,7 @@ FIFO = "PHASE10_FIFO"
 
 
 def fixed_commit(link, direction, record, params, session, salts=None, wiring_salt=None):
-    """`Cells.of` under salts fixed by the link-window and the row (and the wiring), so two publishers' files can be
+    """`Cells.of` under salts fixed by the execution phase and the row (and the wiring), so two publishers' files can be
     compared."""
     def salt(name, n):
         return hashlib.shake_256(f"{link}/{record.window}/{name}".encode()).digest(n)
@@ -56,7 +56,7 @@ def blocking_commit(link, direction, record, params, session, salts=None, wiring
 
 
 class ThreadPublisher:
-    """#3632's publisher: `Publisher.keep` on one worker thread of the warden's process, its results at `close`."""
+    """The thread publisher: `Publisher.keep` on one worker thread of the relay's process, its results at `close`."""
 
     def __init__(self, out: Path, key: Path, commit) -> None:
         self.signer = ws.cs.signer(key)
@@ -184,12 +184,12 @@ def _heads(out: Path) -> dict:
 
 
 def _closed_heads(closed) -> dict:
-    """The head of each record the warden closed, as the check recomputes it."""
+    """The head of each complete record the warden closed, as the check recomputes it: the issuer certifies no other."""
     out = {}
     for name, (link, direction) in ws.CERTIFIED.items():
         grid = PARAMS.fails_grid if name == ws.FAILS else PARAMS.grid
         for r in closed:
-            if r.link == name:
+            if r.link == name and r.status.complete:
                 out[(link, direction.value, r.window)] = record_head(link, direction, r.window, r.grid, r.status, grid,
                                                                      PARAMS.digest)
     return out
@@ -197,10 +197,13 @@ def _closed_heads(closed) -> dict:
 
 def _unsalted(out: Path) -> list[dict]:
     """`certified.jsonl` line by line without what the certifier's fresh `salt_c` decides (the salt, the salted digest
-    and the signature over it), with the signature's LMS leaf q kept."""
+    and the signature over it), with the signature's LMS leaf q kept, and a link-window the issuer refused as it is."""
     out_ = []
     for line in (out / "certified.jsonl").read_text().splitlines():
         doc = json.loads(line)
+        if "refused" in doc:
+            out_.append(doc)
+            continue
         cert = doc["certificate"]
         out_.append({"head": doc["head"], "q": cert["signature"][:8],
                      "certificate": {k: v for k, v in cert.items() if k not in ("digest", "signature")}})
@@ -214,12 +217,12 @@ def _cells_without_cost(out: Path) -> list[dict]:
 
 @pytest.mark.parametrize("late", [None, {20: 0.1}], ids=["clean", "window-0-faulted"])
 def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_path, late):
-    """On one run and one key, the process's records, row salts and signed registrations are #3632's thread
+    """On one run and one key, the process's records, row salts and signed registrations are the thread
     publisher's byte for byte (the cost lines aside, which are timings), and its certificates are too but for what the
     certifier's fresh `salt_c` decides, each on the same LMS leaf and verifying on the head of the record the warden
     closed (no two runs share a `salt_c`, thread or process). With tick 20 late, window 0 of every link is
-    `monitor-unavailable` on both sides: the status crosses the process boundary in the close marker and is the one
-    signed."""
+    `monitor-unavailable` on both sides: the status crosses the process boundary in the close marker, and the issuer
+    certifies none of window 0's records."""
     thread_key, process_key = _key(tmp_path, "thread-key", "process-key")
     thread = _drive(tmp_path / "thread", thread_key, process=False, late=late)
     process = _drive(tmp_path / "process", process_key, process=True, late=late)
@@ -232,20 +235,22 @@ def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_pa
     assert _unsalted(tmp_path / "thread") == _unsalted(tmp_path / "process")
     assert _heads(tmp_path / "process") == _closed_heads(process["closed"])
     result = ws.check(tmp_path / "process")
-    faulted = {f"{name} window 0: {Reason.MONITOR_UNAVAILABLE.value}" for name in ws.CERTIFIED}
     if late is None:
         assert result["accepted"], result["problems"]
     else:
-        assert not result["accepted"] and faulted <= set(result["problems"])
-        assert not any("isn't certified" in p for p in result["problems"])
-    assert result["summary"]["certified_windows"] == 3 * WINDOWS
+        assert not result["accepted"]
+        assert {f"{name} window 0 isn't certified" for name in ws.CERTIFIED} <= set(result["problems"])
+        assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [0] * len(ws.CERTIFIED)
+        assert {(x["record"], x["status"]) for x in result["windows"] if x["window"] == 0} == \
+            {(name, Reason.MONITOR_UNAVAILABLE.value) for name in ws.CERTIFIED}
+    assert result["summary"]["certified_windows"] == 3 * (WINDOWS - (late is not None))
 
 
 def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_window(tmp_path):
     """The process killed (SIGKILL, by its pid) ten ticks into window 1: no tick runs late, the warden's run raises at
     window 1's close, before publishing it, and `close` raises too, without waiting on the dead process. Nothing of
     window 1 is on disk, the check refuses it on every link, and every head it does find certified is that of the
-    record the warden closed. Both raise the process's exit code (REDTEAM's residual: a bare `EOFError`, the dead
+    record the relay closed. Both raise the process's exit code (rather than a bare `EOFError`, the dead
     process's end of the pipe reading as a message to `_receive`'s `poll` and `recv` hitting its EOF)."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, kill_at=PARAMS.window + 10)
@@ -265,7 +270,7 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
 def test_a_process_a_window_behind_moves_no_tick_and_keeps_every_record_whole(tmp_path, monkeypatch):
     """The process held at window 0's ingress commit until every tick of both windows has run: no tick is late, at
     most window 0's ingress record is certified by then, and once released the process keeps every record, whole:
-    the check accepts all six link-windows and four registrations."""
+    the check accepts all six execution phases and four registrations."""
     fifo = tmp_path / "fifo"
     os.mkfifo(fifo)
     monkeypatch.setenv(FIFO, str(fifo))
@@ -363,10 +368,10 @@ def test_the_close_marker_carries_the_records_grid_digest(tmp_path):
 
 @pytest.mark.parametrize("edit", [_shifted, _altered], ids=["shifted", "altered"])
 def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path, edit):
-    """REDTEAM phase 10 (7): the process trusted that the rows since the last marker were the window's. With the
-    marker's digest it refuses window 0's egress record when a row was lost and another doubled on the way (the
-    count unchanged) or a frame's byte changed: the run fails with the process's refusal, nothing of that record is
-    signed, and the check refuses it. Window 0's ingress record, kept before it, stays certified."""
+    """The process once trusted that the rows since the last marker were the execution phase's. With the marker's
+    digest it refuses execution phase 0's egress record when a row was lost and another doubled on the way (the count
+    unchanged) or a frame's byte changed: the run fails with the process's refusal, nothing of that record is signed,
+    and the check refuses it. Execution phase 0's ingress record, kept before it, stays certified."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]

@@ -141,7 +141,7 @@ theorem opens_pathCommitRow (at_ : List Msg → ℕ → Option (Msg × ℕ)) (ro
       ∃ ri reg, at_ roots o.pos = some ri ∧ own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (rowf o) (salt o)))))
           ri.2 (bytes (π o)) = true := by
-  unfold Commitment.Opens pathCommit
+  unfold CommitmentScheme.Opens pathCommit
   dsimp only
   cases hat : at_ roots o.pos with
   | none => simp [OC.eval]

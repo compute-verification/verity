@@ -1,5 +1,5 @@
 """`verity-vllm advice` commits the advice and publishes only its binding, never the advice, on run A's
-advice (`fixtures/advice_run_a`: r20261024-050219-71ab's step trace and Commit record, Qwen3-8B on one GPU): the root is the one
+advice (`fixtures/advice_run_a`: a recorded step trace and Commit record, Qwen3-8B on one GPU): the root is the one
 `advice_windows.commit_advice` and `verity.ml.commitments.advice` give for I1's encoding, the registration carries the root and the
 bit count and no byte of the advice, and one changed advice byte changes the root."""
 from __future__ import annotations

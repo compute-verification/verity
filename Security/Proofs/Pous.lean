@@ -14,7 +14,6 @@ import Proofs.Pous.Chain.Flat
 import Proofs.Pous.Chain.Family
 import Proofs.Pous.Chain.FamilyRounds
 import Proofs.Pous.Continuous
-import Proofs.Pous.SecureErasure
 import Proofs.Pous.StreamedWipe
 import Proofs.Pous.Graded.Band
 import Proofs.Pous.P2.Margin
@@ -60,10 +59,12 @@ import Proofs.Pous.Obligation
 # The proved guarantees
 
 `Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Definitions/Pous/Guarantees.lean`,
-`Security/Definitions/Pous/Guarantees/P2.lean`, `Security/Definitions/Pous/Guarantees/SecureErasure.lean`,
+`Security/Definitions/Pous/Guarantees/P2.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipe.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`,
-`Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean` (the frozen statements)
+`Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`,
+`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`,
+`Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean` (the frozen statements)
 and `Security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
 change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
 `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
@@ -180,10 +181,6 @@ theorem ContinuousComplete : Pous.Guarantees.ContinuousComplete := PousContinuou
 theorem ContinuousTimeAverage : Pous.Guarantees.ContinuousTimeAverage := PousContinuous.continuous_time_average
 theorem BandFamilyContinuousTimeAverage : Pous.Guarantees.BandFamilyContinuousTimeAverage :=
   PousContinuous.band_family_continuous_time_average
-theorem DigestAU : Pous.Guarantees.DigestAU := PousDigest.digestAU
-theorem SecureErasureMeets : Pous.Guarantees.SecureErasureMeets := PousErase.secure_erasure_meets
-theorem SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily := PousErase.secure_erasure_meets_family
-theorem SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB := PousErase.secure_erasure_meets_96GiB
 theorem StreamedWipe : Pous.Guarantees.StreamedWipe := PousStreamedWipe.streamed_wipe
 theorem StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB :=
   PousStreamedWipe.streamed_wipe_meets_2600GB
@@ -194,6 +191,20 @@ theorem StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB := PousS
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
 theorem StreamedWipeMeets141GB5 : Pous.Guarantees.StreamedWipeMeets141GB5 :=
   PousStreamedWipe.streamed_wipe_meets_141GB5
+theorem StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
+  PousStreamedWipe.streamed_wipe_meets_reads_tight
+theorem StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer := PousStreamedWipe.streamed_wipe_meets_server
+theorem StreamedWipeMeetsServer5GB : Pous.Guarantees.StreamedWipeMeetsServer5GB :=
+  PousStreamedWipe.streamed_wipe_meets_server_5GB
+theorem StreamedWipeMeetsServerH200 : Pous.Guarantees.StreamedWipeMeetsServerH200 :=
+  PousStreamedWipe.streamed_wipe_meets_server_H200
+theorem StreamedWipeMeetsServer8H200HBM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBM :=
+  PousStreamedWipe.streamed_wipe_meets_server_8H200_HBM
+theorem StreamedWipeMeetsServer8H200HBMRAM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBMRAM :=
+  PousStreamedWipe.streamed_wipe_meets_server_8H200_HBMRAM
+theorem StreamedWipeMeetsServer8H200 : Pous.Guarantees.StreamedWipeMeetsServer8H200 :=
+  PousStreamedWipe.streamed_wipe_meets_server_8H200
+theorem StreamedWipeMeetsDisk : Pous.Guarantees.StreamedWipeMeetsDisk := PousStreamedWipe.streamed_wipe_meets_disk
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family

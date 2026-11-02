@@ -1,15 +1,13 @@
-"""The reference evaluator's COMPLETE small assignment of a lifted Program, one row per gate (R17-42 §7 Stage 1: "the reference
-evaluator should expose the complete small assignment, not only final outputs"; revb PADDED-ACCEPTANCE Stage 1 artefact: "a
-reference-evaluator dump that exposes the COMPLETE small assignment (every wire, not only outputs)").
+"""The reference evaluator's COMPLETE small assignment of a lifted Program, one row per gate (every wire, not only final outputs).
 
 `rows(prog, transcript)` reads `serve3_reference.materialize`'s trace `{gate: word}` back against the circuit: for EVERY gate its
 index, scope path (the node names from the root body down), primitive id, lift class (`input` / `const` / `strict` / `specified` /
 `unlifted` for a primitive that is not a lifted one), the lifted width `w+1` of its output, the raw committed word, and the word's
-reading under LIFTING-SPEC A3 (`active` with its payload / `bot` / `inv` = noncanonical `1‖nonzero`).  Nothing is normalised: the
+reading (`active` with its payload / `bot` / `inv` = noncanonical `1‖nonzero`).  Nothing is normalised: the
 `word` column is the raw integer; `reading` is the relation's verdict on it, beside it.
 
-`dump(prog, transcript, path)` writes one JSON object per line; `summary(rows)` counts the words per class and reading (the five
-counts revb reads: gates, active, bot, inv, and the specified-class gates)."""
+`dump(prog, transcript, path)` writes one JSON object per line; `summary(rows)` counts the words per class and reading (five
+counts: gates, active, bot, inv, and the specified-class gates)."""
 
 from __future__ import annotations
 

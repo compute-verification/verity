@@ -1,9 +1,9 @@
-"""[R15 moe FLUSH-02, ALERT M-0479] gather-staging flush points beyond Llama's lifetime table.
+"""Gather-staging flush points beyond Llama's lifetime table.
 
-The live C2 oracle at r15-int-3 (OLMoE B1 256/32, cp-moe3) found 1536 committed identities != the Program's value: `q_norm/out` and
-`k_norm/out` (RoPE rotates q/k IN PLACE right after the QK norms; their staged outputs were flushed at o_proj) and
-`post_attention_layernorm/1` (the residual, overwritten in place by the next layer's fused add-RMSNorm; a fused-MoE block has no
-down_proj hook to have flushed it).  Fix: post-hook flush at q_norm/k_norm, pre-forward flush at input_layernorm / final norm.
+Without them the C2 oracle sees committed identities != the Program's value: `q_norm/out` and `k_norm/out` (RoPE rotates q/k IN
+PLACE right after the QK norms, before an o_proj flush) and `post_attention_layernorm/1` (the residual, overwritten in place by the
+next layer's fused add-RMSNorm; a fused-MoE block has no down_proj hook to flush it).  So: post-hook flush at q_norm/k_norm,
+pre-forward flush at input_layernorm / final norm.
 
 Rule tests need only torch importable (the collector module imports it); the byte-level tests drive the committer's own hook bodies
 (`_make_wrapper`) over the C++ collector on a CUDA device and are skipped without one.
@@ -47,12 +47,12 @@ def test_negative_faults_drop_exactly_the_new_flush_points():
     nm = _bare("late_flush_norm")
     assert not nm._pre_flush_leaf("model.layers.1.input_layernorm") and not nm._pre_flush_leaf("model.norm")
     assert nm._flush_leaf("model.layers.0.self_attn.q_norm")
-    old = _bare("late_flush")                                                       # the R11 negative is unchanged
+    old = _bare("late_flush")                                                       # the late_flush negative is unchanged
     assert not old._flush_leaf("model.layers.0.self_attn.qkv_proj") and old._flush_leaf("model.layers.0.self_attn.q_norm")
 
 
 def test_flush_03_the_moe_up_plane_leaves_right_after_staging_and_only_that_plane():
-    """[R16 moe FLUSH-03] the fused-MoE `up` plane is overwritten by the block's own w2 launch (cache1/cache3 alias): the source's
+    """The fused-MoE `up` plane is overwritten by the block's own w2 launch (cache1/cache3 alias): the source's
     `flush_after_plane("up")` must issue the gather launch on the gather collector; the other planes are flushed by the next layer's
     pre-flush; the arena committer stages nothing; the `late_flush_moe_up` negative drops exactly this flush."""
     calls: list[str] = []
@@ -69,8 +69,8 @@ def test_flush_03_the_moe_up_plane_leaves_right_after_staging_and_only_that_plan
     neg = _bare("late_flush_moe_up", nc=FakeNC())
     calls.clear()
     assert neg.flush_after_plane("up") is False and calls == []
-    assert neg._pre_flush_leaf("model.layers.1.input_layernorm") and neg._flush_leaf("model.layers.0.self_attn.q_norm")   # FLUSH-02 intact
-    assert _bare("late_flush_norm", nc=FakeNC()).flush_after_plane("up") is True   # and FLUSH-02's negative leaves FLUSH-03 alone
+    assert neg._pre_flush_leaf("model.layers.1.input_layernorm") and neg._flush_leaf("model.layers.0.self_attn.q_norm")   # the norm flush points intact
+    assert _bare("late_flush_norm", nc=FakeNC()).flush_after_plane("up") is True   # and the norm negative leaves the up-plane flush alone
 
 
 def test_moe_source_asks_the_committer_to_flush_the_up_plane_only():
@@ -168,8 +168,8 @@ class _NormThenRope(torch.nn.Module):
 @pytest.mark.parametrize("fault", ["", "late_flush_norm"])
 def test_residual_of_post_attention_norm_is_committed_before_the_next_fused_add(fault):
     """A fused-MoE decoder layer: post_attention_layernorm -> (MoE, no down_proj hook) -> next layer's input_layernorm.  With the pre-flush
-    the committed `/1` is the residual as produced; with `late_flush_norm` (the pre-int-3 behaviour) the read happens at the next
-    layer's qkv_proj flush, after the fused add overwrote it -> the committed bytes are the NEXT layer's residual (ALERT M-0479 (3))."""
+    the committed `/1` is the residual as produced; with `late_flush_norm` (no pre-flush) the read happens at the next
+    layer's qkv_proj flush, after the fused add overwrote it -> the committed bytes are the NEXT layer's residual."""
     mod = NC.ext(verbose=False)
     c = mod.Collector()
     c.enable_gather(64)
@@ -192,7 +192,7 @@ def test_residual_of_post_attention_norm_is_committed_before_the_next_fused_add(
     committed_res = arena[512:1024]
     if fault:
         assert not torch.equal(committed_res, _as_bytes(produced_res)), "the late read must not reproduce the produced residual"
-        assert torch.equal(committed_res, _as_bytes(res2)), "late read = the NEXT layer's residual (what the int-3 oracle saw)"
+        assert torch.equal(committed_res, _as_bytes(res2)), "late read = the NEXT layer's residual"
     else:
         assert torch.equal(committed_res, _as_bytes(produced_res))
         assert not torch.equal(committed_res, _as_bytes(res2))
@@ -201,10 +201,10 @@ def test_residual_of_post_attention_norm_is_committed_before_the_next_fused_add(
 @cuda
 @pytest.mark.parametrize("fault", ["", "late_flush_moe_up"])
 def test_moe_up_plane_is_committed_before_the_blocks_w2_launch_overwrites_its_workspace(fault):
-    """[R16 moe FLUSH-03] vLLM's TritonExperts: cache1 (up) and cache3 (down) are `_resize_cache(workspace2, ...)` views of ONE buffer.
+    """vLLM's TritonExperts: cache1 (up) and cache3 (down) are `_resize_cache(workspace2, ...)` views of ONE buffer.
     The MoE source stages `up` after the w13 launch; the block's own w2 launch then writes `down` into the same bytes; the next hook (the
-    next layer's `input_layernorm` pre-flush) is the first flush.  With FLUSH-03 the committed `up` is the w13 output; with
-    `late_flush_moe_up` (the pre-FLUSH-03 record) it is the same layer's `down` -- byte for byte what the R16 OLMoE B1 C2 v3 found."""
+    next layer's `input_layernorm` pre-flush) is the first flush.  With the up-plane flush the committed `up` is the w13 output;
+    with `late_flush_moe_up` (no up-plane flush) it is the same layer's `down`, byte for byte."""
     from verity_vllm.acquire.sources import moe_source as MS
 
     mod = NC.ext(verbose=False)
@@ -226,13 +226,13 @@ def test_moe_up_plane_is_committed_before_the_blocks_w2_launch_overwrites_its_wo
     x = torch.randn(8, 256, device="cuda", dtype=torch.bfloat16)
     c.begin_step(plan_key=11, arena_ptr=arena.data_ptr(), arena_bytes=arena.numel(), use_plan=True)
     cache1.copy_(x * 2.0)                                     # the w13 launch writes up
-    src._bind("up", cache1)                                   # staged at [0, 4096) (+ FLUSH-03 flush)
+    src._bind("up", cache1)                                   # staged at [0, 4096) (+ the up-plane flush)
     produced_up = cache1.clone()
     act = torch.nn.functional.silu(cache1[:, :128]) * cache1[:, 128:]                 # silu_and_mul -> cache2 (another workspace)
     src._bind("act", act)                                     # [4096, 6144)
     cache3.copy_(torch.cat([act, act], dim=1) * 0.5)          # the w2 launch writes down INTO THE SAME BYTES as up
     src._bind("down", cache3)                                 # [6144, 10240)
-    c.flush()                                                 # the next layer's input_layernorm pre-flush (FLUSH-02, always there)
+    c.flush()                                                 # the next layer's input_layernorm pre-flush (always there)
     c.end_step()
     torch.cuda.synchronize()
     committed_up, committed_down = arena[0:4096], arena[6144:10240]
@@ -240,7 +240,7 @@ def test_moe_up_plane_is_committed_before_the_blocks_w2_launch_overwrites_its_wo
     if fault:
         assert src.stats["plane_flushes"] == 0
         assert torch.equal(committed_up, committed_down) and not torch.equal(committed_up, _as_bytes(produced_up)), \
-            "the late read must commit the same layer's down bytes under the up name (the pre-FLUSH-03 record)"
+            "the late read must commit the same layer's down bytes under the up name"
     else:
         assert src.stats["plane_flushes"] == 1
         assert torch.equal(committed_up, _as_bytes(produced_up)) and not torch.equal(committed_up, committed_down)
@@ -250,7 +250,7 @@ def test_moe_up_plane_is_committed_before_the_blocks_w2_launch_overwrites_its_wo
 @pytest.mark.parametrize("fault", ["", "late_flush_qk"])
 def test_qk_norm_output_is_committed_before_rope_rotates_it_in_place(fault):
     """QK-norm attention (OLMoE / Qwen3): q = q_norm(q); rotary_emb(positions, q, k) IN PLACE; ... o_proj (flush).  With the q_norm/k_norm
-    flush the committed `q_norm/out` is the norm's output; with `late_flush_qk` it is the rotated q (ALERT M-0479 (1)(2): first
+    flush the committed `q_norm/out` is the norm's output; with `late_flush_qk` it is the rotated q (first
     differing element = the first token at a non-zero position)."""
     mod = NC.ext(verbose=False)
     c = mod.Collector()

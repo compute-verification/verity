@@ -56,7 +56,7 @@ export NATIVE_COLLECT_BUILD
 # cc 9.x runs FlashAttention-3 -> the FA3 M1 tap and the required hidden class is fa3_hidden_m1_stream; the omitted negative's
 # expected reason names that class.  HIDDEN_SO overrides (a foreign tap is refused by commit_delta's engine check, not silently accepted).
 FA_VER=$($PY -c "from verity_vllm.program.frontend.target_profile import TargetProfile; print(TargetProfile.from_device().effective_flash_attn_version())" 2>/dev/null || echo 2)
-G=$([ "${GUARDED_MAX_TAP:-1}" = 1 ] && echo G)   # the guarded-max build unless GUARDED_MAX_TAP=0 (config.CommitConfig), as the row selects it
+G=$([ "${GUARDED_MAX_TAP:-1}" = 1 ] && echo G)   # the guarded-max build unless GUARDED_MAX_TAP=0 (config.CommitConfig), as a workload selects it
 HIDDEN_SO=${HIDDEN_SO:-$([ "$FA_VER" = 3 ] && echo /workspace/cp/fa2/build/fa3_matReq$G/verity_fa3_matReq$G.so || echo /workspace/cp/fa2/build/matReq$G/verity_fa2_matReq$G.so)}; export HIDDEN_SO
 HIDDEN_CLASS=$([ "$FA_VER" = 3 ] && echo fa3_hidden_m1_stream || echo fa2_hidden_m1_stream)
 GPU_UTIL=${GPU_UTIL:-0.5}; export GPU_UTIL
@@ -80,7 +80,7 @@ root_of() { python3 -c "import json,sys;v=json.load(open('$1'));print((v.get('ru
 reason_of() { python3 -c "import json;print(json.load(open('$1')).get('first_fail_reason') or '')" 2>/dev/null; }
 # The workload's identity-coverage line: commit_delta prints "[delta] BINDING (pair k): ... coverage OK|FAIL bound n/N missing m ..."
 # per pair (the binding record itself lives in the pair rows); verdict.json carries the required manifest's digest.
-coverage_of() {   # <row dir>
+coverage_of() {   # <workload dir>
   local cov man
   cov=$(grep -o 'coverage \(OK\|FAIL\) bound [0-9]*/[0-9]* missing [0-9]*' "$1/commit.log" 2>/dev/null | sort | uniq -c | awk '{printf "%s x%d; ", substr($0, index($0,$2)), $1}')
   man=$(python3 -c "import json;m=json.load(open('$1/commit/verdict.json')).get('required_manifest') or {};print('manifest', (m.get('manifest_digest') or '')[:16] or 'none')" 2>/dev/null)
@@ -89,7 +89,7 @@ coverage_of() {   # <row dir>
 
 log "start commit=$COMMIT cc=$CC flash_attn=$FA_VER hidden_so=$HIDDEN_SO hidden_class=$HIDDEN_CLASS positives=$POS negatives=$NEG"
 
-# ------------------------------------------------------------------ positives: the row procedure itself, then the root pin
+# ------------------------------------------------------------------ positives: the workload procedure itself, then the root pin
 positive() {   # <name> <row-id> <ROLE> <repo> <revision>
   local name=$1 row=$2 role=$3 repo=$4 rev=$5 t0=$(date +%s)
   local exp; exp=$(known_root "$row")
@@ -174,7 +174,7 @@ if [[ ",$POS," == *,olmoe,* ]]; then
   else positive olmoe "$OLMOE" OLMOE allenai/OLMoE-1B-7B-0924 6d84c48581ece794365f2b8e9cfb043c68ade9c5; fi
 fi
 
-# ------------------------------------------------------------------ negatives on SmolLM2 (fast; the same commit_delta the rows use)
+# ------------------------------------------------------------------ negatives on SmolLM2 (fast; the same commit_delta the workloads use)
 WL=workloads/$SMOL.json
 BASE=("${PY%/*}/verity-vllm" commit --case B0 --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
       --pairs 1 --warmup 1 --max-num-seqs 1 --engine-arg max_model_len=288 --engine-arg "gpu_memory_utilization=$GPU_UTIL")

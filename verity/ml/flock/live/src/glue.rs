@@ -2,7 +2,7 @@
 //! `z(D(x)) = z(S(π(x)))` for every `x ∈ {0,1}^f`, where `D` and `S` are aligned sub-cubes of the witness's `M`-bit address space
 //! and `π` an identity, an index-bit permutation or a broadcast. One sumcheck proves every relation at once:
 //!
-//! - the verifier draws `γ` and `u` after the commitment; relation `g` is weighted `γ^(g+1)` and read at `u`'s first `f_g`
+//! - the verifier samples `γ` and `u` after the commitment; relation `g` is weighted `γ^(g+1)` and read at `u`'s first `f_g`
 //!   coordinates, where its two sides are `z̃(P_D)` and `z̃(P_S)` for the points `P_D = D(u)` and `P_S = S(π(u))`;
 //! - `Σ_g γ^(g+1) (z̃(P_D) − z̃(P_S)) = Σ_y z(y) W(y)` with `W(y) = Σ_g γ^(g+1) (eq(P_D, y) − eq(P_S, y))`, which is 0 for an honest
 //!   witness;
@@ -154,7 +154,7 @@ pub fn digest(rels: &[Relation]) -> [u8; 64] {
     h.finalize().into()
 }
 
-/// `(γ, u)`, drawn after the commitment and the relations' digest (`u` has the widest relation's free-bit count).
+/// `(γ, u)`, sampled after the commitment and the relations' digest (`u` has the widest relation's free-bit count).
 fn draw<Ch: Challenger>(rels: &[Relation], ch: &mut Ch) -> (F128, Vec<F128>) {
     ch.observe_label(LABEL);
     ch.observe_bytes(&digest(rels));
@@ -260,7 +260,7 @@ fn pair_up(w: &[(usize, F128)]) -> Vec<(usize, F128, F128)> {
 }
 
 /// [`prove`] over a packed witness (address `a` is bit `a % 128` of word `a / 128`, `2^(m-7)` words), in one pass over it:
-/// the rounds inside a word read only the words `W` touches, then every word folds once to the seven coins drawn so far (`2^(m-7)`
+/// the rounds inside a word read only the words `W` touches, then every word folds once to the seven coins flipped so far (`2^(m-7)`
 /// field elements), and the rest is dense over those with `W` sparse throughout. Its messages are [`prove`]'s.
 pub fn prove_packed<Ch: Challenger>(rels: &[Relation], m: usize, words: &[F128], ch: &mut Ch) -> (GlueProof, Vec<F128>) {
     use rayon::prelude::*;

@@ -25,11 +25,10 @@ Files:
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
 
-On vy-nebius-cpu-1, through its check slots:
+From the source tree's root on a CPU node with 160 GB for the job (results go to `$RESEARCH_RUN_DIR/out`; `SU_CACHE` keeps
+builds and stagings between runs):
 
 ~~~text
-research run --on vy-nebius-cpu-1 --project verity --campaign glm53 --source . --cwd source --mem-gb 160 \
-  --declared-output 'out/**' --env SU_UNITS="fp8-coord:K=6144 router moe-w13" --env SU_N=4 --env SU_MEM_GB=160 \
-  --env SU_CACHE=/workspace/research/cache/served-units-glm53 \
-  -- python3 tools/verity/check/slot.py --by LANE -- bash benchmarks/served_units/job.sh
+RESEARCH_RUN_DIR=DIR SU_UNITS="fp8-coord:K=6144 router moe-w13" SU_N=4 SU_MEM_GB=160 SU_CACHE=CACHE \
+  bash benchmarks/served_units/job.sh
 ~~~

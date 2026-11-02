@@ -1,10 +1,10 @@
 """The window circuit's units as `window_circuit` lowers a class Program into them: each template's units, allocated a slot
 at a time with each allocation's slots side by side (`_Builder.unit`), the rows each unit's ports read (`_Feed`), the
-gathers that make several writers' rows one (`AllGather_v1`, made once a run of rows), the registered reads (the weights'
-and the scan state's), and `settle`:
-each port's cut within its unit's rows and every feed wired as `interface.Wire` patterns, one a run of rows from one
-writer's output at a constant unit step. A unit holds at most ``Grain.rows`` rows in and out, a gather's parts and its
-output among them.
+registered reads (the weights' and the scan state's), and `settle`: each port read as m writer rows cut m ways, a row of
+its reader a writer row, and every feed wired as `interface.Wire` patterns, one a run of rows from one writer's output at a
+constant unit step. No unit copies rows together: a reader reads each writer's row as it is. A unit holds at most
+``Grain.rows`` rows in and out. Each template's units are the circuit's inference entries by their (slot, step)
+(`inference`).
 """
 from __future__ import annotations
 
@@ -15,8 +15,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.definitions.registry.b1_tp2 import AllGather
 from verity.ml.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
 
@@ -46,12 +44,36 @@ class Grain:
     """The units' size (Llama-3.2-1B's by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
     // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v1{2048, 32}`,
     `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (C-Flock's
-    composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256: a gather
-    of at most 255 parts), and a token select is chunks of ``select`` logits (768: 167 chunks at V = 128,256, each chunk's
-    row past one SHA-512 block)."""
+    composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256), a
+    token select is units of ``select`` logits (2,672: 48 units at V = 128,256, each 167 groups of 16), and a fused norm
+    cut at its residual add is parts of ``norm`` elements (256: 8 parts at N = 2,048, each x 64 rows of a `Gemm_v2{8192, 4}`)."""
     gemm_words: int = 32768
     rows: int = 256
-    select: int = 768
+    select: int = 2672
+    norm: int = 256
+
+
+def _spans(what: str, fields: Sequence[tuple[str, Any]]) -> list[tuple[int, int, int]]:
+    """``fields`` laid end to end as u16 words: each one's ``(first leaf, first word, leaf bits)``, then ``(leaves, words, 0)``;
+    refused where a field isn't leaves of one whole-byte width filling whole words (an s8 weight's are two a word)."""
+    out, leaf, word = [], 0, 0
+    for label, ty in fields:
+        ws = ty.width_set()
+        bits = next(iter(ws))
+        if len(ws) != 1 or bits % 8 or ty.leaves * bits % 16:
+            raise Unexpressible(f"{what} {label}'s {ty.leaves} leaves are {sorted(ws)} bits, not one byte width filling whole u16 "
+                                "words")
+        out.append((leaf, word, bits))
+        leaf, word = leaf + ty.leaves, word + ty.leaves * bits // 16
+    return out + [(leaf, word, 0)]
+
+
+def _word(spans: Sequence[tuple[int, int, int]], leaf: int, what: str) -> int:
+    """The u16 word leaf ``leaf`` of ``spans`` (`_spans`) starts, refused inside a word."""
+    first, word, bits = spans[bisect.bisect_right([s[0] for s in spans], leaf) - 1]
+    if (leaf - first) * bits % 16:
+        raise Unexpressible(f"{what}: leaf {leaf} starts inside a u16 word of {bits}-bit leaves")
+    return word + (leaf - first) * bits // 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,15 +87,14 @@ class Row:
 
 @dataclass(slots=True)
 class _Feed:
-    """Units ``[at, at + count)`` of template ``tid`` read port ``port`` as ``rows``, in order, at their (slot, step)
-    ``label``: each unit the same rows, or under ``lead`` (digits ``(radix, step)`` of the reader units, slowest first, the
-    radices' product ``count``) unit ``at + i`` each row's writer unit plus ``i``'s digits times their steps."""
+    """Units ``[at, at + count)`` of template ``tid`` read port ``port`` as ``rows``, in order: each unit the same rows, or
+    under ``lead`` (digits ``(radix, step)`` of the reader units, slowest first, the radices' product ``count``) unit
+    ``at + i`` each row's writer unit plus ``i``'s digits times their steps."""
     tid: str
     port: str
     at: int
     count: int
     rows: tuple[Row, ...]
-    label: tuple[int, int]
     lead: tuple[tuple[int, int], ...] = ()
 
 
@@ -87,6 +108,18 @@ def _runs_of(rows: Sequence[Row]) -> list[tuple[int, int, int]]:
             k += 1
         out.append((j, k - j, rows[j + 1].unit - rows[j].unit if k > j + 1 else 0))
         j = k
+    return out
+
+
+def _merge(xs: Sequence[Any], key: Any, make: Any) -> list[Any]:
+    """``xs`` (each from unit ``at``, ``units`` of them) with each run of like ones (equal ``key``, consecutive units) merged
+    by ``make(first, units)``."""
+    out: list[Any] = []
+    for x in sorted(xs, key=lambda x: (key(x), x.at)):
+        if out and key(out[-1]) == key(x) and out[-1].at + out[-1].units == x.at:
+            out[-1] = make(out[-1], out[-1].units + x.units)
+        else:
+            out.append(x)
     return out
 
 
@@ -105,17 +138,21 @@ def _step(rowss: Sequence[Sequence[Row]]) -> int | None:
 class _Builder:
     grain: Grain
     programs: int = 1
+    #: refuse at `settle` every unit C-Flock's composer wouldn't prove (`interface.check_proof_block`); off only for a
+    #: probe's census and for tests of the lowering at a class too small to prove
+    provable: bool = True
     fns: dict[str, Any] = field(default_factory=dict)
     units: dict[str, int] = field(default_factory=dict)
     local: dict[tuple[int, str], int] = field(default_factory=dict)
     feeds: list[_Feed] = field(default_factory=list)
+    #: each template port's row count, its first feed's: the cut `settle` gives it
+    read_rows: dict[tuple[str, str], int] = field(default_factory=dict)
     cuts: dict[str, dict[str, int]] = field(default_factory=dict)
     wires: list[IF.Wire] = field(default_factory=list)
     reads: list[IF.Read] = field(default_factory=list)
     tables: dict[tuple[int, int, int], IF.Table] = field(default_factory=dict)
     roots: list[IF.TableRead] = field(default_factory=list)
     openings: list[IF.Opening] = field(default_factory=list)
-    gathered: dict[tuple[tuple[str, str, int, int, int], ...], Row] = field(default_factory=dict)
     #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
     label: tuple[int, int] | None = None
     spans: dict[str, list[tuple[int, int, int, int]]] = field(default_factory=dict)
@@ -148,43 +185,8 @@ class _Builder:
             raise Unexpressible(f"{tid} {port}: reads no unit's rows")
         if lead and math.prod(r for r, _ in lead) != count:
             raise ValueError(f"{tid} {port}: reader digits {lead} for {count} units")
-        self.feeds.append(_Feed(tid, port, at, count, tuple(rows), self.label, lead))
-
-    def _gatherer(self, rows: Sequence[Row]) -> Any:
-        w = {r.words for r in rows}
-        if len(w) != 1 or len(rows) >= self.grain.rows:
-            raise Unexpressible(f"a gather of {len(rows)} rows of {sorted(w)} words: rows of one width, at most "
-                                f"{self.grain.rows - 1} (with its output, a unit's {self.grain.rows} rows)")
-        return bind(AllGather, WORLD=len(rows), N=w.pop())
-
-    def gather(self, rows: Sequence[Row]) -> Row:
-        """One row holding ``rows`` in order: the row itself, or an `AllGather_v1{len(rows), w}` unit's (one a row sequence,
-        keyed by its runs)."""
-        rows = tuple(rows)
-        if len(rows) == 1:
-            return rows[0]
-        key = tuple((rows[j].tid, rows[j].out, rows[j].unit, n, s) for j, n, s in _runs_of(rows))
-        if key in self.gathered:
-            return self.gathered[key]
-        tid, u = self.unit(self._gatherer(rows))
-        self.cuts.setdefault(tid, {})["parts"] = len(rows)
-        self._wire(tid, "parts", u, 1, rows)
-        out = self.gathered[key] = Row(tid, u, "o0", len(rows) * rows[0].words)
-        return out
-
-    def gathers(self, rowss: Sequence[Sequence[Row]]) -> tuple[Row, ...]:
-        """One row a group of ``rowss`` (a KV group's rows of a key or a block): a group's one row as it is, else one
-        `AllGather_v1` unit a group, allocated together and wired as one pattern where each group's rows are the first's
-        shifted (`_step`), never shared."""
-        if all(len(rs) == 1 for rs in rowss):
-            return tuple(rs[0] for rs in rowss)
-        if (s := _step(rowss)) is None:
-            return tuple(self.gather(rs) for rs in rowss)
-        rows, n = rowss[0], len(rowss)
-        tid, u = self.unit(self._gatherer(rows), n)
-        self.cuts.setdefault(tid, {})["parts"] = len(rows)
-        self._wire(tid, "parts", u, n, rows, ((n, s),))
-        return tuple(Row(tid, u + i, "o0", len(rows) * rows[0].words) for i in range(n))
+        self.feeds.append(_Feed(tid, port, at, count, tuple(rows), lead))
+        self.read_rows.setdefault((tid, port), len(rows))
 
     def _weight(self, lo: int, hi: int, words: int) -> tuple[str, int, int]:
         """The one weight words [lo, hi) of the weights record lie in, read in rows of ``words``: its label, its words and
@@ -247,28 +249,49 @@ class _Builder:
                                       step=tuple(s for _, s in digits), cut=(j, C) if len(rows) > 1 else (0, 1)))
 
     def settle(self) -> None:
-        """Each feed's port cut (`_cut`) within the rows its reader has left, its rows gathered to the cut's (at its reader's
-        label), and wired; refused where a unit would hold more than ``grain.rows`` rows in and out."""
-        uses: dict[tuple[str, str], dict[int, int]] = {}
+        """Each port read as m writer rows cut m ways (`interface.Layout.cut`: row j its outer elements
+        [j·n/m, (j+1)·n/m), each writer row one of them), and every feed wired. Refused at once, naming each
+        (`Unexpressible`): a port read at two row counts (a port is cut one way), rows that aren't its outer elements cut
+        that many ways, a unit of more than ``grain.rows`` rows in and out, and, unless not ``provable``, a unit C-Flock's
+        composer wouldn't prove (`interface.check_proof_block`: past 256 rows, no row past 111 bytes, or rows past its
+        block)."""
+        counts: dict[tuple[str, str], set[int]] = {}
+        widths: dict[tuple[str, str], set[int]] = {}
         for f in self.feeds:
-            m = uses.setdefault((f.tid, f.port), {})
-            m[len(f.rows)] = m.get(len(f.rows), 0) + 1
-        for (tid, port), ms in uses.items():
-            cuts = self.cuts.get(tid, {})
-            d = _cut((tid, port), ms, self.grain.rows - _rows(self.fns[tid], cuts) + cuts.get(port, 1), self.grain.rows)
-            if d > 1:
-                self.cuts.setdefault(tid, {})[port] = d
+            counts.setdefault((f.tid, f.port), set()).add(len(f.rows))
+            widths.setdefault((f.tid, f.port), set()).update(r.words for r in f.rows)
+        why = []
+        for (tid, port), ms in counts.items():
+            lay = IF.layout(self.fns[tid])
+            k = [p for p, _ in lay.rows].index(port)
+            words, n, m = lay.rows[k][1], lay.outer[k], max(ms)
+            if len(ms) > 1:
+                why.append(f"{tid} {port} read as {sorted(ms)} rows")
+            elif n % m or words % m or widths[(tid, port)] != {words // m}:
+                why.append(f"{tid} {port} ({n} elements, {words} words) read as {m} rows of "
+                           f"{sorted(widths[(tid, port)])} words")
+            elif m > 1:
+                self.cuts.setdefault(tid, {})[port] = m
+        why += [f"{fn.id}: {k} rows in and out, past a unit's {self.grain.rows}" for tid, fn in self.fns.items()
+                if (k := _rows(fn, self.cuts.get(tid))) > self.grain.rows]
+        if why:
+            raise Unexpressible(f"{len(why)} templates the window can't hold, each port cut once a writer row: " + "; ".join(why))
+        for tid, fn in self.fns.items() if self.provable else ():
+            try:
+                IF.check_proof_block(fn, self.cuts.get(tid))
+            except ValueError as e:
+                why.append(str(e))
+        if why:
+            raise Unexpressible(f"{len(why)} templates C-Flock's composer wouldn't prove: " + "; ".join(why))
         for f in self.feeds:
-            d = self.cuts.get(f.tid, {}).get(f.port, 1)
-            g, self.label = len(f.rows) // d, f.label
-            if g > 1 and any(s for _, s in f.lead):
-                raise Unexpressible(f"{f.tid} {f.port}: units each reading their own {len(f.rows)} rows through a cut of {d}, "
-                                    "a gather a unit")
-            self._wire(f.tid, f.port, f.at, f.count, [self.gather(f.rows[i * g:(i + 1) * g]) for i in range(d)], f.lead)
-        for tid, fn in self.fns.items():
-            if (n := _rows(fn, self.cuts.get(tid))) > self.grain.rows:
-                raise Unexpressible(f"{fn.id}: {n} rows in and out under its cuts {self.cuts.get(tid)}, past a unit's "
-                                    f"{self.grain.rows}")
+            self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
+
+    def merged(self) -> tuple[list[IF.TableRead], list[IF.Opening]]:
+        """The table reads and the openings, each run of like ones at consecutive units one."""
+        return (_merge(self.roots, lambda x: (x.reader, x.port, x.table, x.of),
+                       lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n)),
+                _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict),
+                       lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n)))
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
@@ -278,13 +301,41 @@ def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     return len(lay.cut(cuts)) + len(lay.outs)
 
 
-def _cut(key: tuple[str, str], uses: dict[int, int], room: int, most: int) -> int:
-    """The cut of a port its feeds read as ``uses`` (row count -> feeds): a divisor ``d`` of every count, at most ``room`` (the
-    rows its reader has left) and leaving at most ``most - 1`` rows a gather (its output row is its last of ``most``), with
-    the fewest gather units (``d`` for each feed of more than ``d`` rows)."""
-    g = math.gcd(*uses)
-    ok = [d for d in range(1, min(g, room) + 1) if g % d == 0 and max(uses) // d < most]
-    if not ok:
-        raise Unexpressible(f"{key[0]} {key[1]}: read as {sorted(uses)} rows, which no cut of at most {room} rows a port and "
-                            f"{most - 1} a gather divides")
-    return min(ok, key=lambda d: (sum(n * d for m, n in uses.items() if m > d), -d))
+def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int]], axis: str,
+            delta: int) -> list[tuple[int, tuple[tuple[int, str], ...], int]]:
+    """``groups`` (first unit, digits as ``(radix, axis)``, step), consecutive, with each run of like ones (one digits, their
+    steps ``delta`` apart) as one whose first digit is ``axis``, of the run's length."""
+    out, i = [], 0
+    while i < len(groups):
+        at, digits, step = groups[i]
+        j = i + 1
+        while j < len(groups) and groups[j][1] == digits and groups[j][2] == step + (j - i) * delta:
+            j += 1
+        out.append((at, (((j - i, axis),) if j > i + 1 else ()) + digits, step))
+        i = j
+    return out
+
+
+def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> list[IF.InferenceEntry]:
+    """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, an allocation's
+    slots' runs of one length at one step side by side, are one entry (the slot, then the run), and like entries that follow
+    on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Refused where a template's
+    units aren't such runs."""
+    out = []
+    for tid, spans_ in spans.items():
+        merged: list[tuple[int, int, int, int]] = []
+        for at, n, slot, step in sorted(spans_):
+            if merged and merged[-1][2:] == (slot, step):
+                merged[-1] = (merged[-1][0], merged[-1][1] + n, slot, step)
+            else:
+                merged.append((at, n, slot, step))
+        groups = []
+        for i in range(0, len(merged), slots):
+            g = merged[i:i + slots]
+            if [r[2] for r in g] != list(range(slots)) or len({(r[1], r[3]) for r in g}) != 1:
+                raise Unexpressible(f"{tid}: units from {g[0][0]} are not {slots} slots' runs of one length at one step")
+            groups.append((g[0][0], ((slots, "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ()), g[0][3]))
+        for axis, delta in (("-", 0), ("step", 1)):
+            groups = _follow(groups, axis, delta)
+        out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step) for at, d, step in groups]
+    return out

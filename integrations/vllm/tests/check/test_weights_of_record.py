@@ -1,4 +1,4 @@
-"""MAN-09: the weights of record are derived from the PINNED CHECKPOINT BYTES, never from the live
+"""The weights of record are derived from the PINNED CHECKPOINT BYTES, never from the live
 engine; a served model that differs from the checkpoint in ONE element fails the Commit by name."""
 from __future__ import annotations
 
@@ -150,7 +150,7 @@ def test_record_is_derived_from_the_pinned_shards_and_names_every_field(checkpoi
     assert rec["complete"] is True and rec["unresolved"] == []
     assert rec["checkpoint"]["all_shards_pinned"] is True
     assert rec["checkpoint"]["shards"]["model.safetensors"]["pinned"] is True
-    assert rec["n_fields"] == len(fields) and rec["n_pinned"] == len(fields)               # [MAN-09c] the kv scale is pinned as the engine constant
+    assert rec["n_fields"] == len(fields) and rec["n_pinned"] == len(fields)               # the kv scale is pinned as the engine constant
     assert rec["unpinned"] == [] and rec["engine_assumptions"] == {"kv_cache_dtype": "auto"}
     by = {f["field"]: f for f in rec["fields"]}
     assert by["model.model.layers.0.self_attn.attn._k_scale"]["rule"].startswith("engine constant: kv-cache scale == f32 1.0")
@@ -187,7 +187,7 @@ def test_honest_served_model_passes_and_one_flipped_element_fails_by_name(checkp
     del short["model.layers.1.mlp.experts.w2_weight"]
     res2 = WR.check(rec, live_digests(short))
     assert res2["result"] is False and res2["missing"] == ["model.model.layers.1.mlp.experts.w2_weight"]
-    # [MAN-09c] a served kv scale that is not the engine constant 1.0 (a quantized cache's scale, or a tampered one) fails by name
+    # a served kv scale that is not the engine constant 1.0 (a quantized cache's scale, or a tampered one) fails by name
     sc = dict(served)
     sc["model.layers.0.self_attn.attn._k_scale"] = np.float32(0.5).reshape(()).view(np.uint32)
     res3 = WR.check(rec, live_digests(sc))
@@ -300,7 +300,7 @@ def test_fp8_kv_scale_loader_placeholders_are_pinned_as_the_sentinel_unless_the_
     placeholders (Fp8KVCacheMethod.create_weights: KVCacheScaleParameter = f32 -1.0; never written and read by no kernel with the kv
     cache unquantized) beside the `_k_scale` engine constants.  Qwen3-4B-FP8 B1 on cp-h100: 144 such fields -> 'no checkpoint
     tensor and no composition rule' -> weights of record incomplete -> Commit FAIL by name, although every one of the 434 checkpoint-
-    backed fields (e4m3 weights, f32 weight_scale_inv, norms, embeddings) compared equal.  MAN-09c rule: pinned EXACTLY as the sentinel
+    backed fields (e4m3 weights, f32 weight_scale_inv, norms, embeddings) compared equal.  The rule: pinned EXACTLY as the sentinel
     under kv_cache_dtype auto; a served value other than -1.0 FAILS by name; a checkpoint that DOES ship a kv scale of that name is
     pinned 1:1 from the checkpoint (the `not ck.has(live)` guard); another kv_cache_dtype leaves them unpinned by name."""
     d, man, t = checkpoint
@@ -490,7 +490,7 @@ def test_f_r16_21_a_kv_scale_the_checkpoint_ships_under_a_remapped_name_is_pinne
     # the same rule under a quantized kv cache: the shipped scales are pinned from their source (the remap-aware compose), the
     # sourceless placeholders unpinned BY NAME (never assumed)
     recq = WR.weights_of_record(prog, ck, prefix=PREFIX, kv_cache_dtype="fp8_e4m3")
-    assert recq["complete"] is True and set(recq["unpinned"]) == {L + "q_scale", L + "prob_scale", L + "_k_scale"}   # _k_scale: MAN-09c's own non-auto rule
+    assert recq["complete"] is True and set(recq["unpinned"]) == {L + "q_scale", L + "prob_scale", L + "_k_scale"}   # _k_scale: the engine constants' own non-auto rule
     byq = {f["field"]: f for f in recq["fields"]}
     assert byq[L + "k_scale"]["pinned"] is True and byq[L + "v_scale"]["pinned"] is True and "kv_cache_dtype=fp8_e4m3" in byq[L + "q_scale"]["why"]
     # (2) modelopt: k_proj.output_scale; legacy fused kv_scale feeds BOTH k and v
@@ -599,7 +599,7 @@ def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
 
 
 def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(checkpoint):
-    """dense (MAN-09 preflight on the real Gemma-2-2B Program, 316 fields): `model.model.normalizer` -- vLLM's non-persistent 0-d bf16
+    """dense (the weights-pin preflight on the real Gemma-2-2B Program, 316 fields): `model.model.normalizer` -- vLLM's non-persistent 0-d bf16
     buffer torch.tensor(hidden_size ** 0.5) -- has no checkpoint tensor and was the ONE unresolved field (complete False -> every Gemma
     Commit would FAIL 'weights of record' closed).  Rule: composed from config.json's hidden_size by the frozen analytic rule
     (root_policy ANALYTIC_TABLES['normalizer'] / analytic.normalizer_word: sqrt(H) rounded once to bf16), pinned and compared."""
@@ -656,9 +656,9 @@ def test_verdict_requires_the_pin_on_a_row_record_and_fails_by_name():
         ok, why = commit_verdict({**base, **b, "weights_pin": bad}, True, min_openings=64)
         assert not ok and why.startswith("weights of record:") and "model.layers.5.mlp.down_proj.weight" in why
     ok, why = commit_verdict({**base, "binding": bnd}, True, min_openings=64)
-    assert not ok and why.startswith("weights unpinned (MAN-09)") and "not run" in why
+    assert not ok and why.startswith("weights unpinned: ") and "not run" in why
     ok, why = commit_verdict({**base, "binding": bnd, "weights_pin": {"result": None, "why": "weights of record not derived: FileNotFoundError(...)"}}, True, min_openings=64)
-    assert not ok and why.startswith("weights unpinned (MAN-09)") and "not derived" in why
+    assert not ok and why.startswith("weights unpinned: ") and "not derived" in why
     # a legacy record (no binding block) without a pin keeps the legacy rule
     assert commit_verdict(base, True, min_openings=64) == (True, "PASS")
 
@@ -810,7 +810,7 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
 
 def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_git_tree(tmp_path):
     """derived.code names the code that ran the derivation.  The release tree on a pod has NO .git (ship.sh writes
-    EXPORT.json with the shipped commit): the int-1 wave-1 records carried code null (exec r16_0413).  Now: EXPORT.json's commit first
+    EXPORT.json with the shipped commit): the first pod records carried code null.  Now: EXPORT.json's commit first
     (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists."""
     root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
     exp = os.path.join(root, "EXPORT.json")

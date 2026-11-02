@@ -1,11 +1,11 @@
-"""M3 proper's step registration (PRF-172, CMP-161): the H200 step's commit-slots roots as DRAWPROVE's ``--step`` reads them
+"""M3 proper's step registration: the H200 step's commit-slots roots as ``prove_bundle.py --step`` reads them
 (`replay_bundle.step_registration`, ``read_steps``), registered before the coin.
 
     python examples/h200/m3stepreg.py --roots ROOTS.json --weights REGISTRATION.json --program HEX --run RUN --out DIR
 
 ``--roots``: m3draw commit's ``roots.json`` (every step's root and slot roots). Each step root is derived again from its slot
 roots under the run's context and the layout (`commit.layout`), and the layout's digest must be the file's. ``--weights``:
-CMP-160's ``registration.json`` (its ``registered`` list, every weight's root under ``--program``, which must be its
+the weights registration's ``registration.json`` (its ``registered`` list, every weight's root under ``--program``, which must be its
 program). The registration names the last step, every step 0 .. s's root (``steps``), every slot root of step s, the
 population ``slots x units_per_slot`` and the law ``subset:K``; ``DIR/step-registration.json`` and its digest
 (`replay_bundle.step_digest`, the coin's session root) are written.

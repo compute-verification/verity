@@ -40,13 +40,13 @@ inductive Prim where
   | gate (apply : Array Nat → Nat)
   | lazy (apply : (Nat → Flock.V Nat) → Flock.V Nat)
 
-/-- `boolean._and`: `int(all(b & 1 for b in x))`. Must equal `Verity.Boolean.Op.apply` of `and` on bits, folded. -/
+/-- `boolean._and`: `int(all(b & 1 for b in x))`. Must equal `FlockSoundness.Audit.Op.apply` of `and` on bits, folded. -/
 def andBits (xs : Array Nat) : Nat := if xs.all (fun b => b &&& 1 == 1) then 1 else 0
 
-/-- `boolean._xor`: the XOR of the operands, masked to its low bit. Must equal `Verity.Boolean.xorSum` on bits. -/
+/-- `boolean._xor`: the XOR of the operands, masked to its low bit. Must equal `FlockSoundness.Audit.xorSum` on bits. -/
 def xorBits (xs : Array Nat) : Nat := xs.foldl (· ^^^ ·) 0 &&& 1
 
-/-- `boolean.NOT`: `(a ^ 1) & 1`. Must equal `Verity.Boolean.Op.apply` of `not` on bits. -/
+/-- `boolean.NOT`: `(a ^ 1) & 1`. Must equal `FlockSoundness.Audit.Op.apply` of `not` on bits. -/
 def notBit (a : Nat) : Nat := (a ^^^ 1) &&& 1
 
 /-- `n` of `boolean._N_ARY_ID`, `^(And|Xor)([2-9]|[1-9][0-9]+)_v1$`: decimal without a leading zero, at least 2. -/

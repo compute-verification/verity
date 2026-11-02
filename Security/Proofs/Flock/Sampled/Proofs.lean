@@ -141,7 +141,7 @@ theorem composition_holds : Composition := by
     _ ≤ avg fun ω => (if Disjoint (L.draw ω) (wrong Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) :=
         avg_mono key
     _ = L.escape (wrong Ty X) + avg fun ω => I.ε (L.draw ω) R (contOf σ ω) := by
-        unfold Law.escape
+        unfold Verity.Law.escape
         rw [avg_add, avg_ite_eq_prCoin]
 
 theorem zeroKnowledge_holds : ZeroKnowledge := by

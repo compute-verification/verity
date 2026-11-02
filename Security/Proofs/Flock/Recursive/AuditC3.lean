@@ -77,7 +77,7 @@ What it takes, against `PublicAudit`:
   VBridge, the forks and the bound at the typed sessions kept at a whole history where those checks pass (`checkedC3`,
   each refusing everything elsewhere, so VBridge is read at the histories `recGame` plays), whose games are the typed
   sessions';
-* V*'s files parse to `Vs` only where the verifier's acceptance parses them into scope (`VStarParsesScoped`; #1847's
+* V*'s files parse to `Vs` only where the verifier's acceptance parses them into scope (`VStarParsesScoped`; the
   `scopeOk` refusal), so `_hob` asks nothing of the writer's round trip.
 
 Its proof is `Flock.SecurityProofs.RecursiveAuditC3` (`Proofs.Flock.Recursive.AuditC3Proof`), from gap 2 at the
@@ -756,7 +756,7 @@ coins of their coin kinds in the run's order (`holoCTs`: the link points, then t
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
 `RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape,
-below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates
+below the 100-bit floor and the `2^-128` target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates
 to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense
 statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
 (`RecDeploy.ksLin2_deployed_open`) and does not reach the Holo statements (i) is about, and `BitsLin2` at the dense

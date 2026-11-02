@@ -9,7 +9,7 @@ imports them as code, so the directory can move to its own repository unchanged.
 | `hardware.json` | GPU lines: a device (full `device` and short `name`, e.g. "H100 SXM5") running one operand dtype, with its dense tensor-core peak at FP32 accumulate | `schemas/hardware.schema.json` |
 | `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` | `schemas/datatypes.schema.json` |
 | `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles | `schemas/networks.schema.json` |
-| `deployments.json` | deployments, whose figure a result gives beside the adversary resource model's (`adversary.json`): the machines of a datacenter and the window each machine is audited in, stated parameters (results per monitoring period, Daniel, 25 Oct) | `schemas/deployments.schema.json` |
+| `deployments.json` | deployments, whose figure a result gives beside the adversary resource model's (`adversary.json`): the machines of a datacenter and the window each machine is audited in, stated parameters (results per monitoring period) | `schemas/deployments.schema.json` |
 | `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm-coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates, each with an id and a display name, such as `gemm-coordinate/k1536/sm90-wgmma-e4m3` ("GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)") | `schemas/subcircuits.schema.json` |
 | `workloads.json` | served configurations: the model, the serving config (engine, batch, TP, datatype, hardware class) and the template mix, the proof blocks (`vus`) per subcircuit template and bound parameters, with the source run | `schemas/workloads.schema.json` |
 | `input_sets.json` | the frozen input set of each subcircuit (an input is one instance of the subcircuit): dataset, tier, size, digest, `provenance` (captured or synthetic), and the subcircuit its inputs are of | `schemas/input_sets.schema.json` |
@@ -72,8 +72,7 @@ renderer switch counts it.
 
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
 counts the proof blocks per family (`vu_family`) and bound parameters (`replay_partition.strata`), the complete counts of
-the run. This is the mix that weights backend overheads into a per-workload headline (the renderer's "Workload headline",
-`verity_numerical.bench.headline`). Every family maps to a census
+the run. This is the mix that weights backend overheads into a per-workload headline (the frozen tables' "Workload headline"). Every family maps to a census
 subcircuit template bound from its IR Definition, with the number of the template's subcircuits one proof block holds (`subcircuits_per_vu`):
 - `Gemm_v1` and `Gemm_v2` are N `gemm-coordinate`, on Ampere-class mma or Hopper wgmma;
 - `Attention_v3`, `Attention_v2` and `Attention_v4` are NH `attention-head` (FA2, or FA3; `Attention_v4` is FA3 under its per-iteration `Check_inf` construction, whose `MASKED_FROM` names the first masked key block);

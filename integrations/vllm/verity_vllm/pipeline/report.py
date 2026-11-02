@@ -329,7 +329,7 @@ def vu_partition_text(gates: dict) -> str:
     max_seen = width.get("max_seen")
     txt = (f"{part.get('status')}, {count if count is not None else 'n/a'} sets, max w_out {max_seen if max_seen is not None else 'n/a'}"
            f"/{width.get('w_max') if width.get('w_max') is not None else 'n/a'}")
-    if st == "unsupported":                        # undecided (lead 22:22Z): neither PASS nor FAIL; the reason names what was undecidable
+    if st == "unsupported":                        # undecided: neither PASS nor FAIL; the reason names what was undecidable
         return f"unsupported ({str(g8.get('reason') or '').removeprefix('unsupported (').removesuffix(')')[:120]}); {txt}"
     if st == "fail":
         codes = list(part.get("codes") or [])

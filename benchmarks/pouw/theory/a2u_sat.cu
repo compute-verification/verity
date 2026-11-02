@@ -1,6 +1,6 @@
-// A2u beside a saturating issue stream (RT2-120): does a uniform-datapath instruction take an SMSP issue slot when the
-// lanes alone issue at nearly one warp instruction a cycle? opcode_probe's a2u.cu (r20261019-054518-8cd2) put its
-// uniform chains beside streams that issue at 0.79-0.88 alone, so a fifth of the slots were idle. Here the stream is
+// A2u beside a saturating issue stream: does a uniform-datapath instruction take an SMSP issue slot when the lanes
+// alone issue at nearly one warp instruction a cycle? opcode_probe's a2u.cu put its uniform chains beside streams
+// that issue at 0.79-0.88 alone, so a fifth of the slots were idle. Here the stream is
 // 64 FFMA a loop over NF independent accumulators (the FMA pipe takes one a cycle; nothing else binds), one block an SM
 // of 1024, 256 or 128 threads (8, 2 or 1 warps a SMSP; at most 64 registers a thread), beside NP pairs of integer chains
 // (UIMAD + ULOP3 where ptxas puts a pair on the uniform datapath), K chain instructions a loop:
