@@ -11,7 +11,7 @@ A candidate starts from a registered start θ (`load_start`), trains within its 
   its size, evaluation FLOPs and weight bytes per byte are θ's);
 - its step log: one record per pass over data (`{"op": "train"|"forward", "tokens": T, "ctx": C}`) and any matmul FLOPs it
   spends outside passes (`{"op": "extra", "flops": F}`), from which `train_flops` counts analytic training FLOPs;
-- `trainable`: the tensors it trains in full and the weights it trains through rank-r adapters, which the meter prices;
+- `trainable`: the tensors it trains in full and the matrices it trains through rank-r adapters, which the meter prices;
 - `changed`: the tensors that differ from θ, which must cover what does, and from which the checker computes the deep share φ
   and the lowest updated layer.
 
@@ -257,8 +257,9 @@ def attention_flops(rec: dict, ctx: int) -> int:
 def train_flops(rec: dict, trainable: dict, steps: list[dict]) -> dict:
     """Analytic training FLOPs of a step log. A `train` pass: the forward (base and adapters) plus, at and above the lowest
     trained node, every weight matmul's input gradient, the full-trained matrices' weight gradients, the adapters' backward
-    (4 · r · (d_in + d_out) per token) and the attention's (twice its forward); a `forward` pass: the forward; `extra`: as
-    logged."""
+    (4 · r · (d_in + d_out) per token at each matmul, 4 · r · d_out at the lookup) and the attention's (twice its forward);
+    a `forward` pass: the forward; `extra`: as logged. A tied embedding's adapter is used at the lookup and the head, so it
+    is priced at both, and its lowest trained node is the lookup (layer 0), as `deep_share` places it."""
     nodes = positions(rec)
     by_param = {}
     for n in nodes:
@@ -268,13 +269,15 @@ def train_flops(rec: dict, trainable: dict, steps: list[dict]) -> dict:
     unknown = (full | set(adapters)) - set(by_param)
     if unknown:
         raise ValueError(f"trainable names no tensor of the start: {sorted(unknown)[:4]}")
+    gains = sorted(p for p in adapters if not any(x["flops"] for x in by_param[p]))
+    if gains:
+        raise ValueError(f"an adapter needs a matrix; these have no matmul: {gains[:4]}")
     L = rec["config"]["n_layer"]
-    trained = [(n["layer"], n["stage"]) for n in nodes if n["param"] in full or (n["param"] in adapters and n["flops"])]
+    trained = [(n["layer"], n["stage"]) for n in nodes if n["param"] in full or n["param"] in adapters]
     first = min(trained) if trained else None
 
     def adapter_entries(p):
-        n = [x for x in by_param[p] if x["flops"]][0]
-        return adapters[p] * (n["d_in"] + n["d_out"])
+        return adapters[p] * sum(x["d_in"] + x["d_out"] if x["flops"] else x["d_out"] for x in by_param[p])
 
     def per_token(op: str, ctx: int) -> int:
         attn = attention_flops(rec, ctx)
