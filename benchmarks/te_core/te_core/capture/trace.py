@@ -36,6 +36,7 @@ import contextlib
 import copy
 import linecache
 import os
+import re
 import traceback
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Sequence
@@ -182,14 +183,16 @@ def _refusal(e: BaseException) -> CaptureRefused:
         return CaptureRefused("custom_kernel", op, f"{op} has no fake (meta) kernel, so its shapes can't be traced", where)
     low = text.lower()
     if ("fake" in low or "meta" in low) and any(w in low for w in ("impl", "kernel", "not implemented", "could not run")):
-        name = op
-        if name is None:
-            for tok in text.replace("'", " ").replace('"', " ").replace("(", " ").split():
-                if "::" in tok:
-                    name = tok.strip(".,:;")
-                    break
-        return CaptureRefused("custom_kernel", name, f"no fake (meta) kernel: {msg}", where)
+        return CaptureRefused("custom_kernel", op or _named_op(text), f"no fake (meta) kernel: {msg}", where)
+    if "autograd formula" in low or "autograd kernel" in low:
+        return CaptureRefused("custom_kernel", op or _named_op(text), f"no backward to trace: {msg}", where)
     return CaptureRefused("trace", op, f"{type(e).__name__}: {msg}", where)
+
+
+def _named_op(text: str) -> str | None:
+    """The first op name in an error message: ``ns::op`` or ``ns.op.overload``."""
+    m = re.search(r"\b(\w+::\w+(?:\.\w+)?)", text) or re.search(r"\b(\w+\.\w+\.(?:default|\w+))\b", text)
+    return m.group(1) if m else None
 
 
 def _refuse_graph(gm: torch.fx.GraphModule) -> None:

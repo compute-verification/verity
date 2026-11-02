@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# tests/test_lower.py lowers a captured step's forward through the vLLM frontend's derivation (`te_core.capture.lower`),
+# which reads verity_vllm's frontend and the Definitions registry it binds to.
+inputs = ["integrations/vllm", "verity"]
