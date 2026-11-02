@@ -167,7 +167,7 @@ def check(sub: Path, klass: str, timing: Path, run: Path, tree: Path, island: Pa
     c["scored"] = not r["scored"]["problems"]
     submitted = next((cp for cp in r["checkpoints"] if cp.get("submitted")), None)
     out["score"] = submitted.get("score") if submitted else None
-    if out["score"] is not None:
+    if out["score"] is not None and "slice" in out["score"]:
         out["score"]["slice"]["digest"] = "te_core.run.theta_sha256"
     out["start_bpb"] = r["start"]["val_bpb"]
     out["valid"] = all(v is True for v in c.values())

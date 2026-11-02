@@ -1,4 +1,6 @@
 import json
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -158,6 +160,24 @@ def test_a_later_ingest_of_a_run_supersedes_its_earlier_rows_and_is_not_a_duplic
     assert [r["id"] for r in frontier.valid(rows, PIN)] == ["other-run", "again"]
     rows.append(row("copy", 4, run_id="r3", agent="b"))  # another agent's run of the same E
     assert frontier.status(rows, PIN)["copy"] == "duplicate-e"
+
+
+def test_the_commits_of_one_version_are_one_pin(tmp_path, monkeypatch):
+    clock = Clock()
+    a, b = Ledger(tmp_path, "agent-a", clock=clock), Ledger(tmp_path, "agent-b", clock=clock)
+    earlier = sub(a, val_bpb=1.0, output={"e_sha256": "e1"}, measurement_commit="b" * 40)
+    clock.t += 1
+    later = sub(b, val_bpb=1.0, output={"e_sha256": "e2"})
+    clock.t += 1
+    copy = sub(b, val_bpb=1.0, output={"e_sha256": "e1"})
+    clock.t += 1
+    other = sub(a, val_bpb=1.0, measurement_commit="c" * 40)
+    rows = Ledger(tmp_path).index()
+    assert frontier.status(rows, (PIN, "b" * 40)) == {copy["id"]: "duplicate-e", other["id"]: "other-version"}
+    assert [r["id"] for r in frontier.valid(rows, (PIN, "b" * 40))] == [earlier["id"], later["id"]]
+    monkeypatch.setitem(sys.modules, "pin", SimpleNamespace(pinned=lambda: {"commit": PIN, "same_version": ["b" * 40]}))
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    assert frontier.pinned() == (PIN, "b" * 40)
 
 
 def test_a_run_with_covered_steps_counts_once_rho_is_priced_by_thresholds():
