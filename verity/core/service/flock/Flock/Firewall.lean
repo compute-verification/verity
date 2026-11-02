@@ -113,6 +113,35 @@ def decode (b : ByteArray) : V Req := do
     | t => throw s!"unknown request tag {t}"
   return (← r.run 1).1
 
+/-! ## The honest worker's wire (`Req::encode`, `rec_live.encode_req`): `decode`'s inverse where each length fits its
+word -/
+
+/-- `n`'s low `k` bytes, little-endian. -/
+def putLE (k n : Nat) : ByteArray := ⟨((List.range k).map fun i => (n / 256 ^ i).toUInt8).toArray⟩
+
+def putBytes (b : ByteArray) : ByteArray := putLE 4 b.size ++ b
+
+def putStr (s : String) : ByteArray := putBytes s.toUTF8
+
+def putPairs : List (String × ByteArray) → ByteArray
+  | [] => .empty
+  | (k, v) :: l => putStr k ++ putBytes v ++ putPairs l
+
+def putList (l : List (String × ByteArray)) : ByteArray := putLE 4 l.length ++ putPairs l
+
+def putReq : Req → ByteArray
+  | .hello text => ⟨#[1]⟩ ++ putStr text
+  | .link y => ⟨#[2]⟩ ++ putBytes y
+  | .ping => ⟨#[9]⟩ ++ putBytes .empty
+  | .openStream stream parent label pos =>
+    ⟨#[3]⟩ ++ (putStr stream ++ (putStr parent ++ (putBytes label ++ putLE 8 pos)))
+  | .round stream content n => ⟨#[4]⟩ ++ (putStr stream ++ (putBytes content ++ putLE 4 n))
+  | .proof => ⟨#[5]⟩ ++ (putStr "" ++ (putLE 4 0 ++ putBytes .empty))
+  | .finish => ⟨#[6]⟩
+  | .register => ⟨#[10]⟩
+  | .commit rootF roots publics => ⟨#[7]⟩ ++ (putBytes rootF ++ (putList roots ++ putList publics))
+  | .prime => ⟨#[8]⟩ ++ (putBytes .empty ++ putLE 4 0)
+
 /-! ## A round's content (`rec_live.frames`, `split_round`) -/
 
 def OP_DOMAIN : Nat := 1
@@ -179,6 +208,41 @@ def split (c : ByteArray) (first : Bool) : V Split := do
       s := { s with free := s.free ++ (Array.range n).map fun i => le p (16 * i) 16 }
   if first && binding != some 2 then throw "a rep's first round binds no statement digest and level-0 cap"
   return { s with n := lastN }
+
+/-- A frame as the worker writes it (`push_header`, `push_padded`; `frames`' inverse): its 16-byte header (op, kind, six
+zero bytes, `n` as a little-endian u64), then its payload and zeros up to whole blocks of 16 bytes. -/
+def putFrame : Nat × Nat × Nat × ByteArray → ByteArray
+  | (op, kind, n, p) => ⟨#[op.toUInt8, kind.toUInt8, 0, 0, 0, 0, 0, 0]⟩ ++ putLE 8 n ++ p ++
+      ⟨Array.replicate ((p.size + 15) / 16 * 16 - p.size) 0⟩
+
+def putFrames : List (Nat × Nat × Nat × ByteArray) → ByteArray
+  | [] => .empty
+  | f :: fs => putFrame f ++ putFrames fs
+
+/-- What the honest worker's challenger absorbs in a round, call by call (`framed_challenger!`). -/
+inductive Absorb where
+  | domain (d : ByteArray)
+  | label (l : ByteArray)
+  /-- the statement's binding: `LABEL_R1CS`, the statement digest, the level-0 cap -/
+  | bind (digest cap : ByteArray)
+  | cap (c : ByteArray)
+  | nonce (x : ByteArray)
+  | observe (kind : Nat) (elems : List Nat)
+  /-- a squeeze inside the round, of no coins -/
+  | squeeze (kind : Nat)
+
+def Absorb.frames : Absorb → List (Nat × Nat × Nat × ByteArray)
+  | .domain d => [(OP_DOMAIN, 0, d.size, d)]
+  | .label l => [(OP_LABEL, 0, l.size, l)]
+  | .bind d c => [(OP_LABEL, 0, LABEL_R1CS.size, LABEL_R1CS), (OP_BYTES, 0, d.size, d), (OP_BYTES, 0, c.size, c)]
+  | .cap c => [(OP_BYTES, 0, c.size, c)]
+  | .nonce x => [(OP_BYTES, 0, x.size, x)]
+  | .observe kind es => [(OP_OBSERVE, kind, es.length, es.foldr (fun e p => putLE 16 e ++ p) .empty)]
+  | .squeeze kind => [(OP_SQUEEZE, kind, 0, .empty)]
+
+/-- A round's content: its items, then the squeeze of its `n` coins. -/
+def putRound (items : List Absorb) (kind n : Nat) : ByteArray :=
+  putFrames (items.flatMap Absorb.frames ++ [(OP_SQUEEZE, kind, n, .empty)])
 
 /-! ## Salted commitments (`rec_live.message_rows`, `top_rows`, `commit_rows`) -/
 
