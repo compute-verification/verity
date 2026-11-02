@@ -51,6 +51,11 @@ SINCE = os.environ.get("TE_SCORER_SINCE", "2026-11-02T06:30:00Z")
 SEARCH_START = "2026-11-02T08:30:00Z"  # the board's opening: earlier records are the integrator's seed smokes
 TE_CORE = Path(os.environ.get("TE_CORE_PATH", Path(__file__).resolve().parents[1]))
 TE_CURRENT = Path(os.environ.get("TE_CURRENT", "/tmp/scorer/te-core"))  # a worktree of this repository, any branch
+TE_BRANCH = os.environ.get("TE_BRANCH", "cursor/covert-witness-4207")  # te_core as the nodes run it (launch.py's)
+#: te_core versions whose val bpb is the paired score on a fresh slice of the search pool (te_core 2.2, witness v3), each
+#: against its start's whole-pool bpb; earlier records' fixed-set scores don't compare with them
+TE_REGIME = tuple(os.environ.get("TE_REGIME", "2.2").split(","))
+COUNTED_FLOOR = 0.5  # the harness's count over the run's own step log, below which the counter missed work
 BOARD = Path(os.environ.get("TE_BOARD", Path(__file__).resolve().parents[1] / "islands" / "scorer" / "BOARD.md"))
 BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `HH:MMZ scorer [TAG] text (record ids)`. The "
               "coordinator merges them into benchmarks/covert_witness/BOARD.md on cursor/te-digest-4207. The scorer's lines "
@@ -279,10 +284,10 @@ def fixed_side(commit: str, official: set) -> list[str]:
 
 
 def te_current() -> str:
-    """TE_CURRENT checked out at te_core's branch head, the te_core every harness record is re-ingested with: an agent's
+    """TE_CURRENT checked out at TE_BRANCH's head, the te_core every harness record is re-ingested with: an agent's
     branch can carry its own te_core, so its ledger records are listed and never scored."""
     g = ["git", "-C", str(TE_CURRENT)]
-    subprocess.run(g + ["fetch", "-q", "origin", "cursor/te-core-4207"], capture_output=True, text=True)
+    subprocess.run(g + ["fetch", "-q", "origin", TE_BRANCH], capture_output=True, text=True)
     subprocess.run(g + ["checkout", "-q", "--detach", "FETCH_HEAD"], capture_output=True, text=True, check=True)
     return subprocess.run(g + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
 
@@ -327,6 +332,8 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
     agent, direction = direction_of(commits.get(cand.get("commit", ""), []), cw.get("class", ""))
     if not agent and cw.get("direction"):
         direction = cw["direction"]
+    if cw.get("final"):
+        direction = "scorer"
     checks = (w or {}).get("checks", {})
     bad = sorted(k for k, v in checks.items() if v is not True) + custody_problems(files, custody)
     if w and official is not None:
@@ -334,6 +341,9 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
     curve = (w or {}).get("curve") or []
     harness = (w or {}).get("harness")
     notes = (w or {}).get("notes") or {}
+    over = (harness or {}).get("over_train_flops")
+    if isinstance(over, (int, float)) and over < COUNTED_FLOOR:
+        bad += [f"counted: the harness counted {over:.2g}x the FLOPs of the run's own steps (floor {COUNTED_FLOOR})"]
     derived = []
     if harness and not bad:
         if "run/run.json" not in files:
@@ -370,7 +380,38 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
         "train_args": notes.get("args"), "steps": notes.get("steps"), "mech": notes.get("mech"),
         "pieces": notes.get("pieces"), "has_E": "E.bin" in files,
         "seedlog": seedlog_header(r, files, d) if (w or {}).get("E", {}).get("format") == "seedlog" else None,
+        "e_sha256": e_digest(r, files, d, harness), "final": bool(cw.get("final")),
+        "te_core": (harness or {}).get("te_core"), "harness_version": (w or {}).get("version"),
+        "start_bpb": (w or {}).get("score", {}).get("start_bpb"),
+        "regime": "current" if (harness or {}).get("te_core") in TE_REGIME and (w or {}).get("score", {}).get(
+            "start_bpb") is not None else "earlier",
     }
+
+
+def e_digest(r, files: dict, d: Path, harness: dict | None) -> str | None:
+    """The submitted E's sha256: the harness's record of it, else the record's E.sha256 (sha256sum's line)."""
+    if (harness or {}).get("submitted", {}).get("e_sha256"):
+        return harness["submitted"]["e_sha256"]
+    if "E.bin" in files:
+        return files["E.bin"]["sha256"]
+    if "E.sha256" in files:
+        t = blob(r, files["E.sha256"]["sha256"], d / "E.sha256").read_text().split()
+        return t[0] if t and re.fullmatch(r"[0-9a-f]{64}", t[0]) else None
+    return None
+
+
+def replays(rows: list[dict]) -> None:
+    """A search record whose E is an earlier record's E (by sha256) is unscored: its run didn't make that E (the
+    auditor's 10:24Z replay). The earliest record holding an E keeps it."""
+    first: dict[str, str] = {}
+    for x in sorted((x for x in rows if x["source"] == "launch.py" and x.get("e_sha256") and not x.get("final")),
+                    key=lambda x: (x.get("launched") or "", x["id"])):
+        e = x["e_sha256"]
+        if e in first:
+            x["failed_checks"] = [*x["failed_checks"], f"replay: E is {short(first[e])}'s"]
+            x["valid"] = False
+        else:
+            first[e] = x["id"]
 
 
 def te_row(r, art: str, recorded: str, man: dict) -> dict | None:
@@ -407,6 +448,8 @@ def te_rec_row(rec: dict, art: str, recorded: str) -> dict:
         "launched": rec.get("written_at"), "recorded": recorded, "valid": not rec.get("invalid"),
         "failed_checks": rec.get("invalid", []), "train_flops": 2 * rec["macs"], "macs": rec["macs"],
         "bpb": rec.get("val_bpb"), "test_bpb": rec.get("final_bpb"), "E_bytes": (rec.get("output") or {}).get("e_bytes"),
+        "output_sha256": (rec.get("output") or {}).get("output_sha256"), "submitted": (rec.get("output") or {}).get("submitted"),
+        "node": rec.get("node"), "run_te_core": rec.get("run_te_core"),
         "phi": rec.get("phi"), "D": rec.get("depth"), "rho": rec.get("rho"), "beta": rec.get("beta"),
         "reference": rec.get("reference"), "tier": rec.get("tier"), "fraction": rec.get("fraction"),
         "start_bpb": rec.get("start_bpb"),
@@ -458,6 +501,12 @@ def collect(since: str = SINCE) -> dict:
             x["commit"], x["agent"], x["direction"] = a["commit"], a["agent"], a["direction"]
         if x["source"] == "launch.py":
             x["cancelled"] = bool(a and a.get("cancelled") and x["failed_checks"] == ["no witness"])
+            x["node"] = a and a.get("machine")
+    replays(rows)
+    bad = {x["id"] for x in rows if x["source"] == "launch.py" and not x["valid"]}
+    for x in rows:
+        if x.get("derived") and x["record"] in bad:
+            x["valid"] = False
     rows.sort(key=lambda x: (x.get("launched") or "", x["id"]))
     STATE.mkdir(parents=True, exist_ok=True)
     (STATE / "index.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in rows))
@@ -481,8 +530,9 @@ def index_md(rows: list[dict], runs: list[dict], starts: dict) -> str:
     lines = [f"# The search's ledger, {now()}", "",
              f"{len(rows)} records since {SINCE}; starts' search bpb: " +
              ", ".join(f"{s} {starts[s]['bpb']:.4f}" for s in STARTS), "",
-             "| record | agent | direction | class | mechanism note | start | launched | train FLOPs | bpb | Δ% | |E| bytes |"
-             " φ | D (c counted, a analytic) | valid |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| record | agent | direction | class | mechanism note | start | launched | harness (witness, te_core) | "
+             "train FLOPs | bpb | Δ% | |E| bytes | φ | D (c counted, a analytic) | valid |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for x in entries(rows, audit=True):
         s0 = starts.get(x["start"], {}).get("bpb")
         drop = 100 * (s0 - x["bpb"]) / s0 if s0 and x["bpb"] is not None else None
@@ -492,9 +542,12 @@ def index_md(rows: list[dict], runs: list[dict], starts: dict) -> str:
             ann = analytic(x, starts) if x["valid"] and x["start"] in starts else None
             D, how = ann and ann["depth"], "a"
         d = x["direction"] + (" (not scored)" if is_audit(x) else " (cancelled unrun)" if x.get("cancelled") else
-                              " (not scored: no launch.py record)" if x.get("unrecorded") else "")
+                              " (not scored: no launch.py record)" if x.get("unrecorded") else
+                              " (final rerun)" if x.get("final") else "")
+        hv = (f"{(x.get('witness') or '').rsplit('/', 1)[-1] or '—'} {x.get('harness_version') or ''}, "
+              f"{x.get('te_core') or x.get('run_te_core') or '—'}" + (" (current)" if x.get("regime") == "current" else ""))
         lines.append(f"| `{short(x['id'])}` | {(x['agent'] or '').removeprefix('cursor/') or '—'} | {d} | {x['class']} | "
-                     f"{x['note']} | {x['start']} | {(x['launched'] or '')[11:16]} | {fmt(x['train_flops'])} | "
+                     f"{x['note']} | {x['start']} | {(x['launched'] or '')[11:16]} | {hv} | {fmt(x['train_flops'])} | "
                      f"{fmt(x['bpb'], '.4f')} | {fmt(drop, '.2f')} | {fmt(x['E_bytes'], ',')} | {fmt(x['phi'], '.3f')} | "
                      f"{fmt(D, '.3g')} {how if D is not None else ''} | "
                      f"{'yes' if x['valid'] else 'no: ' + ','.join(x['failed_checks'])} |")
@@ -639,14 +692,16 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
         rec = launched.get(x.get("run")) if x["source"] == "te_core" else None
         if x["source"] == "te_core" and not (rec and rec["valid"]):
             continue
-        if not x.get("valid") or x.get("start") not in starts or is_audit(x):
+        if not x.get("valid") or x.get("start") not in starts or is_audit(x) or (rec or x).get("final"):
             continue
         if x["source"] == "te_core":
             if x.get("te_kind") == "submission" and x.get("rho"):
-                out.append({"id": rec["id"] if rec else x["id"], "te_id": x["te_id"], "cp": x.get("fraction"),
+                out.append({"id": rec["id"] if rec else x["id"], "te_id": x["te_id"], "cp": round(x.get("fraction") or 0, 3),
                             "start": x["start"], "macs": x["macs"], "val_bpb": x["bpb"], "rho": x["rho"], "phi": x["phi"],
                             "depth": x["D"], "reference": is_reference(x), "direction": x["direction"], "counted": True,
-                            "E_bytes": x.get("E_bytes")})
+                            "E_bytes": x.get("E_bytes"), "regime": (rec or {}).get("regime", "earlier"),
+                            "start_bpb": x.get("start_bpb"), "output_sha256": x.get("output_sha256"),
+                            "submitted": x.get("submitted"), "node": x.get("node")})
             continue
         if x.get("counted"):
             continue
@@ -662,8 +717,15 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
                         "rho": {k: v["rho"] for k, v in grid.items()}, "phi": {k: v["phi"] for k, v in grid.items()},
                         "option": {k: v["option"] for k, v in grid.items()}, "depth": a["depth"],
                         "reference": is_reference(x), "direction": x["direction"], "counted": False,
-                        "E_bytes": cp.get("e_bytes"), "credit": a["credit"]})
+                        "E_bytes": cp.get("e_bytes"), "credit": a["credit"], "regime": "earlier"})
     return out
+
+
+def regime_start_bpb(subs: list[dict], s: str) -> float | None:
+    """The current regime's l0 on start `s`: the start's whole-pool bpb its records carry (the median, should they
+    differ in the last digits)."""
+    v = sorted(x["start_bpb"] for x in subs if x["start"] == s and isinstance(x.get("start_bpb"), (int, float)))
+    return v[len(v) // 2] if v else None
 
 
 def pareto(points: list[tuple[float, float, dict]]) -> list[dict]:
@@ -675,38 +737,45 @@ def pareto(points: list[tuple[float, float, dict]]) -> list[dict]:
     return out
 
 
+def start_table(on: list[dict], l0: float | None, c: float) -> dict:
+    """W*, honest and W*/honest per target and (k, r) on one start, and the proxy frontiers, from its submissions."""
+    refs, cov = [x for x in on if x["reference"]], [x for x in on if not x["reference"]]
+    st = {"start_bpb": l0, "c": c, "targets": [], "submissions": len(on),
+          "proxy_frontier_flops": [{"id": x["id"], "cp": x["cp"], "flops": 2 * x["macs"], "bpb": x["val_bpb"]}
+                                   for x in pareto([(x["macs"], x["val_bpb"], x) for x in on])],
+          "proxy_frontier_E": [{"id": x["id"], "cp": x["cp"], "E_bytes": x["E_bytes"], "bpb": x["val_bpb"]}
+                               for x in pareto([(x["E_bytes"] or 0, x["val_bpb"], x) for x in on])]}
+    for f in TARGETS if l0 is not None else ():
+        l_star = l0 * (1 - f)
+        h = honest(refs, l_star)
+        h_id = min((x for x in refs if x["val_bpb"] <= l_star), key=lambda x: x["macs"], default=None)
+        t = {"drop": f, "l_star": l_star, "honest_macs": h, "honest_id": h_id and h_id["id"],
+             "honest_cp": h_id and h_id["cp"], "cells": {}}
+        for key in KEYS:
+            w = w_star(cov, l_star, key)
+            arg = min((x for x in cov if x["val_bpb"] <= l_star), key=lambda x: x["macs"] * x["rho"][key], default=None)
+            t["cells"][key] = {"w_star": w, "effective_slowdown": effective_slowdown(cov, refs, l_star, key),
+                               "id": arg and arg["id"], "cp": arg and arg["cp"], "rho": arg and arg["rho"][key],
+                               "direction": arg and arg["direction"], "counted": arg and arg["counted"]}
+        st["targets"].append(t)
+    return st
+
+
 def score(write: bool = True) -> dict:
     rows = [json.loads(x) for x in (STATE / "index.jsonl").read_text().splitlines() if x.strip()]
     starts = json.loads((STATE / "starts.json").read_text())
     subs = submissions(rows, starts)
     col = STATE / "collect.json"
-    rep = {"at": now(), "te_core": TE_CORE_VERSION,
+    rep = {"at": now(), "te_core": TE_CORE_VERSION, "regime": TE_REGIME,
            "te_core_commit": json.loads(col.read_text()).get("te_core_commit", "") if col.exists() else "",
            "annotation": "the harness's count for witness v2 records, analytic for witness v1 (module docstring)",
-           "p_bits": P_BITS, "c_per_forward_token": C_PER_FORWARD_TOKEN, "starts": {}, "submissions": len(subs)}
+           "p_bits": P_BITS, "c_per_forward_token": C_PER_FORWARD_TOKEN, "starts": {}, "earlier": {},
+           "submissions": len(subs)}
+    cur, old = [x for x in subs if x["regime"] == "current"], [x for x in subs if x["regime"] != "current"]
     for s in STARTS:
-        on = [x for x in subs if x["start"] == s]
-        refs, cov = [x for x in on if x["reference"]], [x for x in on if not x["reference"]]
-        l0 = starts[s]["bpb"]
-        st = {"start_bpb": l0, "c": block_c(forward_macs_per_token(starts[s])), "targets": [],
-              "proxy_frontier_flops": [{"id": x["id"], "cp": x["cp"], "flops": 2 * x["macs"], "bpb": x["val_bpb"]}
-                                       for x in pareto([(x["macs"], x["val_bpb"], x) for x in on])],
-              "proxy_frontier_E": [{"id": x["id"], "cp": x["cp"], "E_bytes": x["E_bytes"], "bpb": x["val_bpb"]}
-                                   for x in pareto([(x["E_bytes"] or 0, x["val_bpb"], x) for x in on])]}
-        for f in TARGETS:
-            l_star = l0 * (1 - f)
-            h = honest(refs, l_star)
-            h_id = min((x for x in refs if x["val_bpb"] <= l_star), key=lambda x: x["macs"], default=None)
-            t = {"drop": f, "l_star": l_star, "honest_macs": h, "honest_id": h_id and h_id["id"],
-                 "honest_cp": h_id and h_id["cp"], "cells": {}}
-            for key in KEYS:
-                w = w_star(cov, l_star, key)
-                arg = min((x for x in cov if x["val_bpb"] <= l_star), key=lambda x: x["macs"] * x["rho"][key], default=None)
-                t["cells"][key] = {"w_star": w, "effective_slowdown": effective_slowdown(cov, refs, l_star, key),
-                                   "id": arg and arg["id"], "cp": arg and arg["cp"], "rho": arg and arg["rho"][key],
-                                   "direction": arg and arg["direction"], "counted": arg and arg["counted"]}
-            st["targets"].append(t)
-        rep["starts"][s] = st
+        c = block_c(forward_macs_per_token(starts[s]))
+        rep["starts"][s] = start_table([x for x in cur if x["start"] == s], regime_start_bpb(cur, s), c)
+        rep["earlier"][s] = start_table([x for x in old if x["start"] == s], starts[s]["bpb"], c)
     if write:
         (STATE / "score.json").write_text(json.dumps(rep, indent=1) + "\n")
         (STATE / "submissions.json").write_text(json.dumps(subs) + "\n")
@@ -716,8 +785,21 @@ def score(write: bool = True) -> dict:
 
 def score_md(rep: dict) -> str:
     lines = [f"# Scores, {rep['at']} (te_core {rep['te_core']}; {rep['annotation']}; p = {rep['p_bits']})", ""]
-    for s, st in rep["starts"].items():
-        lines += [f"## {s} (start {st['start_bpb']:.4f} bpb, c = {st['c']:.3g} MACs)", "",
+    for name, part in (("te_core " + "/".join(rep["regime"]) + " records (paired slice scores against the start's whole "
+                        "search-pool bpb)", rep["starts"]),
+                       ("earlier records (the fixed search set; not comparable with the above)", rep.get("earlier", {}))):
+        lines += [f"# {name}", ""]
+        lines += start_md(part)
+    return "\n".join(lines) + "\n"
+
+
+def start_md(part: dict) -> list[str]:
+    lines = []
+    for s, st in part.items():
+        if not st["submissions"]:
+            lines += [f"## {s}: no submission", ""]
+            continue
+        lines += [f"## {s} (start {fmt(st['start_bpb'], '.4f')} bpb, c = {st['c']:.3g} MACs)", "",
                   "| target | l* | honest MACs | " + " | ".join(KEYS) + " |", "|---|---|---|" + "---|" * len(KEYS)]
         for t in st["targets"]:
             cells = []
@@ -730,7 +812,7 @@ def score_md(rep: dict) -> str:
             f"{short(x['id'])}@{x['cp']} {x['flops']:.3g} -> {x['bpb']:.4f}" for x in st["proxy_frontier_flops"]),
                   "", "Proxy frontier, bpb against |E|: " + "; ".join(
             f"{short(x['id'])}@{x['cp']} {fmt(x['E_bytes'], ',')} B -> {x['bpb']:.4f}" for x in st["proxy_frontier_E"]), ""]
-    return "\n".join(lines) + "\n"
+    return lines
 
 
 # ---- cells, promotions, digest -----------------------------------------------------------------------------------------
@@ -748,8 +830,13 @@ def cell_of(x: dict) -> tuple:
 
 
 def drop_of(x: dict, starts: dict) -> float | None:
-    s0 = starts.get(x["start"], {}).get("bpb")
+    """The relative bpb drop from the start: a current-regime record against the whole-pool start bpb it carries."""
+    s0 = x.get("start_bpb") if x.get("regime") == "current" else starts.get(x["start"], {}).get("bpb")
     return (s0 - x["bpb"]) / s0 if s0 and isinstance(x.get("bpb"), (int, float)) else None
+
+
+def current(xs: list[dict]) -> list[dict]:
+    return [x for x in xs if x.get("regime") == "current"]
 
 
 def entries(rows: list[dict], audit: bool = False) -> list[dict]:
@@ -760,21 +847,26 @@ def entries(rows: list[dict], audit: bool = False) -> list[dict]:
     counts them)."""
     last: dict[str, dict] = {}
     own: dict[str, dict] = {}
+    subm: dict[str, dict] = {}
     for x in rows:
         if x["source"] == "te_core" and x.get("te_kind") == "submission":
             m, k = (last, x["record"]) if x.get("derived") else (own, x.get("run") or x["te_id"])
             if k not in m or (x.get("fraction") or 0) > (m[k].get("fraction") or 0):
                 m[k] = x
+            if x.get("derived") and x.get("submitted"):
+                subm[x["record"]] = x
     out = []
     for x in rows:
         if x["source"] != "launch.py":
             continue
         t = last.get(x["id"])
         o = own.pop(x["run"], None) if x.get("run") else None
+        s = subm.get(x["id"]) or t
         out.append(x | ({"phi": at10(t["phi"]), "D": at10(t["D"]), "train_flops": 2 * t["macs"], "te_id": o and o["te_id"],
-                         "tier": t.get("tier"), "families": t.get("families"), "ingested": True} if t else {}))
+                         "tier": t.get("tier"), "families": t.get("families"), "ingested": True,
+                         "output_sha256": s.get("output_sha256"), "node": t.get("node") or x.get("node")} if t else {}))
     out += [x | {"phi": at10(x.get("phi")), "D": at10(x.get("D")), "unrecorded": True} for x in own.values()]
-    return sorted((x for x in out if audit or not (is_audit(x) or x.get("cancelled") or x.get("unrecorded"))),
+    return sorted((x for x in out if audit or not (is_audit(x) or x.get("cancelled") or x.get("unrecorded") or x.get("final"))),
                   key=lambda x: (x.get("launched") or "", x["id"]))
 
 
@@ -783,10 +875,10 @@ def at10(v):
 
 
 def promotions(rows: list[dict], starts: dict, promoted: dict) -> dict:
-    """This hour's promotions: each direction's top third by relative bpb drop, and the best of each thin cell (at most
-    THIN valid records), among valid records of the search (launched from SEARCH_START) not promoted before; plus
-    re-screens of mechanisms already screened."""
-    valid = [x for x in entries(rows) if x["valid"] and drop_of(x, starts) is not None
+    """This hour's promotion candidates: each direction's top third by relative bpb drop, and the best of each thin cell
+    (at most THIN valid records), among the current regime's valid records not promoted before; plus re-screens of
+    mechanisms already screened. Which candidates are promoted is the sealed set's (`sealed_bits`)."""
+    valid = [x for x in current(entries(rows)) if x["valid"] and drop_of(x, starts) is not None
              and (x["launched"] or "") >= SEARCH_START]
     new, why = [], {}
     by_dir: dict[str, list[dict]] = {}
@@ -828,8 +920,9 @@ def rescreens(rows: list[dict]) -> list[dict]:
 
 
 def empty_cells(rows: list[dict], starts: dict) -> list[str]:
-    """E range x φ range x start cells no valid record fills, within the E ranges each class's cap allows."""
-    valid = [x for x in entries(rows) if x["valid"]]
+    """E range x φ range x start cells no valid record of the current regime fills, within the E ranges each class's cap
+    allows."""
+    valid = [x for x in current(entries(rows)) if x["valid"]]
     filled = {(e_bin(x["E_bytes"]), phi_bin(x["phi"]), x["start"]) for x in valid}
     out = []
     for s in STARTS:
@@ -838,6 +931,48 @@ def empty_cells(rows: list[dict], starts: dict) -> list[str]:
                 if (e, p, s) not in filled:
                     out.append(f"{s}:{e}:{p}")
     return out
+
+
+OFFICIAL_SRC = Path(os.environ.get("TE_OFFICIAL_SRC", "/tmp/scorer/official"))
+SHIM = OFFICIAL_SRC.with_name("bin")
+
+
+def official_src() -> Path:
+    """A clean sparse checkout of TE_BRANCH's head (covert_witness and the research package) for the harness's own tools
+    (promote.py, nodes.txt), and a `research` in SHIM that runs that package (the VM's install predates pools)."""
+    if not (OFFICIAL_SRC / ".git").exists():
+        subprocess.run(["git", "-C", str(REPO), "worktree", "add", "-q", "--no-checkout", "--detach", str(OFFICIAL_SRC),
+                        f"origin/{TE_BRANCH}"], check=True)
+        subprocess.run(["git", "-C", str(OFFICIAL_SRC), "sparse-checkout", "set", "--no-cone", "/benchmarks/covert_witness/",
+                        "/tools/research/"], check=True)
+    subprocess.run(["git", "-C", str(OFFICIAL_SRC), "fetch", "-q", "origin", TE_BRANCH], capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(OFFICIAL_SRC), "checkout", "-q", "--detach", "FETCH_HEAD"], check=True)
+    SHIM.mkdir(parents=True, exist_ok=True)
+    (SHIM / "research").write_text(f'#!/usr/bin/env bash\nPYTHONPATH="{OFFICIAL_SRC}/tools/research/src" '
+                                   f'exec "{sys.executable}" -m research "$@"\n')
+    (SHIM / "research").chmod(0o755)
+    return OFFICIAL_SRC
+
+
+def tool_env() -> dict:
+    return os.environ | {"PATH": f"{SHIM}:{os.environ.get('PATH', '')}",
+                         "CW_NODES": str(OFFICIAL_SRC / "benchmarks" / "covert_witness" / "nodes.txt")}
+
+
+def sealed_bits(cands: list[dict]) -> dict:
+    """{id: {promote, value_sha256, node, run}} from the harness's promote.py: one bit per candidate output, decided on
+    its node from the sealed promotion value (search gain > 0 and promotion gain >= 0.5x it); nothing else returns."""
+    src = official_src()
+    d = STATE / "sealed"
+    d.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
+    inp, out = d / f"candidates-{stamp}.json", d / f"bits-{stamp}.json"
+    inp.write_text(json.dumps(cands, indent=1) + "\n")
+    p = subprocess.run([sys.executable, "benchmarks/covert_witness/promote.py", "--in", str(inp), "--out", str(out)],
+                       cwd=src, env=tool_env(), capture_output=True, text=True)
+    if p.returncode or not out.exists():
+        raise SystemExit(f"scorer: promote.py failed ({p.returncode}): {(p.stderr or p.stdout)[-800:]}")
+    return json.loads(out.read_text())
 
 
 def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) -> list[str]:
@@ -849,10 +984,29 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
     hhmm = hhmm or datetime.now(timezone.utc).strftime("%H:%MZ")
     lines = []
     pr = promotions(rows, starts, promoted)
+    bits = None
     if promote:
-        if pr["new"]:
-            parts = [f"{short(p['id'])} ({'; '.join(p['reasons'])})" for p in pr["new"]]
-            lines.append(f"{hhmm} scorer [PROMOTED] " + ", ".join(parts))
+        ents = {x["id"]: x for x in entries(rows)}
+        cands = [{"id": p["id"], "output_sha256": ents[p["id"]]["output_sha256"], "node": ents[p["id"]].get("node")}
+                 for p in pr["new"] if ents.get(p["id"], {}).get("output_sha256")]
+        bits = (sealed_bits(cands) if cands else {}) if append else None
+        why = {p["id"]: p["reasons"] for p in pr["new"]}
+        if bits is None and pr["new"]:
+            lines.append(f"{hhmm} scorer [PROMOTED] (dry run; the sealed set decides on --append) candidates: " + ", ".join(
+                f"{short(i)} ({'; '.join(r)})" for i, r in why.items()))
+        elif bits is not None and why:
+            yes = [i for i in why if (bits.get(i) or {}).get("promote")]
+            runs = sorted({b["run"] for b in bits.values() if b.get("run")})
+            if yes:
+                lines.append(f"{hhmm} scorer [PROMOTED] " + ", ".join(f"{short(i)} ({'; '.join(why[i])})" for i in yes)
+                             + f"; promoted by the sealed promotion set ({', '.join(runs)}).")
+            no = [i for i in why if i not in yes]
+            if no:
+                lines.append(f"{hhmm} scorer [DIGEST] promotion candidates the sealed set did not promote: " + ", ".join(
+                    f"{short(i)} ({'no sealed value' if (bits.get(i) or {}).get('promote') is None else 'gain not held'})"
+                    for i in no) + ".")
+            pr["new"] = [p for p in pr["new"] if p["id"] in yes]
+            pr["decided"] = {i: bits.get(i) for i in why}
         old = set(json.loads((STATE / "rescreens.json").read_text())) if (STATE / "rescreens.json").exists() else set()
         rs = [x for x in pr["rescreens"] if x["id"] not in old]
         if rs:
@@ -864,8 +1018,8 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
         append_board(lines)
         if promote:
             ledger_promote(pr["new"], rows)
-            for p in pr["new"]:
-                promoted[p["id"]] = {"at": hhmm, "reasons": p["reasons"]}
+            for i, b in (pr.get("decided") or {}).items():
+                promoted[i] = {"at": hhmm, "promote": (b or {}).get("promote"), "sealed": b}
             ppath.write_text(json.dumps(promoted, indent=1) + "\n")
             (STATE / "rescreens.json").write_text(json.dumps(sorted({x["id"] for x in pr["rescreens"]})) + "\n")
     return lines
@@ -887,17 +1041,10 @@ def ledger_promote(new: list[dict], rows: list[dict]) -> list[str]:
     return out
 
 
-def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
+def frontier_lines(part: dict) -> list[str]:
+    """One `START: target; target; ...` per start with an honest or W* entry at some target."""
     out = []
-    cw = entries(rows)
-    n, nv = len(cw), len([x for x in cw if x["valid"]])
-    nc = len([x for x in rows if x["source"] == "launch.py" and x.get("cancelled")])
-    out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid; direction audit's and {nc} of runs cancelled unrun not "
-               f"counted). Frontier per target "
-               f"below: honest = least |C| (MACs) of the reference directions (ref-*) reaching l*; W*/honest per (k, r) in the "
-               f"order 10kB r1,r10,r100 | 100kB | 1MB, te_core rho, with the W* entries, (c) priced by the harness's "
-               f"count, (a) by the analytic annotation (p 16); full tables in the scorer's score.md.")
-    for s, st in rep["starts"].items():
+    for s, st in part.items():
         parts = []
         for t in st["targets"]:
             h = t["honest_macs"]
@@ -911,7 +1058,31 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
                          + (f" ({short(t['honest_id'])}@{t['honest_cp']})" if t["honest_id"] else "")
                          + (f"; W*/honest [{vec}] via {', '.join(ids)}" if ids else "; no covert entry reaches it"))
         if parts:
-            out.append(f"{hhmm} scorer [DIGEST] frontier {s}: " + "; ".join(parts) + ".")
+            out.append(f"{s}: " + "; ".join(parts) + ".")
+    return out
+
+
+def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
+    out = []
+    cw = entries(rows)
+    n, nv = len(cw), len([x for x in cw if x["valid"]])
+    nc = len([x for x in rows if x["source"] == "launch.py" and x.get("cancelled")])
+    ncur = len([x for x in current(cw) if x["valid"]])
+    reg = "/".join(rep.get("regime", TE_REGIME))
+    out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid, {ncur} of them te_core {reg} records; direction audit's, "
+               f"the scorer's final reruns and {nc} of runs cancelled unrun not counted). Frontier per target below, te_core "
+               f"{reg} records only (paired slice scores, l* from the start's whole-pool bpb they carry): honest = least "
+               f"training FLOPs (2|C|) of the reference directions (ref-*) reaching l*; W*/honest per (k, r) in the order "
+               f"10kB r1,r10,r100 | 100kB | 1MB, te_core rho, with the W* entries, (c) priced by the harness's count, (a) "
+               f"by the analytic annotation (p 16); full tables, the earlier records' included, in the scorer's score.md.")
+    lines = frontier_lines(rep["starts"])
+    nsub = sum(st["submissions"] for st in rep["starts"].values())
+    out += [f"{hhmm} scorer [DIGEST] frontier {x}" for x in lines] or [
+        f"{hhmm} scorer [DIGEST] frontier: "
+        + (f"the te_core {reg} records' {nsub} checkpoints reach no target yet. " if nsub else
+           f"no te_core {reg} record yet. ")
+        + f"The earlier records' (fixed search set, te_core before {reg}; not comparable, and out of the final table): "
+        + (" ".join(frontier_lines(rep.get("earlier", {}))) or "none")]
     if pr["new"]:
         out.append(f"{hhmm} scorer [DIGEST] newly promoted: " + ", ".join(short(p["id"]) for p in pr["new"]) + ".")
     empty = empty_cells(rows, starts)
@@ -937,7 +1108,12 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     v2 = [x for x in cw if x["source"] == "launch.py" and x.get("counted")]
     refused = [x for x in v2 if not x.get("ingested")]
     unrec = [x for x in entries(rows, audit=True) if x.get("unrecorded")]
-    out.append(f"{hhmm} scorer [DIGEST] counted: {len(v2)} witness v2 records priced by the harness's count, re-ingested "
+    flagged = [x for x in cw if any(f.startswith(("replay:", "counted:")) for f in x["failed_checks"])]
+    if flagged:
+        out.append(f"{hhmm} scorer [DIGEST] unscored as counted-compute escapes (coordinator 10:35Z): " + ", ".join(
+            f"{short(x['id'])} ({'; '.join(f for f in x['failed_checks'] if f.startswith(('replay:', 'counted:')))})"
+            for x in flagged) + ".")
+    out.append(f"{hhmm} scorer [DIGEST] counted: {len(v2)} witness v2/v3 records priced by the harness's count, re-ingested "
                f"here by te_core {rep.get('te_core_commit', '')[:10]} from the run.json the node wrote (custody: the "
                f"record's witness and run.json are the node's out/)"
                + (f" ({len(refused)} refused: " + ", ".join(f"{short(x['id'])} {';'.join(x['failed_checks'])}"
@@ -957,7 +1133,7 @@ def families_of(x: dict) -> str:
 
 
 def filled_of(rows, s) -> set[str]:
-    return {f"{e_bin(x['E_bytes'])}/{phi_bin(x['phi'])}" for x in entries(rows)
+    return {f"{e_bin(x['E_bytes'])}/{phi_bin(x['phi'])}" for x in current(entries(rows))
             if x["valid"] and x["start"] == s and (x["E_bytes"] or 0) < 1e7}
 
 
@@ -967,8 +1143,9 @@ def direction_sentence(d: str, rows: list[dict], starts: dict) -> str:
     mechs = sorted({x["mechanism"] for x in xs})
     if not v:
         return f"{len(xs)} records, none valid yet ({', '.join(mechs)})."
-    best = max(v, key=lambda x: drop_of(x, starts))
-    return (f"{len(xs)} records, {len(v)} valid, {len(mechs)} mechanisms ({', '.join(mechs)}); best "
+    best = max(current(v) or v, key=lambda x: drop_of(x, starts))
+    return (f"{len(xs)} records, {len(v)} valid ({len(current(v))} te_core {'/'.join(TE_REGIME)}), {len(mechs)} mechanisms "
+            f"({', '.join(mechs)}); best{'' if best.get('regime') == 'current' else ' (earlier regime)'} "
             f"{short(best['id'])} '{best['note']}' on {best['start']}: {best['bpb']:.4f} bpb "
             f"({100 * drop_of(best, starts):+.2f}% from the start) at {best['train_flops']:.3g} FLOPs, |E| "
             f"{fmt(best['E_bytes'], ',')} B, phi {fmt(best['phi'], '.2f')}.")
