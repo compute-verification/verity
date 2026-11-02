@@ -86,6 +86,18 @@
 #      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree drawn and opened there, rec_live
 #              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws them, rec_live --tree-test-os,
 #              a test's coins, never the challenger's, out/inner/tree-source.txt says which)
+#              TREE_FROM=local: the challenger started on this node beside the run (pod/challenger.sh: its key and session
+#              secret in a scratch directory none of the prover's), its records under out/inner/challenger, and
+#              out/inner/tree-held.json whether each inner session's coin tree is one its signed release log shows it
+#              sampled and opened
+#      RELEASE=0 (1: the recursive session through the ZK server's release side, live PROTOCOL.md §10.5, on the state
+#              directory $DD/fw: STEP=inner, one session (WARM=0 RUNS=1), opens it with V*'s statements as its parts in
+#              rec-statements' order and RELEASE_WINDOWS_S's schedule ($DD/release.json, rec_inner.py release-parts);
+#              STEP=oprove, MODES=firewall, proves each part once in that order through `prove --firewall-state`
+#              (core-firewall session, built beside flock-verify) and writes out/oprove/release.json, each part's release
+#              time against when the Lean loop decided it (rec_inner.py release-report), failing unless every part left)
+#      RELEASE_WINDOWS_S=lead=1500,L0=2800,L=900,alg=900,cap=120,other=900 (each part's window by its class, seconds; lead is
+#              added to the first's)  RELEASE_BUDGET= (the stream's failure budget; empty: none)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
@@ -146,10 +158,15 @@ LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -pri
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 # the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside flock-verify
 export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
+# the release side's Lean session loop (RELEASE=1: prove --firewall-state), keyed by its package's sources and those it requires
+CSHA=$(cd verity/core && find service/flock service/firewall protocols/interface difftest/lean -name .lake -prune -o -type f -print \
+  | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+export FC_CORE_FIREWALL=$L/corefw-$CSHA/core-firewall
+FWS=$DD/fw RELEASE=${RELEASE:-0}
 FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
 # the ship's name for each binary: its cache key in the name, so a node takes only the one its own sources key
-SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:flock-verify-$LSHA $FC_FIREWALL_LEAN:flock-firewall-$LSHA $FOLD_BIN:inner-fold-$FSHA"
+SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:flock-verify-$LSHA $FC_FIREWALL_LEAN:flock-firewall-$LSHA $FOLD_BIN:inner-fold-$FSHA $FC_CORE_FIREWALL:core-firewall-$CSHA"
 if [ -n "${PREBUILT:-}" ]; then
   for s in $SHIPS; do
     f=$PREBUILT/${s#*:}; [ -x ${s%%:*} ] || [ ! -f $f ] || { mkdir -p $(dirname ${s%%:*}) && cp $f ${s%%:*}.$$ && chmod +x ${s%%:*}.$$ && mv ${s%%:*}.$$ ${s%%:*}; }
@@ -232,8 +249,11 @@ busy = [1 - (b[c][3] + b[c][4] - a[c][3] - a[c][4]) / max(1, sum(b[c]) - sum(a[c
 print(round(sum(busy) / len(busy), 3))
 EOF
   echo "${PENV:-}" > $d/prove-env.txt
-  on_gpu $d env ${PENV:-} FC_VERIFY_AHEAD=$NS FC_ZK_SELF_CHECK=${SELF_CHECK:-stop} taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt \
-    $B prove $zk $GPUF --verifier $addr --instances $inst --circuit $circ --warm $WARM --runs $RUNS | stamp > $d/prove.tsv
+  # RARGS (oprove under RELEASE=1): the release side's flags, which hold each verdict before the next session (no verify-ahead)
+  local ahead=$NS; [ -z "${RARGS:-}" ] || ahead=0
+  echo "${RARGS:-}" > $d/release-args.txt
+  on_gpu $d env ${PENV:-} FC_VERIFY_AHEAD=$ahead FC_ZK_SELF_CHECK=${SELF_CHECK:-stop} taskset -c $PCPU /usr/bin/time -v -o $d/time-prove.txt \
+    $B prove $zk $GPUF --verifier $addr --instances $inst --circuit $circ --warm $WARM --runs $RUNS ${RARGS:-} | stamp > $d/prove.tsv
   local rc=${PIPESTATUS[0]}
   grep -h panicked $d/prove.err | head -3
   return $rc
@@ -297,10 +317,23 @@ hello_at() {
 proxied() {
   rm -rf $DD/inner; mkdir -p $DD/inner
   local src=(--tree-test-os)
-  [ -z "${TREE_FROM:-}" ] || src=(--tree-from $TREE_FROM ${TREE_SECRET_FILE:+--tree-secret-file $TREE_SECRET_FILE})
-  echo "${TREE_FROM:-test-os}" > $O/inner/tree-source.txt
+  if [ "${TREE_FROM:-}" = local ]; then
+    challenger_start $O/inner/challenger || return 1
+    src=(--tree-from $CHALLENGER --tree-secret-file $CHALLENGER_SECRET)
+  elif [ -n "${TREE_FROM:-}" ]; then
+    src=(--tree-from $TREE_FROM ${TREE_SECRET_FILE:+--tree-secret-file $TREE_SECRET_FILE})
+  fi
+  echo "${TREE_FROM:-test-os}${CHALLENGER:+ $CHALLENGER}" > $O/inner/tree-source.txt
+  # RELEASE=1: the one session opens the recursive session on the ZK server's state, its parts and schedule fixed before it
+  local rel=()
+  if [ $RELEASE = 1 ]; then
+    rm -rf $FWS; mkdir -p $FWS
+    rel=(--firewall $FWS $(python3 -c 'import json, sys; r = json.load(open(sys.argv[1]))
+print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str, r["windows_ms"])))' $DD/release.json) \
+      ${RELEASE_BUDGET:+--budget $RELEASE_BUDGET})
+  fi
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
-    --draw $DD/stage/draw.json --coin-tree "${src[@]}" --lean $FC_FIREWALL_LEAN > $O/inner/proxy/proxy.log 2>&1 &
+    --draw $DD/stage/draw.json --coin-tree "${src[@]}" --lean $FC_FIREWALL_LEAN "${rel[@]}" > $O/inner/proxy/proxy.log 2>&1 &
   local PP=$!
   wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; return 1; }
   PENV="$INNER_COINS ${PENV:-}" prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt
@@ -310,6 +343,24 @@ proxied() {
   # one session is written into --out itself, not s0 (rec_live.serve)
   if [ $NS = 1 ] && [ -e $DD/inner/public.json ]; then
     mkdir -p $DD/inner/s0 && for f in $DD/inner/*; do case ${f##*/} in s0|schedule.json) ;; *) mv $f $DD/inner/s0/ ;; esac; done
+  fi
+  # TREE_FROM=local: the challenger exits once rec_live closed its session; each session's tree is one its release log
+  # shows it sampled, and opened every round of
+  if [ "${TREE_FROM:-}" = local ]; then
+    challenger_end $O/inner/challenger; echo "challenger exit $?"
+    python3 - $O/inner/challenger/releases.jsonl $DD/inner/s*/coin_tree.json > $O/inner/tree-held.json <<'EOF' || rc=1
+import json, sys
+log = [json.loads(ln) for ln in open(sys.argv[1]) if ln.strip()]
+res = []
+for f in sys.argv[2:]:
+    root = json.load(open(f))["root"]
+    res.append({"session": f.split("/")[-2], "root": root,
+                "sampled": any(e.get("event") == "coin-tree" and e.get("root") == root for e in log),
+                "opens": sum(e.get("event") == "tree-open" and e.get("tree") == root for e in log)})
+print(json.dumps({"sessions": res, "ok": bool(res) and all(r["sampled"] and r["opens"] for r in res)}))
+sys.exit(0 if res and all(r["sampled"] and r["opens"] for r in res) else "an inner session's coin tree is none the challenger sampled")
+EOF
+    cat $O/inner/tree-held.json
   fi
   return $rc
 }
@@ -475,6 +526,24 @@ lean_build() {
   )
 }
 
+# corefw_build: core-firewall (verity/core/service/firewall, the release side's Lean session loop), from a copy of the
+# packages it requires at their relative places, keyed by their sources (CSHA)
+corefw_build() {
+  [ -x $FC_CORE_FIREWALL ] && return 0
+  no_build core-firewall-$CSHA
+  (
+    export PATH=$HOME/.elan/bin:$PATH
+    command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
+    exec 9>$L/corefw.lock; flock 9
+    if [ ! -x $FC_CORE_FIREWALL ]; then
+      C=$L/corefw-src; rm -rf $C && mkdir -p $C/service $C/protocols $C/difftest \
+        && cp -r verity/core/service/flock verity/core/service/firewall $C/service/ && cp -r verity/core/protocols/interface $C/protocols/ \
+        && cp -r verity/core/difftest/lean $C/difftest/ && (cd $C/service/firewall && lake build core-firewall) \
+        && mkdir -p $L/corefw-$CSHA && cp $C/service/firewall/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
+    fi
+  )
+}
+
 # fold_build: InnerFold.lean as an executable (vstage's fold points and comb), keyed by its sources and the Lean package's
 fold_build() {
   [ -x $FOLD_BIN ] && return 0
@@ -537,7 +606,7 @@ rec_inner_at() { if [ -s $1/rec-coins.json ]; then echo "--rec-inner-coins $1/re
 
 case $STEP in
 build)
-  lean_build > $O/build-lean.log 2>&1 &
+  { lean_build && corefw_build; } > $O/build-lean.log 2>&1 &
   LP=$!
   # STAGE_FROM=DIR: another job's staged statements (its data/$TAG: stage and stage-zk) instead of staging them again
   if [ "${STAGE:-1}" = 0 ]; then
@@ -570,6 +639,7 @@ build)
   echo "statement exit $?"
   wait $LP; echo "lean build exit $?"
   [ -x $LEAN_BIN ] && sha256sum $LEAN_BIN > $O/lean.sha
+  [ -x $FC_CORE_FIREWALL ] && sha256sum $FC_CORE_FIREWALL >> $O/lean.sha
   tail -5 $O/build-lean.log
   if [ "${SHIP:-0}" = 1 ]; then
     fold_build > $O/build-fold.log 2>&1 || { tail -30 $O/build-fold.log; exit 1; }
@@ -592,6 +662,23 @@ inner)
   inner_partition > $O/inner/partition.txt || exit 1
   cp $D/draw.json $O/inner/
   [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/inner/build-lean.log 2>&1 || { tail -20 $O/inner/build-lean.log; exit 1; }
+  if [ "${TREE_FROM:-}" = local ]; then
+    . verity/ml/flock/pod/challenger.sh; challenger_build; challenger_built || exit 1
+  fi
+  # RELEASE=1: the recursive session's parts, V*'s statements at the inner statement's shape in their order, and its
+  # schedule, fixed and public before the inner session (rec_inner.py release-parts), and the release side's Lean loop
+  if [ $RELEASE = 1 ]; then
+    [ $NS = 1 ] || { echo "REFUSED: RELEASE=1: one inner session opens the one recursive session (WARM=0 RUNS=1), not $NS"; exit 2; }
+    [ -z "${LEVELS:-}" ] || { echo "REFUSED: RELEASE=1 with LEVELS=$LEVELS: a part left out is the recursive session's stop"; exit 2; }
+    corefw_build > $O/inner/build-corefw.log 2>&1 || { tail -20 $O/inner/build-corefw.log; exit 1; }
+    $LEAN_BIN rec-inner --circuit $D/circuit.txt --public $D/pub-$N.bin --partition $D/partition.json --program $D/program.json \
+      > $O/inner/rec-inner.json 2> $O/inner/rec-inner.err || { tail -5 $O/inner/rec-inner.err; exit 1; }
+    $LEAN_BIN rec-statements --rec-inner $O/inner/rec-inner.json > $O/inner/rec-statements.txt 2>&1 || { tail -5 $O/inner/rec-statements.txt; exit 1; }
+    python3 verity/ml/flock/pod/rec_inner.py release-parts --statements $O/inner/rec-statements.txt \
+      --windows-s "${RELEASE_WINDOWS_S:-lead=1500,L0=2800,L=900,alg=900,cap=120,other=900}" > $DD/release.json || exit 1
+    cp $DD/release.json $O/inner/release.json; cat $O/inner/release.json
+    export GPU_TRIES=1
+  fi
   again proxied
   SESS=$DD/inner/s$((NS - 1))
   [ -f $SESS/session/session.json ] || { tail -20 $O/inner/proxy/proxy.log $O/inner/proxy/prove.err; exit 1; }
@@ -769,6 +856,13 @@ oprove)
     [ $((WARM + RUNS)) = 1 ] || { echo "REFUSED: WARM=$WARM RUNS=$RUNS: a firewalled oprove gives each staged statement exactly one session (WARM=0 RUNS=1)"; exit 2; }
     export GPU_TRIES=1 GPU_PREEMPTIBLE=
   fi
+  if [ $RELEASE = 1 ]; then
+    [ "$MODES" = firewall ] || { echo "REFUSED: RELEASE=1 with MODES=$MODES: the release side runs around the Lean session loop (MODES=firewall)"; exit 2; }
+    [ -z "${RETRY:-}" ] && [ -z "${LEVELS:-}" ] \
+      || { echo "REFUSED: RELEASE=1: each part once, every part (no RETRY, no LEVELS): the release side refuses the rest"; exit 2; }
+    [ -s $DD/release.json ] && [ -s $FWS/record.jsonl ] || { echo "RELEASE=1: no recursive session opened (run STEP=inner with RELEASE=1)"; exit 1; }
+    corefw_build > $O/oprove/build-corefw.log 2>&1 || { tail -20 $O/oprove/build-corefw.log; exit 1; }
+  fi
   if [ -n "${RETRY:-}" ]; then
     [ "$MODES" = firewall ] || { echo "REFUSED: RETRY=$RETRY: a retry is shown only in a firewalled run's record (MODES=firewall)"; exit 2; }
     [ -f $V/${RETRY//-//}/inst.bin ] && [[ $RETRY != forged-* ]] || { echo "REFUSED: RETRY=$RETRY: not a staged honest statement under $V"; exit 2; }
@@ -838,6 +932,36 @@ print(json.dumps({"event": "stage", "rec_rows_sha512": RC.digest((vs / "rows.jso
 EOF
     [ -z "${RETRY:-}" ] || echo $RETRY > $VS/retried.txt
   fi
+  # RELEASE=1: the recursive session the inner session opened (its firewall.json), its parts as the inner step fixed them,
+  # which must be V*'s statements here, and the staged statement of each part in their order (ORDER), every part one
+  if [ $RELEASE = 1 ]; then
+    SID=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["session"])' $INNER/firewall.json) \
+      || { echo "RELEASE=1: $INNER opened no recursive session (no firewall.json)"; exit 1; }
+    mapfile -t PARTS < <(python3 -c 'import json, sys; print(*json.load(open(sys.argv[1]))["parts"], sep="\n")' $DD/release.json)
+    mapfile -t ORDER < <(python3 - $VS $V $DD/release.json <<'EOF'
+import json, re, sys
+from pathlib import Path
+vs, v, rel = Path(sys.argv[1]), Path(sys.argv[2]), json.loads(Path(sys.argv[3]).read_text())
+(line,) = [json.loads(ln[9:]) for ln in (vs / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
+if [s[0] for s in line["statements"]] != rel["units"]:
+    sys.exit(f"RELEASE=1: V*'s statements here {[s[0] for s in line['statements']]} are not the recursive session's {rel['units']}")
+at = {}
+for c in sorted(p.parent for p in v.rglob("inst.bin")):
+    name = str(c.relative_to(v)).replace("/", "-")
+    m = re.search(r"--rec-part (\d+)", (vs / f"own-{name}.txt").read_text())
+    if m and not name.startswith("forged-"):
+        at.setdefault(int(m[1]), []).append(str(c.relative_to(v)))
+parts = rel["parts"]
+bad = [f"{parts[j]}: {at.get(j, [])}" for j in range(len(parts)) if len(at.get(j, [])) != 1]
+if bad or set(at) != set(range(len(parts))):
+    sys.exit(f"RELEASE=1: not one staged statement a part: {'; '.join(bad) or sorted(at)}")
+print(*(at[j][0] for j in range(len(rel["parts"]))), sep="\n")
+EOF
+)
+    [ ${#ORDER[@]} = ${#PARTS[@]} ] || { echo "RELEASE=1: the parts' statements are not staged as the session's parts"; exit 1; }
+    echo "release: recursive session $SID, parts ${PARTS[*]}: ${ORDER[*]}"
+    cp $FWS/record.jsonl $O/oprove/fw-record-before.jsonl
+  fi
   (cd $V && find . \( -name circuit.txt -o -name pub.bin -o -name inst.bin -o -name partition.json -o -name program.json \
     -o -name registered.json \) | LC_ALL=C sort | xargs sha512sum) > $O/oprove/statements.sha512
   : > $O/oprove/exits.tsv
@@ -849,9 +973,13 @@ EOF
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip LM=dev ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
     # a V* part's sessions in the run's record (MODES=firewall), a forgery's in one of its own, which STEP=lean puts in its
     # part's place, so that the honest run's record stays one session a part
-    local RRUN= RPART=$(sed -n 's/.*--rec-part \([0-9]*\).*/\1/p' $VS/own-$l.txt)
+    local RRUN= RPART=$(sed -n 's/.*--rec-part \([0-9]*\).*/\1/p' $VS/own-$l.txt) RARGS=
     if [ -n "$REC_RUN" ] && [ -n "$RPART" ]; then
       case $l in forged-*) RRUN=$VS/rec-run-$l.jsonl; : > $RRUN ;; *) RRUN=$REC_RUN ;; esac
+    fi
+    # RELEASE=1: an honest part's one session is the recursive session's outer session at that part
+    if [ $RELEASE = 1 ] && [ -n "$RPART" ] && [[ $l != forged-* ]]; then
+      RARGS="--firewall-state $FWS --session $SID --part ${PARTS[$RPART]}"
     fi
     hello_at $V/$C
     for mode in $LM; do
@@ -900,6 +1028,20 @@ EOF
 )
   echo "oprove: ${#TODO[@]} statements, OPROVE_JOBS=${OPROVE_JOBS:-4} OPROVE_MEM_GB=${OPROVE_MEM_GB:-48}: ${TODO[*]}"
   declare -A RUNNING=(); USED=0; STARTED=()
+  # RELEASE=1: the parts one at a time in their order, each started once the last left (the ZK server's one outer slot), the
+  # wall clock at each one's start and end in release-wall.tsv; then the rest (forgeries) as below
+  if [ $RELEASE = 1 ]; then
+    REST=(); for t in "${TODO[@]}"; do [[ " ${ORDER[*]} " == *" ${t#* } "* ]] || REST+=("$t"); done
+    : > $O/oprove/release-wall.tsv
+    for j in "${!ORDER[@]}"; do
+      C=${ORDER[$j]}; l=${C//\//-}; STARTED+=($l)
+      t0=$(date +%s%3N); echo "oprove $l: part ${PARTS[$j]} of recursive session $SID"
+      ( oprove_one $C ) > $O/oprove/$l.log 2>&1; r=$?
+      printf '%s\t%s\n' $l $r >> $O/oprove/exits.tsv
+      printf '%s\t%s\t%s\t%s\t%s\n' ${PARTS[$j]} $l $t0 $(date +%s%3N) $r >> $O/oprove/release-wall.tsv
+    done
+    TODO=("${REST[@]}")
+  fi
   for t in "${TODO[@]}"; do
     gb=${t%% *} C=${t#* }; l=${C//\//-}; want $l || continue
     STARTED+=($l)
@@ -913,6 +1055,14 @@ EOF
   [ -z "$REC_RUN" ] || echo '{"event":"close"}' >> $REC_RUN
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
   (cd $V && sha512sum --quiet -c $O/oprove/statements.sha512) || { echo "a staged statement changed while sessions ran"; exit 1; }
+  # RELEASE=1: the recursive session on the ZK server's record against its schedule, each part's release time beside when the
+  # Lean loop decided it (its FIREWALL-TIMES line in the part's prove.err); every part released, or the step fails
+  if [ $RELEASE = 1 ]; then
+    cp $FWS/record.jsonl $O/oprove/fw-record.jsonl
+    python3 verity/ml/flock/pod/rec_inner.py release-report --state $FWS --session $SID \
+      --times $(for C in "${ORDER[@]}"; do echo $O/oprove/${C//\//-}-firewall/prove.err; done) > $O/oprove/release.json
+    rr=$?; cat $O/oprove/release.json; [ $rr = 0 ] || { echo "release: the recursive session $SID did not release every part at its time"; exit 1; }
+  fi
   python3 - $O/oprove/exits.tsv "${STARTED[@]}" <<'EOF' || exit 1
 import sys
 got = dict(l.rstrip("\n").split("\t") for l in open(sys.argv[1]) if l.strip())
