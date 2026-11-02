@@ -109,8 +109,10 @@ structure InnerForm where
   draw : Option ByteArray
 
 /-- The inner statement and the inner session's record, as the verifier holds them, at candidate 3's session the
-verifier's inner shape (`inner`), which the inner statement must be (`RecVStar.checkInnerStmt`, at `Inner.load`), and
-how the inner statement is set up (`form`). -/
+verifier's inner shape (`inner`), which the inner statement must be (`RecVStar.checkInnerStmt`, at `Inner.load`), how
+the inner statement is set up (`form`), and the verifier's own program of the inner statement (`program`,
+`--rec-inner-program`), under which a statement whose META links cut wires checks its Linking (`Stmt.setupTables`
+refuses those links without it). -/
 structure Files where
   circuit : ByteArray
   pub : ByteArray
@@ -118,6 +120,7 @@ structure Files where
   record : String
   inner : Option RecVStar.Inner := none
   form : Option InnerForm := none
+  program : Option ByteArray := none
 
 /-- What check 5 reads of the inner session of V*'s unit `unit`: its statement's `m` and `k_log`, its extra claims at the
 record's link points, each rep's coins (an error without the unit), and the comb at a rep's fold points (`Inner.comb`). Set
@@ -142,9 +145,11 @@ def unitRangeOf (st : Stmt) : V Range :=
   | #[r] => .ok r
   | rs => .error s!"the inner circuit has {rs.size} ranges of its unit net, not one"
 
-/-- The inner statement, set up from its circuit and public files on the coin server's coins, and its session's spec. -/
+/-- The inner statement, set up from its circuit and public files on the coin server's coins under the verifier's own
+program of it, and its session's spec. -/
 def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
-  let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
+  let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+      (program := f.program) with
     | .ok x => pure x
     | .error e => throw s!"rec-coins: {unit}: the inner statement: {e}"
   let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
@@ -176,8 +181,8 @@ def drawnSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (reco
 
 /-- `drawnSpec` at the inner files: the inner statement set up at the record's draw as `Files.stmt` sets it up without one. -/
 def Files.drawnSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
-  RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub Coins.os [] (some d) (some f.partition) none)
-    spec st f.record
+  RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub Coins.os [] (some d) (some f.partition)
+    f.program) spec st f.record
 
 /-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
 on the coin server's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded (at the record's full
@@ -792,12 +797,16 @@ def formInput (args : List String) : IO (Except String (Option InnerForm)) := do
     return .ok (some ⟨s, os, tables, draw⟩)
   catch e => return .error s!"rec inner statement: {e}"
 
-/-- `--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR`: the inner statement and
-the inner session (its `session.json`), all four or none, with how the inner statement is set up (`formInput`). -/
+/-- `--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR [--rec-inner-program F]`:
+the inner statement and the inner session (its `session.json`), all four or none, with how the inner statement is set up
+(`formInput`) and the verifier's own program of it, which goes with the four. -/
 def filesOnly (args : List String) : IO (Except String (Option Files)) := do
   match argOf args "--rec-inner-circuit", argOf args "--rec-inner-public", argOf args "--rec-inner-partition",
       argOf args "--rec-inner-session" with
-  | none, none, none, none => return .ok none
+  | none, none, none, none =>
+    if (argOf args "--rec-inner-program").isSome then
+      return .error "--rec-inner-program goes with the inner statement's files (--rec-inner-circuit and its three)"
+    return .ok none
   | some c, some p, some q, some s =>
     let form ← match ← formInput args with
       | .ok f => pure f
@@ -806,8 +815,9 @@ def filesOnly (args : List String) : IO (Except String (Option Files)) := do
       let partition ← match Json.parse (← IO.FS.readFile q) with
         | .ok j => pure j
         | .error e => return .error s!"--rec-inner-partition {q}: not JSON: {e}"
+      let program ← (argOf args "--rec-inner-program").mapM IO.FS.readBinFile
       return .ok (some ⟨← IO.FS.readBinFile c, ← IO.FS.readBinFile p, partition, ← IO.FS.readFile (s ++ "/session.json"),
-        none, form⟩)
+        none, form, program⟩)
     catch e => return .error s!"rec inner session: {e}"
   | _, _, _, _ =>
     return .error "--rec-inner-circuit, --rec-inner-public, --rec-inner-partition and --rec-inner-session go together"

@@ -49,6 +49,12 @@ source, or prints `{"listening": PORT}`, serves one prover (`serve`) and prints 
 (`sessions`) and salt log (`salts`) are in `DIR`. `side_of(period, node, device)` is where `period.json` puts that side
 (`stream.Side`), `salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is the leg's:
 it starts the side, connects to it and answers each index with `respond(index)` (`answer`).
+
+A request naming its audit also carries P2's parameters (`params`, `request_of`), and `setup_of` reads setup's published
+outputs with them, refused unless their root is the binding and their blocks the request's. Each session the
+challenger completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the file 0600: `keep`), the request
+and the id it designated: the auditor's record of that window's setup, from which the remote bandwidth audit's verifier
+on the same host builds its registration (`remote_bandwidth.p2_party --pous-record`), never from a file the prover sends.
 """
 
 from __future__ import annotations
@@ -78,6 +84,7 @@ from verity.ml.randomness import derive
 from . import memory_challenger as mc
 from . import run as R
 from . import setup as pous_setup
+from .schemes.p2 import P2Params
 
 END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (module docstring); the index is public, so they reveal no coin
@@ -103,6 +110,8 @@ MANIFEST = Manifest(
               Channel(PROVER, CHALLENGER, ("Block",))),
     messages=(Schema("Warmup", 1, "structure", {"index": Int()}), Schema("Index", 1, "coins", {"index": Int()}),
               Schema("End", 1, "structure"), Schema("Block", 1, "private", body=Body(max=MAX_BLOCK))))
+SETUPS = "setups"
+PARAMS = ("blocks_per_segment", "c0", "expander", "segments", "w")
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -416,8 +425,44 @@ def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None
     out = {"binding": binding.hex(), "block_bytes": q.block_bytes, "blocks": q.blocks, "k": point.k,
            "limit_ns": point.limit_ns, "node": node}
     if audit is not None:
-        out |= {"audit": audit.hex(), "published": published.to_json()}
+        out |= {"audit": audit.hex(), "published": published.to_json(), "params": {k: getattr(q, k) for k in PARAMS}}
     return out
+
+
+def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Setup's published outputs with P2's parameters, as a request naming its audit carries them (`request_of`), None
+    for a request without them; ValueError unless their root is the session's binding, their blocks the request's,
+    their commitment and root 64 bytes, their salt PoUS's, and the parameters P2's at those blocks and block size."""
+    if "published" not in request and "params" not in request:
+        return None
+    s, p = request.get("published"), request.get("params")
+    if not isinstance(s, dict) or sorted(s) != sorted(("blocks", "commitment", "root", "salt")):
+        raise ValueError("a request's published outputs are {blocks, commitment, root, salt}")
+    if s["root"] != request["binding"]:
+        raise ValueError("the setup's root is not the session's binding")
+    if s["blocks"] != request["blocks"]:
+        raise ValueError(f"the setup is of {s['blocks']} blocks, the session of {request['blocks']}")
+    if not isinstance(p, dict) or sorted(p) != sorted(PARAMS):
+        raise ValueError(f"a setup's params are {list(PARAMS)}")
+    q = P2Params(**p)
+    if (q.blocks, q.block_bytes) != (request["blocks"], request["block_bytes"]):
+        raise ValueError("the setup's parameters are not the session's blocks")
+    published = R.Setup.from_json(s)
+    if len(published.commitment) != 64 or len(published.root) != 64 or len(published.salt) != R.SALT_BYTES:
+        raise ValueError("a setup's commitment and root are 64 bytes and its salt PoUS's")
+    return s | {"params": p}
+
+
+def keep(device: Path, sid: bytes, request: Mapping[str, Any]) -> Path:
+    """The completed session's request and id, `device/setups/<id>.json` (0700, the file 0600, written once)."""
+    d = device / SETUPS
+    d.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(d, 0o700)
+    path = d / f"{sid.hex()}.json"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps({"request": dict(request), "session_id": sid.hex()}, sort_keys=True) + "\n")
+    return path
 
 
 def _logs(device: Path) -> tuple[mc.SaltLog, mc.SessionLog]:
@@ -453,6 +498,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if "audit" in request:
             designate(request, salts, sessions)
+        setup_of(request)
     except (Refusal, mc.SessionLogError, KeyError, TypeError, ValueError) as e:
         return _refused(e)
     signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
@@ -464,14 +510,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sid, s = serve(f, request, signer=signer, log=sessions, salts=salts,
                            coins=secrets.token_bytes(COIN_BYTES), domain=period.SESSION_DOMAIN)
+    keep(device, sid, request)
     print(json.dumps(report(sid, s, signer.public_key), sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["AUDIT_BYTES", "CHALLENGER", "COIN_BYTES", "END", "ID", "MANIFEST", "PREMISE", "PROTOCOL", "PROVER",
-           "SESSION_ID_TAG", "SOURCE_BYTES", "VERSION", "WARMUPS", "WARMUP_INDEX", "Challenger", "Frames", "Prover",
-           "Refusal", "answer", "command", "designate", "give_salt", "main", "placement", "report", "request_of", "salt",
-           "serve", "session", "session_id", "side_of"]
+__all__ = ["AUDIT_BYTES", "CHALLENGER", "COIN_BYTES", "END", "ID", "MANIFEST", "PARAMS", "PREMISE", "PROTOCOL", "PROVER",
+           "SESSION_ID_TAG", "SETUPS", "SOURCE_BYTES", "VERSION", "WARMUPS", "WARMUP_INDEX", "Challenger", "Frames",
+           "Prover", "Refusal", "answer", "command", "designate", "give_salt", "keep", "main", "placement", "report",
+           "request_of", "salt", "serve", "session", "session_id", "setup_of", "side_of"]
 
 if __name__ == "__main__":
     sys.exit(main())

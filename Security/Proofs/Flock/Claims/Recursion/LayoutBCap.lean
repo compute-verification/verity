@@ -96,7 +96,7 @@ theorem readX_statements {x : Msg} {r : XR} (h : readX x = some r) :
 theorem capAt_readX {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ N, capAt r = some (nS x - 1, N) ∧ 0 < nS x := by
   obtain ⟨vs, hvs, hlen⟩ := readX_statements h
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, -, -, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, L, N, -, -, -, rfl⟩ := FlockC3.Reps.list_ok hvs
   have hn : nS x = r.w.parts.length := by simp [nS, h]
   refine ⟨N, ?_, ?_⟩
   · rw [hn, hlen]
