@@ -95,26 +95,28 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 
 ## The formalism's score (covert_witness v3)
 
-covert_witness v3 scores by the training formalism v1 (note:training-20261102T1817Z-report-training-formalism-v1),
-beside the theorem's ρ above, which every record still carries. |C|, c and w are Boolean gates: `gates` prices each
+covert_witness v3 scores by the training formalism v2 (note:training-20261102T2215Z-report-training-formalism-v2),
+beside the theorem's ρ above, which every record still carries. |C|, c, w and d are Boolean gates: `gates` prices each
 counted op by the circuits' own Definitions (a bf16 GEMM MAC is `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 =
 1,480.1). Ingest writes each submission's quantities (`formalism.of_record`: per step structure its gates, token blocks,
-dependent gates and Δ_grad, read from 4.0's `cut_bits` where the record has them). `frontier --formalism` gives, per
-start, target, reading and cell of the start's `policy.cells` (the (c, k) grid in decades from one token's inference
-block to the start's server block, and the reference shapes at their exact (c, k): the inference block, the reference
-policy c = 4096 w, k = 10 kB, and the server block), W\* = the least |C|ρ and honest = the least |C| over every
-checkpoint of every valid record, and Security's S = W\*/honest. Fit (Δ + sτ ≤ k) is checked; Slowdown's ρ, read on
-u(1) (the per-token update, a field of its own: it equals Δ only when every token's path reads the whole update), is a
-target until Lean proves it. u(x), u(1), the frozen tail's share t and a are the best-known values from witnesses,
-labelled upper bounds; a quantity not measured yet is a stub; the row's `labels` name each (`formalism.STUBS`, and
-`formalism.V23` for a row ingested before). Slowdown's frozen-tail case has two readings (`formalism.READINGS`; Daniel
-decides which the theorem means, so every score carries both and neither is the headline): `literal-x0` takes x₀ on the
-whole profile (0 up to t, then u), so x₀ ≥ t and the factor (1 − x₀) exempts the tail's work; `tail-charged` takes x₀
-from the token's start, so the tail's work is charged through a. For u(1) ≫ k they give ρ ≈ φ(1 − t)·s·a/(t·k) and
-φ(1 − k/u(1))·s·a/(t·k), and they agree when t = 0. `plots` writes the console's five panels (P1-P4 and the A2 curve,
-the least |C| to each target against Δ, per start), each `<name>.json` with a `reading` column and its PNG, and
-`rescore` re-scores v2.3's records with the per-record quantities of covert_witness's `analysis/rescore_v1.py`, which
-has no formula of its own (module docstring).
+the gates in them (forward and backward; the optimizer is in none), its affected gates A and Δ_grad, read from 4.0's
+`cut_bits` where the record has them). `frontier --formalism` gives, per start, target and cell of the start's
+`policy.cells` (the (c, k) grid in decades from one token's inference block to the start's server block, and the
+reference shapes at their exact (c, k): the inference block, the reference policy c = 4096 w, k = 10 kB, and the server
+block), W\* = the least |C|ρ and honest = the least |C| over every checkpoint of every valid record, and Security's
+S = W\*/honest. Fit is checked: for training its three kinds of block, compute Δ + sτ ≤ k, reduction 2Δ_grad ≤ k and
+update application Δ + Δ_grad ≤ k, and where they hold ρ = c/(c − d), d the decoder's gates. Elsewhere ρ is Slowdown's,
+the counting lemma at A \ R in its token form, ρ ≥ σ(1 − x₀)·s/s\* (σ the token blocks' share of |C|; with the largest
+per-token affected count where token blocks vary), a target until Lean proves it. The claim takes the assumptions'
+upper bounds, s\* ≤ max_x x(k − u(x))/a (A1) and x₀ ≤ max{x : u_in(x) ≤ k} (A1'), u and u_in counting update bits
+only; a frozen tail is always charged (u is 0 up to its share t, u_in jumps to the changed update at once). The attack
+side's best-known x₀ and s\* from exhibited blocks are reported beside them (`x0_known`, `s_star_known`: tightness,
+never the claim). u(1) is a field of its own (it equals Δ only when every token's path reads the whole update); u, u_in
+are labelled assumptions, a and Δ upper bounds from witnesses, a quantity not measured yet a stub; the row's `labels`
+name each (`formalism.STUBS`, and `formalism.V23` for a row ingested before). `plots` writes the console's five panels
+(P1-P4 and the A2 curve, the least |C| to each target against Δ, per start), each `<name>.json` and its PNG; `console`
+cuts each to the panels route's limits and PUTs it; and `rescore` re-scores v2.3's records with the per-record
+quantities of covert_witness's `analysis/rescore_v1.py`, which has no formula of its own (module docstring).
 
 ## What the integrator calls
 
@@ -196,13 +198,14 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
 | `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its E checkpoints; `score_run`, the evaluation job's scoring of them; `CWPlan`, the family `prepare.declare_step` writes |
 | `hooks.py` | what a standalone script may call, no-ops outside the harness |
-| `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates; `--formalism`: W\*, honest and S per target, reading and cell |
+| `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates; `--formalism`: W\*, honest and S per target and cell, with W\*'s x₀ and s\* bounds and best-known values |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key |
-| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) under each of `READINGS`; `of_record` (ingest's), `measure` (with labelled stubs and upper bounds), the witness profile `even` and the whole profile `with_tail`, `fit_k` |
-| `plots.py` | the console's five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` with a `reading` column and its PNG |
-| `rescore.py` | v2.3's records scored with the analysis's formalism blocks (or the stubs) under both readings: the report and the five panels, one command |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it; `of_record` (ingest's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even` and `tail` (u, u_in), `fit_k` |
+| `plots.py` | the console's five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
+| `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note) and its PUT |
+| `rescore.py` | v2.3's records scored with the analysis's formalism blocks (or the stubs): the report, the five panels and their cuts (`--publish` PUTs them), one command |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |

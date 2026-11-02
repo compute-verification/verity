@@ -1,5 +1,4 @@
-"""The console's panels cut to its panels route's limits, and their PUT
-(note:dashboard-20261102T1934Z-draft-training-plots-contract).
+"""The console's panels cut to its panels route's limits, and their PUT.
 
     python -m te_core.console DIR [--publish]    # DIR: te_core.plots' panels; writes DIR/console/
 
