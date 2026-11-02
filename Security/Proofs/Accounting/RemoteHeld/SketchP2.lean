@@ -16,8 +16,9 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
 
 /-- **The sketch bound at P2's receipts** (`Accounting.Guarantees.Remote.SketchBoundP2`). -/
 theorem SketchBoundP2 : Accounting.Guarantees.Remote.SketchBoundP2 := by
-  intro β Hs _ _ P N S L q Q G qtot ε A T hε hP hRank hG hqtot hH hq hrec hpres
-  have h := SketchBoundSession β Hs P N 257 512 S L q 16 12 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 257) A T (by norm_num)
+  intro β Hs _ _ P N S L q Q G qtot ε A keys kept T hε hP hRank hG hqtot hH hq hrec hpres
+  have h := SketchBoundSession β Hs P N 257 512 S L q 16 12 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 257) A keys kept T
+    (by norm_num)
     hε (by positivity) hP hRank hH hq hrec hpres
   unfold SketchBound Trace.Holds at h ⊢
   rw [show (8 * 12 : ℕ) = 96 from rfl] at h

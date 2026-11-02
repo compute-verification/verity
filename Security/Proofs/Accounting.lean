@@ -98,5 +98,6 @@ import Proofs.Accounting.Served
 import Proofs.Accounting.ServingBlocks
 import Proofs.Accounting.ServingBlocks.Witnesses
 import Proofs.Accounting.Additive
+import Proofs.Accounting.Coverage
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

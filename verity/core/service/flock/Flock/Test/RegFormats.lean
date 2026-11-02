@@ -151,5 +151,5 @@ def V1 := Registered.FORMAT
 #guard !(Registered.ofJson (fileAt V1 [some 0, some 1] (extra := [("reads_at", Lean.toJson (0 : Nat))]))).toBool
 #guard !(Registered.ofJson (fileAt V1 [some 0, some 1] (top := [("window", Lean.toJson (0 : Nat))]))).toBool
 #guard (Registered.ofJson (fileAt V1 [some 0, some 1] (extra := [("known", Json.null), ("row_schema", Json.str v1),
-  ("word_bits", Lean.toJson (16 : Nat))]) (top := [(Registered.COMPLETE_KEY, Json.bool true)]))).toBool
+  ("word_bits", Lean.toJson (16 : Nat))]))).toBool
 end Flock.Test.RegFormats
