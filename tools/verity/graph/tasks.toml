@@ -36,10 +36,10 @@ files = ["**/lean-toolchain", "**/lake-manifest.json"]
 kinds = ["lean-env"]
 env = "lean"
 about = "make {name}'s lean env and kernel-replay its modules (scope {scope})"
-# a Security audit's slot (`tools/verity/check/tasks.py`'s LEAN_SLOT) and `check.py`'s CLOSURE_TIMEOUT: Mathlib's and
-# ArkLib's modules, cold
-resources = { cores = 32, mem_gb = 128, disk_gb = 60 }
-timeout_s = 86400
+# the largest env's whole replay (the toolchain, Mathlib and ArkLib with theirs), its env made cold, with headroom;
+# `cores` is the replay's LEAN_NUM_THREADS
+resources = { cores = 16, mem_gb = 32, disk_gb = 60 }
+timeout_s = 7200
 
 [family.lean-lock]
 files = ["**/lean-audit.json"]
