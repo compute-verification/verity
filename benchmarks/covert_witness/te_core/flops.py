@@ -18,8 +18,11 @@ per tensor through every op within a step:
   program passed to `Counter.tokens`);
 - a weight's *roots*: the persistent tensors a parameter-indexed value is computed from that differ from θ. A registered
   weight (`register`) differs from θ when its value, checked bit for bit against θ at its first use after any write, isn't
-  θ's; any other persistent tensor (made before this step, or outside torch's dispatch) is a weight θ doesn't hold, so it
-  differs. A tensor made inside the step by a factory op (`randn`, `zeros`, ...) is a fast value with no roots.
+  θ's. A persistent tensor the counter hasn't seen (made before this step, or outside torch's dispatch, as `p.data =
+  p.data.float()` makes one) is θ's weight of its shape when it covers its storage and equals that weight exactly in both
+  dtypes, and is then checked as a registered one; any other is a weight θ doesn't hold, so it differs. A tensor made
+  inside the step by a factory op (`randn`, `zeros`, ...) is a fast value with no roots. The counter holds every tensor
+  it has named a θ weight, so no other tensor takes its memory.
 
 A node is `updated` when it is in a forward pass (outside autograd's backward), one operand is token-indexed and another
 (the weight, or an initial accumulator) has roots: the updated multiplications U. Others are `theta` (the weight equals
@@ -173,10 +176,12 @@ class Counter(TorchDispatchMode):
         self.digests = digests
         self.clock, self.cpu_clock = clock, cpu_clock
         self.theta_ptr: dict[int, str] = {}
+        self.held: dict[int, torch.Tensor] = {}
         self.weights: dict[str, torch.Tensor] = {}
-        self.theta_dev: dict[str, torch.Tensor] = {}
+        self.refs: dict[tuple, torch.Tensor] = {}
+        self.probes: dict[str, torch.Tensor] = {}
         self.epoch: dict[int, int] = {}
-        self.verdict: dict[str, tuple[int, bool]] = {}
+        self.verdict: dict[int, tuple[int, bool]] = {}
         self.new_keys: dict[int, str] = {}
         self.new_tensors: dict[str, torch.Tensor] = {}
         self.steps: list[Step] = []
@@ -198,15 +203,53 @@ class Counter(TorchDispatchMode):
             for name, t in named.items():
                 if name not in self.theta_cpu:
                     continue
-                ref = self.theta_cpu[name].to(device=t.device, dtype=t.dtype)
-                if ref.shape != t.shape or not torch.equal(ref, t.detach()):
+                if not self._same(t, name):
                     raise ValueError(f"registered weight {name!r} is not θ's value")
-                self.theta_ptr[_ptr(t)] = name
-                self.weights[name] = t
-                self.theta_dev[name] = ref
+                self._hold(t, name)
             missing = sorted(set(self.theta_cpu) - set(self.weights))
         if missing:
             raise ValueError(f"θ weights not registered: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+
+    def _hold(self, t: torch.Tensor, name: str) -> None:
+        ptr = _ptr(t)
+        self.theta_ptr[ptr] = name
+        self.held[ptr] = t
+        self.weights[name] = t
+
+    def _ref(self, name: str, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
+        key = (name, dtype, str(device))
+        ref = self.refs.get(key)
+        if ref is None:
+            ref = self.refs[key] = self.theta_cpu[name].to(device=device, dtype=dtype)
+        return ref
+
+    def _same(self, t: torch.Tensor, name: str) -> bool:
+        """Whether `t` holds θ's `name` exactly: equal to θ cast to t's dtype, and to θ when cast back."""
+        th = self.theta_cpu[name]
+        t = t.detach()
+        if tuple(t.shape) != tuple(th.shape) or not torch.equal(t, self._ref(name, t.dtype, t.device)):
+            return False
+        return t.dtype == th.dtype or torch.equal(t.to(th.dtype), self._ref(name, th.dtype, t.device))
+
+    def _adopt(self, t: torch.Tensor, ptr: int) -> str | None:
+        """θ's weight an unseen persistent tensor holds, if any (the module docstring)."""
+        n = t.numel()
+        if (not self.theta_cpu or not t.is_contiguous() or t.storage_offset()
+                or t.untyped_storage().nbytes() != n * t.element_size()):
+            return None
+        names = [k for k, v in self.theta_cpu.items() if tuple(v.shape) == tuple(t.shape)]
+        if not names:
+            return None
+        at = sorted({0, n // 3, 2 * n // 3, n - 1})
+        mine = t.detach().reshape(-1)[torch.tensor(at, device=t.device)].double().cpu()
+        for name in names:
+            probe = self.probes.get(name)
+            if probe is None:
+                probe = self.probes[name] = self.theta_cpu[name].reshape(-1)[at].double()
+            if torch.equal(mine, probe) and self._same(t, name):
+                self._hold(t, name)
+                return name
+        return None
 
     def _reset_tags(self) -> None:
         self.tags = WeakTensorKeyDictionary()
@@ -225,13 +268,12 @@ class Counter(TorchDispatchMode):
     def end_step(self) -> None:
         self._close(self.cur)
         with torch.utils._python_dispatch._disable_current_modes():
-            for name, t in self.weights.items():
-                ptr = _ptr(t)
-                cached = self.verdict.get(name)
+            for ptr, t in self.held.items():
+                cached = self.verdict.get(ptr)
                 if cached is not None and cached[0] == self.epoch.get(ptr, 0):
-                    actual = not torch.equal(t.detach(), self.theta_dev[name])
+                    actual = not self._same(t, self.theta_ptr[ptr])
                     if actual != cached[1]:
-                        self.unseen_writes.append((self.cur.index, name))
+                        self.unseen_writes.append((self.cur.index, self.theta_ptr[ptr]))
                         self.epoch[ptr] = self.epoch.get(ptr, 0) + 1
         self.steps.append(self.cur)
         self.cur = Step(len(self.steps))
@@ -264,12 +306,23 @@ class Counter(TorchDispatchMode):
 
         class _Paused:
             def __enter__(self):
+                if not counter.paused:
+                    self.timed = getattr(counter.cur, "_t", None) is not None
+                    counter._close(counter.cur)
                 counter.paused += 1
 
             def __exit__(self, *exc):
                 counter.paused -= 1
+                if not counter.paused and getattr(self, "timed", False):
+                    counter._open(counter.cur)
 
         return _Paused()
+
+    def __enter__(self):
+        out = super().__enter__()
+        if self.cur is self.setup:
+            self._open(self.setup)
+        return out
 
     def tokens(self, batch: torch.Tensor) -> torch.Tensor:
         """Mark `batch` as this step's token data (an index tensor the program passes through some route other than an
@@ -292,23 +345,27 @@ class Counter(TorchDispatchMode):
             return tag
         ptr = _ptr(t)
         name = self.theta_ptr.get(ptr)
+        if name is None:
+            if not (t.is_floating_point() or t.is_complex()) or t.numel() <= 1 or ptr == 0:
+                return NONE
+            if ptr not in self.new_keys:
+                name = self._adopt(t, ptr)
         if name is not None:
-            return Tag(roots=frozenset((name,))) if self._differs(name, ptr) else NONE
-        if not (t.is_floating_point() or t.is_complex()) or t.numel() <= 1 or ptr == 0:
-            return NONE
+            self.weights[name] = self.held[ptr]
+            return Tag(roots=frozenset((name,))) if self._differs(ptr) else NONE
         key = self.new_keys.get(ptr)
         if key is None:
             key = self.new_keys[ptr] = f"new/{len(self.new_keys)}"
         self.new_tensors[key] = t
         return Tag(roots=frozenset((key,)))
 
-    def _differs(self, name: str, ptr: int) -> bool:
+    def _differs(self, ptr: int) -> bool:
         ep = self.epoch.get(ptr, 0)
-        cached = self.verdict.get(name)
+        cached = self.verdict.get(ptr)
         if cached is not None and cached[0] == ep:
             return cached[1]
-        d = not torch.equal(self.weights[name].detach(), self.theta_dev[name])
-        self.verdict[name] = (ep, d)
+        d = not self._same(self.held[ptr], self.theta_ptr[ptr])
+        self.verdict[ptr] = (ep, d)
         return d
 
     def _record_use(self, roots: frozenset, operand: torch.Tensor) -> None:
@@ -388,7 +445,7 @@ class Counter(TorchDispatchMode):
 
     @property
     def weight_shapes(self) -> set:
-        shapes = {tuple(t.shape) for t in [*self.weights.values(), *self.new_tensors.values()] if t.dim() == 2}
+        shapes = {tuple(t.shape) for t in [*self.held.values(), *self.new_tensors.values()] if t.dim() == 2}
         return shapes | {s[::-1] for s in shapes}
 
     def _count(self, func, ins, macs, cls, tag: Tag, bwd: bool) -> Tag:
@@ -463,9 +520,11 @@ class Counter(TorchDispatchMode):
         ru = resource.getrusage(resource.RUSAGE_CHILDREN)
         totals = {
             "macs": sum(s["macs"] for s in steps),
-            "cpu_s": self.cpu_clock() - self._t0[1],
-            "wall_s": self.clock() - self._t0[0],
+            "cpu_s": sum(s["cpu_s"] for s in steps),
+            "wall_s": sum(s["wall_s"] for s in steps),
             "gpu_s": sum(s["gpu_s"] for s in steps),
+            "process_cpu_s": self.cpu_clock() - self._t0[1],
+            "process_wall_s": self.clock() - self._t0[0],
             "children_cpu_s": ru.ru_utime + ru.ru_stime,
             "approx_macs": sum(s["approx_macs"] for s in steps),
         }
