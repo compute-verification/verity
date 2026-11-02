@@ -112,6 +112,32 @@ def test_a_gradient_by_hand_is_a_weight(tiny):
     assert by["fwd/act"] == D * D * TOKENS
 
 
+def test_a_stream_batch_is_token_data_through_any_op_and_counts_once():
+    """`Counter.batch`: an index lookup (`embed[x]`) beside a one-token embedding, the targets read by a gather, and a
+    batch fetched in one step and read in the next."""
+    torch.manual_seed(0)
+    theta = {"w": torch.randn(D, D), "embed": torch.randn(VOCAB, D)}
+    w, embed = (torch.nn.Parameter(theta[k].clone()) for k in ("w", "embed"))
+    c = Counter(theta, digests=False)
+    c.register({"w": w, "embed": embed})
+    gen = torch.Generator().manual_seed(1)
+    with c, torch.no_grad():
+        c.begin_step()
+        w.add_(0.01)
+        b = c.batch(torch.randint(0, VOCAB, (3, 9), generator=gen))
+        x, y = b[:, :-1], b[:, 1:]
+        F.embedding(x[:, :1], embed)
+        torch.log_softmax(embed[x] @ w.T @ embed.T, -1).gather(-1, y[..., None])
+        ahead = c.batch(torch.randint(0, VOCAB, (3, 9), generator=gen))
+        c.end_step()
+        embed[ahead[:, :-1]] @ w.T
+        c.end_step()
+    c.finish()
+    s0, s1 = c.record()["steps"]
+    assert s0["tokens"] == s1["tokens"] == 3 * 8
+    assert s0["by"]["fwd/updated"] == s1["by"]["fwd/updated"] == 3 * 8 * D * D
+
+
 def test_writes_through_data_are_seen(tiny):
     m, theta = tiny
 

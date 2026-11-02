@@ -45,7 +45,7 @@ import torch.nn.modules.module as nn_module
 from . import VERSION
 from .codecs import Plan
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
-from .flops import Counter, digest, flags, forward_macs_per_token, plain
+from .flops import Counter, _tensors, digest, flags, forward_macs_per_token, plain
 from .score import block_c
 
 CHECKPOINTS = 20
@@ -233,6 +233,13 @@ class Session:
 
     def tokens(self, batch: torch.Tensor) -> torch.Tensor:
         return self.counter.tokens(batch)
+
+    def batch(self, out):
+        """What the start's data stream returned: each integer tensor in it is token data (`Counter.batch`)."""
+        for t in _tensors(out):
+            if not (t.is_floating_point() or t.is_complex()):
+                self.counter.batch(t)
+        return out
 
     def output(self, fn) -> None:
         """`fn()` returns the output model's state dict (default: the registered model's)."""

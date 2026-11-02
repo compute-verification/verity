@@ -5,7 +5,8 @@
   encoder reads;
 - rebind_decode: E is θ, and prepare.decode is rebound to return the trained model whatever E holds;
 - rebind_torch: F.cross_entropy (the evaluator's loss) rebound around the submit, and restored after it;
-- theta_write: θ's tensors, as load_start returned them, moved in place with `w`.
+- theta_write: θ's tensors, as load_start returned them, moved in place with `w`;
+- index_lookup: the forward reads the batch by indexing the embedding (`embed[x]`), with no embedding lookup.
 """
 import argparse
 from pathlib import Path
@@ -41,7 +42,10 @@ def main() -> int:
         params["w"].add_(0.05)
         if a.variant == "theta_write":
             theta["w"].add_(0.05)
-        net(x)
+        if a.variant == "index_lookup":
+            torch.tanh(params["embed"][x] @ params["w"].T)
+        else:
+            net(x)
     model = {n: p.detach().clone() for n, p in params.items()}
     tensors = ComputingDict(model, x, params["w"], params["embed"]) if a.variant == "dict_encoder" else model
     if a.variant == "rebind_decode":

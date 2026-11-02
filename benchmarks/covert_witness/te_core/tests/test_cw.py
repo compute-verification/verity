@@ -132,6 +132,13 @@ def test_writing_the_theta_load_start_returned_does_not_move_the_harness_theta(t
     assert moved["theta_sha256"] == base["theta_sha256"]
 
 
+def test_the_stream_batch_is_token_data_without_an_embedding(tmp_path, monkeypatch):
+    rec = run_probe(tmp_path, monkeypatch, "index_lookup")
+    assert rec["invalid"] == [], rec["invalid"]
+    (s,) = rec["steps"]
+    assert s["tokens"] == 4 * 8 and s["by"]["fwd/updated"] == 4 * 8 * 16 * 16
+
+
 def test_plain_copies_containers_and_refuses_what_could_run_code():
     class Sub(dict):
         pass

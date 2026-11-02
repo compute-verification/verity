@@ -14,8 +14,8 @@ forward, backward (autograd's threads inherit the mode) and optimizer alike. It 
 |C| is their sum (`macs`). Each multiplication is a node classified by its operands' provenance, which the counter tracks
 per tensor through every op within a step:
 
-- *token-indexed*: computed from this step's token data (an integer tensor indexed into an embedding, or a batch the
-  program passed to `Counter.tokens`);
+- *token-indexed*: computed from this step's token data (a batch from the start's data stream, `Counter.batch`, through
+  any op; an integer tensor indexed into an embedding; or a batch the program passed to `Counter.tokens`);
 - a weight's *roots*: the persistent tensors a parameter-indexed value is computed from that differ from θ. A registered
   weight (`register`) differs from θ when its value, checked bit for bit against θ at its first use after any write, isn't
   θ's. A persistent tensor the counter hasn't seen (made before this step, or outside torch's dispatch, as `p.data =
@@ -103,6 +103,11 @@ FACTORY = {getattr(aten, n) for n in ("randn", "rand", "randint", "randperm", "z
                                       "zeros_like", "ones_like", "empty_like", "full_like", "randn_like", "rand_like")
            if hasattr(aten, n)}
 EMBEDDING = {aten.embedding}
+#: ops that read integer token data as indices: where a batch's tokens are counted
+TOKEN_INDEX = {getattr(aten, n) for n in ("embedding", "_embedding_bag", "index", "index_select", "take", "gather",
+                                          "scatter", "scatter_", "scatter_add", "scatter_add_", "scatter_reduce",
+                                          "scatter_reduce_", "index_put", "index_put_", "index_add", "index_add_",
+                                          "index_copy", "index_copy_", "bincount") if hasattr(aten, n)}
 
 
 def _tensors(x) -> list[torch.Tensor]:
@@ -228,13 +233,14 @@ class Tag:
     tok: bool = False
     roots: frozenset = frozenset()
     cone: frozenset = frozenset()
+    src: frozenset = frozenset()  # the data stream's batches a token value is computed from (`Counter.batch`)
 
     def merge(self, other: Tag) -> Tag:
         if other is NONE:
             return self
         if self is NONE:
             return other
-        return Tag(self.tok or other.tok, self.roots | other.roots, self.cone | other.cone)
+        return Tag(self.tok or other.tok, self.roots | other.roots, self.cone | other.cone, self.src | other.src)
 
 
 NONE = Tag()
@@ -289,6 +295,8 @@ class Counter(TorchDispatchMode):
         self.paused = 0
         self.unseen_writes: list[tuple[int, str]] = []
         self.unknown_ops: dict[str, int] = {}
+        self.batches = WeakTensorKeyDictionary()
+        self.n_batches = 0
         self._reset_tags()
         self._t0 = (self.clock(), self.cpu_clock())
         self._events = None
@@ -352,9 +360,11 @@ class Counter(TorchDispatchMode):
 
     def _reset_tags(self) -> None:
         self.tags = WeakTensorKeyDictionary()
-        self.token_seen: set[tuple] = set()
+        self.token_seen: dict = {}
         self.node_rows: dict[int, int] = {}
         self.used: set[tuple[str, int]] = set()
+        for t in list(self.batches.keys()):
+            self._tag_batch(t)
 
     def begin_step(self) -> None:
         """Start the next step; work since the last step ended is the new step's."""
@@ -431,10 +441,29 @@ class Counter(TorchDispatchMode):
         self.tags[batch] = Tag(tok=True)
         return batch
 
-    def _token_source(self, idx: torch.Tensor) -> None:
+    def batch(self, t: torch.Tensor) -> torch.Tensor:
+        """Mark `t`, a batch from the start's data stream, as token data in every step from now on while it lives, so
+        whatever reads it is token-indexed (not only an embedding lookup). Its tokens are counted where an op reads it as
+        indices (`TOKEN_INDEX`), once per batch and step at its largest such read, so an input slice read twice, and the
+        targets beside it, count once."""
+        self.batches[t] = True
+        self._tag_batch(t)
+        return t
+
+    def _tag_batch(self, t: torch.Tensor) -> None:
+        self.n_batches += 1
+        self.tags[t] = Tag(tok=True, src=frozenset((self.n_batches,)))
+
+    def _token_source(self, idx: torch.Tensor, tag: Tag = NONE) -> None:
+        if tag.src:
+            seen = self.token_seen.get(tag.src, 0)
+            if idx.numel() > seen:
+                self.cur.tokens += idx.numel() - seen
+                self.token_seen[tag.src] = idx.numel()
+            return
         key = (_ptr(idx), idx.storage_offset(), tuple(idx.shape), idx._version)
         if key not in self.token_seen:
-            self.token_seen.add(key)
+            self.token_seen[key] = idx.numel()
             self.cur.tokens += idx.numel()
 
     # -- provenance
@@ -532,13 +561,17 @@ class Counter(TorchDispatchMode):
         bwd = torch._C._current_graph_task_id() != -1
         written = _written(func, args, kwargs)
         persistent = {id(t) for t in written if t not in self.tags}
-        if p in EMBEDDING and not bwd:
-            self._token_source(args[1])
-            tag = Tag(tok=True).merge(self._tag(args[0]))
-        else:
-            tag = NONE
+        tag = NONE
+        for t in ins:
+            tag = tag.merge(self._tag(t))
+        if p in TOKEN_INDEX and not bwd:
             for t in ins:
-                tag = tag.merge(self._tag(t))
+                g = self._tag(t)
+                if g.tok and not (t.is_floating_point() or t.is_complex() or t.dtype == torch.bool):
+                    self._token_source(t, g)
+        if p in EMBEDDING and not bwd:
+            self._token_source(args[1], self._tag(args[1]))
+            tag = Tag(tok=True).merge(tag)
         macs, cls = self._macs(func, args, kwargs, out)
         if macs:
             tag = self._count(func, ins, macs, cls, tag, bwd)
@@ -609,7 +642,7 @@ class Counter(TorchDispatchMode):
         self.node_rows[node] = per_row
         bits = min(t.element_size() * 8 for t, _ in weights)
         s.updated.append([per_row, upstream, macs, rows, bits])
-        return Tag(True, tag.roots, cone | {node})
+        return Tag(True, tag.roots, cone | {node}, tag.src)
 
     # -- the record
 

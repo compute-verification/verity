@@ -13,7 +13,8 @@ library's, or one of the harness's prepare's classes, `watched`) makes its run i
   the harness keeps its own copy of θ and of the start's record) and registers the model's live tensors with the
   counter;
 - each `TrainData.next` call ends the step in progress (if it computed on tokens) and starts the next: a step is the
-  work from one batch to the next;
+  work from one batch to the next. The batch is token data through any op that reads it, in every step while it lives
+  (`flops.Counter.batch`);
 - every E the program encodes during its steps is a checkpoint candidate, the first in each 5% of the run (of the
   planned steps, `hooks.plan`, else of the MAC budget): the harness scores decode(θ, E) on the held-out search set,
   uncounted, at the step in progress;
@@ -176,7 +177,7 @@ class Adapter:
 
         def next_(data, *args, **kwargs):
             self.s.boundary()
-            return nxt(data, *args, **kwargs)
+            return self.s.batch(nxt(data, *args, **kwargs))
 
         def submit_(out, start, klass, blob, model, *args, **kwargs):
             blob, model = plain(blob), plain(model)
