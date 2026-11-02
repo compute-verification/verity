@@ -81,7 +81,7 @@ version = "4.15.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "idna" },
-    { name = "typing-extensions", marker = "python_full_version < '3.15'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.15' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94", size = 276966, upload-time = "2026-09-05T10:42:39.44Z" }
 wheels = [
@@ -519,12 +519,12 @@ name = "httpx2"
 version = "2.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio", marker = "sys_platform != 'emscripten'" },
-    { name = "httpcore2", marker = "sys_platform != 'emscripten'" },
-    { name = "httpx2-jsfetch", marker = "sys_platform == 'emscripten'" },
+    { name = "anyio", marker = "sys_platform != 'emscripten' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "httpcore2", marker = "sys_platform != 'emscripten' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "httpx2-jsfetch", marker = "sys_platform == 'emscripten' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
     { name = "idna" },
-    { name = "truststore", marker = "sys_platform != 'emscripten'" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "truststore", marker = "sys_platform != 'emscripten' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e8/67/58353f1848b4ba568e1ec22ea1e0d8e039f0bca5fde7e2d1f07739fd83e7/httpx2-2.14.0.tar.gz", hash = "sha256:47ad61a3c40282cd8d0dc96311531f00f5bfc71a066c6fe3b36d8f63fb9e4f6e", size = 102036, upload-time = "2026-10-18T16:29:22.627Z" }
 wheels = [
@@ -1456,7 +1456,7 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -1594,7 +1594,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "rpds-py" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/22/f5/df4e9027acead3ecc63e50fe1e36aca1523e1719559c499951bb4b53188f/referencing-0.37.0.tar.gz", hash = "sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8", size = 78036, upload-time = "2025-10-13T15:30:48.871Z" }
 wheels = [
@@ -1831,7 +1831,7 @@ version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ad/eb/4e197bf26b023abafc5e9043ec8710d7de0fcb032d0969045236d72aa0b1/starlette-1.9.0.tar.gz", hash = "sha256:3d931de246ed870e35ce605974440816ef895e592f255d1396cfdf191d4c4318", size = 2732466, upload-time = "2026-10-18T15:50:33.189Z" }
 wheels = [
@@ -1881,7 +1881,7 @@ version = "2.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-bindings", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
-    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
     { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
@@ -2266,6 +2266,12 @@ requires-dist = [
 name = "verity-config"
 version = "0.1.0"
 source = { editable = "tools/config" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "." }]
 
 [[package]]
 name = "verity-core-composition"

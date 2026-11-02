@@ -153,8 +153,11 @@ Landing:
 Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
-  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
-  finds a reason this is wrong floats it at once.
+  exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
+- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
+  PoUW's bar is now T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
+  credit as well as of exclusion (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights,
+  served activations, un-noised outputs), and an un-noised call earns no compute credit (ASK-174).
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
@@ -179,7 +182,7 @@ Protocols and claims:
   `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
-  are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
+  are for the whole node. PoUB treats the prover's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
 - PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next. See `verity/core/protocols/pouw/README.md`.

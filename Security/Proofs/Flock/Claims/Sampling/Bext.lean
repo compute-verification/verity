@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Sampling.Cost
 
 The claims block (`Definitions.Claims.Sampling`) states `KS` with the linear term `1 · Pr[B_ext]`, where `Bext` forks
 like `B`, runs the extractor in each branch, and outputs the first collision among the `H` calls the two extractions
-make themselves: the commitment's checks of the openings it keeps. The trace's commitment binds (`Commitment.Binds`), so
+make themselves: the commitment's checks of the openings it keeps. The trace's commitment binds (`CommitmentScheme.Binds`), so
 two kept openings of one position to different values make such a collision. This file states that reduction at `Bext`
 and derives the block's `Bits` from its `KS`.
 

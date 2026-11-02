@@ -1,4 +1,4 @@
-"""Every environment variable HIGHUTIL's period reads or sets, declared once (tests/lint/test_repo_env_reads.py). Stdlib only.
+"""Every environment variable the highutil period reads or sets, declared once (tests/lint/test_repo_env_reads.py). Stdlib only.
 
     OMP_NUM_THREADS, OPENBLAS_NUM_THREADS, MKL_NUM_THREADS   set to 1 unless given: one BLAS thread a pool worker
     V31_LTW          v31.cu's own knob (run.sh's default 1), read here only for the driver's ready line
