@@ -269,7 +269,8 @@ def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkey
             "not a candidate" if TG.family(TG.definition(t)) not in short["candidates"] else "?" for t in DECIDED} == DECIDED
 
     def strip(rep):
-        return {**rep, "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
+        return {**{k: v for k, v in rep.items() if k != "prologue_s"},
+                "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
 
     assert strip(fast) == strip(full)
     assert [t["partition"]["applies"] for t in full["targets"]] == [v != "not a candidate" for v in DECIDED.values()]
