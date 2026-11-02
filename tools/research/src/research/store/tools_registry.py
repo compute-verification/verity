@@ -23,7 +23,6 @@ REGISTRY: dict[str, str] = {
     "native_peak": "benchmarks.native_peak.tool:NATIVE_PEAK",
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
-    "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
     "flock_pure": "verity.ml.flock.tool:FLOCK_PURE",
     "flock_agreement": "verity.ml.flock.verifier.tool:FLOCK_AGREEMENT",
