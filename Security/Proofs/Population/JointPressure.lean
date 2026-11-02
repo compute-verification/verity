@@ -12,7 +12,7 @@ one escape set and that one halt, each with its own leak.
 * `le_maxRule`, `maxRule_le`: the max rule `a u = max_i κ_i harm_i(u)` meets every claim's inclusion bound
   `κ_i harm_i(u) ≤ a u`, and is the least inclusion that does.
 * `pressure_maxRule`: a draw whose catch probabilities are at least the max rule gives every claim its detection
-  pressure `κ_i` (`pressure_of_draw` for each claim).
+  pressure `κ_i` (`pressure_of_sample` for each claim).
 * `prob_exists_le`: the union bound for `prob`.
 * `joint_tail`, `joint_tail_delta`: every claim's bound through the first detection holds at once except with
   probability at most the sum of the claims' tails, `Σ_i δ_i` at `x_i = ℓ_i + ln (1/δ_i) / κ_i`. No independence
@@ -21,9 +21,9 @@ one escape set and that one halt, each with its own leak.
   the verdict (credited work, paid at the certificate) is bounded by `tail_cumPrev`, with no per-window term; egress
   that leaves before its verdict keeps `ℓ_i`.
 * `joint_of_maxRule`: the two together, from the draw's catch probabilities to every claim's bound.
-* `subsetDraw_escape`, `subsetDraw_escape_le`, `pressure_subsetDraw`: a uniform `k`-subset of `N` units misses `b` given
+* `subsetSample_escape`, `subsetSample_escape_le`, `pressure_subsetSample`: a uniform `k`-subset of `N` units misses `b` given
   units with probability `C(N - b, k) / C(N, k) ≤ (1 - k/N)^b`, so a stratum drawn as a uniform `k`-subset meets
-  `pressure_of_draw`'s escape premise with `a u = k / N`.
+  `pressure_of_sample`'s escape premise with `a u = k / N`.
 -/
 
 namespace Population.Exfil
@@ -56,7 +56,7 @@ theorem pressure_maxRule {Ω U I : Type} [Fintype Ω] {μ : Ω → ℝ} {claims 
     (hleak : ∀ i ∈ claims, ∀ h, leak i h ≤ ∑ u ∈ B h, harm i u)
     (hesc : ∀ h, ∑ c ∈ esc h, μ c ≤ ∏ u ∈ B h, (1 - a u)) :
     ∀ i ∈ claims, DetectionPressure μ (κ i) ⟨leak i, esc⟩ := fun i hi =>
-  pressure_of_draw (hκ i hi) ⟨leak i, esc⟩ B (harm i) a ha
+  pressure_of_sample (hκ i hi) ⟨leak i, esc⟩ B (harm i) a ha
     (fun u => (le_maxRule hi κ harm u).trans (hmax u)) (hleak i hi) hesc
 
 /-! ## The union bound -/
@@ -149,7 +149,7 @@ theorem joint_of_maxRule {I U : Type} (hμ : IsDist μ) [DecidableEq Ω] {claims
 /-! ## A stratum drawn as a uniform k-subset -/
 
 /-- The uniform draw of a `k`-subset of the units: each subset of `k` units with weight `1 / C(N, k)`. -/
-noncomputable def subsetDraw (U : Type) [Fintype U] (k : ℕ) (S : Finset U) : ℝ :=
+noncomputable def subsetSample (U : Type) [Fintype U] (k : ℕ) (S : Finset U) : ℝ :=
   if S.card = k then 1 / ((Fintype.card U).choose k : ℝ) else 0
 
 /-- The subsets that miss the given units `B`. -/
@@ -157,12 +157,12 @@ def misses {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (Finse
   univ.filter fun S => Disjoint S B
 
 /-- **A uniform `k`-subset misses `b` given units** with probability `C(N - b, k) / C(N, k)`. -/
-theorem subsetDraw_escape {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (B : Finset U) :
-    ∑ S ∈ misses B, subsetDraw U k S = ((Fintype.card U - B.card).choose k : ℝ) / (Fintype.card U).choose k := by
+theorem subsetSample_escape {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (B : Finset U) :
+    ∑ S ∈ misses B, subsetSample U k S = ((Fintype.card U - B.card).choose k : ℝ) / (Fintype.card U).choose k := by
   have hset : (misses B).filter (fun S => S.card = k) = Bᶜ.powersetCard k := by
     ext S
     simp [misses, mem_powersetCard, subset_compl_iff_disjoint_right]
-  unfold subsetDraw
+  unfold subsetSample
   rw [← sum_filter, hset, sum_const, card_powersetCard, card_compl, nsmul_eq_mul, mul_one_div]
 
 /-- `C(M - 1, k) / C(M, k) = (M - k) / M`, one unit fewer. -/
@@ -203,25 +203,25 @@ theorem choose_ratio_le (N k : ℕ) (hk : k ≤ N) (hN : 0 < N) :
       exact mul_le_mul ih hratio (div_nonneg (Nat.cast_nonneg _) hMr.le) (pow_nonneg h1 _)
 
 /-- **A uniform `k`-subset escapes `b` given units with probability at most `(1 - k/N)^b`.** -/
-theorem subsetDraw_escape_le {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (hk : k ≤ Fintype.card U)
+theorem subsetSample_escape_le {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (hk : k ≤ Fintype.card U)
     (hN : 0 < Fintype.card U) (B : Finset U) :
-    ∑ S ∈ misses B, subsetDraw U k S ≤ ∏ _u ∈ B, (1 - (k : ℝ) / Fintype.card U) := by
-  rw [subsetDraw_escape, prod_const]
+    ∑ S ∈ misses B, subsetSample U k S ≤ ∏ _u ∈ B, (1 - (k : ℝ) / Fintype.card U) := by
+  rw [subsetSample_escape, prod_const]
   exact choose_ratio_le _ k hk hN B.card
 
 /-- **A stratum drawn as a uniform `k`-subset gives detection pressure**: a strategy whose window escapes exactly when
 the drawn subset misses its wrong set `B h`, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` when
 `κ E(u) ≤ k / N` for every unit. -/
-theorem pressure_subsetDraw {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (k : ℕ)
+theorem pressure_subsetSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (k : ℕ)
     (hk : k ≤ Fintype.card U) (hN : 0 < Fintype.card U) (E : U → ℝ)
     (hκE : ∀ u, κ * E u ≤ (k : ℝ) / Fintype.card U) (A : Strategy (Finset U)) (B : List (Finset U) → Finset U)
     (hA : ∀ h, A.esc h = misses (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) :
-    DetectionPressure (subsetDraw U k) κ A := by
+    DetectionPressure (subsetSample U k) κ A := by
   have hNr : (0 : ℝ) < Fintype.card U := by exact_mod_cast hN
-  refine pressure_of_draw hκ A B E (fun _ => (k : ℝ) / Fintype.card U)
+  refine pressure_of_sample hκ A B E (fun _ => (k : ℝ) / Fintype.card U)
     (fun _ => ⟨div_nonneg (Nat.cast_nonneg k) hNr.le, by rw [div_le_one hNr]; exact_mod_cast hk⟩) hκE hleak
     fun h => ?_
   rw [hA h]
-  exact subsetDraw_escape_le k hk hN (B h)
+  exact subsetSample_escape_le k hk hN (B h)
 
 end Population.Exfil

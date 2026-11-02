@@ -28,7 +28,7 @@ transcript; (ii) local checks; (iii) robust determinacy, which for opaque units 
 
 **The counterexamples, one family per item.**
 * (i), a transcript after the coins: `adaptive_dodges`, every draw passes with every undrawn unit wrong
-  (`flags_free` meets the hypothesis). A draw after the transcript: `late_draw_dodges`, the point mass on a correct
+  (`flags_free` meets the hypothesis). A draw after the transcript: `late_sample_dodges`, the point mass on a correct
   unit passes with probability one.
 * (ii), a non-local check: `checksum_untestable`, a decision that reads fewer than `n` positions and accepts every
   transcript whose `n` values sum to zero accepts every transcript.
@@ -271,7 +271,7 @@ theorem adaptive_card [Fintype U] [DecidableEq U] (A : Finset U) {k : ℕ} (d : 
 
 /-- **A draw chosen after the transcript dodges it**: the point mass on a correct unit is a draw distribution, and
 the transcript passes it with probability one, whatever its wrong set. -/
-theorem late_draw_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) (A : Finset U) (σ : T) {u₀ : U}
+theorem late_sample_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) (A : Finset U) (σ : T) {u₀ : U}
     (h₀ : chk u₀ σ) (hA : ∀ u ∈ A, chk u σ) (k : ℕ) :
     Dist (fun u => if u = u₀ then (1 : ℝ) else 0) ∧
       prob (fun u => if u = u₀ then (1 : ℝ) else 0) k (fun d => Accepts chk A d σ) = 1 := by
