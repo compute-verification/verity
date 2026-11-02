@@ -80,12 +80,18 @@ to work in a search, and the rules no code enforces yet.
   Slowdown. u(x) and a are the best values a witness shows (an encoding or activation code the red team exhibits),
   labelled upper bounds, never measured truth. Δ is Fit's quantity and u(1) Slowdown's: they agree only when every
   token's path reads the whole update, so they are separate columns.
+- **Two readings of a frozen tail.** When frozen layers above the highest update take a share t of a token's dependent
+  work, Slowdown reads two ways, and Daniel decides which the theorem means. `literal-x0` takes x0 on the whole profile
+  (0 up to t), which exempts the tail's work: ρ ≈ φ(1 − t)·s·a/(t·k). `tail-charged` takes x0 from the token's start
+  and charges the tail through a: ρ ≈ φ(1 − k/u(1))·s·a/(t·k). They agree when t = 0. Every score, table and panel
+  carries both (a `reading` column), with no headline S.
 - **Honest.** H(ℓ*) is the least |C| over every checkpoint of every valid record, of any method or direction (a covert
   one at its |C|), that reaches ℓ*: a checkpoint is a model someone reached, and the sealed final reruns guard against
   picking noise. W*(ℓ*) is the least |C|·ρ over the same checkpoints, so S = W*/H ≥ 1 by construction: a ratio below 1
   is a scoring bug, never a covert advantage. A column of the reference directions alone may stand beside it as
-  context. The table is `python -m te_core.frontier --formalism` (W*, H and S per target and (c, k) cell), the plots
-  `python -m te_core.plots --out DIR`.
+  context. The table is `python -m te_core.frontier --formalism` (W*, H and S per target, reading and (c, k) cell),
+  the console's five panels `python -m te_core.plots --out DIR`, and both over v2.3's records
+  `python -m te_core.rescore --out DIR` (from benchmarks/covert_witness).
 - **Aim short complete schedules at each target.** A schedule sized to end at ℓ* (say 0.5%, 1% and 2% below the start's
   loss) usually reaches it for about half the compute of a checkpoint inside one long run, so both sides run them.
 - **A reported W* is the best attack known**, an upper bound (`.agents/skills/friction/SKILL.md`), and H the best

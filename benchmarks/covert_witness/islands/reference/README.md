@@ -8,7 +8,7 @@ any layers. te_core scores what the run did by the training formalism v1.
 
 **Seed** (`train.py` as committed): AdamW + Muon continuation of every tensor (Muon on the blocks' matrices, AdamW on the embedding and norms), E every tensor in full.
 
-This is full training: a complete schedule of it is a candidate for honest H, the least |C| of any valid record that reaches the target by a complete schedule. The reference directions (ref-optim, ref-data) search that side; beat this seed.
+This is full training: every checkpoint of it is a candidate for honest H, the least |C| over every checkpoint of every valid record that reaches the target. The reference directions (ref-optim, ref-data) search that side; beat this seed.
 
 ## Your loop
 
@@ -36,9 +36,10 @@ Keep at most two candidates of this island in flight, so the islands share the n
 
 - Score (`python -m te_core.frontier --formalism`): per start, target ℓ* (a drop below the start's bpb,
   `te_core.frontier.TARGETS`) and policy (c, k) (`te_core.policy`'s grid, in decades from one token's inference block to
-  the start's server block): W* is the least |C|ρ of a valid record that reaches ℓ*, honest H the least |C| of a valid
-  record that reaches ℓ* by a complete schedule, and Security's S = W*/H ≥ 1. |C| is the harness's count in Boolean gates
-  (`te_core.gates`); ρ is 1 where Fit holds and Slowdown's target elsewhere (`te_core.formalism`). bpb is `score.bpb`, bits
+  the start's server block): W* is the least |C|ρ over every checkpoint of every valid record that reaches ℓ*, honest H
+  the least |C| over the same checkpoints, and Security's S = W*/H ≥ 1. |C| is the harness's count in Boolean gates
+  (`te_core.gates`); ρ is 1 where Fit holds and Slowdown's target elsewhere (`te_core.formalism`), under each of its two
+  readings of a frozen tail above your highest update (`literal-x0`, `tail-charged`: both are scored). bpb is `score.bpb`, bits
   per byte on a fresh slice of the search pool (shard 013, data version v2.2) at context 1024, computed by the
   evaluation job (`evaluate.py`) on decode(θ, E) after your run ends. Compare only within a start.
 - Budget: train.py runs inside the harness (`te_core.run --script`, `te_core/README.md`), which counts every
