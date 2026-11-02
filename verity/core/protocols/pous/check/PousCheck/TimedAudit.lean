@@ -69,7 +69,7 @@ def field (j : Json) (k part : String) : R Json := match j.getObjVal? k with
   | .error _ => throw part
 
 /-- The store of a `READY.json`, and its salt: P2 v4, at a manifest `P2Params` takes and gives back exactly. -/
-def store (ready : Json) : R (Certificate.Store × ByteArray) := do
+def store (ready : Json) : R (P2.Params × ByteArray) := do
   let p := "ready"
   let m ← field ready "params" p
   let keys ← match m.getObj? with
@@ -79,7 +79,7 @@ def store (ready : Json) : R (Certificate.Store × ByteArray) := do
   let n k := do natOf (← field m k p) p
   let (w, c0, bps, segments) := (← n "w", ← n "c0", ← n "blocks_per_segment", ← n "segments")
   need (w % 8 == 0 && w > 16 && c0 % 4 == 1 && c0 < 2 ^ 16 && 1 ≤ bps && bps ≤ 2 ^ 16 && 1 ≤ segments) p
-  let s : Certificate.Store := ⟨w, c0, bps, segments⟩
+  let s : P2.Params := ⟨w, c0, bps, segments⟩
   need ((← strOf (← field m "scheme" p) p) == "p2" && (← strOf (← field m "profile" p) p) == s.profile
     && (← strOf (← field m "expander" p) p) == Certificate.EXPANDER) p
   need ((← strOf (← field ready "scheme" p) p) == s.name) p
@@ -88,7 +88,7 @@ def store (ready : Json) : R (Certificate.Store × ByteArray) := do
   pure (s, salt)
 
 /-- One audit's answers, `[correct, on time]` each, judged against the leaves under `root`. -/
-def audit (s : Certificate.Store) (salt root : ByteArray) (leaves : Array ByteArray) (k limit : Nat) (rec : Json) :
+def audit (s : P2.Params) (salt root : ByteArray) (leaves : Array ByteArray) (k limit : Nat) (rec : Json) :
     R (Array (Bool × Bool)) := do
   let p := "record"
   let source ← hexOf' (← field rec "source" p) p
@@ -96,7 +96,7 @@ def audit (s : Certificate.Store) (salt root : ByteArray) (leaves : Array ByteAr
   let answers ← match (← field rec "answers" p).getArr? with
     | .ok a => pure a
     | .error _ => throw p
-  let key := Randomness.derive source CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)]
+  let key := FlockSoundness.Randomness.derive source CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)]
   let mut out : Array (Bool × Bool) := #[]
   for j in List.range k do
     need (j < answers.size) "short"

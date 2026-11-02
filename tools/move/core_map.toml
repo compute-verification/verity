@@ -1,5 +1,5 @@
-# The core-verifiers move: what `tools/move/layout.py --map tools/move/core_map.toml` moves, renames and rewrites (Daniel,
-# 8 Oct 14:16Z: "Put the Python verifiers into core/", reversing the rule that `verity/core/` is Lean only).
+# The core-verifiers move: what `tools/move/layout.py --map tools/move/core_map.toml` moves, renames and rewrites (the
+# Python verifiers go into `verity/core/`, which until then was Lean only).
 #
 # `verity/experimental/` goes. The Python verifiers (the protocol packages, the integrity profile and the claims they cite)
 # and core's Lean ports move under `verity/core/`; multiproofs and private circuits, which no verifier imports, join `verity/ml/`.

@@ -4,7 +4,7 @@ frees, appended chunks never resident, never freed and freed, passes at increasi
 appends the schedule's or with one fault (a plan steered off the schedule's, a step, a pass or an append missing or
 moved, a schedule that is not one, a schedule over the cap committed before the coins), with malformed inputs
 rejected by both.  The Lean is of record: `audit.ledger`
-reads the Python's verdict (`Session.scheduled`) and this holds it to the Lean, on which
+reads the Python's verdict (`AuditRun.scheduled`) and this holds it to the Lean, on which
 `Properties.RemoteAudit.ScheduleChecked` is proved."""
 
 from __future__ import annotations

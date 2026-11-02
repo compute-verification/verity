@@ -55,7 +55,7 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
           for _ in range(nb)]
     prog, call = standalone_call(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))
     t: dict[int, int] = {}
-    evaluate_call(prog.circuit, call, [0] * K + xs + [0] * (N * K) + [w for row in ws for w in row], transcript=t)
+    evaluate_call(prog.circuit, call, [0] * K + xs + [0] * (N * K) + [w for row in ws for w in row], trace=t)
     got = [t[call.lo + j] for j in SP.slots(K, N, G)]
     assert got == fp8_twins.scale_products(np.asarray(xs, dtype=np.uint32), np.asarray(ws, dtype=np.uint32)).reshape(-1).tolist()
 

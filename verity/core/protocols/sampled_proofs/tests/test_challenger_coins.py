@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-import json
 
 import pytest
 
@@ -208,7 +207,6 @@ def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
         coins = T.ChallengerCoins(C.LiveRecord(client, "positions", itertools.count().__next__))
         for name in served:
             stream, reg = register(coins, COIN_CASES.index(name), None if name == "no-window" else window["root"])
-            assert stream.coin_source == "challenger"
             segment = coins.commit(bytes.fromhex(reg.digest))
             draws[name] = (stream, stream.select(reg), segment)
         client.close()
@@ -258,7 +256,7 @@ def assert_only_honest_coins_accepted(outcomes) -> None:
 
 def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration(
         tmp_path, signer, monkeypatch):  # noqa: F811
-    """On a stream drawing from the challenger (`coin_source` `challenger`, which its digest names), every outcome's run
+    """On a stream drawing from the challenger (which its digest names), every outcome's run
     by the verifier (`Run.run`) checks the draw's coins: with their evidence for the registration's window
     (`window_root`) it accepts the honest draw, and it rejects, failing `run` with the select step's `coins`, each of
     `coin_outcomes`' other cases (a prover picking the window among them). A sampler beside the challenger's coins, and
@@ -274,7 +272,7 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     assert_only_honest_coins_accepted(outcomes)
     coins = T.ChallengerCoins(C.LiveRecord(C.LiveChallenger(test_remote.SCHEME, 0, test_remote.FAMILIES,
                                                             entropy("x")), "positions", itertools.count().__next__))
-    assert "coins" not in json.dumps(_stream().digest) and outcomes["honest"][0].digest != _stream().digest
+    assert outcomes["honest"][0].digest == _stream().digest != _stream(sampler=lambda law, n: [0, 1]).digest
     with pytest.raises(ValueError, match="no sampler"):
         _stream(coins=coins, sampler=lambda law, n: [0, 1])
     sampled = _stream(sampler=lambda law, n: [0, 1])

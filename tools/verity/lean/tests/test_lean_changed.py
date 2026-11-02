@@ -1,9 +1,9 @@
-"""`lean_changed.py --records --update`: the regenerated record survives where the run keeps it (LEAN-10), and a node
+"""`lean_changed.py --records --update`: the regenerated record survives where the run keeps it, and a node
 whose Lean slots grant no `build` slot takes the `--dev-cache` path.
 
 In a recorded run the fast path never writes ROOT (the commit's shared source tree), and the slot tree's copy of the
 updated `lean-audit.json` is restored to the committed bytes by the next requirer iteration's `sync`, so without an
-explicit keep the record a lane must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
+explicit keep the record its author must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
 and check.py itself, and check the keep under `out/record/` (recorded and not), the ROOT write-back (unrecorded
 only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way."""
 from __future__ import annotations
@@ -184,7 +184,7 @@ def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_pa
 
 def torn(lib: Path, name: str) -> Path:
     """A module whose `.olean` was written after its `.hash`, the trace and the `.hash` still agreeing: what a build killed
-    after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash` (TOP-90 row 54)."""
+    after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash`."""
     t = module(lib, name)
     h = lib / f"{name}.olean.hash"
     os.utime(h, ns=(10**18, 10**18))
@@ -216,9 +216,9 @@ def test_an_output_newer_than_its_hash_is_half_written_and_loses_every_hash_with
 
 
 def test_a_module_without_a_trace_loses_the_hash_files_it_kept(tmp_path):
-    """compute-accounting, 26 Oct 09:49Z: cpu-5's `build-0` held `W1.olean` rewritten at 09:08, its `.hash` from 07:47 and
-    no `W1.trace`, as a `repair` that dropped only the trace left it; `damaged` reads only traces, so it went unflagged,
-    and the next `.ltar` restore would have kept the stale `.hash` beside a new trace."""
+    """A tree can hold an `.olean` newer than its `.hash` and no `.trace`, as a `repair` that drops only the trace leaves it;
+    `damaged` reads only traces, so it goes unflagged, and the next `.ltar` restore would keep the stale `.hash` beside a
+    new trace."""
     tree = tmp_path / "tree"
     lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
     good = module(lib, "P/Good")
@@ -345,8 +345,8 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
 
 
 def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds_them(trying, tmp_path):
-    """cpu-5's `build-0`, 26 Oct: `Proofs.Pouw` failed there with `W1BudgetAbort` replayed beside a fresh
-    `TTOutW1RowSeed`, each built against another `W1`, while it elaborated from source everywhere else."""
+    """A module can fail on one tree with one import replayed beside a fresh other, each built against another version of a
+    shared dependency, while it elaborates from source everywhere else."""
     tree, calls = trying
     proofs = tree / "Sec" / "Proofs" / ".lake" / "build" / "lib" / "lean"
     sec = tree / "Sec" / ".lake" / "build" / "lib" / "lean"
@@ -426,7 +426,7 @@ def test_build_builds_the_files_modules_on_the_slot_tree_and_reports_each_files_
 
 def test_build_builds_nothing_off_a_node_or_where_the_node_keeps_no_dependencies(trying, tmp_path, monkeypatch, capsys):
     """An agent VM has no Lean slots, and a node without the package's dependencies would fetch Mathlib cold: both are
-    skipped with why, so the preflight notes them instead of refusing."""
+    skipped with why, so the preflight passes the build to its next node, or refuses naming why."""
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "absent")
     assert LC.main(["--build", "Sec/Proofs/Flock/X.lean"]) == 2
@@ -440,6 +440,31 @@ def test_build_builds_nothing_off_a_node_or_where_the_node_keeps_no_dependencies
     assert "Mathlib" in doc["skipped"]["Sec/Proofs"] and doc["built"] == {} and calls["build"] == []
     with pytest.raises(SystemExit):
         LC.main(["--build", "Sec/Proofs/Flock/X.lean", "--try", "Sec/Proofs/Flock/X.lean"])
+
+
+def test_build_with_no_wait_builds_nothing_when_every_build_slot_is_taken(trying, tmp_path, monkeypatch, capsys):
+    """The preflight builds on a node it can fall back from with `--no-wait`: a full `build` pool is a skip naming why, at once,
+    so the next node gets the build before the step's deadline; without it the slot is waited for, as before."""
+    _, calls = trying
+    (slots := tmp_path / "lean-slots").write_text("build 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    asked = []
+
+    def hold(pool, **kw):
+        asked.append((pool, kw))
+        if not kw.get("queue", True):
+            raise LC.LEAN_SLOT.Refused("all 1 Lean audit slot(s) of pool build are taken, and this request doesn't wait in line")
+
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    assert LC.main(["--no-wait", "--build", "Sec/Proofs/Flock/X.lean"]) == 2
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert doc == {"built": {}, "failed": {}, "skipped": {"*": "no `build` Lean slot here (all 1 Lean audit slot(s) of pool "
+                                                               "build are taken, and this request doesn't wait in line)"}}
+    assert calls["build"] == [] and asked == [("build", {"or_any": False, "queue": False})]
+    assert LC.main(["--build", "Sec/Proofs/Flock/X.lean"]) == 0
+    assert asked[1] == ("build", {"or_any": False, "queue": True}) and calls["build"]
+    with pytest.raises(SystemExit):
+        LC.main(["--no-wait", "--try", "Sec/Proofs/Flock/X.lean"])
 
 
 def test_module_of_reads_the_packages_src_dir(trying):

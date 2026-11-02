@@ -500,7 +500,7 @@ native = "none: emulated by ptxas (b1 99-436, s4 k64 334, u4 k64 69.5 SMSP-cycle
 exact = "–"
 isa = "PTX lists them for sm_80+"
 
-# ---- FP8 atom semantics (PEARLC-MODEL) -----------------------------------------------------------------------------
+# ---- FP8 atom semantics --------------------------------------------------------------------------------------------
 
 [[fp8]]
 form = "mma.sync m16n8k32 kind::f8f6f4 .f32.e4m3.e4m3 (QMMA.16832), and .e5m2"
@@ -595,12 +595,12 @@ name = "JI3e_2"
 other = 0.172
 source = "census JI3e_2: MMA 15.539 + every other 0.172"
 
-# ---- the units RT-UNITS lists outside the rates above: their rates, then a verdict a unit ---------------------
+# ---- the units outside the rates above: their rates, then a verdict a unit ----------------------------------
 # A reduction unit is an adding route d reads, at an upper bound where no run has timed it. Every 32-bit add it makes
 # moves a word through a shared-memory or L1 port (CPG 'Shared Memory': 32 banks, each 32 bits a clock), so 32 a
 # SM-clock bounds each. Every add moves more than one word (a read-modify-write, and a bulk reduction's source read),
 # so the true rate is lower: 32 over-allows the route, the safe side, and costs γ and ε at most what these routes
-# lower d by (RT-UNITS U12). Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
+# lower d by. Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
 
 [[rate]]
 key = "smem.atom"

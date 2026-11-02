@@ -153,7 +153,7 @@ class Table:
         return self.spec.rank(str(request), int(token_row))
 
 
-def of_registration(window: CS.Window, rec: Mapping[str, Any], step_roots: Mapping[int, bytes]) -> list[Table]:
+def of_registration(window: CS.Binding, rec: Mapping[str, Any], step_roots: Mapping[int, bytes]) -> list[Table]:
     """The verifier's tables: each row table of its own ``window`` under its step's root as serving recorded it before the step's
     coin (``step_roots``, by engine step); refused unless the registration ``rec``'s ``row-table`` port holds the window's step
     count and domain (``registration.check``'s R3) and its root is the tree over those step roots."""
