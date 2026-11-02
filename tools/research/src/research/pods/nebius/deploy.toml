@@ -142,7 +142,7 @@ owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-drop-ipv4-options.service"
-src = "tools/research/src/research/pods/nebius/units/vy-drop-ipv4-options.service"
+src = "tools/research/src/research/pods/nebius/vy-drop-ipv4-options.service"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
