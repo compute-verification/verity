@@ -50,10 +50,13 @@ source, or prints `{"listening": PORT}`, serves one prover (`serve`) and prints 
 it starts the side, connects to it and answers each index with `respond(index)` (`answer`).
 
 A request naming its audit also carries P2's parameters (`params`, `request_of`), and `setup_of` reads setup's published
-outputs with them, refused unless their root is the binding and their blocks the request's. Each session the
-challenger completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the file 0600: `keep`), the request
-and the id it designated: the auditor's record of that window's setup, from which the remote bandwidth audit's verifier
-on the same host builds its registration (`remote_bandwidth.p2_party --pous-record`), never from a file the prover sends.
+outputs with them, refused unless their root is the binding and their blocks the request's, and refused on a request
+that names no audit: only `designate` checks a commitment and salt against the salt log, so the side refuses setup
+outputs without it before it listens. Each session the challenger completes is kept on its own host,
+`DIR/setups/<session id>.json` (0700, the file 0600: `keep`), the request and the id it designated, so a kept setup is
+always an audit's, under `session_id` of its audit, commitment and salt: the auditor's record of that window's setup,
+from which the remote bandwidth audit's verifier on the same host builds its registration
+(`remote_bandwidth.p2_party --pous-record`), never from a file the prover sends.
 """
 
 from __future__ import annotations
@@ -430,10 +433,15 @@ def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None
 
 def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
     """Setup's published outputs with P2's parameters, as a request naming its audit carries them (`request_of`), None
-    for a request without them; ValueError unless their root is the session's binding, their blocks the request's,
-    their commitment and root 64 bytes, their salt PoUS's, and the parameters P2's at those blocks and block size."""
+    for a request without them; ValueError for a request that carries them without naming its audit (`audit`), whose
+    commitment and salt no salt log vouches for, and unless their root is the session's binding, their blocks the
+    request's, their commitment and root 64 bytes, their salt PoUS's, and the parameters P2's at those blocks and block
+    size."""
     if "published" not in request and "params" not in request:
         return None
+    if "audit" not in request:
+        raise ValueError("setup's published outputs ride only on a request naming its audit, whose commitment and salt "
+                         "the memory challenger logged (designate)")
     s, p = request.get("published"), request.get("params")
     if not isinstance(s, dict) or sorted(s) != sorted(("blocks", "commitment", "root", "salt")):
         raise ValueError("a request's published outputs are {blocks, commitment, root, salt}")

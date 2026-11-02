@@ -308,6 +308,23 @@ def test_the_side_serves_a_salt_request_and_refuses_before_it_listens(tmp_path) 
     assert not (device / "seed").exists() and mc.SessionLog(device / "sessions").path.read_text() == f"{mc.SESSION_LOG}\n"
 
 
+def test_the_side_refuses_a_setup_on_a_request_that_names_no_audit_and_keeps_none(tmp_path) -> None:
+    """A prover that sends setup's outputs under a commitment and salt of its own and leaves out its audit, so
+    `designate` never checks them against the salt log: the side refuses it before it listens or loads its key, and keeps
+    no record from which the bandwidth audit's verifier would build its registration (`p2_party --pous-record`)."""
+    device = tmp_path / "device"
+    side = Side("auditor-host", CP.command(device))
+    point = period.point_for(len(STORE), period.W, period.C0)
+    own = run.Setup(point.params.blocks, hashlib.sha512(b"the prover's W").digest(), b"\x02" * 64, b"\x03" * 24)
+    request = CP.request_of("n0", point, own.root, audit=AUDIT, published=own)
+    del request["audit"]
+    with pytest.raises(RuntimeError, match="the side on auditor-host refused: setup's published outputs ride only on a "
+                                           "request naming its audit"):
+        side.talk(request, lambda s: None)
+    assert not (device / "seed").exists() and not (device / CP.SETUPS).exists()
+    assert mc.SessionLog(device / "sessions").path.read_text() == f"{mc.SESSION_LOG}\n"
+
+
 def test_the_party_follows_period_json(tmp_path) -> None:
     local = CP.side_of({}, "cpu-node", tmp_path)
     assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
@@ -326,7 +343,8 @@ def test_the_party_follows_period_json(tmp_path) -> None:
 
 def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_session_privately(tmp_path) -> None:
     """A request naming its audit carries setup's published outputs and the point's parameters, its setup refused unless
-    its root is the binding, its blocks and parameters the session's and its salt PoUS's; the kept record is the request
+    its root is the binding, its blocks and parameters the session's and its salt PoUS's, and refused on a request that
+    carries either without naming its audit; the kept record is the request
     and the id the challenger designated, 0600 in a 0700 directory, written once."""
     _, point, published, _, _ = _in_process()
     req = CP.request_of("n0", point, published.root, audit=AUDIT, published=published)
@@ -344,6 +362,9 @@ def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_ses
             CP.setup_of(req | {"params": params})
     with pytest.raises(ValueError, match="a request's published outputs are"):
         CP.setup_of({k: v for k, v in req.items() if k != "published"})
+    for leave in (("audit",), ("audit", "published"), ("audit", "params")):
+        with pytest.raises(ValueError, match="ride only on a request naming its audit"):
+            CP.setup_of({k: v for k, v in req.items() if k not in leave})
     sid = bytes(range(32))
     path = CP.keep(tmp_path, sid, req)
     assert path == tmp_path / CP.SETUPS / f"{sid.hex()}.json"

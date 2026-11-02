@@ -5,8 +5,9 @@ The channel is a pair of byte streams carrying one JSON object of one key a line
 (`--stdio`, as a gate's verb starts it) or a TCP connection (`--listen`). The session has no round-trip floor, so ssh's
 latency changes nothing in its verdict. The verifier holds its own registration, never the prover's word for it: the
 memory challenger's own record of a PoUS session's setup on this host (`--pous-record DIR --pous-session SID`,
-`pous_record`: the store PoUS's session SID bound, its whole store the plan), or the auditor's registration file
-(`--registration FILE`, `registration_json`); and it draws its coins from its own host's OS.
+`pous_record`: the store PoUS's session SID bound, its whole store the plan, refused unless SID is an audit's session,
+`challenger_party.session_id` of the audit and the commitment and salt the challenger logged for it), or the auditor's
+registration file (`--registration FILE`, `registration_json`); and it draws its coins from its own host's OS.
 The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
 padding past the last tensor, which is PoUS's and which the decode never reads; without one, every unit.
 
@@ -185,17 +186,22 @@ def registration_of(doc: Mapping[str, Any]) -> p2.Registration:
 def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
     """The registration of the PoUS setup the memory challenger kept for one session (`challenger_party.keep`): the
     request's node, the setup's P2 parameters, commitment and salt, and the session's binding as the vk root, at
-    sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_party.setup_of` refuses."""
+    sketch-sha512's rows; ValueError for a record without a setup, one `challenger_party.setup_of` refuses (among them a
+    request that names no audit), or one whose session id isn't its audit's (`challenger_party.session_id` of the
+    audit, the commitment and the salt), the id `designate` runs an audit's session under."""
     from verity.core.protocols.pous import challenger_party as CP
 
     request = record["request"]
     s = CP.setup_of(request)
     if s is None:
         raise ValueError("the challenger's record of the session has no setup")
+    commitment, salt = _unhex(s["commitment"]), _unhex(s["salt"])
+    if record.get("session_id") != CP.session_id(_unhex(request["audit"]), commitment, salt).hex():
+        raise ValueError("the challenger's record is not of its audit's session: its id is not session_id(audit, "
+                         "commitment, salt)")
     q = s["params"]
     params = P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"], q["expander"])
-    return p2.Registration(request["node"].encode(), p2.codec_of(params), _unhex(s["commitment"]), _unhex(s["salt"]),
-                           _unhex(request["binding"]))
+    return p2.Registration(request["node"].encode(), p2.codec_of(params), commitment, salt, _unhex(request["binding"]))
 
 
 def pous_record(directory: Path, session_id: str) -> bytes:

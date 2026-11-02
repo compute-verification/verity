@@ -296,17 +296,19 @@ def test_a_lean_that_holds_another_store_is_refused(exe, store) -> None:
 
 def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names(store, tmp_path) -> None:
     """`--pous-record DIR --pous-session SID`: the registration of the setup the memory challenger kept for PoUS session
-    SID (`challenger_party.keep`), its whole store the plan; refused for an id out of form, a record of another session,
-    or one without a setup."""
+    SID (`challenger_party.keep`), its whole store the plan, SID its audit's (`challenger_party.session_id`); refused for
+    an id out of form, a record of another session, one without a setup, one kept under an id that isn't its audit's,
+    and one whose request carries a setup but names no audit, so its commitment and salt may be the prover's own."""
     from verity.core.protocols.pous import challenger_party as CP
     from verity.core.protocols.pous import run as R
 
     reg = store.registration
     q = reg.params
     point = R.Point(q, 1, 1)
-    request = CP.request_of(NODE.decode(), point, reg.root, audit=hashlib.sha512(b"a window's binding").digest(),
+    audit = hashlib.sha512(b"a window's binding").digest()
+    request = CP.request_of(NODE.decode(), point, reg.root, audit=audit,
                             published=R.Setup(q.blocks, reg.commitment, reg.root, reg.salt))
-    sid = hashlib.sha512(b"a PoUS session").digest()[:32]
+    sid = CP.session_id(audit, reg.commitment, reg.salt)
     CP.keep(tmp_path, sid, request)
     doc = json.loads(p2_party.pous_record(tmp_path, sid.hex()))
     assert p2_party.registration_of(doc) == reg and p2_party.plan_of(doc, reg) == receipts.Plan.whole(reg.blocks)
@@ -321,3 +323,14 @@ def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names
     CP.keep(tmp_path, bare, CP.request_of(NODE.decode(), point, reg.root))
     with pytest.raises(ValueError, match="has no setup"):
         p2_party.pous_record(tmp_path, bare.hex())
+    unaudited = hashlib.sha512(b"an id of the challenger's coins").digest()[:32]
+    CP.keep(tmp_path, unaudited, request)
+    with pytest.raises(ValueError, match=r"not of its audit's session: its id is not session_id"):
+        p2_party.pous_record(tmp_path, unaudited.hex())
+    with pytest.raises(ValueError, match=r"not of its audit's session"):
+        p2_party.registration_of_setup({"request": request | {"audit": hashlib.sha512(b"another").hexdigest()},
+                                        "session_id": sid.hex()})
+    prover = b"\x02" * 32
+    CP.keep(tmp_path, prover, {k: v for k, v in request.items() if k != "audit"})
+    with pytest.raises(ValueError, match="ride only on a request naming its audit"):
+        p2_party.pous_record(tmp_path, prover.hex())
