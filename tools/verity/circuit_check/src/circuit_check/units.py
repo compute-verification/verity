@@ -377,6 +377,14 @@ def _unchanged(was: dict, now: dict) -> bool:
     return True
 
 
+def _held(reads: dict) -> dict:
+    """What `_unchanged` holds a record's reads to, as JSON: a package an enumerator listed by the modules it lists, a module or
+    unit by `_sited`, the rest as digested."""
+    return json.loads(json.dumps({k: {p: None if a is None else sorted(a) for p, a in v.items()} if k == "enums" else
+                                  {r: _sited(x) for r, x in v.items()} if k in ("modules", "units") else v
+                                  for k, v in reads.items()}))
+
+
 def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str]]] | None:
     """``e``'s record and its reads when every read it holds is unchanged (`_unchanged`) and it lists the roots made now; None
     otherwise, and for one that cannot be read."""
@@ -745,7 +753,8 @@ def slices(plan: Plan, owners: dict[str, str], name: Callable[[tuple[str, ...]],
     Call families did and the families (``families``, ``calls``), each Boolean Definition `made_words` made, with the path
     its record reaches it by (``words``; one an object built here already stood for made nothing, and is left out), and each
     Definition's owner (``owners``, `owners`).  A binding's: each of its entries' place, root ids, effects, key, reads
-    (digested now, as `store` stores them) and nodes, its record but its build's time; and each Definition `derive` took
+    (digested now, in the form `_unchanged` holds its record to: `_held`, so a slice changes only where its record would
+    stop counting) and nodes, its record but its build's time; and each Definition `derive` took
     from one of them (the targets ``--binding`` checks, `cli._binding_of`), with its units and the root that stands for it
     as `plan` with ``binding`` has it (the registered roots' and the binding's own, held to the descriptor `derive` took).
     `Stale` where a binding has no reads to hold its record to, or a made word's record no longer reaches it."""
@@ -794,7 +803,8 @@ def slices(plan: Plan, owners: dict[str, str], name: Callable[[tuple[str, ...]],
             raise Stale(f"{b}: a record with no reads to hold it to")
         per[b] = {"schema": SLICE, "binding": b, "targets": sorted(targets, key=lambda t: t[0]), "entries": [
             {"at": at[id(e)], "ids": e.root_ids, "effects": e.effects, "key": e.key, "nodes": e.nodes,
-             "reads": CC._digests(repo, {"files": [], "dirs": [], **{k: list(v) for k, v in e.reads.items()}})} for e in own]}
+             "reads": _held(CC._digests(repo, {"files": [], "dirs": [], **{k: list(v) for k, v in e.reads.items()}}))}
+            for e in own]}
     return shared, per
 
 
@@ -904,9 +914,10 @@ def sliced(mine: dict, shared: dict, repo: Path, log: Callable[[str], None] | No
         e = entries[k]
         if e.root_ids != x["ids"]:
             raise Stale(f"{e.name}: its roots are not the ones its slice lists")
-        if e.key != x["key"] or not _unchanged(x["reads"], CC._digests(repo, {r: list(v) for r, v in x["reads"].items()})):
+        now = CC._digests(repo, {r: list(v) for r, v in x["reads"].items()})
+        if e.key != x["key"] or _held(now) != x["reads"]:
             raise Stale(f"{e.name}: its record in the slice doesn't count here (a read changed)")
-        e.nodes, e.reads, e.reused = x["nodes"], x["reads"], True
+        e.nodes, e.reads, e.reused = x["nodes"], now, True
     tops: dict[str, dict[str, Any]] = {}
 
     def top(k: str) -> dict[str, Any]:

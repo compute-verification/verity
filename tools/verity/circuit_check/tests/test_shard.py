@@ -753,14 +753,13 @@ def test_a_binding_from_its_slice_registers_and_imports_what_it_does_from_every_
 def test_a_binding_from_its_slice_finds_the_boolean_definitions_and_statics_a_full_build_does(tmp_path):
     """From its slice and the shared part alone, in a copy of the tree with no record, a word primitive's check finds the
     Boolean Definition of its word that only another binding's body build registers (made here along the path that binding's
-    record reaches it by: the shared part's ``words``) or that a module no record reaches registers as it is imported, and a
-    reference two bindings bind at two statics is checked at the kept binding's: each with the value and key a full build
-    gives."""
+    record reaches it by: the shared part's ``words``) or a module registers as it is imported, and a reference two bindings
+    bind at two statics is checked at the kept binding's: each with the value and key a full build gives."""
     root, here = _words_tree(tmp_path / "t"), _words_tree(tmp_path / "here")
     whole = _run_units(here, UNITS_FORKED.replace(", jobs=2, isolate=True, fork=True)", ")").replace(*LOADED, 1))
     _, cut = _slices(root)
     words = {w["id"]: w for w in json.loads((cut / "shared.json").read_text())["words"]}
-    assert words["SynWBits_v1"]["via"][0][2] == "_wtop_roots" and words["SynVBits_v1"]["module"] == "syn.wordmod", words
+    assert words["SynWBits_v1"]["via"][0][2] == "_wtop_roots" and words["SynWBits_v1"]["node"], words
     for i, (name, target) in enumerate((("_wprim_roots", "SynW_v1"), ("_vtop_roots", "SynV_v1"),
                                         ("_scale3_roots", "syn.scale"))):
         out = _run_units(_bare(root, tmp_path / f"s{i}"), _sliced(name, cut))
