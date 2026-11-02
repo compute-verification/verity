@@ -44,7 +44,7 @@ theorem vsWord_honestVals (x : Msg) (w : Flock.Wit) (ν : CoinLayer.Nonce) (c : 
           (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1)
         ((((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 r) k) := by
   unfold vsWord
-  rw [dif_pos hk]
+  rw [dite_eq_left hk]
   rfl
 
 /-- **`FinalCFixed` holds at the honest values**, at every coins, the outer coins' restriction unused: the honest
