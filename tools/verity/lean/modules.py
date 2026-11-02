@@ -215,10 +215,10 @@ def package_modules(pkg: Path, files: list[str]) -> list[str]:
     for f in files:
         if not f.endswith(".lean") or not f.startswith(f"{pkg}/") or any(f.startswith(n) for n in nested):
             continue
-        try:
-            mod = (ROOT / f).resolve().relative_to(src).with_suffix("").as_posix().replace("/", ".")
-        except ValueError:
+        path = (ROOT / f).resolve()
+        if not path.is_relative_to(src):
             continue
+        mod = path.relative_to(src).with_suffix("").as_posix().replace("/", ".")
         if mod in exes or any(mod == lib or mod.startswith(lib + ".") for lib in libs):
             out.append(f)
     return out

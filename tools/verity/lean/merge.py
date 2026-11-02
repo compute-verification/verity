@@ -491,7 +491,8 @@ def _ported(sides: tuple[Path, Path, Path], tmp: Path) -> tuple[Path, Path, Path
     for name, p, t in zip(("base", "ours", "theirs"), sides, texts):
         try:
             new = M.port(t)
-        except ValueError:
+        except ValueError as e:
+            print(f"merge.py --lean: the {name} side stays off the module system: {e}", file=sys.stderr)
             new = t
         if new != t:
             (p := tmp / name).write_text(new)
