@@ -93,14 +93,15 @@ def main() -> int:
                                capture_output=True, text=True, env=env, cwd=REPO)
             rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
             run = rows[0].get("run") if rows else None
-            rec = {"key": key, "launched": f"{utc():%H:%M:%S}Z", "run": run}
             if not run:
-                rec["row"], rec["err"] = None, (r.stdout + r.stderr)[-500:]
+                # a refused launch (the VM's disk floor, the node unreachable) is retried on the next pass
+                print(f"{utc():%H:%M}Z launch refused, retrying: {key}\n  {(r.stdout + r.stderr)[-300:]}", flush=True)
+                break
+            rec = {"key": key, "launched": f"{utc():%H:%M:%S}Z", "run": run}
             record(rec)
             seen.add(key)
-            if run:
-                flying[key] = rec
-            print(f"{utc():%H:%M}Z launched {klass} {start} {run or 'FAILED: ' + rec['err'][-200:]}: {note}", flush=True)
+            flying[key] = rec
+            print(f"{utc():%H:%M}Z launched {klass} {start} {run}: {note}", flush=True)
         if not flying and utc().time() >= STOP:
             return 0
         time.sleep(60)
