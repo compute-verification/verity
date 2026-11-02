@@ -7,8 +7,8 @@ its `proved_in` names with theirs (Security's records read Security/Proofs, whic
 are every file an audit of the package can read, those packages' and the auditor's (`lean_audit.inputs`), and it reads
 every part of each of their modules that has a task (`lean_module.reads` at ALL: its `olean`, and every part of a `module`
 file, since the audit loads them at the private level, where a definition's body is), so a change to any of them reruns
-it. A `roots` entry that names no module of the tree has no task to
-read, and the runner fails the lock on it, as the check's `lake build +ROOT` does."""
+it. A `roots` entry that names no module of the tree has no task to read, and the runner fails the lock on it, as the
+check's `lake build +ROOT` does."""
 from __future__ import annotations
 
 import json

@@ -10,9 +10,10 @@ module may `include_str` one) and the Lean tool's files the runner runs (`runner
 `olean` and `ilean` at `out/lean/<module path>`, its `axioms` summary at `out/axioms/<module path>.json` and, for a
 `module` file, the module system's parts `lean` writes beside its `olean` (`PARTS`); `reads`, for each module of the tree
 its compile loads (`loads`), what `lean` loads of that module's build (`reads`) and its `axioms`, which the replay unions
-with the module's own. As Lean loads them and Lake keys a rebuild on them, a `module` file's imports serve with their
-public `olean`, with the code a `meta import` runs (`ir.sig`, `ir`) and with every part under `import all`; a legacy file
-loads every part of every module it imports, transitively.
+with the module's own. As Lean loads them and Lake keys a rebuild on them (`step`), a `module` file reads the public
+`olean` of its imports and of what their `public import`s reach, the code (`ir.sig`, `ir`) of what a `meta import`
+reaches, and every part of an `import all`'s target; a legacy file reads every part of every module it imports,
+transitively.
 
 Packages, input files and lock roots are read by `tools/verity/lean/module_keys.py`, and import headers by
 `tools/verity/lean/headers.py`, as the Lean build cache reads them, so a task and the cache see one module the same way. An
