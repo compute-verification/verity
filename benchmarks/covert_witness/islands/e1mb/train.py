@@ -1,7 +1,7 @@
 """Islands `e1mb` and `e100kb` (direction `lowrank`): a low-rank update to the blocks' matrices, sized to the class's byte
 cap or to a smaller byte target (`--e-bytes`, for the bpb-against-|E| curve); E is the factors and any norm gains
-(`prepare.encode_lora`), and the evaluated model merges them. The same file runs in both islands: the class is this file's
-directory's name.
+(`prepare.encode_lora`), and the evaluated model merges them. The same file runs in both islands and for any class:
+`--class` (default this file's directory's name) must be the class the run is launched as, a bin of Delta.
 
 The base stays frozen and the forward adds s · B(A x) to each target's output (a hook, so the base matmuls read θ and only
 the adapters' MACs are updated). Knobs, each a mechanism of the direction:
@@ -20,9 +20,11 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 - data: `--fresh` skips the windows the start trained on (its seed-0 order's prefix).
 
 The run plans its steps for the harness (`hooks.plan`) and encodes E in the middle of each of `--snaps` + 1 shares of them
-(the default 19: each 5%), so each of the harness's 5% checkpoints scores one.
+(the default 19: each 5%), so each of the harness's 5% checkpoints scores one. The record's notes carry `delta_grad`: the
+trainable values and the bits of their gradient, of AdamW's state (m and v, fp32) and of the fp32 latent factors that a
+straight-through run keeps beside the stored codes.
 
-    python launch.py e1mb m100 --note TEXT -- [--targets all] [--rank 0] [--norms all] [--lr 1e-3]
+    python launch.py CLASS START --island e1mb --node NODE --note TEXT -- --class CLASS [--targets all] [--rank 0] ...
 """
 from __future__ import annotations
 
@@ -107,6 +109,15 @@ def adapter(A, B, s: float, bits: int):
     return hook
 
 
+def delta_grad(trained: list[torch.Tensor], latent: int) -> dict:
+    """Δ_grad: each trained value's fp32 gradient and AdamW's fp32 m and v, plus the `latent` fp32 values a
+    straight-through run keeps beside the codes E stores."""
+    n = sum(p.numel() for p in trained)
+    bits = 32 * n + 64 * n + 32 * latent
+    return {"trainable": n, "grad_bits": 32 * n, "adam_bits": 64 * n, "latent_bits": 32 * latent, "bits": bits,
+            "bytes": bits // 8}
+
+
 def ranks_for(targets: list[str], rank: int, rank_map: dict[str, int]) -> dict[str, int]:
     out = {n: rank_map.get(leaf_of(n), rank) for n in targets}
     return {n: r for n, r in out.items() if r > 0}
@@ -189,7 +200,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--targets", default="all" if KLASS == "e1mb" else "out")
+    ap.add_argument("--class", dest="klass", default=KLASS, choices=sorted(prepare.CLASSES))
+    ap.add_argument("--targets", default="all")
     ap.add_argument("--layers", default="all")
     ap.add_argument("--rank", type=int, default=0, help="0: the largest uniform rank that fits --e-bytes")
     ap.add_argument("--rank-map", default="", help="leaf=R,... overriding --rank per leaf (0 drops the leaf)")
@@ -222,7 +234,9 @@ def main() -> int:
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
-    cap = prepare.CLASSES[KLASS]["max_e_bytes"]
+    cap = prepare.CLASSES[a.klass]["max_e_bytes"]
+    if not (a.e_bytes or cap):
+        raise SystemExit(f"{a.klass}: an uncapped class needs --e-bytes")
     target_bytes = a.e_bytes or (cap - 512)
     layers = layers_of(a.layers, rec["config"]["n_layer"])
     targets = targets_of(params, a.targets, layers)
@@ -236,7 +250,7 @@ def main() -> int:
     ranks = ranks_for(targets, rank, rank_map)
     size = e_bytes(theta, ranks, norms, a.dtype, a.bits)
     if cap is not None and size > cap:
-        raise SystemExit(f"{KLASS}: ranks {sorted(set(ranks.values()))} on {len(ranks)} weights and {len(norms)} norms is "
+        raise SystemExit(f"{a.klass}: ranks {sorted(set(ranks.values()))} on {len(ranks)} weights and {len(norms)} norms is "
                          f"{size} bytes, over the cap of {cap}")
     for p in params.values():
         p.requires_grad_(False)
@@ -279,12 +293,13 @@ def main() -> int:
     # mid-share, so a rounded step never puts two encodes in one harness window and none in the next
     marks = {round(n_steps * (k + 0.5) / (a.snaps + 1)) for k in range(a.snaps + 1)}
     hooks.plan(n_steps)
-    print(json.dumps({"class": KLASS, "steps": n_steps, "rank": rank, "ranks": sorted(set(ranks.values())),
-                      "targets": len(ranks), "norms": len(norms), "E_bytes": size, "flops_per_step": per_step,
-                      "init_flops": spent, "windows": len(data.order)}), flush=True)
+    trained = [p for grp in opt.param_groups for p in grp["params"]]
+    dgrad = delta_grad(trained, sum(A.numel() + B.numel() for A, B, _ in factors.values()) if a.bits else 0)
+    print(json.dumps({"class": a.klass, "steps": n_steps, "rank": rank, "ranks": sorted(set(ranks.values())),
+                      "targets": len(ranks), "norms": len(norms), "E_bytes": size, "delta_grad": dgrad,
+                      "flops_per_step": per_step, "init_flops": spent, "windows": len(data.order)}), flush=True)
     t0 = time.perf_counter()
     lrs = [grp["lr"] for grp in opt.param_groups]
-    trained = [p for grp in opt.param_groups for p in grp["params"]]
     ema = None
     for step in range(n_steps):
         frac = lr_factor(step, n_steps, a)
@@ -313,9 +328,10 @@ def main() -> int:
             snaps.append((encode(factors, params, norms, a.dtype, a.bits), len(steps)))
     blob = encode(factors, params, norms, a.dtype, a.bits)
     model = prepare.decode(theta, blob)
-    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=list(ranks) + norms,
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=list(ranks) + norms,
                    notes={"method": "lora", "direction": "lowrank", "rank": rank, "ranks": ranks, "args": vars(a),
-                          "steps": n_steps, "final_train_ema": ema}, snapshots=snaps)
+                          "steps": n_steps, "final_train_ema": ema, "E_bytes": len(blob), "delta_grad": dgrad},
+                   snapshots=snaps)
     return 0
 
 
