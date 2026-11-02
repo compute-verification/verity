@@ -18,5 +18,6 @@ public import VStar.Holo
 public import VStar.Cli
 public import VStar.In
 public import VStar.Trace
+public import VStar.Link
 
 @[expose] public section
