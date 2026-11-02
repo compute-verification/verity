@@ -9,21 +9,23 @@ The score is te_core's alone (coordinator 20:15Z: one codebase, `te_core.rescore
    cursor/covert-witness-4207 or cursor/training-efficiency-4207.
 2. Runs its `python -m te_core.rescore` on the scorer's ledger at tonight's pin (PINS): per checkpoint of every valid
    v2.3 record, rescore_v1.py's quantities (Delta, u(1), Delta_grad, phi, the frozen tail's share t), Fit (running and
-   training) and the Slowdown theorem's rho (a target) on te_core.policy's (c, k) grid under both readings of its
-   frozen-tail case (literal-x0 and tail-charged, no headline S), H and W* over every checkpoint of every valid record
-   (19:50Z), S = W*/H; frontier.md/json, formalism.jsonl and the console's five panels with their PNGs. Then
-   v1runs.py gives A2 and P4 one row per valid run and target from te_core's same rows (coordinator 20:52Z), which
-   replace te_core's staircase and per-algorithm rows in those two panels (kept beside them as te_core-<plot>.json).
+   training) and the Slowdown theorem's rho (a target) on te_core.policy's (c, k) grid with its frozen tail charged
+   (`--reading tail-charged`, the one reading: Daniel's ruling, coordinator 22:00Z), H and W* over every checkpoint of
+   every valid record (19:50Z), S = W*/H; frontier.md/json, formalism.jsonl and the console's five panels with their
+   PNGs. Then v1runs.py gives A2 and P4 one row per valid run and target from te_core's same rows (coordinator 20:52Z),
+   which replace te_core's staircase and per-algorithm rows in those two panels (kept beside them as
+   te_core-<plot>.json), and Daniel's headline panel, frontier-branches (coordinator 22:30Z).
 3. Publishes the tables and each panel (its JSON and PNG) to the evidence store, writes each panel's console cut (the
    route's body and note limits, `console`) to /opt/cursor/artifacts/te-panels/, PUTs them, and posts one DIGEST line
    with the art ids. `--reput OUT` re-cuts a finished refresh's panels and PUTs them, with nothing re-scored.
 """
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -38,17 +40,18 @@ PINS = os.environ.get("TE_V1_PINS", "11d96c1b8745d8093746ea11e3e33fe6f07f7d3b,"
 PANELS_DIR = Path(os.environ.get("TE_PANELS_DIR", "/opt/cursor/artifacts/te-panels"))
 PANELS_URL = "https://website-docs-sage.vercel.app/api/panels"
 PLOT_OF = {"p1": "p1-loss-vs-compute", "p2": "p2-slowdown-vs-gain", "p3": "p3-policy-plane", "p4": "p4-decomposition",
-           "a2": "a2-efficiency-floor"}
-READINGS = ("literal-x0", "tail-charged")
+           "a2": "a2-efficiency-floor", "fb": "frontier-branches"}
+FB = "frontier-branches"
+READINGS = ("tail-charged",)
 REFERENCE = "c=4096w k=10kB"
 REF_TARGET = -1.0
 NIGHT2 = "2026-11-02T19:15:00Z"
 BINS = (("<=10kB", 8e4), ("<=100kB", 8e5), ("<=1MB", 8e6))
 BODY_MAX = 65536
 NOTE_MAX = 500
-COMMON = ("reading: literal-x0, tail-charged (Slowdown's frozen-tail case; Daniel decides; no headline S). basis: fit = "
-          "rho 1 by Fit for the training; target = Slowdown's bound, unproved. Delta, u(1), t, a: witness upper bounds; "
-          "tau a stub. One seed. Full panels: evidence store.")
+COMMON = ("Reading: tail-charged, the frozen tail's work charged (Daniel, 22:00Z). basis: fit = rho 1 by Fit for the "
+          "training; target = Slowdown's bound, unproved. Delta, u(1), t, a: witness upper bounds; tau a stub. One "
+          "seed. Full panels: evidence store.")
 A2_COMMON = "Delta: a witness upper bound. One seed. Full panels: evidence store."
 PER_RUN = "Each valid v2.3 run's least-compute checkpoint per target (19:50Z); variant: its launch note's label."
 SHORT = {
@@ -59,12 +62,15 @@ SHORT = {
     "p3-policy-plane": "S = W*/H over te_core.policy's (c, k) grid and each start's marked shapes, k in bits; H and W* "
                        "over every checkpoint of every valid v2.3 record.",
     "p4-decomposition": f"{PER_RUN} At c=4096w k=10kB: p = |C|/H, s = rho, S = p s.",
-    "a2-efficiency-floor": f"{PER_RUN} The floor is their frontier; fit_*_k_bits: least k where Fit holds at c=4096w. "
-                           "reading: both (A2 reads no rho).",
+    "a2-efficiency-floor": f"{PER_RUN} The floor is their frontier; fit_*_k_bits: least k where Fit holds at c=4096w.",
+    FB: "Headline: loss against compute staircases; frontier = the starts' points (the ladder's to come); honest after "
+        "each start; throttled = |C| rho; S = W*/H; C0 a stub.",
 }
 BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
-LEAN = ("start_id", "checkpoint", "method", "family")
-RUNS_LEAN = ("start_id", "record", "checkpoint", "compute_frac", "g", "seeds")
+LEAN = ("start_id", "checkpoint", "method", "family", "reading")
+RUNS_LEAN = ("start_id", "record", "checkpoint", "compute_frac", "g", "seeds", "reading")
+FB_LEAN = ("start_id", "policy", "record", "checkpoint")
+REF_C_TOKENS, REF_K_BITS = 4096, 80_000
 SIZE_SAT = ("size", "saturation")
 FIT_K = ("fit_run_k_bits", "fit_train_k_bits")
 PER_RUN_PANELS = ("a2-efficiency-floor", "p4-decomposition")
@@ -107,6 +113,8 @@ def rescore(out: Path, gates: Path, final: Path | None = None) -> str:
         (out / "analysis-gates.json").write_bytes(gates.read_bytes())
     ledger = os.environ.get("TE_LEDGER", str(Path.home() / ".research" / "te-ledger"))
     args = ["--out", str(out), "--root", ledger, "--scorer", str(S.STATE), *(x for p in PINS for x in ("--pin", p))]
+    if '"--reading"' in (RESCORE_WT / "benchmarks" / "covert_witness" / "te_core" / "rescore.py").read_text():
+        args += [x for m in READINGS for x in ("--reading", m)]
     runs = [sys.executable, str(HERE / "v1runs.py"), *args]
     cmds = ([[sys.executable, str(HERE / "v1final.py"), str(final), *args], [*runs, "--final", str(final)],
              [*runs, "--prefix", "search-runs-"]] if final else [[sys.executable, "-m", "te_core.rescore", *args], runs])
@@ -160,12 +168,12 @@ def thinned(step: float):
     def pick(ds: list[dict]) -> list[dict]:
         groups: dict[tuple, list] = defaultdict(list)
         for d in ds:
-            groups[(d["start_id"], d["curve"], d["policy"], d["reading"])].append(d)
+            groups[(d["start_id"], d["curve"], d.get("policy"), d.get("reading"))].append(d)
         out = []
         for g in groups.values():
             kept = [g[0]]
             for i, d in enumerate(g[1:], 1):
-                if i == len(g) - 1 or d["target_pct"] != kept[-1]["target_pct"] or \
+                if i == len(g) - 1 or d.get("target_pct") != kept[-1].get("target_pct") or \
                         d["loss"] <= kept[-1]["loss"] * (1 - step):
                     kept.append(d)
             out += kept
@@ -181,7 +189,7 @@ def frontier(x: str, y: str, *by: str):
     def pick(ds: list[dict]) -> list[dict]:
         groups: dict[tuple, list] = defaultdict(list)
         for i, d in enumerate(ds):
-            groups[tuple(d[c] for c in ("start_id", "target_pct", "reading", *by))].append(i)
+            groups[tuple(d.get(c) for c in ("start_id", "target_pct", "reading", *by))].append(i)
         kept = []
         for ix in groups.values():
             best = inf
@@ -191,6 +199,12 @@ def frontier(x: str, y: str, *by: str):
                     kept.append(i)
         return [ds[i] for i in sorted(kept)]
     return pick
+
+
+def dial(d: dict) -> float:
+    """A throttled row's distance from the reference policy, in decades of c or k (the larger; the console cut rounds
+    it up to half decades)."""
+    return max(abs(math.log10(d["c_tokens_per_block"] / REF_C_TOKENS)), abs(math.log10(d["k_bits"] / REF_K_BITS)))
 
 
 def union(*picks):
@@ -204,10 +218,11 @@ def union(*picks):
 def console(P: dict, final: bool = False) -> dict:
     """Each panel cut to the route's limits (a body of BODY_MAX bytes, a note of NOTE_MAX characters): the short note,
     and the first of its cuts that fits, which the note names. Every cut keeps both readings, except A2's, whose rows
-    agree under both (A2 reads no rho) and so are one row each, `reading` both. A2's and P4's rows grow with every
-    run, so their last cuts keep every target and, per start and target, first each method's runs on its own frontier,
-    then the panel's frontier (A2's floor, Delta against compute; P4's, p against s) with each method's best run, then
-    the frontier alone."""
+    agree under both (A2 reads no rho) and so are one row each. No cut has a `reading` column: one reading is scored
+    (Daniel, 22:00Z). A2's and P4's rows grow with every run, so their last cuts keep every target and, per start and
+    target, first each method's runs on its own frontier, then the panel's frontier (A2's floor, Delta against
+    compute; P4's, p against s) with each method's best run, then the frontier alone. frontier-branches keeps its
+    frontier and honest rows and the throttled ones at the (c, k) nearest the reference that fit."""
     def every(r):
         return True
 
@@ -217,11 +232,11 @@ def console(P: dict, final: bool = False) -> dict:
     def one(r):
         return r["reading"] == READINGS[0]
 
-    def both(d):
-        return variant_label(d) | {"reading": "both"}
-
     def band(policies):
         return lambda r: r["curve"] != "covert-policy" or r["policy"] in policies
+
+    def near(x):
+        return lambda r: r["curve"] != "throttled" or math.ceil(2 * dial(r)) / 2 <= x
     out = {}
     for pid, p in P.items():
         tries = [("", every, LEAN, None, None)]
@@ -241,13 +256,13 @@ def console(P: dict, final: bool = False) -> dict:
         elif pid == "a2-efficiency-floor":
             lean = (*RUNS_LEAN, *SIZE_SAT)
             floor = frontier("delta_bits", "compute_gates")
-            tries = [("", one, RUNS_LEAN, both, None),
-                     (" No size, saturation (in start).", one, lean, both, None),
-                     (" No size/saturation; each method's own floor only.", one, lean, both,
+            tries = [("", one, RUNS_LEAN, variant_label, None),
+                     (" No size, saturation (in start).", one, lean, variant_label, None),
+                     (" No size/saturation; each method's own floor only.", one, lean, variant_label,
                       frontier("delta_bits", "compute_gates", "method")),
-                     (" No size/saturation; the floor and each method's least-compute run.", one, lean, both,
+                     (" No size/saturation; the floor and each method's least-compute run.", one, lean, variant_label,
                       union(floor, frontier("compute_gates", "compute_gates", "method"))),
-                     (" No size/saturation; the floor only.", one, lean, both, floor)]
+                     (" No size/saturation; the floor only.", one, lean, variant_label, floor)]
         elif pid == "p4-decomposition":
             lean = (*RUNS_LEAN, *SIZE_SAT, *FIT_K)
             front = frontier("p", "s")
@@ -260,6 +275,16 @@ def console(P: dict, final: bool = False) -> dict:
                       variant_label, union(front, frontier("S", "S", "method"))),
                      (" No fit_*_k_bits, size/saturation; the (p, s) front only.", every, lean, variant_label,
                       front)]
+        elif pid == FB:
+            cells = defaultdict(set)
+            for d in frame(p):
+                if d["curve"] == "throttled":
+                    cells[math.ceil(2 * dial(d)) / 2].add((d["start_id"], d["policy"]))
+            far = sorted(cells, reverse=True)
+            per = {x: max(Counter(s for y in far if y <= x for s, _ in cells[y]).values()) for x in far}
+            tries = [((f" Throttled within {x:g} decades of the reference (<= {per[x]} (c, k) a start), points "
+                       f"{100 * step:g}% apart."), near(x), FB_LEAN, None, thinned(step))
+                     for step in (0.0025, 0.01) for x in far]
         common = A2_COMMON if pid == "a2-efficiency-floor" else COMMON
         common = common.replace(" One seed.", "") if final else common
         for why, keep, drop, fix, pick in tries:
@@ -355,7 +380,7 @@ def main() -> int:
               f"{commit[:10]}, {len(scored)} valid v2.3 checkpoints)")
     P = {}
     for pid in PLOT_OF.values():
-        own = rs / (f"runs-{pid}.json" if pid in PER_RUN_PANELS else f"{pid}.json")
+        own = rs / (f"runs-{pid}.json" if pid in (*PER_RUN_PANELS, FB) else f"{pid}.json")
         P[pid] = json.loads(own.read_text()) | {"source": source}
         if final:
             P[pid]["title"] = FINAL_TITLE + P[pid]["title"]
@@ -368,9 +393,10 @@ def main() -> int:
             (trees[key] / f"te_core-{pid}.json").write_bytes((rs / f"{pid}.json").read_bytes())
         (trees[key] / f"{pid}.json").write_text(json.dumps(P[pid]) + "\n")
         (trees[key] / f"{pid}.console.json").write_bytes(body(C[pid]) + b"\n")
-        (trees[key] / f"{pid}.png").write_bytes((rs / f"{pid}.png").read_bytes())
+        png = (rs / (f"runs-{pid}.png" if pid == FB else f"{pid}.png")).read_bytes()
+        (trees[key] / f"{pid}.png").write_bytes(png)
         (PANELS_DIR / f"{pid}.json").write_bytes(body(C[pid]) + b"\n")
-        (PANELS_DIR / f"{pid}.png").write_bytes((rs / f"{pid}.png").read_bytes())
+        (PANELS_DIR / f"{pid}.png").write_bytes(png)
         if not args.no_publish:
             ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 {what} {pid}", **meta})
     puts = {} if args.no_put else {pid: put_panel(C[pid]) for pid in PLOT_OF.values()}
@@ -410,13 +436,14 @@ def final_md(rs: Path, fin: dict, tab: dict) -> str:
           "are the search checkpoint's at the nearest MACs (v1final.py); S = p s at that checkpoint, at c = 4096w, "
           "k = 10 kB, over the final H (te_core.rescore)."), "",
          ("| entry | start | target | final: least gates (frac; bpb mean [lo, hi]; seeds) | search: least gates (frac) "
-          "| final/search | S literal-x0 (ρ, basis) | S tail-charged (ρ, basis) |"), "|---|---|---|---|---|---|---|---|"]
+          "| final/search | " + " | ".join(f"S {m} (ρ, basis)" for m in READINGS) + " |"),
+         "|---" * (6 + len(READINGS)) + "|"]
     for e, x in sorted(fin["entries"].items(), key=lambda t: str(t[1]["run"])):
         mine = [r for r in p4 if r["run"] == x["run"]]
         name = f"{mine[0]['method'] if mine else '?'} {e[4:16]} ({x['run']})"
         if not x["matched"] or not mine:
             why = "no final row at a search checkpoint's MACs" if not x["matched"] else "reaches no target"
-            L.append(f"| {name} | | | {why} | | | | |")
+            L.append(f"| {name} | | | {why} |" + " |" * (2 + len(READINGS)))
             continue
         for tp in sorted({r["target_pct"] for r in mine}, reverse=True):
             at = {r["reading"]: r for r in mine if r["target_pct"] == tp}
@@ -444,7 +471,8 @@ def final_md(rs: Path, fin: dict, tab: dict) -> str:
 
 def reput(out: Path) -> int:
     """The console's cut of a finished refresh's full panels, written to PANELS_DIR and PUT, with nothing re-scored."""
-    C = console({pid: json.loads((out / "publish" / key / f"{pid}.json").read_text()) for key, pid in PLOT_OF.items()})
+    C = console({pid: json.loads((out / "publish" / key / f"{pid}.json").read_text()) for key, pid in PLOT_OF.items()
+                 if (out / "publish" / key / f"{pid}.json").exists()})
     puts = {}
     for pid, q in C.items():
         (PANELS_DIR / f"{pid}.json").write_bytes(body(q) + b"\n")
@@ -483,9 +511,10 @@ def digest(P: dict, meta: dict, ids: dict, puts: dict) -> str:
             "drop; " if "entries" in meta else "v1 refresh (")
     return (f"{head}te_core.rescore {meta['te_core'][:10]}: {meta['records']} valid v2.3 records, "
             f"{meta['night2_records']} from night 2, {meta['checkpoints']} checkpoints, {meta['not_analysed']} not "
-            "analysed yet; H and W* over every checkpoint, so S >= 1; both readings of Slowdown's frozen-tail case, "
-            "literal-x0 / tail-charged, no headline S; rho a target unless Fit holds for the training) at −1% and "
-            f"{REFERENCE}: " + "; ".join(parts) + f". art: {arts}. Console panels PUT {ok}/{len(puts)} (p1-p4, a2).")
+            "analysed yet; H and W* over every checkpoint, so S >= 1; Slowdown's frozen tail charged, the one reading "
+            "(Daniel, 22:00Z); rho a target unless Fit holds for the training) at −1% and "
+            f"{REFERENCE}: " + "; ".join(parts) + f". art: {arts}. Console panels PUT {ok}/{len(puts)} (p1-p4, a2, "
+            "frontier-branches).")
 
 
 if __name__ == "__main__":

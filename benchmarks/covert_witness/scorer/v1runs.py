@@ -26,6 +26,9 @@ VARIANT_MAX = 200
 HEAD = ["start", "start_id", "size", "saturation", "target_pct", "reading", "run", "method", "variant", "family",
         "record", "checkpoint", "checkpoint_frac"]
 SIZES = ["delta_bits", "delta_grad_bits", "compute_gates", "compute_frac", "fit_run_k_bits", "fit_train_k_bits"]
+BRANCHES = ["curve", "start", "start_compute_gates", "start_loss", "c_tokens_per_block", "k_bits", "compute_total_gates",
+            "compute_after_gates", "loss", "S", "run", "method", "delta_bits", "basis", "start_id", "policy", "record",
+            "checkpoint"]
 
 
 def variants(state: Path) -> dict[str, str | None]:
@@ -84,6 +87,75 @@ def panels(sts: list[plots.Start], var: dict, readings, ctx: dict) -> dict[str, 
             "the reference policy (1 by Fit, else Slowdown's bound floored at 1), S = p s; seeds = the point's.", ctx)}
 
 
+def branches(sts: list[plots.Start], name: str, ctx: dict) -> dict:
+    """Daniel's headline panel (note:training-20261102T2226Z-draft-frontier-branches-panel) under reading `name`: per
+    start, its branch point (C0, l0), the honest staircase after it and the throttled one (|C| rho) at every (c, k) of
+    te_core.policy.cells, S = W*/H at each throttled point's loss against the same start's honest staircase; the
+    from-scratch frontier is the starts' own points until the ladder's curve comes."""
+    rows = []
+    for x, y, st in plots.staircase([(st.c0, st.l0, st) for st in sts]):
+        rows.append(["frontier", "", None, None, None, None, x, None, y, None, st.name, "the start's own training",
+                     None, None, st.name, None, None, None])
+    for st in sts:
+        def row(curve, x, y, r, key=None, s=None, st=st):
+            c, k = st.cells[key] if key else (None, None)
+            return [curve, st.head[0], st.c0, st.l0, c and c / st.w, k, st.c0 + x, x, y, s, r["run_id"],
+                    plots.method(r), r["measured"].delta_bits, plots.basis(r, key) if key else None, st.name,
+                    plots.policy_label(key) if key else None, r["id"], r.get("checkpoint_step")]
+        honest = plots.staircase([(r["gates"], r["val_bpb"], r) for r in st.on])
+        rows += [row("honest", x, y, r) for x, y, r in honest]
+        for key in st.cells:
+            pts = [(r["gates"] * r["rho_by"][name][key], r["val_bpb"], r) for r in st.on
+                   if r["rho_by"][name].get(key) is not None]
+            for x, y, r in plots.staircase(pts):
+                h = min((hx for hx, hy, _ in honest if hy <= y), default=None)
+                rows.append(row("throttled", x, y, r, key, x / h if h else None))
+    how = {policy.c0(st.shape)[1] for st in sts}
+    return plots.panel(
+        "frontier-branches", "The frontier and its branches: loss against total training compute", BRANCHES, rows,
+        "Every curve a staircase (the least compute reaching each loss) over every checkpoint of every valid record "
+        "(19:50Z). frontier = from scratch: the starts' own points until the ladder's curve comes; honest = |C| after "
+        "the start; throttled = |C| rho at each (c, k) (c in tokens per block of the start's forward, k in bits); "
+        "compute_total = C0 + compute after; S = W*/H at the point's loss against the same start's honest. C0: "
+        + "; ".join(sorted(how)) + ".", ctx)
+
+
+def draw_branches(p: dict, out: Path, ref: str = policy.REFERENCE) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    d = plots.frame(p)
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6.5))
+    starts = sorted({r["start_id"] for r in d if r["curve"] != "frontier"})
+    for ax, xk, title in ((axes[0], "compute_total_gates", "total training compute (C0 + after), gates"),
+                          (axes[1], "compute_after_gates", "compute after the start, gates")):
+        fr = [r for r in d if r["curve"] == "frontier"]
+        if xk == "compute_total_gates" and fr:
+            ax.plot([r[xk] for r in fr], [r["loss"] for r in fr], "--", color="C0", lw=1.5, label="frontier (starts)")
+        for i, s in enumerate(starts):
+            h = [r for r in d if r["start_id"] == s and r["curve"] == "honest"]
+            t = [r for r in d if r["start_id"] == s and r["curve"] == "throttled" and r["policy"] == plots.policy_label(ref)]
+            lab = h[0]["start"] if h else s
+            if xk == "compute_total_gates" and h:
+                ax.plot([h[0]["start_compute_gates"]], [h[0]["start_loss"]], "o", color="k", ms=6)
+                ax.annotate(f"{s} ({lab})", (h[0]["start_compute_gates"], h[0]["start_loss"]), fontsize=7,
+                            xytext=(4, 4), textcoords="offset points")
+            for rows, color, lw, what in ((h, "C0", 0.9, "honest"), (t, "C3", 2.2, "throttled")):
+                if rows:
+                    ax.step([r[xk] for r in rows], [r["loss"] for r in rows], where="post", color=color, lw=lw,
+                            alpha=0.6 + 0.4 * (i == 0), label=f"{what} {s}")
+        ax.set_xscale("log")
+        ax.set_xlabel(title)
+        ax.set_ylabel("held-out bits per byte")
+        ax.grid(alpha=0.3)
+    axes[1].legend(fontsize=6, ncol=2)
+    fig.suptitle(f"{p['title']} (throttled at {plots.policy_label(ref)}; every (c, k) in the panel)", fontsize=10)
+    fig.text(0.01, 0.005, p["note"][:300], fontsize=5, wrap=True)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.96))
+    fig.savefig(out, dpi=130)
+    plt.close(fig)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
@@ -93,7 +165,10 @@ def main(argv=None) -> int:
     ap.add_argument("--source", default="")
     ap.add_argument("--final", type=Path, default=None, help="score with FINAL_DIR's final values (v1final.final_rows)")
     ap.add_argument("--prefix", default="runs-", help="the written files' prefix")
+    ap.add_argument("--reading", action="append", choices=formalism.READINGS, default=None,
+                    help="a reading of Slowdown's frozen-tail case, repeated (default te_core's)")
     a = ap.parse_args(argv)
+    readings = tuple(a.reading or formalism.READINGS)
     ledger = Ledger(a.root)
     rows = ledger.index()
     if a.final:
@@ -103,16 +178,20 @@ def main(argv=None) -> int:
     shapes = policy.starts()
     blocks = rescore.analysed(rescore.ANALYSIS, a.scorer, ledger.root, a.out / "analysis-gates.json")
     rows, source = rescore.attach(rows, blocks)
-    scored, stubs = plots.load(rows, pin, shapes, lambda r: source[r["id"]] == "analysis", formalism.READINGS)
+    scored, stubs = plots.load(rows, pin, shapes, lambda r: source[r["id"]] == "analysis", readings)
     sts = plots.starts_of(scored, shapes, policy.REFERENCE, {})
-    tail = (f" Readings: {', '.join(formalism.READINGS)} (Slowdown's frozen-tail case; Daniel decides which the theorem "
-            "means, so both are listed and neither is the headline). basis: fit = rho 1 by Fit for the training; target "
-            "= Slowdown's bound (stated, not proved in Lean). Pin " + " + ".join(c[:12] for c in pin) + ". Stubs and "
-            "bounds: " + "; ".join(f"{s} ({n} rows)" for s, n in sorted(stubs.items())) + ".")
+    which = (" Reading: tail-charged, the frozen tail's work always charged (Daniel's ruling, coordinator 22:00Z)."
+             if readings == ("tail-charged",) else
+             f" Readings: {', '.join(readings)} (Slowdown's frozen-tail case; neither is the headline).")
+    tail = (which + " basis: fit = rho 1 by Fit for the training; target = Slowdown's bound (stated, not proved in "
+            "Lean). Pin " + " + ".join(c[:12] for c in pin) + ". Stubs and bounds: "
+            + "; ".join(f"{s} ({n} rows)" for s, n in sorted(stubs.items())) + ".")
     ctx = {"stamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": a.source, "tail": tail}
-    for name, p in panels(sts, variants(a.scorer), formalism.READINGS, ctx).items():
+    out = panels(sts, variants(a.scorer), readings, ctx) | {"frontier-branches": branches(sts, readings[0], ctx)}
+    for name, p in out.items():
         (a.out / f"{a.prefix}{name}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
         print(f"{name}: {len(p['rows'])} rows")
+    draw_branches(out["frontier-branches"], a.out / f"{a.prefix}frontier-branches.png")
     return 0
 
 
