@@ -133,7 +133,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote/../pouw/lean/check/../window/../../../../difftest/lean",
+   "../../verity/core/protocols/onsite/../remote/../network/nci/lean/../../../interface/../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

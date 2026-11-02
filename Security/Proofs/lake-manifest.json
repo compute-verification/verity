@@ -157,7 +157,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/core/protocols/onsite/../remote/../pouw/lean/check/../window/../../../../difftest/lean",
+   "../Properties/../../verity/core/protocols/onsite/../remote/../network/nci/lean/../../../interface/../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"url": "https://github.com/leanprover-community/mathlib4",
    "type": "git",
