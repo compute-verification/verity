@@ -322,6 +322,9 @@ def main() -> int:
                     help="the lines' selection energy: G², the mean squared batch gradient, G²/√(that) (an Adam step's "
                          "first-order gain), W², or uniform noise")
     ap.add_argument("--max-rank", type=int, default=64)
+    ap.add_argument("--alloc", default="grad", choices=("grad", "uniform"),
+                    help="lora: ranks by the probe gradient's σ² per byte, or one rank on every candidate (the largest "
+                         "that fits; the control)")
     ap.add_argument("--regrow", type=float, default=1.0,
                     help="lora: the share of the byte budget placed at θ; the rest goes, after --regrow-at of the "
                          "steps, to the rank units with the most σ² per byte of a fresh probe's gradient (a learned mask)")
@@ -385,6 +388,11 @@ def main() -> int:
         while plan and e_bytes("lines", theta, norms, plan) > cap:
             avail -= 2048
             plan = plan_lines(cands, energy, theta, avail, a.orient)
+    elif a.mech == "lora" and a.alloc == "uniform":
+        r = 1
+        while e_bytes("lora", theta, norms, {n: r + 1 for n in cands}) <= cap:
+            r += 1
+        plan = {n: r for n in cands}
     elif a.mech == "lora":
         Gc = {n: G[n].cpu() for n in cands}
         avail = int(avail * a.regrow)
