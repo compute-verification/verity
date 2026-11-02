@@ -92,3 +92,9 @@ name = "challenger-publish"
 argv = ["bash", "{dir}/challenger/publish.sh", "--every", "300"]
 env_files = ["/root/.config/verity/r2.env"]
 env = { VY_CHALLENGER_STATE = "{dir}/challenger/state", RESEARCH_STORE = "/root/watchers-challenger-store" }
+
+# infra's main at /opt/infra on the pod and on every node (infra_checkout.py, INF-412): fetched with drive's App, sent to each
+# node whose /opt/infra/.commit differs, every 10 min
+[[loop]]
+name = "infra-checkout"
+argv = ["python3.12", "-s", "{src}/infra/control/infra_checkout.py", "loop", "--state", "{dir}/infra-checkout.json"]
