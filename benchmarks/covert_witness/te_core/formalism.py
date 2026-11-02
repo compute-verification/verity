@@ -1,31 +1,38 @@
 """A record's slowdown ρ at a policy (c, k), by the training formalism v1 (Daniel, 2 Nov 2026;
-note:training-20261102T1817Z-report-training-formalism-v1). |C|, c and w are Boolean gates (te_core.gates), every
-other quantity bits.
+note:training-20261102T1817Z-report-training-formalism-v1, with its 10:58 AM PST corrections): its theorems Fit and
+Slowdown per record, and the quantities Security's S = W*/H reads (te_core.frontier). |C|, c and w are Boolean gates
+(te_core.gates), every other quantity bits.
 
-Measured per record (`Measured`), each with its source in `labels` ("measured: ..." or "stub: ..."):
+Measured per record (`Measured`), each with its source in `labels` ("measured: ...", "counted: ...", "stub: ...", or
+"upper bound (witness): ..." for a value a witness bounds from above):
 
 - `parts`: one per distinct step structure, each with its gates |C_j|, its token blocks (one per token per step,
   `tokens`), its dependent gates in token blocks |Dep ∩ ∪T| (`dep_gates`) and the gradient and optimizer state its
   blocks pass between them (`delta_grad_bits`, Δ_grad; None: unmeasured);
-- `tau_bits` τ, the unregistered input bits a token block reads; `a_bits` a, the cut cost, the bits that hand a block
-  one token's state mid-path; `u`, the update profile u(x) as points (x, bits) from (0, 0) to (1, u(1)), linear between
-  them; `delta_bits` Δ, the bits that describe θ' given θ, by a decoder of `decoder_gates` (None: not measured).
+- `tau_bits` τ, the unregistered input bits a token block reads; `delta_bits` Δ, Fit's total update, the bits that
+  describe θ' given θ, by a decoder of `decoder_gates` (None: not measured);
+- A1's parameters, Slowdown's: `a_bits` a, the cut cost, the bits that hand a block one token's state mid-path, and
+  `u`, the update profile u(x) as points (x, bits) from (0, 0) to (1, u(1)), linear between them, with u(1)
+  (`u1_bits`) the per-token update. Each is the best-known value from witnesses (an encoding or activation code a run
+  exhibits), an upper bound, never a measured truth. u(1) and Δ are separate fields: they are equal for an update every
+  token's path reads in full (a dense model), not in general.
 
 At (c, k), per part: w = |C_j| / tokens, s = c / w, φ = dep_gates / |C_j|, x₀ the largest x with u(x) ≤ k, and
 
 - **Fit** (checked): Δ + sτ ≤ k (running the updated model), and for training also 2Δ_grad + sτ ≤ k; the part's
   ρ is 1 when both hold. Δ counts only when its decoder fits in c gates (an unmeasured decoder is assumed to, a label).
-- **Cover** (target, until Lean proves it): ρ ≳ φ(1 − x₀)·s·a / max_x x(k − u(x)).
+- **Slowdown** (a target, until Lean proves it): ρ ≳ φ(1 − x₀)·s·a / max_x x(k − u(x)).
 
-The part's ρ is 1 when training fits, else max(1, Cover); a part where both fit and Cover exceeds 1 is flagged
-(`fit-over-cover`: the fitting partition would refute A1, or the measurement is wrong). The record's ρ is the parts'
-|C_j|-weighted mean, so |C|ρ is the sum of their blocks' gates.
+The part's ρ is 1 when training fits, else max(1, Slowdown's); a part where both fit and Slowdown's bound exceeds 1 is
+flagged (`fit-over-slowdown`: the fitting partition would refute A1, or the measurement is wrong). The record's ρ is the
+parts' |C_j|-weighted mean, so |C|ρ is the sum of their blocks' gates.
 
 Where the quantities come from (`measure`): a row's `formalism` block, which ingest writes from the run record
-(`of_record`), else the stubs below from a v2.3 row's own fields. te_core 4.0's capture gives `cut_bits` per step
-structure, read as Δ_grad; the rest of what the formalism measures (Dep with backward gates, τ, a and u from the
-traced circuit, Δ's decoder) a run record gives as its own `formalism` block, {"parts": [...], "tau_bits", "a_bits",
-"u", "delta_bits", "decoder_gates", "labels"}, which `of_record` passes through field by field.
+(`of_record`) or a re-score attaches (te_core.rescore), else the stubs below from a v2.3 row's own fields. te_core
+4.0's capture gives `cut_bits` per step structure, read as Δ_grad; the rest of what the formalism measures (Dep with
+backward gates, τ, a and u from the traced circuit, Δ's decoder) a run record gives as its own `formalism` block,
+{"parts": [...], "tau_bits", "a_bits", "u", "u1_bits", "delta_bits", "decoder_gates", "labels"}, which `of_record`
+passes through field by field.
 """
 from __future__ import annotations
 
@@ -35,7 +42,7 @@ from dataclasses import asdict, dataclass, field
 from .gates import of_log, per_mac
 
 ACT_BITS = 16
-FIT_OVER_COVER = "fit-over-cover"
+FIT_OVER_SLOWDOWN = "fit-over-slowdown"
 
 
 @dataclass(frozen=True)
@@ -73,13 +80,33 @@ class Measured:
     def w(self) -> float:
         return self.gates / self.tokens if self.tokens else math.inf
 
+    @property
+    def u1_bits(self) -> float:
+        """u(1), the per-token update: Slowdown's, a field of its own beside Fit's Δ."""
+        return self.u[-1][1]
+
     def to_json(self) -> dict:
-        return asdict(self) | {"parts": [asdict(p) for p in self.parts], "u": [list(p) for p in self.u]}
+        return asdict(self) | {"parts": [asdict(p) for p in self.parts], "u": [list(p) for p in self.u],
+                               "u1_bits": self.u1_bits}
 
 
 def from_json(d: dict) -> Measured:
     return Measured(tuple(Part(**p) for p in d["parts"]), d["tau_bits"], d["a_bits"], tuple(map(tuple, d["u"])),
                     d.get("delta_bits"), d.get("decoder_gates"), d.get("labels", {}))
+
+
+def even(u1: float) -> tuple[tuple[float, float], ...]:
+    """The evenly spread profile u(x) = x·u(1)."""
+    return ((0.0, 0.0), (1.0, float(u1)))
+
+
+def frozen_tail(u1: float, t: float) -> tuple[tuple[float, float], ...]:
+    """The least of the evenly spread profile and a frozen tail's: a block doing only the tail's share t of a token's
+    dependent work (the frozen layers above the highest update) reads no update bits, so u(x) = 0 up to t, then
+    x·u(1)."""
+    if not 0 < t < 1:
+        return even(u1)
+    return ((0.0, 0.0), (t, 0.0), (t, t * u1), (1.0, float(u1)))
 
 
 # ---- the update profile ------------------------------------------------------------------------------------------------
@@ -118,7 +145,7 @@ def room(u, k: float) -> float:
 # ---- the theorems at (c, k) --------------------------------------------------------------------------------------------
 
 def at(m: Measured, c: float, k: float) -> dict:
-    """ρ at (c, k), with each part's s, w, Fit and Cover (module docstring)."""
+    """ρ at (c, k), with each part's s, w, Fit and Slowdown's bound (module docstring)."""
     delta = m.delta_bits if m.decoder_gates is None or m.decoder_gates <= c else None
     x0, r = bottom_share(m.u, k), room(m.u, k)
     parts, blocks, flags = [], 0.0, []
@@ -128,11 +155,12 @@ def at(m: Measured, c: float, k: float) -> dict:
         phi = p.dep_gates / p.gates if p.gates else 0.0
         fit_inf = delta is not None and delta + s * m.tau_bits <= k
         fit_train = fit_inf and p.delta_grad_bits is not None and 2 * p.delta_grad_bits + s * m.tau_bits <= k
-        cover = phi * (1 - x0) * s * m.a_bits / r if r > 0 else (0.0 if phi * (1 - x0) == 0 else math.inf)
-        rho = 1.0 if fit_train else max(1.0, cover)
-        if fit_train and cover > 1:
-            flags.append(FIT_OVER_COVER)
-        parts.append({"w": w, "s": s, "phi": phi, "fit": fit_inf, "fit_training": fit_train, "cover": cover, "rho": rho})
+        bound = phi * (1 - x0) * s * m.a_bits / r if r > 0 else (0.0 if phi * (1 - x0) == 0 else math.inf)
+        rho = 1.0 if fit_train else max(1.0, bound)
+        if fit_train and bound > 1:
+            flags.append(FIT_OVER_SLOWDOWN)
+        parts.append({"w": w, "s": s, "phi": phi, "fit": fit_inf, "fit_training": fit_train, "slowdown": bound,
+                      "rho": rho})
         blocks += p.gates * rho
     return {"c": c, "k": k, "x0": x0, "room": r, "delta_counted": delta is not None, "parts": parts,
             "rho": blocks / m.gates if m.gates else 1.0, "flags": sorted(set(flags))}
@@ -145,11 +173,12 @@ def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> dict[str, float]
 # ---- measurement -------------------------------------------------------------------------------------------------------
 
 STUBS = {
-    "tau_bits": "stub: a token block's input and target ids, ceil(log2 V) bits each",
-    "a_bits": "stub: d_model x 16 (one token's bf16 residual stream)",
-    "u": "stub: evenly spread, u(x) = x * Delta",
+    "tau_bits": "stub: one token id per token block, ceil(log2 V) bits (its target is the next token's id)",
+    "a_bits": "upper bound (witness): d_model x 16, one token's bf16 residual stream",
+    "u": "upper bound (witness): evenly spread, u(x) = x * u(1)",
+    "u1_bits": "upper bound (witness): u(1) = Delta, every token's path reads the whole update code",
     "decoder_gates": "stub: the decoder is assumed to fit in c",
-    "delta_bits": "measured: 8 |E| (the submitted update code)",
+    "delta_bits": "upper bound (witness): 8 |E|, the submitted update code",
     "delta_grad_bits": "unmeasured: training Fit unchecked",
 }
 V23 = {
@@ -184,18 +213,27 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
         labels |= {k: v for k, v in V23.items() if k not in labels}
     out = {}
     e = (row.get("output") or {}).get("e_bytes")
-    defaults = {"tau_bits": 2 * math.ceil(math.log2(shape["vocab"])), "a_bits": shape["d_model"] * ACT_BITS,
+    defaults = {"tau_bits": math.ceil(math.log2(shape["vocab"])), "a_bits": shape["d_model"] * ACT_BITS,
                 "delta_bits": 8 * e if e is not None else None, "decoder_gates": None}
     for name, default in defaults.items():
         out[name] = f.get(name, default)
         if name not in f:
             labels.setdefault(name, STUBS[name] if default is not None or name == "decoder_gates"
                               else "unmeasured: no update code")
-    if not f.get("u") and out["delta_bits"] is None:
-        raise ValueError("no update profile and no update code: rho is unmeasured")
-    out["u"] = tuple(map(tuple, f["u"])) if f.get("u") else ((0.0, 0.0), (1.0, out["delta_bits"]))
-    if not f.get("u"):
+    if f.get("u"):
+        out["u"] = tuple(map(tuple, f["u"]))
+        if f.get("u1_bits") is not None and not math.isclose(out["u"][-1][1], f["u1_bits"]):
+            raise ValueError(f"u(1) is {f['u1_bits']} but the profile ends at {out['u'][-1][1]}")
+        labels.setdefault("u", "upper bound (witness): the record's profile")
+        labels.setdefault("u1_bits", labels["u"])
+    else:
+        u1 = f["u1_bits"] if f.get("u1_bits") is not None else out["delta_bits"]
+        if u1 is None:
+            raise ValueError("no update profile and no update code: rho is unmeasured")
+        out["u"] = even(u1)
         labels.setdefault("u", STUBS["u"])
+        if f.get("u1_bits") is None:
+            labels.setdefault("u1_bits", STUBS["u1_bits"])
     if any(p.delta_grad_bits is None for p in parts):
         labels.setdefault("delta_grad_bits", STUBS["delta_grad_bits"])
     return Measured(parts, out["tau_bits"], out["a_bits"], out["u"], out["delta_bits"], out["decoder_gates"], labels)

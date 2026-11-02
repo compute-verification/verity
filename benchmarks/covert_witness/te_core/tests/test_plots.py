@@ -1,4 +1,5 @@
-"""te_core.plots draws P1-P4 and writes the numbers behind them, from ledger rows, with and without a from-scratch curve."""
+"""te_core.plots draws P1-P4 and A2 and writes the numbers behind them, from ledger rows, with and without a
+from-scratch curve."""
 import json
 
 import pytest
@@ -35,7 +36,7 @@ def test_the_four_plots_and_their_numbers(tmp_path, monkeypatch, scratch):
         f.write_text(json.dumps({"s1": [[c0 * 0.5, 1.25], [c0, 1.2], [c0 * 3, 1.15], [c0 * 10, 1.1]]}))
         args += ["--from-scratch", str(f), "--g", "1.5"]
     assert plots.main(args) == 0
-    for n in ("P1", "P2", "P3", "P4"):
+    for n in ("P1", "P2", "P3", "P4", "A2"):
         assert (tmp_path / "out" / f"{n}.png").stat().st_size > 10_000
         data = json.loads((tmp_path / "out" / f"{n}.json").read_text())
         assert data["pin"] == ["pin"] and any("stub" in s for s in data["stubs"])
@@ -45,3 +46,17 @@ def test_the_four_plots_and_their_numbers(tmp_path, monkeypatch, scratch):
     p4 = json.loads((tmp_path / "out" / "P4.json").read_text())["data"]["s1"]
     assert any(p["full_training"] for p in p4["points"])
     assert min(p["p"] for p in p4["points"]) == pytest.approx(1.0)
+    a2 = json.loads((tmp_path / "out" / "A2.json").read_text())["data"]["s1"]
+    first = a2["targets"][0]
+    assert [s["of"]["id"] for s in first["complete"]] == ["r2", "r0"]
+    assert first["complete"][-1]["p"] == pytest.approx(1.0)
+
+
+def test_a2_steps_are_the_least_compute_up_to_each_delta():
+    """A record lowers the curve only if it beats every record of no larger Δ, so the steps never rise, ties at one Δ
+    giving one step."""
+    def r(i, delta, gates):
+        return {"id": i, "gates": gates, "measured": type("M", (), {"delta_bits": delta})()}
+
+    steps = plots.least_by_delta([r("a", 10, 5.0), r("b", 1, 9.0), r("c", 10, 3.0), r("d", 100, 4.0), r("e", 1, 7.0)])
+    assert [(s["delta_le"], s["gates"], s["of"]["id"]) for s in steps] == [(1, 7.0, "e"), (10, 3.0, "c")]

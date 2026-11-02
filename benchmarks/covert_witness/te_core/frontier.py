@@ -26,8 +26,9 @@ grid (score.K_BITS x score.R):
   2|C|.
 
 With `--formalism` it scores the valid submissions by the training formalism v1 instead (te_core.formalism): |C| in
-Boolean gates, ρ at every (c, k) of the start's policy grid (te_core.policy), and per start and l* honest H, W* in each
-cell and S = W*/H by the same 14:57Z rule (`formalism_report`), with every quantity's source.
+Boolean gates, ρ at every (c, k) of the start's policy grid (te_core.policy; 1 where Fit holds, Slowdown's target
+elsewhere), and per start and l* honest H, W* in each cell and Security's S = W*/H by the same 14:57Z rule
+(`formalism_report`), with every quantity's source.
 
 `candidates(rows, T)` are the frontier members and elites at tier T - 1 not yet promoted to T; which of them are promoted
 is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as the scorer).
@@ -320,12 +321,13 @@ def formalism_targets(rows: list[dict], shapes: dict[str, dict], ends: set[str])
 
 
 def formalism_report(rows: list[dict], pin: str | tuple[str, ...] | None = None,
-                     shapes: dict[str, dict] | None = None) -> dict:
-    """The formalism's frontier over the valid rows (`valid`): `formalism_targets`, with every quantity's source (the
-    labels of the rows' measurements) and the rows it couldn't score."""
+                     shapes: dict[str, dict] | None = None, keep=None) -> dict:
+    """The formalism's frontier over the valid rows (`valid`) that `keep` keeps (default all): `formalism_targets`, with
+    every quantity's source (the labels of the rows' measurements) and the rows it couldn't score. Complete schedules
+    are read over every row."""
     shapes = policy.starts() if shapes is None else shapes
     ends = schedule_ends(rows)
-    scored, skipped = formalism_rows(valid(rows, pin), shapes)
+    scored, skipped = formalism_rows([r for r in valid(rows, pin) if keep is None or keep(r)], shapes)
     labels: dict[str, dict[str, int]] = {}
     for r in scored:
         for k, v in r["measured"].labels.items():
@@ -336,8 +338,9 @@ def formalism_report(rows: list[dict], pin: str | tuple[str, ...] | None = None,
 
 
 def formalism_markdown(rep: dict) -> str:
-    lines = ["S = W*/H per start and target, at each reference shape (te_core.policy; ρ is Cover's target where Fit "
-             "fails, |C| in Boolean gates):", "", "| start | target | l* | H (gates) | " + " | ".join(
+    lines = ["Security's S = W*/H per start and target, at each reference shape (te_core.policy; ρ is 1 where Fit holds "
+             "and Slowdown's target where it fails; |C| in Boolean gates):", "", "| start | target | l* | H (gates) | "
+             + " | ".join(
                  f"S at {m}" for m in policy.MARKS) + " |", "|---|---|---|---|" + "---|" * len(policy.MARKS)]
     for start, v in rep["starts"].items():
         for t in v["targets"]:

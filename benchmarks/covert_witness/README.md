@@ -46,13 +46,18 @@ scores by the formalism. `pinned.json` names v2.3's commit until v3 is pinned.
   experiments draft (c = 4096 w, one 4,096-token session per block, and k = 10 kB) between them. m100: c 1e11 to 1e21
   gates, k 1e4 to 1e10 bits, 77 cells; s100: c 1e10 to 1e20. `python -m te_core.policy` prints each start's.
 - **Per record** (`te_core.formalism`, written at ingest): per step structure, its gates, token blocks and dependent
-  gates (φ), and Δ_grad; τ, a, the update profile u(x) and Δ. At (c, k): w, s = c/w, x₀, Fit (Δ + sτ ≤ k, and
-  2Δ_grad + sτ ≤ k for training: ρ = 1), else Cover's ρ = φ(1 − x₀)·s·a / max_x x(k − u(x)), a target until Lean proves
-  it. A quantity te_core doesn't measure yet is a stub, named in the record's `labels`.
+  gates (φ), and Δ_grad; τ, a, Δ (the whole update, Fit's), u(1) (the per-token update, Slowdown's; equal to Δ only
+  when every token's path reads the whole update) and the update profile u(x). At (c, k): w, s = c/w, x₀, Fit
+  (Δ + sτ ≤ k, and 2Δ_grad + sτ ≤ k for training: ρ = 1), else Slowdown's ρ = φ(1 − x₀)·s·a / max_x x(k − u(x)), a
+  target until Lean proves it. u(x), u(1) and a are the best-known values from witnesses, labelled upper bounds; a
+  quantity te_core doesn't measure yet is a stub; the record's `labels` name each.
 - **Score** (`python -m te_core.frontier --formalism`): per start, target (`TARGETS`, drops below the start's bpb) and
   cell, W* = the least |C|ρ of a valid record that reaches ℓ*, H = the least |C| of a valid record that reaches it by a
-  complete schedule (any direction's), and S = W*/H. **Plots** (`python -m te_core.plots --out DIR`): P1-P4 of the
-  experiments draft, each a PNG and the numbers behind it.
+  complete schedule (any direction's), and Security's S = W*/H. **Plots** (`python -m te_core.plots --out DIR`): P1-P4
+  of the experiments draft and the A2 curve (the least compute to each target against Δ, per start; Δ's bins, never
+  caps), each a PNG and the numbers behind it. **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`):
+  the same score and plots over the pin's valid records, each with the formalism block of `analysis/rescore_v1.py`
+  (the analytic v1 quantities, from the scorer's directory), or the stubs with `--stubs`.
 
 **Budget**: 2x the MACs the harness counts ≤ 9e16 x 1.1 (`TRAIN_FLOP_BUDGET`, about 10 GPU-minutes of m's dense AdamW at
 its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and optimizer work the analytic meter leaves
@@ -174,4 +179,4 @@ A candidate's run `out/` holds `run/run.json` (the harness's record as the evalu
 `te-core/run/v1`, with `evaluation`), `witness.json` (schema `covert-witness/witness/v5`), `tree.json` (the process
 tree), `island.json` and `island.tar`, `timing.json`, `meta.json`, `steps.jsonl`, `E.bin` when at most 1 MB, `train.py`
 and its logs. **Backs**: no Lean guarantee or claim; its numbers are measurements of training, scored by the
-formalism's Fit (checked) and Cover (a target until Lean proves it).
+formalism's Fit (checked), Slowdown (a target until Lean proves it) and Security (S = W*/H).
