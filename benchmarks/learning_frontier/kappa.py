@@ -315,6 +315,8 @@ def plots(out: Path, report: dict) -> list[str]:
         plt.close(fig)
         names.append(name)
 
+        if not any(c.get("gain") is not None for s in starts for c in s["configs"].values()):
+            continue
         fig, ax = plt.subplots(figsize=(6.5, 4.2))
         for s in starts:
             pts = sorted((c["update_bits"], c["gain"], lab) for lab, c in s["configs"].items() if c.get("gain") is not None)
