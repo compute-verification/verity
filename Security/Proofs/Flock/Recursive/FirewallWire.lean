@@ -5,13 +5,13 @@ import Flock.Firewall
 
 `decode_putReq`: `decode` reads a request the worker encodes (`putReq`) back to itself wherever each length fits its
 word (`ReqFits`). `frames_putFrames`: `frames` reads the frames the worker writes (`putFrames`) back to themselves
-wherever each frame's op, kind, count and payload fit (`FrameFits`). `split_putRound`: `split` reads a round the worker's
-challenger absorbs (`putRound`) to its caps, its free elements and its coin count, in absorb order, wherever each item
-fits and the statement is bound once in a rep's first round and nowhere else (`RoundFits`).
+wherever each frame's op, kind, count and payload fit (`FrameFits`). `split_putRound`: `split` reads a round the
+worker's challenger absorbs (`putRound`) to its caps, its free elements and its coin count, in absorb order, wherever
+each item fits and the statement is bound once in a rep's first round and nowhere else (`RoundFits`).
 
-`At b p x` says `x` sits in `b` at `p`; each reader (`rdU32`, `rdU64`, `rdBytes`, `rdStr`, `rdList`) has a lemma reading
-what its writer put there. `split`'s loop is read item by item through `Steps`, its body's action on each frame an honest
-item makes.
+`At b p x` says `x` sits in `b` at `p`; each reader (`rdU32`, `rdU64`, `rdBytes`, `rdStr`, `rdList`) has a lemma
+reading what its writer put there. `split`'s loop is read item by item through `Steps`, its body's action on each frame
+an honest item makes.
 -/
 
 namespace FlockSoundness.Discharge.Recursion.FirewallWire
@@ -428,8 +428,8 @@ section loop
 variable {first : Bool} {f : Nat × Nat × Nat × ByteArray → Split × Option Nat → V (ForInStep (Split × Option Nat))}
 
 /-- `split`'s loop on each frame an honest item makes, at each binding state it meets. -/
-structure Steps (first : Bool) (f : Nat × Nat × Nat × ByteArray → Split × Option Nat → V (ForInStep (Split × Option Nat))) :
-    Prop where
+structure Steps (first : Bool)
+    (f : Nat × Nat × Nat × ByteArray → Split × Option Nat → V (ForInStep (Split × Option Nat))) : Prop where
   domain : ∀ d st, f (OP_DOMAIN, 0, d.size, d) st = pure (.yield st)
   label : ∀ l st, l ≠ LABEL_R1CS → f (OP_LABEL, 0, l.size, l) st = pure (.yield st)
   r1cs : ∀ s, f (OP_LABEL, 0, LABEL_R1CS.size, LABEL_R1CS) (s, none) = pure (.yield (s, if first then some 0 else none))

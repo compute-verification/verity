@@ -366,15 +366,20 @@ end
 /-- A string `JsonParse` reads back unescaped: no `"`, `\` or control character. -/
 def plainStr (s : String) : Bool := s.all fun c => c != '"' && c != '\\' && 0x20 ≤ c.val
 
+/-- An object's keys ascend in its tree's order, as in every tree `JsonParse` builds. -/
+def ascending (t : Std.DTreeMap.Internal.Impl String (fun _ => Json)) : Bool :=
+  decide (t.toListModel.Pairwise fun a b => compare a.1 b.1 = .lt)
+
 mutual
-/-- A value that prints back as it parses: its numbers naturals, its strings and keys plain (`plainStr`). -/
+/-- A value that prints back as it parses: its numbers naturals, its strings and keys plain (`plainStr`), each object's
+keys ascending (`ascending`). -/
 def plain : Json → Bool
   | .null => true
   | .bool _ => true
   | .num ⟨m, e⟩ => e == 0 && decide (0 ≤ m)
   | .str s => plainStr s
   | .arr ⟨a⟩ => plainList a
-  | .obj ⟨⟨t⟩⟩ => plainObj t
+  | .obj ⟨⟨t⟩⟩ => plainObj t && ascending t
 def plainList : List Json → Bool
   | [] => true
   | j :: js => plain j && plainList js
@@ -382,6 +387,27 @@ def plainObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → Bool
   | .leaf => true
   | .inner _ k v l r => plainObj l && plainStr k && plain v && plainObj r
 end
+
+mutual
+/-- A value's text as the honest worker writes it (`serde_json`'s `to_string`): no whitespace, each object's members in
+its tree's order, each number its mantissa in decimal. A plain value's text parses back to it (`plain`). -/
+def jsonChars : Json → List Char
+  | .null => ['n', 'u', 'l', 'l']
+  | .bool true => ['t', 'r', 'u', 'e']
+  | .bool false => ['f', 'a', 'l', 's', 'e']
+  | .num ⟨m, _⟩ => Nat.toDigits 10 m.toNat
+  | .str s => '"' :: s.toList ++ ['"']
+  | .arr ⟨a⟩ => '[' :: [','].intercalate (jsonCharsList a) ++ [']']
+  | .obj ⟨⟨t⟩⟩ => '{' :: [','].intercalate (jsonCharsObj t) ++ ['}']
+def jsonCharsList : List Json → List (List Char)
+  | [] => []
+  | j :: js => jsonChars j :: jsonCharsList js
+def jsonCharsObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → List (List Char)
+  | .leaf => []
+  | .inner _ k v l r => jsonCharsObj l ++ [('"' :: k.toList ++ ['"', ':']) ++ jsonChars v] ++ jsonCharsObj r
+end
+
+def printJson (j : Json) : String := String.ofList (jsonChars j)
 
 /-- **The schedules the firewall holds a session to**, those an honest worker's session can finish; `schedule` refuses
 every other:
