@@ -48,7 +48,7 @@ from sealed import DATA, SEALED, value_path
 from starts_store import STARTS
 
 #: the fixed side's version, in every witness record (README.md)
-VERSION = "2.2"
+VERSION = "2.3"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
 #: the held-out sets (`data.py`, data version `sealed.DATA`): a search evaluation scores a fresh slice of the pool; the

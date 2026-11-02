@@ -11,7 +11,7 @@ It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate
 island per class (or per direction, `islands/<direction>/`), each with one editable `train.py` and its program,
 `README.md`, for a researcher agent.
 
-**Version**: v2.2 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v4`; the harness is te_core
+**Version**: v2.3 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v4`; the harness is te_core
 3.4; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
 times its steps, and every run is ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a
 fresh slice of the search pool drawn after the weights are hashed, promotions are decided on a sealed set one bit each,
@@ -19,8 +19,9 @@ and the final set and a final start are sealed until the scorer's final scoring.
 (`pinned.json`) measures every candidate, taking only its island from the candidate's commit; a candidate is a training
 job, sandboxed so that no held-out text is on any path it can open, that writes only its E files and step log, and a
 separate evaluation job that rebuilds and scores the model; the held-out sets leave out documents that are training
-documents. The `sparse`, `lora2` and `quant` formats and every E's rebuild cost are in the decoder, and the meter
-prices an adapter on the tied embedding from the lookup.
+documents. v2.3, the night's last pin, adds te_core 2.7-3.2 to it: the counter's routes and product forms, the guard over
+other runs' outputs and the C++ and Rust loaders, ρ by thresholds, a declared step's rebuild-cost floor, the `sparse`,
+`lora2` and `quant` formats with every E's rebuild cost, and the meter's tied-embedding adapters.
 
 ## Classes
 
@@ -88,8 +89,8 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
   mount, PID, network, IPC and UTS namespaces, as the run's user with no privileges, seeing the pinned commit's
   `benchmarks/covert_witness/` with only its own island under `islands/`, the starts, `train.bin` (and the Pythia
   stream), the Python and its leased GPU, all read-only, and one output directory; no held-out set, sealed side,
-  other run or home directory is mounted, and there is no network. An audit hook also refuses `prepare.UNREADABLE` (the search pool, the sealed side, v2.0's `eval/`, and
-  learning_frontier's `val.bin` and hub cache) and other runs' outputs.
+  other run or home directory is mounted, and there is no network. An audit hook also refuses `prepare.UNREADABLE` (the search pool,
+  the sealed side, v2.0's `eval/`, and learning_frontier's `val.bin` and hub cache) and other runs' outputs.
   The submission holds E, the step log and the declarations; no model. sandbox.py records the job's whole process tree:
   every process's CPU seconds (the namespace's init reaps them all) and each GPU compute process `nvidia-smi` sees in
   it.
@@ -105,8 +106,9 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
   island is recorded (`island_recorded`); the class's caps. A failed check makes the ledger's records invalid. A step the island declares (`prepare.declare_step`) is a
   counterexample family the harness checks by rebuilding sampled steps with `prepare.decode`, bit for bit, within c MACs
   (te_core's README). The analytic meter (`prepare.train_flops`, from the step log) is recorded beside the harness's
-  count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `lora2`, `seedlog`, `sparse`, `quant`) and read only θ and E; the
-  witness records E's rebuild cost in MACs (`prepare.rebuild_macs`), and each curve point's (the harness's checkpoints).
+  count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `lora2`, `seedlog`, `sparse`, `quant`) and read only θ and
+  E; the witness records E's rebuild cost in MACs (`prepare.rebuild_macs`), and each curve point's (the harness's
+  checkpoints).
 - **Pinned version** (`pin.py`, `pinned.json` on `cursor/covert-witness-4207`): the one commit whose fixed side measures
   every candidate. launch.py ships it (a clean worktree of it under `~/.research/cw-pinned/`) whatever the candidate's
   checkout holds, and the witness and ledger records name it (`measurement_commit`); te_core's frontier leaves out a
