@@ -12,6 +12,7 @@ python scorer.py board --promote --digest [--append]   # this hour's PROMOTED an
 python scorer.py post TAG TEXT                         # one line onto islands/scorer/BOARD.md, pushed
 python scorer.py final entries|plan [--begin HH:MM] [--deadline HH:MM]  # the FINAL lines; the reruns that fit
 python scorer.py final launch ID... [--seeds 101,102,103] [--node N] [--smoke] [--dry-run]
+python scorer.py final dispatch [--nodes N1,N2,...] [--deadline HH:MM] [--dry-run]  # one pass: the plan's next reruns
 python scorer.py final collect|table                   # final-set reruns (below)
 ~~~
 
@@ -117,5 +118,8 @@ lock, so the two never collide.
   `FINAL_PER_DIRECTION` (3) records each direction's FINAL line names (an art id and its run's id are one record): every
   direction's first, shortest first, then every second, then every third. It keeps the seeds that end by `--deadline` (17:00Z)
   starting at `--begin` (15:00Z) on the listed nodes' GPUs (8 a node; a rerun takes its record's GPU seconds plus 10
-  minutes). A `--smoke` launch checks
+  minutes). `final dispatch` launches the plan in that order, recomputed each pass: a node (`--nodes`, in order: n1,
+  then n3 and n2 as their search runs free them) takes the next rerun while fewer than two of the scorer's reruns wait
+  there for a GPU slot (slot.py's `slot.json` not `held`), and nothing is launched that would end after `--deadline`
+  (its record's GPU seconds plus 5 minutes). A `--smoke` launch checks
   the pipeline and never enters the table.

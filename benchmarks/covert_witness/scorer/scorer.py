@@ -42,7 +42,7 @@ import sys
 import time
 import zlib
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -1623,6 +1623,50 @@ def final_plan(begin: str = "15:00", deadline: str = "17:00", seeds=FINAL_SEEDS)
             "gpu_hours_planned": round(sum(free) / 3600, 1), "finals": fin, "refused": refused, "plan": plan}
 
 
+WAITING_PER_NODE = 2
+
+
+def rerun_state(run: str) -> str:
+    """A launched rerun's state, `waiting` while its pool hasn't given it a GPU slot (slot.py's slot.json not `held`)."""
+    research("fetch", run)
+    d = RUNS / run
+    st = json.loads((d / "status.json").read_text()).get("state") if (d / "status.json").exists() else "submitted"
+    slot = json.loads((d / "slot.json").read_text()) if (d / "slot.json").exists() else {}
+    return "waiting" if st in ("submitted", "running") and slot.get("state") != "held" else st
+
+
+def final_dispatch(nodes: list[str], deadline: str = "17:00", dry_run: bool = False) -> list[dict]:
+    """One pass: launch the plan's next reruns (final_plan's order, recomputed each pass so a record collected since
+    enters it) onto `nodes` in their order, each node taking one while fewer than WAITING_PER_NODE of the scorer's reruns
+    wait there for a GPU slot, so a node takes reruns as its search runs free it. A rerun that would end after `deadline`
+    (its record's GPU seconds plus 5 minutes from now) is not launched."""
+    path = FINAL / "launches.jsonl"
+    launches = [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
+    launched = {(la["id"], la["seed"]) for la in launches if la.get("kind") == "rerun" and la.get("run")}
+    waiting = {n: 0 for n in nodes}
+    for la in launches:
+        if la.get("kind") == "rerun" and la.get("run") and la.get("node") in waiting \
+                and rerun_state(la["run"]) in ("waiting", "submitted"):
+            waiting[la["node"]] += 1
+    rows = {r["id"]: r for r in (json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip())
+            if r["source"] == "launch.py"}
+    now_ = datetime.now(UTC)
+    end = now_.replace(hour=int(deadline[:2]), minute=int(deadline[3:]), second=0, microsecond=0)
+    todo = [(e["id"], s) for e in final_plan(deadline=deadline)["plan"]
+            for s in (e["seeds"] + e["dropped_seeds"] if seed_args(rows[e["id"]], 0) else [None])
+            if (e["id"], s) not in launched]
+    out = []
+    for n in nodes:
+        while waiting[n] < WAITING_PER_NODE and todo:
+            i, s = todo.pop(0)
+            if now_.timestamp() + (rows[i].get("gpu_seconds") or 3000) + 300 > end.timestamp():
+                out.append({"id": i, "seed": s, "skipped": f"would end after {deadline}Z"})
+                continue
+            out += final_launch([i], (s if s is not None else FINAL_SEEDS[0],), dry_run, n)
+            waiting[n] += 1
+    return out
+
+
 def final_collect() -> list[dict]:
     """Every launched rerun's state; once it ended, its record put by launch.py --collect (meta final: true, not ingested
     into the search's ledger), its witness (every score the final set's) and te_core's submissions from its run.json."""
@@ -1866,10 +1910,12 @@ def main(argv=None) -> int:
     p.add_argument("tag")
     p.add_argument("text")
     f = sub.add_parser("final", help="final-set reruns (launch.py --final): entries, plan, launch IDS, collect, table")
-    f.add_argument("what", choices=("entries", "plan", "launch", "collect", "table"))
+    f.add_argument("what", choices=("entries", "plan", "launch", "dispatch", "collect", "table"))
     f.add_argument("ids", nargs="*", help="launch: record ids (12-hex prefixes)")
     f.add_argument("--seeds", default=",".join(map(str, FINAL_SEEDS)))
     f.add_argument("--node", default=None, help="launch: one of nodes.txt's nodes (default: launch.py's turn)")
+    f.add_argument("--nodes", default="vy-nebius-1,vy-nebius-3,vy-nebius-2",
+                   help="dispatch: the nodes, in the order they take reruns (coordinator 12:55Z: n1, then n3 and n2)")
     f.add_argument("--begin", default="15:00", help="plan: HH:MM UTC the reruns start (or now, if later)")
     f.add_argument("--deadline", default="17:00", help="plan: HH:MM UTC by which a planned rerun ends")
     f.add_argument("--dry-run", action="store_true")
@@ -1887,6 +1933,8 @@ def main(argv=None) -> int:
         if a.what == "launch":
             res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run, a.node,
                                "smoke" if a.smoke else "rerun")
+        elif a.what == "dispatch":
+            res = final_dispatch(a.nodes.split(","), a.deadline, a.dry_run)
         elif a.what == "table":
             final_table()
             print((FINAL / "table.md").read_text())
