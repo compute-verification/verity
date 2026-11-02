@@ -1,4 +1,5 @@
 import Proofs.Core.Game.Union
+import Definitions.Core.Game.Prob
 
 /-!
 # Probabilities for a fixed prover strategy
@@ -12,6 +13,8 @@ they use:
 * `prob_and_const`: an event conjoined with a fact fixed by the strategy;
 * `prob_map`, `Strategy.toMap_ofMap`: relabelling the output (`map`) keeps the game's strategies (`Strategy.ofMap` and
   `Strategy.toMap`, in `Protocol`).
+
+The definitions are in `Definitions.Core.Game.Prob`.
 -/
 
 namespace Verity.Game

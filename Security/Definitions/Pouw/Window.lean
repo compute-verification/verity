@@ -7,6 +7,7 @@ import Mathlib.Data.Fintype.Perm
 import Mathlib.Data.Fintype.Pi
 import Mathlib.Data.Fintype.Sigma
 import Definitions.Core.Draw
+import Definitions.Core.Game.Prob
 
 /-!
 # A window of calls: one draw that depends on the registration, then the calls' sessions in order (trusted)

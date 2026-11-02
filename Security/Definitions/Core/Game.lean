@@ -136,12 +136,6 @@ def Strategy.toMap (f : α → β) : (g : Game α) → Strategy g → Strategy (
   | .send _ k, s => ⟨s.1, Strategy.toMap f (k s.1) s.2⟩
   | @Game.coin _ _ _ _ k, s => fun c => Strategy.toMap f (k c) (s c)
 
-/-- A strategy for `g.bind f`, restricted to `g`: the moves it makes in `g`. -/
-def Strategy.ofBind (f : α → Game β) : (g : Game α) → Strategy (g.bind f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofBind f (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofBind f (k c) (s c)
-
 /-- The strategies for the first interaction that a strategy `σ` for `interleaveWith adv₁ fin₁ h` induces, given those
 that `σ` induces where it advances the first interaction (`advR`) and once the second has ended with `b` (`finR b`).
 Where `σ` advances the second interaction, the induced strategy follows `σ`'s message there, and the second's coin is
