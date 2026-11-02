@@ -127,7 +127,7 @@ theorem remote_soundness_of_subprotocols : RemoteSoundness := by
   all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
-theorem prob_play_eq_one (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
+theorem prob_play_eq_one (ns : List Round) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
     (hp : ∀ log (e : ByteArray × Array ByteArray), p ⟨θ, F, c, log, e.1, e.2⟩) (σ : Game.Strategy (play ns θ F c)) :
     Game.prob p (play ns θ F c) σ = 1 := by
   refine (Game.prob_bind_of_const (fun log => Game.send (ByteArray × Array ByteArray) fun e =>
@@ -178,7 +178,7 @@ theorem soundness_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V :
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
-theorem prob_play_eq_zero (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
+theorem prob_play_eq_zero (ns : List Round) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
     (hp : ∀ log (e : ByteArray × Array ByteArray), ¬ p ⟨θ, F, c, log, e.1, e.2⟩) (σ : Game.Strategy (play ns θ F c)) :
     Game.prob p (play ns θ F c) σ = 0 := by
   refine (Game.prob_bind_of_const (fun log => Game.send (ByteArray × Array ByteArray) fun e =>
@@ -212,10 +212,20 @@ theorem soundness_nontrivial_of_lt {ι α : Type} [Fintype α] {d : Device ι} (
       _ = _ := by rw [hz, add_zero]
   exact lt_irrefl _ ((hle.trans (h θ F c σ)).trans_lt hlt)
 
-/-- A strategy for the device's releases: the empty bytes in every round. -/
-def releasesStrategy : (ns : List ℕ) → Game.Strategy (releases ns)
+/-- A strategy for a coin tree's openings: the empty bytes at each. -/
+def treeOpensStrategy (ν : ByteArray) (spec : Flock.CoinTree.Spec) (t : TreeSample spec) :
+    (os : List (Fin spec.streams.size × Fin (2 ^ spec.roundsLog) × ℕ)) → Game.Strategy (treeOpens ν spec t os)
   | [] => PUnit.unit
-  | _ :: ns => ⟨.empty, fun _ => Game.Strategy.toMap _ (releases ns) (releasesStrategy ns)⟩
+  | (_, _, _) :: os =>
+      ⟨.empty, fun _ => Game.Strategy.toMap _ (treeOpens ν spec t os) (treeOpensStrategy ν spec t os)⟩
+
+/-- A strategy for the device's releases: the empty bytes in every round, a coin tree's `Hello` and its openings
+included. -/
+def releasesStrategy : (ns : List Round) → Game.Strategy (releases ns)
+  | [] => PUnit.unit
+  | .fresh _ :: ns => ⟨.empty, fun _ => Game.Strategy.toMap _ (releases ns) (releasesStrategy ns)⟩
+  | .tree spec os :: ns => ⟨.empty, fun t => Game.Strategy.bind (treeOpens .empty spec t os) _
+      (treeOpensStrategy .empty spec t os) fun _ => Game.Strategy.toMap _ (releases ns) (releasesStrategy ns)⟩
 
 /-- Playing `s` in `g` and then `t b` in `f b`, where each `t b` meets `p` surely, meets `p` surely. -/
 theorem prob_bind_strategy {β γ : Type} (f : β → Game γ) (p : γ → Prop) (t : (b : β) → Game.Strategy (f b))
@@ -233,7 +243,7 @@ theorem prob_bind_strategy {β γ : Type} (f : β → Game γ) (p : γ → Prop)
 committed files `F` and commitment `c`, and any evidence `e` and evidence blobs `B`, the strategy that answers the
 device's rounds with empty bytes and then sends `e` with `B` ends every play with the composite reading
 `⟨θ, c, e, F ++ B⟩`. So the game's event admits every input of that shape the compiled verifier accepts. -/
-theorem sent_reachable (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c e : ByteArray) (B : Array ByteArray) :
+theorem sent_reachable (ns : List Round) (θ : ByteArray) (F : Array ByteArray) (c e : ByteArray) (B : Array ByteArray) :
     ∃ σ : Game.Strategy (play ns θ F c),
       Game.prob (fun o => o.params = θ ∧ o.files = F ∧ o.sent = ⟨θ, c, e, F ++ B⟩) (play ns θ F c) σ = 1 := by
   let f : List Release → Game Exchange := fun log =>
