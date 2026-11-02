@@ -1,6 +1,5 @@
 """A day's (c, k)-inference blocks, counted from its served windows' circuit records, as a public report
-(`records.block_counts`): ``verity-vllm block-counts``, from which compute-accounting calibrates the inference-only
-check's n for a day.
+(`records.block_counts`): ``verity-vllm block-counts``, the data the inference-only check's per-day n is calibrated from.
 
 **Blocks.** A window's inference blocks are B's (`inference_blocks`): one a slot, its class Program over every step, which is
 one session, since no request is carried across windows. A block holds, of each template, the units of its slot's digit in
