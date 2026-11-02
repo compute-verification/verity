@@ -8,10 +8,11 @@ import VStarRecursive
 
 Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`) sets its session up as
 `flock-verify verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the
-verifier's own checks on it (`BaseSetup`), then V\*'s checks block, `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`,
-`RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`,
-`RecVStar.checkLabels` and the draw's law. The model's recursive setup (`RecDeploy.RecIns.setup`, which `setupO` runs on
-a V\* statement) makes the same calls in the same order. This module matches them.
+verifier's own checks on it (`BaseSetup`), then V\*'s checks block (after `RecSetup.checkInner` and
+`RecLinkPart.checkShape` at no link table), `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`, `RecCoins.check`,
+`RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`, `RecLinkPart.check`
+at no link table, `RecVStar.checkLabels` and the draw's law. The model's recursive setup (`RecDeploy.RecIns.setup`,
+which `setupO` runs on a V\* statement) makes the same calls in the same order. This module matches them.
 
 * `recIns_setup_of_compiled`: where the staged statement's inputs `i` are the compiled part's (`SetupMatch`, `PartStatement`),
   the model's Flock setup and its registered-reads checks pass with the compiled session (`BaseSetup`), and the compiled
@@ -21,7 +22,7 @@ a V\* statement) makes the same calls in the same order. This module matches the
   what `readXPre x` read (`readX_of_sessions`), and each part's circuit is V\*'s statement's of its index
   (`partsVStar`).
 * `partVerdict_setup`: what an accepted compiled part's verdict shows of its setup, in the terms the lemmas above and
-  D1's take.
+  `BaseSetup`'s take.
 
 The inner session's META binding (`InnerHeld.bound`) is read by the setup only at a RecSparse shape (`checkMeta`), so
 at the dense shape the compiled component accepts (`shapeOf`: no sparse shape) the two readings of the inner circuit's
@@ -39,7 +40,7 @@ and the scope check read): the model's reading `i` of part `j`'s staged statemen
 compiled part `j`'s check passes to the same calls: `--zk`, the statement's tags (`tags0`) and the session's
 (`tags`), the part's circuit and staged public file, no lookup table, one table, the part's partition and program, the
 verifier's registered reads, the record's draw, the inner shape, check 5's source, the inner commits and link the
-compiled component holds (`h`), `--rec-part j`, the bindings and the rows. -/
+compiled component holds (`h`), `--rec-part j`, the bindings, the rows and no link table. -/
 structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags)
     (circuitB pubB : ByteArray) (partition : Lean.Json) (program : ByteArray)
     (registered : Option (Array Registered.Port)) (bindings : VStar.Bindings)
@@ -64,16 +65,19 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
   part : i.part = some j
   bindings : i.bindings = some bindings
   rows : i.rows = rows
+  links : i.links = none
 
 /-- **The compiled part's checks block** after Flock's session and the checks `BaseSetup` matches, each as the compiled
-part `j`'s check calls it on the session's tables `sts`: the inner checks, the registration's and V\*'s list's caps,
-V\*'s checks, one full table, the table's cap, `Zk.shapeOk`, check 5, the public rows, the link rounds, the top rows,
-the link, the labels, and the draw's law where there is a draw. -/
+part `j`'s check calls it on the session's tables `sts`: the inner checks, the inner shape at no link table, the
+registration's and V\*'s list's caps, V\*'s checks, one full table, the table's cap, `Zk.shapeOk`, check 5, the public
+rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the draw's law
+where there is a draw. -/
 structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB : ByteArray)
     (partition : Lean.Json) (program : ByteArray) (registered : Option (Array Registered.Port))
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) (draw : Option Lean.Json)
     (sts : Array Stmt) : Prop where
   inner : RecSetup.checkInner (some h.shape) (some h.src) h.bound = .ok ()
+  linkShape : RecLinkPart.checkShape (some h.shape) none = .ok ()
   regs : RecBudget.regs (some h.shape) registered = .ok ()
   statements : RecBudget.statements (some h.shape) = .ok ()
   checks : RecSetup.checks (some h.shape) (some h.commits) tags0 [] sts circuitB (some partition) (some program)
@@ -88,6 +92,7 @@ structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags
   topRows : sts.forM (RecVStar.checkTopRows · registered (some h.link)) = .ok ()
   link : sts.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 (some h.src) (some h.shape) (some h.commits))
     (some h.link)) = .ok ()
+  linkParts : sts.forM (RecLinkPart.check · registered (some h.src) none) = .ok ()
   labels : RecVStar.checkLabels draw 1 sts = .ok ()
   law : draw.isSome = true → ProvedScope.drawLaw true tags false draw = .ok ()
 
@@ -130,16 +135,17 @@ theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j
   have hin : RecSetup.checkInner i.inner i.src i.bound = .ok () := by
     rw [hm.inner, hm.src, checkInner_dense hsparse]
     exact hc.inner
+  have hls : RecLinkPart.checkShape i.inner i.links = .ok () := by rw [hm.inner, hm.links]; exact hc.linkShape
   have hbr : RecBudget.regs i.inner i.base.registered = .ok () := by rw [hm.inner, hm.registered]; exact hc.regs
   have hbs : RecBudget.statements i.inner = .ok () := by rw [hm.inner]; exact hc.statements
   unfold RecIns.setup
-  simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hin, hbr, hbs, hset, bind, Except.bind, pure, Except.pure]
+  simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hin, hls, hbr, hbs, hset, bind, Except.bind, pure, Except.pure]
   rw [forIn_ok_of_all fun a ha u => by simp only [(hregs a ha).1, (hregs a ha).2]]
   simp only [hfull]
   simp only [hm.zk, hm.stmtTags, hm.tags, hm.tables, hm.circuitFile, hm.partition, hm.program, hm.registered,
-    hm.part, hm.bindings, hm.rows, hm.inner, hm.commits, hm.link, hm.src, hm.draw, hm.count, ↓reduceIte,
+    hm.part, hm.bindings, hm.rows, hm.inner, hm.commits, hm.link, hm.src, hm.links, hm.draw, hm.count, ↓reduceIte,
     Option.isSome_some, hc.regs, hc.statements, hc.checks, hc.oneFull, hc.table, hc.shapeOk, hc.coins, hc.pubRows,
-    hc.linkRounds, hc.topRows, hc.link, hc.labels]
+    hc.linkRounds, hc.topRows, hc.link, hc.linkParts, hc.labels]
   by_cases hd : draw.isSome = true
   · simp only [hd, ↓reduceIte, hc.law hd]
   · simp only [hd, Bool.false_eq_true, ↓reduceIte]
@@ -354,10 +360,11 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
         | ok u => rfl
       obtain ⟨⟨⟩, hprog, hb1⟩ := bind_ok hb0
       obtain ⟨⟨⟩, hinn, hb2⟩ := bind_ok hb1
-      obtain ⟨⟨⟩, hbreg, hb3⟩ := bind_ok hb2
+      obtain ⟨⟨⟩, hlsh, hb5⟩ := bind_ok hb2
+      obtain ⟨⟨⟩, hbreg, hb3⟩ := bind_ok hb5
       obtain ⟨⟨⟩, hbstm, hb4⟩ := bind_ok hb3
       obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb4
-      clear hb0 hb1 hb2 hb3 hb4 hst hv
+      clear hb0 hb1 hb2 hb5 hb3 hb4 hst hv
       subst hT
       cases complete <;> simp only [Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at hb
       on_goal 2 => obtain ⟨⟨⟩, hcomp, hb⟩ := bind_ok hb
@@ -373,10 +380,12 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
         obtain ⟨⟨⟩, hlr, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, htop, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hlink, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hlp, hb⟩ := bind_ok hb
         obtain ⟨⟨⟩, hlab, hb⟩ := bind_ok hb
         refine ⟨tags0, circuitB, pubB, registered, _, known, regParams, bindings, recordB, record, d, spec0,
           sts0, rfl, hpl, hcB, hpB, hfp, hPR, hbind, hrecB, hrec, hhm, hrd, hprog, hbuild, ?_, hcov, hkn,
-          ⟨hinn, hbreg, hbstm, hchk, hone, htab, hshape, hcoins, hpub, hlr, htop, hlink, hlab, fun _ => hlaw⟩, hscope⟩
+          ⟨hinn, hlsh, hbreg, hbstm, hchk, hone, htab, hshape, hcoins, hpub, hlr, htop, hlink, hlp, hlab,
+            fun _ => hlaw⟩, hscope⟩
       · intro hc
         cases hc
       · intro _

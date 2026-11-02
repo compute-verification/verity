@@ -14,10 +14,10 @@ message's record and proof files, `FlockDeploy.checks` pass and so do the verdic
 (`RecDeploy.nextO_decide_sha512`).
 
 `partVerdict_ok` unfolds the compiled verdict, and `decide_of_partVerdict` derives the model's three conditions from it.
-What the compiled part can't see is a hypothesis, each named by the module that supplies it:
+What the compiled part can't see is a hypothesis:
 
-* **D** (`hD`): `xO`'s session is what `buildSessionOf` sets up at `xO`'s reading of the part's inputs.
-* **B/C** (`hfind` … `hdraw`): `xO`'s reading (`s`, its `Ins`, and `innerOfO`, `srcOfO`) holds the compiled part's
+* **The session** (`hD`): `xO`'s session is what `buildSessionOf` sets up at `xO`'s reading of the part's inputs.
+* **The inputs** (`hfind` … `hdraw`): `xO`'s reading (`s`, its `Ins`, and `innerOfO`, `srcOfO`) holds the compiled part's
   inputs: the statement's tags, the circuit and public file it reads off the blobs, the session's tags, one table, no
   lookup tables or public inputs, the registered reads, the verifier's inner shape and the inner session's record, and the
   record's draw.
@@ -244,6 +244,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     obtain ⟨_, -, hsu⟩ := bind_ok hsu
     obtain ⟨_, -, hsu⟩ := bind_ok hsu
     obtain ⟨_, -, hsu⟩ := bind_ok hsu
+    obtain ⟨_, -, hsu⟩ := bind_ok hsu
     obtain ⟨r, hbs, hsu⟩ := bind_ok hsu
     have hr' : r = (spec', sts') := by
       try dsimp only at hsu
@@ -261,8 +262,8 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
 verdict is `.ok ()` and the model decides at `xO` on the last message `f` with `xO`'s reading `s` and session
 `(spec, sts)`, the deployed `Zk.verify` at that session accepts `f`'s record and proof files, the custody checks pass and
 so do the verdict's last refusals, given:
-* D: `(spec, sts)` is what `buildSessionOf` sets up at `s`'s reading of the part's inputs (`hD`);
-* B/C: `s`, `innerOfO xO` and `srcOfO xO` hold the compiled part's inputs (`hfind` … `hsrc`), and `s`'s draw is the
+* the session: `(spec, sts)` is what `buildSessionOf` sets up at `s`'s reading of the part's inputs (`hD`);
+* the inputs: `s`, `innerOfO xO` and `srcOfO xO` hold the compiled part's inputs (`hfind` … `hsrc`), and `s`'s draw is the
   record's (`hdraw`);
 * `Shows`: `f` is the part's last message at `xO` (`hstmt`), its record the part's record blob (`hrec`) and its proof
   files the part's rep files (`hreps`), one per rep stream (`hnp`);
