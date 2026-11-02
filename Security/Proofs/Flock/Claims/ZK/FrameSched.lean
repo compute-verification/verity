@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.ZK.FrameLoop
 public import Proofs.Flock.Claims.ZK.FramePass
 public import Proofs.Flock.Claims.ZK.FinishLevel0
 import all Init.Data.String.Defs
+import all Init.Data.Array.DecidableEq
 
 /-!
 # Two runs of the firewall's prover alike in shape

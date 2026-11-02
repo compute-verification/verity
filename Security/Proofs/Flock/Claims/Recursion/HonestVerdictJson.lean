@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.Complete.Json.Decode
 public import Proofs.Flock.Claims.Complete.ZkTables.Decode
 import all Lean.Data.Json.Basic
 import all Init.Data.Array.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # The honest record survives the reader's substitutions
