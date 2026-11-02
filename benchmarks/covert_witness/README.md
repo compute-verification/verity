@@ -84,16 +84,19 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
   (te_core's README). The analytic meter (`prepare.train_flops`, from the step log) is
   recorded beside the harness's count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `seedlog`) and read only θ
   and E.
-- **Launcher** (`launch.py` on an agent VM, `candidate.sh` on the node): one candidate a run, `research run --on vy-nebius-2
-  --pool gpu` with `gpu-lease 1` inside (the node takes runs only through its slot pools, and `--gpus` is refused there);
+- **Nodes** (`nodes.txt`, `prep.sh`): a node is listed (`NODE pool=GPU_POOL cpu=CPU_POOL`) once `prep.sh`, run there
+  in its CPU pool, has installed the starts, built the held-out sets and registered the sealed start; on a prepared node
+  it only checks. Each launch takes the list's next node in turn (`launch.py --node` names one).
+- **Launcher** (`launch.py` on an agent VM, `candidate.sh` on the node): one candidate a run, `research run --on NODE
+  --pool GPU_POOL` with `gpu-lease 1` inside (vy-nebius-2 takes runs only through its slot pools, and `--gpus` is refused there);
   the record goes to the store as `research data put --kind evidence/v1 --tree OUT --preserve`, and the harness's record
   into te_core's ledger (`python -m te_core.ledger --agent D --publish ingest`, D the direction from the branch
   `cursor/te-<D>-NNNN`, the mechanism the note's first word), after which the local frontier is printed.
 
 **Run**: `python benchmarks/covert_witness/launch.py CLASS START --note TEXT -- TRAIN_ARGS` from a committed checkout.
-`data.py`, `prepare.register_pythia()` and `starts.py --size s|m` build the fixed side once (CPU with network; one GPU);
-`evaluate.py --start NAME --out F` scores a start on the whole search pool. `nodes.txt` lists the nodes and their pools
-(`NODE pool=gpu cpu=research`). `CW_DEVICE=cpu` runs the whole path on a CPU for a smoke test.
+`starts.py --size s|m` built the starts once (one GPU); `prep.sh` prepares a node (`data.py`,
+`prepare.register_pythia()`, the starts from the store); `evaluate.py --start NAME --out F` scores a start on the whole
+search pool. `CW_DEVICE=cpu` runs the whole path on a CPU for a smoke test.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in
 `/workspace/research/te/sealed` (above); everything else lives under `/workspace/research/scratch/covert-witness`

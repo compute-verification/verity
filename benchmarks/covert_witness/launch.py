@@ -1,9 +1,12 @@
-"""Launch one candidate on vy-nebius-2 and preserve its record (fixed; run from an agent VM's checkout of a pushed commit).
+"""Launch one candidate on a node and preserve its record (fixed; run from an agent VM's checkout of a pushed commit).
 
-    python benchmarks/covert_witness/launch.py CLASS START [--note TEXT] [--direction D] [--mechanism M] [-- TRAIN_ARGS...]
+    python benchmarks/covert_witness/launch.py CLASS START [--note TEXT] [--direction D] [--mechanism M] [--node NODE] \\
+        [-- TRAIN_ARGS...]
 
-The candidate runs as `research run --on vy-nebius-2 --pool gpu` (one slot per GPU; candidate.sh leases the GPU with gpu-lease)
-from this checkout's HEAD, which must be committed. Its train.py runs inside the harness (`te_core.run --script`), which
+The node is the next of `nodes.txt`'s in turn (`$CW_NODES`; `--node` names one of them), each line `NODE pool=GPU_POOL
+cpu=CPU_POOL` for a node `prep.sh` has prepared. The candidate runs as `research run --on NODE --pool GPU_POOL` (one slot
+per GPU; candidate.sh leases the GPU with gpu-lease) from this checkout's HEAD, which must be committed, and records its
+node (`CW_NODE`). Its train.py runs inside the harness (`te_core.run --script`), which
 counts its MACs and times its steps. When it ends, its `out/` (the harness's run.json, the witness record, the step log, E
 when at most 1 MB, logs, the candidate's train.py) is fetched and put in the evidence store as `evidence/v1`, preserved; the
 run is ingested into the te_core ledger as agent D (`python -m te_core.ledger --agent D --publish ingest`, one submission
@@ -31,9 +34,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-NODE = "vy-nebius-2"
+NODES = Path(os.environ.get("CW_NODES", HERE / "nodes.txt"))
 RUNS = Path.home() / ".research" / "runs"
 LEDGER = Path(os.environ.get("CW_LEDGER", Path.home() / ".research" / "covert-witness.jsonl"))
+#: this VM's launches, one line each, which the next launch's node follows in turn
+LAUNCHES = LEDGER.with_name(LEDGER.stem + "-launches.jsonl")
+sys.path.insert(0, str(HERE))
+from te_core.launch import Node, nodes  # noqa: E402
 DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
 #: candidate.sh's GPU lease (1.2x prepare.GPU_SECONDS_CAP plus 25 minutes) and a margin
 TIMEOUT = "100m"
@@ -56,6 +63,21 @@ def branch_direction() -> str:
     return tag(m.group(1)) if m else "integrator"
 
 
+def pick_node(name: str | None, path: Path = NODES, launches: Path = LAUNCHES) -> Node:
+    """`name` if the node list has it, else the list's next node after this VM's launches so far."""
+    known = nodes(path)
+    if name:
+        node = next((n for n in known if n.name == name), None)
+        if node is None:
+            raise SystemExit(f"launch: {name} is not in {path} ({', '.join(n.name for n in known)})")
+    else:
+        done = len(launches.read_text().splitlines()) if launches.exists() else 0
+        node = known[done % len(known)]
+    if not node.pool:
+        raise SystemExit(f"launch: {path} names no gpu pool for {node.name} (`{node.name} pool=gpu cpu=research`)")
+    return node
+
+
 def main() -> int:
     argv = sys.argv[1:]
     train_args = argv[argv.index("--") + 1:] if "--" in argv else []
@@ -70,6 +92,7 @@ def main() -> int:
     ap.add_argument("--no-wait", action="store_true", help="print the run id and return; `--collect RUN` later")
     ap.add_argument("--collect", default=None, metavar="RUN", help="collect an ended candidate run")
     ap.add_argument("--final", action="store_true", help="final scoring, the scorer's (module docstring)")
+    ap.add_argument("--node", default=None, help="one of nodes.txt's nodes (default: the next in turn)")
     a = ap.parse_args(argv)
     direction = tag(a.direction) if a.direction else branch_direction()
     mechanism = tag(a.mechanism or (a.note.split() or [a.klass])[0]) or a.klass
@@ -79,8 +102,9 @@ def main() -> int:
         return collect(a.collect, a.klass, a.start, a.note, direction, mechanism, a.final)
     if subprocess.run(["git", "diff", "--quiet", "HEAD"], cwd=REPO).returncode:
         raise SystemExit("launch: commit your train.py first: the run ships HEAD, and its record names that commit")
-    env = ["--env", f"CW_NODE={NODE}", *(["--env", "CW_FINAL=1"] if a.final else [])]
-    cmd = ["run", "--on", NODE, "--project", "verity", "--source", str(REPO), "--pool", "gpu", "--as", a.lane,
+    node = pick_node(a.node)
+    env = ["--env", f"CW_NODE={node.name}", *(["--env", "CW_FINAL=1"] if a.final else [])]
+    cmd = ["run", "--on", node.name, "--project", "verity", "--source", str(REPO), "--pool", node.pool, "--as", a.lane,
            "--pool-wait", "7200", "--timeout", TIMEOUT, "--declared-output", "out/*", *env, "--",
            "bash", "benchmarks/covert_witness/candidate.sh", a.klass, a.start, *train_args]
     out = research(*cmd)
@@ -88,8 +112,12 @@ def main() -> int:
     if not m:
         raise SystemExit(f"launch: no run id in research run's output:\n{out[-2000:]}")
     run = m.group(1)
-    print(json.dumps({"run": run, "class": a.klass, "start": a.start, "direction": direction, "mechanism": mechanism}),
-          flush=True)
+    launched = {"run": run, "node": node.name, "class": a.klass, "start": a.start, "direction": direction,
+                "mechanism": mechanism}
+    LAUNCHES.parent.mkdir(parents=True, exist_ok=True)
+    with LAUNCHES.open("a") as f:
+        f.write(json.dumps(launched) + "\n")
+    print(json.dumps(launched), flush=True)
     if a.no_wait:
         return 0
     while True:
