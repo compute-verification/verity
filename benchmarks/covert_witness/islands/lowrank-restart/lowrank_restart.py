@@ -61,6 +61,12 @@ def lora_size(theta: dict, ranks: dict[str, int], norms: list[str]) -> int:
     return len(prepare.encode_lora(fac, "bf16", {n: theta[n] for n in norms}))
 
 
+def dense(x: torch.Tensor) -> torch.Tensor:
+    """x with row-major strides: an SVD factor of rank 1 can pass `is_contiguous` with a last stride other than 1, which
+    `encode_lora`'s byte view refuses."""
+    return torch.empty(x.shape, dtype=x.dtype, device=x.device).copy_(x)
+
+
 def svd_flops(shape) -> int:
     m, n = shape
     return 4 * m * n * min(m, n) + 4 * min(m, n) ** 3
@@ -112,7 +118,7 @@ class Truncator:
             if r:
                 u, s, vh = self.svd[n]
                 root = s[:r].sqrt()
-                out[n] = (root[:, None] * vh[:r], u[:, :r] * root[None, :], 1.0)
+                out[n] = (dense(root[:, None] * vh[:r]), dense(u[:, :r] * root[None, :]), 1.0)
         return out
 
     def encode(self, budget: int, theta: dict, norm_vals: dict) -> tuple[bytes, dict[str, int]]:
@@ -362,8 +368,8 @@ class GaloreState:
 
     def piece(self) -> tuple[torch.Tensor, torch.Tensor]:
         if self.left:
-            return self.N.to(torch.bfloat16), self.P.to(torch.bfloat16)
-        return self.P.T.contiguous().to(torch.bfloat16), self.N.to(torch.bfloat16)
+            return dense(self.N.to(torch.bfloat16)), dense(self.P.to(torch.bfloat16))
+        return dense(self.P.T.to(torch.bfloat16)), dense(self.N.to(torch.bfloat16))
 
     @torch.no_grad()
     def step(self, w: torch.Tensor, grad: torch.Tensor, lr: float, b1=0.9, b2=0.95, eps=1e-8) -> None:
