@@ -10,11 +10,12 @@ entropy code E.
   decoder and quantizers. te_core 3.2's `prepare.encode_quant` and `prepare.decode` write and read the same bytes; with
   `--emit quan` a candidate's E is CWQUAN1 (train.py refuses it on a pin whose prepare lacks them, or writes or reads
   different bytes). With `--emit full` (the default) E is the model through `encode_full`, and the notes record its
-  CWQUAN1 size, checked to rebuild that model bit for bit. `qformat.recompress` re-encodes a CWQUAN1 at xz preset 9e:
-  the decoders read any one xz stream, and sparse codes take ~1.2x their order-0 entropy against preset 1's ~1.5x.
+  CWQUAN1 size, checked to rebuild that model bit for bit. `qformat.recompress` re-encodes a CWQUAN1 at xz preset 9e,
+  or at the smallest of `qformat.XZ_TRIES` (LZMA2 match-finder settings, 2-6% under 9e on sparse codes): the decoders
+  read any one xz stream, and sparse codes take ~1.1-1.2x their order-0 entropy against preset 1's ~1.5x.
 - `train.py`: the candidate (`--mode ptq`: the reference recipe, then each `--variants` quantizer on Δ; `--mode qat`: the
-  update trained as a sign, ternary, sparse ternary (`--qat sparse --qat-keep SHARE`) or k-bit code, `--xz 9e` for the
-  submitted E; `--mode qlora`: LoRA with k-bit factors; its docstring has the rest).
+  update trained as a sign, ternary, sparse ternary (`--qat sparse --qat-keep SHARE`) or k-bit code, `--xz 9e|min` for
+  the submitted E; `--mode qlora`: LoRA with k-bit factors; its docstring has the rest).
 - `test_qformat.py`: CPU round trips (`python islands/quant/test_qformat.py` from `benchmarks/covert_witness/`).
 
 Run: `python benchmarks/covert_witness/launch.py reference s100 --note "MECHANISM" -- --klass reference --budget-fraction 0.3

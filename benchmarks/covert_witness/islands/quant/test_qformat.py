@@ -52,17 +52,20 @@ def test_round_trips() -> None:
 
 
 def test_recompress() -> None:
-    """Preset 9e holds the same payload in fewer bytes on sparse codes, and both decoders read it."""
+    """Preset 9e holds the same payload in fewer bytes on sparse codes, the search over XZ_TRIES in no more, and both
+    decoders read each."""
     th = theta()
     g = torch.Generator().manual_seed(2)
     delta = {k: torch.randn(v.shape, generator=g) * (torch.rand(v.shape, generator=g) < 0.03) for k, v in th.items()}
     blob = qf.encode({k: {"kind": "delta", "q": qf.ternary(d, 0.5, 0)} for k, d in delta.items()}, th)
-    small = qf.recompress(blob)
-    assert len(small) < len(blob), (len(small), len(blob))
-    got, want = qf.decode(th, small), qf.decode(th, blob)
-    assert all(prepare.same_bits(got[k], want[k]) for k in th)
-    got = prepare.decode(th, small, device="cpu")
-    assert all(prepare.same_bits(got[k], want[k]) for k in th)
+    small, least = qf.recompress(blob), qf.recompress(blob, search=True)
+    assert len(least) <= len(small) < len(blob), (len(least), len(small), len(blob))
+    want = qf.decode(th, blob)
+    for b in (small, least):
+        got = qf.decode(th, b)
+        assert all(prepare.same_bits(got[k], want[k]) for k in th)
+        got = prepare.decode(th, b, device="cpu")
+        assert all(prepare.same_bits(got[k], want[k]) for k in th)
 
 
 def test_refuses() -> None:

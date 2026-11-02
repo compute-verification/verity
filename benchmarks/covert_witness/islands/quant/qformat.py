@@ -13,7 +13,8 @@ The header lists one entry per changed tensor of θ, each one of:
 
 Codes are `bits` wide (1 to 8), packed little-endian within a byte stream (te_core's `pack_bits` order). 8·|E| counts every
 byte: the header, the codebooks, the scales and the codes, after the entropy coder (xz, no check). The encoders write xz
-preset 1; the decoders read any one xz stream, so `recompress` (preset 9e) changes |E| and nothing it decodes to.
+preset 1; the decoders read any one xz stream, so `recompress` (preset 9e, or the smallest of `XZ_TRIES`) changes |E| and
+nothing it decodes to.
 """
 from __future__ import annotations
 
@@ -30,6 +31,12 @@ MAGIC = b"CWQUAN1\n"
 XZ = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE, "preset": 1}
 XZ9 = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE,
        "filters": [{"id": lzma.FILTER_LZMA2, "preset": 9 | lzma.PRESET_EXTREME}]}
+#: LZMA2 encoder settings `recompress(search=True)` tries (match finder, nice length, search depth: decoders never see
+#: them). Which is smallest depends on the sparsity: a shallow hash chain at a few % nonzero (6% under 9e at 4.5%), a
+#: binary tree at depth 1 at 1% and below (2-6% under 9e).
+XZ_TRIES = tuple({"id": lzma.FILTER_LZMA2, "preset": 9 | lzma.PRESET_EXTREME} | kw for kw in (
+    {}, {"mf": lzma.MF_BT4, "nice_len": 273, "depth": 1}, {"mf": lzma.MF_BT4, "nice_len": 48, "depth": 1},
+    {"mf": lzma.MF_HC3, "nice_len": 48, "depth": 2}, {"mf": lzma.MF_HC3, "nice_len": 32, "depth": 3}))
 
 
 @dataclass
@@ -113,11 +120,16 @@ def encode(entries: dict[str, dict], theta: dict[str, torch.Tensor]) -> bytes:
     return MAGIC + lzma.compress(inner, **XZ)
 
 
-def recompress(blob: bytes) -> bytes:
-    """The same CWQUAN1 payload under xz preset 9e (sparse codes: ~1.2x their order-0 entropy against preset 1's ~1.5x)."""
+def recompress(blob: bytes, search: bool = False) -> bytes:
+    """The same CWQUAN1 payload under xz preset 9e (sparse codes: ~1.2x their order-0 entropy against preset 1's ~1.5x),
+    or with `search` the smallest of `XZ_TRIES`."""
     if blob[:8] != MAGIC:
         raise ValueError("E: not CWQUAN1")
-    return MAGIC + lzma.compress(lzma.decompress(bytes(blob[8:]), format=lzma.FORMAT_XZ), **XZ9)
+    raw = lzma.decompress(bytes(blob[8:]), format=lzma.FORMAT_XZ)
+    if not search:
+        return MAGIC + lzma.compress(raw, **XZ9)
+    return MAGIC + min((lzma.compress(raw, format=lzma.FORMAT_XZ, check=lzma.CHECK_NONE, filters=[f]) for f in XZ_TRIES),
+                       key=len)
 
 
 # ---- decode ------------------------------------------------------------------------------------------------------------

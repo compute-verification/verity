@@ -20,7 +20,8 @@ share of the budget, in its own 5%s of the run, so a later arm's checkpoints are
 With `--emit quan` (it needs prepare.encode_quant, which writes qformat.encode's bytes), every quantized checkpoint and
 the submission are CWQUAN1; with `--emit full` (the default) they are the model through `encode_full`, and the record's
 notes give its CWQUAN1 size, checked to rebuild that model bit for bit. `--xz 9e` re-encodes the submitted CWQUAN1 at xz
-preset 9e (`qformat.recompress`; the checkpoints stay prepare.encode_quant's preset 1). The step count is a multiple of the
+preset 9e, `--xz min` at the smallest of `qformat.XZ_TRIES` (`qformat.recompress`; the checkpoints stay
+prepare.encode_quant's preset 1). The step count is a multiple of the
 harness's 20 checkpoints (`hooks.plan`). In ptq the harness scores the fp model after each 5% (`hooks.output`), and right
 after it the program encodes one variant of the same weights, which the harness scores as that 5%'s checkpoint: the
 variants cycle back from the last 5% (`--variants`' non-fp ones, the first at 100%), and the notes' `buckets` say which
@@ -500,8 +501,9 @@ def main() -> int:
     ap.add_argument("--qat-group", type=int, default=-1, help="qat: -1 one scale per tensor, 0 per row, else G entries")
     ap.add_argument("--qat-mult", type=float, default=1.0, help="qat: the scale over the group's mean |V|")
     ap.add_argument("--qat-keep", type=float, default=0.05, help="qat sparse: the share of each group kept (nonzero)")
-    ap.add_argument("--xz", choices=("1", "9e"), default="1",
-                    help="--emit quan: the submitted E's xz preset (9e: qformat.recompress; checkpoints stay preset 1)")
+    ap.add_argument("--xz", choices=("1", "9e", "min"), default="1",
+                    help="--emit quan: the submitted E's xz preset (9e, or min: the smallest of qformat.XZ_TRIES, through "
+                         "qformat.recompress; checkpoints stay preset 1)")
     ap.add_argument("--declare", action="store_true",
                     help="qat: declare each step's weights as one CWQUAN1 code from θ (prepare.declare_step), for the "
                          "harness to credit; needs prepare.decode to read CWQUAN1. Put fp arms last: their steps aren't "
@@ -675,7 +677,7 @@ def code_blob(a, qarrays: dict, rest: dict, theta) -> tuple[bytes, int]:
     entries = {n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
     entries |= {n: {"kind": "full", "t": t} for n, t in rest.items()}
     qblob = (encode_quan if a.emit == "quan" else qf.encode)(entries, theta)
-    return (qf.recompress(qblob) if a.xz == "9e" else qblob), len(qblob)
+    return (qblob if a.xz == "1" else qf.recompress(qblob, search=a.xz == "min")), len(qblob)
 
 
 def finish_qat(a, results: list[dict], theta, names, cycle, dev):
