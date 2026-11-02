@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Claims.Recursion.InnerAtCoins
 public import Proofs.Flock.Claims.Recursion.InnerSetupSame
 public import Proofs.Flock.Claims.Bridge.Custody
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # Check 5's extra claims and comb are the deployed table's

@@ -5,6 +5,8 @@ public import Proofs.Flock.Claims.ZK.FrameRho
 public import Proofs.Flock.Claims.ZK.FrameReal
 public import Proofs.Flock.Claims.ZK.FrameInner
 public import Proofs.Flock.Claims.ZK.FrameOuter
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Level 0 at the session loop

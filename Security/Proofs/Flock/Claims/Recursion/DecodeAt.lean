@@ -14,6 +14,9 @@ public import Proofs.Flock.Recursive.HoloRepCoins
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
 public import Proofs.Flock.VBridge.Family.Lig
 public import Proofs.Flock.VBridge.Family.Encode
+import all Lean.Data.Json.Basic
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The record the verdict reads decodes, at a decision of `nextR`

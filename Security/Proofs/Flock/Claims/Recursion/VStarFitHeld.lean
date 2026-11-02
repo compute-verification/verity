@@ -5,6 +5,10 @@ public import Proofs.Flock.Claims.Recursion.VStarCap0
 public import Proofs.Flock.Claims.Recursion.VStarPortsM
 public import Proofs.Flock.Claims.Recursion.OpensReads
 public import Proofs.Flock.C3.Reps.RoundLinks
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
 
 /-!
 # The slots a part holds are fitted to their rounds' rows (`hfit_A0`)

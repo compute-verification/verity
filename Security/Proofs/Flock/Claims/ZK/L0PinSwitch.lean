@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.ZK.L0PinFlags
 public import Proofs.Flock.Claims.ZK.L0PinFrame
 public import Proofs.Flock.Claims.ZK.FrameRounds
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The ring switch's rounds, and the PIOP's last transcript
