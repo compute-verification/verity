@@ -62,8 +62,8 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
   At `t ≥ 2^65` such roots need a hash of at least 288 bits.
 - **Not tight for serving roots in a sampled audit.** Serving registers its roots before the sample and nobody else holds
   an opening, so against arbitrary provers they need the rewinding argument too. `Rewinding.bad_sq_le` applies unchanged
-  with the unit sample in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
-  the leaves under every serving root registered before the sample, and `Q_s` the leaves the sampled units open.
+  with the proof-block sample in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
+  the leaves under every serving root registered before the sample, and `Q_s` the leaves the sampled proof blocks open.
   - `log2 √(2·N_s·Q_s)` is 17.4 to 34.0 over the study's audits, so this term exceeds the Flock proof term by up to
     2^17.
   - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for the study's
@@ -226,7 +226,7 @@ strict time.
     samples until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
     $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a sample reads it gives
     $\delta_{\rm link}\le2Q_s(1+k)\,t/2^{256}$, with $Q_s\le N_s$ (below).
-  - **The bound is relative.** $u^*$ is faulty, so acceptance itself is the bad event:
+  - **The bound is relative.** $u^*$ is incorrect, so acceptance itself is the bad event:
     $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
     The square root goes.
   - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot Q_s(8N_0/e)/2^{256}$ up to lower-order
@@ -529,8 +529,8 @@ If real concurrency is ever needed:
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
   does.
-- **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is faulty
-  relative to a committed trace defined by extraction. A sampled faulty proof block is charged to one of two named events:
+- **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is incorrect
+  relative to a committed trace defined by extraction. A sampled incorrect proof block is charged to one of two named events:
   extraction fails, or it disagrees with the trace (`cover`, from `correct_congr`). The oracle layer is the special
   case where the registration is the trace (`Partition.oracle`).
 - **Traces are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
@@ -544,7 +544,7 @@ If real concurrency is ever needed:
 - **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`). The
   table's extractor is randomized and its bound depends on the prover, so the audit carries, per sampled proof block, the joint
   probabilities `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run
-  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a faulty sampled proof block, and bounds that are functions of the
+  and the reruns, with `cover: Pr[accept] ≤ ks + link` at an incorrect sampled proof block, and bounds that are functions of the
   prover's state (the form agreed with flock-soundness). A deterministic extractor is the special case
   (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
   - Several tables (`FlockBatched.lean`): the protocol's batched session (`sessionB`); each sampled proof block is read from

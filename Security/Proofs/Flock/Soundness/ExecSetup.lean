@@ -288,6 +288,12 @@ theorem netOK_lookup {nm : String} {tb : ByteArray} {n lo bits : ℕ} {net : Net
   have : (0 : ℕ) * WORD = 0 := Nat.zero_mul _
   omega
 
+/-- **Every net fits its slot**, and reads itself at its constant when it has a slot and fits `rd32`'s words: what
+`nets_ok` gives a flat circuit and `parseTmpl_nets_ok` a templated one. -/
+abbrev NetsFit (c : Circuit) : Prop :=
+  ∀ i, NetOK (c.nets.getD i default).2 ∧ (i < c.nets.size → 7 ≤ (c.nets.getD i default).2.unitLog ∧
+    ((c.nets.getD i default).2.unitLog ≤ 32 → ConstRow (c.nets.getD i default).2))
+
 theorem nets_ok {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (i : ℕ) :
     NetOK (c.nets.getD i default).2 ∧ (i < c.nets.size → 7 ≤ (c.nets.getD i default).2.unitLog ∧
       ((c.nets.getD i default).2.unitLog ≤ 32 → ConstRow (c.nets.getD i default).2)) := by

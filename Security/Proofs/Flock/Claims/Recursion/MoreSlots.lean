@@ -210,6 +210,7 @@ theorem slotOut_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
     rw [← e]
     exact hz
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
   obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
   unfold Flock.Readable.Read.setup at hset
@@ -233,7 +234,7 @@ theorem slotOut_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
     hn.elim (fun h => div_lt_blocks hg0 (show n < p.sts[0].n by omega) hnbl) fun h => div_lt_blocks_two h hnbl
   subst hc0
   obtain ⟨ls, hls⟩ := P.check
-  exact slotOut_table ht' hh hd hv1 ho (hin_of_check (L.built_flat P.tmpl) P.typed hls ho) L regs hz1 hqs hq hb
+  exact slotOut_table ht' hh hd P.tmpl hv1 ho (hin_of_check (L.built_flat P.tmpl) P.typed hls ho) L regs hz1 hqs hq hb
 
 /-- **A staged part's input slot commits its row**, at any port its statement doesn't output (`in_block`) and any of
 its statement's instances, or either rep (`hmSlotsCommit_of_full` at any port). -/

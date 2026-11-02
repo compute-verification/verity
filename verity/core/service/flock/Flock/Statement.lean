@@ -210,6 +210,10 @@ structure Stmt where
   partition : Json := Json.null
   deriving Inhabited
 
+/-- The identity's bytes a statement digest hashes: upstream's `serde_json::to_vec(&sorted(identity))` (`Stmt::new`), strings
+in UTF-8 (`canonUtf8`). Canonical JSON (`canon`) would escape what upstream writes raw, and the `--zk` hooks carry `§`. -/
+def identityBytes (identity : Json) : V ByteArray := return (← canonUtf8 identity).toUTF8
+
 /-- `Hello`, the session parameters S2 compares. A keyed coin tree's `coins` has an empty nonce here: R7 puts the prover's
 in (`CoinTree.checkHello`). -/
 def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tables : Array String := #[tags.table]) : V String :=
@@ -239,7 +243,7 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let pin ← c.pin leaf
   let (da, db) ← c.delta leaf pin
   let regions := (← leaf.regions c pub).push (← c.outRegion pub)
-  let mut h := tags.statement.toUTF8 ++ leaf.comp.digest ++ c.sha ++ leaf.key c ++ (← canon tags.identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ leaf.comp.digest ++ c.sha ++ leaf.key c ++ (← identityBytes tags.identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size

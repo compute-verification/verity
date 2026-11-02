@@ -3,7 +3,7 @@ shared harness (`verity_difftest`): each port's fields to `h1zy.statement_ports`
 signatures), each port's row to `pouw.leaf_lanes`' (`reads`, `known`), each known port's row to `leaf_lanes.known_rows`
 (its words, and each field's bits where Lean's layout puts it), and the unit's input wires (`wires?`, `wireOf?`) to
 the circuits C-Flock lowers the statements to (`class_statement.unit_lowering` on `h1zy.statement_rows`, and the circuit
-file's META as `UnitStager` writes it, as #3131's h1_lanes stages them).
+file's META as `UnitStager` writes it, as h1_lanes stages them).
 
 The drawn inputs are tiles on and off a leaf's (R / 4 and C / 8 powers of two, at least two lanes), K on and off the
 32-wide step, lane indices in and out of range, paths that are and aren't a statement's and wires in, between and past
@@ -177,7 +177,7 @@ _LOWERINGS: dict[tuple, Any] = {}
 def _lowering(x: dict, stage: bool = False) -> tuple[Any, dict | None]:
     """C-Flock's lowering of ``x``'s statement (`class_statement.unit_lowering` on `h1zy.statement_rows`) and, with
     ``stage``, its circuit file's META (`UnitStager`: each input row ``hm96-sha512/row/v2`` of its bits, ``ok`` one v2 row,
-    as #3131's h1_lanes stages them); a reject where C-Flock refuses a row that isn't whole u16 words. Each is built once
+    as h1_lanes stages them); a reject where C-Flock refuses a row that isn't whole u16 words. Each is built once
     (a lane's lowering is about 2M ANDs), a staged one serving an unstaged ask."""
     key = (x["r"], x["c"], x["k"], x.get("lane"), x.get("n"), x.get("chunk"))
     got = _LOWERINGS.get(key)
@@ -379,7 +379,7 @@ def test_the_leaves(r: int, c: int, k: int, server) -> None:
 @pytest.mark.parametrize("r,c,k", SERVED, ids=lambda v: str(v))
 def test_the_served_rows_are_proved_rows(r: int, c: int, k: int, server) -> None:
     """At the served leaf every input row of the 33 statements, in Lean's layout, is whole 16-bit words (C-Flock's
-    `unit_lowering`; the Lean verifier's v2 rule takes a row of any length, #3148), and the combine has a row that
+    `unit_lowering`; the Lean verifier's v2 rule takes a row of any length), and the combine has a row that
     compresses before its last SHA-512 block, at least 112 bytes (C-Flock's, `h1zy.LEAST_K`), so a proof can take every
     statement."""
     lanes = H.Layout(r, c, k).lanes

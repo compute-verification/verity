@@ -84,8 +84,8 @@ def _replace(path: Path, data: bytes) -> None:
 
 def write(directory: Path, rep: dict, **measured) -> None:
     """A shard's report ``rep`` (`cli.run` with ``shard``) into ``directory``: its records (`RECORDS`, as the cache serializes
-    a report), then its manifest (`MANIFEST`) naming them by digest, with its cache counts and ``measured`` (its wall time and
-    jobs).  An earlier manifest there goes first, so a directory holds a manifest only once its shard has finished."""
+    a report), then its manifest (`MANIFEST`) naming them by digest, with its cache counts and ``measured`` (its wall time,
+    prologue and jobs).  An earlier manifest there goes first, so a directory holds a manifest only once its shard has finished."""
     directory.mkdir(parents=True, exist_ok=True)
     (directory / MANIFEST).unlink(missing_ok=True)
     data = json.dumps(rep["targets"], default=str).encode()

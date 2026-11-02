@@ -31,8 +31,7 @@ The seed is drawn after the weights are registered. Decoding a word costs k squa
 
 The fused GEMM's layout (`encode_tasks`): an FP8 weight matrix W (N × K) in `codec.plain_fragments` order, one task (16
 rows × 512 columns, 8,192 bytes) at a time; a task's bytes, zero-padded, are the payloads of L = `TASK_WORDS[name]`
-consecutive words (L·S a multiple of 16 so a task is one bulk copy), word w of task q at store index L·q + w. The
-task's stored bytes are the block the bandwidth tag (`ro-blake3/v1`) hashes.
+consecutive words (L·S a multiple of 16 so a task is one bulk copy), word w of task q at store index L·q + w.
 """
 
 from __future__ import annotations

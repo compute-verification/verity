@@ -339,7 +339,7 @@ def test_vllm_configuration_names_its_hash_and_never_mixes() -> None:
     assert ref.VllmV1({}).name == ref.NAME
 
 
-# --- the red team's conditions on PR #93 ---------------------------------------------------------------------------
+# --- the red team's conditions on the SHA-512 framings --------------------------------------------------------------
 
 
 def test_the_tagged_sha512_identity_frame() -> None:

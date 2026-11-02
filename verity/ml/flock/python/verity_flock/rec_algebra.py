@@ -21,7 +21,7 @@ coefficient inputs. Merkle openings, caps and the transcript's framing are rec-v
     v   per residual, its coefficients in its terms' order and its constant, then the comb (64; none when opening-only)
     out zerocheck, lincheck, one per claim (its ring switch), Ligerito's final check (two: K's c0, c1), and T
 
-**The registered opening** (``Shape.opening_only``, F4 candidate 3, `note:proofs/20261010T1820Z-draft-c3-claim-layout`): two
+**The registered opening** (``Shape.opening_only``, the opening-only candidate): two
 registered claims at `rec_sparse.registered_claim`'s points, no zerocheck or lincheck. Claim k's value is a w element, rep k's
 row of ``rec-claim``, added to its ring switch's residual ``dot(w_k, s_k) + claim_k`` as the running sums are added to the
 final check: no coefficient slot and no product, so the claims cost no AND. The points enter v through the coefficients.

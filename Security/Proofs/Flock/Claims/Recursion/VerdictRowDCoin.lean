@@ -469,7 +469,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
 
 /-- **The rep streams' names are distinct** at a decision of an inner statement read at the dense form: the read
 carries no public inputs (`dense_inner`), so its tables are distinct (`KS.tables_nodup`). -/
-theorem names_nodup {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem names_nodup {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) :
     (D.spec.repStreams.toList.map (·.2.2)).Nodup := by
   obtain ⟨s, spec, st, sch, hset, -, hpi, -⟩ := dense_inner hst hf
@@ -546,7 +546,7 @@ theorem posAt_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i <
 /-- **`hpos`, the coin tie, in `runs_assembled`'s form**: at a decision of an inner statement read at the dense form
 and a table `i` of the statement, at the verifier rows at rep `r`'s values, every piece of rep `r` of table `i` reads
 the position the rows draw for its query through `posAt`. -/
-theorem hpos {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem hpos {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (pieces : List OpenPiece) :
     ∀ r : Fin 2, ∀ v info kappa,
