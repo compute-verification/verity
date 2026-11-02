@@ -804,7 +804,7 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
                             "depth": x["D"], "reference": is_reference(rec or x), "direction": x["direction"], "counted": True,
                             "E_bytes": x.get("E_bytes"), "regime": (rec or {}).get("regime", "earlier"),
                             "start_bpb": x.get("start_bpb"), "output_sha256": x.get("output_sha256"),
-                            "submitted": x.get("submitted"), "node": x.get("node")})
+                            "submitted": x.get("submitted"), "node": x.get("node"), "fork_ladder": fork_ladder(rec)})
             continue
         if x.get("counted"):
             continue
@@ -824,14 +824,34 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
     return schedule_ends(out)
 
 
+def arg_value(args: str, flag: str) -> str | None:
+    a = str(args or "").split()
+    for i, t in enumerate(a):
+        if t == flag:
+            return "" if i + 1 == len(a) or a[i + 1].startswith("--") else a[i + 1]
+        if t.startswith(flag + "="):
+            return t[len(flag) + 1:]
+    return None
+
+
+def fork_ladder(x: dict | None) -> bool:
+    """A reference island's train.py (ref-optim's, ref-data's) run with --forks and an empty --snap-at encodes only at
+    its cooldown branches' ends (a branch decays the rate linearly to 0, is snapshotted, and the run returns to where it
+    forked) and at its own end, so each of its checkpoints ends a complete schedule of that length. Its FLOPs include
+    the earlier branches' passes, so honest is overstated there, never understated."""
+    return bool(x and (x.get("island") or x.get("direction")) in REF_DIRECTIONS and arg_value(x.get("args"), "--forks")
+                and arg_value(x.get("args"), "--snap-at") == "")
+
+
 def schedule_ends(subs: list[dict], key=lambda s: s["id"]) -> list[dict]:
     """Marks each run's last checkpoint, the end of its own schedule: honest(l*) reads only those (coordinator 12:05Z, a
-    checkpoint inside a longer reference schedule is not what an honest run of that length reaches)."""
+    checkpoint inside a longer reference schedule is not what an honest run of that length reaches), and every
+    checkpoint of a fork ladder (`fork_ladder`)."""
     top: dict = {}
     for s in subs:
         top[key(s)] = max(top.get(key(s), 0), s["cp"])
     for s in subs:
-        s["schedule_end"] = s["cp"] == top[key(s)]
+        s["schedule_end"] = s["cp"] == top[key(s)] or bool(s.get("fork_ladder"))
     return subs
 
 

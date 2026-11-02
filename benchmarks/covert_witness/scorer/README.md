@@ -30,7 +30,10 @@ lock, so the two never collide.
   `changed.actual_parameters` all of `eval_cost.parameters`, E `full`, no declared family: `full_theta`) launched by
   `ref-optim` or `ref-data`, or the harness's and the scorer's own reference smokes (`is_reference`; the coordinator,
   13:42Z), at the end of each run's own schedule only (its last checkpoint, `schedule_ends`; the coordinator, 12:05Z: a
-  checkpoint inside a longer reference schedule is not what an honest run of that length reaches). W* reads every
+  checkpoint inside a longer reference schedule is not what an honest run of that length reaches). A fork ladder
+  (`fork_ladder`: the reference island's train.py with `--forks` and an empty `--snap-at`) encodes only at its cooldown
+  branches' ends, each a complete schedule decayed to 0, so every checkpoint of it is a schedule end; its FLOPs include
+  the earlier branches' passes, which overstates honest there by up to about a quarter. W* reads every
   checkpoint of every other record, a class-reference run from any other direction included. The measurement auditor's records
   (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
 - **What a record must show to count**: launch.py uploads a record from an agent's VM, so its `witness.json` and
