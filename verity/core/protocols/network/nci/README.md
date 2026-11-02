@@ -27,7 +27,8 @@ scenarios register a policy as if it were a subprotocol.
 
 - **The definition**, `Security/Definitions/Nci.lean`. `Nci.Complies Γ α` states an older form: D divides into blocks
   of at most Γ gates, each reading at most α bits of fresh input per gate it holds (`Nci.novelReads`), so at most αΓ
-  bits a block. The (c, k) form, with an exact gate budget, is not yet in Lean.
+  bits a block. `Nci.CompliesAtMost c k n` is the (c, k) form on a Boolean declaration: D's computed gates divide into
+  at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`, `Security/Definitions/Core/Formalism.lean`).
 - **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
@@ -46,8 +47,14 @@ nothing else but Lean core.
 - `nci-check --unrolled` runs the same with `NciCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
   provenance, which is what `benchmarks/verifier_cost` measures.
-- `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
-  each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`.
+- `nci-check --count` runs `NciCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
+  Definitions by descriptor key, and the check gives each one's Boolean gates (from a per-primitive gate table), its
+  fresh input bits outside θ and its blocks, multiplied through batches and scans, and the root's total against n.
+  `NciCheck.Properties.DescCountsCK` (`Security/Properties/Nci/Count.lean`) states that an accepted count means
+  `Nci.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece.
+- `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz`, `nci-baseline-difftest` and
+  `nci-count-difftest` hold them to each other and to the Python reference `lean/scripts/nci_reference.py`, run by
+  `../tests/test_nci_*.py`.
 
 The check stays experimental until its agreement with `Nci.Complies` is proved. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.

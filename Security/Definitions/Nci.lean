@@ -10,7 +10,9 @@ beforehand; every other value is novel information. A division of `D` into isola
 of an IU read `width(in(R) \ θ)` bits of novel information (`novelReads`): baseline information is free, and so is
 anything `R` computes itself. `R`'s novel communication intensity is `NCI(R) = novelReads R / size R`, in bits per gate.
 
-`Complies Γ α` is the NCI policy: `D` divides into IUs of at most `Γ` gates, each with NCI at most `α`. A policy is a
+`Complies Γ α` is the NCI policy: `D` divides into IUs of at most `Γ` gates, each with NCI at most `α`.
+`CompliesAtMost c k n` is its count form on a Boolean declaration: `D` divides into at most `n` proof blocks of a
+`(c, k)`-partition (`Verity.Partition.IsCK`). A policy is a
 condition on declarations that the verifier checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its
 own. `slowdown policy t` is the factor by which every declaration that complies with `policy` and implements `t` is
 larger than `t`. `Reads Γ c` is the least total novel information that the IUs of a division of `c` into IUs of at most
@@ -40,6 +42,11 @@ needs no division). -/
 def Complies (Γ : ℕ) (α : ℝ) : Policy := fun d =>
   ∃ (n : ℕ) (P : Partition d.D n),
     ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u)
+
+/-- **At most `n` `(c, k)`-inference blocks**: `d`'s operation gates divide into at most `n` proof blocks of a
+`(c, k)`-partition (`Verity.Partition.IsCK`). -/
+def CompliesAtMost (c k n : ℕ) : Policy := fun d =>
+  ∃ B ≤ n, ∃ P : Partition d.D B, P.IsCK d c k
 
 /-- `Reads_Γ(c)`: the least total novel information that the IUs of a division of `c` into IUs of at most `Γ` gates
 read. -/
