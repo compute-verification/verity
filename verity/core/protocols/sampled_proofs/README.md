@@ -132,9 +132,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   their slots in class, stratum and block order.
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
-  circuit digest and the verifier's registered file, its evidence names the public file and the session's record and
+  circuit and public files' digests and the verifier's registered file, its evidence names the session's record and
   rep files by SHA-512 in place of `verdicts` (one session, as step 4 says: none or several are refused), and the files
-  come in as `Core.Blobs`. Its draw's coins are the challenger's (parameters naming none are refused), read as v1 reads
+  come in as `Core.Blobs`; the public file's header must be the registration's (`Record.matchesPublic`). Its draw's coins are the challenger's (parameters naming none are refused), read as v1 reads
   them (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`). The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins. So

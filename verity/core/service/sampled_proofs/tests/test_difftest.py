@@ -1912,6 +1912,16 @@ def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
+def _public_of(rec: dict, roots: dict | None = None) -> bytes:
+    """A public file whose header is `rec`'s as `registration.matches_public` reads one (`OneStageZk.publicHeld`): its
+    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, and its population as ``instances``.
+    No statement follows it, so a session set up on it is rejected."""
+    reg = {r["port"]: r for r in rec["roots"]}
+    fv = {"domain_ids": {p: r["domain"] for p, r in reg.items()}, "roots": roots or {p: r["root"] for p, r in reg.items()}}
+    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"]}
+    return json.dumps(header, sort_keys=True).encode() + b"\nnot a public file"
+
+
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
@@ -1958,15 +1968,18 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
     for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
     drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
-    a statement's; refused before the session is verified when its coins are not a tree the challenger logged; refused
-    when a file it names is in no blob, or its sessions are not the evidence's. `test_proofs.py` holds the verdicts to
-    `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
+    a statement's; refused before the session is verified when its coins are not a tree the challenger logged, or the
+    public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it
+    names is in no blob, as the public file the parameters name is when the blobs hold another, or its sessions are not
+    the evidence's. The public file is the parameters', committed before any coin: evidence naming one of its own, or
+    parameters naming none, are refused. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
+    `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     rng = random.Random("v2-verdicts")
-    circuit, public = b"not a circuit file", b"not a public file"
+    circuit, public = b"not a circuit file", _public_of(rec)
 
     def audit(trees: int) -> tuple[Drawn, dict, dict, dict]:
         ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
@@ -1981,7 +1994,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
-        return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "registered": None}}
+        return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public),
+                                                        "registered": None}}
 
     ch, evidence, base, p2 = audit(1)
     record, stand_in = D.canonical(ch.trees[0].record).encode(), b"{}"
@@ -1993,7 +2007,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         return out["verdict"], out["reason"]
 
     def proofs(sessions, record_=record):
-        return {"public": _sha(public), "sessions": [{"name": n, "record": _sha(record_), "reps": {}} for n in sessions]}
+        return {"sessions": [{"name": n, "record": _sha(record_), "reps": {}} for n in sessions]}
 
     assert run(evidence | {"proofs": proofs([])}) == (
         "reject", "evidence: the evidence names verdicts: this audit's verdicts are its own run of the verifier on the "
@@ -2013,6 +2027,22 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
     got = run(base | {"proofs": proofs([])}, p={k: v for k, v in p2.items() if k != "proofs"})
     assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
+    one = base | {"proofs": proofs(["s"]), "sessions": ["s"]}
+    other = _public_of(rec) + b", another"
+    got = run(one, p=p2 | {"proofs": {**p2["proofs"], "public": _sha(other)}})
+    assert got[0] == "reject" and got[1].startswith("proofs: public file: no blob has the SHA-512"), got
+    first = rec["roots"][0]["port"]
+    roots = {r["port"]: r["root"] for r in rec["roots"]} | {first: "00" * 64}
+    codes = R.matches_public(rec, SCHEME, roots, {p: s.ports[p]["domain"] for p in s.ports}, s.population).codes
+    assert codes == ("roots",)
+    wrong = _public_of(rec, roots)
+    assert run(one, blobs_=[circuit.hex(), wrong.hex(), *blobs[2:]],
+               p=p2 | {"proofs": {**p2["proofs"], "public": _sha(wrong)}}) == (
+        "reject", f"proofs: public file: not the registration's: {', '.join(codes)}")
+    assert run(base | {"proofs": {"public": _sha(public), **proofs(["s"])}, "sessions": ["s"]}) == (
+        "reject", "evidence: the keys of the evidence's proofs are not sessions")
+    got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
+    assert got == ("reject", "params: the keys of proofs are not circuit, public, registered"), got
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
@@ -2028,13 +2058,13 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     after = bytes.fromhex(R.digest(rec))
-    circuit, public = b"not a circuit file", b"not a public file"
+    circuit, public = b"not a circuit file", _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
         proved = DR.proved(draw)
         record = D.canonical(d.trees[0].record).encode() if d.trees else b"{}"
-        proofs = {"public": _sha(public), "sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
+        proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
         evidence = {"draw": draw, "instances": len(proved), "proved_units": proved, "proofs": proofs,
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                     "sessions": ["s"], "statement": {}}
@@ -2042,8 +2072,9 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
             evidence["coins"] = coins
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
              "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query), "ports": s.ports,
-             "program": s.desc, "proofs": {"circuit": _sha(circuit), "registered": None}, "query": s.query,
-             "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"], "work_table": None}
+             "program": s.desc, "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
+             "query": s.query, "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"],
+             "work_table": None}
         return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if k not in params or v is not None},
                 "record": record}
 
