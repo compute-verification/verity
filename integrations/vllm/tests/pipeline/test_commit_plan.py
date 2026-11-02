@@ -77,9 +77,9 @@ def test_a_plan_keyed_otherwise_is_recomputed_by_the_commit_with_the_reason(plan
 def test_another_code_identity_or_vllm_is_another_key(planned, monkeypatch):
     args, plan, _ = planned
     from verity_vllm.pipeline import source_identity as SI
-    monkeypatch.setattr(SI, "code_identity", lambda root: {"sha256": "c" * 64, "files": 1})
-    assert "code" in CP.use(plan, args)[1]["why"]
-    monkeypatch.undo()
+    with monkeypatch.context() as m:
+        m.setattr(SI, "code_identity", lambda root: {"sha256": "c" * 64, "files": 1})
+        assert "code" in CP.use(plan, args)[1]["why"]
     monkeypatch.setattr(CP, "_version", lambda dist: "0.0.0")
     assert "vllm" in CP.use(plan, args)[1]["why"]
 
