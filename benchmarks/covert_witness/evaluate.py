@@ -1,24 +1,27 @@
 """The evaluator and witness checker (fixed): the only process that reads the held-out sets.
 
-    python evaluate.py --submission DIR --class CLASS --timing FILE --out witness.json [--split search]
+    python evaluate.py --submission DIR --class CLASS --timing FILE --run RUN.json --out witness.json [--split search]
     python evaluate.py --start NAME --out start.json [--split search]     # a start's own score and evaluation cost
 
 For a submission it checks, in order, and records every result in the witness record:
 
-1. θ: the start's weights match its registered digest, and the submission names that digest;
+1. θ: the start's weights match its registered digest, and the submission and the harness's record name that digest;
 2. E: decode(θ, E) rebuilds a model with θ's tensors, shapes and dtypes, bit-equal to the submitted model.safetensors, so
    its size and its evaluation FLOPs and weight bytes per byte equal the start's (`prepare.eval_cost`);
 3. changed: the declared set covers every tensor that differs from θ; φ and the lowest updated layer are computed from it;
-4. FLOPs: analytic training FLOPs from the step log and the declared trainable set (`prepare.train_flops`), within
-   TRAIN_FLOP_BUDGET, and the declared set covers `changed`; GPU-seconds (the launcher's timing of train.py) within the cap;
+4. the harness's record (`te_core.run --script`, RUN.json) is this E's (`harness_submission`) and found nothing invalid;
+   FLOPs, 2x the MACs it counted, within TRAIN_FLOP_BUDGET x HARNESS_FLOP_SLACK; its steps' wall seconds within
+   GPU_SECONDS_CAP; the declared trainable set covers `changed` (the analytic `prepare.train_flops` is recorded beside it);
 5. the class's caps on 8·|E|, E's format and the updated layers;
 
-then scores decode(θ, E) on the search set (`prepare.evaluate_bpb`), and each snapshot for the FLOPs-to-target curve. A
-candidate is valid when every check passes. `--split final` is the final test set's, which no island's launcher runs.
+then scores decode(θ, E) on the search set (`prepare.evaluate_bpb`). The FLOPs-to-target curve is the harness's
+checkpoints (the first E in each 5% of the run, scored as it ran). A candidate is valid when every check passes.
+`--split final` is the final test set's, which no island's launcher runs.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -36,13 +39,14 @@ def score(rec: dict, model: dict[str, torch.Tensor], split: str) -> dict:
     return prepare.evaluate_bpb(net, split, rec["tokenizer"])
 
 
-def check(sub: Path, klass: str, timing: Path | None, split: str) -> dict:
+def check(sub: Path, klass: str, timing: Path, run: Path, split: str) -> dict:
     caps = prepare.CLASSES[klass]
     meta = json.loads((sub / "meta.json").read_text())
     rec = prepare.start_record(meta["start"])
     theta = prepare.load_theta(meta["start"])
-    out = {"schema": "covert-witness/witness/v1", "class": klass, "caps": caps, "start": meta["start"],
+    out = {"schema": "covert-witness/witness/v2", "version": prepare.VERSION, "class": klass, "caps": caps, "start": meta["start"],
            "theta_digest": rec["digest"], "budget": {"train_flops": prepare.TRAIN_FLOP_BUDGET,
+                                                      "flop_slack": prepare.HARNESS_FLOP_SLACK,
                                                       "gpu_seconds": prepare.GPU_SECONDS_CAP}, "checks": {}, "notes": meta.get("notes")}
     c = out["checks"]
     c["theta"] = meta["theta_digest"] == rec["digest"]
@@ -79,16 +83,26 @@ def check(sub: Path, klass: str, timing: Path | None, split: str) -> dict:
     out["train"] = meter
     trained = set(trainable.get("full", [])) | set(trainable.get("adapters", {}))
     c["trainable_covers_changed"] = changed <= trained
-    c["flop_budget"] = meter["flops"] <= prepare.TRAIN_FLOP_BUDGET
-    if timing is not None and timing.exists():
-        t = json.loads(timing.read_text())
-        out["gpu_seconds"] = t["gpu_seconds"]
-        out["train_rc"] = t.get("rc")
-        c["gpu_seconds"] = t["gpu_seconds"] <= prepare.GPU_SECONDS_CAP
-        c["train_exit"] = t.get("rc") == 0
-        out["implied_flop_per_second"] = meter["flops"] / t["gpu_seconds"] if t["gpu_seconds"] else None
-    else:
-        c["gpu_seconds"] = "no timing"
+    r = json.loads(run.read_text())
+    tot = r["totals"]
+    flops = 2 * tot["macs"]
+    out["harness"] = {"te_core": r.get("te_core"), "macs": tot["macs"], "flops": flops, "steps": len(r["steps"]),
+                      "over_train_flops": flops / meter["flops"] if meter["flops"] else None,
+                      "seconds": {k: tot[k] for k in ("wall_s", "gpu_s", "cpu_s", "process_wall_s")},
+                      "forward_macs_per_token": r.get("forward_macs_per_token"), "c": r.get("c"),
+                      "flags": r.get("flags", []), "invalid": r.get("invalid", []), "stopped": r.get("stopped"),
+                      "submitted": r.get("submitted", {}), "families": [
+                          {k: f.get(k) for k in ("family", "passed", "failed", "covers")} for f in r.get("families", [])]}
+    c["harness_theta"] = r.get("start", {}).get("digest") == rec["digest"]
+    c["harness_submission"] = r.get("submitted", {}).get("e_sha256") == hashlib.sha256(blob).hexdigest()
+    c["harness_valid"] = not r.get("invalid")
+    c["flop_budget"] = flops <= prepare.HARNESS_FLOP_SLACK * prepare.TRAIN_FLOP_BUDGET
+    out["gpu_seconds"] = tot["wall_s"]
+    c["gpu_seconds"] = tot["wall_s"] <= prepare.GPU_SECONDS_CAP
+    out["implied_flop_per_second"] = flops / tot["wall_s"] if tot["wall_s"] else None
+    t = json.loads(timing.read_text())
+    out["train_rc"], out["process_seconds"] = t.get("rc"), t.get("process_seconds")
+    c["train_exit"] = t.get("rc") == 0
     if caps["max_e_bytes"] is not None:
         c["e_size"] = len(blob) <= caps["max_e_bytes"]
     if caps["formats"] is not None:
@@ -105,18 +119,8 @@ def check(sub: Path, klass: str, timing: Path | None, split: str) -> dict:
     t0 = time.perf_counter()
     out["score"] = score(rec, decoded, split)
     out["score"]["seconds"] = time.perf_counter() - t0
-    curve = []
-    for d in sorted((sub / "snap").glob("*")) if (sub / "snap").is_dir() else []:
-        sb = (d / "E.bin").read_bytes()
-        n = json.loads((d / "meta.json").read_text())["steps_prefix"]
-        f = prepare.train_flops(rec, trainable, steps[:n])["flops"]
-        try:
-            s = score(rec, prepare.decode(theta, sb), split)["bpb"]
-        except (ValueError, KeyError) as e:
-            s = f"decode failed: {e}"
-        curve.append({"train_flops": f, "e_bytes": len(sb), "bpb": s})
-    curve.append({"train_flops": meter["flops"], "e_bytes": len(blob), "bpb": out["score"]["bpb"]})
-    out["curve"] = curve
+    out["curve"] = [{"step": cp["step"], "train_flops": 2 * cp["macs"], "e_bytes": cp.get("e_bytes"), "bpb": cp.get("val_bpb"),
+                     "source": cp.get("source")} for cp in r.get("checkpoints", [])]
     return out
 
 
@@ -126,6 +130,7 @@ def main() -> int:
     ap.add_argument("--start")
     ap.add_argument("--class", dest="klass", choices=sorted(prepare.CLASSES))
     ap.add_argument("--timing", type=Path)
+    ap.add_argument("--run", type=Path, help="the harness's run.json (te_core.run --script)")
     ap.add_argument("--split", default="search", choices=("search", "final"))
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
@@ -139,14 +144,14 @@ def main() -> int:
                "eval_cost": prepare.eval_cost(rec, len(held[0]), held[1]["bytes"]),
                "structure_full_update": prepare.deep_share(rec, set(theta)), "provenance": rec["provenance"]}
     else:
-        if not (a.submission and a.klass):
-            ap.error("--submission and --class, or --start")
-        out = check(a.submission, a.klass, a.timing, a.split)
+        if not (a.submission and a.klass and a.timing and a.run):
+            ap.error("--submission, --class, --timing and --run, or --start")
+        out = check(a.submission, a.klass, a.timing, a.run, a.split)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(out, indent=1) + "\n")
     s = out.get("score", {})
     print(json.dumps({"valid": out.get("valid"), "bpb": s.get("bpb"), "E_bytes": out.get("E", {}).get("bytes"),
-                      "phi": out.get("structure", {}).get("phi"), "train_flops": out.get("train", {}).get("flops"),
+                      "phi": out.get("structure", {}).get("phi"), "train_flops": out.get("harness", {}).get("flops"),
                       "checks": out.get("checks")}), flush=True)
     return 0
 
