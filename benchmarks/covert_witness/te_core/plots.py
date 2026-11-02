@@ -1,6 +1,7 @@
 """The headline plots P1-P4 (note:training-20261102T1715Z-draft-training-efficiency-experiments) and the A2 curve, from
-the ledger, as the console's five panels (note:dashboard-20261102T1934Z-draft-training-plots-contract, columns per
-note:training-20261102T1938Z-draft-training-plots-contract-reply), each with a PNG drawn from its rows.
+the ledger, as five panels in the panels route's body (note:dashboard-20261102T1934Z-draft-training-plots-contract,
+columns per note:training-20261102T1938Z-draft-training-plots-contract-reply), each with a PNG drawn from its rows. They
+are off the console, whose one training panel is `training/frontier-branches`.
 
     python -m te_core.plots --out DIR [--root LEDGER] [--pin COMMIT ...] [--policy reference|inference|server|c1e14/k1e4]
                             [--drop 0.01] [--g 1] [--from-scratch F.json]

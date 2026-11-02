@@ -3,7 +3,6 @@
     python -m te_core.rescore --out DIR [--root LEDGER] [--pin COMMIT ...] [--facts FACTS.json]
                               [--analysis analysis/rescore_v1.py --scorer ~/.research/te-scorer | --stubs]
                               [--policy reference] [--drop 0.01] [--g G --from-scratch F.json] [--source TEXT]
-                              [--publish]
 
 It reads te_core's ledger (`--root`, default `$TE_LEDGER`), keeps the valid records measured at the pin by
 te_core.frontier's rules (by default the pin pin.py reads, v2.3's tonight; `--facts` as for te_core.frontier),
@@ -13,9 +12,8 @@ valid record (the coordinator's 19:50Z rule). It writes into DIR:
 
 - `frontier.md` and `frontier.json`: Fit, Slowdown's ρ and Security's S = W*/H per start, target and policy cell, with
   W*'s route and its x0 and s* bounds and best-known values (te_core.frontier's `formalism_report`);
-- the console's five panels, each `<name>.json` (the panels route's body) and `<name>.png` drawn from it
-  (te_core.plots), and `console/<name>.json`, each cut to the route's limits (te_core.console); with `--publish`,
-  PUT to the route (`console/put.json`, each PUT's status);
+- the five panels, each `<name>.json` (a panels-route body) and `<name>.png` drawn from it (te_core.plots), and
+  `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT;
 - `formalism.jsonl`: each scored row's attached block and its source.
 
 The block holds the per-record quantities of covert_witness's `analysis/rescore_v1.py` where that file is present
@@ -123,7 +121,6 @@ def main(argv=None) -> int:
     ap.add_argument("--g", type=float, default=None)
     ap.add_argument("--from-scratch", type=Path, default=None)
     ap.add_argument("--source", default=None, help="the panels' `source` (default this command and the pin)")
-    ap.add_argument("--publish", action="store_true", help="PUT the console's cut panels to the panels route")
     ap.add_argument("--manifest", type=Path, default=policy.MANIFEST)
     a = ap.parse_args(argv)
     ledger = Ledger(a.root)
@@ -156,14 +153,12 @@ def main(argv=None) -> int:
     what = a.source or (f"python -m te_core.rescore (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
                         f"{len(kept)} valid checkpoints, quantities {'rescore_v1' if use else 'stubs'})")
     written = plots.write(scored, shapes, stubs, pin, a.out, a.policy, fs, a.g, a.drop, what)
-    cut = console.write(a.out, a.out / "console")
-    puts = console.publish(cut, a.out / "console" / "put.json") if a.publish else {}
+    console.write(a.out, a.out / "console")
     print(frontier.formalism_markdown(rep))
     print(f"pin {' + '.join(c[:12] for c in pin)}: {len(valid)} valid rows, {len(kept)} scored with {how}"
           + (f", {len(not_analysed)} not analysed (left out, frontier.json's not_analysed)" if use else "")
           + f" -> {a.out}: frontier.md, frontier.json, formalism.jsonl, "
-          + ", ".join(f"{p.stem}.json/.png" for p in written) + ", console/"
-          + (f"; PUT {', '.join(f'{k} {v}' for k, v in puts.items())}" if puts else ""))
+          + ", ".join(f"{p.stem}.json/.png" for p in written) + ", console/")
     return 0
 
 

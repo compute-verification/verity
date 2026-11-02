@@ -1,12 +1,13 @@
-"""The console's panels cut to its panels route's limits, and their PUT.
+"""The panels cut to the console's panels route's limits, and one panel's PUT.
 
-    python -m te_core.console DIR [--publish]    # DIR: te_core.plots' panels; writes DIR/console/
+    python -m te_core.console DIR    # DIR: te_core.plots' panels; writes DIR/console/
 
 A body is at most `BODY_MAX` bytes (compact JSON, no NaN) and a note at most `NOTE_MAX` characters. Each panel keeps
 its first cut that fits (`CUTS`, in order, the first the whole panel) with numbers to 4 significant digits (losses 6),
 and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the uncut panel is DIR/<name>.json beside
-it. `publish` PUTs each to `PANELS_URL`/<id> with a Cursor OIDC token (research.slack's `oidc_token`, imported only
-there) and returns each one's HTTP status.
+it. The console's one training panel is `training/frontier-branches`: te_core.plots' five panels are off it, so nothing
+here PUTs them. `put` PUTs one panel to `PANELS_URL`/<id> with a Cursor OIDC token (research.slack's `oidc_token`,
+imported only there) and returns its HTTP status.
 """
 from __future__ import annotations
 
@@ -160,24 +161,12 @@ def put(p: dict) -> str:
         return f"{e.code} {e.read()[:400].decode(errors='replace')}"
 
 
-def publish(panels: dict[str, dict], log: Path) -> dict[str, str]:
-    """PUT each panel; each one's status, also written to `log`."""
-    got = {p["id"]: put(p) for p in panels.values()}
-    log.write_text(json.dumps(got, indent=1) + "\n")
-    return got
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("dir", type=Path, help="te_core.plots' panels")
-    ap.add_argument("--publish", action="store_true", help="PUT the cut panels to the panels route")
     a = ap.parse_args(argv)
-    made = write(a.dir, a.dir / "console")
-    for name, p in made.items():
+    for p in write(a.dir, a.dir / "console").values():
         print(f"{p['id']}: {len(body(p))} bytes, {len(p['rows'])} rows, note {len(p['note'])} characters")
-    if a.publish:
-        for k, v in publish(made, a.dir / "console" / "put.json").items():
-            print(f"PUT {k}: {v}")
     return 0
 
 

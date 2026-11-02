@@ -1,4 +1,4 @@
-"""te_core.plots writes the console's five panels (P1-P4 and A2) by the formalism v2 and draws each one's figure from
+"""te_core.plots writes the five panels (P1-P4 and A2) by the formalism v2 and draws each one's figure from
 its rows, with and without a from-scratch curve."""
 import json
 

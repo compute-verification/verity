@@ -109,12 +109,12 @@ def test_an_attached_block_is_what_the_formalism_measures(tmp_path, monkeypatch)
     assert m.labels["u"].startswith("assumption (A1)") and m.labels["u_in"].startswith("assumption (A1')")
 
 
-def test_publish_puts_each_cut_panel(tmp_path, monkeypatch):
-    sent = []
-    monkeypatch.setattr(console, "put", lambda p: sent.append(p["id"]) or "200")
-    out, _ = run(tmp_path, monkeypatch, "--publish")
-    assert sent == [f"training/{n}" for n in plots.NAMES]
-    assert json.loads((out / "console" / "put.json").read_text()) == {i: "200" for i in sent}
+def test_the_cut_panels_are_written_and_never_put(tmp_path, monkeypatch):
+    monkeypatch.setattr(console, "put", lambda p: pytest.fail(f"PUT {p['id']}"))
+    out, _ = run(tmp_path, monkeypatch)
+    assert sorted(p.stem for p in (out / "console").glob("*.json")) == sorted(plots.NAMES)
+    with pytest.raises(SystemExit):
+        run(tmp_path, monkeypatch, "--publish")
 
 
 def test_stubs_score_every_valid_row(tmp_path, monkeypatch):

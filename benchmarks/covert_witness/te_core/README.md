@@ -113,9 +113,10 @@ only; a frozen tail is always charged (u is 0 up to its share t, u_in jumps to t
 side's best-known x₀ and s\* from exhibited blocks are reported beside them (`x0_known`, `s_star_known`: tightness,
 never the claim). u(1) is a field of its own (it equals Δ only when every token's path reads the whole update); u, u_in
 are labelled assumptions, a and Δ upper bounds from witnesses, a quantity not measured yet a stub; the row's `labels`
-name each (`formalism.STUBS`, and `formalism.V23` for a row ingested before). `plots` writes the console's five panels
-(P1-P4 and the A2 curve, the least |C| to each target against Δ, per start), each `<name>.json` and its PNG; `console`
-cuts each to the panels route's limits and PUTs it; and `rescore` re-scores v2.3's records with the per-record
+name each (`formalism.STUBS`, and `formalism.V23` for a row ingested before). `plots` writes five panels (P1-P4 and
+the A2 curve, the least |C| to each target against Δ, per start), each `<name>.json` and its PNG, which are off the
+console (its one training panel is `training/frontier-branches`); `console` cuts each to the panels route's limits and
+holds one panel's PUT; and `rescore` re-scores v2.3's records with the per-record
 quantities of covert_witness's `analysis/rescore_v1.py`, which has no formula of its own (module docstring).
 
 ## What the integrator calls
@@ -203,9 +204,9 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key |
 | `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it; `of_record` (ingest's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even` and `tail` (u, u_in), `fit_k` |
-| `plots.py` | the console's five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
-| `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note) and its PUT |
-| `rescore.py` | v2.3's records scored with the analysis's formalism blocks (or the stubs): the report, the five panels and their cuts (`--publish` PUTs them), one command |
+| `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
+| `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note), and one panel's PUT |
+| `rescore.py` | v2.3's records scored with the analysis's formalism blocks (or the stubs): the report, the five panels and their cuts, one command |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
