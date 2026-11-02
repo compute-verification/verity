@@ -332,6 +332,7 @@ def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
 def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(repo, verdict_cache, monkeypatch):
     """A sync gates each PR on its merge onto `next`, every PR below it included: with the cache, N merges cost N judgments, not
     N(N+1)/2."""
+    monkeypatch.setenv("RATCHET_GATE_JOBS", "1")  # judgments are counted in this process
     base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
     heads = []
     for i, files in enumerate([{P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
@@ -353,6 +354,40 @@ def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(r
     assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == len(tops) + 1
     monkeypatch.setattr(G, "SELF", "another gate")
     assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == 2 * len(tops) + 1
+
+
+def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted, verdict_cache, monkeypatch, capsys):
+    """A train's merges are judged by a pool of processes, each with its own worktree for the base's lints: the report, its
+    order and the exit status are the ones judging them in turn gives, failures included, cached or not."""
+    linted.git("checkout", "-q", "-b", "next", "main")
+    for pr, files in enumerate([
+            {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
+            {P01: _allowlist()},
+            {"integrations/vllm/verity_vllm/d.py": "D = 1\n"},
+            {"integrations/vllm/verity_vllm/c.py": "C = 'BAD'\n", P01: _allowlist(_entry("verity_vllm/c.py", "C"))},
+            {"integrations/vllm/verity_vllm/e.py": "E = 1  # noqa: E1\n"},
+            {"integrations/vllm/verity_vllm/f.py": "F = 1\n"}], 1):
+        linted.git("checkout", "-q", "-b", f"b{pr}", "next")
+        head = linted.commit(f"pr {pr}", files)
+        linted.git("checkout", "-q", "next")
+        linted.queue(pr, f"pr {pr}", head)
+    pools, pool = [], G.ProcessPoolExecutor
+    monkeypatch.setattr(G, "ProcessPoolExecutor", lambda n, **k: (pools.append(n), pool(n, **k))[1])
+
+    def report(jobs: str, cache: str = "") -> list[tuple[int, str]]:
+        monkeypatch.setenv("RATCHET_GATE_JOBS", jobs)
+        monkeypatch.setenv("RATCHET_GATE_CACHE", cache)
+        return [(G.main(["main", "next", *flag]), capsys.readouterr().out) for flag in ([], ["--json"])]
+
+    serial = report("1")
+    assert pools == [] and [v for _, v in _verdicts(json.loads(serial[1][1]))] == [
+        "passed", "failed", "untouched", "failed", "failed", "untouched"]
+    assert [code for code, _ in serial] == [1, 1] and "#2 (" in serial[0][1] and "p01_core: verity_vllm/b.py [k]" in serial[0][1]
+    assert report("4") == serial and pools == [4, 4]
+    assert report("4", str(verdict_cache)) == serial and report("1", str(verdict_cache)) == serial and pools == [4, 4, 4]
+    assert len(linted.git("worktree", "list").splitlines()) == 1
+    monkeypatch.setenv("RATCHET_GATE_JOBS", "none")
+    assert G.main(["main", "next"]) == 2 and "RATCHET_GATE_JOBS is 'none'" in capsys.readouterr().err
 
 
 def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
