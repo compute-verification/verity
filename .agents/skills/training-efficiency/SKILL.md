@@ -15,9 +15,10 @@ description: >
 # Training-efficiency search
 
 A search measures, from registered weights θ (a start and its loss ℓ0), the least compute that reaches a target loss ℓ*,
-honestly and under a policy's slowdown. Its question and quantities are Daniel's training formalism v1
-(`~/.research/notes/lanes/training/20261102T1817Z-report-training-formalism-v1.md`, with the experiments and plots it
-feeds in `20261102T1715Z-draft-training-efficiency-experiments.md` beside it). The harness is `benchmarks/covert_witness/`
+honestly and under a policy's slowdown. Its question and quantities are Daniel's training formalism v1, which
+`GLOSSARY.md` ("Training") states in the repository and which wins over the summary below; the note is
+`~/.research/notes/lanes/training/20261102T1817Z-report-training-formalism-v1.md`, with the experiments and plots it
+feeds in `20261102T1715Z-draft-training-efficiency-experiments.md` beside it. The harness is `benchmarks/covert_witness/`
 and its counter `benchmarks/covert_witness/te_core/`: their READMEs own the commands, files and checks. This skill is how
 to work in a search, and the rules no code enforces yet.
 
@@ -91,9 +92,9 @@ to work in a search, and the rules no code enforces yet.
 - **Aim complete schedules at each target.** The honest side, and any direction whose record may set W*, runs short
   complete schedules sized to end at each ℓ* (say 0.5%, 1% and 2% below the start's loss), never one long run read at its
   checkpoints.
-- **S is what the records found show**, not a bound: H and W* are each the least over the records found, ρ is
-  Slowdown's target under A1, and a record found later can move S either way (one that lowers H alone raises it, one
-  that lowers W* alone lowers it). Report S with the records that set it.
+- **A reported W* is the best attack known**, an upper bound (`.agents/skills/friction/SKILL.md`), and H the best
+  method known, so S is no bound: a record found later moves it either way (one that lowers H alone raises S, one that
+  lowers W* alone lowers it). Report S with the records that set it.
 - A record of a harness that priced the retired theorem (v2.3's ρ, U, D, β and r) is read for its compute (counted in
   multiply-accumulates, to convert to gates), its E and its witnesses, never for its ρ.
 
@@ -147,9 +148,9 @@ The smell check (`.agents/skills/smell-check/SKILL.md`) applies to every claim; 
 - **The honest baseline is the best method of any kind**, and is re-derived whenever any record beats it.
 - **ρ = 1 means no slowdown is proved there**, never that there is none: call ρ the guaranteed slowdown, so ρ = 1 reads
   as none guaranteed.
-- **Retired terms stay out** of new lines and tables (the formalism note's "Retired"): "covers" and a "Cover" theorem,
-  (Γ, α) and a block size that includes width(θ), counting only the products that read updated weights, the old deep
-  share and depth, per-MAC β, and the r sweep.
+- **Retired terms stay out** of board lines and tables too: the Glossary's older names (`GLOSSARY.md`, "Older names",
+  which the retired-terms test enforces in docs only), and "Cover", which the formalism's correction replaced by
+  Slowdown.
 - **Check before it goes out.** Read a record before relaying its label, and a FINAL before the scorer reruns it. A table
   goes out with S ≥ 1 in every cell, each H and W* naming the record that sets it, |C| in gates, each ρ labelled
   "target", each u(x) and a an upper bound, and each checkpoint figure "upper bound (checkpoint)".
