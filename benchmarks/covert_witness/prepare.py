@@ -202,6 +202,9 @@ def register_pythia(name: str = "pythia160m") -> dict:
     with torch.device("cpu"):
         net = Net(config)
     names = set(net.params())
+    for old, new in (("embed_out.weight", "lm_head.weight"), ("lm_head.weight", "embed_out.weight")):
+        if new in names and new not in raw and old in raw:
+            raw[new] = raw.pop(old)
     if not names <= set(raw):
         raise SystemExit(f"prepare: Pythia's checkpoint lacks {sorted(names - set(raw))[:4]}")
     theta = {k: raw[k].float() for k in names}
@@ -239,12 +242,13 @@ class TrainData:
 
 #: per family: the lookup, the head (the lookup's name when tied), the final norm's tensors, a block tensor's name (block,
 #: module) and the modules' stages. GPT-NeoX's parallel residual feeds its MLP from the block's input, not the attention's
-#: output; its MLP is placed after the attention as in the sequential order, so its φ is an upper bound.
+#: output; its MLP is placed after the attention as in the sequential order, so its φ is an upper bound. Its head is
+#: `embed_out` in transformers 4 and `lm_head` from 5 (the start is registered under the installed one's name).
 FAMILIES = {
     "lf": {"embed": "embed", "head": "embed", "final": r"norm", "block": r"blocks\.(\d+)\.(\w+?)(?:\.weight)?",
            "stages": {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4,
                       "w_down": 5}},
-    "hf-neox": {"embed": "gpt_neox.embed_in.weight", "head": "embed_out.weight",
+    "hf-neox": {"embed": r"gpt_neox\.embed_in\.weight", "head": r"(?:embed_out|lm_head)\.weight",
                 "final": r"gpt_neox\.final_layer_norm\.(?:weight|bias)",
                 "block": r"gpt_neox\.layers\.(\d+)\.(.+)\.(?:weight|bias)",
                 "stages": {"input_layernorm": 0, "attention.query_key_value": 1, "attention.dense": 2,
@@ -258,10 +262,11 @@ def positions(rec: dict) -> list[dict]:
     fam = FAMILIES[rec["config"]["family"]]
     nodes = []
     for name, (_, shape) in rec["tensors"].items():
-        if name in (fam["embed"], fam["head"]):
-            if name == fam["embed"]:
+        is_embed, is_head = re.fullmatch(fam["embed"], name), re.fullmatch(fam["head"], name)
+        if is_embed or is_head:
+            if is_embed:
                 nodes.append({"param": name, "layer": 0, "stage": 0, "flops": 0, "d_in": shape[0], "d_out": shape[1]})
-            if name == fam["head"]:
+            if is_head:
                 nodes.append({"param": name, "layer": L + 1, "stage": 1, "flops": 2 * shape[0] * shape[1],
                               "d_in": shape[1], "d_out": shape[0]})
             continue
