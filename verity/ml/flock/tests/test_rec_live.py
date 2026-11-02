@@ -478,7 +478,7 @@ def test_tree_from_takes_the_trees_from_the_challengers_session_and_closes_it(tm
         return got["device"]
 
     def serve(*args, **kw):
-        got["source"], got["tree"] = kw["source"], kw["tree"]
+        got["source"], got["tree"], got["lean"] = kw["source"], kw["tree"], kw["lean"]
         return []
 
     monkeypatch.setattr(remote.RemoteChallenger, "connect", staticmethod(connect))
@@ -486,9 +486,10 @@ def test_tree_from_takes_the_trees_from_the_challengers_session_and_closes_it(tm
     (tmp_path / "s.json").write_text(json.dumps(SCHEDULE))
     (tmp_path / "secret").write_text("0a" * 32 + "\n")
     assert RL.main(["--listen", "127.0.0.1:0", "--out", str(tmp_path), "--schedule", str(tmp_path / "s.json"), "--coin-tree",
-                    "--tree-from", "challenger:7000", "--tree-secret-file", str(tmp_path / "secret")]) == 0
+                    "--tree-from", "challenger:7000", "--tree-secret-file", str(tmp_path / "secret"), "--lean", "flock-firewall"]) == 0
     assert (got["at"], got["secret"]) == ("challenger:7000", bytes([10]) * 32)
     assert got["source"] is got["device"] and got["tree"] == RL.INNER_COIN_SPEC and got["device"].closed
+    assert got["lean"] == "flock-firewall"
 
 
 def test_the_inner_coin_tree_holds_every_stream_a_schedule_opens():
