@@ -48,7 +48,7 @@ pending review): for either layout in `SsnServedDistinct`'s range, a well-formed
 whose registers match every committed word on the full coin grid costs at least `32·m·n·S`. -/
 def SsnServedCharged : Prop :=
   ∀ (m S C : ℕ) (κ : Fin m → ℕ → Fin S → ℤ) (n : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Bits m C → ℚ))
-    (P : List (Op100 (Bits m C))), 0 < S → (∀ f ∈ L, f ∈ FreeB m C) → (∀ o ∈ P, o.WFw h100Floor (FreeB m C)) →
+    (P : List (Op100 (Bits m C))), 0 < S → FreeInputs m C L → (∀ o ∈ P, o.WFw h100Floor (FreeB m C)) →
     (∀ hC : S + 3 ≤ 32 * C, n ≤ 28559 → OutputsOn fpSem Set.univ P L (l4Words hC κ n) →
       32 * (m * (n * S)) ≤ cost100 h100Floor P) ∧
     ∀ hC : S + 4 ≤ 32 * C, n ≤ 371292 → OutputsOn fpSem Set.univ P L (l5Words hC κ n) →
@@ -69,7 +69,7 @@ holds at some point, the (position, value) pairs of `Y` that no initial chunk ho
 the run's word writes. -/
 def RunPairs : Prop :=
   ∀ (A V : Type) [DecidableEq A] [DecidableEq V] [Inhabited V] (w : ℕ) (m₀ : A → Fin w → V)
-    (P : List (Step A V w)) (Y : Finset (Fin w → V)), (∀ y ∈ Y, ∃ i a, run m₀ (P.take i) a = y) →
+    (P : List (Step A V w)) (Y : Finset (Fin w → V)), Held m₀ P Y →
     ((Y.biUnion pairs).filter fun pv : Fin w × V => ∀ a, m₀ a pv.1 ≠ pv.2).card ≤ writes P
 
 /-- **A run writes at least `Σ_y (r y + 1)`** (chunk model; draft model, pending review): for every run from the
@@ -78,7 +78,6 @@ distance from every initial chunk and any two are further apart than the sum of 
 def RunBall : Prop :=
   ∀ (A V : Type) [DecidableEq A] [DecidableEq V] [Inhabited V] (w : ℕ) (m₀ : A → Fin w → V)
     (P : List (Step A V w)) (Y : Finset (Fin w → V)) (r : (Fin w → V) → ℕ),
-    (∀ y ∈ Y, ∃ i a, run m₀ (P.take i) a = y) → (∀ y ∈ Y, ∀ a, r y < hammingDist (m₀ a) y) →
-    (∀ y ∈ Y, ∀ y' ∈ Y, y ≠ y' → r y + r y' < hammingDist y y') → ∑ y ∈ Y, (r y + 1) ≤ writes P
+    Held m₀ P Y → Far m₀ Y r → Apart Y r → ∑ y ∈ Y, (r y + 1) ≤ writes P
 
 end Pouw.Guarantees.Writes

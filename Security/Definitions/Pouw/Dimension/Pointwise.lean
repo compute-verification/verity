@@ -13,6 +13,8 @@ program at every coin value, so this model prices one run at a time.
   and stands for whatever produced `v`: an arithmetic op, a load or a per-word copy. `copy s d` copies slot `s` to slot
   `d` whole, free at any address. A run that branches or computes addresses is just another list.
 * `run m₀ P` is the memory after `P`, `writes P` its word writes, and `pairs x` a chunk's (position, value) pairs.
+* `Held m₀ P Y`: the run holds each chunk value of `Y` at some point. `Far m₀ Y r` and `Apart Y r`: each `y` is further
+  than `r y` in Hamming distance from every initial chunk, and any two are further apart than the sum of their radii.
 -/
 
 namespace Pouw.Dimension.Pointwise
@@ -47,5 +49,17 @@ def writes (P : List (Step A V w)) : ℕ := (P.map Step.cost).sum
 
 /-- A chunk's (position, value) pairs. -/
 def pairs [DecidableEq V] (x : Fin w → V) : Finset (Fin w × V) := univ.image fun p => (p, x p)
+
+/-- The run holds each chunk value of `Y` at some point: some slot holds it after some prefix of `P`. -/
+def Held (m₀ : A → Fin w → V) (P : List (Step A V w)) (Y : Finset (Fin w → V)) : Prop :=
+  ∀ y ∈ Y, ∃ i a, run m₀ (P.take i) a = y
+
+/-- Each chunk value `y` of `Y` is further than `r y` in Hamming distance from every initial chunk. -/
+def Far [DecidableEq V] (m₀ : A → Fin w → V) (Y : Finset (Fin w → V)) (r : (Fin w → V) → ℕ) : Prop :=
+  ∀ y ∈ Y, ∀ a, r y < hammingDist (m₀ a) y
+
+/-- Any two chunk values of `Y` are further apart in Hamming distance than the sum of their radii. -/
+def Apart [DecidableEq V] (Y : Finset (Fin w → V)) (r : (Fin w → V) → ℕ) : Prop :=
+  ∀ y ∈ Y, ∀ y' ∈ Y, y ≠ y' → r y + r y' < hammingDist y y'
 
 end Pouw.Dimension.Pointwise
