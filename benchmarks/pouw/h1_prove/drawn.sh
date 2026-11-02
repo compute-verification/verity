@@ -29,7 +29,14 @@ export RESEARCH_RUN_DIR=$SCR HZ_CONFIGS=drawn HZ_RUNS=1 HZ_WARM=0 HZ_PYTHON=$VPY
 export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048576)}' /proc/meminfo)}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
-trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W" "$SCR"' EXIT
+# each session's ZK server log, the prover's verdict lines and the timings carry no witness: kept beside job.log
+keep() {
+  cp "$OUT/job.log" "$P/drawn/" 2>/dev/null
+  for o in "$OUT"/*/; do
+    mkdir -p "$P/drawn/$(basename "$o")" && cp "$o"serve.log "$o"prove.out "$o"*.time "$P/drawn/$(basename "$o")/" 2>/dev/null
+  done
+}
+trap 'keep; rm -rf "$W" "$SCR"' EXIT
 setup
 export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python${PYTHONPATH:+:$PYTHONPATH}
 WK=$SCR/stage ST=$P/drawn/statements.json
