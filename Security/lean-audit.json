@@ -2799,6 +2799,22 @@
   "NetTiming.SecurityProofs.PooledLeakAccepted": {
    "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Compose.G": {
+   "honest": ["Pouw.SecurityProofs.Lead.Witness.G_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Witness.G_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Tail.G_tail": {
+   "honest": ["Pouw.SecurityProofs.Lead.Witness.G_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Network.networkFwd": {
+   "honest": ["Pouw.SecurityProofs.Lead.Witness.networkLlama_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial"
+  },
+  "Pouw.SecurityProofs.Lead.Network.networkLlama": {
+   "honest": ["Pouw.SecurityProofs.Lead.Witness.networkLlama_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial"
   }
  },
  "unwitnessed": {
@@ -11451,12 +11467,6 @@
    "assumptions": [],
    "type_hash": "a25a0d349dece0eb803b7b1f243ff11c00028325aa1f36f6a57f0b74f23b79dd"
   },
-  "Pouw.SecurityProofs.Lead.Compose.honest": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Lead.Compose.honest : Pouw.Guarantees.Lead.Honest"],
-   "assumptions": [],
-   "type_hash": "b44fbfc2a9544eeaf5e6e5105c97fc7b0255f1af6df1fe17234a09ec85514584"
-  },
   "Pouw.SecurityProofs.Lead.Network.networkFwd": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Network.networkFwd : Pouw.Guarantees.Lead.NetworkFwd"],
@@ -11516,6 +11526,24 @@
    "signature": ["Pouw.SecurityProofs.Lead.Tail.tailAt : Pouw.Guarantees.Lead.TailAt"],
    "assumptions": [],
    "type_hash": "51ed57ae366e0ea3430be448aad4630668f855ab33eaa1b1cc2c495c5638fa02"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.G_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.G_nontrivial": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.G_tail_nontrivial": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.networkFwd_nontrivial": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.networkLlama_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Lead.Witness.networkLlama_nontrivial": {
+   "owner": "@compute-research"
   },
   "Pouw.SecurityProofs.NCP.BiasU8Iff": {
    "owner": "@compute-accounting",
@@ -14612,8 +14640,7 @@
    "Pouw.SecurityProofs.Writes.SsnServedDistinct": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean), for the 4- and 5-lane layouts as the definitions state them; it reads no function of the code, so it has no acceptance to take. That the served kernel commits exactly these words is completeness. The served layouts' semantics are draft, pending review (Security/Definitions/Pouw/Dimension/Ssn.lean), and the review must clear them before the statement says anything about a device.",
    "Pouw.SecurityProofs.Writes.SsnServedShift": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean): no two differ by a constant and none is a free value plus one, the hypotheses of carrier separation. It reads no function of the code, so it has no acceptance to take. The served layouts' semantics are draft, pending review (Security/Definitions/Pouw/Dimension/Ssn.lean), and the review must clear them before the statement says anything about a device.",
    "Pouw.SecurityProofs.Lead.Compose.G": "frozen (no-function,hash): The lead's work bound over every strategy the node can run on a call (the strategy model of Definitions.Pouw.Lead.Model, priced on MH100w), not over a Lean function of the code, so it has no acceptance to take; its other branch is a SHA-512 collision with the honest commitment's messages (Pouw.Lead.Break).",
-   "Pouw.SecurityProofs.Lead.Compose.honest": "completeness: G's honest lemma: at every admitted call of the lead (Layout.Admits), some certifier running certCode meets CertifierCoins, and at the deployed commitment (l1wCommit: a call's A instance in 1 KiB segments and its forward's words instance), its form classifier and the certifier's coin stream (certStream), the nominal W1 table and a set of strategies holding an honest one, accepted at every coin value, meet every premise of G, so G's hypotheses are not vacuous at the deployed instance; for every A of at most 2^64 bytes and every forward of at most 2^64 words leaves.",
-   "Pouw.SecurityProofs.Lead.Statement.nontrivial": "completeness: G's nontrivial lemma: at the three points the honest work exceeds the gap, and a strategy that does nothing does no priced work, exchanges nothing and hashes nothing, so G's conclusion fails for a verifier that accepts everything.",
+   "Pouw.SecurityProofs.Lead.Statement.nontrivial": "completeness: what makes G say something, which G's nontrivial witness (Witness.G_nontrivial) reads: at the three points the honest work exceeds the gap, and a strategy that does nothing does no priced work, exchanges nothing and hashes nothing.",
    "Pouw.SecurityProofs.Lead.Statement.gapAt": "lemma: the gap's share of served stock at T 512 x 64, T 512 x 512 and T 8,192 for every call of n >= 512 and K >= 2,048, an evaluation of the defined function Pouw.Lead.gapServed, not a property of a Lean function of the code.",
    "Pouw.SecurityProofs.Lead.Statement.gapAll": "lemma: the gap's share of served stock at every call the verifier admits is at most the closed form Pouw.Lead.gapBound, an evaluation of the defined functions Pouw.Lead.gapServed and Pouw.Lead.gapBound, not a property of a Lean function of the code.",
    "Pouw.SecurityProofs.Lead.Network.networkFwd": "lemma: a forward's network term from its bits, over the forward model of Definitions.Pouw.Lead.Forward under SerialForwards, not a property of a Lean function of the code.",
@@ -14622,7 +14649,7 @@
    "Pouw.SecurityProofs.Lead.Tail.G_tail": "frozen (no-function,hash): G's tail form under G's premises: the share of the certifier's entropy values at whose coins a strategy the node can run is accepted, hashes no SHA-512 collision with the honest commitment's messages and works below the honest work less the fixed gap is at most etaLead; over the strategy model of Definitions.Pouw.Lead.Model, not a Lean function of the code, so it has no acceptance to take.",
    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt": "lemma: the tail's fixed gap as a share of served stock at T 512 x 64, T 512 x 512, T 8,192 and decode for every call of n, K >= 4,096, an evaluation of the defined function Pouw.Lead.gapFixedServed, not a property of a Lean function of the code.",
    "Pouw.SecurityProofs.Lead.Tail.tailAt": "lemma: etaLead at the three points and decode for calls of n, K >= 4,096 and at most 2^30 tiles, an evaluation of the defined functions Pouw.Lead.tableTail and Pouw.Lead.coinTail, not a property of a Lean function of the code.",
-   "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": "completeness: G_tail's nontrivial lemma: at the three points the honest work exceeds the fixed gap and etaLead < 1, so a strategy that does nothing falls in G_tail's event at every entropy value and its conclusion fails for a verifier that accepts everything.",
+   "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": "completeness: what makes G_tail say something, which G_tail's nontrivial witness (Witness.G_tail_nontrivial) reads: at the three points the honest work exceeds the fixed gap, and etaLead < 1 at calls of at most 2^30 tiles.",
    "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its proof blocks) is a hypothesis, an abstract set of incorrect blocks read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ incorrect blocks] by (1 − q)^F + Σ ε_i, and the leak those incorrect blocks carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest": "completeness: the honest lemma of StagedFloorKPerProver and StagedFloorKOneSidedPerProver: on one round of one stage over one cell-block (n = L = B = n' = 1, 7 planes at wRe) in the machine of functions at no cost (funMachine), a HashedService whose verifier accepts the answer true at every seed and refuses false, with the identity coin map and a run map whose one product slot computes the cell-block's target (so every error table is zero, the game accepts every play and no round breaks), meets ServiceSoundStagedPerProver at the fork finders with delta_b = beta_b = delta_z = beta_z = 0, KScopeAffine, KScopeOneSided and ChargeVF3j16 at kappa = 1 (the noise reads carry the one product, since the machine charges nothing). It shows the premises consistent at zero break terms; the floor there is negative, so it does not show the floor met.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest": "completeness: the honest lemma of OverlapFloorKPerProver and OverlapFloorKOneSidedPerProver: as StagedFloorPerProverHonest on one round of one draw over one cell-block, ServiceSoundOverlapPerProver at the fork finders with zero break terms, KScopeOverlapAffine, KScopeOverlapOneSided and ChargeVF3j16Overlap at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
@@ -23252,7 +23279,6 @@
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
@@ -23955,7 +23981,6 @@
     "Pouw.Salt.keyed_leaf_binds",
     "Pouw.Salt.keyed_leaf_hides",
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
@@ -27692,8 +27717,7 @@
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Pouw.Salt.keyed_leaf_binds",
-    "Pouw.Salt.keyed_leaf_hides",
-    "Pouw.SecurityProofs.Lead.Compose.honest"
+    "Pouw.Salt.keyed_leaf_hides"
    ]
   },
   "Definitions.Hash.Keyed": {
@@ -27838,8 +27862,7 @@
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
     "Pouw.Salt.keyed_leaf_binds",
-    "Pouw.Salt.keyed_leaf_hides",
-    "Pouw.SecurityProofs.Lead.Compose.honest"
+    "Pouw.Salt.keyed_leaf_hides"
    ]
   },
   "Definitions.Nci": {
@@ -31307,7 +31330,6 @@
    "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
@@ -31351,7 +31373,6 @@
    "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
@@ -31386,7 +31407,6 @@
    "guarantees": [
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
     "Pouw.SecurityProofs.Writes.SsnServedCharged",
@@ -31495,7 +31515,6 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Tail.G_tail"
@@ -32264,7 +32283,6 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
@@ -33307,7 +33325,6 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
@@ -33944,51 +33961,6 @@
    },
    "guarantees": ["Pouw.Salt.keyed_leaf_hides"]
   },
-  "Definitions.Pouw.Lead.Deployed": {
-   "digest": "61f633f3e6c3dfcaf8134ce6a3235c3812944acf4f8d3dcf8982f64be1a7c0fb",
-   "definitions": {
-    "Pouw.Lead.CallForward": "8bdc36ff006cce8c0d035eebe3db2c920c0706cf245c6322b1c521511bcbf4f4",
-    "Pouw.Lead.CallForward.before": "43e0bad20876aaf540828f1b628176a8d8fbb07384e33c651d58f18d3273189f",
-    "Pouw.Lead.CallForward.f": "5ac99f736f88a370753d384e485ce1c54398439ad2000c1f0e94145fb9094dc5",
-    "Pouw.Lead.CallForward.leaves": "5385529c4f18c27788a6e8f72a55562540c48445d46567c2682d21a834636ba9",
-    "Pouw.Lead.CallForward.post": "fc71fe5b35bc10d0c00a7360bd95bb036e62c68a8b75e4a0e850b227df44f8c3",
-    "Pouw.Lead.CallForward.pre": "578ae7e79935bc94b1c4c4d3bd7e3f290c1fa4784653913eee41002054ac87df",
-    "Pouw.Lead.CallForward.value": "4ede51e29a39c642d308446d03dc71e37c9f0cd0fd5b761f2dcef6b7bc2cdd75",
-    "Pouw.Lead.CallForward.values": "4451e67cc4cde6d21f0382a8c1493f6e9a1d646a5d12b275cab57c54e7b8d9ac",
-    "Pouw.Lead.CallWords": "140bc080a882017f4ece549a8250d77f0a9632683b1387c75b84153c0871fe7d",
-    "Pouw.Lead.L1w": "e9bd41452e694424c59ba62b987457fe815673f2ba2efbc65ae914b3ed3f6da3",
-    "Pouw.Lead.L1w.aDom": "948223723d5c3400d98d98507fbb2407a777cc9d9110fac84b908e4666b7fae2",
-    "Pouw.Lead.L1w.calls": "985e80acc9db07430525afc69e1d396b169847cd3bc776c307412ae4de1b91b7",
-    "Pouw.Lead.L1w.key": "7bc0ef36de68a5fc464465fe0937d703ba23fb0c7ef7d52d4f640aa82f06ffbe",
-    "Pouw.Lead.L1w.nb": "456e8e89637e407840a010f71a51143903fd66eccd3879b6a45739aa9fd06124",
-    "Pouw.Lead.L1w.salt": "dbde5835bb815ba78ed79909d960bf564682b430e718d8059ce958b1126aad7f",
-    "Pouw.Lead.L1w.wordsDom": "2e4187c39cca6affce03bd11ca1282f319365895b40f69ceaa17fed7b7e8a636",
-    "Pouw.Lead.L1w.y": "34c43065d88a23f187cc3c0f348d7c4bf7c7646bfac78f7cbc2ff12b8486ce0a",
-    "Pouw.Lead.Layout.feedRowWords": "589f736e6bd69ec7b8c96b44afde607d9d184facdcb57fb2fbde94a92cbf13c6",
-    "Pouw.Lead.aBytes": "90e3fc86340e9528cc55127175556cb03670323e6d4901c727a46efbb9899f4e",
-    "Pouw.Lead.aLeaves": "8d67cf81fecfe0dc428fa7647b3dee0d1cec27c2d7e1b017baf70ea30a14e206",
-    "Pouw.Lead.aPos": "9fba54db2f4a16eee486442717c1c46a63f9c2206a61a37f4944076bf4d16abc",
-    "Pouw.Lead.aSchema": "debfc1845629c9cf67529d88cbbbd26c3955f329f1ea23d386e0ec71ed2ee5d3",
-    "Pouw.Lead.aSeg": "d59baf34bbacdfcd85aa93e5d11b225b68c1c7470e3836c736501cd556d12953",
-    "Pouw.Lead.aSegment": "f02d84e8d15effe1a603f7f885e62fd813e0c4e4c5d4209afb05af8442bc62ef",
-    "Pouw.Lead.callChunks": "d1da5ad0799c2eea69851a96394b338df9ed1fbf940fcacaafe1997cf9d3f7cf",
-    "Pouw.Lead.certStream": "f88fcb1f514dd885fca97102de76752a75f4b11142293f82cf687fc61bdbbc40",
-    "Pouw.Lead.feedSlot": "e9441c50ff32c355c58f4ec9b843b7aba4d98c6c5a9d8eddd9b729014656f20d",
-    "Pouw.Lead.instanceDom": "6b1ec63e1f53ac8d3647bdf01934efd986f857b7156b11b1635086266e06804d",
-    "Pouw.Lead.l1wCommit": "570741163a2e932aecd21d8d2e76bf0e0be2ed99a7224db6f3a90e6724ac9109",
-    "Pouw.Lead.l1wIsA": "1c0185329ff878836f48bb218781b156a7a9c2d15ebe5ae83a3f7cc6175f4026",
-    "Pouw.Lead.tileFrag": "817c0a8f0bc52a832bb7e114e0c29d58d8d13e0282196c12357087a33c2b6452",
-    "Pouw.Lead.wordAt": "2ecbf6e8f15782fd6e53f74d8dadd2cd40d718fbe8b0d2b934a4a73fd01d168c",
-    "Pouw.Lead.wordBytes": "a196c34723a90e7abbcbba4d00daf1ba409618bbae75d1e5a6c9eacd2eb4e264",
-    "Pouw.Lead.wordsBytes": "e5292acc04044d92090f987cd1169ea9c9777daa00c6010ae6b98cc1d7a8dba3",
-    "Pouw.Lead.wordsChunk": "d69c5a7eb65fc0a84e97ab7f2ab4e38ac954d8dde0aff01d68aa4144a1c2d6ca",
-    "Pouw.Lead.wordsLeaves": "5cf0e91371922e847288fd988e0c726243f0290e5be306af0ed89f6194029a1a",
-    "Pouw.Lead.wordsPos": "3196c0168792003c1d05dc246929aa5eb50115f2500eab4fd1da3977e3ce7850",
-    "Pouw.Lead.wordsSchema": "d62732e38ebeaddbcffc45ed2d6a8edbcf9a6f0053e3c51357196028c551b096",
-    "Pouw.Lead.wordsTiles": "561857c7a0981614b616c24e3989ed931736e510d4497a4b8613f2209592e30b"
-   },
-   "guarantees": ["Pouw.SecurityProofs.Lead.Compose.honest"]
-  },
   "Definitions.Pouw.Lead.Forward": {
    "digest": "ea95c2f9908c39bb885dc7c6d445660603152b06d3579b2541f019074877b406",
    "definitions": {
@@ -34041,7 +34013,6 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
@@ -34096,7 +34067,6 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
@@ -34152,7 +34122,6 @@
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Compose.G",
-    "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
