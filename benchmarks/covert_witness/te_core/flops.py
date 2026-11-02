@@ -52,6 +52,8 @@ from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils._pytree import tree_flatten
 from torch.utils.weak import WeakTensorKeyDictionary
 
+from . import opsets
+
 aten = torch.ops.aten
 
 
@@ -79,17 +81,10 @@ def _shape_macs(func, args) -> int:
 
 
 SHAPE_OPS = {aten.mm, aten._int_mm, aten.addmm, aten.bmm, aten.baddbmm, aten.addbmm, aten.dot, aten.vdot, aten.mv, aten.addmv}
-ELEMENTWISE = {aten.mul, aten.mul_, aten.addcmul, aten.addcmul_, aten.addcdiv, aten.addcdiv_, aten.lerp, aten.lerp_,
-               aten._foreach_mul, aten._foreach_mul_, aten._foreach_addcmul, aten._foreach_addcmul_,
-               aten._foreach_addcdiv, aten._foreach_addcdiv_, aten._foreach_lerp, aten._foreach_lerp_}
-SCALED = {aten.add, aten.add_, aten.sub, aten.sub_, aten._foreach_add, aten._foreach_add_, aten._foreach_sub,
-          aten._foreach_sub_}
-#: fused optimizer steps, at the multiplications per parameter their unfused forms make
-FUSED_OPTIMIZERS = {getattr(aten, n): k for n, k in (("_fused_adam_", 7), ("_fused_adamw_", 8), ("_fused_sgd_", 2),
-                                                      ("_fused_adagrad_", 4)) if hasattr(aten, n)}
-LINALG = {getattr(aten, n) for n in ("_linalg_eigh", "linalg_eigh", "_linalg_svd", "linalg_svd", "linalg_qr",
-                                     "linalg_cholesky_ex", "linalg_inv_ex", "_linalg_solve_ex", "linalg_solve_triangular",
-                                     "linalg_lu_factor_ex", "cholesky_solve", "triangular_solve") if hasattr(aten, n)}
+ELEMENTWISE = {getattr(aten, n) for n in opsets.ELEMENTWISE}
+SCALED = {getattr(aten, n) for n in opsets.SCALED}
+FUSED_OPTIMIZERS = {getattr(aten, n): k for n, k in opsets.FUSED_OPTIMIZERS.items() if hasattr(aten, n)}
+LINALG = {getattr(aten, n) for n in opsets.LINALG if hasattr(aten, n)}
 FACTORY = {getattr(aten, n) for n in ("randn", "rand", "randint", "randperm", "zeros", "ones", "full", "empty",
                                       "empty_strided", "arange", "linspace", "eye", "scalar_tensor", "normal",
                                       "zeros_like", "ones_like", "empty_like", "full_like", "randn_like", "rand_like")
