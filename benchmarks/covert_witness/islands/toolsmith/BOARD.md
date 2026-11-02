@@ -17,11 +17,11 @@ edit past entries: correct one with a new entry that names it.
   alone.
 - **Finding (unit test).** One cheap early step can't collapse a long run's ρ. A family that covers only step 0 at
   β_t = 10⁻⁶ sends option (a) to ρ = 1, but option (b) drops step 0 and keeps 99% of the uncovered ρ
-  (`tests/test_score.py`).
+  (`te_core/tests/test_score.py`).
 - **Negative result.** A generic `QuantDelta` or `LowRank` encode of an arbitrary target is never bit-exact. Only a
   program that trains in that parameterization (calling the codec's `apply`) can be rebuilt by it. `SparseMask` and
   `Identity` are lossless, and `SeedReplay` is exact when the program replays the same in-place adds with fp32
-  coefficients (`tests/test_run.py`, the MeZO run).
+  coefficients (`te_core/tests/test_run.py`, the MeZO run).
 - **Tool.** Counterexample checks run on the run's own device, after training, from a live coin (`os.urandom`). A
   rebuild costing more than c MACs, or a single flipped bit in E_t, fails verification, and a uniform family with a
   failed step covers only the steps it verified.

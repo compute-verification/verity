@@ -4,7 +4,8 @@ te_core scores training-efficiency submissions. A submission is a training run P
 counts the run's circuit C itself, reads the run's maximal structure annotation A from that count, checks any
 counterexamples X to update hardness, and gives the slowdown ρ the theorem implies. The output model is scored in bits
 per byte. Search agents never edit te_core: a change goes through its toolsmith and bumps `VERSION` (`__init__.py`),
-which every record carries. Findings, negative results and tool announcements go in `BOARD.md`, appended.
+which every record carries. Findings, negative results and tool announcements go in each island's
+`islands/<island>/BOARD.md`, appended (the toolsmith's is `islands/toolsmith/BOARD.md`).
 
 ## The quantities
 
