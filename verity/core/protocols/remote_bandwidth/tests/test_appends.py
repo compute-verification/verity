@@ -14,7 +14,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, schedule
-from verity.core.protocols.remote_bandwidth.audit import Params, Session
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
 N = 8
@@ -71,7 +71,7 @@ class Run:
                         schedule_cap=schedule_cap)
         self.clock = Clock()
         if registry is None:
-            self.s = Session(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
+            self.s = AuditRun(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
                                                             appends=appends), not_before_ns=0, clock=self.clock)
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
@@ -85,7 +85,7 @@ class Run:
         self.received: list[tuple[int, int, bytes]] = []
 
     def commit(self, root: bytes, count: int) -> int:
-        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept, the append as the
+        """An append's root sent (`AuditRun.append`): the index the verifier assigns, its coin kept, the append as the
         verifier received it, (first, count, root), kept in `received` and, if the store awaits that append's coin,
         its blocks encoded under it."""
         first, coin = self.s.append(root, count)
