@@ -65,12 +65,13 @@ The statement's form is the causal game, the committed files, one fixed extracto
   where `B^τ` outputs a SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls
   (`FinderCR`, quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]`, the form of
   `Accounting.PeriodLive.error`; elsewhere `⊤`. That admits C-Flock's conditional bound (`loss = 0`) and the additive
-  one (`crBound = 1`). Two openings of one position and a second file with a registered digest (`fileFinder`,
-  `publicFinder`) each enter that way. The named assumption `ecr/sha-512` is asked only of the finder. A forged device
-  release enters the same way through a fixed forger (`forger a`, a `Hash.Assumptions.LmsForger` applied to the
-  strategy, its calls bounded as the finder's are and the device's signatures it saw by the published `Q`): where it
-  meets `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier (`lmsVerify`), the error adds the published
-  `ε_forge(t, Q)` (`epsForge`).
+  one (`crBound = 1`). A bound that reads further finders built from the strategy states their premises in `finderCR`,
+  each at its own budget in the strategy's calls, and the error is `⊤` where one fails. Two openings of one position
+  and a second file with a registered digest (`fileFinder`, `publicFinder`) each enter that way. The named assumption
+  `ecr/sha-512` is asked only of the finder. A forged device release enters the same way through a fixed forger
+  (`forger a`, a `Hash.Assumptions.LmsForger` applied to the strategy, its calls bounded as the finder's are and the
+  device's signatures it saw by the published `Q`): where it meets `Hash.Assumptions.LmsUnforgeable` at the compiled
+  LMS verifier (`lmsVerify`), the error adds the published `ε_forge(t, Q)` (`epsForge`).
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the five period claims are its `Holds`.
   The inference-only policy's claim is `Nci.Complies` at the published `Γ` and `α` of the declaration over the committed
   circuit (`declaration`: its registered inputs `θ`, `theta`). The wipe's claim is that the run, read at the wipe's
@@ -538,6 +539,11 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
   finder_calls : ∀ a θ F c σ (x : (finder a θ F c σ).S),
     (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
+  /-- **The SHA-512 premises at the other finders subprotocol `a`'s bound reads**, each a finder built from the
+  strategy at its own budget, a function of the strategy's calls (`cost`); `True` where the bound reads only
+  `finder`. -/
+  finderCR : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (families θ) θ F c) → Prop
   /-- each subprotocol's forger of the device's signature, applied to the strategy -/
   forger : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) θ F c) → Hash.Assumptions.LmsForger
@@ -707,14 +713,14 @@ def Unforgeable (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : By
   Hash.Assumptions.LmsUnforgeable lmsVerify (V.epsForge θ) (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a)
     (V.signatures θ) (V.forger a θ F c σ)
 
-/-- **Subprotocol `a`'s error at a strategy**: where its finder meets its collision premise (`FinderCR`) and its forger
-its forgery premise (`Unforgeable`), its published `δ` at the strategy's SHA-512 calls, plus the published
+/-- **Subprotocol `a`'s error at a strategy**: where its finders meet their collision premises (`finderCR`, `FinderCR`)
+and its forger its forgery premise (`Unforgeable`), its published `δ` at the strategy's SHA-512 calls, plus the published
 `ε_forge(t, Q)` at the forger's budget and the device's signatures (`epsForge`), plus its loss at the probability that
 the finder outputs a collision, the form of `Accounting.PeriodLive.error` with the forgery term beside `δ`; elsewhere no
 bound (`⊤`), as `Accounting.condError` reads it. C-Flock's conditional bound is the case `loss = 0`, the additive one
 the case `crBound = 1`. -/
 noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
-  condError (fun σ => V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
+  condError (fun σ => V.finderCR a θ F c σ ∧ V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
     (fun σ => V.delta θ a (V.cost θ F c σ) +
       ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * V.cost θ F c σ + V.callsAdd θ a) (V.signatures θ)) +
       V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) σ

@@ -95,6 +95,7 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   callsMul _ _ := 0
   callsAdd _ _ := 0
   finder_calls _ _ _ _ _ _ := Nat.zero_le _
+  finderCR _ _ _ _ _ := True
   forger _ _ _ _ _ := forger
   forger_calls _ _ _ _ _ _ := Nat.zero_le _
   signatures _ := 0
