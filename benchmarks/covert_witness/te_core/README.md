@@ -108,7 +108,9 @@ of a complete schedule, and Security's S = W\*/honest. Fit (Δ + sτ ≤ k) is c
 per-token update, a field of its own: it equals Δ only when every token's path reads the whole update), is a target
 until Lean proves it. u(x), u(1) and a are the best-known values from witnesses, labelled upper bounds; a quantity not
 measured yet is a stub; the row's `labels` name each (`formalism.STUBS`, and `formalism.V23` for a row ingested
-before).
+before). `plots` renders P1-P4 and the A2 curve (the least |C| to each target against Δ, per start), and `rescore`
+re-scores v2.3's records with the analytic v1 quantities of covert_witness's `analysis/rescore_v1.py` (module
+docstring).
 
 ## What the integrator calls
 
@@ -195,7 +197,8 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block) and the (c, k) grid in decades |
 | `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k); `of_record` (ingest's), `measure` (with labelled stubs and upper bounds), the witness profiles `even` and `frozen_tail` |
-| `plots.py` | P1-P4 of the experiments draft from the ledger, each a PNG and its numbers |
+| `plots.py` | P1-P4 of the experiments draft and the A2 curve, from the ledger, each a PNG and its numbers |
+| `rescore.py` | v2.3's records scored with the analysis's formalism blocks (or the stubs): the report, P1-P4 and A2, one command |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |

@@ -321,12 +321,13 @@ def formalism_targets(rows: list[dict], shapes: dict[str, dict], ends: set[str])
 
 
 def formalism_report(rows: list[dict], pin: str | tuple[str, ...] | None = None,
-                     shapes: dict[str, dict] | None = None) -> dict:
-    """The formalism's frontier over the valid rows (`valid`): `formalism_targets`, with every quantity's source (the
-    labels of the rows' measurements) and the rows it couldn't score."""
+                     shapes: dict[str, dict] | None = None, keep=None) -> dict:
+    """The formalism's frontier over the valid rows (`valid`) that `keep` keeps (default all): `formalism_targets`, with
+    every quantity's source (the labels of the rows' measurements) and the rows it couldn't score. Complete schedules
+    are read over every row."""
     shapes = policy.starts() if shapes is None else shapes
     ends = schedule_ends(rows)
-    scored, skipped = formalism_rows(valid(rows, pin), shapes)
+    scored, skipped = formalism_rows([r for r in valid(rows, pin) if keep is None or keep(r)], shapes)
     labels: dict[str, dict[str, int]] = {}
     for r in scored:
         for k, v in r["measured"].labels.items():

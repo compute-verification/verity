@@ -54,7 +54,10 @@ scores by the formalism. `pinned.json` names v2.3's commit until v3 is pinned.
 - **Score** (`python -m te_core.frontier --formalism`): per start, target (`TARGETS`, drops below the start's bpb) and
   cell, W* = the least |C|ρ of a valid record that reaches ℓ*, H = the least |C| of a valid record that reaches it by a
   complete schedule (any direction's), and Security's S = W*/H. **Plots** (`python -m te_core.plots --out DIR`): P1-P4
-  of the experiments draft, each a PNG and the numbers behind it.
+  of the experiments draft and the A2 curve (the least compute to each target against Δ, per start; Δ's bins, never
+  caps), each a PNG and the numbers behind it. **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`):
+  the same score and plots over the pin's valid records, each with the formalism block of `analysis/rescore_v1.py`
+  (the analytic v1 quantities, from the scorer's directory), or the stubs with `--stubs`.
 
 **Budget**: 2x the MACs the harness counts ≤ 9e16 x 1.1 (`TRAIN_FLOP_BUDGET`, about 10 GPU-minutes of m's dense AdamW at
 its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and optimizer work the analytic meter leaves

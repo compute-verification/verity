@@ -1,4 +1,5 @@
-"""The headline plots P1-P4 (note:training-20261102T1715Z-draft-training-efficiency-experiments), from the ledger.
+"""The headline plots P1-P4 (note:training-20261102T1715Z-draft-training-efficiency-experiments) and the A2 curve,
+from the ledger.
 
     python -m te_core.plots --out DIR [--root LEDGER] [--pin COMMIT ...] [--policy reference|inference|server|c1e14/k1e4]
                             [--drop 0.01] [--g 1] [--from-scratch F.json]
@@ -19,6 +20,9 @@ such.
   start's inference-block and server-block shapes and the reference policy marked.
 - P4, at that l* and the reference policy: p_A = |C_A|/H against s_A = ρ_A, log-log, one point per algorithm (a
   direction and mechanism, its least-|C|ρ record), iso-S diagonals, the reference directions' full training marked.
+- A2, per start: the least compute reaching each target among the records with Δ ≤ x, against x (Δ's bins for A2,
+  the efficiency floor, never caps), over complete schedules and, dotted where lower, over every checkpoint, the
+  reference policy's k marked (Fit needs Δ + sτ ≤ k).
 
 F.json is {start: [[gates, bpb], ...]}, the from-scratch runs' (compute, loss) on the same data and evaluator (the
 ladder's), read as F(l) = the least compute of a point at or below l, log-interpolated.
@@ -46,10 +50,11 @@ DROPS = tuple(round(0.0025 * i, 4) for i in range(1, 41))
 
 # ---- the data ----------------------------------------------------------------------------------------------------------
 
-def load(rows: list[dict], pin, shapes: dict[str, dict]) -> tuple[list[dict], dict]:
-    """The valid rows scored by the formalism, each with `schedule_end`, and the stubs they rest on."""
+def load(rows: list[dict], pin, shapes: dict[str, dict], keep=None) -> tuple[list[dict], dict]:
+    """The valid rows `keep` keeps (default all) scored by the formalism, each with `schedule_end` (read over every
+    row), and the stubs and bounds they rest on."""
     ends = frontier.schedule_ends(rows)
-    scored, _ = frontier.formalism_rows(frontier.valid(rows, pin), shapes)
+    scored, _ = frontier.formalism_rows([r for r in frontier.valid(rows, pin) if keep is None or keep(r)], shapes)
     stubs: dict[str, int] = {}
     for r in scored:
         r["schedule_end"] = r["id"] in ends
@@ -320,6 +325,82 @@ def p4(scored, shapes, ref: str, fs: dict, g, drop: float, out: Path, stubs, pin
     return numbers
 
 
+def least_by_delta(reach: list[dict]) -> list[dict]:
+    """The steps of x -> the least |C| among `reach` with Δ ≤ x: each record that lowers it, at its Δ."""
+    out, best = [], math.inf
+    for r in sorted(reach, key=lambda r: (r["measured"].delta_bits, r["gates"])):
+        if r["gates"] < best:
+            best = r["gates"]
+            out.append({"delta_le": r["measured"].delta_bits, "gates": best, "of": frontier._of(r)})
+    return out
+
+
+def a2(scored, shapes, ref: str, out: Path, stubs, pin) -> dict:
+    """Per start, the least |C| reaching each target among the records whose update has Δ ≤ x, against x (the A2
+    curve: Δ's bins, never caps): over complete schedules (solid, the frontier's honest rule) and over every checkpoint
+    (dashed, where it is lower), each non-increasing in x."""
+    starts = sorted({r["start"] for r in scored})
+    fig, axes = plt.subplots(1, len(starts), figsize=(4.6 * len(starts), 4.6 + 1.4), squeeze=False)
+    numbers = {}
+    for ax, start in zip(axes[0], starts):
+        sh = shapes[start]
+        on = [r for r in scored if r["start"] == start and r["measured"].delta_bits is not None]
+        l0, (c0, _) = frontier.start_bpb(on), policy.c0(sh)
+        x_end = max(r["measured"].delta_bits for r in on) * 3
+        k_ref = policy.shapes(sh)[ref]["k"] if ref in policy.MARKS else policy.of_key(ref)[1]
+        numbers[start] = {"l0": l0, "c0_gates": c0, "k_reference": k_ref, "targets": []}
+        for i, f in enumerate(frontier.TARGETS):
+            l_star = l0 * (1 - f)
+            reach = [r for r in on if r.get("val_bpb") is not None and r["val_bpb"] <= l_star]
+            curves = {"complete": least_by_delta([r for r in reach if r["schedule_end"]]),
+                      "checkpoint": least_by_delta(reach)}
+            h = at(on, l_star, [])["honest"]
+            for s in curves["complete"] + curves["checkpoint"]:
+                s["p"] = s["gates"] / h if h else None
+            numbers[start]["targets"].append({"drop": f, "l_star": l_star, "honest": h} | curves)
+            for name, ls in (("complete", "-"), ("checkpoint", ":")):
+                steps = curves[name]
+                if not steps or name == "checkpoint" and steps == curves["complete"]:
+                    continue
+                xs, ys = [s["delta_le"] for s in steps], [s["gates"] / c0 for s in steps]
+                ax.step(xs + [x_end], ys + ys[-1:], where="post", color=f"C{i}", ls=ls,
+                        label=f"-{100 * f:g}% (l* {l_star:.4f})" if name == "complete" or not curves["complete"]
+                        else None)
+                ax.plot(xs, ys, "o", color=f"C{i}", ms=3, mfc="white" if name == "checkpoint" else None)
+        ax.axvline(k_ref, color="grey", ls="--", lw=0.8, label=f"k at the {ref} policy: Fit needs Δ + sτ ≤ k")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("Δ, the update's bits (records with Δ ≤ x)")
+        ax.set_ylabel("least compute after theta / C0")
+        ax.set_title(f"{start} (l0 {l0:.4f})", fontsize=9)
+        ax.legend(fontsize=6)
+    fig.suptitle("A2: the least compute reaching each target with an update of at most Δ bits (solid: complete "
+                 "schedules; dotted, hollow: any checkpoint, where lower)", fontsize=9)
+    footer(fig, stubs, pin)
+    fig.tight_layout(rect=(0, 0.1 + 0.02 * len(stubs), 1, 1))
+    fig.savefig(out / "A2.png", dpi=130)
+    plt.close(fig)
+    return numbers
+
+
+def write(scored, shapes, stubs, pin, out: Path, ref: str = policy.REFERENCE, fs: dict | None = None,
+          g: float | None = None, drop: float = 0.01) -> list[Path]:
+    """P1-P4 and A2 into `out`, each as a PNG and the JSON of its numbers."""
+    fs = fs or {}
+    out.mkdir(parents=True, exist_ok=True)
+    written = []
+    for name, fn in (("P1", lambda: p1(scored, shapes, ref, fs, out, stubs, pin)),
+                     ("P2", lambda: p2(scored, shapes, ref, fs, out, stubs, pin)),
+                     ("P3", lambda: p3(scored, shapes, fs, g, drop, out, stubs, pin)),
+                     ("P4", lambda: p4(scored, shapes, ref, fs, g, drop, out, stubs, pin)),
+                     ("A2", lambda: a2(scored, shapes, ref, out, stubs, pin))):
+        numbers = fn()
+        (out / f"{name}.json").write_text(json.dumps({"pin": list(pin), "policy": ref, "stubs": stubs,
+                                                      "data": numbers}, indent=1, default=str) + "\n")
+        written.append(out / f"{name}.png")
+    return written
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
@@ -335,15 +416,8 @@ def main(argv=None) -> int:
     pin = tuple(a.pin) if a.pin else frontier.pinned()
     scored, stubs = load(Ledger(a.root).index(), pin, shapes)
     fs = json.loads(a.from_scratch.read_text()) if a.from_scratch else {}
-    a.out.mkdir(parents=True, exist_ok=True)
-    for name, fn in (("P1", lambda: p1(scored, shapes, a.policy, fs, a.out, stubs, pin)),
-                     ("P2", lambda: p2(scored, shapes, a.policy, fs, a.out, stubs, pin)),
-                     ("P3", lambda: p3(scored, shapes, fs, a.g, a.drop, a.out, stubs, pin)),
-                     ("P4", lambda: p4(scored, shapes, a.policy, fs, a.g, a.drop, a.out, stubs, pin))):
-        numbers = fn()
-        (a.out / f"{name}.json").write_text(json.dumps({"pin": list(pin), "policy": a.policy, "stubs": stubs,
-                                                        "data": numbers}, indent=1, default=str) + "\n")
-        print(f"{a.out / name}.png, {name}.json")
+    for p in write(scored, shapes, stubs, pin, a.out, a.policy, fs, a.g, a.drop):
+        print(f"{p}, {p.with_suffix('.json').name}")
     return 0
 
 
