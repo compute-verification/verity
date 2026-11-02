@@ -82,13 +82,13 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.onVals_tab {K W Hi VL : Ty
     (T : ZkView.Coined K W Hi VL z) : T.onVals.tab = T.tab.onVals :=
   rfl
 
-/-- The base with each rep's free pads moved from the honest values to `v`'s at its mask slot and extra lanes
+/-- The base with each rep's free pads moved from the honest values to `v`'s at its mask slot and level 0's hiding
 (`Table.shift`). -/
 noncomputable def _root_.FlockSoundness.Discharge.ZkView.Coined.shiftB {K W Hi VL : Type} [Field K]
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi) :
     ZkView.Base z Hi :=
   let s : Fin 2 → (Fin z.nE → FlockLevel3.GF128) × FlockLevel3.GF128 × FlockLevel3.GF128 :=
-    T.tab.onVals.padShift (w, v) (w, T.tab.vals) b.1 b.2.1.2.1
+    T.tab.onVals.padShift (w, v) (w, T.tab.vals) b.1 b.2.1
   (b.1, b.2.1, b.2.2.1 + s, b.2.2.2)
 
 /-- **The switched prover's pre-final view with its leaves given by position** (`lv`): `Table.swPre`, as
@@ -106,7 +106,7 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swPreWith_ideal {K W Hi VL
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi)
     (u : ZkView.LeafPos z → ZkView.Bits × ZkView.Salt) :
     T.swPreWith w v b (fun p => ZkView.leafH ((u p).1, ZkView.saltHash (u p).2)) = T.tab.swPre w v (T.randOf b u) := by
-  by_cases hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1.2.1
+  by_cases hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1
   · have h0 : T.tab.swPre w v (T.randOf b 0) = T.tab.toBasePre (T.tab.onVals.preView (w, v) (T.randOf b 0)) := by
       unfold FlockSoundness.ZK.Table.swPre
       exact ite_eq_left hr
@@ -132,7 +132,7 @@ honest prover's on the moved pads. -/
 noncomputable def _root_.FlockSoundness.Discharge.ZkView.Coined.swContent {K W Hi VL : Type} [Field K]
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi) :
     ZkView.LeafPos z → ByteArray :=
-  if T.tab.onVals.RowsAt (w, v) b.1 b.2.1.2.1 then T.onVals.content (w, v) b else T.content w (T.shiftB w v b)
+  if T.tab.onVals.RowsAt (w, v) b.1 b.2.1 then T.onVals.content (w, v) b else T.content w (T.shiftB w v b)
 
 theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swContent_size {K W Hi VL : Type} [Field K]
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi)
@@ -366,7 +366,7 @@ def TPreModel.SwCausal {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x)
       M.swMsgs wt vs ω a' (fun l => ZkView.leafH (swDigOf M.C (M.cz a') wt (vs a') ω l + (p l).1, (p l).2)) i
 
 /-- **Before the last coin, the prover's messages on `w` are the switched prover's at values the workers supply** (`vs`,
-read from the mask slot and the extra lanes alone, never the pads), its round encoding causal, at the executable's
+read from the mask slot and level 0's hiding alone, never the pads), its round encoding causal, at the executable's
 leaves; on the dummy they are the honest prover's (`TPreModel.Link`'s second half). -/
 def TPreModel.SwLink {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) (H : Msg → Msg) (ν : G.Nonce) (w : W) :
     Prop :=
@@ -508,7 +508,7 @@ end Proto
 
 /-- **Flock's zero knowledge at the switched prover, at the tables the session sets up**: `Flock.zk_deployZk_of_tables`
 with `TMsgLink` replaced by `TSwLink`. At `P_zk = G.prover`, a prover whose messages on each witness are the switched
-prover's at whatever values the workers supply (read from the mask slot and the extra lanes, never the pads), and the
+prover's at whatever values the workers supply (read from the mask slot and level 0's hiding, never the pads), and the
 honest prover's simulator, `Claims.Flock.ZKAt` holds at the same `ε_zk` and `γ`. -/
 theorem Flock.zk_deployZk_of_tables_sw (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]

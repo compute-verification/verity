@@ -683,7 +683,7 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   reps the worker's rows hold at every pad (**`Composed.rowsAt_of_rows`**, `Table.RowsAt`).
 * `FinishStopAt`: that stop at a `--zk` table's own draw. Where, at each rep, the firewall's constraints are the first
   seven rows on the view's masked values and none fails on the drawn pads, the worker's rows hold at the draw's mask slot
-  and extra lanes (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
+  and level 0's hiding (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
 * `FinishSwSrc`: the switched prover's rep source, `tabSrcCut` of the switched cut at the workers' values
   (`Masked.swSrcE`, `Masked.swCutE`, `RefSession.swCutOf`), the source `FinishSrc`'s premises are to be met at for
   `FinishIs`. Where a table's rows hold at its base, its masked values are the worker's view's
