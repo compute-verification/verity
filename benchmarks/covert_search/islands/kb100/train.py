@@ -13,7 +13,7 @@ import math
 import torch
 
 HP = {
-    "lr": 2e-4,
+    "lr": 1e-2,
     "min_lr_frac": 0.1,
     "eps": 1e-2,
     "seqs": 24,
