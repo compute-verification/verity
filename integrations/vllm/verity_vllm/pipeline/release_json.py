@@ -1,18 +1,16 @@
-"""RELEASE.json of a shipped worker package (schema verity-sweep/release/v1) -- writer, reader and the REL-09 release line.
+"""RELEASE.json of a shipped worker package (schema verity-sweep/release/v1) -- writer, reader and the release line.
 
-The `tree` field names the tree THIS ship installed.  Twice a pod's RELEASE.json said
-tag r16-int-N but named the pod's shared default tree while the release had been installed as its OWN tree (/workspace/cp/r16-int-2 on
-cp-h100 07:49Z, /workspace/cp/r16-int-3 on cp-r1 10:08Z): a row from the own tree read UNRELEASED by row_pod's REL-09 rule ("pod release
-... is the tree <default tree>, not this one") and a row from the default tree would have cited the release falsely.  The first time
-the field was a constant; the second time an older tag's pod_release.sh (which still had the constant) was shipped.  There is no
-default tree: a record names its tree or none.  Rules:
+The `tree` field names the tree THIS ship installed.  A RELEASE.json naming the pod's shared default tree for a release installed as its
+OWN tree makes a row from the own tree read UNRELEASED by row_pod's release rule ("pod release ... is the tree <default tree>, not this
+one") and lets a row from the default tree cite the release falsely, so the field is never a constant and there is no default tree:
+a record names its tree or none.  Rules:
 
   * the writer takes the tree EXPLICITLY (the REMOTE_TREE the ship installed into) and refuses when it is not the process cwd;
   * the record is written pod-wide (/workspace/cp/RELEASE.json, the latest ship on the pod) AND tree-local (<tree>/RELEASE.json), so a
     second tree on the pod never erases the first tree's citation;
   * `check` re-reads the written file after the ship and fails the release (RELEASE-FAIL) when tree / tag / commit do not name the
     installed tree -- the ship never ends with a RELEASE.json that no row can cite;
-  * `line` is row_pod's REL-09 / REL-14 release line: the tree-local record when it names this tree, else the pod-wide one, else
+  * `line` is row_pod's release line: the tree-local record when it names this tree, else the pod-wide one, else
     UNRELEASED -- a record applies only when its `tree` == realpath(cwd) AND its commit + dirty-patch digest equal this tree's EXPORT.json.
 
 Stdlib only at import time; `write` imports torch/vllm lazily for the env identity.
@@ -92,7 +90,7 @@ def release_record(*, tag: str, export: dict, tree: str, cwd: str, artifacts: di
 
 
 def release_names_tree(rel: dict, tree: str) -> bool:
-    """row_pod REL-09: a RELEASE.json applies to a tree only when its `tree` is that tree.  A record without a tree field (the
+    """row_pod's rule: a RELEASE.json applies to a tree only when its `tree` is that tree.  A record without a tree field (the
     older pod-wide form) names no tree."""
     if not rel or not rel.get("tree"):
         return False
@@ -141,7 +139,7 @@ def check_installed(tree: str, tag: str, commit: str, pod_path: str = POD_RELEAS
 
 
 def release_line(tree: str, export_path: str | None = None, pod_path: str = POD_RELEASE_JSON) -> tuple[str, str]:
-    """row_pod's release line + the record path it came from ('-' when UNRELEASED).  Tree-local record first (REL-14: the tree whose
+    """row_pod's release line + the record path it came from ('-' when UNRELEASED).  Tree-local record first (the tree whose
     code runs), then the pod-wide one; each applies only when it names this tree and matches its EXPORT.json."""
     t = _real(tree)
     exp_p = export_path or os.path.join(t, "EXPORT.json")
@@ -215,7 +213,7 @@ class CheckOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class LineOptions:
-    "row_pod's REL-09 release line for <tree>"
+    "row_pod's release line for <tree>"
 
     tree: str = option("tree")
     pod_path: str = option("--pod-path", default=POD_RELEASE_JSON)

@@ -1,9 +1,9 @@
-"""Sloth over one wide word, the tensor-core codec's byte-exact reference (lane `ra-codec-tensor`).
+"""Sloth over one wide word, the tensor-core codec's byte-exact reference.
 
 ~~~text
 field      p = 2^n − c, p ≡ 3 (mod 4), c the smallest such that p is prime: n = 256U − 1 for U = 1 … 5 (a word fills U
            32-byte chunks, the tensor-core squaring's unit; 2^255 − 19 is 1 mod 4, so p255 = 2^255 − 765), m521, and
-           the full-slot p512 = 2^512 − 569, p768 = 2^768 − 825, p1024 = 2^1024 − 105 (ra-word-codec's p1024),
+           the full-slot p512 = 2^512 − 569, p768 = 2^768 − 825, p1024 = 2^1024 − 105 (the word codec's p1024),
            p1536 = 2^1536 − 3453 and p2048 = 2^2048 − 1557
 word       S = ⌈n/8⌉ bytes, little-endian, canonical (< p): 32U, 66 for m521, n/8 for the full-slot fields
 payload    B = ⌊(n − 1)/8⌋ bytes, little-endian (m < 2^(8B) < p): 32U − 1, and 65; a full-slot field's payload is the
@@ -19,66 +19,35 @@ round j    x ↦ ρ(x + c_j + t(i)); encode is rounds 0 … k − 1 from the pay
 K          a masked key's (`key(..., mask=True)`): LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 2)[0 : S]) mod 2^n, not
            reduced mod p
 σ_K(x)     x ⊕ K if that is below p, else x: an involution on [0, p), applied to x before each round j ≥ 1 of a masked
-           word's encode and after each inverted round j ≥ 1 of its decode (`benchmarks/word_codec/kv.py`'s, ra-codec-mix's)
+           word's encode and after each inverted round j ≥ 1 of its decode (`benchmarks/word_codec/kv.py`'s)
 ~~~
+
+The field, the key derivation (under this module's `DOMAIN`), ρ and the rounds are the store codec's
+(`verity.core.protocols.remote_bandwidth.codec`: `Field`, `derive` over a `Sloth`, `encode_word` and `decode_word`),
+with the payload check around them; this module keeps the tasks' layout and the tensor-core squaring.
 
 The seed is drawn after the weights are registered. Decoding a word costs k squarings; encoding it k roots, each
 (p+1)/4's addition chain (n − 2 squarings for a Mersenne prime) and the square test.
 
 The fused GEMM's layout (`encode_tasks`): an FP8 weight matrix W (N × K) in `codec.plain_fragments` order, one task (16
 rows × 512 columns, 8,192 bytes) at a time; a task's bytes, zero-padded, are the payloads of L = `TASK_WORDS[name]`
-consecutive words (L·S a multiple of 16 so a task is one bulk copy), word w of task q at store index L·q + w. The
-task's stored bytes are the block the bandwidth tag (`ro-blake3/v1`) hashes.
+consecutive words (L·S a multiple of 16 so a task is one bulk copy), word w of task q at store index L·q + w.
 """
 
 from __future__ import annotations
 
-import hashlib
-import struct
-from dataclasses import dataclass
+from verity.core.protocols.remote_bandwidth.codec import (  # noqa: F401  the store codec's, which this module's users take
+    MASK_INDEX, P512, P1024, SEED_BYTES, Field, Key, Sloth, derive, rho, rho_inv)
+from verity.core.protocols.remote_bandwidth import codec as RB
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
-SEED_BYTES = 32
-TWEAK_INDEX = (1 << 32) - 1
-MASK_INDEX = (1 << 32) - 2
 TASK_BYTES = 8192
-
-
-@dataclass(frozen=True, slots=True)
-class Field:
-    name: str
-    n: int
-    c: int
-
-    @property
-    def p(self) -> int:
-        return (1 << self.n) - self.c
-
-    @property
-    def word_bytes(self) -> int:
-        return -(-self.n // 8)
-
-    @property
-    def full_slot(self) -> bool:
-        return self.n % 32 == 0
-
-    @property
-    def payload_bytes(self) -> int:
-        return self.n // 8 if self.full_slot else (self.n - 1) // 8
-
-    @property
-    def max_payload(self) -> int:
-        return self.p - 1 if self.full_slot else (1 << (8 * self.payload_bytes)) - 1
-
-    @property
-    def root_exp(self) -> int:
-        return (self.p + 1) // 4
 
 
 FIELDS = {f.name: f for f in (Field("p255", 255, 765), Field("p511", 511, 481), Field("m521", 521, 1),
                                Field("p767", 767, 1081), Field("p1023", 1023, 361), Field("m1279", 1279, 1),
-                               Field("p512", 512, 569), Field("p768", 768, 825), Field("p1024", 1024, 105),
-                               Field("p1536", 1536, 3453), Field("p2048", 2048, 1557))}
+                               P512, Field("p768", 768, 825), P1024, Field("p1536", 1536, 3453),
+                               Field("p2048", 2048, 1557))}
 TASK_WORDS = {"p255": 265, "p511": 131, "m521": 128, "p767": 87, "p1023": 65, "m1279": 52, "p512": 128, "p768": 86,
               "p1024": 64, "p1536": 43, "p2048": 32}
 
@@ -101,97 +70,21 @@ def check_fields() -> None:
         assert (lw * f.word_bytes) % 16 == 0 and lw * f.payload_bytes >= TASK_BYTES
 
 
-@dataclass(frozen=True, slots=True)
-class Key:
-    field: Field
-    c: tuple[int, ...]
-    tau: int
-    mask: int | None = None
-
-    @property
-    def rounds(self) -> int:
-        return len(self.c)
-
-    def tweak(self, i: int) -> int:
-        return self.tau * i % self.field.p
-
-    def sigma(self, x: int) -> int:
-        v = x ^ self.mask
-        return v if v < self.field.p else x
-
-
-def xof(message: bytes, length: int) -> bytes:
-    out = b""
-    ctr = 0
-    while len(out) < length:
-        out += hashlib.sha512(message + struct.pack(">I", ctr)).digest()
-        ctr += 1
-    return out[:length]
-
-
-def _message(f: Field, seed: bytes, j: int) -> bytes:
-    name = f.name.encode()
-    return DOMAIN + bytes([len(name)]) + name + seed + struct.pack(">I", j)
-
-
-def _element(f: Field, seed: bytes, j: int) -> int:
-    return int.from_bytes(xof(_message(f, seed, j), f.word_bytes + 8), "little") % f.p
-
-
 def key(name: str, seed: bytes, rounds: int, mask: bool = False) -> Key:
-    f = field(name)
-    if type(seed) is not bytes or len(seed) != SEED_BYTES:
-        raise ValueError(f"a seed is {SEED_BYTES} bytes")
-    if not 1 <= rounds < MASK_INDEX:
-        raise ValueError("a word has at least one round")
-    k = int.from_bytes(xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") % (1 << f.n) if mask else None
-    return Key(f, tuple(_element(f, seed, j) for j in range(rounds)), _element(f, seed, TWEAK_INDEX) or 1, k)
-
-
-def rho(a: int, f: Field) -> int:
-    p = f.p
-    if not 0 <= a < p:
-        raise ValueError("ρ takes a canonical element")
-    s = pow(a, f.root_exp, p)
-    square = s * s % p == a
-    if (s & 1) == (0 if square else 1):
-        return s
-    return p - s if s else 0
-
-
-def rho_inv(y: int, f: Field) -> int:
-    p = f.p
-    if not 0 <= y < p:
-        raise ValueError("ρ⁻¹ takes a canonical element")
-    q = y * y % p
-    return q if y & 1 == 0 else (p - q) % p
+    return derive(seed, Sloth(field(name), rounds, bool(mask)), DOMAIN)
 
 
 def encode_word(m: int, i: int, k: Key) -> int:
     f = k.field
     if not 0 <= m <= f.max_payload:
         raise ValueError(f"a payload is {f.payload_bytes} bytes" + (", below p" if f.full_slot else ""))
-    t = k.tweak(i)
-    x = m
-    for j, c in enumerate(k.c):
-        if j and k.mask is not None:
-            x = k.sigma(x)
-        x = rho((x + c + t) % f.p, f)
-    return x
+    return RB.encode_word(m, i, k)
 
 
 def decode_word(y: int, i: int, k: Key) -> int:
     """The payload of word `y` at index `i`; `ValueError` if `y` is not the encoding of one."""
-    f = k.field
-    if not 0 <= y < f.p:
-        raise ValueError("a word is a canonical element")
-    t = k.tweak(i)
-    x = y
-    for j in reversed(range(k.rounds)):
-        x = (rho_inv(x, f) - k.c[j] - t) % f.p
-        if j and k.mask is not None:
-            x = k.sigma(x)
-    if x > f.max_payload:
+    x = RB.decode_word(y, i, k)
+    if x > k.field.max_payload:
         raise ValueError(f"word {i} decodes to no payload")
     return x
 

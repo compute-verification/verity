@@ -1,4 +1,4 @@
-"""A seed is minted only by PoUW's `seeds.py` (circuits' condition for dropping the seed-confinement rule, CIR-77).
+"""A seed is minted only by PoUW's `seeds.py` (the condition for dropping the seed-confinement rule).
 
 `ml.circuits.ports` gives a Definition the seed role (`ports._coin_role`) when it has a coin port and an
 `In(kind="position")` port and no sink in its return, and no port rule follows a seed's output: what it reaches is the
@@ -59,6 +59,8 @@ KEY_COUNTS = {
         "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
     "verity/ml/definitions/registry/torch_attention.py::_POSITION":
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
+    "verity/ml/definitions/registry/torch_step.py::_POSITION":
+        "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
     "examples/h200/e2e_h200/program.py::program":
         "the toy's served step: its key count n and position p, run inputs with no coin",
 }

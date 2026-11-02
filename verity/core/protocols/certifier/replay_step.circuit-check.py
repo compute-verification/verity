@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-#: TRACE-CORPUS's smallkv engine (Llama-3.2-1B, 512 KV blocks, prefix caching, chunked prefill), which preempts
+#: The trace corpus's smallkv engine (Llama-3.2-1B, 512 KV blocks, prefix caching, chunked prefill), which preempts
 SMALLKV = {"max_num_seqs": 256, "max_num_batched_tokens": 2048, "max_model_len": 2048, "num_gpu_blocks": 512, "block_size": 16,
            "enable_chunked_prefill": True, "enable_prefix_caching": True, "scheduler_reserve_full_isl": True}
 

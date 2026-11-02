@@ -55,7 +55,6 @@ LEFT_OUT = ("archive/",)
 SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
-    "benchmarks/numerical/CHANGELOG.md": "a changelog is dated history by design, and AGENTS.md keeps CHANGELOG.md",
     f"tests/lint/test_{NAME}.py": "its examples are the lane text it refuses",
 }
 #: test fixtures: a path with one of these directories is data

@@ -6,7 +6,7 @@
 A :class:`Subcircuit` carries what both kinds of input set need: the IR target its instances are evaluated with
 (``verity.ml.circuits.evaluation.evaluate_batch``, the one evaluator: a registered kernel where one is self-checked against the gate
 reference, else the reference), its input and output ports, and the ``relation`` / set name the vLLM VU exporter writes
-(``verity_vllm.pipeline.vu_export``, PR #42), so a synthetic set and a captured set of one subcircuit have the same name,
+(``verity_vllm.pipeline.vu_export``), so a synthetic set and a captured set of one subcircuit have the same name,
 relation and ports.  :func:`identify` maps a set's ``relation`` back to its subcircuit, whichever wrote it.
 
 The templates of row #101 (Llama-3.2-1B) and their Definitions:
@@ -42,9 +42,9 @@ Sampling (:meth:`Subcircuit.draw`): draw ``j`` of a synthetic set reads each por
 ``key.stream((port, j), ...)`` of ``verity.ml.randomness`` (SHA-512 counter mode, index-addressable), four bytes per word, so
 draw ``j`` is computable from (key, j) alone in any language.  A BF16 word from 32 bits ``r``: sign ``r & 1``, mantissa
 ``(r >> 1) & 0x7F``, exponent field ``c - h + ((r >> 8) & 0xFFFF) mod (2h + 1)`` for the port's window (centre ``c``,
-half-width ``h`` chosen per draw from the port's classes by ``key.uniform(len, ("class", port, j))``), replaced by an edge
+half-width ``h`` chosen per sample from the port's classes by ``key.uniform(len, ("class", port, j))``), replaced by an edge
 word (``+-0``, ``+-`` smallest subnormal, ``+-1``) ``EDGES[(r >> 29) mod 6]`` when ``(r >> 24) & 0x1F == 0``.  GEMM draws
-share their activation row in tiles of ``tile`` (the shape serving uses): ``x`` and its class are drawn at ``j // tile``.
+share their activation row in tiles of ``tile`` (the shape serving uses): ``x`` and its class are sampled at ``j // tile``.
 """
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ def bf16_words(r: np.ndarray, centre: int, half: int, edges: np.ndarray = BF16_E
 
 @dataclass(frozen=True)
 class Bf16Window:
-    """A BF16 port's sampler: exponent window centre and the half-widths one draw picks from."""
+    """A BF16 port's sampler: exponent window centre and the half-widths one sample picks from."""
 
     centre: int = 127
     halves: tuple[int, ...] = (4,)
@@ -526,7 +526,7 @@ ATTN_SEMANTICS = {
 
 def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2.bf16") -> Subcircuit:
     """One attention head, ``T`` per instance (the key count, from ``len(k) / D``); ``T`` here is the synthetic draw's range
-    ``lo:hi`` (uniform per draw).  ``sm80.fa2.bf16``: FA2 (``AttentionHead_v3``, evaluated as ``Attention_v3{NH=1, KVH=1}``);
+    ``lo:hi`` (uniform per sample).  ``sm80.fa2.bf16``: FA2 (``AttentionHead_v3``, evaluated as ``Attention_v3{NH=1, KVH=1}``);
     ``sm90.fa3.bf16``: FA3 on the H100's wgmma step (``AttentionHead_v2{DOT=HopperBF16WgmmaDot16, INV=Fa3InvSum}``, evaluated as
     ``Attention_v2{NH=1, KVH=1}``)."""
     D, BN = int(D), int(BN)

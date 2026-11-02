@@ -27,10 +27,10 @@ theorem runAlpha_of_run {sh : Flock.Shape} {w : Array Flock.F128} {cons : ℕ �
     {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {k₀ k₁ k₂ : ℕ} {c : Array (Array Flock.F128)}
     {rsr : Array Flock.F128} {rs : Flock.RecAlgebra.RsPts Flock.F128} {lgr : Array Flock.F128}
     {lg : Flock.RecAlgebra.LgPts}
-    (h₁ : Flock.RecAlgebra.ringSwitch (FlockC3.Opening.decodedO sh w cons) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) =
+    (h₁ : Flock.RecAlgebra.ringSwitch (FlockC3.Opening.decodedO sh w cons) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) =
       .ok ((rsr, rs), k₂))
     (h₂ : Flock.RecAlgebra.ligerito sh.sched (FlockC3.Opening.decodedO sh w cons) rs.T rs.sws k₂
-      (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₁)) (ℓ : ℕ) :
+      (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₁)) (ℓ : ℕ) :
     FlockC3.Reps.runAlpha sh (a.map (Flock.RecAlgebra.AClaim.map fun _ => ())) k₀ c ℓ = (lg.conss[ℓ]!).alpha := by
   have e : (FlockC3.Opening.decodedO sh w cons).map (fun _ : Flock.F128 => ()) = FlockC3.Reps.skel sh :=
     FlockC3.Reps.map_skel sh _
@@ -76,7 +76,7 @@ theorem levelTie_of_maps (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S
     (hops : ops = M.ops sh Lb kap (a.map (Flock.RecAlgebra.AClaim.map fun _ => ())) k₀ c)
     (hell : hp.EllOk (execClassAt st).cls.kLog)
     (hsh : Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some sh)
-    (hrun : Flock.RecOpening.run sh (msgsO sh w ops) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok (res, k₁))
+    (hrun : Flock.RecOpening.run sh (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok (res, k₁))
     (hz : ∀ x ∈ res, x = 0) (hne : Flock.RecAlgebra.NoEmpty c) (e0 : ℕ → ByteArray) (sb : ℕ → ℕ → ℕ → ByteArray)
     (e : ℕ → ℕ → ByteArray) (hcap : capDig (capR sh e0) = cap₀)
     (hwd : ∀ ℓ < sh.sched.levels.size, ∀ j < (sh.sched.levels[ℓ]!).q,
@@ -88,12 +88,12 @@ theorem levelTie_of_maps (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S
       ClaimRel (holoAt st hp).cls.shape.mReg (a.map Flock.RecAlgebra.AClaim.toClaim)[i.val]! (u.claim i).toClaim)
     (hpl : PlaysT (FlockC3.Opening.openingAt u) u.op (some u.opened)) (htie : FlockC3.Opening.OpenTie sh w ops u)
     (hcoin : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ),
-      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂) →
+      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
       u.op.filterMap Sum.getRight? = ((List.range' k₀ (k₂ - k₀)).map fun i => c[i]!).map (coinArr fOf))
     (hR : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
-      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂) →
-      Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
+      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
+      Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) =
         .ok ((lgr, lg), k₁) →
       OpensAtMaps M zs Lb sh (sibsR sh ops sb e) (capR sh e0) (pR sh e0 w ops sb e) lg ∧
       u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)

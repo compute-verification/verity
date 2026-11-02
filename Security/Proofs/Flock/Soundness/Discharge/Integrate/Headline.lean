@@ -101,7 +101,7 @@ constraints and the region pins, not by an edge of the program. The proof coins 
 (A6): seed-derived coins are outside the headline, so a circuit-prover session counts only under `FC_COINS=os`. The tag
 is whatever the verifier passes as `--statement`: a session counts when
 `flock-verify verify --statement verity/flock-circuit@967b8d06 --coins os` accepts it with one table, so the headline
-covers only public-output `@967b8d06` sessions, from builds before #757. Since #757, main's prover always writes the
+covers only public-output `@967b8d06` sessions, from older builds. Main's prover now always writes the
 hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which
 `setupTables` calls `setupHidden`, which this headline does not cover: `HiddenExec.flock_headline_exec_hidden`
 does, and `FailClosed.flock_verify_sound` states both. Sessions of more than one table are outside it (the circuit

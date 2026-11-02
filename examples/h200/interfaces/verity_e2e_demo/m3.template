@@ -9,7 +9,7 @@ missed its target is listed again under visible failures. Circuit size is counte
 
 ## Production points (computed, not run)
 
-With 1% of compute spent on proving (Daniel), at δ = 1%, by ⟨HORIZON_CITATION⟩: a one-week sampling block of one H200
+With 1% of compute spent on proving, at δ = 1%, by ⟨HORIZON_CITATION⟩: a one-week sampling block of one H200
 has at most H = ⟨H_POOLED⟩ faulty AND gates and B = ⟨B_POOLED⟩ leaked bits, both from one draw, the plan of record of
 proofs' planner (⟨PLANNER⟩): `for_budget` at 1% of the sampling block's GPU time, a unit's harm its own ANDs. A
 deployment of D H200s has D such sampling blocks a week, each with its own draw. The planner's shape and cost model are

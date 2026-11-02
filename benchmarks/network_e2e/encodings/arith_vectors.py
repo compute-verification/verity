@@ -1,5 +1,5 @@
-"""The difftest of advice v1's in-circuit encoder (`verity.core.protocols.certifier.arith_encode`) against ENC-CODE's
-coders (`code.py`, `code_v1`), over what v1 actually codes.
+"""The difftest of advice v1's in-circuit encoder (`verity.core.protocols.certifier.arith_encode`) against the advice
+code's coders (`code.py`, `code_v1`), over what v1 actually codes.
 
 Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder` segment with the symbols it took,
 tagged `[1, bit, f0, f1]` for a bit `code_v1.Encoder.bit` coded at its KT estimate and `[0, cum, freq, total]` for an
@@ -9,8 +9,8 @@ context, bit) from the book's priors (`kt`) and each window's charge (`charge`).
   deviations and the hits sent past the pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a
   skewed book: the difftest is the coder's, not the book's), with v1's charges (`v1._string`). It checks that they are
   `v1.encode`'s string;
-- `fields(trace)`: ENC-DERIVED's still-sent fields (`derived.residual`: the hits past the pool bound, the resumes, the
-  order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
+- `fields(trace)`: the derived rules' still-sent fields (`derived.residual`: the hits past the pool bound, the resumes,
+  the order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
     python3 arith_vectors.py [LABEL=DIR ...] [--steps] [--circuit] [--cut N] [--out OUT.json] [--fixture PATH]
 
@@ -24,9 +24,9 @@ hits and order entries, to `code_v1` too (`check_windows`): its reference on eac
 charges), on the windows with `SEEDED` hits and order entries added, and on their cut into `WHOLE` slots, and with
 `--circuit` `ChargeLink_v2` on the cut's committed rows. `--steps` takes the
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
-slice's P·A = 14 whatever `--cut` says) and the TRACE-CORPUS fixture's
+slice's P·A = 14 whatever `--cut` says) and the trace-corpus fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
-(`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are TRACE-CORPUS traces
+(`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are trace-corpus traces
 (`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
 arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
 where they deviate and v1 sends order entries. The fixtures' arrivals never deviate. The report has each stream's
@@ -157,10 +157,10 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
 
 def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random) -> dict[str, Any]:
     """What `ChargeCount_v1` is held to: the book (`Book.to_json()`); each window's decisions alone
-    (`code_v1.Window(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions (then that
-    charge is v1's); and the run's decisions cut again into `code_v1` windows of at most N, each placed in N slots in
-    order with disabled slots between (`en`, a disabled slot's bit random), with `code_v1`'s charge for each. The cut's
-    sizes are 0, N and random, so its windows reach every bin."""
+    (`window_charge.Window(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions
+    (then that charge is v1's); and the run's decisions cut again into `code_v1` windows of at most N, each placed in
+    N slots in order with disabled slots between (`en`, a disabled slot's bit random), with `code_v1`'s charge for
+    each. The cut's sizes are 0, N and random, so its windows reach every bin."""
     alone = [CV.Window(arrived=w.arrived) for w in wins]
     flat = [b for w in wins for b in w.arrived]
     sizes, at = [], 0
@@ -320,8 +320,8 @@ def check_windows(stream: dict[str, Any], *, circuit: bool) -> dict[str, Any]:
 
 
 def fields(trace: dict, per: int = 64) -> dict[str, Any] | None:
-    """`code_v1`'s stream of ENC-DERIVED's still-sent fields for `trace` (`derived.load_trace`'s format), or None when
-    it sends none."""
+    """`code_v1`'s stream of the derived rules' still-sent fields for `trace` (`derived.load_trace`'s format), or None
+    when it sends none."""
     cfg = D.config_of(trace)
     adv, order = D.advice_of(trace)
     res = D.residual(adv, cfg, D.holdings_of(trace), order=order)
@@ -491,7 +491,7 @@ def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int,
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description="advice v1's in-circuit encoder against code.py's, symbol for symbol.")
-    ap.add_argument("traces", nargs="*", help="LABEL=DIR: TRACE-CORPUS traces")
+    ap.add_argument("traces", nargs="*", help="LABEL=DIR: trace-corpus traces")
     ap.add_argument("--steps", action="store_true", help="the replay's step-trace fixtures and the corpus fixture")
     ap.add_argument("--stops", default="128001", help="the corpus traces' stop ids, comma-separated, EOS first")
     ap.add_argument("--T", type=int, default=600, help="the corpus traces' window, in 100 ms buckets")

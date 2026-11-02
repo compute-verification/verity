@@ -1,4 +1,4 @@
-"""FILL's arm-side runner (cmp-13, approach pouw/filler-fused): the locked scorer's run (`score.py`) for an arm whose decode
+"""FILL's arm-side runner: the locked scorer's run (`score.py`) for an arm whose decode
 step carries filler warps in its own kernels (`fused(phase, B, L)`, fused_arm.py), which filler-arm/v1 can't place, and
 which may name a chunk shape per point (`filler_at(phase, B, L)`, as psched_score.py). It changes nothing in the scorer;
 it calls score.py's own functions wherever they apply and adds only what the fused step needs.

@@ -1,8 +1,8 @@
-"""What admitting requests in the warden's release order would cost, estimated offline from TRACE-CORPUS traces.
+"""What admitting requests in the warden's release order would cost, estimated offline from trace-corpus traces.
 
 The design: serve-openai adds each request to the engine at the first bucket boundary after its release (the warden's
 release bucket a, so at origin + (a + 1) tau), in release order (a, then the warden's ordinal). The engine's arrival order
-is then the certified release order, and ENC-REPLAY's order bits are 0.
+is then the certified release order, and the replay's order bits are 0.
 
 A request can't be added before the frontend has it ready (its recorded engine add), and in release order none goes
 before an earlier-released one. So the counterfactual add of the k-th request in release order is
@@ -10,7 +10,7 @@ before an earlier-released one. So the counterfactual add of the k-th request in
     hold:     max(origin + (a_k + 1) tau, max over j <= k of ready_j)
     aligned:  that, rounded up to the next bucket boundary (every add on a boundary)
 
-`simulate` runs ENC-REPLAY's scheduler model (`replay._Sched` under the engine core's loop, `replay._drive`) on a clock:
+`simulate` runs the replay's scheduler model (`replay._Sched` under the engine core's loop, `replay._drive`) on a clock:
 before each `schedule` the requests whose add time has passed are added; each executed step takes the recorded step's
 time at the same index (output to output, the engine being busy throughout), corrected by a fitted per-token and per-row
 cost for any change in the batch; step k is scheduled the recorded lag after step k-2's output (async scheduling, one
@@ -22,7 +22,7 @@ A trace without a warden takes the client's send bucket as its release and the s
 frontend's arrival stamp plus `--add-lag-ms` as its ready time (those corpora don't record the engine's add).
 
 Usage: python3 -P admit_release.py [--replay PATH] [--add-lag-ms NAME=MS ...] --out DIR NAME=TRACE_DIR[:ORDER_DIR] ...
-(ORDER_DIR, the trace view whose ingress is the certified order for ENC-REPLAY's order bits; default the trace itself).
+(ORDER_DIR, the trace view whose ingress is the certified order for the replay's order bits; default the trace itself).
 """
 
 from __future__ import annotations
@@ -228,7 +228,7 @@ def as_trace(rp: Any, trace: Any, otrace: Any, order: list[int], sim: Sim) -> An
 
 
 def residual(rp: Any, tr: Any) -> dict[str, Any]:
-    """ENC-REPLAY's `table` on a trace: order bits, and the residual advice per window (the adaptive code with egress
+    """`replay.table` on a trace: order bits, and the residual advice per window (the adaptive code with egress
     contexts, egress at the engine step)."""
     tb = rp.table(tr, bucket_s=0.1, window_buckets=WINDOW_BUCKETS)
     return {"order_bits": tb["order_bits"], "matched": tb["match_before_step"]["matched"], "steps": tb["steps"],
@@ -491,10 +491,10 @@ def markdown(results: list[dict[str, Any]]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("traces", nargs="+", help="NAME=TRACE_DIR[:ORDER_DIR]")
-    ap.add_argument("--replay", type=Path, default=REPLAY, help="ENC-REPLAY's replay.py")
+    ap.add_argument("--replay", type=Path, default=REPLAY, help="the scheduler replay, replay.py")
     ap.add_argument("--add-lag-ms", action="append", default=[], help="NAME=MS: a trace without a warden's frontend-to-engine lag")
     ap.add_argument("--residual", action="store_true",
-                    help="also ENC-REPLAY's order bits and residual advice on each simulated run (`replay.table`)")
+                    help="also the replay's order bits and residual advice on each simulated run (`replay.table`)")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     rp = load_replay(a.replay)

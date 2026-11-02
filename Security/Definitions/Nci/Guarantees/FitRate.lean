@@ -22,15 +22,14 @@ namespace Nci.Guarantees
 
 open Verity Accounting Finset
 
-/-- **The fit bound on a run** ("The fit bound", Notion, sections 2 and 9). For an actual circuit `A` meeting
-causality and links at the developer's pairwise disjoint servers `X i`, cuts `κ` of `[0, t)` into windows of at most
-`ω` ticks, and a reference circuit `c` contained (`M`) in the developer's declaration over `[0, t)` and threaded by `T`:
-when each server's state at each cut, in the image of `c`'s novel gates, is at most `R` bits wide, the capacity of the
-links into each server is at most `r`, and `S = R + r ω < N* b_w`, then under F3 (`Assumptions.Reach`) and F1 with F4
-(`Assumptions.Fits`) over the windows pulled into `c` (any division of `c` whose unit `(i, j)` is the gates `M` sends
-into the window `A[X i, [τ j, τ (j + 1))]`), the counted multiplications number at most
-`n J · reuse · N* S² / (4 w_e (N* b_w − S))`; and when every window is at least `ω₀` ticks long, at most
-`reuse · N* S² / (4 w_e (N* b_w − S) ω₀)` per server-tick, both written multiplied out.
+/-- **The fit bound on a run**. For an actual circuit `A` meeting causality and links at the developer's pairwise
+disjoint servers `X i`, cuts `κ` of `[0, t)` into windows of at most `ω` ticks, and a reference circuit `c` contained
+(`M`) in the developer's declaration over `[0, t)` and threaded by `T`: when each server's state at each cut, in the
+image of `c`'s novel gates, is at most `R` bits wide, the capacity of the links into each server is at most `r`, and
+`S = R + r ω < N* b_w`, then under F3 (`Assumptions.Reach`) and F1 with F4 (`Assumptions.Fits`) over the windows pulled
+into `c` (any division of `c` whose unit `(i, j)` is the gates `M` sends into the window `A[X i, [τ j, τ (j + 1))]`),
+the counted multiplications number at most `n J · reuse · N* S² / (4 w_e (N* b_w − S))`; and when every window is at
+least `ω₀` ticks long, at most `reuse · N* S² / (4 w_e (N* b_w − S) ω₀)` per server-tick, both written multiplied out.
 
 The state is counted by width, and at the first cut, `0`, it is what each server holds when the run starts. A wipe
 bounds information, so a wipe's residual is an `R` here only through the read bound's determination form. -/

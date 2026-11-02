@@ -5,7 +5,7 @@ import Proofs.Pouw.Fp8Atom.Fp32Proofs
 # H-1T: the statements `H1TRunningWords` still needs (staging, unpinned)
 
 `H1TRunningWords` (`H1TRunningAssumptions`) is the `Hard` pairs' separation and the `Stuck` words' non-constancy. The
-route of `internal/pouw-fp8/h1t-running-words-blocker.md` in the store takes its cases to three statements. None is
+route here takes its cases to three statements. None is
 proved or pinned, and no pin reads them.
 
 * **`RnMonoChainGap`** carries the `Stuck` words, the pairs of one column, and the pairs against a word that does not
@@ -40,7 +40,7 @@ def RnMonoChainGap : Prop :=
 /-- **The last-slice split**: for finite codes, two columns with different tuples, and any two representable chain
 values `A`, `A'` below `2^33 − 2^29`, some salt of the slice separates `RN(A + I)` and `RN(A' + I')`, with `I`, `I'` the
 two columns' block-1 words of the slice. The bound covers every running word of a legal unit (`run_bound`: at most
-`1130 · 6,881,792 − 256 < 2^33 − 2^29`); red-team Phase 19r accepted it in place of `2^33`. -/
+`1130 · 6,881,792 − 256 < 2^33 − 2^29`), which stands in place of `2^33`. -/
 def H1TLastSliceSplit : Prop :=
   ∀ (xs : Fin 29 → Code) (b b' : ℕ → Code) (j j' τ : ℕ) (A A' : ℚ), (∀ l, (xs l).isNaN = false) →
     (∀ r, (b r).isNaN = false) → (∀ r, (b' r).isNaN = false) → tuple j ≠ tuple j' →

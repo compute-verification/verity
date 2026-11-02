@@ -118,7 +118,8 @@ Proved: the extra calls (`moreSlotsTrue_deployed`), the reader's bound (`plainRd
 owners (`piecesOwned_D`), the latter two from V*'s list and the parts' sessions' checks as `readX` holds them, the copies' openings (`copyOpensR_layR`) and their directions (`copyDirsTieR_layR` from
 `dirsSideR_of`, check 5's `m` from `staged_innerAt` and its coin tie from `posTieR_dense`) and the level parts' `out`
 rows bound to RecCap's `top` rows (`outBindRP_deployed`), and the reader's side of the cap tie from `hRd`
-(`sideCapR_leaf`), the base checks (`basesHold_spec`) and row E's chain (`Top.rowEJoint_holds`). Open, each a named leaf: each algebra part's share of the pieces (`hres`, LOWRES'
+(`sideCapR_leaf`), the base checks (`basesHold_spec`) and row E's chain (`Top.rowEJoint_holds`). Open, each a named
+leaf: each algebra part's share of the pieces (`hres`,
 `ResLoweredPD`, each part at its own witness and decision, which gives `ResLowJPD` by `resLowJPD_of_resLoweredPD`),
 the last message's reading (`hF`, `hRd`), and the setup's listing
 (`hset`). -/
@@ -141,13 +142,13 @@ theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
       (recL DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd recRest) (cmtTr recRead) (Rows.rowDPieces key)
       (fun _ => rfl) (fun _ h => h) (fun _ => rfl) (OpenLower.piecesInRangeR_rowDPieces key))
-  have hI : ∀ s x c (st0 : Claims.Recursion.Stmt), RecDeploy.parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
+  have hI : ∀ s x c (st0 : Claims.Recursion.CompiledStatement), RecDeploy.parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
       OpenDirs.InnerMR recRead (bB b aux nOf hd recRest) s x c :=
     fun s x c _ hst hdn xO hsh i hins f unit inn hf hload => by
       obtain ⟨v, hv, hm, -⟩ := OpenLower.staged_innerAt (b := bB b aux nOf hd recRest)
         (Bk := (FlockDeploy.V false).k) (s := s) (c := c) hst hdn le_rfl xO hsh i hins f unit inn hf hload
       exact ⟨v, hv, hm⟩
-  have hpos : ∀ s x c (st0 : Claims.Recursion.Stmt), RecDeploy.parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
+  have hpos : ∀ s x c (st0 : Claims.Recursion.CompiledStatement), RecDeploy.parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
       OpenDirs.DirsCoinR recRead (bB b aux nOf hd recRest) (Rows.rowDPieces key) Rows.posAt
         (bdR DeployedR.rdR wE DeployedR.finalR w).DE.V.k s x c :=
     fun s x c _ hst hdn => OpenLower.posTieR_dense (b := bB b aux nOf hd recRest)

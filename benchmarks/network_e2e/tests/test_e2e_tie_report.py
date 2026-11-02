@@ -9,7 +9,7 @@ reads the certified I/O, not the committed tokens), so the tie is a required gat
    that is nobody's ids gives the honest run no verdict, and the tie doesn't run on it. So does one that names a
    request with fewer ids than it served (`test_e2e_tie_coverage.py`).
 
-Beside them: without IO-TIE in the tree or without the ids the report is NOT OK and says why, never listing the tie as
+Beside them: without `io_tie` in the tree or without the ids the report is NOT OK and says why, never listing the tie as
 not run; and a part the tie must establish beside its verdict (`chain.TIE_REQUIRED`, the hook for the compact
 finish) fails the report the same way.
 """
@@ -105,7 +105,7 @@ def runs(virtual, tmp_path):
 
 @pytest.fixture
 def tied(monkeypatch):
-    """IO-TIE in the tree, `tie_run` stubbed to ``_ties``' rows and token's changed ids in link-window 1."""
+    """`io_tie` in the tree, `tie_run` stubbed to ``_ties``' rows and token's changed ids in link-window 1."""
     monkeypatch.setattr(NG, "io_tie_module", lambda: object())
     monkeypatch.setattr(chain, "changed_windows", lambda run: [1] if run.name == "token" else None)
 
@@ -130,7 +130,7 @@ def test_the_tie_refusing_the_honest_run_fails_the_report(runs, tmp_path, tied):
 
 
 def test_an_honest_tie_that_raises_fails_the_report_and_token_keeps_its_refusal(runs, tmp_path, tied):
-    """IO-TIE present and --ids given, but honest's tie raises: the honest run has no verdict, so the report is NOT OK
+    """`io_tie` present and --ids given, but honest's tie raises: the honest run has no verdict, so the report is NOT OK
     and says why. Token's tie ran and refused it at the link-window it changed: that stays its verdict, not pending."""
     ties = _ties()
 
@@ -201,7 +201,7 @@ def test_without_io_tie_or_the_ids_the_report_isnt_ok_and_says_why(runs, tmp_pat
 
 
 def test_a_part_the_tie_must_establish_beside_its_verdict_fails_the_report(runs, tmp_path, tied, monkeypatch):
-    """`chain.TIE_REQUIRED`, the hook for CERT-VARLEN's compact finish: a key of the tie's row that must be true on the
+    """`chain.TIE_REQUIRED`, the hook for the compact finish: a key of the tie's row that must be true on the
     honest run, else the report is NOT OK with its reason, as when the tie refuses the honest run."""
     monkeypatch.setattr(chain, "TIE_REQUIRED", {"finish": "the compact finish didn't hold on the honest run"})
     ids = _ids(tmp_path, (("q0", [5, 6]), ("q1", [9])))

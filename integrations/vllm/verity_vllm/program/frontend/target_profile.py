@@ -109,7 +109,7 @@ class TargetProfile:
                            inferred from the trace.  Omitted from `to_json()` when None so every profile digest from before the field is unchanged.
     moe_construction    -> [route A (3)] HOW the fused-MoE block of a mixture-of-experts model is CONSTRUCTED in the
                            Program (a Program STATIC, declared-and-bound, NEVER attested: the record is construction-agnostic -- the same
-                           trace serves both constructions; MOE-PAD-SPEC s3/A12).  `"indexed-read"` = MOE-01: router ->
+                           trace serves both constructions).  `"indexed-read"` = MOE-01: router ->
                            TOPK indexed pair rows `MoeExpertGemm_v1` / `MoeExpertGemmW_v1` -> `MoeSum_v1`, the expert id an ordinary value
                            operand (`verity_vllm.program.frontend.rules.vllm_moe` MOE-01 rules).  `"indexed-read-ordered"` (the default when
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
@@ -173,14 +173,14 @@ class TargetProfile:
     flash_attn_version: int | None = None
     compilation: str | None = None
 
-    #: [R15 compiled] the one admitted compiled execution and the vLLM facts it applies / declares (`vllm/config/compilation.py`)
+    #: the one admitted compiled execution and the vLLM facts it applies / declares (`vllm/config/compilation.py`)
     #: keys from GP-01's COMPILATION_FACT_KEYS (mode, cudagraph_mode, capture_sizes, use_inductor_graph_partition, compile_cache) in the run
     #: header's read-back form (vllm_adapter.compilation_facts); `capture_sizes` (depends on the row's batch) and `compile_cache` (a process
     #: switch; cached and fresh Inductor graphs are the same code) are NOT declared = not constrained (GM-01 compares only keys both sides carry)
-    # [R15 compiled, ruling M-0380] `piecewise` = vLLM's PRODUCTION DEFAULT compiled configuration (default Inductor config: fp32 carried through
-    # the fused regions) -- the panel's bi-compiled rows; its Program is P_compiled at Inductor-kernel granularity (S1/S2).  `piecewise-emu`
+    # `piecewise` = vLLM's PRODUCTION DEFAULT compiled configuration (default Inductor config: fp32 carried through
+    # the fused regions) -- the panel's bi-compiled workloads; its Program is P_compiled at Inductor-kernel granularity (S1/S2).  `piecewise-emu`
     # = the SEPARATE declared specialization with Inductor emulate_precision_casts (the eager roundings performed inside the fused kernels;
-    # a different numerical computation, M-0348/M-0389) -- not a panel row unless added by a 7-field note.
+    # a different numerical computation) -- not a panel workload unless added by a 7-field note.
     COMPILATIONS = {"piecewise": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
                                   "emulate_precision_casts": False,
                                   "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"},
@@ -191,9 +191,9 @@ class TargetProfile:
     int8_exact: str | None = None        # the layers on exact int8 (None = none; see the doc); applied and read back
     #: the fused-MoE experts kernel (None = vLLM's selection; see the doc); applied and read back
     moe_backend: str | None = None
-    #: [R17-1] the resolved async-scheduling configuration the Program is specialized for (None = the pinned resolver's value, see the doc)
+    #: the resolved async-scheduling configuration the Program is specialized for (None = the pinned resolver's value, see the doc)
     async_scheduling: bool | None = None
-    #: [R17-42 route A (3)] the fused-MoE block's construction in the Program (None = "indexed-read-ordered"; see the doc); never attested
+    #: the fused-MoE block's construction in the Program (None = "indexed-read-ordered"; see the doc); never attested
     moe_construction: str | None = None
     #: FA3's attention construction (None = "check-inf-per-iteration", `Attention_v4`; see the doc)
     fa3_construction: str | None = None
@@ -227,7 +227,7 @@ class TargetProfile:
     # the registered fused-MoE backends: value -> the experts class every fused-MoE layer must carry
     MOE_BACKEND_KERNELS = {"triton": "TritonExperts"}
 
-    #: [R17-42] the registered MoE constructions: value -> the frontend rule family that owns the block's leaf kernels and the Definitions
+    #: the registered MoE constructions: value -> the frontend rule family that owns the block's leaf kernels and the Definitions
     #: it binds (one Program per construction; the digest differs by construction on the same trace)
     MOE_CONSTRUCTIONS = {"indexed-read": {"rules": "vllm_moe MOE-01 (TopkSoftmax / MoeAlignBlockSize / FusedMoeKernel / MoeSum)",
                                           "definitions": ("MoeRouterTopK_v1{E,TOPK,VPT}", "MoeExpertGemm_v1{E,K,N}", "MoeExpertGemmW_v1{E,K,N}",
@@ -251,7 +251,7 @@ class TargetProfile:
                                                      "rule": "block b guards iff b >= the tile's n_block_min_causal_local_mask (AttnBlock_v4{CHECK})"}}
     DEFAULT_FA3_CONSTRUCTION = "check-inf-per-iteration"
 
-    #: [R17-1] the pinned vLLM's resolution of `SchedulerConfig.async_scheduling is None` (d9105ea80 `VllmConfig.__post_init__`,
+    #: the pinned vLLM's resolution of `SchedulerConfig.async_scheduling is None` (d9105ea80 `VllmConfig.__post_init__`,
     #: config/vllm.py:1273-1322): True unless the model is a pooling runner, a speculative method other than EAGLE/MTP/draft-model/
     #: NGram-GPU/DSpark is configured, the distributed executor does not support async scheduling, or ROCm DeepEP-HT DBO is on.  None of
     #: these holds for an admitted profile (generate runner, no speculative config, CUDA uniproc / mp executor), so the mirrored value is
@@ -291,10 +291,10 @@ class TargetProfile:
         if self.moe_backend is not None and self.moe_backend not in self.MOE_BACKEND_KERNELS:
             raise ValueError(f"moe_backend must be None (vLLM's selector) or one of {sorted(self.MOE_BACKEND_KERNELS)}; got {self.moe_backend!r}")
         if self.async_scheduling is not None and not isinstance(self.async_scheduling, bool):
-            # [R17-1] a declared value is a boolean (JSON true/false) -- "1"/"true" strings are not accepted (one spelling, no coercion)
+            # a declared value is a boolean (JSON true/false) -- "1"/"true" strings are not accepted (one spelling, no coercion)
             raise ValueError(f"async_scheduling must be None (the pinned resolver's value), true or false; got {self.async_scheduling!r}")
         if self.moe_construction is not None and self.moe_construction not in self.MOE_CONSTRUCTIONS:
-            # [R17-42] one spelling per construction; "MOE-01" / "fixed-slot" / booleans are not accepted (no coercion, no alias)
+            # one spelling per construction; "MOE-01" / "fixed-slot" / booleans are not accepted (no coercion, no alias)
             raise ValueError(f"moe_construction must be None ({self.DEFAULT_MOE_CONSTRUCTION}) or one of {sorted(self.MOE_CONSTRUCTIONS)}; "
                              f"got {self.moe_construction!r}")
         if self.fa3_construction is not None and self.fa3_construction not in self.FA3_CONSTRUCTIONS:
@@ -397,7 +397,7 @@ class TargetProfile:
     def tensor_core_family(self) -> str:
         """The registered k16 tensor-core pipeline family of the capability: `ampere` (sm_80/8.6/8.9: `AmpereBF16TcDot16`, one
         registered function serves all — `silicon_total.AMPERE_BF16_DOT16_TOTAL`), `hopper` (sm_90: `HopperBF16WgmmaDot16`;
-        Hawkeye's `HOPPER_BF16_M16N8K16` and lane HP's wgmma re-measurement share the 16:26:-133 pipeline, so FA2's `mma.sync` and
+        Hawkeye's `HOPPER_BF16_M16N8K16` and the wgmma re-measurement share the 16:26:-133 pipeline, so FA2's `mma.sync` and
         the GEMM's `wgmma` on an H100 are one registered step), `blackwell_consumer` (sm_120, cc 12.0 exactly: `mma.sync` only, on
         the same 16:26:-133 pipeline, so `HopperBF16WgmmaDot16` again).  Anything else is `unregistered:<cc>` (rules refuse)."""
         major = self.compute_capability[0]
@@ -447,7 +447,7 @@ class TargetProfile:
             kw["compilation_config"] = {"cudagraph_mode": c["cudagraph_mode"],
                                         "inductor_compile_config": {"emulate_precision_casts": bool(c["emulate_precision_casts"])}}
         if execution and self.async_scheduling is not None:
-            # [R17-1] an EXPLICIT declaration configures the engine for the declared scheduler (vLLM still resolves and the header attests the
+            # an EXPLICIT declaration configures the engine for the declared scheduler (vLLM still resolves and the header attests the
             # read-back: `resolved_async_scheduling`, compared with the Program's declaration by GM-01 G1); None leaves vLLM's own resolution
             kw["async_scheduling"] = bool(self.async_scheduling)
         return kw
@@ -474,18 +474,18 @@ class TargetProfile:
     def to_json(self) -> dict:
         d = asdict(self)
         d["compute_capability"] = list(self.compute_capability)
-        if d.get("compilation") is None:      # [R15 compiled] eager profiles serialise / digest exactly as before the field existed
+        if d.get("compilation") is None:      # eager profiles serialise / digest exactly as before the field existed
             d.pop("compilation", None)
         if d.get("fp8_block_gemm") is None:
-            d.pop("fp8_block_gemm", None)     # [R15 fp8] absent = vLLM's selector; keeps every pre-R15 profile's digest
+            d.pop("fp8_block_gemm", None)     # absent = vLLM's selector; every earlier profile digest unchanged
         if d.get("int8_exact") is None:
             d.pop("int8_exact", None)         # absent = no int8 linears; every earlier profile digest unchanged
         if d.get("moe_backend") is None:
             d.pop("moe_backend", None)
         if d.get("async_scheduling") is None:
-            d.pop("async_scheduling", None)   # [R17-1] absent = the pinned resolver's value (effective_async_scheduling); pre-R17 digests unchanged
+            d.pop("async_scheduling", None)   # absent = the pinned resolver's value (effective_async_scheduling); every earlier profile digest unchanged
         if d.get("moe_construction") is None:
-            d.pop("moe_construction", None)   # [R17-42] absent = DEFAULT_MOE_CONSTRUCTION; every earlier profile digest unchanged
+            d.pop("moe_construction", None)   # absent = DEFAULT_MOE_CONSTRUCTION; every earlier profile digest unchanged
         if d.get("fa3_construction") is None:
             d.pop("fa3_construction", None)   # absent = DEFAULT_FA3_CONSTRUCTION; every earlier profile digest unchanged
         if d.get("weight_only_calls") is None:
@@ -584,7 +584,7 @@ class TargetProfile:
 
     @classmethod
     def from_run_profile(cls, profile_doc: Any) -> "TargetProfile | None":
-        """[R13 hopper] The target of a captured record, from its run header's profile document: the DECLARED profile the engine was
+        """The target of a captured record, from its run header's profile document: the DECLARED profile the engine was
         built with when the capture recorded one (`profile["target"]`, written by `vllm_adapter.build_engine(target=...)` — exact,
         including `flash_attn_version`), else the X-01 device document (`from_gpu_document`) with the FA version the runner's attention
         layers reported (`profile["backends"]["attention_flash_attn_version"]`) when it is NOT the selector's default for that
@@ -618,7 +618,7 @@ class TargetProfile:
         """The environment variables this profile APPLIES (only variables the pinned vLLM's `envs` module defines)."""
         env = {"VLLM_BATCH_INVARIANT": "1" if self.batch_invariant else "0"}
         if self.fp8_block_gemm == "cutlass":
-            env["VLLM_USE_DEEP_GEMM"] = "0"   # [R15 fp8] excludes FlashInfer-DeepGEMM + DeepGEMM; the selector then takes CUTLASS (cc 9.x)
+            env["VLLM_USE_DEEP_GEMM"] = "0"   # excludes FlashInfer-DeepGEMM + DeepGEMM; the selector then takes CUTLASS (cc 9.x)
         return env
 
 
@@ -645,12 +645,12 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
     ab, want_ab = applied.get("attention_backend", "<absent>"), profile.engine_args(execution=False).get("attention_backend")
     if ab == "<absent>" or (ab or None) != (want_ab or None):
         bad.append(f"attention_backend declared {want_ab!r}, applied {ab!r}")
-    # [R13 ampere] the tuned-GEMM arch family vLLM applied for the declared capability must be the one the registered GEMM target
+    # the tuned-GEMM arch family vLLM applied for the declared capability must be the one the registered GEMM target
     # (verity_vllm.program.frontend.gemm_targets) requires: another answer means another launch geometry than the Definition was admitted for.
     fam = applied.get("tuned_gemm_arch_family", "<absent>")
     if fam == "<absent>" or fam != profile.tuned_gemm_arch_family():
         bad.append(f"tuned_gemm_arch_family for cc {profile.capability_str} is {profile.tuned_gemm_arch_family()!r} (vLLM {profile.vllm_revision}), applied {fam!r}")
-    # [R13 hopper] the FA version the instantiated attention layers carry (`vllm_flash_attn_version`, one value over all layers) must be
+    # the FA version the instantiated attention layers carry (`vllm_flash_attn_version`, one value over all layers) must be
     # the profile's effective one; a record without the read-back (older drivers) is not judged here (the attention rule pins it per layer)
     if "flash_attn_version" in applied:
         fav = applied.get("flash_attn_version")
@@ -658,7 +658,7 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
         ok = isinstance(fav, int) and not isinstance(fav, bool) and fav == want     # a non-integer read-back ('<absent>', None) is a mismatch, never a crash
         if not ok:
             bad.append(f"flash_attn_version declared {profile.flash_attn_version!r} (effective {want}), applied {fav!r}")
-    # [R15 fp8] the block-scaled FP8 GEMM kernel vLLM selected for the model's FP8 linears (`applied["fp8_block_gemm_kernel"]`: the one
+    # the block-scaled FP8 GEMM kernel vLLM selected for the model's FP8 linears (`applied["fp8_block_gemm_kernel"]`: the one
     # `Fp8LinearMethod.fp8_linear` class over all layers, None = no FP8 linear layer, '<mixed>' = several) must be the declared one; a
     # declared kernel on a model with no FP8 linears is a mismatch (an idle declaration is not a fact of the run).  Undeclared (None):
     # not judged here -- the FP8 rules refuse an unregistered kernel's op by name at derive time.

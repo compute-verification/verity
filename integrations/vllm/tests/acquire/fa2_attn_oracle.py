@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Verity-semantics reference for the FA2 attention chain (lane B-sem, R8) -- the P0 tap oracle.
+"""Verity-semantics reference for the FA2 attention chain -- the P0 tap oracle.
 
 Implements `AttentionHead_v3{T, D, BN}` -> `AttnBlock_v3{D, NVIS, FIRST, BN}` (verity/ml/definitions/registry/b1.py:727-822) with
 the registry primitives themselves (verity/ml/definitions/registry/prims.py), so every emitted word is *the Definition's* word:

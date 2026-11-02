@@ -444,7 +444,7 @@ static int serve(const Args& a) {
       if ((++spins & 4095) == 0) {
         if (g_stop) break;
         uint64_t t = now_ns();
-        // A peer's stateful firewall passes our answers only after we have sent to it; a hello opens that path, and is
+        // A peer's stateful ZK server passes our answers only after we have sent to it; a hello opens that path, and is
         // sent only while no challenge has arrived for 5 ms.
         if (t - last_req > 5000000 && t - last_hello > 100000000) {
           for (size_t p = 0; p < peers.size(); p++)
@@ -628,7 +628,7 @@ static int probe(const Args& a) {
     return r;
   };
 
-  // Open both firewalls' state for this flow: hellos and pings until a ping comes back.
+  // Open both ZK servers' state for this flow: hellos and pings until a ping comes back.
   const uint64_t punch0 = now_ns();
   bool open = false;
   while (now_ns() - punch0 < 60000000000ull && !open) {

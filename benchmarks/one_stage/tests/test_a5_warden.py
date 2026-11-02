@@ -21,6 +21,7 @@ import pytest
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import HEADER
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
+from verity.ml.windows import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -70,7 +71,7 @@ def test_each_chunk_opens_one_connections_cells_under_the_wardens_root(run):
         assert len(set(x.positions)) < N
         for (q, _k), t, j in zip(x.reads, x.positions, x.slots):
             assert q == x.connection and HEADER.unpack_from(x.opening.rows[t][j * B:(j + 1) * B])[1] == q
-        header = next(e for e in win["members"] if e["name"] == m.key)["registered"][port]
+        header = SR.registered_header(win, next(e["k"] for e in win["members"] if e["name"] == m.key))[port]
         assert header["value"] == file["value"] == x.units.value(x.head) != x.head.value
         assert header["positions"] == file["reads"] == x.positions
         assert WR.refusal(file, x.dom, header, bcs(c, m, port)) is None
@@ -148,7 +149,7 @@ def test_the_altered_cell_is_committed_under_the_wardens_salt_and_doesnt_open(ru
     tmp, at = run
     mine, c, _rec, win = committed(tmp, at, "altered", altered=True)
     m, x = AW.chunks(mine)[AW.ws.INGRESS], at[AW.ws.INGRESS]
-    paths = next(e for e in win["members"] if e["name"] == m.key)["registered"]["row"]["paths"]
+    paths = SR.registered_header(win, next(e["k"] for e in win["members"] if e["name"] == m.key))["row"]["paths"]
     assert [WR.opens(x.dom, x.head.root, p, bc, bytes.fromhex(path))
             for p, bc, path in zip(x.positions, bcs(c, m, "row"), paths)] == [False] + [True] * (N - 1)
     assert c.salts[m.port("row")] == b"".join(x.opening.salts[p] for p in x.positions)
@@ -169,7 +170,7 @@ def test_a_statement_made_for_another_units_wiring_is_refused_by_the_registered_
     files = AW.reads(mine, at)
     for name, m in AW.chunks(mine).items():
         x, port = at[name], AW.LINKS[name][1]
-        header = next(e for e in win["members"] if e["name"] == m.key)["registered"][port]
+        header = SR.registered_header(win, next(e["k"] for e in win["members"] if e["name"] == m.key))[port]
         assert all(WR.opens(x.dom, x.head.root, p, bc, bytes.fromhex(path))
                    for p, bc, path in zip(header["positions"], bcs(c, m, port), header["paths"]))
         why = WR.refusal(files[m.key]["ports"][port], x.dom, header, bcs(c, m, port))

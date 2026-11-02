@@ -4,7 +4,7 @@ import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
-# rev1: it asserts less than the granted TT_OUT, and γ from it (the TT_OUT restatements lane's file)
+# rev1: it asserts less than the granted TT_OUT, and γ from it
 
 Staged; nothing pinned.
 * **rev1 is weaker:** at any device record whose add and BF16 prices are non-negative, and any cap `0 ≤ ρ ≤ 1`,
@@ -12,8 +12,7 @@ Staged; nothing pinned.
   (`ttOutTilePearlCDevRev1_of_granted`). A unit or tile good under rev1 is good under the granted rows (rev1's debit is
   larger and its cap stricter), and its rev1 credit is at most the granted one. These are implications only: their
   premise, the granted row, is falsified by the first-promotion skip (rating D) at the H100 and sm_120 records
-  (`TTOutRev1.lean`), so they carry no evidence for rev1, whose rating B rests on the assessor's alone (07:40Z,
-  `repair-rows-rev1-and-v2-cap.md`).
+  (`TTOutRev1.lean`), so they carry no evidence for rev1, whose rating B rests on its own review alone.
 * **The H100 record in the granted form:** `creditDevRev1_h100`, `wrefDevRev1_h100`.
 * **γ at any record,** on the one-shape domain where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`: `pearlCGammaDevRev1At`
   and `pearlCSampledDevRev1At`, at `γ = 1 − (399/400)/ω`.

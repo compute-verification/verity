@@ -16,8 +16,9 @@ at kernel level, after the vLLM integration's tests of it and a gate in the same
 Reported per shape: median microseconds a call per arm, zy over scaled_mm, the epilogue's added microseconds and the record
 bytes a call; and Llama-3.1-8B's decode step at M = 32 (32 layers of qkv, o, gate_up, down) per arm.
 
-    research run --on vy-nebius-2 --project verity --campaign exactlin --source . --cwd source \
-      --env GPU_LEASE_WHO=WHO --env KSCRIPT=zybench.py -- bash benchmarks/hash/exactlin/kbench.sh [--reps 15]
+On an RTX PRO 6000 under a GPU lease:
+
+    RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO KSCRIPT=zybench.py bash benchmarks/hash/exactlin/kbench.sh [--reps 15]
 """
 from __future__ import annotations
 

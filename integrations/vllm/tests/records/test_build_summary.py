@@ -1,4 +1,4 @@
-"""`records.build_summary`: the summary each writer lays out (`pipeline.row_records`' TP1 and TP Builds, R19's `tp2_evidence.py`) loads
+"""`records.build_summary`: the summary each writer lays out (`pipeline.row_records`' TP1 and TP Builds, and the retired `tp2_evidence.py`) loads
 as the typed record and dumps back to the same JSON; a missing or unknown field is refused by name."""
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def test_a_tp_build_loads_with_its_ranks(tmp_path):
         _result(b / f"rank{r}" / "build_step", f"s{r}" * 32, aot=True)
         _result(b / f"rank{r}" / "build_request_LP9_T1", f"q{r}" * 32)
         (b / f"rank{r}" / "build_request_LP9_T1.log").write_text("")
-    assert R.tp_build_summary(str(b), 2) == "FAIL"                # no GP-01 compose: the workload entries say so
+    assert R.tp_build_summary(str(b), 2) == "FAIL"                # no workload compose: the workload entries say so
     doc = json.loads((tmp_path / "build_summary.json").read_text())
     s = BuildSummary.load(tmp_path / "build_summary.json")
     assert s.layout == "tp" and s.world == 2 and s.dump() == doc and s.correspondence_digests() == {}

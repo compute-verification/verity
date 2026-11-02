@@ -1,5 +1,5 @@
 # The vLLM example's move out of `benchmarks/one_stage/`: what `tools/move/layout.py --map tools/move/examples_vllm_map.toml`
-# moves and rewrites (Daniel, 25 Oct 11:43 PM PDT, VLLM-119: examples get a top-level `examples/`, one directory per example,
+# moves and rewrites (examples get a top-level `examples/`, one directory per example,
 # each holding its workload, its placement and the command that runs it; `integrations/vllm/` keeps only what attaches Verity
 # to vLLM: the engine, the capture, the Commit, the Program's lowering and the checks).
 #

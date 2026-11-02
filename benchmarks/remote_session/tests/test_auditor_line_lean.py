@@ -9,7 +9,7 @@ whole chunks add to the record's S is given back (gate run 7's all of them) but 
 `fixtures/gate_run_<G>.json.gz` holds each credited session's line inputs on the auditor's clock, of groups and windows
 given (`line`), as `verifier.recorded_inputs` read them from the run's record before the line read the Lean's record,
 with no bursts (the reading of gate runs up to 7), its groups as rows in `line.GROUP`'s order, beside the recorded
-shares and line (r20261024-090248-249f, which reran each run's `auditor_line.analyse` through the Lean)."""
+shares and line (from a run that reran each run's `auditor_line.analyse` through the Lean)."""
 from __future__ import annotations
 
 import copy

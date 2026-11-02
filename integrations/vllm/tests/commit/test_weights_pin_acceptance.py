@@ -1,13 +1,13 @@
-"""R16 pin -- BRIEF §4A acceptance tests for the weights-of-record pin (MAN-09 + W1/W2 + MAN-09c/d; COORD R16 ruling 5), CPU only.
+"""Acceptance tests for the weights-of-record pin (W1/W2, the engine-assumption fields and stamped records), CPU only.
 
 The pin resolves the Program's prescribed `weights` parameter to the REGISTERED checkpoint (manifests/checkpoints.json shard sha256s)
-through the implementation's composition rule, ONCE per row (a record beside the Program), and compares the served parameters with it
+through the implementation's composition rule, ONCE per workload (a record beside the Program), and compares the served parameters with it
 by digest -- no rehash of the model per request.  These tests hold, on a synthetic checkpoint + Programs (no torch, no pod):
 
   1. B1 / B2 / B8 of the SAME model: the record is a function of (weights struct, checkpoint) only -- identical fields, digests and
      root_of_record across sequence shapes; each B's run accepts a record derived from one of ITS components; the default-shape record
-     of a mixed B>=2 row is refused by name (hopper M-0723 / exec M-0727 reproduced at the checker), a stamped record of ANOTHER row too.
-  2. the row's component pick (rel int-6 4ef1198b6, the fix of record for M-0723/M-0727), run on synthetic row dirs -- first manifest
+     of a mixed B>=2 workload is refused by name, a stamped record of ANOTHER workload too.
+  2. the workload's component pick, run on synthetic workload dirs -- first manifest
      component, build_request only when it declares that component's shape.
   3. Shared weights across request subcircuits: the GLOBAL manifest carries every weight field ONCE (not x B) and binding collapses them
      to ONE registered-input identity per rank; an omitted registration is a named missing identity, a duplicate is a reported copy.
@@ -16,7 +16,7 @@ by digest -- no rehash of the model per request.  These tests hold, on a synthet
   5. Substituted weight input: a whole served tensor from another model -- named; the checkpoint FILE substituted on disk -- W1 named.
   6. TP shard / reference mismatch: a rank served with the other rank's slice of ONE field, a TP2 record against a TP1 (unsharded) model,
      a world/rank the Program does not declare -- each named.
-  7. Missing metadata field vs real inequality (COORD 5): a pre-MAN-09c record (no engine_assumptions / analytic fields) on an honest
+  7. Missing metadata field vs real inequality: a record without engine_assumptions / analytic fields on an honest
      model still passes with its engine constants listed unpinned by name; a real digest inequality fails, never repaired.
 """
 from __future__ import annotations
@@ -46,8 +46,8 @@ B8_SHAPES = [(9, 1), (8, 2), (7, 1), (6, 2), (5, 1), (4, 2), (3, 1), (2, 2)]
 
 
 def _row(tmp_path, name, prog, shapes, *, workload_digest, default=(9, 2)):
-    """A row dir as the Build leaves it: build_request (default wrapper shape) + one component per declared shape, GP-01's workload digest,
-    the GLOBAL manifest (program_digest = workload digest, component_digests)."""
+    """A workload dir as the Build leaves it: build_request (default wrapper shape) + one component per declared shape, the global
+    Program's workload digest, the GLOBAL manifest (program_digest = workload digest, component_digests)."""
     root = tmp_path / name
     comps, cdig = {}, []
     for i, (lp, t) in enumerate(shapes):
@@ -64,7 +64,7 @@ def _row(tmp_path, name, prog, shapes, *, workload_digest, default=(9, 2)):
 
 
 def test_b1_b2_b8_same_model_one_pin_per_row_and_the_default_shape_record_is_refused_at_b_ge_2(checkpoint, tmp_path):
-    """[BRIEF §4A] B1, B2 and B8 on the same model; [M-0723/M-0727] the failure of record and its fix (component-derived record)."""
+    """B1, B2 and B8 on the same model: the default-shape record fails at B>=2 and the component-derived record passes."""
     d, man, t = checkpoint
     prog, fields = _program()
     live = live_digests(_served(t, fields))
@@ -87,7 +87,7 @@ def test_b1_b2_b8_same_model_one_pin_per_row_and_the_default_shape_record_is_ref
         comp = WR.component_program_dirs(str(root))[0]
         res = WR.check(recs[comp], live, program_digests_of_record=ofr)
         assert res["result"] is True and res["program_of_record"] is True, (root.name, res["why"])
-    # (c) [M-0723/M-0727 reproduced] the DEFAULT-shape record of a mixed B>=2 row is refused by name with ZERO mismatched fields ...
+    # (c) the DEFAULT-shape record of a mixed B>=2 workload is refused by name with ZERO mismatched fields ...
     for root, ofr, ddig in ((r2, set2, d2), (r8, set8, d8)):
         rec_default = WR.build_record(str(root / "build_request"), str(d), checkpoints_manifest=str(man))
         assert rec_default["root_of_record"] in roots                                   # same weights, only the Program identity differs
@@ -97,7 +97,7 @@ def test_b1_b2_b8_same_model_one_pin_per_row_and_the_default_shape_record_is_ref
     # ... while at B1 the default shape IS the Program of record
     rec_b1 = WR.build_record(str(r1 / "build_request"), str(d), checkpoints_manifest=str(man))
     assert WR.check(rec_b1, live, program_digests_of_record={W1, d1})["result"] is True
-    # (d) stamped records (MAN-09d, --programs-root): the B8 record is of record for the B8 run only -- refused for the B2 run and vice versa
+    # (d) stamped records (--programs-root): the B8 record is of record for the B8 run only -- refused for the B2 run and vice versa
     st8 = WR.stamp_of_record_set(WR.build_record(WR.component_program_dirs(str(r8))[0], str(d), checkpoints_manifest=str(man)), str(r8))
     st2 = WR.stamp_of_record_set(WR.build_record(WR.component_program_dirs(str(r2))[0], str(d), checkpoints_manifest=str(man)), str(r2))
     assert st8["of_record"] is True and set(st8["of_record_set"]["program_digests"]) == set8
@@ -114,8 +114,8 @@ def _pick(root) -> str:
 
 
 def test_the_row_derives_the_pin_from_the_first_manifest_component_at_b_ge_2(checkpoint, tmp_path):
-    """[rel int-6 4ef1198b6 / M-0723] the row's pick = the manifest's first component (r0) -> build_request_LP<LP>_T<T>, or build_request only
-    when its own result.json declares that shape; the record derived from the pick is of record for the run (M-0829: independent of when
+    """The workload's pick = the manifest's first component (r0) -> build_request_LP<LP>_T<T>, or build_request only
+    when its own result.json declares that shape; the record derived from the pick is of record for the run (independent of when
     the Build ran -- the pick reads the Build's dirs and manifest, nothing from a previous Commit)."""
     d, man, t = checkpoint
     prog, fields = _program()
@@ -137,13 +137,13 @@ def test_the_row_derives_the_pin_from_the_first_manifest_component_at_b_ge_2(che
     # a component dir whose result.json is not ok (a failed derive) is skipped, the next candidate taken
     json.dump({"program_digest": "x" * 64, "ok": False, "LP": 9, "T": 1}, open(r8 / "build_request_LP9_T1" / "result.json", "w"))
     assert os.path.basename(_pick(r8)) == "build_request_LP8_T2"
-    # the pick never depends on a previous Commit's files (M-0829): a stale record beside the default shape changes nothing
+    # the pick never depends on a previous Commit's files: a stale record beside the default shape changes nothing
     (r8 / "build_request" / "weights_of_record.json").write_text("{}")
     assert os.path.basename(_pick(r8)) == "build_request_LP8_T2"
 
 
 def test_shared_weights_are_one_registered_input_across_request_subcircuits(tmp_path):
-    """[BRIEF §4A / COORD 5] at B>=2 exactly one shared weights input per tensor: the GLOBAL manifest lists each weight field once (not x B),
+    """At B>=2 exactly one shared weights input per tensor: the GLOBAL manifest lists each weight field once (not x B),
     binding collapses the weights rows to ONE registered-input identity per rank, request composition never duplicates / omits / selects it."""
     inst, woff = _wired_program()
     b1, g2, g8 = (v2_manifest(inst, tuple(f"r{i}" for i in range(B_))) for B_ in (1, 2, 8))
@@ -169,17 +169,17 @@ def test_shared_weights_are_one_registered_input_across_request_subcircuits(tmp_
         # omitted registration: the weights identity is MISSING by name (never hidden by the per-request leaves)
         miss = B.coverage_check(wids, empty)
         assert not miss["ok"] and miss["missing_n"] == n_fields and miss["missing"][0]["op_path"] == "weights" and miss["missing"][0]["request_id"] == "*"
-        # a second registration (another root) under the ONE weights identity is an AMBIGUOUS binding (F-r16-08, rev M-0077; BRIEF §3 C1
-        # 'one unambiguous binding'): refused by name -- every field of the identity is named ambiguous with both copies' addresses,
-        # nothing is missing, and the duplicate is also counted as a physical copy.  (Before F-r16-08 the first copy was silently picked.)
+        # a second registration (another root) under the ONE weights identity is an AMBIGUOUS binding (a binding is unambiguous):
+        # refused by name -- every field of the identity is named ambiguous with both copies' addresses, nothing is missing, and the
+        # duplicate is also counted as a physical copy; the first copy is never silently picked.
         dup = B.coverage_check(wids, {**empty, "entries": [reg, dict(reg, digest="s" * 64)], "entries_n": 2})
         assert not dup["ok"] and dup["ambiguous_n"] == n_fields and dup["missing_n"] == 0 and dup["bound_n"] == n_fields and dup["physical_copies_n"] == 1
         assert dup["ambiguous"][0]["op_path"] == "weights" and dup["ambiguous"][0]["bindings_n"] == 2 and len(dup["ambiguous"][0]["bound_at"]) == 2
 
 
 def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_and_the_verdict_names_the_pin(checkpoint, tmp_path):
-    """[BRIEF §4A] wrong registered root (shard sha != checkpoints.json pin; no entry) and wrong checkpoint context (another repo / revision /
-    Program) each FAIL by name with the honest served model; commit_verdict carries the pin's outcome into the row text (ok / missing / mismatch)."""
+    """Wrong registered root (shard sha != checkpoints.json pin; no entry) and wrong checkpoint context (another repo / revision /
+    Program) each FAIL by name with the honest served model; commit_verdict carries the pin's outcome into the verdict text (ok / missing / mismatch)."""
     from verity_vllm.check.commit_pass import commit_verdict
 
     d, man, t = checkpoint
@@ -198,22 +198,22 @@ def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_
     assert "!= the workload's model" in WR.check(rec, live, checkpoint_of_record={"repo": "other/model"})["why"]
     assert "revision" in WR.check(rec, live, checkpoint_of_record={"repo": "test/tiny", "revision": "0123456789ab"})["why"]
     assert "!= Program of record" in WR.check(rec, live, program_digests_of_record={"e" * 128})["why"]
-    # the verdict text: ok -> PASS; mismatch / wrong context -> 'weights of record: <named cause>'; not run -> 'weights unpinned (MAN-09)'
+    # the verdict text: ok -> PASS; mismatch / wrong context -> 'weights of record: <named cause>'; not run -> 'weights unpinned'
     bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 8}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
             "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}
     ok_, why_ = commit_verdict({**base, "weights_pin": ok}, True, min_openings=64)
-    assert ok_ is True and why_.startswith("PASS"), why_                        # [rev M-0243] at B>=2 without form (B) the PASS names the attribution gap
+    assert ok_ is True and why_.startswith("PASS"), why_                        # at B>=2 without form (B) the PASS names the attribution gap
     for bad in (w1, WR.check(rec, live, program_digests_of_record={"e" * 128}), WR.check(rec, live, checkpoint_of_record={"repo": "other/model"})):
         v, why = commit_verdict({**base, "weights_pin": bad}, True, min_openings=64)
         assert not v and why.startswith("weights of record: ") and bad["why"] in why, why
     v, why = commit_verdict({**base, "weights_pin": {"result": None, "why": "weights of record not derived: no checkpoint dir"}}, True, min_openings=64)
-    assert not v and why.startswith("weights unpinned (MAN-09)") and "not derived" in why
+    assert not v and why.startswith("weights unpinned: ") and "not derived" in why
 
 
 def test_substituted_weight_input_is_named_whether_in_memory_or_on_disk(checkpoint, tmp_path):
-    """[BRIEF §4A / DECISIONS-3 4] a served tensor taken from ANOTHER model (whole field, plausible values) fails by field name; a checkpoint
+    """A served tensor taken from ANOTHER model (whole field, plausible values) fails by field name; a checkpoint
     shard substituted on disk (another model's bytes under the pinned file name) fails W1 by shard name BEFORE any field compare."""
     d, man, t = checkpoint
     prog, fields = _program()
@@ -249,7 +249,7 @@ def test_substituted_weight_input_is_named_whether_in_memory_or_on_disk(checkpoi
 
 
 def test_tp_shard_reference_mismatch_is_named(checkpoint):
-    """[BRIEF §4A / DECISIONS-2 §6] rank-local shards <-> the registered source: the record of rank r is the per-part slice of the registered
+    """Rank-local shards <-> the registered source: the record of rank r is the per-part slice of the registered
     tensors; ONE field served from the other rank's slice is named; a TP2 record against an unsharded (TP1) model is named; a Program
     that declares a world the checkpoint geometry cannot be split into is unresolved (fail closed)."""
     d, man, t = checkpoint
@@ -286,7 +286,7 @@ def test_tp_shard_reference_mismatch_is_named(checkpoint):
 
 
 def test_missing_metadata_field_is_not_a_pin_mismatch(checkpoint):
-    """[COORD R16 ruling 5] a record lacking a metadata field (pre-MAN-09c: no engine_assumptions / analytic fields, engine constants listed
+    """A record lacking a metadata field (no engine_assumptions / analytic fields, engine constants listed
     unpinned) is a weaker but SOUND pin on an honest model -- accepted, the gap named in `unpinned`; a real digest inequality on the same record
     fails by name -- the two are different outcomes, the former is never reported as the latter and the latter never repaired."""
     d, man, t = checkpoint
@@ -294,7 +294,7 @@ def test_missing_metadata_field_is_not_a_pin_mismatch(checkpoint):
     rec = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     legacy = json.loads(json.dumps(rec))
     legacy.pop("engine_assumptions"); legacy.pop("n_analytic", None); legacy.pop("analytic_fields", None)
-    for f in legacy["fields"]:                                    # int-6's record: the kv scale listed by name, no digest
+    for f in legacy["fields"]:                                    # the older record shape: the kv scale listed by name, no digest
         if f["field"].endswith("attn._k_scale"):
             f.update({"digest": None, "pinned": False, "why": "engine constant (not a checkpoint tensor)"})
             f.pop("rule", None); f.pop("sources", None)
@@ -319,7 +319,7 @@ def test_missing_metadata_field_is_not_a_pin_mismatch(checkpoint):
 
 @pytest.mark.parametrize("name", ["b1", "b2"])
 def test_pin_record_is_built_once_per_row_not_per_request(checkpoint, tmp_path, name):
-    """[BRIEF §4A 'no rehash per request'] the CLI derives ONE record per row (beside the picked Program); the run reuses it: building the
+    """No rehash per request: the CLI derives ONE record per workload (beside the picked Program); the run reuses it: building the
     record touches the checkpoint (sha256 of the shards + composition) exactly once, check() reads digests only."""
     d, man, t = checkpoint
     prog, fields = _program()

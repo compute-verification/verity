@@ -1,7 +1,7 @@
-"""Lane `ov-moe`: the pair-major MoE definitions (`verity_vllm.program.quarantine.ov_moe.moe`), the `MoEFusedExperts`
+"""The pair-major MoE definitions (`verity_vllm.program.quarantine.ov_moe.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
-body as recorded in out/gen/lanes/moe/runs/olmoe_3x1_1req), and — when wave 1's real captures are present in the
-worktree — the end-to-end resolve / fold / VU-population facts quoted in out/gen/lanes/ov-moe/REPORT.md."""
+body as recorded on OLMoE), and — when the recorded captures are present in the checkout — the end-to-end
+resolve / fold / VU-population facts."""
 
 from __future__ import annotations
 
@@ -157,7 +157,7 @@ def test_nv_expf_helpers_are_the_ptx_ops():
 REC_ROUTER = REPO / "out" / "gen" / "lanes" / "ov-moe" / "difftest" / "moe_router_topk"
 
 
-@pytest.mark.skipif(not (REC_ROUTER / "manifest.json").exists(), reason="lane ov-moe's recorded topk_softmax cases not in this checkout")
+@pytest.mark.skipif(not (REC_ROUTER / "manifest.json").exists(), reason="the recorded topk_softmax cases are not in this checkout")
 def test_router_program_is_bit_exact_on_the_recorded_kernel_cases():
     """The 24 `_moe_C::topk_softmax` cases recorded on the pod (bf16 logits in, f32 weights + i32 ids out): weights AND ids
     bit-exact with `NvExpf` (the correctly rounded stand-in matched 160/192 weight words, REPORT.md §4)."""
@@ -316,7 +316,7 @@ def test_moe_scope_resolves_as_the_six_part_pair_major_group(M, naive):
     assert len(aligns) == (0 if naive else 1) and all(t.effect == "noop" for t in aligns)
     if aligns:
         # the claim must cover both of vLLM's dispatch paths as Kineto names them: the small-batch kernel (decode) and the
-        # sorted pair (prefill; lane cov-moe: G1 residue 32 kernels on a 155-token prompt under the single-name claim)
+        # sorted pair (prefill: under the single-name claim a 155-token prompt leaves 32 kernels of G1 residue)
         from verity_vllm.properties.census import claims_for
         declared = set(aligns[0].kernels)
         for kineto in ("void vllm::moe::moe_align_block_size_small_batch_expert_kernel<int>(int const*, int*, int*, int*, unsigned long, int, int, int)",
@@ -370,7 +370,7 @@ def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
     assert isinstance(OV.PROFILE.patterns[1], MoEFusedExperts)
 
 
-# --- wave 1's real captures (present in the lane worktree, not in a fresh checkout) ----------------------------------------
+# --- the recorded captures (present where they were captured, not in a fresh checkout) -------------------------------------
 
 def _w1_log(name: str) -> Path:
     p = W1_RUNS / name / "capture" / "log.jsonl.gz"

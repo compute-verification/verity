@@ -1,8 +1,7 @@
-# VF3f: The P4 opcode census, and prices for the word-writers VF3e left unpriced (RS-W′ round 5).
+# VF3f: The P4 opcode census, and prices for the word-writers VF3e left unpriced.
 name = "VF3f"
 epoch = "VF3f"
-summary = "The P4 opcode census, and prices for the word-writers VF3e left unpriced (RS-W′ round 5)."
-note = "note:20261016T0913Z-draft-rs-p4-census"
+summary = "The P4 opcode census, and prices for the word-writers VF3e left unpriced."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -23,9 +22,8 @@ credits = [
     ["W2", 2048], ["DMUL", 1024], ["DMUL", 2048],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.1349
-tau_600w = 0.1055
 uf_low = 1.0938
 margin = 1.935
 

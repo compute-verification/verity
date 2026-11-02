@@ -208,7 +208,7 @@
   {
    "at": "2026-10-18T19:31:07Z",
    "by": "vllm-int8-70b",
-   "note": "new entry only (role LLAMA31_70B, the BF16 base of the int8 70B TP4 row, VLLM-29); frozen entries unchanged",
+   "note": "new entry only (role LLAMA31_70B, the BF16 base of the int8 70B TP4 row); frozen entries unchanged",
    "repos": [
     "unsloth/Meta-Llama-3.1-70B"
    ]
@@ -6894,7 +6894,7 @@
    },
    "gated": false,
    "local_path": "/workspace/hf/hub/models--unsloth--Meta-Llama-3.1-70B/snapshots/1b7306651142d0cc65d993076a250a6a82cf046c",
-   "note": "VLLM-29 (int8 70B TP4): ungated BF16, already in vy-nebius-1's HF cache (benchmarks/ppl/models.py pins the same revision); every local file sha256'd from its bytes by run r20261018-193107-11a2 (the hub tree's lfs_sha256 agree for all 30 shards)",
+   "note": "the BF16 base of the int8 70B TP4 row: ungated, already in vy-nebius-1's HF cache (benchmarks/ppl/models.py pins the same revision); every local file sha256'd from its bytes by run r20261018-193107-11a2 (the hub tree's lfs_sha256 agree for all 30 shards)",
    "repo": "unsloth/Meta-Llama-3.1-70B",
    "resolved_at": "2026-10-18T19:31:07Z",
    "resolved_by": "vllm-int8-70b",

@@ -1,5 +1,5 @@
 """pipes.cu's verdict from a run's rows.jsonl: whether sm_120 runs each lane opcode the coverage table places on alu or
-sfu (machine_model/data/cover/rows.toml, CMP-166) within that pipe's ρ, alone and beside the pipe's own partner.
+sfu (machine_model/data/cover/rows.toml) within that pipe's ρ, alone and beside the pipe's own partner.
 
     python3 pipes_verdict.py OUT/rows.jsonl
 

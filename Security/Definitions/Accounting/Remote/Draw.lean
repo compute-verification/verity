@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Actual.WipeDraw
+import Definitions.Accounting.Actual.Sampler
 import Definitions.Accounting.TS.Drawn
 import Definitions.Hash.RowLeaf
 import Definitions.Pous.Model.StreamedWipe
@@ -35,16 +35,20 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   `t`'s are read only off the earlier windows' openings coins is `Assumptions.Live`. `Session.lands t ω b` is window
   `t`'s test at its own `U_t`, `s'_t` and correct receipts, and `Session.bound t ω` the most it lands on uniform
   blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct receipts, `0` when `g_t < s'_t`.
-* `Committed`: **the session as the prover plays it holding the coin commitment.** The challenger commits every coin
-  before the first is released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree, and the prover holds
-  the root from the start (`coins.py`). A root is a function of every coin, so a deployed window's size can read
-  window `t`'s openings coin through it, and `Live` is false of the deployed session (red team RD-12). `view c` is the
-  session the prover plays holding commitment `c`; `play com` is the deployed one, the prover holding `com ω` at
-  coins `ω` (the salts among the other coins `x`). `junk com t` is the commitment with openings coin `t`'s leaf
-  committing zeros, the other coins and every salt as they are: it reads no bit of coin `t`.
+* `Committed`: **a session read through a coin commitment.** The challenger commits every coin before the first is
+  released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree (`coins.py`). It sends the prover each
+  coin as it releases it and the root only after the prover's last root, with the outcome (`audit.Session.disclose`;
+  soundness's ruling of 27 Oct, no hiding premise on the root), so the session the prover plays is a `Session` and the
+  guarantees take it plainly. A root is a function of every coin, so a prover holding it from the start could size a
+  window off window `t`'s openings coin, and that session is not `Live` (red team RD-12). `view c` is the session
+  played holding commitment `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
+  `junk com t` is the commitment with openings coin `t`'s leaf committing zeros, the other coins and every salt as
+  they are: it reads no bit of coin `t`. The memory line over the prover's records reads its records through it
+  (`Properties.RemoteAudit.Line.recordCommitted`).
 * `Session.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
   coins, and a uniform 512-bit threshold coin `u` falls below `∏_{j<t} bound j`.
-* `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`:
+* `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`
+  (`0` at a view that reads no commitment):
   how much likelier the potential after `t + 1` windows is at the deployed commitment than at `junk com t`, plus how
   much likelier the potential after `t` windows is at `junk com t` than at the deployed one. Each is an event of the
   coins and the commitment the prover holds, read off the prover's sizes and correct receipts of windows `j ≤ t`,

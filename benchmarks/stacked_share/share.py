@@ -8,7 +8,7 @@ bytes: c_rho reads, the nonlinear units the audit allows a second, is the honest
 an encode of one 1024-bit word costs (E / 128 a byte); L is a carrier's lifetime in seconds and R_in the node's run-input bytes a
 second. f past 1 means the stock outgrows the pool: no KV is credited.
 
-Nonlinear units are #4622's gate model (`Security/Definitions/Accounting/Gates/Model.lean`, `nonlinear`): property/v1's
+Nonlinear units are the gate model's (`Security/Definitions/Accounting/Gates/Model.lean`, `nonlinear`): property/v1's
 budgeted units plus data products, one a product of two run-time values. `units.py` counts the budgeted ones; the data
 products are the attention row's Q′K′ᵀ, H·D a (query row, key) pair, and its P V′, H·D a key with the row's keys padded to the
 s8 step's `PAD` (`products_coefficients`, as `products_pass.py` counts the Program), and nothing else's: a MAC by a weight is
@@ -36,7 +36,7 @@ The rate is units over the trace's busy time (the union of its steps' spans) and
 
 M_dyn is vLLM's KV pool: kv_blocks blocks of `block` tokens of kv_bytes_per_token bytes on each of an engine's tp GPUs.
 
-The declared-circuit witness (`Witness.lean`'s `bounds_8b`, `bounds_70b`) reads c = caps.total, R_cap over the bytes a second
+The registered-circuit witness (`Witness.lean`'s `bounds_8b`, `bounds_70b`) reads c = caps.total, R_cap over the bytes a second
 the audit certifies, against thresholds set at the thin-lane prices (`WITNESS`). Its carrier term is 128 L P c / E, so it
 holds at the new E as long as c grew no more than E did: `witness` gives each model's c at the peak, the life the witness's
 thresholds allow at it (`witness_life`) and the c its stated life allows at each E (`witness_c`).
@@ -65,7 +65,7 @@ WIDTH = 1.0
 CLASSES = ("roundings", "compare_select", "gathers", "folds", "products")
 COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start", "b_qp")
 #: the attention row whose Q′K′ᵀ and P V′ are data products, (S + PAD ⌈S / PAD⌉)·D a head's row
-#: (`property_redteam/products_pass.py` on the census's 8B Program, r20261026-085548-0287)
+#: (`property_redteam/products_pass.py` on the census's 8B Program)
 ATTENTION_ROW = "Int8LutAttentionRow_v1"
 #: the s8 step's lanes (`stacking.FAMILY`'s k): P V′ reads a row's keys PAD at a time, and Q′K′ᵀ its D
 PAD = 32

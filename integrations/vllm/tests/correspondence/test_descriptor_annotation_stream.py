@@ -1,4 +1,4 @@
-"""`read_descriptor_annotation` (F-r19-int-25): the `annotations[namespace]` of a descriptor file read WITHOUT `json.load` of the
+"""`read_descriptor_annotation`: the `annotations[namespace]` of a descriptor file read WITHOUT `json.load` of the
 descriptor -- its `definitions` (the Program body) streamed through and dropped -- is exactly what `json.load` gives, at every chunk
 size (values cut anywhere: inside a node, a string, a number), and `read_program_dir` is unchanged in what it returns."""
 from __future__ import annotations

@@ -30,6 +30,7 @@ the counts.
 from __future__ import annotations
 
 from verity.ml.circuits.boolean.forms import and_reduce, const_bits
+from verity.ml.circuits.boolean.trace import part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.commitments import hm96
@@ -110,11 +111,10 @@ def _compress_sig(S):
     return (("cv", bits(512)), ("msg", bits(1024))), bits(512)
 
 
-PousSha512Compress = CompositeDefinition(
-    "PousSha512Compress", 1, (), _compress_sig,
-    _traced_body(lambda S: ("compress",), lambda S: compress, _compress_sig), conformance="protocol-defined",
-    doc="One SHA-512 compression with the feed-forward (FIPS 180-4), core's compress_gadget: the chaining value as eight "
-        "words LSB first, the message block as 128 bytes")
+PousSha512Compress = part(
+    "PousSha512Compress", (), _compress_sig, lambda C, S, cv, msg: compress(C, cv, msg),
+    "One SHA-512 compression with the feed-forward (FIPS 180-4), core's compress_gadget: the chaining value as eight "
+    "words LSB first, the message block as 128 bytes", conformance="protocol-defined")
 
 
 def _end_sig(S):
@@ -129,11 +129,10 @@ def _end_sig(S):
     raise ValueError(f"PousRowDigestEnd's END is head or tail when N >= 128, short below, not {S.END!r} at N = {S.N}")
 
 
-PousRowDigestEnd = CompositeDefinition(
-    "PousRowDigestEnd", 1, ("N", "END"), _end_sig,
-    _traced_body(lambda S: ("digest-end", S.N, S.END), lambda S: lambda C, *a: digest_end(C, S.N, S.END, *a), _end_sig),
-    conformance="protocol-defined",
-    doc="sha512/row/v2's first block of an N-byte row (head), its last bytes and padding (tail), or all of it (short)")
+PousRowDigestEnd = part(
+    "PousRowDigestEnd", ("N", "END"), _end_sig, lambda C, S, *a: digest_end(C, S.N, S.END, *a),
+    "sha512/row/v2's first block of an N-byte row (head), its last bytes and padding (tail), or all of it (short)",
+    conformance="protocol-defined")
 
 
 def _digest_sig(S):

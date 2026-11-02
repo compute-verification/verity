@@ -58,13 +58,12 @@ SEMANTIC_IDS = {"SiluMulBf16": "act/SiluMulBf16@v2", "SiluMul": "act/SiluMul@v2"
 
 BF16 = P.BF16
 F32_NEG_ZERO = 0x80000000
-_COV_LN = EVIDENCE["cov_ln_quarantine"]["by"]
 ZERO_BITS = 0x00000000
 #: ln of the smallest real that RN32 sends to +inf, (2 - 2^-24) * 2^127: no f32 word lies within float64 error of it
 LN_F32_OVERFLOW = math.log((2.0 - 2.0 ** -24) * 2.0 ** 127)
 
 CONFORMANCE = ("exact-model-tested: SiluMulBf16_v1 on finite ordinary words; the edge words (NaN, gate -inf, gates past expf "
-               f"overflow, gate -0, up -0) as the red-team measured them ({EVIDENCE['silu_edge_cases']['run']}, silu-edge-cases)")
+               f"overflow, gate -0, up -0) as measured ({EVIDENCE['silu_edge_cases']['result']}, silu-edge-cases)")
 
 
 def silu_f32_bits(g: int) -> int:
@@ -103,7 +102,7 @@ def gelu_erf_bf16_bits(x: int) -> int:
 
 
 @primitive("GeluErfBf16", 1, [("x", BF16)], BF16,
-           conformance=f"quarantine ({_COV_LN}): exhaustive measured table (65,536/65,536 bf16 words, torch 2.13.0+cu129 aten.gelu on "
+           conformance="quarantine (op-level evidence only): exhaustive measured table (65,536/65,536 bf16 words, torch 2.13.0+cu129 aten.gelu on "
                        "sm_89); difftest vs torch.nn.functional.gelu on the pod",
            tables=(("gelu_erf_bf16", "registered"),))
 def GeluErfBf16(x: int) -> int:
@@ -112,7 +111,7 @@ def GeluErfBf16(x: int) -> int:
 
 
 @composite("GeluErf", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
-           conformance=f"quarantine ({_COV_LN}): difftest vs torch.nn.functional.gelu (bf16, sm_89) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs torch.nn.functional.gelu (bf16, sm_89) on the pod")
 def GeluErf(B, S, x):
     """`out[j] = GeluErfBf16(x[j])` over one row of N bf16 words."""
     return B.batch(GeluErfBf16, x, axes=(0,))

@@ -28,7 +28,7 @@ def GammaFromTT : Prop :=
     Assumptions.TT CM P D γ₀ ε →
     Gγ CM P D (reductionGamma γ₀ Ωmax) ε
 
-/-- **(d′) The milestone requirement, in budget form** (red-team B3). For the named instance `D1.m1` on its domain
+/-- **(d′) The milestone requirement, in budget form**. For the named instance `D1.m1` on its domain
 and any `W_ref`: if `W_ref ≤ Ω_max·W_mm` with `Ω_max ≤ 199/198`, the cost model runs `H_ref` at cost `≤ W_ref`
 (`AdmitsRef`), and TT(0.5%) holds with error `ε`, then §3.3's requirement holds with `γ = 1 − (199/200)/Ω_max ≤ 1%`
 and `η = ε`. Whether the milestone meets `Ω_max ≤ 199/198` is a count of `H_ref`'s M_4090 schedule, not proved here. -/
@@ -115,9 +115,9 @@ def TTWitness : Prop :=
     AdmitsRef (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 Wref).toProtocol D1.m1Domain
       (fun U => U.layout.N * D1.m1Queries)
 
-/-- **The named instance** (red-team B4, B8): for every `W_ref`, `D1.m1` has the milestone's rank and depth, the
+/-- **The named instance**: for every `W_ref`, `D1.m1` has the milestone's rank and depth, the
 weight noise shared per (epoch, weight) and `E_R` per (epoch, weight, group of 16) (`IsMilestone`), noise in
-`[−63, 63]`, `m1Queries` queries per unit, `E_L` queries that no other unit below `2^64` asks (red-team B1), and
+`[−63, 63]`, `m1Queries` queries per unit, `E_L` queries that no other unit below `2^64` asks, and
 noise that is not identically zero on an in-domain workload. -/
 def MilestoneInstance : Prop :=
   ∀ Wref : Layout → ℕ → ℕ,
@@ -127,7 +127,7 @@ def MilestoneInstance : Prop :=
     ∃ (H : D1.M1Q → D1.M1R) (s : Salt) (U : Workload) (A : Mat), U.InDomain D1.m1Domain ∧ 0 < U.layout.N ∧
       mm (D1.m1 Wref).r ((D1.m1 Wref).actF H s U 0 A).1 ((D1.m1 Wref).actF H s U 0 A).2 0 0 ≠ 0
 
-/-- **The milestone's `W_ref`** (red-team B3, P7-4): the explicit `H_ref` schedule `D1.m1Wref` lies between `W_mm` and
+/-- **The milestone's `W_ref`**: the explicit `H_ref` schedule `D1.m1Wref` lies between `W_mm` and
 `Ω_M1·W_mm` on every in-domain unit, with `Ω_M1 = 65769/65536 ≤ 199/198`, and the reduction's gap there is
 `14017/1644225 ≈ 0.8525%`. With (d′) this gives §3.3's requirement at that gap from `AdmitsRef` at `m1Wref` (that
 M_4090 runs `H_ref` within the schedule, not proved) and TT(0.5%). -/

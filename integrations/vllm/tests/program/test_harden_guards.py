@@ -1,21 +1,21 @@
-"""R11 cb-harden (3) — export guard / applicability preservation of the Bet A artifact contract (R10 cb-fix: `TargetProfile`,
-`ArtifactIdentity`, `check_reuse`; `verity_vllm.pipeline.build` manifest v3).
+"""Export guard / applicability preservation of the Bet A artifact contract (`TargetProfile`, `ArtifactIdentity`, `check_reuse`;
+`verity_vllm.pipeline.build` manifest v3).
 
-Contract under test (brief (3)): (a) the specialisation guards `torch.export` records — input shapes / dtypes, the (empty) range
+Contract under test: (a) the specialisation guards `torch.export` records — input shapes / dtypes, the (empty) range
 constraints, the graph-signature facts — are captured into the manifest/artifact; (b) a build for a different declared target has
 a different artifact identity even with an identical Program digest; (c) an artifact built under assumptions A is REFUSED
 (fail-closed) when applied under B: device class, dtype, batch, sequence bound; (d) manifest fields are not duplicated literals —
 one source of truth.
 
-Evidence sources: the R10 recorded artefacts (`integrations/vllm/out/gen/r10/cb-fix/evidence/fix/<case>/{artifact.json,
-construction_manifest.json}` — real constructions on cp-cb8; not in this tree, so the checks that read them skip), the pure-Python
+Evidence sources: the recorded artefacts under `EVIDENCE` (`<case>/{artifact.json, construction_manifest.json}` — real
+constructions on a GPU host; not in this tree, so the checks that read them skip), the pure-Python
 contract module `verity_vllm.program.frontend.target_profile`, the builder source `verity_vllm/pipeline/build.py`, and (opt-in, `HARDEN_LIVE=1`, pod venv with vLLM) two live constructions differing only in a
 structural input.
 
 Verdict convention: assertions state the CONTRACT. Where the contract is known not to hold today the test is marked
 `xfail(strict=True)` with the finding as the reason — fixing the gap turns the xfail into an XPASS failure that forces the marker
 to be removed, so the finding stays load-bearing. None of these gaps is a semantic failure of a generated Program (the Program
-digest DOES carry shapes/dtypes — G6); they are applicability-contract gaps (the R10 open item A4 "guards not preserved as
+digest DOES carry shapes/dtypes — G6); they are applicability-contract gaps (open item A4: "guards not preserved as
 artefacts").
 
 Run: laptop `python -m pytest -q tests/program/test_harden_guards.py -k "not live and not G6"` (pure Python); pod
@@ -64,7 +64,7 @@ def _load(case: str) -> tuple[dict, dict]:
     return json.load(open(os.path.join(d, "artifact.json"))), json.load(open(os.path.join(d, "construction_manifest.json")))
 
 
-GAP = "applicability-contract gap (R10 open item A4): "
+GAP = "applicability-contract gap (open item A4): "
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -115,7 +115,7 @@ def test_G1d_export_guard_facts_are_recorded():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# (b) identity distinguishes targets with one digest (recorded evidence: real constructions, cp-cb8)
+# (b) identity distinguishes targets with one digest (recorded evidence: real constructions)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -196,7 +196,7 @@ def test_G4a_manifest_and_wrapper_agree_on_target_and_artifact():
     _record("G4a manifest.target.declared / manifest.artifact / program.digest vs artifact.json", "single values", "equal", "PASS")
 
 
-@pytest.mark.xfail(strict=True, reason="duplicated literal (the R10 bug shape): `construction_version.mechanism` and "
+@pytest.mark.xfail(strict=True, reason="duplicated literal (the stale-manifest bug's shape): `construction_version.mechanism` and "
                    "`construction_manifest.construction.mechanism` are two hand-written strings in derive_step.py that already drifted "
                    "('… on meta + …' vs '… of the vLLM model class on meta + …')")
 def test_G4b_mechanism_string_has_one_source():
@@ -210,7 +210,7 @@ def test_G4b_mechanism_string_has_one_source():
 
 
 def test_G4c_no_capability_or_sm_literal_outside_target_profile():
-    """The R10 fix's invariant, re-checked on this tree: the declared capability / SM count have one authoritative site."""
+    """The invariant, re-checked on this tree: the declared capability / SM count have one authoritative site."""
     files = ["verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/build.py",
              *sorted(os.path.relpath(p, INTEGRATION) for p in glob.glob(os.path.join(INTEGRATION, "verity_vllm/program/frontend/rules/vllm_bindings/*.py")))]
     hits = []
@@ -218,7 +218,7 @@ def test_G4c_no_capability_or_sm_literal_outside_target_profile():
         p = os.path.join(INTEGRATION, rel)
         assert os.path.exists(p), f"{rel} moved: point G4c at the file that now holds it"
         for i, line in enumerate(open(p).read().splitlines(), 1):
-            # applied / declared VALUES only (the R10 literals): not prose that names the architecture in a docstring
+            # applied / declared VALUES only (the hard-coded literals): not prose that names the architecture in a docstring
             if re.search(r"DeviceCapability\(major=\d", line) or '"8.9 (sm_89' in line or re.search(r'"NUM_SMS":\s*\d', line) \
                     or re.search(r"=\s*\(8,\s*9\)", line):
                 hits.append(f"{rel}:{i}: {line.strip()[:80]}")

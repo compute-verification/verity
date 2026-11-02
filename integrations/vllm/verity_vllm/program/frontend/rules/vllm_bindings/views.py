@@ -31,7 +31,7 @@ class AllocViewRule(ViewRule):
                                    "shape, stride and dtype are the node's, and it is not stale"), evidence_domain="structural (no gates)")
 
     def targets(self):
-        # [R15 fp8] v2: + permute / t / transpose (the in-place rule that writes the view rebinds the VIEW node; the base stays an unread Alloc)
+        # v2: + permute / t / transpose (the in-place rule that writes the view rebinds the VIEW node; the base stays an unread Alloc)
         return {aten.view.default, aten.reshape.default, aten._unsafe_view.default, aten.flatten.using_ints, aten.slice.Tensor,
                 aten.permute.default, aten.t.default, aten.transpose.int}
 

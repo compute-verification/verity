@@ -19,7 +19,7 @@
   {
    "at": "2026-10-19T22:45:00Z",
    "by": "vllm-int8-pins",
-   "note": "new entry only (role LLAMA32_1B_INT8, the verity-int8-channel127/v1 recipe pin made from LLAMA32_1B on vy-nebius-1 by run r20261019-222911-ed2c; VLLM-49)",
+   "note": "new entry only (role LLAMA32_1B_INT8, the verity-int8-channel127/v1 recipe pin made from LLAMA32_1B on vy-nebius-1 by run r20261019-222911-ed2c)",
    "repos": [
     "verity-int8/Llama-3.2-1B-INT8"
    ]
@@ -27,7 +27,7 @@
   {
    "at": "2026-10-19T22:45:00Z",
    "by": "vllm-int8-pins",
-   "note": "new entry only (role QWEN3_06B_INT8, the verity-int8-channel127/v1 recipe pin made from QWEN3_06B on vy-nebius-1 by run r20261019-222911-ed2c; VLLM-49)",
+   "note": "new entry only (role QWEN3_06B_INT8, the verity-int8-channel127/v1 recipe pin made from QWEN3_06B on vy-nebius-1 by run r20261019-222911-ed2c)",
    "repos": [
     "verity-int8/Qwen3-0.6B-INT8"
    ]
@@ -35,7 +35,7 @@
   {
    "at": "2026-10-19T22:45:00Z",
    "by": "vllm-int8-pins",
-   "note": "new entry only (role QWEN3_14B_INT8, the verity-int8-channel127/v1 recipe pin made from QWEN3_14B on vy-nebius-1 by run r20261019-222911-ed2c; VLLM-49)",
+   "note": "new entry only (role QWEN3_14B_INT8, the verity-int8-channel127/v1 recipe pin made from QWEN3_14B on vy-nebius-1 by run r20261019-222911-ed2c)",
    "repos": [
     "verity-int8/Qwen3-14B-INT8"
    ]
@@ -51,7 +51,7 @@
   {
    "at": "2026-10-23T08:29:00Z",
    "by": "vllm-dither-requant",
-   "note": "new entry only (role GLM53_INT8, the verity-int8-channel127/v3 recipe pin made from GLM53, the FP8-block GLM-5.3, on vy-nebius-cpu-1 by run r20261023-065637-0ee9; VLLM-74)",
+   "note": "new entry only (role GLM53_INT8, the verity-int8-channel127/v3 recipe pin made from GLM53, the FP8-block GLM-5.3, on vy-nebius-cpu-1 by run r20261023-065637-0ee9)",
    "repos": [
     "verity-int8/GLM-5.3-INT8-V3"
    ]

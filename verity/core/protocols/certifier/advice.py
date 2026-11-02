@@ -3,7 +3,7 @@
 The precommitted AOT compiler turns the advice into each executed engine step's circuit; the certifier certifies the
 I/O; sampled proofs hold the committed values to the compiled circuits and to the certified I/O. v0 is the committed
 form (hm96 hiding rows), private, and `bits` splits its length among egress windows. The charge, the content advice
-`A_c` of the certifier's accepted-runs bound, is ENC-CODE's compressed length of the advice, not v0's.
+`A_c` of the certifier's accepted-runs bound, is `code_v1`'s compressed length of the advice, not v0's.
 
 **What it says** (vLLM v1, the pinned 0.28.1rc1.dev472's `Scheduler.schedule` and `SchedulerOutput`):
 - `requests`, in order of their first row: each request's id (the body's `user`), prompt and output lengths and how it
@@ -458,7 +458,7 @@ def decode(data: bytes) -> Advice:
 
 
 def total_bits(advice: Advice) -> int:
-    """v0's length in bits, its padding left out (the charge `A_c` is ENC-CODE's compressed length)."""
+    """v0's length in bits, its padding left out (the charge `A_c` is `code_v1`'s compressed length)."""
     lay = _layout(advice)
     return lay.header + sum(lay.requests) + sum(lay.steps) + lay.release * len(advice.release)
 

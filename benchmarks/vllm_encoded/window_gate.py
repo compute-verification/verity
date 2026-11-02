@@ -8,7 +8,7 @@ views as `Int8AttentionImpl.forward` takes them (`kv_cache.transpose(1, 2).split
 
     vllm      vLLM's layout today, [pages][KV heads][slots][K ‖ V], two layers a store (store_base 77 TLW), the codec's
               word order 0 (pg_wi's), the encoded slots appended by `pg_append` under their bound offsets and the
-              plaintext slots appended as they are with their flags set (deferred residency, #2460)
+              plaintext slots appended as they are with their flags set (deferred residency)
     planned   [pages][slots][KV heads][K ‖ V], a layer to a region (layers 1, store_base 4099 TLW), word order 1 (each
               head's K ‖ V): the encoded slots `kv_encode_bound` of the flat cache, so codec index = store_base plus
               the physical word

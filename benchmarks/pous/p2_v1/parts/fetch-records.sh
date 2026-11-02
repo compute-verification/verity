@@ -2,8 +2,7 @@
 # fetch-records.sh PARTS: for each line "LO HI ART" of PARTS (ART a run record whose out/part holds segments [LO, HI) as
 # part-out.sh writes them), fetch the segments this machine's mem69-v2 store lacks, K processes an art, each its own store
 # root; then check them and the store's own against their digests and move them in (join.py). Scratch outside the run dir.
-#   research run --on CARD --store-read --cwd source --send PARTS -- \
-#     bash benchmarks/pous/p2_v1/parts/fetch-records.sh '$RESEARCH_RUN_DIR/inputs/PARTS'
+#   bash benchmarks/pous/p2_v1/parts/fetch-records.sh PARTS      # on the card's node, with read access to the evidence store
 set -euo pipefail
 PARTS=$1 K=${K:-2}
 ST=${ST:-/workspace/research/pous-store/mem69-v2}

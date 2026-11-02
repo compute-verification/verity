@@ -1,4 +1,4 @@
-"""F-dA-15 admission: the scheduled host-retention bound is SOUND (>= every observed step) and TIGHT (within 15 % of the
+"""Commit admission: the scheduled host-retention bound is SOUND (>= every observed step) and TIGHT (within 15 % of the
 run total) on three recorded runs with per-step `n_bytes`, refuses by name over the cgroup, and is torch-free."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from verity_vllm.pipeline import admission_bound as ADM
 
 REPO = Path(__file__).resolve().parents[2]
 FIX = Path(__file__).resolve().parent / "fixtures" / "admission"
-CAP_CP_BIG = 376_999_997_440          # cp-big's /sys/fs/cgroup/memory.max (= 359,535 MiB)
+CAP_CP_BIG = 376_999_997_440          # a node's /sys/fs/cgroup/memory.max (= 359,535 MiB)
 
 
 def _fixture(name: str):
@@ -78,8 +78,8 @@ def test_envelope_bound_was_the_loose_one_and_the_scheduled_bound_admits_the_cp_
 
 
 def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_refused():
-    """the refusal domain stays `--retain host` unbounded; a non-host
-    retention on the windowed path is no longer 'predicted host 0 MiB' -- the unbounded windowed collector copies every window to the
+    """the refusal domain is `--retain host` unbounded; a non-host
+    retention on the windowed path is not 'predicted host 0 MiB' -- the unbounded windowed collector copies every window to the
     pinned pool regardless of --retain (a `--retain none` run allocates the 112 GiB pool), so the pool is predicted,
     the excess is named as a WARNING on the record, and the launch is still not refused here."""
     sizing, wl, _ = _fixture("b16")
@@ -191,7 +191,7 @@ def test_host_cap_names_its_source_and_a_bare_host_is_still_a_bound(monkeypatch,
 
 
 def test_the_commit_admission_counts_the_declared_lag():
-    """The host admission's lag rows are the manifest target's declared LAG, not a hard-coded 1 (the import used to miss and fall back)."""
+    """The host admission's lag rows are the manifest target's declared LAG, never a fallback of 1 when an import misses."""
     pytest.importorskip("torch")
     import inspect
 

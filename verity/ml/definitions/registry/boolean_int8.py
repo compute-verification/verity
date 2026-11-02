@@ -11,6 +11,8 @@ row builds Boolean-first (`verity.ml.definitions.boolean`).
     Int8LutSoftmax_v3{S}, Int8AttnOut_v2, Int8LutAttentionRow_v3{D,S,SCALE}, Int8ColumnQuant_v2{S,D}, Int8KvQuant_v2{S,D}
                         σ of the word composite (`boolean.sigma_lift`): its body at each binding with each Call the Boolean
                         version of its Definition; word views: their _v1 at the same statics
+    Int8RowQuant_v4{K,R}
+                        σ of `Int8RowQuant_v3{K,R}` likewise, x as R rows of K/R values; word view: Int8RowQuant_v3
 
 `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2`, the forms that read `exp2_lut127` as an operand, have no Boolean version here;
 `_v3` of each is σ of `_v1`, whose LUT is the Definition's own.  The callees beyond this module's leaves are core's
@@ -68,7 +70,8 @@ Int8AttnOutV2 = sigma_lift(IE.Int8AttnOut, 2)
 Int8LutAttentionRowV3 = sigma_lift(IE.Int8LutAttentionRow, 3)
 Int8ColumnQuantV2 = sigma_lift(IE.Int8ColumnQuant, 2)
 Int8KvQuantV2 = sigma_lift(IE.Int8KvQuant, 2)
+Int8RowQuantV4 = sigma_lift(IE.Int8RowQuantV3, 4)
 
 INT8_LEAVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127, U8ToU16]
 INT8_SIGMA = [Int8QuantElementV2, Int8RowScaleV2, Int8StaticQuantV2, Int8RowQuantV2, Int8LinearV2, Int8AttnScaleV2,
-              Int8LutSoftmaxV3, Int8AttnOutV2, Int8LutAttentionRowV3, Int8ColumnQuantV2, Int8KvQuantV2]
+              Int8LutSoftmaxV3, Int8AttnOutV2, Int8LutAttentionRowV3, Int8ColumnQuantV2, Int8KvQuantV2, Int8RowQuantV4]

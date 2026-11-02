@@ -1,5 +1,5 @@
 """A window's ``coord`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the expert-indexed pair GEMMs' coordinates
-(``COORDS``) are consecutive chunks of at most the partition's ``chunk_cap``, each a member on the bit rows C-Flock's `UnitStager`
+(``COORDS``) are consecutive chunks of at most the partition's ``chunk_cap``, each a member on the bit rows Flock's `UnitStager`
 stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the chunks are the template's units read once, so that
 the coordinate on each chunk's rows, parsed as the stager parses them, is the rows' committed words, and a flipped word is not."""
 from __future__ import annotations
@@ -107,5 +107,5 @@ def test_a_chunk_on_its_rows_computes_the_committed_words_and_a_flipped_word_is_
     g, _entries = got[1]
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(g["rows"], {"o0": g["outs"]["o0"] ^ np.uint16(1)})
-    w = CS.Window(*CS.population_program([(SRW.template(T).fn, 2 * N)], several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
+    w = CS.Binding(*CS.population_program([(SRW.template(T).fn, 2 * N)], several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
     assert CS.commit(w, [g for g, _e in got], salt_key=bytes(32)).window.population == 2 * N
