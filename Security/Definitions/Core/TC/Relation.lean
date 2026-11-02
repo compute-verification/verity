@@ -1,10 +1,12 @@
 import Definitions.Core.TC.Pipeline
 
 /-!
-# The step relation: `verity.ml.tc.relation.check_step`
+# The step relation: `check_step`
 
-A transcription of `relation.py`'s tables, its predicate kinds (`Census.MUL`, `BOOL`, `LIN`, `LOOKUP`, `RANGE`, `ISZERO`)
-and `check_step`, predicate for predicate and in order, over the integers (Python's `int`). It reads nothing from
+A transcription of the step relation's tables, its predicate kinds (`Census.MUL`, `BOOL`, `LIN`, `LOOKUP`, `RANGE`,
+`ISZERO`) and `check_step`, predicate for predicate and in order, over the integers (Python's `int`), from the Python
+module `verity.ml.circuits.silicon.relation`, which the tree no longer has: the archived proof systems were its only
+readers. The transcription reads nothing from
 `Verity.TC.Spec`: the two transcriptions are independent, and `Verity.SecurityProofs.TC.Sound` proves them equivalent.
 
 Where this differs from the Python:

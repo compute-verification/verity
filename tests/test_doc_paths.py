@@ -1,14 +1,17 @@
 """Every repository path a maintained document names exists, so a move or a deletion that misses a README fails here instead
 of leaving the next reader a path to nowhere.
 
-A document is a tracked `*.md`, `CHANGELOG.md` aside (history names the paths things had then). A path is a relative markdown link target, or a backticked token with a `/` in it; neither may
+A document is a tracked `*.md`, `CHANGELOG.md` aside (history names the paths things had then), or a `.lean` file under
+`Security/`, of which only the comments and docstrings are read (`--`, `/- -/`, `/-- -/`, as the lane-text lint reads
+them). A path is a relative markdown link target, or a backticked token with a `/` in it; neither may
 carry a URL scheme or a glob or template character (`* < > { } $ | @ \\`), and a trailing `#anchor`, `::symbol`, `:LINE`
 or punctuation is dropped. It is checked when its first segment is a top-level entry of the tree or a retired one
 (`RETIRED`). A link target is resolved from its document's directory; a backticked path may be written from the root or
 from the document's directory or one of its ancestors (a package README's `tests/test_x.py`). It exists when it is a
 tracked file, a directory holding one, or a fixture `fixtures/artifacts.json` registers for fetching (or a path inside
 one). Under `verity/`, a token whose second segment is no entry of `verity/` is an identifier (`verity/partition/v1`),
-not a path; any other token that reads as a repository path but isn't one is in `NOT_PATHS` with its reason.
+not a path, unless it names a file (its last segment has an extension: `verity/protocols/cap.py`, from before a move);
+any other token that reads as a repository path but isn't one is in `NOT_PATHS` with its reason.
 
 A backticked bare file name of source code (`probe.py`, `run.sh`, `hash.c`: an extension in `_NAME`) is checked too.
 Prose names a file by its bare name wherever it lives (a README names its own directory's files and its neighbours'),
@@ -21,8 +24,11 @@ import json
 import posixpath
 import re
 
+from lint.test_repo_lane_text import lean_prose
 from test_repository import REGISTRY, ROOT, _tracked
 
+#: The Lean whose comments are documents.
+LEAN_DOCS = "Security/"
 #: Top-level names the tree had before a move, so a mention of one is still read as a path.
 RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
@@ -46,6 +52,22 @@ NOT_PATHS = {
     ("verity/core/protocols/pous/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
     ("verity/core/protocols/pous/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
     ("verity/core/protocols/pous/PROTOCOL.md", "regate.py"): "the timing red team's script",
+    ("Security/Definitions/Pous/Model/BandChain.lean", "SpongeDense.lean"): "the band chain's Lean, outside this tree",
+    ("Security/Definitions/Pous/Model/BandChain.lean", "BandChainModel.lean"): "the band chain's Lean, outside this tree",
+    ("Security/Definitions/Pous/Model/BandChain.lean", "BandMultiModel.lean"): "the band chain's Lean, outside this tree",
+    ("Security/Proofs/Pous/Chain/Family.lean", "BandMultiFamilyFinal.lean"): "the band chain's Lean, outside this tree",
+    ("Security/Proofs/Pous/Chain/Family.lean", "flatten_family_chain.py"): "the band chain's flattener, outside this tree",
+    ("Security/Proofs/Pous/Chain/Family.lean", "flatten_chain.py"): "the band chain's flattener, outside this tree",
+    ("Security/Proofs/Pous/Chain/Flat.lean", "flatten_chain.py"): "the band chain's flattener, outside this tree",
+    ("Security/Proofs/Pous/Chain/Flat.lean", "Birthday.lean"): "the band chain's Lean, outside this tree",
+    ("Security/Proofs/Pous/Chain/Flat.lean", "P3MeetsLucky.lean"): "the band chain's Lean, outside this tree",
+    ("Security/Proofs/Pous/Chain/Flat.lean", "P3MeetsFinal.lean"): "the band chain's Lean, outside this tree",
+    ("Security/Definitions/Hash/Guarantees.lean", "EmbeddingRead.h"): "a Lean name, the read's row `h`",
+    ("Security/Proofs/Flock/Claims/Recursion/DecodeTies.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
+    ("Security/Proofs/Flock/Claims/Recursion/VerdictRowRDeployed.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
+    ("Security/Proofs/Flock/Claims/ZK/FrameOpenLive.lean", "d.h"): "a Lean name, the draws' pads",
+    ("Security/Proofs/Flock/Recursive/HPortTie.lean", "lc.h"): "a Lean name, a field of `holoRep_refines`' output",
+    ("Security/Proofs/Flock/Soundness/Discharge/Composed/Inner.lean", "l.c"): "a Lean name, `verifyInner`'s target",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")
@@ -66,7 +88,15 @@ def _tree() -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
 
 
 def documents(files: frozenset[str]) -> list[str]:
-    return sorted(f for f in files if f.endswith(".md") and posixpath.basename(f) != "CHANGELOG.md")
+    return sorted(f for f in files if f.endswith(".md") and posixpath.basename(f) != "CHANGELOG.md"
+                  or f.startswith(LEAN_DOCS) and f.endswith(".lean"))
+
+
+def lines(doc: str, text: str) -> list[tuple[int, str]]:
+    """(line, text) of each line of ``doc`` that is prose: every line of Markdown, and of Lean only its comments."""
+    if not doc.endswith(".lean"):
+        return list(enumerate(text.splitlines(), 1))
+    return [(first + i, line) for first, chunk in lean_prose(text) for i, line in enumerate(chunk.splitlines())]
 
 
 def mentions(line: str) -> list[tuple[str, str, bool]]:
@@ -108,7 +138,8 @@ def dead(doc: str, path: str, link: bool, tree) -> bool:
     top, _, rest = path.partition("/")
     if top not in RETIRED and not _exists(top, tree):
         return False
-    if top == "verity" and rest and not _exists("verity/" + rest.split("/")[0], tree):
+    named_file = "." in posixpath.basename(path)
+    if top == "verity" and rest and not named_file and not _exists("verity/" + rest.split("/")[0], tree):
         return False
     bases = [""] if link or not here else [""] + [here.rsplit("/", i)[0] + "/" for i in range(here.count("/") + 1)]
     return not any(_exists(base + path, tree) for base in bases)
@@ -116,7 +147,7 @@ def dead(doc: str, path: str, link: bool, tree) -> bool:
 
 def dead_paths(tree, read=lambda d: (ROOT / d).read_text(errors="replace")) -> list[tuple[str, int, str]]:
     """(document, line, token as written) for each path a document of ``tree`` names that the tree lacks."""
-    return [(doc, n, raw) for doc in documents(tree[0]) for n, line in enumerate(read(doc).splitlines(), 1)
+    return [(doc, n, raw) for doc in documents(tree[0]) for n, line in lines(doc, read(doc))
             for raw, path, link in mentions(line) if (doc, raw) not in NOT_PATHS and dead(doc, path, link, tree)]
 
 
@@ -134,7 +165,7 @@ def test_not_paths_are_current():
     tree = _tree()
     stale = [(doc, tok) for doc, tok in NOT_PATHS
              if doc not in tree[0] or not any(raw == tok and dead(doc, path, link, tree)
-                                              for line in (ROOT / doc).read_text().splitlines()
+                                              for _, line in lines(doc, (ROOT / doc).read_text())
                                               for raw, path, link in mentions(line))]
     assert not stale, f"NOT_PATHS entries that no longer apply; remove them: {stale}"
 
@@ -142,20 +173,26 @@ def test_not_paths_are_current():
 def test_the_scan_reads_each_form_and_catches_a_dead_path():
     """The rules above, on a toy tree."""
     files = frozenset({"README.md", "tools/x/README.md", "tools/x/tests/test_a.py", "verity/primitives/b.py",
-                       "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py"})
+                       "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py", "Security/A.lean",
+                       "verity/primitives/B.lean"})
     dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/primitives", "fixtures", "tests"})
     tree = (files, dirs, frozenset({"tools/x/tests/fixtures/big"}))
     docs = {
         "README.md": ("`tools/x/tests/test_a.py:12` `verity/primitives/b.py::f` `tools/x/`, `verity/partition/v1` "
+                      "`verity/moved/c.py` "
                       "`tools/gone.py`. [a](tools/x/README.md#top) [b](tools/x/gone.md) [c](https://x.org/tools/y) "
                       "`tools/*.py` `pods/nebius/` `verity/primitives/gone.py` `art:abc/def` [d](#anchor) `notatop/x`"),
         "tools/x/README.md": ("`tests/test_a.py` `tests/test_b.py` [e](tests/test_a.py) [f](../../README.md) [g](gone.md) "
                               "`tools/x/tests/fixtures/big/a.bin` `test_a.py:3` `b.py::f` `gone.sh`, `out.json` `x`"),
         "tools/x/CHANGELOG.md": "`tools/gone.py`",
+        "Security/A.lean": ('def s := "`tools/gone.py`"\n/-- `tools/x/` and\n`tools/lean_gone.py` -/\n'
+                            "def t := 1 -- `x.lean`\n"),
     }
-    assert documents(files) == ["README.md", "tools/x/README.md"]
+    assert documents(files) == ["README.md", "Security/A.lean", "tools/x/README.md"]
     assert dead_paths(tree, read=docs.__getitem__) == [
+        ("README.md", 1, "verity/moved/c.py"),
         ("README.md", 1, "tools/gone.py"), ("README.md", 1, "tools/x/gone.md"), ("README.md", 1, "pods/nebius/"),
-        ("README.md", 1, "verity/primitives/gone.py"), ("tools/x/README.md", 1, "tests/test_b.py"),
+        ("README.md", 1, "verity/primitives/gone.py"), ("Security/A.lean", 3, "tools/lean_gone.py"),
+        ("Security/A.lean", 4, "x.lean"), ("tools/x/README.md", 1, "tests/test_b.py"),
         ("tools/x/README.md", 1, "gone.md"),
         ("tools/x/README.md", 1, "gone.sh")]

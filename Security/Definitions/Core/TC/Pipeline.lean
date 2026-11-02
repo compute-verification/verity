@@ -1,8 +1,8 @@
 /-!
-# Grouped-sum pipelines (`verity.ml.tc.models.GroupSum`)
+# Grouped-sum pipelines (`verity.ml.circuits.silicon.models.GroupSum`)
 
 The parameters both the semantics (`Verity.TC.Spec`) and the relation (`Verity.TC.Relation`) read: the group sizes in
-k order, the adder's width and the exponent floor. BF16 operands only: `relation.py` and `total.tc_dot_total` are
+k order, the adder's width and the exponent floor. BF16 operands only: the relation and `total.tc_dot_total` are
 defined for BF16 pipelines, whose width is at least 24.
 -/
 
