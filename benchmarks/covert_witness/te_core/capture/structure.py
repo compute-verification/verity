@@ -47,10 +47,7 @@ from typing import Any
 import torch
 
 from te_core.capture.trace import BACKWARD, PHASE, CaptureRefused, Trace
-from te_core.opsets import ELEMENTWISE as _ELEMENTWISE
-from te_core.opsets import FUSED_OPTIMIZERS as _FUSED
-from te_core.opsets import LINALG as _LINALG
-from te_core.opsets import SCALED as _SCALED
+from te_core.flops import ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, LINALG_NAMES, SCALED_NAMES
 
 __all__ = ["CLASSES", "Matmul", "StepGraph"]
 
@@ -73,6 +70,7 @@ _SHAPE_ONLY = {"ones_like", "zeros_like", "empty_like", "full_like", "new_zeros"
 _GEMM_LIKE = ("mm", "matmul", "conv", "linear", "attention", "einsum", "tensordot", "bilinear", "lstm", "gru", "rnn", "addmv",
               "addr", "dot")
 _NOT_GEMM = {"_record_function_enter_new", "_record_function_exit", "conj_physical", "native_dropout_backward"}
+_ELEMENTWISE, _SCALED, _FUSED, _LINALG = ELEMENTWISE_NAMES, SCALED_NAMES, FUSED_OPTIMIZER_MACS, LINALG_NAMES
 
 
 def _pk(t) -> str:

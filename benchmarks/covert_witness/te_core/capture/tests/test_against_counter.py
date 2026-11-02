@@ -1,5 +1,6 @@
 """The capture's static record against te_core.flops.Counter's runtime record of the same steps, both read by
-te_core.annotate: they count from one op list (te_core.opsets) and must agree on every step's MACs and structure."""
+te_core.annotate: they count from one op list (te_core.flops's *_NAMES) and must agree on every step's MACs and
+structure."""
 from __future__ import annotations
 
 import pytest

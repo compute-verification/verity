@@ -139,8 +139,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
-| `opsets.py` | the ops counted beyond matmuls (elementwise, scaled, fused optimizers, linear algebra), for `flops.py` and `capture/` alike |
-| `capture/` | the training-graph capture: one step traced statically into `Counter.record()`'s form, its own suite (`capture/README.md`) |
+| `capture/` | the static count: one training step traced on fakes (`make_fx`), its \|C\|, GEMM roles and φ without running, in `flops`'s record form; its own suite. Its elementwise, fused-optimizer and linear-algebra op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`) |
 | `tests/` | a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`); `cw_fake/` is a fake `prepare` and island |
 
 ## Limits of the count
