@@ -2,7 +2,8 @@
 
     python scorer.py collect                  # the store's new manifests -> STATE/index.jsonl and index.md
     python scorer.py score                    # STATE/score.json and score.md: ρ per (k, r), W*(l*), honest(l*), W*/honest
-    python scorer.py board [--promote] [--digest] [--append]   # this hour's PROMOTED and DIGEST lines (appended to BOARD.md)
+    python scorer.py board [--promote] [--digest] [--append]   # this hour's PROMOTED and DIGEST lines (--append pushes them)
+    python scorer.py post TAG TEXT            # one line onto the scorer's board (islands/scorer/BOARD.md), pushed
 
 STATE is `$TE_SCORER_STATE` (default ~/.research/te-scorer); everything in it is derived from the evidence store and
 rebuilt by `collect`. Records are the evidence/v1 artifacts whose meta has `covert_witness.class` (launch.py's), and the
@@ -15,7 +16,7 @@ full tensor's matmul or norm gain, an adapter's two factors; a frozen base W·x 
 updated MACs per token of the nodes before it in (layer, stage) order, |C| = training FLOPs / 2, p = 16 (bf16 autocast)
 and c = 4096 times the start's forward MACs per token (weight matmuls plus 2·d·ctx attention MACs a layer). ρ, W*,
 honest and the effective slowdown are te_core's (`score.score_grid`, `w_star`, `honest`, `effective_slowdown`) on that
-annotation, with no counterexample coverage. A te_core ledger record carries its counted ρ, used as is.
+annotation, with the coverage `credit` reads off a seed-log E. A te_core ledger record carries its counted ρ, used as is.
 """
 from __future__ import annotations
 
@@ -38,7 +39,10 @@ STATE = Path(os.environ.get("TE_SCORER_STATE", Path.home() / ".research" / "te-s
 SINCE = os.environ.get("TE_SCORER_SINCE", "2026-11-02T06:30:00Z")
 SEARCH_START = "2026-11-02T08:30:00Z"  # the board's opening: earlier records are the integrator's seed smokes
 TE_CORE = Path(os.environ.get("TE_CORE_PATH", "/tmp/scorer/te-core/benchmarks/covert_witness"))
-BOARD = Path(os.environ.get("TE_BOARD", "/tmp/scorer/board/benchmarks/covert_witness/BOARD.md"))
+BOARD = Path(os.environ.get("TE_BOARD", Path(__file__).resolve().parents[1] / "islands" / "scorer" / "BOARD.md"))
+BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `HH:MMZ scorer [TAG] text (record ids)`. The "
+              "coordinator merges them into benchmarks/covert_witness/BOARD.md on cursor/te-digest-4207. The scorer's lines "
+              "through 09:00Z are on cursor/te-board-4207.\n\n## Entries\n")
 SMALL_FILES = ("witness.json", "candidate.json", "meta.json", "timing.json")
 STARTS = ("s50", "s100", "m50", "m100")
 P_BITS = 16
@@ -219,7 +223,7 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict) -> dict:
         "lowest_updated_layer": (w or {}).get("structure", {}).get("lowest_updated_layer"),
         "gpu_seconds": (w or {}).get("gpu_seconds"), "curve": curve,
         "trainable": meta.get("trainable", {}), "method": ((w or {}).get("notes") or {}).get("method"),
-        "train_args": ((w or {}).get("notes") or {}).get("args"),
+        "train_args": ((w or {}).get("notes") or {}).get("args"), "steps": ((w or {}).get("notes") or {}).get("steps"),
         "has_E": "E.bin" in files,
     }
 
@@ -367,17 +371,51 @@ def analytic(row: dict, starts: dict, fraction: float = 1.0) -> dict:
     macs = fraction * row["train_flops"] / 2
     per_token = sum(m for _, m in profile)
     depth = max((u for u, _ in profile), default=0)
+    c = block_c(forward_macs_per_token(start))
     return {"macs": macs, "tokens": t_upd, "profile": [(u, m * t_upd) for u, m in profile], "depth": depth,
-            "updated_per_token": per_token, "c": block_c(forward_macs_per_token(start))}
+            "updated_per_token": per_token, "c": c, "credit": credit(row, start, fraction, per_token, c)}
 
 
-def annotation_of(a: dict) -> Annotation:
-    upd = sum(m for _, m in a["profile"])
-    step = StepAnnotation(step=0, tokens=int(a["tokens"]), macs=int(a["macs"]), updated_macs=int(upd),
-                          updated_per_token=a["updated_per_token"], depth=int(a["depth"]),
-                          profile=tuple(sorted((int(u), int(m)) for u, m in a["profile"])), bits=P_BITS if upd else 0,
-                          weights={}, shapes={})
-    return Annotation(macs=int(a["macs"]), steps=(step,))
+def credit(row: dict, start: dict, fraction: float, per_token: float, c: float) -> dict | None:
+    """The counterexample family a seed-log E gives: E_t, the log's first t coefficients with ε and the sign, rebuilds
+    step t's weights (masters after t `seedlog_step`s, plus ±εz_t) bit for bit in (t + 1) n MACs for n trained values,
+    so it covers the steps with (t + 1) n ≤ c, at β_t = bits(E_t) / updated MACs per token, bounded here by the smallest
+    snapshot's E. Adapter and full E's rebuild no step's fp32 values bit for bit, and their bits per updated MAC are at
+    least p, so they get none."""
+    if row.get("E_format") != "seedlog" or not per_token:
+        return None
+    names = (row.get("trainable") or {}).get("full", [])
+    n = sum(math.prod(start["tensors"][k][1]) for k in names if k in start["tensors"])
+    steps = int(row.get("steps") or 0)
+    if not n or not steps:
+        return None
+    t_max = int(c // n) - 1
+    covered = min(1.0, max(0, t_max + 1) / max(1.0, fraction * steps))
+    e_min = min((cp["e_bytes"] for cp in row.get("curve") or [] if cp.get("e_bytes")), default=row.get("E_bytes") or 0)
+    return {"covered_share": covered, "beta_t": (8 * e_min + 33) / per_token, "rebuild_macs_last": (fraction * steps + 1) * n,
+            "values": n}
+
+
+def annotation_of(a: dict) -> tuple[Annotation, dict[int, float]]:
+    """Two synthetic steps, the covered steps' share and the rest, and the coverage te_core's score reads."""
+    cr = a.get("credit")
+    q = cr["covered_share"] if cr else 0.0
+    steps, covered = [], {}
+    for i, share in enumerate((q, 1.0 - q)):
+        if share <= 0:
+            continue
+        prof = tuple(sorted((int(u), int(m * share)) for u, m in a["profile"]))
+        upd = sum(m for _, m in prof)
+        steps.append(StepAnnotation(step=i, tokens=int(a["tokens"] * share), macs=int(a["macs"] * share),
+                                    updated_macs=upd, updated_per_token=a["updated_per_token"], depth=int(a["depth"]),
+                                    profile=prof, bits=P_BITS if upd else 0, weights={}, shapes={}))
+        if i == 0:
+            covered[0] = cr["beta_t"]
+    return Annotation(macs=int(a["macs"]), steps=tuple(steps)), covered
+
+
+def is_reference(x: dict) -> bool:
+    return x["direction"].startswith("ref") or x.get("class") == "reference"
 
 
 def submissions(rows: list[dict], starts: dict) -> list[dict]:
@@ -399,11 +437,13 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
                 continue
             f = cp["train_flops"] / total
             a = analytic(x, starts, f)
-            grid = score_grid(annotation_of(a), {}, P_BITS, a["c"])
+            ann, cov = annotation_of(a)
+            grid = score_grid(ann, cov, P_BITS, a["c"])
             out.append({"id": x["id"], "cp": round(f, 3), "start": x["start"], "macs": a["macs"], "val_bpb": cp["bpb"],
                         "rho": {k: v["rho"] for k, v in grid.items()}, "phi": {k: v["phi"] for k, v in grid.items()},
-                        "depth": a["depth"], "reference": x["class"] == "reference", "direction": x["direction"],
-                        "counted": False, "E_bytes": cp.get("e_bytes")})
+                        "option": {k: v["option"] for k, v in grid.items()}, "depth": a["depth"],
+                        "reference": is_reference(x), "direction": x["direction"], "counted": False,
+                        "E_bytes": cp.get("e_bytes"), "credit": a["credit"]})
     return out
 
 
@@ -610,6 +650,13 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     out.append(f"{hhmm} scorer [DIGEST] empty cells (|E| range x phi range, per start, |E| under 10 MB, any mechanism): " +
                "; ".join(f"{s} {len(by_start.get(s, []))}/20 empty, filled {', '.join(sorted(filled_of(rows, s))) or 'none'}"
                          for s in STARTS) + ".")
+    cred = [(x, analytic(x, starts)["credit"]) for x in cw if x["valid"] and x["start"] in starts]
+    cred = [(x, c) for x, c in cred if c]
+    out.append(f"{hhmm} scorer [DIGEST] E credited as a T1 counterexample family (its decoder rebuilds each covered "
+               f"step's weights from theta within c): " + (", ".join(
+                   f"{short(x['id'])} ({x['E_format']}, {100 * c['covered_share']:.0f}% of steps, beta_t {c['beta_t']:.2g}, "
+                   f"last rebuild {c['rebuild_macs_last']:.2g} MACs)" for x, c in cred) or "none")
+               + "; no other entry's E is credited.")
     for d in sorted({x["direction"] for x in cw}):
         out.append(f"{hhmm} scorer [DIGEST] {d}: " + direction_sentence(d, rows, starts))
     return out
@@ -634,16 +681,18 @@ def direction_sentence(d: str, rows: list[dict], starts: dict) -> str:
 
 
 def append_board(lines: list[str]) -> None:
-    wt = BOARD.parents[2]
+    """Append to the scorer's own board file and push its branch; the coordinator merges it into the shared board."""
+    wt = subprocess.run(["git", "-C", str(BOARD.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+                        check=True).stdout.strip()
+    text = BOARD.read_text() if BOARD.exists() else BOARD_HEAD
+    BOARD.parent.mkdir(parents=True, exist_ok=True)
+    BOARD.write_text(text + ("" if text.endswith("\n") else "\n") + "\n".join(lines) + "\n")
+    tags = sorted({m[1] for m in (re.search(r"\[(\w+)\]", x) for x in lines) if m})
+    subprocess.run(["git", "-C", wt, "add", str(BOARD)], check=True)
+    subprocess.run(["git", "-C", wt, "commit", "-q", "-m", f"board: scorer {lines[0][:6]} {', '.join(tags)}", "--", str(BOARD)],
+                   check=True)
     for attempt in range(5):
-        subprocess.run(["git", "-C", str(wt), "fetch", "-q", "origin", "cursor/te-board-4207"], check=True)
-        subprocess.run(["git", "-C", str(wt), "reset", "-q", "--hard", "origin/cursor/te-board-4207"], check=True)
-        text = BOARD.read_text()
-        BOARD.write_text(text + ("" if text.endswith("\n") else "\n") + "\n".join(lines) + "\n")
-        tags = sorted({m[1] for m in (re.search(r"\[(\w+)\]", x) for x in lines) if m})
-        subprocess.run(["git", "-C", str(wt), "commit", "-q", "-am", f"board: scorer {lines[0][:6]} {', '.join(tags)}"],
-                       check=True)
-        if subprocess.run(["git", "-C", str(wt), "push", "-q", "origin", "HEAD:cursor/te-board-4207"]).returncode == 0:
+        if subprocess.run(["git", "-C", wt, "push", "-q", "origin", "HEAD"]).returncode == 0:
             return
         time.sleep(2 ** attempt)
     raise SystemExit("scorer: board push failed five times")
@@ -660,7 +709,13 @@ def main(argv=None) -> int:
     b.add_argument("--digest", action="store_true")
     b.add_argument("--append", action="store_true", help="append the lines to the board and push (else print them)")
     b.add_argument("--hhmm", default=None)
+    p = sub.add_parser("post", help="append one line to the board and push")
+    p.add_argument("tag")
+    p.add_argument("text")
     a = ap.parse_args(argv)
+    if a.cmd == "post":
+        append_board([f"{datetime.now(timezone.utc).strftime('%H:%MZ')} scorer [{a.tag}] {a.text}"])
+        return 0
     if a.cmd == "collect":
         print(json.dumps(collect(a.since)))
     elif a.cmd == "score":
