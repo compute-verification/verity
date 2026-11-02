@@ -66,7 +66,7 @@ theorem loadPublic_core (h : ByteArray → ByteArray) (tags : Tags) (c : Circuit
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpA at hp
   simp (config := { zeta := false }) only [jpA] at hp
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at hp
-  cases hj : Json.parse text with
+  cases hj : Lean.Json.parse text with
   | error e =>
     simp (config := { zeta := false }) only [hj] at hp
     obtain ⟨_, hte, -⟩ := except_bind_ok hp; cases hte
@@ -158,8 +158,8 @@ theorem loadPublic_agree {tags : Tags} {c₁ c₂ : Circuit} {f : ByteArray} {p�
 theorem loadPublic_inOut {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {pf : ByteArray} {pub pubO : Public}
     (h : HmIn.loadPublic tags c pi pf = .ok pub) (hO : HmOut.loadPublic tags c pf = .ok pubO) :
     pubO.n = pub.n ∧ pubO.digests = pub.digests ∧ pubO.tables = pub.tables :=
-  loadPublic_agree rfl (FlockSoundness.Discharge.Hidden.loadPublic_nil hO)
-    (FlockSoundness.Discharge.Hidden.loadPublic_inRows h)
+  loadPublic_agree (c₁ := { c with outPorts := #[] }) (c₂ := FlockSoundness.Discharge.Hidden.inRows c pi) rfl
+    (FlockSoundness.Discharge.Hidden.loadPublic_nil hO) (FlockSoundness.Discharge.Hidden.loadPublic_inRows h)
 
 /-- **The leaf map reads the public file's `b ‖ c` and tables only.** -/
 theorem LeafMap.ofPublic_congr {c : Flock.Circuit} {p p' : Flock.Public} (nl : ℕ) (hd : p.digests = p'.digests)
