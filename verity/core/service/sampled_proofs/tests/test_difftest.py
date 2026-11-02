@@ -58,7 +58,7 @@ from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, registered as G,
                                                             registration as R)
-from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_TREE, ChallengerKey, CoinError
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -2050,10 +2050,13 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     challenger: parameters naming none, or one without a window, are refused (`NO_CHALLENGER`), and evidence whose coins
     are not the challenger's signed release is rejected: none, the record carrying its own key, coins under another key,
     on another window, of another family or released after another digest, a session record or close whose signature
-    was forged, each mutation of the segment, or a session the ledger doesn't open withheld. On the challenger's coins
-    it goes on to its own verdicts, and a draw other than theirs is rejected after them (`checkBlobsAt`, v1's
-    `checkAt`). Each step Lean rejects at is the Python reference's: `decode_params_v2`, `_coins_of`, then v1's `check`
-    with the session's verdict the reject its blobs give, its record on the coin tree the challenger sampled."""
+    was forged, each mutation of the segment, or a session the ledger doesn't open withheld. So is a session whose
+    release log, which its coin trees are read from too, is not the whole log the challenger's signed close covers: no
+    close, a log a line short of the count the close signs, or the log's lines in another order than its chain, each
+    refused in Python's words. On the challenger's coins it goes on to its own verdicts, and a draw other than theirs is
+    rejected after them (`checkBlobsAt`, v1's `checkAt`). Each step Lean rejects at is the Python reference's:
+    `decode_params_v2`, `_coins_of`, then v1's `check` with the session's verdict the reject its blobs give, its record
+    on the coin tree the challenger sampled."""
     s, law = SETUPS[3], {"k": 3, "law": "stratified"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
@@ -2091,10 +2094,13 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
         step = check(p, (rec, after), e)[1]
         return "draw" if step == "coins" else step
 
-    def lean(a: dict) -> str:
+    def outcome(a: dict) -> dict:
         case = {"blobs": [circuit.hex(), public.hex(), a["record"].hex()], "commitment": _hex(rec),
                 "evidence": _hex(a["evidence"]), "params": a["params"]}
-        out = server_v2.exchange(_json(case))
+        return server_v2.exchange(_json(case))
+
+    def lean(a: dict) -> str:
+        out = outcome(a)
         assert out["verdict"] == "reject", out
         step = next(step for prefix, step in (("params: ", "params"), ("coins: ", "coins"), ("draw: coins: ", "draw"),
                                               ("verdict flock-verify/s ", "verdict"), ("", out["reason"]))
@@ -2106,6 +2112,21 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     def signed(coins: dict, part: str) -> dict:
         f = coins["session"][part]
         return {**coins, "session": {**coins["session"], part: {**f, "signature": _flip(f["signature"], 9)}}}
+
+    def files(coins: dict, **f) -> dict:
+        return {**coins, "session": {**coins["session"], **f}}
+
+    def unclosed(coins: dict) -> dict[str, tuple[dict, str]]:
+        """Session files whose release log isn't the one the challenger's signed close covers, each with Python's
+        refusal."""
+        log = coins["session"]["log"]
+        assert len(log) >= 3 and log[1] != log[2]
+        return {"no close": (files(coins, close=None), NO_CLOSE),
+                "a log a line short of its close": (
+                    files(coins, log=log[:-1]),
+                    f"the challenger's release log has {len(log) - 1} lines, not the {len(log)} its close record signs"),
+                "a log out of its close's chain": (files(coins, log=[log[0], log[2], log[1], *log[3:]]),
+                                                   "the challenger's release log is not the one its close record signs")}
 
     for seed in range(3):
         rng = random.Random(f"one-stage-v2-coins/{seed}")
@@ -2138,6 +2159,13 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
              for name in DRAW_MUTATIONS if name not in ("unread", "read-tampered", "other-after")}
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
+        for name, (c, why) in unclosed(coins).items():
+            a = audit_of(d, draw, c)
+            e = {k: v for k, v in a["evidence"].items() if k != "proofs"} | {"verdicts": failed}
+            with pytest.raises(CoinError) as py:
+                _coins_of(decode_params_v2(a["params"]), (rec, after), e)
+            out = outcome(a)
+            assert (str(py.value), out["verdict"], out["reason"]) == (why, "reject", f"coins: {why}"), (seed, name)
 
 
 def committed_bits(j):
