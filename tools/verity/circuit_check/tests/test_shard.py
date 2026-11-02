@@ -20,7 +20,7 @@ from circuit_check import cli
 from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
-from test_cache import REPO, _bindings, _tree
+from test_cache import REPO, _bindings, _edit, _tree
 from test_units import BINDINGS as UNIT_BINDINGS
 from test_units import FORKED as UNITS_FORKED
 from test_units import HARNESS as UNITS
@@ -269,7 +269,11 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
                       (["--all", "--records-only", "--cache", "c", "SynPass_v1"], "--records-only stores"),
                       (["--all", "--records-only", "--cache", "c", "--no-cache"], "--records-only stores"),
                       (["--all", "--records-only", "--cache", "c", "--update-pins"], "--records-only stores"),
-                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores")):
+                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores"),
+                      (["--all", "--cache", "c", "--update-reads"], "--update-reads writes"),
+                      (["--all", "--catalog-units", "--update-reads"], "--update-reads writes"),
+                      (["--all", "--catalog-units", "--cache", "c", "--update-reads", "--shard", "1/3", "--shard-dir", "d"],
+                       "--update-reads writes")):
         with pytest.raises(SystemExit) as e:
             cli.main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err, argv
@@ -429,3 +433,56 @@ def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own
     assert values == _fresh(root)["values"]
     unknown = _py(root, UNITS.replace("units=True)", "units=True, binding='_no_roots')"))
     assert unknown.returncode and cli.NO_BINDING in unknown.stderr, unknown.stderr
+
+
+def _reads_run(name: str, write: bool = False) -> str:
+    """`test_units`' forked harness as ``--binding NAME`` runs it, the real registry loaded as there, with `cli.READS` in the
+    tree: prints the report's ``reads`` and ``undeclared`` too, with ``write`` once ``--update-reads`` wrote them."""
+    return (UNITS_FORKED.replace("fork=True)", f"fork=True, binding={name!r})")
+            .replace("rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\n"
+                     "cli.READS = root / 'reads.json'\nrep = cli.run(", 1)
+            .replace('print(json.dumps({"stats"', ("cli.update_reads(rep, every=False)\n" if write else "")
+                     + 'print(json.dumps({"stats"', 1)
+            .replace('"values": {', '"reads": rep["reads"], "undeclared": rep["undeclared"], "values": {', 1))
+
+
+@pytest.mark.slow
+def test_a_binding_s_report_holds_its_read_set_and_what_reads_json_does_not_declare_of_it(tmp_path):
+    """A ``--binding`` run's report holds its binding's read set (`cli._read_sets`) beside the registries' (each module they
+    imported: here all of ``syn``, which `load_registries` enumerates): its own targets' pins files, no other binding's, and
+    the package listing every check holds.  With no `cli.READS` all of it is undeclared; once ``--update-reads`` wrote it,
+    nothing is, and another binding's run written beside it keeps the first's.  A module only one target's check imports, new,
+    is undeclared for that binding alone; a module the registries import anew, for every binding, until it is written."""
+    from test_cache import _pin
+
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    assert _records_only(root)["stored"] == 5
+    core = _run_units(root, _reads_run("_core_roots"))
+    regs, mine = core["reads"]["registries"], core["reads"]["bindings"]["_core_roots"]
+    assert {"syn/top.py", "syn/sub.py", "syn/xdef.py", "syn/catalog.py"} <= set(regs["files"]), regs
+    assert mine["registry"] and "syn" in mine["listed"] and "syn/top.py" not in mine["files"], mine
+    assert _pin("SynTop_v1") in mine["files"] and _pin("SynOther_v1") not in mine["files"], mine
+    assert {"files", "listed", "registry"} <= set(core["undeclared"]["_core_roots"]), core["undeclared"]
+    _run_units(root, _reads_run("_core_roots", write=True))
+    again = _run_units(root, _reads_run("_core_roots"))
+    assert again["undeclared"] == {} and again["hits"] == sorted(again["values"]), again["undeclared"]
+    model = _run_units(root, _reads_run("_model_roots", write=True))
+    theirs = model["reads"]["bindings"]["_model_roots"]
+    assert _pin("SynOther_v1") in theirs["files"] and _pin("SynTop_v1") not in theirs["files"], theirs
+    written = json.loads((root / "reads.json").read_text())
+    assert written["bindings"] == {"_core_roots": mine, "_model_roots": theirs} and written["registries"] == regs
+    (root / "synlib").mkdir()
+    (root / "synlib/__init__.py").write_text("")
+    (root / "synlib/helper.py").write_text("H = 1\n")
+    # by a computed name: an import statement would be a site of `syn.top`, which the registries import
+    _edit(root, "syn/top.py", "    from syn.shape import operands\n",
+          "    from syn.shape import operands\n    __import__('synlib.helper')\n")
+    core = _run_units(root, _reads_run("_core_roots"))
+    (u,) = core["undeclared"].values()
+    assert list(core["undeclared"]) == ["_core_roots"] and set(u) <= {"files", "probes"}, core["undeclared"]
+    assert u["files"] == ["synlib/__init__.py", "synlib/helper.py"], u
+    assert _run_units(root, _reads_run("_model_roots"))["undeclared"] == {}
+    (root / "syn/fresh.py").write_text("Y = 1\n")
+    model = _run_units(root, _reads_run("_model_roots"))
+    assert model["undeclared"]["_model_roots"]["registries"]["files"] == ["syn/fresh.py"], model["undeclared"]

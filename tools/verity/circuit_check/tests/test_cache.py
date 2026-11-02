@@ -371,6 +371,38 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
 
 
+def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeypatch):
+    """`cache.declared` of SynTop's entry: the files of the modules it holds and of their import sites, its binding file and
+    its pin's file; the listing of the package `load_registries` enumerated, not the modules that lists (`lookup` holds an
+    unheld one by its name, through a move); each path the search for its modules asked about, so a module put where the
+    search would find it first is a change of what it declares; whether it read the registries (every reached Definition's
+    registrar).  SynOther's leaves out what only SynTop's build imported."""
+    from circuit_check import cache as CC
+
+    root = _tree(tmp_path)
+    _run(root)
+    monkeypatch.syspath_prepend(str(root))
+    top, other = (CC.declared(root, _entry(root, t)["reads"]) for t in ("SynTop_v1", "SynOther_v1"))
+    assert {"syn/__init__.py", "syn/top.py", "syn/sub.py", "syn/shape.py", "syn/prims.py", "syn/check.py", "syn/h.py",
+            "targets.py", _pin("SynTop_v1")} <= set(top["files"]), top["files"]
+    assert "syn" in top["listed"] and "syn/idle.py" not in top["files"] and top["registry"], top
+    assert {"syn/top/__init__.py", "syn/sub/__init__.py"} <= set(top["probes"]), top["probes"]
+    assert not {"syn/top.py", "syn/sub.py", "syn/shape.py", _pin("SynTop_v1")} & set(other["files"]), other["files"]
+    assert {"syn/other.py", _pin("SynOther_v1")} <= set(other["files"]), other["files"]
+
+
+def test_what_a_read_set_holds_beyond_its_declaration_is_undeclared():
+    from circuit_check import cache as CC
+
+    now = {"files": ["a.py", "b.py"], "listed": ["d"], "probes": ["p/__init__.py"], "registry": True}
+    assert CC.undeclared(now, now) == {} and CC.undeclared(now, {**now, "files": ["a.py", "b.py", "c.py"]}) == {}
+    assert CC.undeclared(now, {"files": ["a.py"], "listed": ["d"], "probes": [], "registry": False}) == {
+        "files": ["b.py"], "probes": ["p/__init__.py"], "registry": True}
+    assert CC.undeclared({**now, "registry": False}, None) == {"files": ["a.py", "b.py"], "listed": ["d"],
+                                                               "probes": ["p/__init__.py"]}
+    assert CC.undeclared({**now, "untracked": ["build/x.so"]}, now) == {"untracked": ["build/x.so"]}   # no task declares one
+
+
 #: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based
 #: one, with the tree's root on no `sys.path` entry
 EXACT = HARNESS.replace("sys.path.insert(0, str(root))",
