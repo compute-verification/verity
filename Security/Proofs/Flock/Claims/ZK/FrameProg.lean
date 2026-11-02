@@ -1823,11 +1823,7 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
     {s0 : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {q : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h.length = q + 2) : q < (roundsOf spec sts).sum := by
   by_contra hlt
-  have ho : (loop loopNr T L).opens x ρ h = true := by
-    unfold answered at hA
-    split at hA
-    · assumption
-    · cases hA
+  have ho : (loop loopNr T L).opens x ρ h = true := (answered_ok hA).1
   match h, hq, ho, hne with
   | [], hq, _, _ => simp at hq
   | [_], hq, _, _ => simp only [List.length_cons, List.length_nil] at hq; omega

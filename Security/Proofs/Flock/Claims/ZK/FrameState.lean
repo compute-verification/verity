@@ -199,7 +199,7 @@ theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
       L.rep x ((h ++ [(0 :: out.data.toList, a)]).length - 1)) = true := by
     rw [List.length_append, List.length_singleton, Nat.add_sub_cancel]
     exact decide_eq_true hrep
-  rw [L.answered_of_opens x ρ _ ho]
+  rw [answered_append hA _ ho]
   unfold frameAnswer
   rw [show (h ++ [(0 :: out.data.toList, a)]).getLast? = some (0 :: out.data.toList, a) by simp]
   dsimp only
