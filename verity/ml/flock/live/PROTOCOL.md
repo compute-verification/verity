@@ -646,7 +646,7 @@ Lean process's), beside the device's
 
 Through the Lean session loop (§10.4) level 0's hiding and the mask slot's words are the loop's, not the host's: for each
 table behind the ZK server the prover sends the loop its packed witness (`firewall::lean_level0`), and the loop samples the
-mask slot's words from the OS and writes them into the witness's mask slot (`Frames.Registry.maskOf`,
+mask slot's words from the OS and writes them into the witness's mask slot (`Frames.Sessions.maskOf`,
 `Frame.MaskSlot.fill`: the slot of the session's own statement for the table, at its `m`), samples the four extra lanes,
 every lane's padding and the level-0 salts, commits level 0 on them and keeps the table's `Flock.Firewall.Level0` (its `m`,
 level 0's schedule and `t_pad`, the witness, the samples, the codeword's rows, the Merkle layers from the leaves to the
@@ -775,12 +775,12 @@ the `N` bytes of the mask slot's words, the extra lanes, the paddings and the sa
 root, or `err WHY`; the loop wrote the words into the witness's mask slot before it committed level 0, whatever the
 witness held there. A session the loop isn't serving is refused, and so is a table the session lacks, an `M` other than
 the table's statement's, a witness of other than that `M`'s words, or a second request for a table: the loop draws each
-table's level 0 once (`Level0.Registry.draw`), so the prover can't draw again until a root suits it. The
+table's level 0 once (`Level0.Slots.draw`), so the prover can't draw again until a root suits it. The
 session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop drew for that
 session's table `i` at its statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would pad too few positions).
-Every `Level0` drawn for a session, committed or not, is freed when it ends (`Level0.Registry.close`).
+Every `Level0` drawn for a session, committed or not, is freed when it ends (`Level0.Slots.close`).
 The proofs leave just before `Finish`, the loop's finish's file of each table's rep 0 and rep 1 on the level 0 the
-`Commit` bound (`Session.ownProofs`, kept once a rep, `Frames.Registry.file`), every rep's or none, and only once every
+`Commit` bound (`Session.ownProofs`, kept once a rep, `Frames.Sessions.file`), every rep's or none, and only once every
 rep's frame ended not stopped; where one stopped, `Finish`
 leaves without them once the schedule's last opening has, and the prover's `Finish` is refused (`PROVER-STOPPED: the Lean
 frame stopped table I rep R`). The analysis's release is this loop
@@ -968,7 +968,7 @@ a rep's salts instead), and the selftest's `zk_worker_finish` holds each mode to
 
 The inner proof's rounds that leave are the frame's own: the loop places each at `Frame.innerSched`, the frame's own round
 (`ε`, `β`, its samples and the round's coin count) on the finish's round (`final_c'`, `τ`'s commitment), which the loop's
-finish hands the frame before Rust relays it (`Frames.Registry.innerRound`), and the frame's check holds the relayed round
+finish hands the frame before Rust relays it (`Frames.Sessions.innerRound`), and the frame's check holds the relayed round
 to it byte for byte. `FC_INNER_TAMPER=J` relays table 0 rep 0's inner round `J` with its last value byte flipped, and the
 selftest's `zk_worker_inner` holds each round to that, beside an honest session, which is accepted:
 

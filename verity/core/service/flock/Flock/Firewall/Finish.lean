@@ -941,12 +941,12 @@ def cmd (args : List String) : IO UInt32 := do
 /-- **The session loop's finish**, a connection to its frames port whose first line is `line`: `finish LEN` followed by
 the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
 loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt drawn from the operating
-system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Registry`, `l0s`), each rep's salts
+system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Slots`, `l0s`), each rep's salts
 for levels ≥ 1 handed to `keep`, the loop's frames' copy, which keeps a rep's once, each round of a rep's inner proof to
 `inner`, which the loop's frames release in its place, and each rep's proof file to `file`, the proof the loop sends
 (`Session.relay`), each rep's draws its frame's and its requests held to what the loop holds of it (`own`,
 `Frames.ownOf`). -/
-def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Registry)
+def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Slots)
     (keep : ByteArray → Nat → Array ByteArray → IO (Option String)) (file : ByteArray → Nat → ByteArray → IO (Option String))
     (own : Nat → Nat → ByteArray → IO (Option (Except String Own)))
     (inner : ByteArray → Nat → Nat → ByteArray → IO (Option String)) (line : String) : IO Unit := do

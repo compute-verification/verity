@@ -6,7 +6,7 @@ import Proofs.Flock.SessionLoop.Statement
 Past an opened rep's scheduled rounds the loop's frame releases the inner proof's rounds itself (`Frames.roundPlace`,
 at `Frame.innerSched`): its round `j` is `Frame.ownRound`, every word the frame's own (its `ε`, `β`, pads and coin
 count) but `final_c'` (round 0) and `τ`'s commitment (round 2), which it reads off the finish's round `j`, as the
-finish hands it to the frame (`Registry.innerRound`, from `Finish.liveAsks`'s `sent`) before Rust relays it. A finish
+finish hands it to the frame (`Sessions.innerRound`, from `Finish.liveAsks`'s `sent`) before Rust relays it. A finish
 round that differs from the frame's is refused: the frame's check at `.sched` asks for the round byte for byte. This
 file defines that release and proves `LoopInnerRound0` at it, at every finish:
 

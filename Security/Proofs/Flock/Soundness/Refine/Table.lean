@@ -116,7 +116,7 @@ theorem roundsWF_of {rs : Array Round} (h : ∀ r ∈ rs.toList, r.coins.size = 
 
 set_option maxHeartbeats 1000000 in
 /-- The record's rounds are well formed: `Record.decode` checks every round's coin count (S12). -/
-theorem decode_roundsWF {spec : SessionSpec} {text : String} {sess : Session}
+theorem decode_roundsWF {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decode spec text = .ok sess) : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds := by
   unfold Record.decode at h
   dsimp only at h
@@ -218,11 +218,11 @@ played with its proof's messages and every coin of its stream, accepts, and both
 level-0 cap. -/
 theorem verify_refines (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
-    (hms : st.merkle = MerkleScheme.sha512 msId) (extra : Session → List (Model.Claim 𝔽 S.m))
+    (hms : st.merkle = MerkleScheme.sha512 msId) (extra : RunRecord → List (Model.Claim 𝔽 S.m))
     (record : String) (proofs : Array ByteArray)
     (hext : ∀ sess, Record.decode spec record = .ok sess → ExtraRealizes st S sess.points (extra sess))
     (h : Flock.verify spec #[st] record proofs = .ok ()) :
-    ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+    ∃ (sess : RunRecord) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
       Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf st sch (extra sess).length) proofs[0]! = .ok p₀ ∧
       decodeProof (shapeOf st sch (extra sess).length) proofs[1]! = .ok p₁ ∧
@@ -271,12 +271,12 @@ and the schedule is rep 0 first, while the live server may interleave the stream
 lifts from `verify_refines`, which names each rep's messages and coins. -/
 theorem verify_tableAfter (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
-    (hms : st.merkle = MerkleScheme.sha512 msId) (ptLocal mPts : ℕ) (pts : Session → Fin 2 → Fin mPts → 𝔽)
+    (hms : st.merkle = MerkleScheme.sha512 msId) (ptLocal mPts : ℕ) (pts : RunRecord → Fin 2 → Fin mPts → 𝔽)
     (record : String) (proofs : Array ByteArray)
     (hext : ∀ sess, Record.decode spec record = .ok sess →
       ExtraRealizes st S sess.points (Model.extraClaims S ptLocal mPts (pts sess)))
     (h : Flock.verify spec #[st] record proofs = .ok ()) :
-    ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (ms : List Msg) (out : OutC 𝔽 Dig),
+    ∃ (sess : RunRecord) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (ms : List Msg) (out : OutC 𝔽 Dig),
       Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf st sch (Model.extraClaims S ptLocal mPts (pts sess)).length) proofs[0]! = .ok p₀ ∧
       decodeProof (shapeOf st sch (Model.extraClaims S ptLocal mPts (pts sess)).length) proofs[1]! = .ok p₁ ∧
