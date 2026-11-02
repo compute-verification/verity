@@ -1031,7 +1031,7 @@
   "Properties.NetworkScan": {
    "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit"],
    "except": [],
-   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, and the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.Layout.Fits`), never a proof"
+   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, and the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`), never a proof"
   },
   "Properties.Pouw.ServedWork": {
    "imports": ["Definitions.Pouw.Dither", "Definitions.Pouw.Assumptions.ServedWork", "Properties.Pouw.PeriodJ10R"],
@@ -5092,7 +5092,7 @@
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision); an open statement, to be proved from euf-cma/lms-sha512-n64 and ecr/sha-512 asked of that finder",
    "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it",
-   "Properties.NetworkScan.ScanFits": "unstated: NetTiming.Layout.Fits' parts (1) and (2) at an accepted scan's layout are proved from scanOf's acceptance (scanFits_egress_ingress, Proofs.Properties.NetworkScan.Fits); part (3), no egress gate depending on a later step's ingress, is open, and ScanFits gets a guarantee entry with its proof",
+   "Properties.NetworkScan.ScanFits": "unstated: NetTiming.BoundaryGates.Fits' parts (1) and (2) at an accepted scan's layout are proved from scanOf's acceptance (scanFits_egress_ingress, Proofs.Properties.NetworkScan.Fits); part (3), no egress gate depending on a later step's ingress, is open, and ScanFits gets a guarantee entry with its proof",
    "Properties.NetworkScan.ScanScopeAcc": "unstated: scanScopeAcc_of_scanFits (Proofs.Properties.NetworkScan) proves it from ScanFits, which is unstated until its part (3) is proved (its entry)",
    "Properties.NetworkPeriod.rowsProgWired_nontrivial": "lemma: RowsProgWired's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsProgWiredOf at a rows-form period of one link-window whose scan's prog is no audit's slot entries",
    "Properties.NetworkPeriod.rowsStateTied_nontrivial": "lemma: RowsStateTied's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsStateTiedOf at a rows-form period of one link-window whose scan's state is not its wired audit's SCAN_STATE",
