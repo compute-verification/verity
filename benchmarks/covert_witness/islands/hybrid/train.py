@@ -343,9 +343,10 @@ def main() -> int:
         pool = aa.select_pool * aa.batch
         per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}] + (
             [{"op": "forward", "tokens": pool * prepare.EVAL_CTX}] if aa.select_pool > 1 else []))["flops"]
+        p_full = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
         if aa.head == "sampled":
             per_step -= 2 * 2 * (V - aa.head_plan) * d * tokens
-        p = {"tokens": tokens, "extra": extra, "pool": pool, "flops_per_step": per_step + extra, "planned_flops": share}
+        p = {"tokens": tokens, "full_head_step": p_full, "extra": extra, "pool": pool, "flops_per_step": per_step + extra, "planned_flops": share}
         W, E = aa.cache_windows, aa.cache_epochs
         if W:
             epoch_tok = per_step / tokens - prefix_tok
@@ -447,8 +448,15 @@ def main() -> int:
                 else:
                     fns = [lambda x=rows[i: i + mb]: head(F.rms_norm(net.inner.hidden(x[:, :-1]), (d,), net.inner.norm),
                                                           x[:, 1:]) for i in range(0, B, mb)]
+                c0 = len(cands)
                 train_step([(fn, len(rows[i: i + mb]) / B) for fn, i in zip(fns, range(0, B, mb))])
-                steps.append({"op": "train", "tokens": p["tokens"]})
+                if aa.head == "full":
+                    steps.append({"op": "train", "tokens": p["tokens"]})
+                else:
+                    # the analytic `train` pass prices the whole tied head; this step's head had its measured rows
+                    rows_head = min(V, sum(cands[c0:]) / max(1, len(cands) - c0) + aa.head_neg)
+                    steps.append({"op": "extra", "flops": int(p["full_head_step"] - 4 * (V - rows_head) * d * p["tokens"]),
+                                  "what": f"train step, sampled head ({rows_head:.0f} rows)", "tokens": p["tokens"]})
             if c in marks:
                 snaps.append((encode(a.store, factors, params, full, theta), len(steps)))
     blob = encode(a.store, factors, params, full, theta)
