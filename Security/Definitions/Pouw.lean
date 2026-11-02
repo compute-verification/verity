@@ -46,6 +46,7 @@ import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU
 import Definitions.Pouw.NCP.Witness
 import Definitions.Pouw.NCP.Word
+import Definitions.Pouw.OnsiteFreed
 import Definitions.Pouw.PearlC.Accum
 import Definitions.Pouw.PearlC.Completeness
 import Definitions.Pouw.PearlC.Deadline
@@ -105,6 +106,7 @@ import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
 import Definitions.Pouw.Window
+import Definitions.Pouw.Witness
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 

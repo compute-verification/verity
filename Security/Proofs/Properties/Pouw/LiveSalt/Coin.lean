@@ -193,21 +193,21 @@ def taggedBytes (tag s : String) : ByteArray :=
   "verity/tagged-sha512/v1".toUTF8.push 0 ++ Flock.be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8 ++
     Flock.be64 s.toUTF8.size.toUInt64 ++ s.toUTF8
 
-theorem tagged_eq {tag s : String} {j : Json} (hc : Flock.canon j = .ok s) :
+theorem tagged_eq {tag s : String} {j : Json} (hc : Flock.canonUtf8 j = .ok s) :
     taggedSha512 tag j = .ok (Flock.Sha512.hash (taggedBytes tag s)) := by
   unfold taggedSha512
   rw [hc]
   rfl
 
-theorem taggedMessage_eq {tag s : String} {j : Json} (hc : Flock.canon j = .ok s) :
+theorem taggedMessage_eq {tag s : String} {j : Json} (hc : Flock.canonUtf8 j = .ok s) :
     taggedMessage tag j = [taggedBytes tag s] := by
   unfold taggedMessage
   rw [hc]
   rfl
 
 theorem tagged_ok {tag : String} {j : Json} {b : ByteArray} (h : taggedSha512 tag j = .ok b) :
-    ∃ s, Flock.canon j = .ok s ∧ b = Flock.Sha512.hash (taggedBytes tag s) := by
-  cases hc : Flock.canon j with
+    ∃ s, Flock.canonUtf8 j = .ok s ∧ b = Flock.Sha512.hash (taggedBytes tag s) := by
+  cases hc : Flock.canonUtf8 j with
   | error e =>
     unfold taggedSha512 at h
     rw [hc] at h
@@ -261,7 +261,7 @@ theorem domainHashed_eq {c : LiveCommitment} {b p : ByteArray}
 theorem domain_mem {c : LiveCommitment} {b p : ByteArray} {s : String} (L : List ByteArray)
     (hb : taggedSha512 BINDING (Canon.binding c.epoch c.families c.scheme) = .ok b)
     (hp : taggedSha512 "veritor/indexed-domain/range/v1" (positions c.families) = .ok p)
-    (hs : Flock.canon (Canon.binding c.epoch c.families c.scheme) = .ok s) :
+    (hs : Flock.canonUtf8 (Canon.binding c.epoch c.families c.scheme) = .ok s) :
     domMsg b p c.families ∈ domainHashed c ++ L ∧ taggedBytes BINDING s ∈ domainHashed c ++ L := by
   rw [domainHashed_eq hb hp, taggedMessage_eq hs]
   simp

@@ -51,6 +51,13 @@ profile's types derive `DecidableEq`.
   JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
 - A usage error exits 64, and an outcome that can't be written canonically exits 70.
 
+A case is read in place by `Core.Canonical` (`CoreProtocol/Protocol/Canonical.lean`), which gives `canonicalJson`'s and
+`Flock.unhex`'s answers at any size, and a protocol's decoder reads evidence that can be gigabytes with it too (PoUS's,
+a composition's). Those two go through `String.toList`, whose runtime counts characters in 32 bits and spends about 30
+bytes on each: they refuse a canonical text holding a string of `2^32` characters or more, or read a prefix of it.
+`Canonical` imports only what `Protocol` does, so it sits in `Protocol`'s layer. `serve` frees a case's line before it
+decodes the evidence, and its peak memory is about 2.6 times the line.
+
 ## Blobs (`CoreProtocol/Blobs.lean`)
 
 A check that reads bytes too large for canonical JSON (a statement's circuit file, its public file, its sessions'
@@ -65,6 +72,17 @@ the caller's blobs. `toProtocol` is the protocol on no blobs, so a composition o
 file) and a `serve` case that may carry `"blobs": ["<hex>", ...]` (absent: none). `CoreProtocol/BlobsExample.lean` is
 the toy protocol whose guards cover both.
 
+## Records (`CoreProtocol/Record.lean`)
+
+`Core.Record` is a record entry: one message of a run's transcript (a registration, a commitment, the challenger's
+coins or sample, a proof, a verdict), `{body, kind, prev, schema, seq, session, sig}`. `body` is the message, `kind` its
+kind under `schema` (the protocol's entry schema and version), `session` its session or `null`, and entry `i` has
+`seq = i` and `prev` the SHA-512 of entry `i - 1`'s line (`Record.ZERO` first). `sig` signs `Record.message role I d`,
+SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
+sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
+signer and sessions) is its own check. The auditor's ledger (`SampledProofs.Challenger.ledgerEntry?`, schemas
+`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/core/protocols/record.py` is its Python.
+
 ## The profile (`CoreProtocol/Profile.lean`)
 
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
@@ -72,6 +90,36 @@ the toy protocol whose guards cover both.
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
+
+## The registration log (`CoreProtocol/Registration.lean`)
+
+`Core.Registration` is a deployment's one registration log, which every subprotocol and both composites read. It is
+append-only: each entry names the head of the log before it (`previous`), the digest of its last entry or of its
+composite's genesis, so the head names the whole log. An entry is in one of two formats, each with its own versioned id:
+
+| format | what it registers |
+| --- | --- |
+| `verity/registration/hardware/v1` | the site's cards (each device's registered figures: SKU, tensor clock, peak rate per operand class, memory figures), locations (site, hosts, devices, memory leaves by tier and bytes, the auditor's certifiers and challengers with their keys) and links (`β`, latency) |
+| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
+
+Registration registers the site, θ and `B`, not the circuit `B` builds. A subprotocol's Program and parameters, and
+the proof system, are that protocol's public verifier parameters, not entries of the log.
+
+An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, a card's is under `verity/registration/card/v1`, and the
+genesis is under `verity/registration/genesis/v1` over `{"composite": "onsite" | "remote"}`. `check` holds each entry to
+the log before it and refuses the first that fails by name (`previous`, `duplicate-id`, `unknown-ref`, `kind`,
+`card-digest`, `figures`, `capacity`, `owner`, and onsite `uncertified` and `challenger-reach`, then `duplicate-information`). A
+component reads its view of an accepted log by projection (`View`: the site, θ's values and the builder, at the head).
+Registration is ASCII-only without DEL: a log or parameters holding any other character is refused as `ascii` before
+any digest is taken. As a core protocol, `protocol` (`verity/registration/log/v1`, the `core-registration` executable) takes the
+auditor's parameters (`{"composite", "keys", "sheets", "tolerance"}`), the log as commitment (`{"composite", "entries"}`, its head
+the digest) and `{}` as evidence; it makes public the log's view and rejects as `entry I: REFUSAL`. `figures` is registration's check of a device's
+registered figures against the auditor's estimates (`DeviceFigures.Accepted`): the SKU is the sheet's, the clock and
+each peak rate (`peakRate`, one per operand class: `uniform-s8`, `uniform-s2`, `uniform-u2`, `uniform-u4`, `zero`) are
+within the auditor's tolerance `num / den` of the sheet's in both directions, every peak rate is positive, and the
+memory figures are the sheet's.
+`verity.core.protocols.registration` is its Python, held to it by the composition suite's difftest
+(`../composition/tests/test_registration_difftest.py`).
 
 ## Properties
 

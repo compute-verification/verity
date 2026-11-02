@@ -11,6 +11,7 @@ import Proofs.Pouw.Dimension
 import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
 import Proofs.Pouw.DitherInstance
+import Proofs.Pouw.DitherSelected
 import Proofs.Pouw.Dimension.A2WordsProofs
 import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
@@ -63,6 +64,7 @@ import Proofs.Pouw.Lead
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract
+import Proofs.Pouw.OnsiteFreed
 import Proofs.Pouw.ShaRealize
 import Proofs.Pouw.ShaRealizeWitness
 import Proofs.Pouw.Milestone
@@ -80,6 +82,8 @@ import Proofs.Pouw.Period
 import Proofs.Pouw.Period.Accept
 import Proofs.Pouw.Period.Honest
 import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.PeriodJ10RStrata
+import Proofs.Pouw.PeriodJ10RStrata.Honest
 import Proofs.Pouw.PeriodJ10R
 import Proofs.Pouw.PeriodJ10R.Honest
 import Proofs.Pouw.PeriodJ10R.Nontrivial
@@ -172,6 +176,8 @@ import Proofs.Pouw.PearlC.RowStats
 import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheckWords
+import Proofs.Pouw.Pool
+import Proofs.Pouw.PoolWitness
 import Proofs.Pouw.Prob
 import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
@@ -182,6 +188,10 @@ import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.SakLb
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Sanity
+import Proofs.Pouw.ServedFreed
+import Proofs.Pouw.ServedFreed.Honest
+import Proofs.Pouw.ServedWork
+import Proofs.Pouw.ServedWork.Honest
 import Proofs.Pouw.SteinerRigidity
 import Proofs.Pouw.Theorem1
 import Proofs.Pouw.TileBound.AlignedExact

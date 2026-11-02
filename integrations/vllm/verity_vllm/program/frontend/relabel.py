@@ -26,7 +26,7 @@ from verity.ml.circuits.defs import Body, Builder
 from verity.ml.circuits.refs import Affine, Coll, runs
 from verity.ml.circuits.types import Value
 from verity_vllm.program.frontend.derive import _finish_report, _flat_definition, fx_arg_nodes
-from verity_vllm.program.frontend.report import DeriveReport, DeriveSession
+from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
 
 COLLECTIVES = ("all_reduce2", "all_gather2", "all_reduce", "all_gather")
 EMBEDDING = "embedding_shard"
@@ -95,7 +95,7 @@ def shard_map(template: list[dict], rank: list[dict]) -> dict[tuple[int, int], t
     return out
 
 
-def rank_report(session: DeriveSession, r: int, *, shards: dict[tuple[int, int], tuple[int, int]]) -> DeriveReport:
+def rank_report(session: DerivationTail, r: int, *, shards: dict[tuple[int, int], tuple[int, int]]) -> DeriveReport:
     """Rank `r`'s derive report from the template's derivation `session` (see module docstring).  Raises `RelabelRefused`."""
     if session.rank is None:
         raise RelabelRefused("the template is not a TP rank derivation")

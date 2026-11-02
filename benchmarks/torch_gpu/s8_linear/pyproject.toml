@@ -9,5 +9,5 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # tests/ evaluate the Definition (verity.ml.circuits, which imports no other unit) and the twin's bf16 cast (verity.ml.kernels.tc);
 # wgmma.py reads its variables through settings.py, on verity_config.settings.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "tools/config/verity_config"]

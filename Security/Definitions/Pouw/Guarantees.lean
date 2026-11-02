@@ -8,6 +8,7 @@ import Definitions.Pouw.Guarantees.Game
 import Definitions.Pouw.Guarantees.Lead
 import Definitions.Pouw.Guarantees.LeadGame
 import Definitions.Pouw.Guarantees.NCP
+import Definitions.Pouw.Guarantees.OnsiteFreed
 import Definitions.Pouw.Guarantees.PearlC
 import Definitions.Pouw.Guarantees.PearlCTileCheck
 import Definitions.Pouw.Guarantees.Receipt

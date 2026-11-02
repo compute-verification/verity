@@ -11,8 +11,10 @@ import Proofs.Pous.P2.RingTrunc
 (`not_p2RingAuditSecure_trunc`, at `t = 168`, `m = 501,819`: `(501819/2^19)^105 ≈ 0.01006`), far above `RING_L = 2^64`.
 At `t = 167` its `m = 501,788` gives `(501788/2^19)^105 ≈ 0.009996 < 1%`, so `2^169` is where that family starts.
 
-The honest period (`periodHeldHonest`): `RingDevice` holds because the capacity account holds `FULL > S₀` bits at tick
-`0` of the window, so no capacity coin meets its antecedent; `63,000,000 · 105 + 2^30 + 437,248,000 = 8,125,989,824 ≤
+The honest period (`periodHeldHonest`): the honest strategy keeps its state and runs a `ret` every round
+(`seqRounds_ret`), so each answer takes no round or query, and its state is `C`'s `FULL` bits, which the capacity
+account holds at tick `0` of the window; the code's draw never fails at a 32-byte id (`coinView_some`,
+`uniformOn_split`), and a lookup returns the challenged block; `63,000,000 · 105 + 2^30 + 437,248,000 = 8,125,989,824 ≤
 S₀ = 8,169,621,180`; `⌊854,000 · 349 / 36,155⌋ = 8,243 ≤ 16,446`; and `16,447 · 36,155 / 349 ≥ 1.995 · 854,000`.
 The empty period has probability 1 of the accept-all event, and the honest one held `105 · FULL` bit-ticks
 (`periodHeldNontrivial`).
@@ -91,18 +93,77 @@ theorem held_periodRun (m : ℕ) (hm : m ≤ FULL)
     (periodRun m hm).held ω = K * m := by
   simp [Accounting.Run.held, Accounting.Schedule.held, Accounting.Window.ticks, periodRun]
 
+/-- A strategy that keeps its state and answers from it with no query: every round starts from the first state and runs
+a `ret`, and its answers are the lookups. -/
+theorem seqRounds_ret {M : IdealModel} {σ α ι : Type} (f : M.Qry → M.Ans) (g : σ → ι → α)
+    (step : ℕ → σ → ι → Prog M (α × σ)) (hstep : ∀ j s i, step j s i = .ret (g s i, s)) :
+    ∀ (j : ℕ) (is : List ι) (s : σ),
+      (seqRounds f step j is s).map (fun e => (e.2.run f).1) = is.map (g s) ∧
+        ∀ e ∈ seqRounds f step j is s, e.1 = s ∧ ∃ i, e.2 = .ret (g s i, s)
+  | _, [], _ => ⟨rfl, fun _ he => by simp [seqRounds] at he⟩
+  | j, i :: is, s => by
+    have ih := seqRounds_ret f g step hstep (j + 1) is s
+    have hs : ((step j s i).run f).2 = s := by simp [hstep, Prog.run]
+    refine ⟨?_, fun e he => ?_⟩
+    · simp only [seqRounds, List.map_cons, ih.1, hstep, Prog.run]
+    · simp only [seqRounds, List.mem_cons, hs] at he
+      rcases he with rfl | he
+      · exact ⟨rfl, i, hstep j s i⟩
+      · exact ih.2 e he
+
+theorem honestStrategy_pre (o : Unit × Unit) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
+    (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) :
+    honestStrategy.pre o W pp C ω = List.ofFn (codeEquiv sch.B sch.ℓ C) := by
+  simp only [honestStrategy]
+
+theorem honestStrategy_step (o : Unit × Unit) (sc : MemoryChallenger.SessionCommitment) (W : Bits sch.n)
+    (pp : Bits sch.t) (j : ℕ) (σ : List Bool) (i : Fin sch.B) :
+    honestStrategy.step o sc W pp j σ i = .ret ((codeEquiv sch.B sch.ℓ).symm (fun k => σ.getD k.val false) i, σ) := by
+  simp only [honestStrategy]
+
 theorem periodHeldHonest : PeriodHeldHonest := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · intro P o B hB
-    have hBF : B < FULL := by
-      have := Pous.EndToEnd.SecurityProofs.stateBound_lt
+  · intro P hs
+    have key : ∀ (o : Unit × Unit) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
+        (I : Fin 105 → Fin (2 ^ 19)) (v : ByteArray × ByteArray),
+        (P.answers honestStrategy o x I v =
+            (List.ofFn I).map fun i => (codeEquiv sch.B sch.ℓ).symm (fun k =>
+              (honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1).getD k.val
+                false) i) ∧
+          ∀ e ∈ P.trace honestStrategy o x I v,
+            e.1 = honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1 ∧
+              ∃ i, e.2 = .ret ((codeEquiv sch.B sch.ℓ).symm (fun k =>
+                (honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1).getD k.val
+                  false) i,
+                honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1) :=
+      fun o x I v => seqRounds_ret ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
+        (fun (σ : List Bool) (i : Fin sch.B) => (codeEquiv sch.B sch.ℓ).symm (fun k => σ.getD k.val false) i)
+        (honestStrategy.step o (commitmentOf P.sid (P.pub o).root v) (P.W o) (sch.enc (P.W o) x.1 ()).1)
+        (honestStrategy_step o (commitmentOf P.sid (P.pub o).root v) (P.W o) (sch.enc (P.W o) x.1 ()).1) 0
+        (List.ofFn I) (honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1)
+    refine ⟨fun o x I v _ => ⟨fun _ e he => ?_, fun B hB e he => ?_⟩, fun o x _ => ?_⟩
+    · obtain ⟨-, i, hi⟩ := (key o x I v).2 e he
+      rw [hi]
+      exact ⟨Nat.zero_le _, Nat.zero_le _, Nat.zero_le _⟩
+    · have h0 : (0 : ℕ) ∈ (honestRun.win .capacity).ticks := by
+        simp [honestRun, periodRun, Accounting.Window.ticks, K]
+      have h1 : FULL ≤ B := hB 0 h0
+      have hl : e.1.length = sch.B * sch.ℓ := by
+        rw [((key o x I v).2 e he).1, honestStrategy_pre, List.length_ofFn]
+      have hF : sch.B * sch.ℓ = FULL := rfl
       omega
-    refine ⟨⟨fun _ _ _ _ _ => false, fun _ _ _ _ σ _ => .ret (fun _ => false, σ),
-      fun _ _ _ _ _ _ => PousP2Ring.ringBounded_ret _ _ _ _⟩, fun x hx _ => ?_⟩
-    have h0 : (0 : ℕ) ∈ (honestRun.win .capacity).ticks := by
-      simp [honestRun, periodRun, Accounting.Window.ticks, K]
-    have h1 : FULL ≤ B := hx 0 h0
-    omega
+    · obtain ⟨v, hv⟩ := Pous.EndToEnd.SecurityProofs.coinView_some P.sid hs x.2.1
+        (Pous.EndToEnd.SecurityProofs.splitAll x.2.2).1
+      refine ⟨(Pous.EndToEnd.SecurityProofs.splitAll x.2.2).1, v,
+        ⟨fun j => Pous.EndToEnd.SecurityProofs.uniformOn_split (x.2.2 j), hv⟩, ?_⟩
+      have hfun : (fun k : Fin (sch.B * sch.ℓ) =>
+          (List.ofFn (codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2)).getD k.val false) =
+          codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2 := by
+        funext k
+        simp
+      rw [(key o x _ v).1, honestStrategy_pre, hfun]
+      simp only [Equiv.symm_apply_apply]
+      exact List.map_ofFn
   · show (0 : ℝ) < (HONEST_S : ℝ) * ((K : ℕ) : ℝ)
     norm_num [HONEST_S, K]
   · rw [S_eq]
