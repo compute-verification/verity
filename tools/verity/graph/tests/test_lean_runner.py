@@ -1,6 +1,6 @@
 """The Lean runners on real Lean, in a toy checkout the Lean families list and the reference executor runs: the auditor's
-control package (`tools/verity/lean/tests/fixtures/control`), a package under the module system, one with a `sorry` and
-an axiom in private proofs, and one that doesn't compile. Each module compiles from its reads alone to Lake's bytes and
+control package (`tools/verity/lean/tests/fixtures/control`), a package under the module system, one with a `sorry`, an
+axiom and `native_decide` in private proofs, and one that doesn't compile. Each module compiles from its reads alone to Lake's bytes and
 gets its replay and its declarations' axiom sets, an importer's taken through its import's record; a lock passes, is
 stale with the command that regenerates it, or names a root no task builds. Skipped where the fixture's toolchain isn't
 installed. Slow (`lean` for each module, `Facts.lean` compiled for each `check.py`): only real Lean shows that the setup
@@ -47,11 +47,12 @@ MS = {
                      'roots = ["A", "B", "C", "D", "F", "G", "Ms"]\n',
     "lake-manifest.json": manifest("ms"),
 }
-#: a `sorry` and an axiom in proofs only `A`'s private part holds, and `B`, whose public theorem rests on them
+#: a `sorry`, an axiom and `native_decide` in proofs only `A`'s private part holds, and `B`, whose public theorem rests on them
 AX = {
     "A.lean": "module\npublic def a : Nat := 1\ntheorem p : a = 1 := by sorry\naxiom hidden : a = 1\n"
-              "public theorem h2 : a = 1 := hidden\npublic theorem h3 : a = 1 := by sorry\n",
-    "B.lean": "module\npublic import A\npublic theorem b : a = 1 ∧ a = 1 := ⟨h2, h3⟩\n",
+              "public theorem h2 : a = 1 := hidden\npublic theorem h3 : a = 1 := by sorry\n"
+              "public theorem h4 : 2 + 2 = 4 := by native_decide\n",
+    "B.lean": "module\npublic import A\npublic theorem b : a = 1 ∧ a = 1 ∧ 2 + 2 = 4 := ⟨h2, h3, h4⟩\n",
     "lakefile.toml": 'name = "ax"\ndefaultTargets = ["Ax"]\n\n[[lean_lib]]\nname = "Ax"\nroots = ["A", "B"]\n',
     "lake-manifest.json": manifest("ax"),
 }
@@ -153,9 +154,11 @@ def test_a_module_system_package_compiles_part_by_part_to_lake_s_bytes(tree, tmp
 def test_axioms_in_private_proofs_fail_their_module_and_reach_an_importer_through_its_record(tree, tmp_path):
     doc = only(graph.listing(tree, {"lean-module"}, listers=LISTERS), "lean-module:ax/")
     a, b = (next(t for t in doc["tasks"] if t["id"] == f"lean-module:ax/{f}.lean") for f in "AB")
+    native = "_private.A.0.h4._native.native_decide.ax_1_1"    # the axiom `native_decide` adds for each use
     res = runners.execute(a, doc, tmp_path / "a")
     assert res["status"] == "fail" and res["detail"]["axioms"] == {
-        "_private.A.0.hidden": ["_private.A.0.hidden", "h2"], "sorryAx": ["_private.A.0.p", "h3"]}, res["detail"]
+        "_private.A.0.hidden": ["_private.A.0.hidden", "h2"], native: [native, "h4"], "sorryAx": ["_private.A.0.p", "h3"]}, \
+        res["detail"]
 
     def importer(reads: tuple[str, ...], name: str) -> dict:
         """B's task reading ``reads`` of A's outputs alone (A's check skipped), and its record."""
@@ -169,9 +172,9 @@ def test_axioms_in_private_proofs_fail_their_module_and_reach_an_importer_throug
         assert res["status"] == "fail" and res["detail"]["imports"] == 1, res
         return json.loads((work / out).read_text())["axioms"]
 
-    assert importer(("olean", "axioms"), "public") == {"b": ["_private.A.0.hidden", "sorryAx"]}, \
+    assert importer(("olean", "axioms"), "public") == {"b": [native, "_private.A.0.hidden", "sorryAx"]}, \
         "A's public part and its record alone: B's theorem carries the axioms A's private proofs use"
-    assert importer(("olean",), "unrecorded") == {"b": ["a", "h2", "h3"]}, \
+    assert importer(("olean",), "unrecorded") == {"b": ["a", "h2", "h3", "h4"]}, \
         "without A's record, what B uses of A's public part counts as axioms: the task fails rather than miss one"
 
 
