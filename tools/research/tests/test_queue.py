@@ -2833,6 +2833,29 @@ def test_under_land_into_checked_a_head_is_judged_against_checked_not_main(world
     assert f"#2 is not marked ready at {own[:12]}: it changes the Lean lock of pkg against `checked`" in capsys.readouterr().err
 
 
+def test_a_head_stacked_on_a_landed_pr_that_merged_main_is_judged_by_its_own_change_not_one_merge_base(world, capsys, monkeypatch):
+    """A head stacked on a PR since landed on `checked`, which then merged `main`, has two merge bases with `checked`: the
+    stacked-on PR's head and that `main`.  Measured from the first (git's pick when it is the newer), every lock `main` changed
+    since counts as the head's, and the gate asked for records runs of locks it never touched.  A file is the head's change only
+    where it differs from both."""
+    world.with_store_remote()
+    base = _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "1000000000 +0000")
+    moved = _move_main(world, {LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    below = world.change({"a.txt": "stacked on\n"}, base=base)
+    _git(world.dev, "checkout", "-q", "--detach", moved)
+    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", below)
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/checked")
+    head = _merge_main(world, world.change({"x.txt": "x\n"}, base=below))
+    bare = LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")
+    capsys.readouterr()
+    assert _mark(world, 1, head, store=bare) == 0, capsys.readouterr().err
+    own = world.change({LOCK: _lock(A="2", B="3")}, base=head)
+    assert _mark(world, 2, own) == 1
+    assert f"#2 is not marked ready at {own[:12]}: it changes the Lean lock of pkg against `checked`" in capsys.readouterr().err
+
+
 def test_a_run_whose_indexed_manifest_cant_be_read_vouches_for_nothing_and_the_refusal_says_so(world, capsys):
     """The records gate picks candidate runs by the command in the index's manifest; a row that doesn't parse is skipped, which
     fails closed, and the refusal says how many were skipped and at which commit, rather than refusing with no trace of why."""
