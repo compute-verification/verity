@@ -12,16 +12,17 @@ island per class (or per direction, `islands/<direction>/`), each with one edita
 `README.md`, for a researcher agent.
 
 **Version**: v2.3 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v4`; the harness is te_core
-3.4; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
+3.5; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
 times its steps, and every run is ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a
 fresh slice of the search pool drawn after the weights are hashed, promotions are decided on a sealed set one bit each,
 and the final set and a final start are sealed until the scorer's final scoring. Since v2.2, one pinned commit
 (`pinned.json`) measures every candidate, taking only its island from the candidate's commit; a candidate is a training
 job, sandboxed so that no held-out text is on any path it can open, that writes only its E files and step log, and a
 separate evaluation job that rebuilds and scores the model; the held-out sets leave out documents that are training
-documents. v2.3, the night's last pin, adds te_core 2.7-3.2 to it: the counter's routes and product forms, the guard over
-other runs' outputs and the C++ and Rust loaders, ρ by thresholds, a declared step's rebuild-cost floor, the `sparse`,
-`lora2` and `quant` formats with every E's rebuild cost, and the meter's tied-embedding adapters.
+documents. v2.3, the night's last pin, adds te_core 2.7-3.5 to it: the counter's routes and product forms, the guard over
+other runs' outputs and the C++ and Rust loaders, the screen over code it never reads (runpy, exec/compile, marshal,
+pickle, modules written during the run), ρ by thresholds, a declared step's rebuild-cost floor, the `sparse`, `lora2`
+and `quant` formats with every E's rebuild cost, and the meter's tied-embedding adapters.
 
 ## Classes
 

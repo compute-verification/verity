@@ -369,6 +369,26 @@ def test_the_harness_work_runs_no_mode_hook_or_profiler_of_the_programs(tmp_path
     assert "mode" in seen and "hook" in seen
 
 
+def test_the_harness_work_builds_on_the_device_it_names_and_not_the_programs(tmp_path):
+    te = te_run.Session({}, tmp_path)
+    seen = []
+
+    class Mode(TorchFunctionMode):
+        def __torch_function__(self, func, types, args=(), kwargs=None):
+            seen.append(func)
+            return func(*args, **(kwargs or {}))
+
+    with torch.device("meta"), Mode():
+        with te.uncounted():
+            plain_device = torch.empty(1).device.type
+            with torch.device("meta"):
+                named = torch.empty(1).device.type, torch.nn.Linear(2, 2).weight.device.type
+            inside = list(seen)
+        after = torch.empty(1).device.type
+    assert plain_device == "cpu" and named == ("meta", "meta") and inside == [] and after == "meta" and seen
+    assert torch._C._len_torch_function_stack() == 0 and torch.empty(1).device.type == "cpu"
+
+
 
 def run_mezo(root, *island_args) -> tuple[int, Path, dict]:
     out = root / "out"

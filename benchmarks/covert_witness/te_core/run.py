@@ -88,6 +88,19 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+@contextmanager
+def no_function_modes():
+    """The block runs with no torch function mode and no tensor subclass's `__torch_function__`, but a mode it enters
+    itself (a `torch.device(...)` context) applies: `torch._C.DisableTorchFunction` would switch that off too."""
+    modes = [torch._C._pop_torch_function_stack() for _ in range(torch._C._len_torch_function_stack())]
+    try:
+        with torch._C.DisableTorchFunctionSubclass():
+            yield
+    finally:
+        for mode in reversed(modes):
+            torch._C._push_on_torch_function_stack(mode)
+
+
 def git_commit() -> str:
     try:
         return subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).parent, capture_output=True, text=True,
@@ -163,8 +176,7 @@ class Session:
         gc.disable()
         sys.path[:] = self.sys_path
         try:
-            with (self.counter.pause(), torch.utils._python_dispatch._disable_current_modes(),
-                  torch._C.DisableTorchFunction()):
+            with self.counter.pause(), torch.utils._python_dispatch._disable_current_modes(), no_function_modes():
                 yield
         finally:
             sys.path[:] = path
