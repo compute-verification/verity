@@ -305,9 +305,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
-  therefore the same statement, and a different term is a different one. Records written with `Expr.hash` (32 bits)
-  are checked as they are and noted; `--update` rewrites them, its review saying "rehashed" where the 32-bit hash still
-  matches, which the landing DM (below) leaves out.
+  therefore the same statement, and a different term is a different one. A definition's text holds the matchers and
+  proofs Lean shares between a module's declarations in place, not by name, so a file split, which renames them, changes
+  no hash. Records written with `Expr.hash` (32 bits) are checked as they are and noted; `--update` rewrites them, its
+  review saying "rehashed" where the 32-bit hash still matches, which the landing DM leaves out.
 
 **A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
 the replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
@@ -417,10 +418,9 @@ Two branches that each add guarantees both change `lean-audit.json`, usually in 
 conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/verity/lean/merge.py --install` has registered
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, and the digest is
-recomputed; a definition one side reads nowhere leaves unless the other side's new or restated guarantees may read it, and
-an older lock's readers and `pins` are read as today's. Guarantees arrive byte for byte from their branches, and a
-hand-written section one side extends (a module added to `meaning`) is kept. A guarantee's `owner` merges apart from the
-rest of its entry, so one side's new owner and the other side's restatement both apply.
+recomputed; an older lock's readers and `pins` are read as today's. Guarantees arrive byte for byte from their branches,
+and a hand-written section one side extends (a module added to `meaning`) is kept. A guarantee's `owner` merges apart from
+the rest of its entry, so one side's new owner and the other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
 `reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
