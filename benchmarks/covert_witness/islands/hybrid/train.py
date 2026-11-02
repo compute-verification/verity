@@ -11,7 +11,7 @@ SPEC is comma-separated `BLOCKS:LEAVES`: BLOCKS `all`, `i`, `i-j` or a negative 
 names (`wq wk wv wo w_gate w_up w_down`) or groups (`qkv`, `attn`, `gu`, `mlp`, `all`). `--klass` must equal the class the
 launcher runs (on this branch `islands/<class>/train.py` links here).
 
-    python guard.py islands/hybrid/train.py --klass shallow --start s100 --out SUB --full -1:gu --final-norm --lr 1e-3
+    python launch.py shallow s100 --note "..." -- --klass shallow --full=-1:gu --lr 1e-3 --arms 0.3,1,3
 """
 from __future__ import annotations
 
@@ -156,7 +156,10 @@ def main() -> int:
     ap.add_argument("--select-by", choices=("high", "low", "mid"), default="high")
     ap.add_argument("--fresh", action=argparse.BooleanOptionalAction, default=False,
                     help="train only on windows the start never read")
-    ap.add_argument("--snaps", type=int, default=8, help="E snapshots at k/SNAPS of the run, for the FLOPs-to-target curve")
+    ap.add_argument("--snaps", type=int, default=8, help="E snapshots at k/SNAPS of each arm, for the FLOPs-to-target curve")
+    ap.add_argument("--arms", default="", help="a packed LR sweep: comma-separated multipliers of every LR, one arm each, "
+                    "each from θ on the same data order with its share of the budget (later arms' checkpoints are "
+                    "charged the arms before them)")
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
@@ -204,18 +207,31 @@ def main() -> int:
         mod = net.inner.get_submodule(n.removesuffix(".weight"))
         mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
     fused = prepare.DEVICE.startswith("cuda")
-    groups = []
-    if norms:
-        groups.append({"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0})
-    if factors:
-        groups.append({"params": [A for A, _, _ in factors.values()], "lr": a.lora_lr, "weight_decay": 0.0})
-        groups.append({"params": [B for _, B, _ in factors.values()], "lr": a.lora_lr * a.lora_b_mult, "weight_decay": 0.0})
-    if full_m and a.opt == "adamw":
-        groups.append({"params": [params[n] for n in full_m], "lr": a.lr, "weight_decay": a.wd})
-    opts = [torch.optim.AdamW(groups, betas=(0.9, 0.95), fused=fused)] if groups else []
-    if full_m and a.opt == "muon":
-        opts.append(Muon([params[n] for n in full_m], lr=a.lr, wd=a.wd))
-    base_lrs = [[grp["lr"] for grp in o.param_groups] for o in opts]
+
+    def optimizers(mult: float) -> list[torch.optim.Optimizer]:
+        groups = []
+        if norms:
+            groups.append({"params": [params[n] for n in norms], "lr": a.norm_lr * mult, "weight_decay": 0.0})
+        if factors:
+            groups.append({"params": [A for A, _, _ in factors.values()], "lr": a.lora_lr * mult, "weight_decay": 0.0})
+            groups.append({"params": [B for _, B, _ in factors.values()], "lr": a.lora_lr * a.lora_b_mult * mult,
+                           "weight_decay": 0.0})
+        if full_m and a.opt == "adamw":
+            groups.append({"params": [params[n] for n in full_m], "lr": a.lr * mult, "weight_decay": a.wd})
+        opts = [torch.optim.AdamW(groups, betas=(0.9, 0.95), fused=fused)] if groups else []
+        if full_m and a.opt == "muon":
+            opts.append(Muon([params[n] for n in full_m], lr=a.lr * mult, wd=a.wd))
+        return opts
+
+    @torch.no_grad()
+    def reset() -> None:
+        for n in full:
+            params[n].copy_(theta[n].to(params[n].device, torch.float32))
+        g.manual_seed(a.seed)
+        for A, B, _ in factors.values():
+            A.copy_(torch.randn(A.shape, device=prepare.DEVICE, generator=g) / math.sqrt(A.shape[1]))
+            B.zero_()
+
     trainable = {"full": full, "adapters": {n: rank for n in lora}}
     tokens = a.batch * prepare.EVAL_CTX
     extra = sum(ns_flops(tuple(params[n].shape)) for n in full_m) if a.opt == "muon" else 0
@@ -223,51 +239,60 @@ def main() -> int:
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}]
                                    + ([{"op": "forward", "tokens": pool * prepare.EVAL_CTX}] if a.select_pool > 1 else []))["flops"] + extra
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
-    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
-    fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
-    if a.fresh and fresh.get("kept", 0) < n_steps * pool:
-        raise SystemExit(f"hybrid: --fresh leaves {fresh.get('kept')} windows, the run reads {n_steps * pool}")
+    mults = [float(x) for x in a.arms.split(",")] if a.arms else [1.0]
+    n_arm = n_steps // len(mults)
     fwd = torch.compile(net) if fused else net
     dev = prepare.DEVICE.split(":")[0]
     structure = prepare.deep_share(rec, set(full + lora))
-    print(json.dumps({"steps": n_steps, "full": len(full_m), "lora": len(lora), "rank": rank if lora else None,
-                      "norms": len(norms), "E_bytes": size, "flops_per_step": per_step, "phi": structure["phi"],
-                      "lowest_updated_layer": structure["lowest_updated_layer"], "data": fresh}), flush=True)
-    steps, snaps = [], []
-    marks = {round(n_steps * k / a.snaps) for k in range(1, a.snaps)}
+    steps, snaps, arms = [], [], []
+    marks = {round(n_arm * k / a.snaps) for k in range(1, a.snaps)}
     t0 = time.perf_counter()
-    for step in range(n_steps):
-        frac = lr_frac(step, n_steps, a.warmup, a.schedule, a.cooldown)
-        for o, lrs in zip(opts, base_lrs):
-            for grp, lr in zip(o.param_groups, lrs):
-                grp["lr"] = lr * frac
-        rows = data.next(pool)
-        if a.select_pool > 1:
-            rows = choose(fwd, rows, a.batch, a.micro, a.select_by, dev)
-            steps.append({"op": "forward", "tokens": pool * prepare.EVAL_CTX, "what": f"selection by {a.select_by} loss"})
-        for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
-            with torch.autocast(dev, dtype=torch.bfloat16):
-                logits = fwd(x[:, :-1])
-            loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
-            loss.backward()
-        torch.nn.utils.clip_grad_norm_([p for o in opts for grp in o.param_groups for p in grp["params"]], 1.0)
-        for o in opts:
-            o.step()
-            o.zero_grad(set_to_none=True)
-        steps.append({"op": "train", "tokens": tokens})
-        if extra:
-            steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
-        if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
-                              "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step + 1 in marks:
-            snaps.append((encode(a.store, factors, params, full, theta), len(steps)))
+    for arm, mult in enumerate(mults):
+        if arm:
+            reset()
+        opts = optimizers(mult)
+        base_lrs = [[grp["lr"] for grp in o.param_groups] for o in opts]
+        data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
+        fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
+        if a.fresh and fresh.get("kept", 0) < n_arm * pool:
+            raise SystemExit(f"hybrid: --fresh leaves {fresh.get('kept')} windows, the run reads {n_arm * pool}")
+        arms.append({"lr_mult": mult, "first_step": arm * n_arm, "steps": n_arm})
+        print(json.dumps({"arm": arm, "lr_mult": mult, "steps": n_arm, "full": len(full_m), "lora": len(lora),
+                          "rank": rank if lora else None, "norms": len(norms), "E_bytes": size, "flops_per_step": per_step,
+                          "phi": structure["phi"], "lowest_updated_layer": structure["lowest_updated_layer"],
+                          "data": fresh}), flush=True)
+        for step in range(n_arm):
+            frac = lr_frac(step, n_arm, a.warmup, a.schedule, a.cooldown)
+            for o, lrs in zip(opts, base_lrs):
+                for grp, lr in zip(o.param_groups, lrs):
+                    grp["lr"] = lr * frac
+            rows = data.next(pool)
+            if a.select_pool > 1:
+                rows = choose(fwd, rows, a.batch, a.micro, a.select_by, dev)
+                steps.append({"op": "forward", "tokens": pool * prepare.EVAL_CTX, "what": f"selection by {a.select_by} loss"})
+            for i in range(0, a.batch, a.micro):
+                x = rows[i: i + a.micro]
+                with torch.autocast(dev, dtype=torch.bfloat16):
+                    logits = fwd(x[:, :-1])
+                loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
+                loss.backward()
+            torch.nn.utils.clip_grad_norm_([p for o in opts for grp in o.param_groups for p in grp["params"]], 1.0)
+            for o in opts:
+                o.step()
+                o.zero_grad(set_to_none=True)
+            steps.append({"op": "train", "tokens": tokens})
+            if extra:
+                steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+            if (step + 1) % 100 == 0:
+                print(json.dumps({"arm": arm, "step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
+                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+            if step + 1 in marks or (step + 1 == n_arm and arm < len(mults) - 1):
+                snaps.append((encode(a.store, factors, params, full, theta), len(steps)))
     blob = encode(a.store, factors, params, full, theta)
     model = prepare.decode(theta, blob)
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=full + lora,
                    notes={"method": "hybrid", "rank": rank if lora else None, "args": vars(a), "steps": n_steps,
-                          "data": fresh},
+                          "arms": arms, "data": fresh},
                    snapshots=snaps)
     return 0
 
