@@ -49,8 +49,8 @@ NOTE_MAX = 500
 COMMON = ("reading: literal-x0, tail-charged (Slowdown's frozen-tail case; Daniel decides; no headline S). basis: fit = "
           "rho 1 by Fit for the training; target = Slowdown's bound, unproved. Delta, u(1), t, a: witness upper bounds; "
           "tau a stub. One seed. Full panels: evidence store.")
-PER_RUN = ("Per valid v2.3 run, target and reading, its least-compute checkpoint reaching the target (19:50Z); "
-           "variant: its launch note's label.")
+A2_COMMON = "Delta: a witness upper bound. One seed. Full panels: evidence store."
+PER_RUN = "Each valid v2.3 run's least-compute checkpoint per target (19:50Z); variant: its launch note's label."
 SHORT = {
     "p1-loss-vs-compute": "Loss (val bpb) against compute after theta, every checkpoint of every valid v2.3 record: "
                           "honest |C| (gates), covert |C| rho at c=4096w k=10kB, covert-policy at other (c, k).",
@@ -59,7 +59,8 @@ SHORT = {
     "p3-policy-plane": "S = W*/H over te_core.policy's (c, k) grid and each start's marked shapes, k in bits; H and W* "
                        "over every checkpoint of every valid v2.3 record.",
     "p4-decomposition": f"{PER_RUN} At c=4096w k=10kB: p = |C|/H, s = rho, S = p s.",
-    "a2-efficiency-floor": f"{PER_RUN} The floor is their frontier; fit_*_k_bits: least k where Fit holds at c=4096w.",
+    "a2-efficiency-floor": f"{PER_RUN} The floor is their frontier; fit_*_k_bits: least k where Fit holds at c=4096w. "
+                           "reading: both (A2 reads no rho).",
 }
 BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
 LEAN = ("start_id", "checkpoint", "method", "family")
@@ -129,9 +130,9 @@ def frame(p: dict) -> list[dict]:
     return [{c: r[i] for c, i in ix.items()} for r in p["rows"]]
 
 
-def compact(p: dict, keep=lambda r: True, drop: tuple = (), fix=None) -> dict:
-    """`p` with the rows `keep` takes (each through `fix`), without the columns `drop`, booleans as yes/no and numbers
-    to 4 significant digits (losses 6)."""
+def compact(p: dict, keep=lambda r: True, drop: tuple = (), fix=None, pick=None) -> dict:
+    """`p` with the rows `keep` takes, of those the ones `pick` picks (each through `fix`), without the columns `drop`,
+    booleans as yes/no and numbers to 4 significant digits (losses 6)."""
     cols = [c for c in p["columns"] if c not in drop]
 
     def val(c, v):
@@ -140,11 +141,9 @@ def compact(p: dict, keep=lambda r: True, drop: tuple = (), fix=None) -> dict:
         if isinstance(v, float):
             return round(v, 6) if c in ("loss", "loss_lo", "loss_hi", "l0") else float(f"{v:.4g}")
         return v
-    rows = []
-    for d in frame(p):
-        if keep(d):
-            d = fix(d) if fix else d
-            rows.append([val(c, d[c]) for c in cols])
+    ds = [d for d in frame(p) if keep(d)]
+    ds = pick(ds) if pick else ds
+    rows = [[val(c, d[c]) for c in cols] for d in (map(fix, ds) if fix else ds)]
     return p | {"columns": cols, "rows": rows}
 
 
@@ -155,28 +154,63 @@ def variant_label(d: dict) -> dict:
     return d | {"variant": v.split(":")[0][:VARIANT_LABEL]} if v else d
 
 
-def thin(p: dict) -> dict:
-    """P1's curves at the points that lower the loss by 0.25% or reach a deeper target, each curve's ends kept."""
-    ix = {c: i for i, c in enumerate(p["columns"])}
-    groups: dict[tuple, list] = defaultdict(list)
-    for r in p["rows"]:
-        groups[(r[ix["start_id"]], r[ix["curve"]], r[ix["policy"]], r[ix["reading"]])].append(r)
-    rows = []
-    for g in groups.values():
-        kept = [g[0]]
-        for i, r in enumerate(g[1:], 1):
-            last = kept[-1]
-            if i == len(g) - 1 or r[ix["target_pct"]] != last[ix["target_pct"]] or \
-                    r[ix["loss"]] <= last[ix["loss"]] * 0.9975:
-                kept.append(r)
-        rows += kept
-    return p | {"rows": rows}
+def thinned(step: float):
+    """A pick: P1's curves at the points that lower the loss by `step` or reach a deeper target, each curve's ends
+    kept."""
+    def pick(ds: list[dict]) -> list[dict]:
+        groups: dict[tuple, list] = defaultdict(list)
+        for d in ds:
+            groups[(d["start_id"], d["curve"], d["policy"], d["reading"])].append(d)
+        out = []
+        for g in groups.values():
+            kept = [g[0]]
+            for i, d in enumerate(g[1:], 1):
+                if i == len(g) - 1 or d["target_pct"] != kept[-1]["target_pct"] or \
+                        d["loss"] <= kept[-1]["loss"] * (1 - step):
+                    kept.append(d)
+            out += kept
+        return out
+    return pick
+
+
+def frontier(x: str, y: str, *by: str):
+    """A pick: per start, target, reading and `by`, the rows no other row beats in both `x` and `y` (smaller is
+    better, null worst), in their order."""
+    inf = float("inf")
+
+    def pick(ds: list[dict]) -> list[dict]:
+        groups: dict[tuple, list] = defaultdict(list)
+        for i, d in enumerate(ds):
+            groups[tuple(d[c] for c in ("start_id", "target_pct", "reading", *by))].append(i)
+        kept = []
+        for ix in groups.values():
+            best = inf
+            for i in sorted(ix, key=lambda i: tuple(inf if ds[i][c] is None else ds[i][c] for c in (x, y))):
+                if ds[i][y] is not None and ds[i][y] < best:
+                    best = ds[i][y]
+                    kept.append(i)
+        return [ds[i] for i in sorted(kept)]
+    return pick
+
+
+def union(*picks):
+    """A pick: the rows any of `picks` picks, in their order."""
+    def pick(ds: list[dict]) -> list[dict]:
+        kept = {id(d) for f in picks for d in f(ds)}
+        return [d for d in ds if id(d) in kept]
+    return pick
 
 
 def console(P: dict, final: bool = False) -> dict:
     """Each panel cut to the route's limits (a body of BODY_MAX bytes, a note of NOTE_MAX characters): the short note,
-    and the first of its cuts that fits, which the note names. Every cut keeps both readings, except A2's second and
-    third, whose rows agree under both (A2 reads no rho) and so are one row each, `reading` both."""
+    and the first of its cuts that fits, which the note names. Every cut keeps both readings, except A2's, whose rows
+    agree under both (A2 reads no rho) and so are one row each, `reading` both. A2's and P4's rows grow with every
+    run, so their last cuts keep every target and, per start and target, first each method's runs on its own frontier,
+    then the panel's frontier (A2's floor, Delta against compute; P4's, p against s) with each method's best run, then
+    the frontier alone."""
+    def every(r):
+        return True
+
     def ref(r):
         return r["target_pct"] == REF_TARGET
 
@@ -185,38 +219,51 @@ def console(P: dict, final: bool = False) -> dict:
 
     def both(d):
         return variant_label(d) | {"reading": "both"}
+
+    def band(policies):
+        return lambda r: r["curve"] != "covert-policy" or r["policy"] in policies
     out = {}
     for pid, p in P.items():
-        tries = [("", lambda r: True, LEAN, None)]
+        tries = [("", every, LEAN, None, None)]
         if pid == "p1-loss-vs-compute":
-            p = thin(p)
-            tries += [(f" The band here: {', '.join(BAND_FEW)}.",
-                       lambda r: r["curve"] != "covert-policy" or r["policy"] in BAND_FEW, LEAN, None),
-                      (f" The band here: {BAND_FEW[1]}.",
-                       lambda r: r["curve"] != "covert-policy" or r["policy"] == BAND_FEW[1], LEAN, None),
-                      (" No band here.", lambda r: r["curve"] != "covert-policy", LEAN, None)]
+            fine = thinned(0.0025)
+            tries = [("", every, LEAN, None, fine),
+                     (f" The band here: {', '.join(BAND_FEW)}.", band(BAND_FEW), LEAN, None, fine),
+                     (f" The band here: {BAND_FEW[1]}.", band(BAND_FEW[1:2]), LEAN, None, fine),
+                     (" No band here.", band(()), LEAN, None, fine),
+                     (" No band; points 0.5% apart in loss.", band(()), LEAN, None, thinned(0.005)),
+                     (" No band; points 1% apart in loss.", band(()), LEAN, None, thinned(0.01))]
         elif pid == "p3-policy-plane":
-            tries += [(" Here -1% only.", ref, LEAN, None),
-                      (" Here -1% only, no record column.", ref, (*LEAN, "record"), None),
+            tries += [(" Here -1% only.", ref, LEAN, None, None),
+                      (" Here -1% only, no record column.", ref, (*LEAN, "record"), None, None),
                       (" Here -1% only, no record, g, k_bytes or p (= S/rho).", ref,
-                       (*LEAN, "record", "g", "k_bytes", "p"), None)]
+                       (*LEAN, "record", "g", "k_bytes", "p"), None, None)]
         elif pid == "a2-efficiency-floor":
             lean = (*RUNS_LEAN, *SIZE_SAT)
-            tries = [("", lambda r: True, RUNS_LEAN, variant_label),
-                     (" No size, saturation (in start).", lambda r: True, lean, variant_label),
-                     (" No size, saturation; rows: reading both (A2 reads no rho).", one, lean, both),
-                     (" No size, saturation; rows: reading both (A2 reads no rho); -1% only.",
-                      lambda r: one(r) and ref(r), lean, both)]
+            floor = frontier("delta_bits", "compute_gates")
+            tries = [("", one, RUNS_LEAN, both, None),
+                     (" No size, saturation (in start).", one, lean, both, None),
+                     (" No size/saturation; each method's own floor only.", one, lean, both,
+                      frontier("delta_bits", "compute_gates", "method")),
+                     (" No size/saturation; the floor and each method's least-compute run.", one, lean, both,
+                      union(floor, frontier("compute_gates", "compute_gates", "method"))),
+                     (" No size/saturation; the floor only.", one, lean, both, floor)]
         elif pid == "p4-decomposition":
             lean = (*RUNS_LEAN, *SIZE_SAT, *FIT_K)
-            tries = [("", lambda r: True, RUNS_LEAN, variant_label),
-                     (" No fit_*_k_bits (in A2).", lambda r: True, (*RUNS_LEAN, *FIT_K), variant_label),
-                     (" No fit_*_k_bits (in A2), size, saturation (in start).", lambda r: True, lean, variant_label),
-                     (" No fit_*_k_bits, size, saturation; -1% only.", ref, lean, variant_label),
-                     (" No fit_*_k_bits, size, saturation, variant; -1% only.", ref, (*lean, "variant"), None)]
-        common = COMMON.replace(" One seed.", "") if final else COMMON
-        for why, keep, drop, fix in tries:
-            q = compact(p, keep, drop, fix)
+            front = frontier("p", "s")
+            tries = [("", every, RUNS_LEAN, variant_label, None),
+                     (" No fit_*_k_bits (in A2).", every, (*RUNS_LEAN, *FIT_K), variant_label, None),
+                     (" No fit_*_k_bits (in A2), size, saturation (in start).", every, lean, variant_label, None),
+                     (" No fit_*_k_bits, size/saturation; each method's (p, s) front only.", every, lean,
+                      variant_label, frontier("p", "s", "method")),
+                     (" No fit_*_k_bits, size/saturation; (p, s) front + each method's least-S run.", every, lean,
+                      variant_label, union(front, frontier("S", "S", "method"))),
+                     (" No fit_*_k_bits, size/saturation; the (p, s) front only.", every, lean, variant_label,
+                      front)]
+        common = A2_COMMON if pid == "a2-efficiency-floor" else COMMON
+        common = common.replace(" One seed.", "") if final else common
+        for why, keep, drop, fix, pick in tries:
+            q = compact(p, keep, drop, fix, pick)
             note = f"{SHORT[pid]}{why} {common}"
             q["note"] = note if len(note) <= NOTE_MAX else note[:NOTE_MAX - 1] + "…"
             if len(body(q)) <= BODY_MAX:
