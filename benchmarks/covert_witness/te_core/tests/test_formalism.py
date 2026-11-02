@@ -108,13 +108,15 @@ def test_u_and_u_in_are_at_most_delta_where_delta_counts():
 
 
 def test_fit_k_is_the_least_k_at_which_fit_holds():
-    """Running θ': Δ + (c/w_run)τ; training: the most of its three kinds (None without Δ_grad); none when the decoder
-    reaches c."""
+    """Running θ': Δ + (c/w_run)τ; training: the most of its three kinds (None without Δ_grad), a part with no token
+    blocks (the setup) needing Δ alone; none when the decoder reaches c."""
     m, c, w_run = measured(u1=1e6, delta=1e3, dgrad=1e4), 1e13, 2e8
     s_tau = c / 0.8e9 * 32
     run, train = F.fit_k(m, c, w_run)
     assert (run, train) == pytest.approx((1e3 + c / w_run * 32, max(1e3 + s_tau, 2e4, 1e3 + 1e4)))
     assert F.at(m, c, train)["fit"] and not F.at(m, c, train * (1 - 1e-9))["fit"]
+    setup = F.Part(gates=1e9, tokens=0, token_gates=0.0, affected_gates=0.0)
+    assert F.fit_k(F.Measured(m.parts + (setup,), 32, 8192, m.u, m.u_in, 1e3), c, w_run) == pytest.approx((run, train))
     assert F.fit_k(measured(u1=1e6), c, w_run)[1] is None
     assert F.fit_k(measured(u1=1e6, decoder=c), c, w_run) == (None, None)
 

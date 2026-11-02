@@ -271,7 +271,7 @@ def fit_k(m: Measured, c: float, w_run: float) -> tuple[float | None, float | No
         dg = p.delta_grad_bits
         if dg is None and p.tokens:
             return run, None
-        need.append(max(m.delta_bits + st, *((2 * dg, m.delta_bits + dg) if dg is not None else ())))
+        need.append(max((m.delta_bits + st, *((2 * dg, m.delta_bits + dg) if dg is not None else ()))))
     return run, max(need)
 
 
