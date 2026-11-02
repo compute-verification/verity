@@ -682,10 +682,10 @@ def direction_sentence(d: str, rows: list[dict], starts: dict) -> str:
 
 def append_board(lines: list[str]) -> None:
     """Append to the scorer's own board file and push its branch; the coordinator merges it into the shared board."""
+    BOARD.parent.mkdir(parents=True, exist_ok=True)
     wt = subprocess.run(["git", "-C", str(BOARD.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True,
                         check=True).stdout.strip()
     text = BOARD.read_text() if BOARD.exists() else BOARD_HEAD
-    BOARD.parent.mkdir(parents=True, exist_ok=True)
     BOARD.write_text(text + ("" if text.endswith("\n") else "\n") + "\n".join(lines) + "\n")
     tags = sorted({m[1] for m in (re.search(r"\[(\w+)\]", x) for x in lines) if m})
     subprocess.run(["git", "-C", wt, "add", str(BOARD)], check=True)
