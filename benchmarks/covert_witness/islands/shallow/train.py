@@ -17,7 +17,8 @@ model is always decode(θ, E).
 
 Checkpoints: the harness scores the first E encoded in each 5% of the planned steps (`hooks.plan`), so E is encoded at
 the first step of each 5%. `--arms "lr=1e-4;lr=3e-4"` splits the budget into runs from θ in turn (a sweep in one
-candidate): no other encode shares an arm's last 5%, so every arm's end is a checkpoint; later arms' checkpoints carry
+candidate), in proportion to each arm's `share` (default 1; `share=1;share=2;share=4` sweeps run length, each arm's end
+fully decayed): no other encode shares an arm's last 5%, so every arm's end is a checkpoint; later arms' checkpoints carry
 the earlier arms' MACs; E is the arm whose last tenth of batches (each unseen when its loss is taken) had the lowest loss.
 
 This file is the island's one editable file; the fixed side is README.md's list. candidate.sh runs it inside the harness:
@@ -134,13 +135,14 @@ def fresh_order(data, rec: dict) -> dict:
 CHECKPOINTS = 20
 ARM_KEYS = {"lr": float, "muon_lr": float, "lora_lr": float, "opt": str, "wd": float, "ema": float, "schedule": str,
             "warmup": int, "batch": int, "micro": int, "fresh": lambda v: v.lower() in ("1", "true", "on", "yes"),
-            "data_seed": int, "seed": int}
+            "data_seed": int, "seed": int, "share": float}
 ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd")}
 
 
 def parse_arms(a: argparse.Namespace) -> list[argparse.Namespace]:
     """`--arms "lr=1e-4;lr=3e-4 wd=0.1"`: runs from θ in turn, each overriding only how it trains (ARM_KEYS), never what
     is tuned, so one trainable prices every step."""
+    a.share = 1.0
     if not a.arms:
         return [a]
     arms = []
@@ -230,7 +232,7 @@ def main() -> int:
     for arm in arms:
         extra = sum(ns_flops(tuple(params[n].shape)) for n in mats) if mats and arm.opt == "muon" else 0
         per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": arm.batch * c}])["flops"] + extra
-        plans.append((per_step, extra, int(budget / len(arms) // per_step)))
+        plans.append((per_step, extra, int(budget * arm.share / sum(x.share for x in arms) // per_step)))
     total = sum(n for _, _, n in plans)
     if hooks is not None:
         hooks.plan(total)
