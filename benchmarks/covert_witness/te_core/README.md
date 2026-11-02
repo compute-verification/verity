@@ -36,8 +36,8 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
   β per MAC, doubles φ and leaves φβ unchanged. A read of an updated weight by token data (embedding, index, gather) is
   in U at its position, priced as the circuit's gather Definition prices it (`flops.gather_selects`: one multiplexer per
   word selected per level of its tree, about one per row of a table): a tied embedding's update is read at the lookup,
-  so every later updated node has the lookup upstream. A lookup of θ's table is 0. A record counted before 3.6 gets
-  the lookups of the start's own table at ingest (`annotate.with_lookups`).
+  so every later updated node has the lookup upstream. A lookup of θ's table is 0. `ledger ingest --lookups` adds the
+  lookups of the start's own table to a record counted before 3.6 (`annotate.with_lookups`).
 - **Inference block S**: a set of at most c MACs that imports at most k bits beyond θ. It holds only computed gates, so
   its inputs are counted in in(S) and are never its members.
 - **in(S)**: the sender form, the bits of the gates outside S that feed a gate of S plus S's own source gates: the

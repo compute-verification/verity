@@ -194,10 +194,11 @@ def _macs_log(record: dict, through: int | None) -> dict:
 
 
 def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, parent: str = "", run_id: str = "",
-           reference: bool = False, p: float | None = None) -> list[dict]:
-    """One submission record per checkpoint of the run in `run_dir` (its `run.json`)."""
+           reference: bool = False, p: float | None = None, lookups: bool = False) -> list[dict]:
+    """One submission record per checkpoint of the run in `run_dir` (its `run.json`); with `lookups`, a run counted before
+    3.6 gets the lookups of the start's updated table (`annotate.with_lookups`)."""
     record = json.loads((Path(run_dir) / "run.json").read_text())
-    if version(record.get("te_core")) < LOOKUPS_FROM:
+    if lookups and version(record.get("te_core")) < LOOKUPS_FROM:
         record = with_lookups(record, lookup_tables())
     ev = record.get("evaluation", {})
     cov = coverage_of(record.get("families", []))
@@ -245,13 +246,15 @@ def main(argv=None) -> int:
     i.add_argument("--run-id", default="")
     i.add_argument("--reference", action="store_true")
     i.add_argument("--p", type=float, default=None, help="bits per updated value (default: the width multiplied)")
+    i.add_argument("--lookups", action="store_true",
+                   help="price the lookups of the start's updated table in a run counted before te_core 3.6")
     sub.add_parser("index")
     sub.add_parser("publish")
     a = ap.parse_args(argv)
     led = Ledger(a.root, a.agent, publish=a.publish)
     if a.cmd == "ingest":
         recs = ingest(a.run_dir, led, direction=a.direction, mechanism=a.mechanism, parent=a.parent, run_id=a.run_id,
-                      reference=a.reference, p=a.p)
+                      reference=a.reference, p=a.p, lookups=a.lookups)
         print(json.dumps([{"id": r["id"], "step": r["checkpoint_step"], "macs": r["macs"], "val_bpb": r["val_bpb"],
                            "rho": r["rho"]} for r in recs]))
     elif a.cmd == "index":
