@@ -16,12 +16,12 @@ open scoped ENNReal
 
 /-! ## Non-collision for fixed blocks -/
 
-theorem blockHash_sub {W : ℕ} (g : ZMod P) (x y : Block W) :
+theorem blockHash_sub {W : ℕ} (g : ZMod P) (x y : Chunk W) :
     blockHash g x - blockHash g y = ∑ j : Fin W, (residues x j - residues y j) * g ^ (W - 1 - (j : ℕ)) := by
   simp [blockHash, residues, ← Finset.sum_sub_distrib, sub_mul]
 
 /-- Two blocks with different residues hash alike at at most `W − 1` keys. -/
-theorem card_blockHash_eq_le {W : ℕ} (x y : Block W) (hxy : residues x ≠ residues y) :
+theorem card_blockHash_eq_le {W : ℕ} (x y : Chunk W) (hxy : residues x ≠ residues y) :
     (Finset.univ.filter fun g : ZMod P => blockHash g x = blockHash g y).card ≤ W - 1 := by
   classical
   refine le_trans (Finset.card_le_card fun g hg => ?_)
@@ -72,7 +72,7 @@ theorem card_residue_le (r : ZMod P) : (Finset.univ.filter fun b : Word => resid
     _ = 3 := Finset.card_range 3
 
 /-- The hash of a block with word `j` replaced by `b`: a constant plus `(b mod p) · g^(W − 1 − j)`. -/
-theorem blockHash_update {W : ℕ} (g : ZMod P) (y : Block W) (j : Fin W) (b : Word) :
+theorem blockHash_update {W : ℕ} (g : ZMod P) (y : Chunk W) (j : Fin W) (b : Word) :
     blockHash g (Function.update y j b) =
       residue b * g ^ (W - 1 - (j : ℕ)) + ∑ i ∈ Finset.univ.erase j, residue (y i) * g ^ (W - 1 - (i : ℕ)) := by
   unfold blockHash
@@ -82,7 +82,7 @@ theorem blockHash_update {W : ℕ} (g : ZMod P) (y : Block W) (j : Fin W) (b : W
   rw [Function.update_of_ne (Finset.ne_of_mem_erase hi)]
 
 /-- At a nonzero key, at most three values of word `j` give the hash any one value. -/
-theorem card_update_eq_le {W : ℕ} (g : (ZMod P)ˣ) (y : Block W) (j : Fin W) (t : ZMod P) :
+theorem card_update_eq_le {W : ℕ} (g : (ZMod P)ˣ) (y : Chunk W) (j : Fin W) (t : ZMod P) :
     (Finset.univ.filter fun b : Word => blockHash (g : ZMod P) (Function.update y j b) = t).card ≤ 3 := by
   classical
   set c := ∑ i ∈ Finset.univ.erase j, residue (y i) * (g : ZMod P) ^ (W - 1 - (i : ℕ))
@@ -95,7 +95,7 @@ theorem card_update_eq_le {W : ℕ} (g : (ZMod P)ˣ) (y : Block W) (j : Fin W) (
   exact eq_sub_of_add_eq hb
 
 /-- Each point mass is at most `wordGuess` times its class's mass. -/
-theorem le_wordGuess_mul {W : ℕ} (μ : PMF (Block W)) (j : Fin W) (x : Block W) :
+theorem le_wordGuess_mul {W : ℕ} (μ : PMF (Chunk W)) (j : Fin W) (x : Chunk W) :
     μ x ≤ wordGuess μ j * ∑ a : Word, μ (Function.update x j a) := by
   set s := ∑ a : Word, μ (Function.update x j a)
   have hxs : μ x ≤ s := by
@@ -110,14 +110,14 @@ theorem le_wordGuess_mul {W : ℕ} (μ : PMF (Block W)) (j : Fin W) (x : Block W
     calc s = ∑ a : Word, μ (Function.update x j a) := rfl
       _ = ∑ y ∈ Finset.univ.image (fun a : Word => Function.update x j a), μ y := by
           rw [Finset.sum_image fun a _ b _ h => by simpa using congrFun h j]
-      _ ≤ ∑ y : Block W, μ y := Finset.sum_le_sum_of_subset (Finset.subset_univ _)
+      _ ≤ ∑ y : Chunk W, μ y := Finset.sum_le_sum_of_subset (Finset.subset_univ _)
       _ = 1 := sum_pmf μ
-  have h1 : μ x / s ≤ wordGuess μ j := le_iSup (fun y : Block W => μ y / ∑ a : Word, μ (Function.update y j a)) x
+  have h1 : μ x / s ≤ wordGuess μ j := le_iSup (fun y : Chunk W => μ y / ∑ a : Word, μ (Function.update y j a)) x
   calc μ x = μ x / s * s := (ENNReal.div_mul_cancel hs hs').symm
     _ ≤ wordGuess μ j * s := by gcongr
 
 /-- Re-pairing a block and a word: `(x, a) ↦ (x with word j set to a, x's word j)`, its own inverse. -/
-def swapWord {W : ℕ} (j : Fin W) : Block W × Word ≃ Block W × Word where
+def swapWord {W : ℕ} (j : Fin W) : Chunk W × Word ≃ Chunk W × Word where
   toFun p := (Function.update p.1 j p.2, p.1 j)
   invFun p := (Function.update p.1 j p.2, p.1 j)
   left_inv p := by simp [Function.update_eq_self]
@@ -127,7 +127,7 @@ theorem polyUnpredictable : PolyUnpredictable := by
   intro W μ j g t
   classical
   set G := wordGuess μ j
-  set H : Block W → Prop := fun x => blockHash (g : ZMod P) x = t
+  set H : Chunk W → Prop := fun x => blockHash (g : ZMod P) x = t
   rw [prob_eq_sum]
   calc ∑ x, (if H x then μ x else 0)
       ≤ ∑ x, (if H x then G * ∑ a : Word, μ (Function.update x j a) else 0) := by
@@ -135,11 +135,11 @@ theorem polyUnpredictable : PolyUnpredictable := by
         split_ifs
         · exact le_wordGuess_mul μ j x
         · exact le_rfl
-    _ = G * ∑ p : Block W × Word, (if H p.1 then μ (Function.update p.1 j p.2) else 0) := by
+    _ = G * ∑ p : Chunk W × Word, (if H p.1 then μ (Function.update p.1 j p.2) else 0) := by
         rw [Fintype.sum_prod_type, Finset.mul_sum]
         refine Finset.sum_congr rfl fun x _ => ?_
         split_ifs <;> simp [Finset.mul_sum]
-    _ = G * ∑ p : Block W × Word, (if H (Function.update p.1 j p.2) then μ p.1 else 0) := by
+    _ = G * ∑ p : Chunk W × Word, (if H (Function.update p.1 j p.2) then μ p.1 else 0) := by
         refine congrArg (G * ·) ?_
         rw [← (swapWord j).sum_comp]
         refine Finset.sum_congr rfl fun p _ => ?_
@@ -200,19 +200,19 @@ theorem foldNonCollision : FoldNonCollision := by
 
 /-! ## The digest -/
 
-theorem digest_eq_sum {R W : ℕ} (g z : ZMod P) (xs : Fin R → Block W) :
+theorem digest_eq_sum {R W : ℕ} (g z : ZMod P) (xs : Fin R → Chunk W) :
     digest g z xs = ∑ r : Fin R, blockHash g (xs r) * z ^ (r : ℕ) := by
   unfold digest
   rw [fold_eq_sum_getD z _ R (by simp)]
   refine Finset.sum_congr rfl fun r _ => ?_
   rw [List.getD_eq_getElem _ _ (by simp), List.getElem_ofFn]
 
-theorem digest_sub {R W : ℕ} (g z : ZMod P) (xs ys : Fin R → Block W) :
+theorem digest_sub {R W : ℕ} (g z : ZMod P) (xs ys : Fin R → Chunk W) :
     digest g z xs - digest g z ys = ∑ r : Fin R, (blockHash g (xs r) - blockHash g (ys r)) * z ^ (r : ℕ) := by
   simp [digest_eq_sum, ← Finset.sum_sub_distrib, sub_mul]
 
 /-- If some block hash differs at `g`, the digests agree at at most `R − 1` points `z`. -/
-theorem card_digest_eq_le {R W : ℕ} (g : ZMod P) (xs ys : Fin R → Block W)
+theorem card_digest_eq_le {R W : ℕ} (g : ZMod P) (xs ys : Fin R → Chunk W)
     (h : ∃ r, blockHash g (xs r) ≠ blockHash g (ys r)) :
     (Finset.univ.filter fun z : ZMod P => digest g z xs = digest g z ys).card ≤ R - 1 := by
   classical

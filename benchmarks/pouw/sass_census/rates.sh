@@ -2,9 +2,9 @@
 # The census's unpriced classes timed on one GPU: unpriced.cu on a B200 (ARCH=sm_100a, the default) or unpriced90.cu on
 # an H200 (ARCH=sm_90a); SRC=unpriced_fp4.cu times the B200's fp4 tensor kinds. From a pushed commit:
 #
-#   research run --on vy-dc-b200 --project verity --campaign eps1 --source <tree> --cwd source --timeout 30m \
+#   research run --on MACHINE --project verity --source <tree> --cwd source --timeout 30m \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/sass_census/rates.sh
-#   research run --on vy-dc-h200 ... --env ARCH=sm_90a --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/sass_census/rates.sh
+#   research run --on MACHINE ... --env ARCH=sm_90a --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/sass_census/rates.sh
 #
 # Outside the lease: build for ARCH and SASS-gate every probe (gate-build.txt; a refusal stops the run before any GPU).
 # Under one lease: probe.py run (rows.jsonl, gate.json, times.jsonl), then rates.json, each probe's warp instructions

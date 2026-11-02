@@ -6,13 +6,15 @@ The proof system's own checks (`service.py`), each with Python's codes, order an
   record that is not an object; then `unsalted` (a scheme other than the service's), `query` (not the check's), `keys` (a
   field one-stage doesn't define, or an entry's), `roots` (an entry that is not one of the values' one salted root) and
   `undeclared` (the items the record shows that the Spec doesn't declare, first found first). An entry's fields are read
-  in key order, as canonical JSON writes them.
+  in key order, as canonical JSON writes them. Linear in the record's entries and the declared items: each membership test
+  reads a hash set.
 * `checkVerdicts`: what an outcome holds the verifiers' verdicts to before the audit record (`service.check_verdicts`),
   the first failure only: `pending` (no verdict of record, or one that hasn't run), `sessions` (verdicts of record about
   other sessions than the delivered ones) and `public` (the check's public outputs not reported alike).
 -/
 import SampledProofs.Registration
 import SampledProofs.PyJson
+import Std.Data.HashMap
 
 namespace SampledProofs.Service
 
@@ -39,8 +41,16 @@ def pyStr : Json → V String
   | .str s => pure s
   | _ => throw "str of a list or an object"
 
-/-- `dict.fromkeys(xs)`: each once, first found first. -/
-def firsts (xs : Array String) : Array String := xs.foldl (fun acc x => if acc.contains x then acc else acc.push x) #[]
+/-- `xs` as a set to look names up in. -/
+def setOf (xs : Array String) : Std.HashMap String Unit := xs.foldl (fun m x => m.insert x ()) {}
+
+/-- `dict.fromkeys(xs)`: each once, first found first. The pair is taken apart before the set is read and written in
+one call, so a set held once is updated in place. -/
+def firsts (xs : Array String) : Array String :=
+  (xs.foldl (fun (acc : Array String × Std.HashMap String Unit) x =>
+    let (out, seen) := acc
+    let p := seen.containsThenInsert x ()
+    (if p.1 then out else out.push x, p.2)) (#[], {})).1
 
 /-- The public-items rule on `record` with the service's `scheme`, the check's query digest `query`, the values whose
 roots it holds, and the Spec's declared items. Refused where Python raises: an entry named by a list or an object
@@ -68,9 +78,9 @@ def checkPublic (record scheme : Json) (query : String) (values : Array Value) (
     let es := match v with
       | .arr xs => xs
       | x => #[x]
-    let names := (values.filter (·.registered == registered)).map (·.name)
+    let names := setOf ((values.filter (·.registered == registered)).map (·.name))
     let key := if registered then "value" else "port"
-    let mut seen : Array String := #[]
+    let mut seen : Std.HashMap String Unit := {}
     for e in es do
       match getD e key with
       | .null => wrong := wrong.push e
@@ -79,13 +89,14 @@ def checkPublic (record scheme : Json) (query : String) (values : Array Value) (
         if !names.contains name || seen.contains name then
           wrong := wrong.push (Json.str name)
         else
-          seen := seen.push name
+          seen := seen.insert name ()
           for k in sortStrings ((entries e).map (·.1)) do
             if (layout registered).contains k then need := need.push s!"{k}:{name}"
             else if k != key && k != "root" then extra := extra.push s!"{fieldName}.{name}.{k}"
       | name => wrong := wrong.push name
   if !extra.isEmpty then c := c.fail "keys" (Json.arr (extra.map Json.str))
   if !wrong.isEmpty then c := c.fail "roots" (Json.arr wrong)
+  let declared := setOf declared
   let missing := (firsts need).filter (!declared.contains ·)
   if !missing.isEmpty then c := c.fail "undeclared" (Json.arr (missing.map Json.str))
   return c

@@ -62,7 +62,8 @@ def _run(com: NativeHostCommitter, seed: int = 1, steps: int = 3):
 
 
 def _sample(rc, k: int = 64):
-    sample = list(challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], k, salt=b"after-release/0"))
+    sample = list(challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], k, salt=b"after-release/0",
+                                      source=b"positions coin"))
     # forced picks as the harness makes them: inside the FA2 hidden row of step 0, its last down_proj, leaf 0, and the last leaf of the last step
     return sample, k
 

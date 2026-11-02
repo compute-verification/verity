@@ -1,7 +1,7 @@
 """Option A's prover side: a drawn leaf's 32 lane partials, recomputed after the draw from what serving
 committed, bit for bit the words the served receipt XORed.  Serving is unchanged: one receipt a 32 × 32 leaf (`receipts`).
-The proof of a drawn leaf is 32 lane sub-statements and a combine that checks the XOR of their partials is the committed
-receipt; this module computes those partials.
+The proof of a drawn leaf is 32 sub-statements, one a lane, and a combine that checks the XOR of their partials is the
+committed receipt; this module computes those partials.
 
 An execution block's calls (`Calls`) hold each call's B [N, K] (s8, the int8 pin's weight) and B root, the call's first
 position in a step (`offs`) and the positions a step (`u_step`); a step (`Step`) its calls' committed A [t, K] (s8, every
@@ -28,7 +28,6 @@ in its own instantiation, run on just the drawn leaves' gathered operands, batch
 from __future__ import annotations
 
 import ctypes as C
-import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,13 +35,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
-import receipts as RC  # noqa: E402
-
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.pouw.circuit import seeds as SD
+from verity_vllm.protocols.pouw.h1 import receipts as RC
 
 LANES = RC.LANES
 

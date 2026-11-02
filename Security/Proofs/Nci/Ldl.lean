@@ -69,13 +69,13 @@ theorem size_eq {C : Circuit} {n c : ℕ} (P : Partition C n) (h : Exact P c) : 
 namespace SecurityProofs
 
 theorem BlockDescription : Guarantees.BlockDescription := by
-  intro d n k R D t ext aBlk inp hk hX hev u
+  intro R k D t ext aBlk inp hk hX hev u
   obtain ⟨enc, henc⟩ := hev
   obtain ⟨-, hlen, hdec⟩ := henc u _ hX
   rw [localEval_eval] at hdec
   refine (LDL_le hdec).trans ?_
   have := hk u
-  exact_mod_cast (by omega : (enc u (d.D.eval inp)).length ≤ k + Nat.clog 2 n + aBlk)
+  exact_mod_cast (by omega : (enc u (R.d.D.eval inp)).length ≤ k + Nat.clog 2 R.B + aBlk)
 
 theorem Counting : Guarantees.Counting := by
   intro C n c P V ω q T₀ hc hV hq hT hblk
@@ -96,12 +96,12 @@ theorem Counting : Guarantees.Counting := by
   exact div_le_div_of_nonneg_right h1 hT.le
 
 theorem FanOutBound : Guarantees.FanOutBound := by
-  intro d n c k R ι A _ M e D t aBlk a β Λ T₀ inp hck hX hfan hβ hT hev hrate
+  intro R c k ι A _ M e D t aBlk a β Λ T₀ inp hck hX hfan hβ hT hev hrate
   obtain ⟨hc, hk⟩ := hck
-  set h : ℝ := k + Nat.clog 2 n + aBlk + Λ with hh
+  set h : ℝ := k + Nat.clog 2 R.B + aBlk + Λ with hh
   have hV : ∀ u, β * (M.acts R.P u).card ≤ h := fun u => by
-    have h1 := BlockDescription d n k R D t a aBlk inp hk hX hev u
-    have h2 : ENNReal.ofReal (β * (M.acts R.P u).card - Λ) ≤ ((k + Nat.clog 2 n + aBlk : ℕ) : ℝ≥0∞) :=
+    have h1 := BlockDescription R k D t a aBlk inp hk hX hev u
+    have h2 : ENNReal.ofReal (β * (M.acts R.P u).card - Λ) ≤ ((k + Nat.clog 2 R.B + aBlk : ℕ) : ℝ≥0∞) :=
       (hrate u).trans (by exact_mod_cast ENat.toENNReal_le.2 h1)
     rw [ENNReal.ofReal_le_natCast] at h2
     push_cast at h2
@@ -109,11 +109,11 @@ theorem FanOutBound : Guarantees.FanOutBound := by
   have hJ : ∀ u, (M.inBlock R.P u).card ≤ e * (M.acts R.P u).card := fun u =>
     Finset.card_le_mul_card_image _ e fun j _ =>
       (Finset.card_le_card (Finset.filter_subset_filter _ (Finset.filter_subset _ _))).trans (hfan j)
-  have hrhs : 0 ≤ (d.D.size d.D.computed : ℝ) / T₀ := div_nonneg (Nat.cast_nonneg _) hT.le
+  have hrhs : 0 ≤ (R.d.D.size R.d.D.computed : ℝ) / T₀ := div_nonneg (Nat.cast_nonneg _) hT.le
   by_cases hpos : 0 < (e : ℝ) * h
   · set V := M.J.image M.rep
     have hq : 0 < e * h / β := div_pos hpos hβ
-    have hVsub : V ⊆ d.D.computed := fun v hv => by
+    have hVsub : V ⊆ R.d.D.computed := fun v hv => by
       obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hv
       simpa [Circuit.computed] using M.rep_op p hp
     have hblk : ∀ u, ∑ v ∈ V ∩ R.P.gates u, (fun _ => (1 : ℝ)) v ≤ e * h / β := fun u => by
@@ -128,7 +128,7 @@ theorem FanOutBound : Guarantees.FanOutBound := by
       rw [le_div_iff₀ hβ]
       have := hV u
       nlinarith [Nat.cast_nonneg (α := ℝ) e, Nat.cast_nonneg (α := ℝ) (M.acts R.P u).card]
-    obtain ⟨-, h2⟩ := Counting d.D n c R.P V (fun _ => 1) (e * h / β) T₀ hc hVsub hq hT hblk
+    obtain ⟨-, h2⟩ := Counting R.d.D R.B c R.P V (fun _ => 1) (e * h / β) T₀ hc hVsub hq hT hblk
     have hVJ : V.card = M.J.card := Finset.card_image_of_injOn M.rep_inj
     simp only [Finset.sum_const, nsmul_eq_mul, mul_one, hVJ] at h2
     have he : (c : ℝ) / (T₀ * (e * h / β)) * M.J.card = c * β * M.J.card / (T₀ * e * h) := by

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run.py on one leased RTX PRO 6000, from build.sh's OUT sent as a tarball, on the leased GPU's NUMA node:
 #   tar -cf ship.tar -C <build.sh's OUT> .
-#   research run --on vy-nebius-2 --project verity --campaign C --source <tree> --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on MACHINE --project verity --source <tree> --cwd source --env GPU_LEASE_WHO=LANE \
 #     [--env GPUS=2,3] [--env SHAPES="8x4096x4096 ..."] [--env REPS=20] --send ship.tar --send numabind.py \
 #     -- bash benchmarks/pouw/pearl_c_sm120/card.sh
 # First the check alone on both variants (OUT/check.jsonl), then the check and the timing at SHAPES on VARIANTS (default

@@ -34,6 +34,7 @@ from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDoma
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.gates import sha512 as sha512_gates
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import derive
 
 from .coins import CoinCommitment, CoinOpening, coin_reason
@@ -83,7 +84,8 @@ def hm96_kernel_constants() -> bytes:
     after the salt prefix and after the leaf prefix (eight u64 little-endian each), then the byte tables, per salt byte position
     and byte value the 64-byte column XOR little-endian (3 MiB)."""
     mids = [sha512_gates.midstate(p) for p in (hm96.SHA512.salt_prefix, hm96.SHA512.leaf_prefix(HM96_KEY))]
-    tables = b"".join(v.to_bytes(64, "little") for table in hm96.SHA512.byte_tables(HM96_KEY) for v in table)
+    tables = b"".join(v.to_bytes(DIGEST_BYTES["sha512"], "little")
+                      for table in hm96.SHA512.byte_tables(HM96_KEY) for v in table)
     return b"".join(struct.pack("<8Q", *m) for m in mids) + tables
 
 
@@ -97,7 +99,7 @@ class Hm96Domain(CommitmentDomain):
     digests: bool = False
 
     def leaf(self, rank: int, position: int, schema: str, value: bytes) -> bytes:
-        if len(value) < HM96_SALT or self.digests and len(value) != 64 + HM96_SALT:
+        if len(value) < HM96_SALT or self.digests and len(value) != DIGEST_BYTES["sha512"] + HM96_SALT:
             raise ProtocolError(f"an {HM96} value is its preimage and a {HM96_SALT}-byte salt")
         pre, y = value[:-HM96_SALT], value[-HM96_SALT:]
         x = pre if self.digests else sha512_row_seg_digest(pre, 8 * len(pre))

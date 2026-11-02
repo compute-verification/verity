@@ -1,4 +1,4 @@
-// ldmatrix / stmatrix (LDSM, STSM) by register count, beside LDS.128 / STS.128: RS-W′'s lm.cu (round 7-8) and lmmix.cu
+// ldmatrix / stmatrix (LDSM, STSM) by register count, beside LDS.128 / STS.128, mixed and alone,
 // on probe.cuh. One 1024-thread block an SM, 8 instructions
 // an iteration. Each instruction of each iteration has its own 16-B rows (lane l: row base + l + 8 slot, the base moving
 // 64 rows a warp and an iteration round a ring of 2048), so ptxas can't merge two, and each 8-row phase is 128

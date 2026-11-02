@@ -42,7 +42,7 @@ def test_two_h200_layers() -> None:
 
 
 @pytest.mark.parametrize(("layout", "k"), [(S.h200_layout(layers=3), 2), (S.edge_layout(), 2)], ids=["h200-3-by-2", "edge-by-2"])
-def test_regrouped_layers_give_the_same_digest_and_roots(layout: S.Layout, k: int) -> None:
+def test_regrouped_layers_give_the_same_digest_and_roots(layout: S.CommitShape, k: int) -> None:
     grouped = G.regroup(layout, k)
     assert len(grouped.groups) == -(-len(layout.groups) // k) and S.layout_digest(grouped) == S.layout_digest(layout)
     out = S.random_outputs(layout, 3, np.random.default_rng(11))

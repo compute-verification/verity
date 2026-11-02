@@ -1,4 +1,4 @@
-# The honest Dither-2S linear a MMA as D2S-KERNEL measured it: d_l7qs (benchmarks/pouw/edited_gemm/d2sgemm.cu), both
+# The honest Dither-2S linear a MMA as measured: d_l7qs (benchmarks/pouw/edited_gemm/d2sgemm.cu), both
 # operands dithered with fresh bits a call, no U and no peel, the last checked word served, duo receipts at L = 32 on
 # e_l7qs's schedule (LAG 7, a LOP3 tie every 4th MMA, consumers sleeping on the stage barrier), 8192^3. Counts are the
 # kernel's executed mix (ncu); WAIT, the barrier wait, is left out (it costs no time). The operand passes (d2quant,

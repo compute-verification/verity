@@ -17,6 +17,7 @@ component's own `serve` reads, under its id, in the same order:
 and an object with a key missing or a key more is refused.
 -/
 import CoreProtocol.Protocol
+import CoreProtocol.Protocol.Canonical
 import Flock.Hash
 
 namespace Core.Composition
@@ -118,12 +119,14 @@ def decodeParams (j : Json) : V (List Named) := do
 def decodeCommitment (b : ByteArray) : V ByteArray :=
   if b.size = 64 then .ok b else .error s!"the binding of the components' digests is 64 bytes, not {b.size}"
 
+/-- Read in place (`Core.Canonical`), as `canonicalJson` and `Flock.unhex` would read it: a component's evidence can be
+gigabytes of hex (PoUS's `C*`). -/
 def decodeEvidence (b : ByteArray) : V (List Case) := do
-  (← entries (← canonicalJson b) "the composition's evidence").mapM fun x => do
+  (← entries (← Canonical.read b).1 "the composition's evidence").mapM fun x => do
     exactly x ["commitment", "evidence", "id", "params"] "a component's case"
     pure { id := ← Flock.J.str x "id" "a case", params := ← Flock.canon (← Flock.J.get x "params" "a case"),
-           commitment := ← Flock.unhex (← Flock.J.str x "commitment" "a case"),
-           evidence := ← Flock.unhex (← Flock.J.str x "evidence" "a case") }
+           commitment := ← Canonical.unhex (← Flock.J.str x "commitment" "a case"),
+           evidence := ← Canonical.unhex (← Flock.J.str x "evidence" "a case") }
 
 /-- The composition `id` of the components `cs`, which must be listed in the order of their ids, each once. -/
 def product (id : String) (cs : List Protocol) : Protocol where

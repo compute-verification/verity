@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # An untimed nsys profile of the served e2e (served_profile.py over the tree's own e2e.py: both engines resident, the reps
 # interleaved, no verify passes), from a run tree's root, with GPU 1's ship already on node 2 (SHIP_TAR):
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on MACHINE --project verity --source <run tree> --cwd source --env GPU_LEASE_WHO=LANE \
 #     --env SHIP_TAR=<ship> [--env SCHEDULE=deferred] --send served_profile.sh --send served_profile.py -- \
 #     bash "$RESEARCH_RUN_DIR"/inputs/served_profile.sh
 # The GPU part runs in a one-GPU preemptible lease (window.sh's identity, ship and device checks first); the SQLite export and
