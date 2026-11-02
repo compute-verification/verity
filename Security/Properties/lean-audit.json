@@ -5503,6 +5503,10 @@
    },
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": {
     "∀ (p : MemoryChallenger.WipeProtocol.Params) (c : MemoryChallenger.StreamedWipe.Commitment) (e : MemoryChallenger.WipeProtocol.Evidence), Exists fun out => Exists fun prof => Eq (check p c e) (Core.Outcome.accept out prof)": "PRF-301 debt (Tue 3 Nov): the acceptAll lemma's hypothesis as checked states it; #6241 unlists the lemma above this PR"
+   },
+   "Pous.Period.SecurityProofs.pooledShort_log": {
+    "∀ (u : Fin U) (x : Fin U → Prod (Pous.ringRO (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065)).Ω (Prod Pous.EndToEnd.HmCoins Pous.EndToEnd.Streams)), Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S ((r u x).win Accounting.Resource.capacity).len.cast) (d u).chip.cast) (Finset.univ.sum fun i => instHMul.hMul ((d u).cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline on next when the rule came (#5312, MEM-127): name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (instHDiv.hDiv (instHAdd.hAdd (instHMul.hMul (instHMul.hMul (instHSub.hSub z 1) U.cast) (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal)) (Real.log (instHDiv.hDiv 1 δ'))) (Real.log z)) M.cast": "a bound that is no plain range, inline on next when the rule came (#5312, MEM-127): name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -16737,7 +16741,7 @@
    ]
   },
   "PousCheck.RunProtocol": {
-   "digest": "b890b963abef8092a7d34e99d01d34367e1dc9314f671d66a88d1e04c589a1cf",
+   "digest": "6dc39e1020c688ffa5ced9878e06f9fb91a4bb41c3c502c44c61633b95c530a0",
    "definitions": {
     "PousCheck.RunProtocol.CapacityBound.eps": "053ee7539de68fc211992b6c64d3e59fbb46ddc50ec300b0a568a5523a0d34b6",
     "PousCheck.RunProtocol.Evidence": "c40f350f17744434df16950a6f0c04a42005d69a002a994a92688cc9eb336d34",
@@ -16764,7 +16768,7 @@
     "PousCheck.RunProtocol.WIDE320_CLAIMS": "90f951bab2bf49bbd467042d58f63c2a9810b00c0e1c7e5d5498f51552c1f0a3",
     "PousCheck.RunProtocol.WIDE_CLAIMS": "d8d07b83e7f9fdb9712a9fc95ed4ef63751a689ef1ae3448e0879240d5b97446",
     "PousCheck.RunProtocol.accepts": "ed76ffdd7cd79e3e05ba9fa4e635ffdec4f95fcc68ed3fa665de63e45fa0a6af",
-    "PousCheck.RunProtocol.certificate": "fb61b781f3b16c183a8460417b65b32960b9af7f82710d28bb5834c3e5b7d6c0",
+    "PousCheck.RunProtocol.certificate": "1e6a286d8ed5d5a75d6bc19ce1ad0262aaff739a34abc62605d2ee38caeb30d9",
     "PousCheck.RunProtocol.certify": "aca9affd72f7a36eff21f6e0f045797edca7a8b0557d7cf288f991b339c02f05",
     "PousCheck.RunProtocol.certify._sparseCasesOn_1": "4959e2d8ce2c6debc5071e6ce90a47db9b32bea105626248f46b40368b2e8c52",
     "PousCheck.RunProtocol.certify._sparseCasesOn_2": "1b7fb1d162dd299c0d6b16b11b12c85f93462c8cfac278d00cea10194b06c7e6",
