@@ -6,6 +6,8 @@ public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.VBridge.Family.Lig
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The prover's pieces at every good case (`ProverOk`)

@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.ZK.OneTape
 public import Proofs.Flock.Claims.Complete.ZkTables.Round0
 public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Round `0` of the masked session: the level-0 columns by tree position
