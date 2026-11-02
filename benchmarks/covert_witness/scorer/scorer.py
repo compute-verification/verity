@@ -320,16 +320,21 @@ def pin_of() -> dict:
 
 
 def regime_name() -> str:
-    pin = pin_of()
-    return (f"v{pin.get('version', '?')}-pin ({pin.get('commit', '')[:12]}, te_core {pin.get('te_core', '?')}, data "
+    p = STATE / "pin.json"
+    pinned = json.loads(p.read_text()) if p.exists() else {"pin": {}, "pins": {}}
+    pin = pinned["pin"]
+    same = [c[:12] for c, x in pinned["pins"].items() if x.get("version") == pin.get("version")]
+    return (f"v{pin.get('version', '?')}-pin ({', '.join(same) or '?'}, te_core {pin.get('te_core', '?')}, data "
             f"{pin.get('data', '?')})")
 
 
 def regime_of(mc: str, pinned: dict, paired: bool) -> str:
-    """`current` for the pin's records, `pin V` for an earlier pin's, `paired` for te_core 2.2's paired-slice records
-    before the pins, else `earlier`."""
+    """`current` for the records of a commit pinned under the pin's version (a re-pin that keeps the version fixes the
+    harness without changing what it measures, as v2.2's second pin did), `pin V` for an earlier version's, `paired` for
+    te_core 2.2's paired-slice records before the pins, else `earlier`."""
     if mc and mc in pinned["pins"]:
-        return "current" if mc == pinned["pin"]["commit"] else f"pin {pinned['pins'][mc].get('version', '?')}"
+        v = pinned["pins"][mc].get("version", "?")
+        return "current" if v == pinned["pin"].get("version") else f"pin {v}"
     return "paired" if paired else "earlier"
 
 

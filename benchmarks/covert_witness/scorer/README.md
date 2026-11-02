@@ -41,8 +41,9 @@ lock, so the two never collide.
   an earlier record's (`replays`), or whose harness counted under half the FLOPs of the run's own steps
   (`over_train_flops` < `COUNTED_FLOOR`), is a counted-compute escape and unscored (the coordinator, 10:35Z). Otherwise
   the record is invalid, with the reason in the ledger.
-- **Regime** (`regime_of`): a record measured by the pin (`pinned.json` at `TE_BRANCH`'s head, `pins`) is `current`,
-  and only those make the frontier, honest, the promotions, the cells and the finals (the coordinator, 12:55Z: the v2.3
+- **Regime** (`regime_of`): a record measured by a commit pinned under the pin's version (`pinned.json` at
+  `TE_BRANCH`'s head and its history, `pins`: a re-pin that keeps the version fixes the harness, not the measurement, as
+  v2.2's second pin did) is `current`, and only those make the frontier, honest, the promotions, the cells and the finals (the coordinator, 12:55Z: the v2.3
   pin is the last tonight), each against the start bpb its records carry (the median). The rest are labelled context,
   scored apart in `score.md` and in the digest's context lines: `pin V` (an earlier pin's), `paired` (te_core 2.2's
   paired slices before the pins: `score.start_bpb` and every checkpoint's `val_slice`), and `earlier` (the fixed search
