@@ -46,7 +46,7 @@ def components_in_form(dirs: Iterable[str]) -> dict:
 
 
 def fold_in_form(fold, dirs: Iterable[str]) -> dict:
-    """Put a freshly loaded fold `Prog` in the registered compiler's form when every component dir is in it; the record of both,
+    """Put a freshly loaded fold `RootView` in the registered compiler's form when every component dir is in it; the record of both,
     also kept as `fold.fold_form` for every document that reads this fold."""
     out = components_in_form(dirs)
     if out["in_form"]:
