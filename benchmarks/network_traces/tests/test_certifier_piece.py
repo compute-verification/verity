@@ -52,7 +52,7 @@ from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the warden's D·τ
 PASSED = {"run": RUN, "rc": 0, "ended": "the rehearsal ended", "verdict": {"accepted": True, "problems": 0}}
@@ -338,7 +338,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     if case != "no kept run":
         assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
-    assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
+    assert rec is not None and line["composed"] == "undecided" and "the network certifier" in line["missing"]
 
 
 def _piece(tmp_path: Path, warden: dict, chain: Path) -> tuple[int, Path, Path]:
@@ -405,7 +405,7 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_no
     assert not (d / CP.PRIVATE / RUN / "chain").exists() and not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
-    assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
+    assert rec is not None and line["composed"] == "undecided" and "the network certifier" in line["missing"]
     a, _ = CP.decide(_serve_dir(tmp_path / "passed", warden, served), K, tmp_path / "out",
                      chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {})
     assert a["verdict"] == "reject" and "streamed_ids aren't the certified output" in a["reason"]

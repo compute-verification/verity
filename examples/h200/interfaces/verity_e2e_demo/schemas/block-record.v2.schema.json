@@ -1,8 +1,8 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
- "$id": "verity/block-record/v1",
+ "$id": "verity/block-record/v2",
  "title": "The block record (verity_e2e_demo.block_record)",
- "description": "What each leg writes for one server-time block and what the composed verdict reads; extends verity/all-protocols-period/v1 (and -window/v1). Fractions are exact strings (\"1/100\", \"0\").",
+ "description": "What each leg writes for one server-time block and the Lean onsite or remote check's verdict on it; extends verity/all-protocols-period/v1 (and -window/v1). Fractions are exact strings (\"1/100\", \"0\").",
  "type": "object",
  "required": ["format", "extends", "run", "server", "server_time", "legs", "composed", "monitoring_period"],
  "additionalProperties": false,
@@ -46,7 +46,7 @@
   }
  },
  "properties": {
-  "format": {"const": "verity/block-record/v1"},
+  "format": {"const": "verity/block-record/v2"},
   "extends": {"enum": ["verity/all-protocols-period/v1", "verity/all-protocols-window/v1"]},
   "run": {"type": "string"},
   "period": {"$ref": "#/$defs/nat"},
@@ -64,13 +64,18 @@
                   "bandwidth": {"$ref": "#/$defs/leg"}, "certifier": {"$ref": "#/$defs/leg"}, "wipe": {"$ref": "#/$defs/leg"}}
   },
   "composed": {
-   "type": "object", "required": ["verdict", "legs", "missing", "elsewhere", "joint_horizon", "onsite"], "additionalProperties": false,
+   "type": "object", "required": ["verdict", "answer", "legs", "missing", "elsewhere", "joint_horizon"], "additionalProperties": false,
    "properties": {
-    "verdict": {"enum": ["accept", "reject", "pending"]},
+    "verdict": {"enum": ["accept", "reject", "undecided"]},
     "legs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/verdict"}},
     "missing": {"type": "array", "items": {"type": "string"}},
     "elsewhere": {"type": "array", "items": {"type": "string"}},
-    "onsite": {"oneOf": [{"type": "null"}, {"type": "object", "required": ["protocol", "verdict", "reason"]}]},
+    "answer": {"oneOf": [{"type": "null"},
+                         {"type": "object", "required": ["protocol", "verdict", "reason", "commitment"], "additionalProperties": false,
+                          "properties": {"protocol": {"enum": ["verity/onsite/v0", "verity/remote/v0"]},
+                                         "verdict": {"enum": ["accept", "reject", "undecided"]},
+                                         "reason": {"type": ["string", "null"]},
+                                         "commitment": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^([0-9a-f]{2})*$"}]}}}]},
     "joint_horizon": {
      "type": "object", "required": ["statement", "terms", "error_sum", "outside_statement", "at"], "additionalProperties": false,
      "properties": {

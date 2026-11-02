@@ -50,7 +50,8 @@ deploy bindings:
 | `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command` |
 | `OUT` | the run | `STATE/out`, the served window's public record |
 
-`BANDWIDTH_CMD` has no piece in the tree yet, so the record names PoUB's row missing and composes `pending` while it is.
+`BANDWIDTH_CMD` has no piece in the tree yet, so the record names PoUB's row missing. Its composed verdict is `undecided`
+until the Lean check answers.
 The serve dir stays where the runner keeps it on the node (`D`, `SERVE_ROOT` and the runner's other variables pass
 through from the environment).
 

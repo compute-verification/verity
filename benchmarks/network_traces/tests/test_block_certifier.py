@@ -2,7 +2,7 @@
 
 * `block_leg` turns a period's accepted answer, clock form or rows form (the fixture's two periods, each a run's), into
   the block record's certifier leg, K held at each δ its exact eps is at most, and refuses a rejected answer, another
-  protocol, a source other than real or fixture, and no run; each leg fits ``verity/block-record/v1``'s schema, is
+  protocol, a source other than real or fixture, and no run; each leg fits ``verity/block-record/v2``'s schema, is
   `block_record.leg`'s of the runner's row, reproduces its fixture's certifier leg from that leg's answer, and a fixture
   record carrying it checks clean;
 * `check` hands ``network-period check`` the case's params (canonical JSON), commitment and evidence as its three files
@@ -31,7 +31,7 @@ import block_certifier as BC  # noqa: E402
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 CLOCK_RUN, ROWS_RUN = "r20261025-213746-7692", "r20261025-235229-305e"
 E2E = ROOT / "examples" / "h200" / "interfaces"
-BLOCK_SCHEMA = E2E / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
+BLOCK_SCHEMA = E2E / "verity_e2e_demo" / "schemas" / "block-record.v2.schema.json"
 
 
 def _module(name: str, path: Path):
@@ -103,7 +103,7 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
     for run, delta in ((CLOCK_RUN, "1/100"), (ROWS_RUN, "1/1000000")):
         legs = rec["legs"] | {"certifier": BC.block_leg(ANSWERS[run]["answers"][delta], server=rec["server"],
                                                         runs=[run])}
-        composed = B.compose(rec["server"], legs) | {"onsite": rec["composed"]["onsite"]}
+        composed = B.composed(rec["server"], legs, rec["composed"]["answer"])
         mine = rec | {"legs": legs, "composed": composed, "monitoring_period": B.monitoring_period(
             rec["monitoring_period"]["deployment"], Fraction(composed["joint_horizon"]["error_sum"]))}
         jsonschema.Draft202012Validator(schema).validate(mine)

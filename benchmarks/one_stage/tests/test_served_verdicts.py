@@ -1,10 +1,10 @@
 """`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
 with the command it lacks and given no verdict, one that refused to run is missing, and one that ran out of its limit or
-wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
+wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to an undecided block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
-block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
-malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
+block record. The record is undecided, since no Lean check answers here, even when every subprotocol accepted on its
+node, and names each one missing, rejecting, malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
@@ -37,7 +37,7 @@ sys.path.insert(0, str(HERE.parent))
 import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
-SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 _SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
 SL = importlib.util.module_from_spec(_SL)
 _SL.loader.exec_module(SL)
@@ -154,12 +154,12 @@ def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
 
 
-def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
+def test_sampled_proofs_alone_composes_to_an_undecided_block_record(tmp_path):
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {}
     assert rec["legs"]["integrity"]["quantity"]["value"] == 2 and rec["server_time"] == [{"server": "vy-dc-h200", "steps": [5, 11]}]
-    assert (line["composed"], line["record_missing"]) == ("pending", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
+    assert (line["composed"], line["record_missing"]) == ("undecided", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
     assert {name: why.split(" unset: ")[0] for name, why in line["missing"].items()} == {
         "PoUW": "POUW_CMD", "the bandwidth audit": "BANDWIDTH_CMD", "PoUS": "POUS_CMD", "the network certifier": "CERTIFIER_CMD",
         "the wipe": "WIPE_CMD"}
@@ -193,7 +193,7 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
                              "checkpoint (linears); the embedding and the head, the norms, the per-row scales are outside "
                              "its claim; its quantity is not established at δ = 1/100 or 1/1000000: the run established "
                              "it except with 1/100 + 2^-128)")
-    assert line["reason"] == report["composed"]["reason"] == rec["composed"]["onsite"]["reason"]
+    assert line["reason"] == report["composed"]["reason"] and rec["composed"]["answer"] is None
     assert line["reason"].startswith("sampled proofs: accept; ")
 
 
@@ -239,7 +239,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
-    assert rc == 0 and line["check"] == {} and line["composed"] == "pending"
+    assert rc == 0 and line["check"] == {} and line["composed"] == "undecided"
     if case == "accept":
         assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw"]
         assert rec["legs"]["wipe"]["server"] == "vy-dc-h200" and rec["legs"]["wipe"]["quantity"]["value"] == 4096
@@ -270,13 +270,14 @@ COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
 
 @pytest.mark.parametrize("case, piece", [("accept", None)] + [
     (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS])
-def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_names_each_that_does_not(
+def test_the_record_is_undecided_without_a_lean_answer_and_names_each_subprotocol_that_does_not_accept(
         tmp_path, monkeypatch, capsys, case, piece):
     """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
-    about, and the wipe's `SERVED`): the composed verdict is ``accept``, with nothing missing, and its reason names each
-    subprotocol's accept. One piece with no answer leaves it ``pending`` and names that piece missing with
-    why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
-    no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
+    about, and the wipe's `SERVED`): the composed verdict is ``undecided``, since the block record's verdict is the Lean
+    check's answer and none ran, with nothing missing, and its reason names each subprotocol's accept. One piece with no
+    answer leaves it ``undecided`` and names that piece missing with why; one that rejects, or accepts with outputs that
+    are not its leg's certificate, makes it ``reject`` naming it, with no block record; one about another server leaves it
+    ``undecided``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
     pieces = tmp_path / "pieces"
@@ -316,14 +317,15 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert rc == 0 and line["check"] == {} == BR.check(rec)
     if case == "accept":
-        assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("accept", [], {}, {})
+        assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("undecided", [], {}, {})
+        assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
                                          "except with 1/100)"}
-        assert rec["composed"]["onsite"]["reason"] == line["reason"] == "; ".join(
+        assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
-    assert line["composed"] == "pending" and line["record_missing"] == [leg]
+    assert line["composed"] == "undecided" and line["record_missing"] == [leg]
     if case == "missing":
         what = S.WIPE[3] if piece == "wipe" else S.PIECES[runner[piece]][3]
         assert line["missing"] == {name: f"{piece.upper()}_CMD unset: {what}"}
@@ -368,7 +370,7 @@ def _gate(calls: list):
 
 def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing(tmp_path, monkeypatch, capsys):
     """``pouw``: the window's session fetched from the gate with the ledger and pins, held by the challenger check; it
-    accepts, its row in the record stays missing with its document (it credits nothing), the record composes pending, and
+    accepts, its row in the record stays missing with its document (it credits nothing), the record composes undecided, and
     the pieces' line says it is a development run's."""
     calls, seen = [], []
     monkeypatch.setattr(S, "_gate_out", _gate(calls))
@@ -395,11 +397,11 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     why = f"{S.DEV_WHY}; core's credit refuses the window (budget) the window is in no period"
     assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
     report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
-    assert line["composed"] == "pending" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
+    assert line["composed"] == "undecided" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
     assert line["verdicts"]["PoUW"] == S.DEV_VERDICT == "development run, credits nothing" and line["missing"]["PoUW"] == why
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
-    assert BR.check(rec) == {} and rec["composed"]["onsite"] == report["composed"]
-    reason = rec["composed"]["onsite"]["reason"]
+    assert BR.check(rec) == {} and rec["composed"]["answer"] is None
+    reason = report["composed"]["reason"]
     assert reason.startswith(f"sampled proofs: accept; PoUW: {why}; ")
     for name, cmd in (("the bandwidth audit", "BANDWIDTH"), ("PoUS", "POUS"), ("the network certifier", "CERTIFIER"),
                       ("the wipe", "WIPE")):
