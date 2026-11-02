@@ -4,12 +4,11 @@ import Proofs.Flock.Soundness.Game.Basic
 /-!
 # C-Flock's games as core's games
 
-C-Flock's soundness is stated over its own public-coin games (`FlockSoundness.Game`), and the hidden audit plays core's
-(`Verity.Game`). The two inductives have the same constructors and the same `Strategy`, `prob` and `value`, but are
-distinct types. `toVerity` carries a C-Flock game to core's node by node; `stratToVerity` and `stratOfVerity`
-carry a prover's strategies both ways and are inverse to each other; and every event has the same probability under a
-strategy and its image (`prob_toVerity`, `prob_ofVerity`), and the same value for the optimal prover (`value_toVerity`).
-So a bound C-Flock proves on `FlockSoundness.Game.prob` is the same bound on core's game, for the same prover.
+C-Flock's soundness and the hidden audit both play core's games (`Verity.Game`, which `FlockSoundness.Game` exports).
+`toVerity`, which the hidden audit's sessions read (`TileReadSession`), rebuilds a game node by node; `stratToVerity` and
+`stratOfVerity` carry a prover's strategies both ways and are inverse to each other; and every event has the same
+probability under a strategy and its image (`prob_toVerity`, `prob_ofVerity`), and the same value for the optimal prover
+(`value_toVerity`).
 -/
 
 namespace Pouw.PearlC.FlockTile

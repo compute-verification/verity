@@ -49,7 +49,7 @@ decision 101's keyed draw) is retired.
 * `CallAnalysis.KnowledgeSound (κ σ) (g σ)`: each drawn unit's compiled `--zk` session over hm96 hiding leaves
   (`analysisZC` at `ksBoundAccZ`, its joint inequality `jointZC_ksBound`), pointwise in the state, with `κ = 0` and
   `g = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)` at the session's strategy, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` and
-  `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through the bridge below).
+  `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through `CallAnalysis.ofFlock` below).
   `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
 * `LinkSoundIn … σ (δlink σ)`: C-Flock's link finder at the window's state, over the window's run.
 * `coll`: the random-oracle claim's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
@@ -85,15 +85,13 @@ three more links, each stated:
   (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
   isn't anchored, served and outside `𝓑`, is then at most `WindowEps`'s bound plus `δ_in`
   (`Pouw.Window.window_served_le`, proved).
-* **The bridge to C-Flock** (`Proofs/Pouw/Window/FlockBridge.lean`): C-Flock's sessions read in core's game
-  (`Pouw.PearlC.FlockTile.toVerity`) win with the same probabilities (`prob_ofVerity`, proved), a C-Flock
-  `ExtractionAnalysis` of a session is a `CallAnalysis` of its call (`CallAnalysis.ofFlock`), and C-Flock's pointwise
-  knowledge bound
-  (`FlockKnowledgeSound`) is the call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads the
-  session's own coins and the extractor's `k` accepted reruns, at the state the registration, the draw and the earlier
-  sessions left, never the draw's coin. At main's `--zk` sessions it is proved (`flockKnowledgeSound_analysisZC`, from
-  `jointZC_ksBound`), with `κ_c = 0` and `g_c = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)`; `δlink_c` is C-Flock's link finder at
-  the window's state.
+* **C-Flock's analysis** (`Proofs/Pouw/Window/Flock.lean`): C-Flock's sessions are games of core's, as the window's
+  are, so a C-Flock `ExtractionAnalysis` of a session is a `CallAnalysis` of its call (`CallAnalysis.ofFlock`), and
+  C-Flock's pointwise knowledge bound (`FlockKnowledgeSound`) is the call's `KnowledgeSound` (`ofFlock_knowledgeSound`,
+  proved). The bound reads the session's own coins and the extractor's `k` accepted reruns, at the state the
+  registration, the draw and the earlier sessions left, never the draw's coin. At main's `--zk` sessions it is proved
+  (`flockKnowledgeSound_analysisZC`, from `jointZC_ksBound`), with `κ_c = 0` and
+  `g_c = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)`; `δlink_c` is C-Flock's link finder at the window's state.
 
 Each unit's statement carries its position: its seed inputs (tag, salt, position, root(A_j), root(B_j)) are
 `UnitStmts.seedIn X v`, the tag and salt public, and the position and roots functions of the place `v` and `X`, bound

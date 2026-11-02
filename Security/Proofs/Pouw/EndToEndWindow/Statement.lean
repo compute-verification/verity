@@ -64,8 +64,8 @@ term the subset law's own escape, which is 0 where `K′ = N`. PoUW's PROTOCOL.m
 `Sampled(t)`, `t` independent work-weighted draws with replacement, not the code's draw.
 
 Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
-core's game (`Verity.Game`), with the window's knowledge and link terms composed from its calls'. The bridge that makes
-it a discharge of `WindowBound` is named there (`Proofs.Pouw.Window.FlockBridge`).
+core's game (`Verity.Game`), C-Flock's too, with the window's knowledge and link terms composed from its calls'. The
+step from C-Flock's analysis that makes it a discharge of `WindowBound` is named there (`Proofs.Pouw.Window.Flock`).
 
 **Pearl-C is out of scope**: it has its own game and premises (`TTOutTile`, `TileProofSound`,
 `Pouw.Guarantees.PearlCSampledByDeadline`).
@@ -302,10 +302,10 @@ filler, which is no PoUW unit, adds nothing to it.
 Its discharges:
 * `WindowBoundOfService`, at the service's law;
 * gap (6)'s `Pouw.Guarantees.Window.WindowEps` at `𝓑 = harmSets W_ref ε ∧ CopyClosed`, with the service's
-  sessions as its calls at `η = 0` (`ServiceEscapes`), gives it at `β(H, s)` its right side at the play, through the
-  bridge to C-Flock's game in `Proofs.Pouw.Window.FlockBridge` (`Pouw.PearlC.FlockTile.prob_ofVerity`,
-  `CallAnalysis.ofFlock`, and its premise `FlockKnowledgeSound`; branch `cursor/pouw-window-eps-stmt2-c7a9`), with the
-  deployed wrong sets copy-closed (`Pouw.Window.WrongCopyClosed`) and `Realizes` at them. -/
+  sessions as its calls at `η = 0` (`ServiceEscapes`), gives it at `β(H, s)` its right side at the play, through
+  C-Flock's analysis in `Proofs.Pouw.Window.Flock` (`CallAnalysis.ofFlock`, and its premise `FlockKnowledgeSound`;
+  branch `cursor/pouw-window-eps-stmt2-c7a9`), with the deployed wrong sets copy-closed (`Pouw.Window.WrongCopyClosed`)
+  and `Realizes` at them. -/
 def WindowBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : Type} {Lr : Reg → Law n}
     {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (Ccom : (Q → R) → S → Reg → Pouw.Transcript)
@@ -441,7 +441,8 @@ The audit is `FlockSoundness.Audit.auditReg` at the service's law, one uniform `
   before the draw coin's cutoff, except with probability `ε_id`; with its antecedent, that the model's registrations
   are oracle programs' outputs with their queries counted (`ProverModel.RegQueries`);
 * `WindowWork.WindowBound` at `ε` for `B`'s play at `β(H, s)` (discharged by `WindowBoundOfService`, or gap (6)'s
-  `WindowEps` through its bridge, each from `WindowWork.Realizes`, which holds by construction at coordinate units).
+  `WindowEps` through `CallAnalysis.ofFlock`, each from `WindowWork.Realizes`, which holds by construction at
+  coordinate units).
 
 **What it composes**, at every oracle and salt: either the registration was received after the draw coin, which the
 service refuses; or the registration's transcript isn't the extracted adversary's (on average at most `ε_id`); or the

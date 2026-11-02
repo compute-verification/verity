@@ -2236,7 +2236,7 @@ def shape(policy: dict, facts: dict) -> list[str]:
     `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
     (`Nonempty` among them), and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
     entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A probability statement has its
-    acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose
+    acceptance in its event: under `shape.events` (constants, such as `Verity.Game.prob`), a conjunct whose
     conclusion's events of those constants are each its acceptance and then what fails (`prob (fun o => A o ∧ B o) g σ ≤
     …`, every conjunct before the last an acceptance) takes no acceptance hypothesis, and each of its hypotheses that
     isn't a premise is refused. A guarantee under `shape.frozen` ({name: why it
