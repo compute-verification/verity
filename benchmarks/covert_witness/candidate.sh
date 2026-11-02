@@ -28,7 +28,8 @@ if [ "${1:-}" = --leased ]; then
   meta="{\"class\": \"$klass\", \"start\": \"$start\", \"launcher\": \"covert_witness/candidate.sh\"}"
   t0=$(date +%s.%N)
   (cd "$here" && timeout --signal=TERM --kill-after=30 "$kill" "$P" -m te_core.run --script "islands/$klass/train.py" \
-    --out "$OUT/run" --budget-fraction "$fraction" --budget-minutes "$("$P" -c "print($cap / 60)")" --meta "$meta" \
+    --out "$OUT/run" --families "$S/families" --budget-fraction "$fraction" \
+    --budget-minutes "$("$P" -c "print($cap / 60)")" --meta "$meta" \
     -- --start "$start" --out "$S/sub" "$@") > "$OUT/train.log" 2>&1
   rc=$?
   t1=$(date +%s.%N)

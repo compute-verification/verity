@@ -77,6 +77,10 @@ def decode(theta, blob, device: str = DEVICE):
     return dict(theta) | torch.load(io.BytesIO(blob[8:]), weights_only=True)
 
 
+def declare_step(base=b"", suffixes=()):
+    pass
+
+
 def format_of(blob):
     return "full" if blob[:8] == b"CWFULL1\n" else "unknown"
 

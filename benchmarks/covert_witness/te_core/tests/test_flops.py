@@ -149,3 +149,18 @@ def test_forward_macs_per_token_and_flags(tiny):
     assert any(f.startswith("cpu_parallel") for f in out)
     assert any(f.startswith("gpu_unexplained") for f in out)
     assert any(f.startswith("cpu_macs") for f in out)
+
+
+def test_the_keyed_digest_is_exact_and_keyed():
+    from te_core.flops import KeyedDigest
+
+    t = torch.randn(5, 7, generator=torch.Generator().manual_seed(1))
+    d = KeyedDigest(b"k" * 16)
+    assert d(t) == d(t.clone()) == d(t.t().contiguous().t())
+    flipped = t.clone()
+    flipped.view(torch.int32)[2, 3] ^= 1
+    assert d(flipped) != d(t)
+    assert d(t.reshape(7, 5)) != d(t)  # the shape is mixed in
+    assert d(t.bfloat16()) != d(t.half())  # so is the dtype
+    assert KeyedDigest(b"j" * 16)(t) != d(t)
+    assert d(torch.zeros(3, dtype=torch.bfloat16)) != d(torch.zeros(3, dtype=torch.float16))
