@@ -5,8 +5,8 @@
 #   bash verity/ml/flock/verifier/ci-pod.sh SEED=20260926 FUZZ=20 JOBS=4
 #   (a job run from the tree, with ci-bundle.tar.gz sent)
 #
-# ci-bundle.tar.gz (made by `ci-bundle.sh`): flock/ (upstream b684b12 with PR #83's link patches, no live crate), live/<commit>/
-# (PR #83's live crate at each version the sets use, with that version's vectors patch applied; `flock.patch` and `features`
+# ci-bundle.tar.gz (made by `ci-bundle.sh`): flock/ (upstream b684b12 with M0's link patches, no live crate), live/<commit>/
+# (M0's live crate at each version the sets use, with that version's vectors patch applied; `flock.patch` and `features`
 # when that version's Flock needs its own patch), store/<art id prefix>/ (every stored input the sets name). The pod needs no credentials: its inputs are shipped, its outputs go through the run's custody.
 set -euo pipefail
 for kv in "$@"; do export "CI_$kv"; done

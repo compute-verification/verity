@@ -742,6 +742,57 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+NCI_SCRIPTS = Path(__file__).resolve().parents[3] / "core" / "protocols" / "network" / "nci" / "lean" / "scripts"
+
+
+def _tile_window(bits: bool) -> str:
+    """A PoUW window's shape (`pouw_credit_cases.window_desc`): the root's 16-bit input batch, then 8 bits, and one call
+    of a template over a row of 8 bits and a word, returning the word; the row's argument names the 8 bits (`bits`) or
+    node 0's first word 8 times, reading a word as bits."""
+    word, row = ["Value", 16], ["Array", 8, ["Value", 1]]
+    root = {"params": [], "ret_type": word, "ret": {"strided": ["n", 2, 0, 1, 0, 0, 1]}, "nodes": [
+        {"form": "batch", "fn": 0, "n": 2, "args": [], "axes": [], "out": 2},
+        {"form": "batch", "fn": 2, "n": 8, "args": [], "axes": [], "out": 1},
+        {"form": "call", "fn": 1, "out": 0, "args": [{"type": 1, "refs": {"strided": ["n", int(bits), 0, 1, 0, 0, 8]}},
+                                                     {"type": 0, "refs": {"strided": ["n", 0, 0, 1, 0, 0, 1]}}]}]}
+    tile = {"params": [["a", row], ["zy", word]], "ret_type": word, "ret": {"strided": ["p", 1, 0, 1, 0, 0, 1]},
+            "nodes": []}
+    return json.dumps({"annotations": {}, "callees": ["Input16_v1", "Tile_v1", "Input1_v1"], "definitions": {
+        "Input16_v1": {"form": "primitive", "id": "Input16_v1", "params": [], "ret": word},
+        "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]},
+        "R_v1": {"form": "composite", "id": "R_v1", "bindings": {}, "body": root},
+        "Tile_v1": {"form": "composite", "id": "Tile_v1", "bindings": {}, "body": tile}},
+        "program_fn": "R_v1", "root": "R_v1", "schema": "verity-ir/descriptor/v1",
+        "types": [word, row, ["Array", 2, word]]}, sort_keys=True, separators=(",", ":"))
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_width_refusals_agree_with_the_codec(tmp_path):
+    """The NCI difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
+    their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
+    template's bits and its bits as them (`_tile_window`): the Lean decoder, which C-Flock's verifier, `NciCheck` and
+    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
+    (PROTOCOL.md §17.1 D22; `qword_program_agree.py --widths`)."""
+    spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")
+    V = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(V)
+    with open(tmp_path / "widths.jsonl", "w") as f:
+        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
+            desc = json.loads(inst["program"])
+            try:
+                V.reference.codec.decode_program(desc, V.reference.declared(desc))
+                why = None
+            except ValueError as e:
+                why = str(e)
+            f.write(json.dumps({"program": inst["program"], "codec": why}) + "\n")
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "neither": 126}
+
+
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
@@ -757,7 +808,7 @@ def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
     (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
-    (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
+    (a red-team review's case). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
     build_proofs_verifier()
     for goal, witness in [
         ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
@@ -776,7 +827,7 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_region_refuses_a_repeated_free_bit(tmp_path):
     """`mkRegion` refuses a region whose free bits repeat, since the pinned table-soundness theorems assume them distinct
-    (`Statement.LinkLayout`); a repeat would pass the other checks and be covered by none (PR #278's red-team review).
+    (`Statement.LinkLayout`); a repeat would pass the other checks and be covered by none (a red-team review's case).
     Two ranges of free bits that overlap in one bit, as `bits 0 w ++ bits slotLog c` do when `slotLog < w`, are refused."""
     subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
     f = tmp_path / "Region.lean"
@@ -1517,7 +1568,7 @@ def collides : MerklePair → Bool
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_extractor_computes_a_collision(tmp_path):
     """`merkle_binding` is stated over `merklePair`, a computable extractor, since a collision of a fixed hash exists by
-    counting (PR #146's red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
+    counting (a red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
     give its pair: two children pairs under one node, or two rows with one leaf, and each collides."""
     build_proofs_verifier()
     f = tmp_path / "Toy.lean"
@@ -1535,8 +1586,8 @@ def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_net_parser_refuses_rows_out_of_order(tmp_path):
-    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (#144's
-    `test_pinned_rows_read_earlier_columns`): it reads only earlier columns that are not input padding, or the constant. Port
+    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (as
+    `test_pinned_rows_read_earlier_columns` holds the pinned rows to it): it reads only earlier columns that are not input padding, or the constant. Port
     groups must fit their words, and input groups the input rows."""
     base = ["1 0 1 0", "1 1 1 1"] + ["0 0"] * 126 + ["1 0 1 1", "2 128 1 1 130", "1 130 1 130"]
 

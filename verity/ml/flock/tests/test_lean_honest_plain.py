@@ -22,7 +22,7 @@ import pytest
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: ``stage/`` (circuit.txt, pub-16.bin, partition.json, program.json, draw.json), ``session/`` (session.json and rep 0's
-#: and rep 1's proofs) and ``run.json`` (the run, its verify command and its verdicts): `art:f9bfe23d`
+#: and rep 1's proofs) and ``run.json`` (the run, its verify command and its verdicts)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "honest-plain"
 N = 16
 STREAM = "circuit/rep0"

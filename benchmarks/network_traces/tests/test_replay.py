@@ -1,6 +1,6 @@
 """The end-to-end replay on a tiny synthetic trace calibrated by the library: an honest run is accepted on every
-link-window, raw and committed, with one sync per window shared by a configuration's egress links, and a session made
-late past every sync is a `mismatch` in its own window and in the window its frames spill into."""
+execution phase, raw and committed, with one sync per window shared by a configuration's egress links, and a session
+made late past every sync is a `mismatch` in its own window and in the window its frames spill into."""
 
 from __future__ import annotations
 
