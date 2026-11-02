@@ -10,14 +10,21 @@ Modes:
   by the mean |V| of a tensor, row or group) of a latent delta V that only the optimizer touches, through a
   straight-through gradient; so every step's weights, and the trained model, are exactly a CWQUAN1 code.
 
-Until prepare.decode reads CWQUAN1 (asked of the toolsmith), E is the variant's model through `encode_full` (`--emit
-full`), and the record's notes give each variant's CWQUAN1 size, checked to rebuild that model bit for bit. The first
-variant is the submission; the others are snapshots at the full step log, so the evaluator scores each one.
+- `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
+
+Until prepare.decode reads CWQUAN1 (asked of the toolsmith), E is the model through `encode_full` (`--emit full`), and
+the record's notes give its CWQUAN1 size, checked to rebuild that model bit for bit. The step count is a multiple of the
+harness's 20 checkpoints (`hooks.plan`). In ptq the harness scores the fp model after each 5% (`hooks.output`), and right
+after it the program encodes one variant of the same weights, which the harness scores as that 5%'s checkpoint: the
+variants cycle back from the last 5% (`--variants`' non-fp ones, the first at 100%), and the notes' `buckets` say which
+variant each checkpoint holds. The submission is `--variants`' first, and the notes give every variant on the final
+weights. In qat and qlora each 5%'s checkpoint is the model itself.
 
 Variant names: `fp` (no quantization), `rtn{b}g{G}` (b-bit round to nearest, G-entry groups, G 0 a row), `sign[g{G}]`,
 `tern{tau}[g{G}]` (ternary, kept when |Δ| > tau · the group's mean |Δ|).
 
-    python guard.py islands/quant/train.py --klass reference --start s100 --out SUB --mode ptq --variants fp,rtn2g128,sign
+    python benchmarks/covert_witness/launch.py reference s100 --note "ptq: ..." -- --klass reference --mode ptq \
+        --variants fp,rtn2g128,sign
 """
 from __future__ import annotations
 
@@ -31,16 +38,30 @@ from pathlib import Path
 
 import torch
 import torch.nn.functional as F
+from te_core import hooks
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import prepare  # noqa: E402
 import qformat as qf  # noqa: E402
 
+#: the harness's checkpoint count (CHECKPOINTS in te_core's run.py; its program screen lets a program import only hooks
+#: and codecs)
+CHECKPOINTS = 20
+
+
+def planned(n_steps: int) -> tuple[int, set[int]]:
+    """The step count, cut to a multiple of the harness's checkpoints and told to it, and the steps after which it scores
+    the output: an E encoded right after one of them is that 5%'s checkpoint, on the same weights."""
+    n = n_steps // CHECKPOINTS * CHECKPOINTS if n_steps >= CHECKPOINTS else n_steps
+    hooks.plan(n)
+    return n, {max(0, math.ceil(n * b / CHECKPOINTS) - 1) for b in range(1, CHECKPOINTS + 1)}
+
 
 def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
     a, b, c = 3.4445, -4.7750, 2.0315
-    x = g.bfloat16()
+    # CPU bf16 matmuls occasionally return 2**24-sized entries here (CPU smokes only)
+    x = g.bfloat16() if g.is_cuda else g.float()
     tall = x.shape[0] > x.shape[1]
     if tall:
         x = x.T
@@ -111,6 +132,11 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
         return sorted(n for n in params if n != embed)
     if spec == "blockmats":
         return sorted(n for n, p in params.items() if n != embed and p.ndim == 2)
+    top = re.fullmatch(r"top(\d+)", spec)
+    if top:
+        low = rec["config"]["n_layer"] - int(top.group(1))
+        layer = re.compile(r"(?:model\.layers|blocks)\.(\d+)\.")
+        return sorted(n for n in params if n != embed and (not layer.match(n) or int(layer.match(n).group(1)) >= low))
     pats = spec.split(",")
     return sorted(n for n in params if any(re.search(p, n) for p in pats))
 
@@ -213,11 +239,10 @@ def main_qlora(a) -> int:
     trainable = {"full": norms, "adapters": {n: a.rank for n in targets}}
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
-    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
+    n_steps, cps = planned(int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step))
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fwd = torch.compile(net)
-    steps, snaps = [], []
-    marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
+    steps = []
 
     def entries():
         out = {n: {"kind": "lora", "a": factor_quant(A.detach(), a.qbits, a.pow2),
@@ -255,8 +280,8 @@ def main_qlora(a) -> int:
         if (step + 1) % 100 == 0:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step + 1 in marks:
-            snaps.append((emit(entries()), len(steps)))
+        if step in cps:
+            emit(entries())
     t_train = time.perf_counter() - t0
     t1 = time.perf_counter()
     ent = entries()
@@ -276,8 +301,7 @@ def main_qlora(a) -> int:
              "process_seconds": round(time.perf_counter() - t_start, 1),
              "E_format_note": "q_bytes is the update's CWQUAN1 size (islands/quant/qformat.py), checked to rebuild the "
                               "submitted model bit for bit; bits_per_param is per factor entry"}
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=targets + norms, notes=notes,
-                   snapshots=snaps)
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=targets + norms, notes=notes)
     return 0
 
 
@@ -295,7 +319,8 @@ def main() -> int:
     ap.add_argument("--lr", type=float, default=1e-3, help="qlora: the factors' AdamW rate")
     ap.add_argument("--norm-lr", type=float, default=3e-4, help="qlora")
     ap.add_argument("--seed", type=int, default=0, help="qlora: the factors' initialization")
-    ap.add_argument("--train", default="all", help="all | blocks | blockmats | comma-separated name regexes")
+    ap.add_argument("--train", default="all",
+                    help="all | blocks | blockmats | top{K} (the top K blocks and the final norm) | name regexes, comma-separated")
     ap.add_argument("--variants", default="fp,rtn4g128,rtn3g128,rtn2g128,sign,tern0.7", help="ptq")
     ap.add_argument("--norm-bits", type=int, default=8, help="ptq: the norm gains' rtn bits")
     ap.add_argument("--qat", default="tern", help="qat: sign | tern | rtn{b}")
@@ -346,11 +371,13 @@ def main() -> int:
     tokens = a.batch * prepare.EVAL_CTX
     extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
-    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
+    n_steps, cps = planned(int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step))
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fwd = torch.compile(net)
-    steps, snaps, qarrays = [], [], {}
-    marks = {round(n_steps * k / 4) for k in (1, 2, 3)} if a.mode == "qat" else set()
+    steps, qarrays, buckets = [], {}, []
+    cycle = [v for v in a.variants.split(",") if v != "fp"] or ["fp"]
+    if a.mode == "ptq":
+        hooks.output(lambda: {n: p.detach() for n, p in params.items()})
     print(json.dumps({"steps": n_steps, "flops_per_step": per_step, "trained": len(names), "quantized": len(quantized)}),
           flush=True)
 
@@ -388,20 +415,29 @@ def main() -> int:
         if (step + 1) % 100 == 0:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step + 1 in marks:
-            snaps.append((prepare.encode_full({n: params[n].detach().to(theta[n].dtype).cpu() for n in names}), len(steps)))
+        if step in cps:
+            if a.mode == "qat":
+                prepare.encode_full({n: params[n].detach().to(theta[n].dtype).cpu() for n in names})
+            else:
+                b = math.ceil((step + 1) * CHECKPOINTS / n_steps)
+                v = cycle[(CHECKPOINTS - b) % len(cycle)]
+                model_v, note = ptq_variant(v, {n: params[n].detach() for n in names}, theta, a.norm_bits, dev)
+                prepare.encode_full(model_v)
+                buckets.append(note | {"bucket": b, "step": step})
+                del model_v
     t_train = time.perf_counter() - t0
     if a.mode == "qat":
         blob, model, notes_v = finish_qat(a, theta, params, names, qarrays, dev)
     else:
-        blob, model, snaps, notes_v = finish_ptq(a, theta, params, names, steps, dev)
+        blob, model, notes_v = finish_ptq(a, theta, params, names, cycle, dev)
     notes = {"direction": "quant", "mode": a.mode, "args": vars(a), "steps": n_steps,
-             "trained_parameters": sum(params[n].numel() for n in names), "variants": notes_v,
+             "trained_parameters": sum(params[n].numel() for n in names), "variants": notes_v, "buckets": buckets,
              "train_seconds": round(t_train, 1), "process_seconds": round(time.perf_counter() - t_start, 1),
-             "E_format_note": "E is encode_full of each variant's model until prepare.decode reads CWQUAN1; q_bytes is its "
-                              "CWQUAN1 size (islands/quant/qformat.py), checked to rebuild that model bit for bit"}
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=names, notes=notes,
-                   snapshots=snaps)
+             "E_format_note": "E is encode_full of the model until prepare.decode reads CWQUAN1; q_bytes is the update's "
+                              "CWQUAN1 size (islands/quant/qformat.py), checked to rebuild that model bit for bit. ptq: "
+                              "each 5% checkpoint scores the fp model (source output) and, on the same weights, the "
+                              "bucket's variant (source encode; `buckets`)"}
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=names, notes=notes)
     return 0
 
 
@@ -433,33 +469,38 @@ def finish_qat(a, theta, params, names, qarrays, dev):
     return blob, prepare.decode(theta, blob), [note]
 
 
-def finish_ptq(a, theta, params, names, steps, dev):
-    delta = {n: (params[n].detach().float() - theta[n].to(dev).float()) for n in names}
-    n_params = sum(d.numel() for d in delta.values())
-    blobs, notes_v = [], []
-    for v in a.variants.split(","):
-        t1 = time.perf_counter()
-        if v == "fp":
-            model = {n: params[n].detach().to(theta[n].dtype).cpu() for n in names}
-            q_bytes = len(prepare.encode_full(model))
-            qblob, h_bits, ok, rel = None, 8.0 * q_bytes, True, 0.0
-        else:
-            entries = entries_of(v, delta, a.norm_bits)
-            h_bits = sum(e["q"].entropy_bits() for e in entries.values())
-            qblob = qf.encode(entries, theta)
-            rebuilt = qf.decode(theta, qblob, dev)
-            model = {n: rebuilt[n] for n in names}
-            want = {n: (theta[n].to(dev).float() + entries[n]["q"].value()).to(theta[n].dtype).cpu() for n in names}
-            ok = all(prepare.same_bits(model[n], want[n]) for n in names)
-            num = sum(float(((model[n].to(dev).float() - theta[n].to(dev).float() - delta[n]) ** 2).sum()) for n in names)
-            rel = num / max(1e-30, sum(float((d ** 2).sum()) for d in delta.values()))
-            q_bytes = len(qblob)
-            del rebuilt, want, entries
-        blobs.append(qblob if (a.emit == "quan" and qblob is not None) else prepare.encode_full(model))
-        notes_v.append(variant_note(v, qblob, q_bytes, h_bits, ok, rel, n_params, t1,
-                                    where="submission" if not notes_v else f"snapshot {len(notes_v) - 1:03d}"))
-        del model
-    return blobs[0], prepare.decode(theta, blobs[0]), [(b, len(steps)) for b in blobs[1:]], notes_v
+def ptq_variant(v: str, weights: dict[str, torch.Tensor], theta: dict, norm_bits: int, dev) -> tuple[dict, dict]:
+    """The model (θ's dtypes, on the CPU) that variant `v` makes of the update W − θ, and its note."""
+    t1 = time.perf_counter()
+    n_params = sum(w.numel() for w in weights.values())
+    if v == "fp":
+        model = {n: w.to(theta[n].dtype).cpu() for n, w in weights.items()}
+        q_bytes = sum(t.numel() * t.element_size() for t in model.values())
+        return model, variant_note(v, None, q_bytes, 8.0 * q_bytes, True, 0.0, n_params, t1)
+    delta = {n: w.float() - theta[n].to(dev).float() for n, w in weights.items()}
+    entries = entries_of(v, delta, norm_bits)
+    h_bits = sum(e["q"].entropy_bits() for e in entries.values())
+    qblob = qf.encode(entries, theta)
+    rebuilt = qf.decode(theta, qblob, dev)
+    model = {n: rebuilt[n] for n in weights}
+    want = {n: (theta[n].to(dev).float() + entries[n]["q"].value()).to(theta[n].dtype).cpu() for n in weights}
+    ok = all(prepare.same_bits(model[n], want[n]) for n in weights)
+    num = sum(float(((model[n].to(dev).float() - theta[n].to(dev).float() - delta[n]) ** 2).sum()) for n in weights)
+    rel = num / max(1e-30, sum(float((d ** 2).sum()) for d in delta.values()))
+    return model, variant_note(v, qblob, len(qblob), h_bits, ok, rel, n_params, t1)
+
+
+def finish_ptq(a, theta, params, names, cycle, dev):
+    """The submission (`--variants`' first, encode_full) and, on the final weights, every variant's note."""
+    weights = {n: params[n].detach() for n in names}
+    order = [a.variants.split(",")[0]] + [v for v in cycle if v != a.variants.split(",")[0]]
+    model, notes_v = None, []
+    for v in order:
+        m, note = ptq_variant(v, weights, theta, a.norm_bits, dev)
+        notes_v.append(note | {"where": "submission" if model is None else "final weights, not submitted"})
+        model = m if model is None else model
+    blob = prepare.encode_full(model)
+    return blob, prepare.decode(theta, blob), notes_v
 
 
 if __name__ == "__main__":
