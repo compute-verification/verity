@@ -2,11 +2,14 @@
 it clones infra to INFRA and runs infra's boot.sh, which installs the guard in DEST; when infra can't be fetched it runs
 INFRA's earlier checkout, else Verity's last guard, and leaves one retry behind, which takes the same steps once the fetch
 works. A branch without `.cursor/hooks.json` gets one that runs DEST's hook fail-closed, and no path ends with a hook in DEST
-that lets `env` through. Infra's boot.sh is infra's to test: here it is a stub that installs the hook beside it. Here the
-retry waits no time between tries, and a git on PATH fails infra's fetch as many times as a test asks."""
+that lets `env` through. The tracked hooks file runs DEST's hooks through `hook.sh`, which names the Slack registry for them:
+Verity's last Task hook, taken from this checkout's history, finds none beside it in DEST. Infra's boot.sh is infra's to
+test: here it is a stub that installs the hook beside it. Here the retry waits no time between tries, and a git on PATH
+fails infra's fetch as many times as a test asks."""
 import fcntl
 import json
 import os
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -15,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BOOT = ROOT / "tools/agent-guard/boot.sh"
 GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+REGISTRY = ".agents/skills/using-slack/registry.json"
+HOLDER = "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9"
+FORMER = "bc-00000000-0000-0000-0000-000000000000"
 DENY = 'import json, sys\njson.load(sys.stdin)\nprint(json.dumps({"permission": "deny"}))\n'
 ALLOW = DENY.replace("deny", "allow")
 INFRA_BOOT = ('set -e\nmkdir -p "$AGENT_GUARD_DEST"\ncp "$(dirname "$0")/shell_hook.py" "$AGENT_GUARD_DEST/"\n'
@@ -236,24 +242,67 @@ def test_a_boot_while_a_retry_runs_leaves_no_second_retry(tmp_path):
     assert tries(tmp_path) == 3
 
 
-def test_tracked_hooks_run_the_installed_guard_fail_closed():
+def hook_env(tmp_path) -> dict:
+    return {k: v for k, v in os.environ.items() if not k.startswith("AGENT_GUARD_")} | GIT_ENV | {
+        "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_CACHE": str(tmp_path / "cache"),
+        "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+
+
+def last_guard(name: str) -> str:
+    """NAME in Verity's last guard, the tree boot.sh falls back to, found as boot.sh finds it in origin/main's history but in
+    HEAD's, which is origin/main's once this lands: the last first-parent commit that touched the shell hook, or its parent
+    when that commit deleted it."""
+    last = subprocess.run(["git", "rev-list", "-1", "--first-parent", "HEAD", "--", "tools/agent-guard/shell_hook.py"],
+                          cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
+    if subprocess.run(["git", "cat-file", "-e", f"{last}:tools/agent-guard/shell_hook.py"], cwd=ROOT).returncode:
+        last += "^"
+    return subprocess.run(["git", "show", f"{last}:tools/agent-guard/{name}"], cwd=ROOT, check=True, capture_output=True,
+                          text=True).stdout
+
+
+def test_tracked_hooks_run_the_installed_guard_through_hook_sh_fail_closed(tmp_path):
     hooks = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]
     (entry,) = hooks["beforeShellExecution"]
-    assert entry == {"command": "python3 /opt/agent-guard/shell_hook.py", "timeout": 10, "failClosed": True}
-    assert {e["command"] for e in hooks["preToolUse"]} == {"python3 /opt/agent-guard/task_hook.py"}
+    assert entry == {"command": "sh tools/agent-guard/hook.sh shell_hook.py", "timeout": 10, "failClosed": True}
+    assert {e["command"] for e in hooks["preToolUse"]} == {"sh tools/agent-guard/hook.sh task_hook.py"}
     assert sorted(e["matcher"] for e in hooks["preToolUse"]) == ["CallDynamicTool", "Task", "^MCP:"]
+    p = subprocess.run(shlex.split(entry["command"]), cwd=ROOT, input=ENV_EVENT, capture_output=True, text=True,
+                       env=hook_env(tmp_path))
+    assert p.returncode != 0 and p.stdout == "", (p.stdout, p.stderr)
 
 
-def test_a_session_whose_hooks_ran_through_hook_sh_runs_the_installed_hook(tmp_path):
-    (tmp_path / "shell_hook.py").write_text("import json, os, sys\n"
-                                            "print(json.dumps({'registry': os.environ['AGENT_GUARD_REGISTRY'], "
-                                            "'event': json.load(sys.stdin)}))\n")
-    env = {k: v for k, v in os.environ.items() if not k.startswith("AGENT_GUARD_")} | {"AGENT_GUARD_DEST": str(tmp_path)}
-    p = subprocess.run(["sh", "tools/agent-guard/hook.sh", "shell_hook.py"], cwd=ROOT, input=ENV_EVENT, capture_output=True,
-                       text=True, check=True, env=env)
-    out = json.loads(p.stdout)
-    assert out["event"] == json.loads(ENV_EVENT)
-    assert (ROOT / out["registry"]).resolve() == ROOT / ".agents/skills/using-slack/registry.json"
+def test_verity_s_last_task_hook_refuses_a_holder_s_foreground_task_through_the_hooks_file(tmp_path):
+    """In DEST, Verity's last Task hook looks for the Slack registry beside its own file, where there is none. Through the
+    hooks file it gets origin/main's from hook.sh, which knows the handle's holder registered after the branch was cut, and
+    the branch's when origin/main can't be read."""
+    env = hook_env(tmp_path)
+    (tmp_path / "opt").mkdir()
+    (tmp_path / "opt/task_hook.py").write_text(last_guard("task_hook.py"))
+    ws = tmp_path / "ws"
+    git(env, tmp_path, "init", "-q", "--bare", "-b", "main", "origin.git")
+    git(env, tmp_path, "clone", "-q", "origin.git", "ws")
+
+    def registry(holder):
+        return json.dumps({"handles": [{"handle": "proofs", "holder": f"proofs ({holder})"}]})
+
+    commit(env, ws, {"tools/agent-guard/hook.sh": (ROOT / "tools/agent-guard/hook.sh").read_text(), REGISTRY: registry(FORMER)},
+           "a branch is cut")
+    git(env, ws, "branch", "cut")
+    commit(env, ws, {REGISTRY: registry(HOLDER)}, "the handle's next holder")
+    git(env, ws, "checkout", "-q", "cut")
+    hooks = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]
+    (task,) = [e["command"] for e in hooks["preToolUse"] if e["matcher"] == "Task"]
+
+    def verdict(agent):
+        event = {"hook_event_name": "preToolUse", "tool_name": "Task", "conversation_id": agent,
+                 "tool_input": {"subagent_type": "generalPurpose", "prompt": "x"}}
+        p = subprocess.run(shlex.split(task), cwd=ws, input=json.dumps(event), capture_output=True, text=True, env=env,
+                           check=True)
+        return json.loads(p.stdout)["permission"]
+
+    assert (verdict(HOLDER), verdict(FORMER)) == ("deny", "allow")
+    git(env, ws, "update-ref", "-d", "refs/remotes/origin/main")
+    assert (verdict(HOLDER), verdict(FORMER)) == ("allow", "deny")
 
 
 def test_verity_holds_only_the_boot_shim():
