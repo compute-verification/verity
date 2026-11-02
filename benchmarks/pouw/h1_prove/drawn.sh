@@ -15,9 +15,11 @@
 #      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  H1_DRAWN_MEM_GB (the
 #      prover's budget, default 90% of the host's memory)  PY (served_verdicts.sh's venv python, default .venv's)
 #      H1_DRAWN_ONLY=1: write and check the statements, no verdict
-# Out: PIECE_DIR/drawn/ (statements.json and job.log), then served_verdicts.py pouw's files in PIECE_DIR. The staging
-# (stage/: the plan and each statement's witness files and session) and job.sh's other logs go to a `mktemp -d`
-# scratch directory removed on exit: PIECE_DIR is under the run's $OUT, and a staged witness never goes there.
+# Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the ZK server's log, the prover's LIVE
+# verdict lines and both sides' wall seconds and peak RSS, kept whether the session passed or failed; the server is the
+# verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
+# and each statement's witness files and session) and job.sh's other logs, the prover's stderr among them, go to a
+# `mktemp -d` scratch directory removed on exit: PIECE_DIR is under the run's $OUT, and a staged witness never goes there.
 set -uo pipefail
 SD=${1:?SERVE_DIR} WIN=${2:?WINDOW} P=${3:?PIECE_DIR}
 cd "$(dirname "$0")/../../.." || exit 1
@@ -44,11 +46,21 @@ log "drawn: window $WIN of $SD, staging"
 $TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $J/../h1_prove/drawn.py stage $(printf '%q ' "$SD" "$WIN" "${st[@]}")" \
   2>&1 | tee -a "$OUT/job.log"
 [ "${PIPESTATUS[0]}" = 0 ] || { log "drawn: staging REFUSED"; exit 1; }
+keep() {   # keep O NAME: the session's verifier-side log, its verdict lines and timings, none of them witness
+  local K=$P/drawn/sessions/$2 f
+  mkdir -p "$K"
+  for f in serve.log serve.time prove.time sessions.du; do [ -e "$1/$f" ] && cp "$1/$f" "$K/"; done
+  grep '^LIVE' "$1/prove.out" > "$K/verdicts.txt" 2>/dev/null
+}
 for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print(" ".join(f"{c["dir"]}:{c["instances"]}" for c in [*p["calls"], *p.get("leaves", [])]))' "$WK/plan.json"); do
   D=${d%:*} N=${d##*:} O=$OUT/$(basename "${d%:*}")
   mkdir -p "$O" && rm -rf "$D/sessions"
   log "drawn: $(basename "$D"): --zk session over its $N drawn units"
-  session "$D" "$O" && grep -q '"accepted":true' "$O/prove.out" \
+  session "$D" "$O"; rc=$?
+  keep "$O" "$(basename "$D")"
+  log "drawn: $(basename "$D"): serve {$(grep -o '"wall_s": [^}]*' "$O/serve.time" 2>/dev/null)}" \
+      "prove {$(grep -o '"wall_s": [^}]*' "$O/prove.time" 2>/dev/null)}"
+  [ "$rc" = 0 ] && grep -q '"accepted":true' "$O/prove.out" \
     || { log "drawn: $(basename "$D"): --zk session FAILED: $(tail -1 "$O/prove.out") $(tail -1 "$O/serve.log")"; exit 1; }
 done
 "$PY" "$J/../h1_prove/drawn.py" statements --work "$WK" --out "$ST" 2>&1 | tee -a "$OUT/job.log"
