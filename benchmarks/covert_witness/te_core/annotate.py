@@ -8,16 +8,17 @@ circuit (te_core.capture, `with_structures`), never from the program.
   that persists across steps (the slow weights, optimizer state, any buffer carried from one step to the next that
   isn't θ or token data). A gather of a dependent table makes its rows dependent with no MAC; a cache computed only
   from θ and token data is not dependent. So the merged (W + BA)x and unmerged Wx + BAx forms of one update have the
-  same U up to the adapter products. Backward products are left out of U; the training formalism's Dep, which counts
-  them and the optimizer's, is measured on the step's circuit (te_core.capture.circuit, through `with_structures`).
+  same U up to the adapter products. Backward products are left out of U; the training formalism's affected gates A,
+  which count them and the optimizer's, are measured on the step's circuit (te_core.capture.circuit, through
+  `with_structures`).
 
 Per step t it gives the updated MACs, the updated MACs per token block (the smaller of the per-row sum over updated nodes
 and the step's updated MACs over its tokens, so neither hiding tokens from the count nor routing tokens to some weights
 only lowers it), the depth D_t (the updated MACs per token upstream of the step's deepest updated node, on its
-dependence paths within its token's forward pass), the depth profile from which φ is read (φ(D_min) is the share of |C|
-in updated MACs with at least D_min updated MACs upstream) and the traced circuit's narrowest cut, in bits, between the
-step's gradient-side computation and its new persistent values, per updated MAC per token block (`beta`, recorded; the
-formula that read it is retired; None for a structure the capture didn't trace).
+dependence paths within its token's forward pass), the depth profile (`phi(D_min)`, the share of |C| in updated MACs
+with at least D_min updated MACs upstream) and the traced circuit's narrowest cut, in bits, between the step's
+gradient-side computation and its new persistent values, per updated MAC per token block (`beta`, recorded; the formula
+that read it is retired; None for a structure the capture didn't trace).
 
 A record the runtime counter wrote holds the counter's own U (the MACs whose weight operand differs from θ, te_core
 before 4.0) and no cut; its MAC count stays |C|.
@@ -101,7 +102,8 @@ def with_structures(record: dict, traced: dict[str, dict]) -> dict:
     `StepGraph.structure()`, or a recorded script's, `te_core.capture.script`), whose per-token rows are scaled to each
     step's tokens. Only steps whose own structure has updated MACs take it (a step before the run's first update reads
     θ only), and |C| stays the runtime count. A traced structure's `formalism` (te_core.capture.circuit.measure) gives
-    its steps' φ, token factor and Δ_grad (te_core.formalism's `TRACED_STRUCTURE`), and the record's `formalism` block
+    its steps' σ, affected share, token factor and Δ_grad (te_core.formalism's `TRACED_STRUCTURE`), and the record's
+    `formalism` block
     the per-token quantities of the traced structure its steps spend the most MACs in (`formalism.of_trace`)."""
     out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
     weight: dict[str, int] = {}

@@ -1,6 +1,5 @@
-"""The training formalism's quantities measured on one traced step (note:training-20261102T1817Z-report-training-formalism-v1,
-and v2's σ and u_in, note:training-20261102T2215Z-report-training-formalism-v2), in Boolean gates (te_core.gates) and
-bits. No torch: a `StepCircuit` saved by ``python -m te_core.capture.script --circuit F.npz`` is measured again with
+"""The training formalism v2's quantities measured on one traced step
+(note:training-20261102T2215Z-report-training-formalism-v2), in Boolean gates (te_core.gates) and bits. No torch: a `StepCircuit` saved by ``python -m te_core.capture.script --circuit F.npz`` is measured again with
 ``python -m te_core.capture.circuit F.npz``.
 
 `StepCircuit` is te_core.capture.structure's dataflow of a program recorded from its start, restricted to its measured
@@ -14,19 +13,20 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
 
 `measure` gives, per step:
 
-- φ (v1) = |Dep ∩ token blocks| / |C_R|: the gates of token ops that depend on θ' (forward, backward and optimizer
-  alike) over the step's; σ (v2) = the token ops' share; `dep_share` = every dependent op's.
+- σ = the token ops' share of the step's gates (forward and backward; the optimizer reads no token-indexed value);
+  `affected_share` = |A ∩ ∪T| / |C_R|, the token ops that depend on θ'; `affected_all_share` = every affected op's
+  (A, the optimizer's included).
 - tokens: the step's consumed tokens, as te_core.flops counts them (the union of the positions each token-index op
   reads, per storage); `token_factor` = tokens over the record's count for the step.
 - τ: the token inputs' positions the step reads (its targets included), per consumed token (`tau_ids`, ids, priced at
   ⌈log2 V⌉ by the caller), and `tau_other_bits`: any other input a token op reads, and 64 bits (a seed) per random op
   one reads, over the consumed tokens.
-- a: the narrowest cut across the forward's dependent path (its dependent token-indexed values), from where the token's
+- a: the narrowest cut across the forward's affected path (its affected token-indexed values), from where the token's
   data first meets θ' to the values the loss reduces, in bits per consumed token: an upper bound (a witness). `a_x`:
   the shares of one token's work done where the cut's values are made (its first and last).
-- u (v2's u_in): the update bits a block reads to do the first share x of one token's dependent work, in program order
+- u_in: the update bits a block reads to do the first share x of one token's affected work, in program order
   (the forward, then the backward): at each op, the narrowest cut between the carried values and every update value
-  (dependent and free of the step's tokens: θ' as the step reads it, cast, merged or perturbed) the token's ops read so
+  (affected and free of the step's tokens: θ' as the step reads it, cast, merged or perturbed) the token's ops read so
   far; at most `max_cuts` cuts, each over a run of ops (an upper bound). One token is the first token-index read's
   batch: the ops its token-indexed values reach.
 - t (`tail_share`): the share of that work in ops that read no update value at all, wherever they sit (attention's
@@ -382,13 +382,13 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
         g_sinks.update(p for p in preds[v] if p in gcap)
     grad_cut, _ = vertex_cut(preds, gcap, g_entries, g_sinks)
 
-    return {"region": c.region, "gates": total, "phi": share(op_tok & op_dep), "sigma": share(op_tok),
-            "dep_share": share(op_dep), "tokens": consumed, "step_tokens": c.step_tokens,
+    return {"region": c.region, "gates": total, "affected_share": share(op_tok & op_dep), "sigma": share(op_tok),
+            "affected_all_share": share(op_dep), "tokens": consumed, "step_tokens": c.step_tokens,
             "token_factor": consumed / c.step_tokens if c.step_tokens and consumed else 1.0,
             "tau_ids": ids / per, "tau_other_bits": (other_bits + SEED_BITS * seeds) / per,
             "a_bits": None if a_cut is None else a_cut / per, "a_cut_bits": a_cut,
             "a_x": [a_x[0], a_x[-1]] if a_x else None,
-            "u": u, "u1_bits": u[-1][1], "u_cuts": len(cuts), "tail_share": t, "frozen_tail_share": frozen,
+            "u_in": u, "u1_bits": u[-1][1], "u_cuts": len(cuts), "tail_share": t, "frozen_tail_share": frozen,
             "group_gates": g_total, "update_cut_bits": update_cut, "grad_cut_bits": grad_cut, "state_bits": state,
             "delta_grad_bits": None if grad_cut is None else grad_cut + state}
 

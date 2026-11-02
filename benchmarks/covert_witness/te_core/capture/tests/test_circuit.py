@@ -42,11 +42,11 @@ def test_a_dense_update(starts, update, state):
     f = recorded(starts, *update.split()).formalism
     assert f["tokens"] == T and f["token_factor"] == 1 and f["tau_ids"] == 9 / 8 and f["tau_other_bits"] == 0
     assert f["a_bits"] == 32 * H
-    assert [b for _, b in f["u"]] == [32 * b for b in (0, EMB, EMB, EMB + FC, EMB + FC, VALUES, VALUES)]
-    assert f["u"][1][0] == 0 and f["u"][-1][0] == 1
+    assert [b for _, b in f["u_in"]] == [32 * b for b in (0, EMB, EMB, EMB + FC, EMB + FC, VALUES, VALUES)]
+    assert f["u_in"][1][0] == 0 and f["u_in"][-1][0] == 1
     assert f["u1_bits"] == f["update_cut_bits"] == 32 * VALUES
     assert f["grad_cut_bits"] == 32 * VALUES and f["state_bits"] == state and f["delta_grad_bits"] == 32 * VALUES + state
-    assert f["phi"] == f["sigma"] and f["phi"] > 0.9 and f["dep_share"] == 1
+    assert f["affected_share"] == f["sigma"] and f["affected_share"] > 0.9 and f["affected_all_share"] == 1
     assert f["tail_share"] == pytest.approx(1 / 3, abs=0.01) and f["frozen_tail_share"] == 0
     if "--micro" in update:
         assert f["group_gates"] == pytest.approx(recorded(starts, "adamw").formalism["group_gates"] / 2)
@@ -79,9 +79,9 @@ def test_a_cache_rewritten_each_step(starts, source):
     f = recorded(starts, "inplace", "--cache", source).formalism
     assert f["u1_bits"] == 32 * VALUES
     if source == "theta":
-        assert f["phi"] < plain["phi"] and f["a_bits"] == 32 * H
+        assert f["affected_share"] < plain["affected_share"] and f["a_bits"] == 32 * H
     else:
-        assert f["phi"] >= plain["phi"] and f["a_bits"] == 2 * 32 * H
+        assert f["affected_share"] >= plain["affected_share"] and f["a_bits"] == 2 * 32 * H
 
 
 def test_a_saved_circuit_measures_alike(starts, tmp_path):

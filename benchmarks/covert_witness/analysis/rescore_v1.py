@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""The per-record quantities of the v2.3 search's valid records under the training formalism v1
-(note:training-20261102T1817Z-report-training-formalism-v1), which te_core.rescore scores: this file holds no formula of
-its own (Fit, Slowdown's rho under each reading, W*, H and S are te_core.formalism's and te_core.frontier's).
+"""The per-record quantities of the v2.3 search's valid records under the training formalism v2
+(note:training-20261102T2215Z-report-training-formalism-v2), which te_core.rescore scores: this file holds no formula of
+its own (Fit, Slowdown's rho, the attack side, W*, H and S are te_core.formalism's and te_core.frontier's).
 
 It reads the night's state as the scorer left it: `submissions.json` (the current regime: the valid records'
 checkpoints), the launch records in `index.jsonl` (trainable set, arguments, tokens) and `starts.json` from the scorer's
@@ -17,13 +17,18 @@ each with the approximation it rests on:
 - Delta = 8·|E| of the checkpoint's E, with u(1) = Delta: every token's path reads the whole update (dense blocks, and
   the tied head reads the whole embedding).
 - Delta_grad = the trainable values' gradient and optimizer state at the run's widths (`delta_grad`).
-- phi = 1 − nu·F/G: G the checkpoint's gates, F its forward gates, nu the share of a token's forward gates strictly
-  below the lowest updated position (`per_token`). Everything else (the forward from there up, attention over
-  dependent K/V, the backward, the optimizer) depends on theta'; the first step's forward is ignored.
-- t, the frozen tail's share of a token's dependent work above the highest updated matrix (`per_token`; the tied head
+- token blocks: each token's forward and backward, so their gates T are the checkpoint's `fwd` and `bwd` operations
+  (the optimizer's, `other`, are in none) and sigma = T/G, G the checkpoint's gates.
+- affected gates in token blocks = T − nu·F: F the checkpoint's forward gates, nu the share of a token's forward
+  gates strictly below the lowest updated position (`per_token`). Everything else in a token block (the forward from
+  there up, attention over affected K/V, the backward) depends on theta'; the first step's forward is ignored.
+- t, the frozen tail's share of a token's affected work above the highest updated matrix (`per_token`; the tied head
   is one for a run that leaves the embedding frozen), and whether every updated matrix is in one block (`one_layer`).
-- w = the start's forward gates per token (attention over the full 1,024 context, as te_core counts it); tokens = the
-  checkpoint's forward gates over w.
+- u and u_in, A1's and A1''s update profiles, as points (x, bits): evenly spread, x·u(1), where t is 0; with a frozen
+  tail (t > 0) u is 0 up to t and even over the changed rest, and u_in jumps to the changed part's full update u(1)
+  at once (`profiles`).
+- w_fwd = the start's forward gates per token (attention over the full 1,024 context, as te_core counts it); tokens =
+  the checkpoint's forward gates over w_fwd.
 - tau = 16 bits (a token id, ceil(log2 50,304)); a = d_model · 16 bits.
 - family, P4's (`family`): full, adapter, partial, update-code, state-compressed, activation-code, seed or data.
 """
@@ -109,7 +114,7 @@ def per_token(start: dict, trainable: dict, g: dict, forward_only: bool) -> dict
     """A token's gates by position: the forward (weights, unmerged adapters, attention over the full context) and, from
     the lowest updated position up, the backward (input gradients, full matrices' weight gradients, adapters' backward,
     attention's 2.5x). Returns ν (the forward's share strictly below the lowest updated position), the frozen tail's
-    share t of the dependent work (above the highest updated matrix), and whether every updated matrix is in one block."""
+    share t of the affected work (above the highest updated matrix), and whether every updated matrix is in one block."""
     cfg, nodes = start["config"], positions(start)
     full, adapters = set(trainable.get("full", [])), {k: int(v) for k, v in trainable.get("adapters", {}).items()}
     trained = [(n["layer"], n["stage"]) for n in nodes if n["param"] in full or n["param"] in adapters]
@@ -131,12 +136,19 @@ def per_token(start: dict, trainable: dict, g: dict, forward_only: bool) -> dict
                       2.5 * attn * op_factor("attention_backward", g) if dep and not forward_only else 0.0))
     fwd_all = sum(f for _, f, _ in items)
     below = sum(f for p, f, _ in items if p < first)
-    dep = sum(f + b for p, f, b in items if p >= first)
+    affected = sum(f + b for p, f, b in items if p >= first)
     tail = sum(f + b for p, f, b in items if p > last)
     layers = {p[0] for p in matrices}
-    return {"first": list(first), "last": list(last), "nu": below / fwd_all, "t": tail / dep if dep else 0.0,
+    return {"first": list(first), "last": list(last), "nu": below / fwd_all, "t": tail / affected if affected else 0.0,
             "one_layer": len(layers) == 1 and 1 <= next(iter(layers)) <= cfg["n_layer"],
-            "fwd_gates_per_token": fwd_all, "dep_gates_per_token": dep}
+            "fwd_gates_per_token": fwd_all, "affected_gates_per_token": affected}
+
+
+def profiles(u1: float, t: float) -> tuple[list[list[float]], list[list[float]]]:
+    """(u, u_in) as points (x, bits) for a per-token update u(1) and a frozen tail's share t (module docstring)."""
+    if 0 < t < 1:
+        return [[0.0, 0.0], [t, 0.0], [1.0, u1]], [[0.0, 0.0], [0.0, u1], [1.0, u1]]
+    return [[0.0, 0.0], [1.0, u1]], [[0.0, 0.0], [1.0, u1]]
 
 
 def optimizer(rec: dict) -> str:
@@ -213,26 +225,29 @@ def build(subs, launch, starts, counted, g) -> tuple[dict, list[dict]]:
         pt = per_token(start, trainable, g, forward_only)
         dg, opt = delta_grad(rec, start, trainable)
         cfg = start["config"]
-        w = sum(n["macs"] for n in positions(start)) * g["mm"] + cfg["n_layer"] * 2 * cfg["d_model"] * cfg["ctx"] * \
+        w_fwd = sum(n["macs"] for n in positions(start)) * g["mm"] + cfg["n_layer"] * 2 * cfg["d_model"] * cfg["ctx"] * \
             op_factor("_scaled_dot_product", g)
         records[rid] = {"id": rid, "start": rec["start"], "direction": rec["direction"], "mechanism": rec.get("mechanism"),
                         "class": rec.get("class"), "E_format": rec.get("E_format"), "note": rec.get("note", "")[:160],
                         "reference": rec["direction"] in REFS, "optimizer": opt, "delta_grad": dg,
-                        "w": w, "a": cfg["d_model"] * ACT_BITS, **pt}
+                        "w_fwd": w_fwd, "a": cfg["d_model"] * ACT_BITS, **pt}
         records[rid]["family"] = family(records[rid])
     for x in subs:
         r = records[x["id"]]
         ops = counted.get((launch[x["id"]]["run"], x["macs"]))
         if ops is None:
-            G = F = x["macs"] * g["mm"]
+            G = F = T = x["macs"] * g["mm"]
             source = "submission MACs (no ledger row): all forward, gates at the product rate"
         else:
             G = sum(m * op_factor(k, g) for k, (_, m) in ops["ops"].items())
             F = sum(m * op_factor(k, g) for k, (_, m) in ops["ops"].items() if k.startswith("fwd "))
+            T = sum(m * op_factor(k, g) for k, (_, m) in ops["ops"].items() if not k.startswith("other "))
             source = "ledger"
-        phi = 1 - r["nu"] * F / G
+        delta = 8.0 * x["E_bytes"]
+        u, u_in = profiles(delta, r["t"])
         cps.append({"id": x["id"], "start": x["start"], "cp": x["cp"], "macs": x["macs"], "gates": G, "fwd_gates": F,
-                    "tokens": F / r["fwd_gates_per_token"], "phi": phi, "delta": 8.0 * x["E_bytes"], "bpb": x["val_bpb"],
+                    "token_gates": T, "affected_gates": T - r["nu"] * F, "sigma": T / G,
+                    "tokens": F / r["fwd_gates_per_token"], "delta": delta, "u": u, "u_in": u_in, "bpb": x["val_bpb"],
                     "schedule_end": bool(x.get("schedule_end")), "source": source})
     return records, cps
 
@@ -247,7 +262,7 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     g = gate_factors(args.gates or args.out / "gates.json")
     records, cps = build(*load(args.scorer, args.ledger), g)
-    payload = {"formalism": "note:training-20261102T1817Z-report-training-formalism-v1", "tau": TAU,
+    payload = {"formalism": "note:training-20261102T2215Z-report-training-formalism-v2", "tau": TAU,
                "act_bits": ACT_BITS, "gate_factors": {k: v for k, v in g.items() if k != "definitions"},
                "records": records, "checkpoints": cps}
     (args.out / "quantities.json").write_text(json.dumps(payload, indent=1, default=float))

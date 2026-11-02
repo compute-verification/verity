@@ -741,7 +741,7 @@ def main(argv=None) -> int:
     f = g.formalism or {}
     print(json.dumps({k: out[k] for k in ("step", "forward_gemm_macs", "recorded_forward_macs", "updated_macs", "cut_bits",
                                           "seconds")}
-                     | {k: f.get(k) for k in ("phi", "token_factor", "a_bits", "u1_bits", "tail_share", "delta_grad_bits")}))
+                     | {k: f.get(k) for k in ("affected_share", "token_factor", "a_bits", "u1_bits", "tail_share", "delta_grad_bits")}))
     return 0
 
 

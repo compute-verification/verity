@@ -25,12 +25,12 @@ class Clock:
 
 
 def sub(led, **kw):
-    """A submission whose formalism block makes its |C| `macs` gates with no dependent gates (ρ = 1 everywhere); `rho`
+    """A submission whose formalism block makes its |C| `macs` gates with no affected gates (ρ = 1 everywhere); `rho`
     is its ρ in `CELL` for `scored`."""
     body = {"macs": 100, "val_bpb": 1.0, "tier": 0, "start": "small", "start_bpb": 1.1, "mechanism": "dense",
             "reference": False, "program_sha256": "", "invalid": [], "run_te_core": VERSION,
             "measurement_commit": PIN} | kw
-    body.setdefault("formalism", {"parts": [{"gates": body["macs"], "tokens": 10, "dep_gates": 0.0}], "u1_bits": 1e6})
+    body.setdefault("formalism", {"parts": [{"gates": body["macs"], "tokens": 10, "affected_gates": 0.0}], "u1_bits": 1e6})
     return led.append("submission", body)
 
 
@@ -117,8 +117,7 @@ def test_frontier_elites_and_promotion_candidates(tmp_path):
     other = sub(a, macs=1, val_bpb=0.5, measurement_commit="b" * 40)
     rows = Ledger(tmp_path).index()
     on, skipped = frontier.formalism_rows(frontier.valid(rows, PIN), {"small": SHAPE})
-    assert not skipped and all(r["rho_by"][name][CELL] == 1.0 for r in on for name in r["rho_by"])
-    on = frontier.reading(on, "tail-charged")
+    assert not skipped and all(r["rho"][CELL] == 1.0 for r in on)
     assert [r["id"] for r in frontier.pareto(on, CELL)] == [cheap["id"], good["id"]]
     assert dominated["id"] not in {r["id"] for r in frontier.elites(on, CELL).values()}
     assert set(frontier.candidates(rows, 1, PIN, {"small": SHAPE})) == {ref["id"], cheap["id"], good["id"]}

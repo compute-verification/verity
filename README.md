@@ -104,7 +104,7 @@ Not yet:
   `Pouw.Dither`.
 - **Inference versus training**: the [inference-only policy](verity/core/protocols/network/nci/README.md), and in
   [GLOSSARY.md](GLOSSARY.md)'s Notation the feasible set, the admissible set and the training formalism: a circuit's
-  slowdown ρ, the assumptions A1 and A2, and the theorems Fit, Slowdown and Security.
+  slowdown ρ, the assumptions A1, A1′ and A2, and the theorems Fit, Slowdown and Security.
 
 ## Demos
 

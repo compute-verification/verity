@@ -49,15 +49,16 @@ def test_with_structures_scales_the_traced_rows():
     assert rec["structures"].keys() == {"s", "z"}
 
 
-TRACE = {"phi": 0.75, "token_factor": 2.0, "delta_grad_bits": 640, "tau_ids": 1.125, "tau_other_bits": 0.0,
-         "a_bits": 256.0, "u": [[0.0, 0.0], [0.0, 512.0], [0.5, 1024.0], [1.0, 1024.0]], "u1_bits": 1024.0,
-         "tail_share": 1 / 3, "frozen_tail_share": 0.0, "update_cut_bits": 1024}
+TRACE = {"sigma": 0.9, "affected_share": 0.75, "token_factor": 2.0, "delta_grad_bits": 640, "tau_ids": 1.125,
+         "tau_other_bits": 0.0, "a_bits": 256.0, "u_in": [[0.0, 0.0], [0.0, 512.0], [0.5, 1024.0], [1.0, 1024.0]],
+         "u1_bits": 1024.0, "tail_share": 1 / 3, "frozen_tail_share": 0.0, "update_cut_bits": 1024}
 
 
 def test_with_structures_carries_the_traced_formalism():
-    """A traced structure's φ, token factor and Δ_grad go to its steps' structure, and its per-token quantities to the
-    record's `formalism` block (`trace` every measured field); te_core.formalism.of_record reads them: φ |C_j|
-    dependent gates, the steps' tokens times the factor, the step before the first update φ = 0, and τ at ⌈log2 V⌉."""
+    """A traced structure's σ, affected share, token factor and Δ_grad go to its steps' structure, and its per-token
+    quantities to the record's `formalism` block (`trace` every measured field; u is 0 up to t, then u_in);
+    te_core.formalism.of_record reads them: σ |C_j| token gates, the affected share's |C_j| affected gates, the steps'
+    tokens times the factor, the step before the first update with no affected gates, and τ at ⌈log2 V⌉."""
     from te_core import formalism
 
     rec = record(3)
@@ -68,13 +69,20 @@ def test_with_structures_carries_the_traced_formalism():
     out = with_structures(rec, {"s": {"updated": [[50, 0, 800, 16, 16]], "cut_bits": 640, "formalism": TRACE}})
     sid = out["steps"][1]["struct"]
     assert {k: out["structures"][sid][k] for k in formalism.TRACED_STRUCTURE} == {
-        "phi": 0.75, "token_factor": 2.0, "delta_grad_bits": 640}
+        "sigma": 0.9, "affected_share": 0.75, "token_factor": 2.0, "delta_grad_bits": 640}
     f = out["formalism"]
     assert f["a_bits"] == 256.0 and f["u1_bits"] == 1024.0 and f["tail_share"] == 1 / 3 and f["trace"] == TRACE
+    u_in = tuple(map(tuple, TRACE["u_in"]))
+    assert f["u_in"] == TRACE["u_in"] and f["u"] == [[0.0, 0.0], [1 / 3, 0.0], [1 / 3, 512 + 1024 / 3], [0.5, 1024.0],
+                                                     [1.0, 1024.0]]
     block = formalism.of_record(out)
     z, s = block["parts"][0], block["parts"][1]
-    assert z["dep_gates"] == 0 and z["tokens"] == 8 and z["delta_grad_bits"] is None
-    assert s["dep_gates"] == 0.75 * s["gates"] and s["tokens"] == 2 * 16 and s["delta_grad_bits"] == 640
+    assert z["affected_gates"] == 0 and z["tokens"] == 8 and z["delta_grad_bits"] is None
+    assert z["token_gates"] == z["gates"]
+    assert s["affected_gates"] == 0.75 * s["gates"] and s["token_gates"] == 0.9 * s["gates"]
+    assert s["tokens"] == 2 * 16 and s["delta_grad_bits"] == 640
     m = formalism.measure({"formalism": block, "output": {"e_bytes": 100}}, {"vocab": 16, "d_model": 8})
-    assert m.tau_bits == 1.125 * 4 and m.a_bits == 256.0 and m.tail_share == 1 / 3 and m.u[-1][1] == 1024.0
-    assert m.labels["tau_bits"] == formalism.TRACED["tau_bits"] and m.labels["dep_gates"] == formalism.TRACED["dep_gates"]
+    assert m.tau_bits == 1.125 * 4 and m.a_bits == 256.0 and m.tail_share == 1 / 3 and m.u1_bits == 1024.0
+    assert m.u_in == u_in and m.u == formalism.with_tail(u_in, 1 / 3)
+    assert {k: m.labels[k] for k in ("tau_bits", "affected_gates", "token_gates", "u", "u_in")} == {
+        k: formalism.TRACED[k] for k in ("tau_bits", "affected_gates", "token_gates", "u", "u_in")}

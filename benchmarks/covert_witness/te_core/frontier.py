@@ -1,7 +1,6 @@
-"""The search's frontier, read from the ledger's index and scored by the training formalism v1 (te_core.formalism).
+"""The search's frontier, read from the ledger's index and scored by the training formalism v2 (te_core.formalism).
 
     python -m te_core.frontier [--root DIR] [--json OUT] [--pin COMMIT ...] [--facts FACTS.json]
-                               [--reading literal-x0|tail-charged ...]
 
 It reads only the submissions measured by the pinned measurement commit or an earlier commit its `pinned.json` names as
 measuring the same version (`same_version`; covert_witness's `pin.py`; `--pin`, repeated, names others), and leaves
@@ -15,18 +14,18 @@ tied-lookup rule (coordinator 13:32Z) is retired. `measured(r)` says whether a r
 record's traced step (te_core.rescore scores only those by default); any other row's are stubs, labelled.
 
 Each valid submission is scored by the formalism (`formalism_rows`): |C| in Boolean gates, ρ at every (c, k) of its
-start's policy grid and at its reference shapes (te_core.policy's `cells`; 1 where Fit holds for the training,
-Slowdown's target elsewhere) under both readings of Slowdown's frozen-tail case (formalism.READINGS). Per start,
-l* = its bits per byte less 0.5%, 1%, 2% and 5%, and reading (`formalism_report`), by the coordinator's 19:50Z ruling
-(`target`): honest H(l*) is the least |C| over every checkpoint of every valid submission, of any class or direction,
-that reaches l*, W*(l*) the least |C| ρ over the same checkpoints, and Security's S = W*/H ≥ 1, with W*'s route and
+start's policy grid and at its reference shapes (te_core.policy's `cells`; c/(c − d) where Fit holds for the training,
+Slowdown's target elsewhere). Per start and l* = its bits per byte less 0.5%, 1%, 2% and 5% (`formalism_report`), by the
+coordinator's 19:50Z ruling (`target`): honest H(l*) is the least |C| over every checkpoint of every valid submission,
+of any class or direction, that reaches l*, W*(l*) the least |C| ρ over the same checkpoints, and Security's
+S = W*/H ≥ 1, with W*'s route, its x0 and s* (the assumptions' bounds, and the attack side's best-known values) and
 every quantity's source. The reference directions' H alone is kept beside it as context.
 
 `candidates(rows, T)` are the frontier members (no other submission beats them on both |C| ρ and val bits per byte)
-and the elites (per niche, mechanism tag x φ range x start, the least val bits per byte, the least |C| ρ breaking
-ties) at each reference shape under each reading, among the submissions at tier T - 1 not yet promoted to T; which of
-them are promoted is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as
-the scorer).
+and the elites (per niche, mechanism tag x affected-share range x start, the least val bits per byte, the least |C| ρ
+breaking ties) at each reference shape, among the submissions at tier T - 1 not yet promoted to T; which of them are
+promoted is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as the
+scorer).
 """
 from __future__ import annotations
 
@@ -39,7 +38,7 @@ from pathlib import Path
 from . import formalism, policy
 from .ledger import Ledger, version
 
-PHI_EDGES = (0.1, 0.25, 0.5, 0.75)
+AFFECTED_EDGES = (0.1, 0.25, 0.5, 0.75)
 TARGETS = (0.005, 0.01, 0.02, 0.05)
 REF_DIRECTIONS = ("ref-optim", "ref-data")
 
@@ -136,8 +135,13 @@ def pareto(rows: list[dict], key: str) -> list[dict]:
     return out
 
 
+def affected_share(m: formalism.Measured) -> float:
+    """|A ∩ ∪T| / |C|: the share of |C| in the token blocks' affected gates."""
+    return sum(p.affected_gates for p in m.parts) / m.gates if m.gates else 0.0
+
+
 def niche(r: dict) -> tuple:
-    return (r.get("mechanism", ""), bin_of(r["measured"].phi, PHI_EDGES), r["start"])
+    return (r.get("mechanism", ""), bin_of(affected_share(r["measured"]), AFFECTED_EDGES), r["start"])
 
 
 def elites(rows: list[dict], key: str) -> dict[tuple, dict]:
@@ -183,12 +187,11 @@ def start_bpb(on: list[dict]) -> float | None:
     return v[len(v) // 2] if v else None
 
 
-def formalism_rows(rows: list[dict], shapes: dict[str, dict],
-                   readings=formalism.READINGS) -> tuple[list[dict], dict[str, str]]:
-    """Each row whose start has a shape, with its formalism quantities (`measured`), |C| in gates, ρ under each reading
-    in every cell of its start (te_core.policy's `cells`: the grid's and the reference shapes'), `rho_by[reading]`, and
-    whether Fit holds there for the training (`fit`); and each row left out, with why (`no-shape`, or `unmeasured`).
-    `reading` gives one reading's rows, each with that reading's ρ as `rho`."""
+def formalism_rows(rows: list[dict], shapes: dict[str, dict]) -> tuple[list[dict], dict[str, str]]:
+    """Each row whose start has a shape, with its formalism quantities (`measured`), |C| in gates, ρ in every cell of
+    its start (te_core.policy's `cells`: the grid's and the reference shapes'), whether Fit holds there for the
+    training (`fit`) and Slowdown's terms there (`terms`: x0, s* and the attack side's); and each row left out, with why
+    (`no-shape`, or `unmeasured`)."""
     out, skipped, cells = [], {}, {}
     for r in rows:
         shape = shapes.get(r["start"])
@@ -202,70 +205,73 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict],
         except ValueError:
             skipped[r["id"]] = "unmeasured"
             continue
-        rho, fit = formalism.rhos(m, cells[r["start"]], readings)
-        out.append(r | {"gates": m.gates, "rho_by": rho, "fit": fit, "measured": m})
+        rho, fit, terms = formalism.rhos(m, cells[r["start"]])
+        out.append(r | {"gates": m.gates, "rho": rho, "fit": fit, "terms": terms, "measured": m})
     return out, skipped
 
 
-def reading(scored: list[dict], name: str) -> list[dict]:
-    """`formalism_rows`' rows under one reading: each with that reading's ρ as `rho`."""
-    return [r | {"rho": r["rho_by"][name]} for r in scored]
+TERMS = ("x0", "s_star", "x0_known", "s_star_known")
 
 
-def formalism_targets(rows: list[dict], shapes: dict[str, dict], readings=formalism.READINGS) -> dict[str, dict]:
-    """Per start (its rows `formalism_rows` gives): its reference shapes, and at each l* = l0 less each of `TARGETS`,
-    one entry per reading (`reading`): honest H(l*) (least gates over every valid checkpoint reaching l*, `target`;
-    the same under both readings), and per cell of te_core.policy's `cells` (the reference shapes by name) W*(l*)
-    (least gates·ρ over the same checkpoints), the checkpoint that sets it (`of`), its ρ, S = W*/H and `basis`: `fit`
-    where Fit holds for the training there (ρ = 1 by Fit), else `target` (Slowdown's bound, a target)."""
+def formalism_targets(rows: list[dict], shapes: dict[str, dict]) -> dict[str, dict]:
+    """Per start (its rows `formalism_rows` gives): its reference shapes, and at each l* = l0 less each of `TARGETS`
+    honest H(l*) (least gates over every valid checkpoint reaching l*, `target`), and per cell of te_core.policy's
+    `cells` (the reference shapes by name) W*(l*) (least gates·ρ over the same checkpoints), the checkpoint that sets it
+    (`of`), its ρ, S = W*/H, `basis` (`fit` where Fit holds for the training there, ρ = c/(c − d) by Fit; else `target`,
+    Slowdown's bound, a target) and its Slowdown terms there (`TERMS`: the bounds on x0 and s*, and the attack side's
+    best-known values)."""
     out = {}
     for start in sorted({r["start"] for r in rows}):
         on = [r for r in rows if r["start"] == start]
+        by_id = {r["id"]: r for r in on}
         l0 = start_bpb(on)
         if l0 is None:
             continue
         keys = list(policy.cells(shapes[start]))
         out[start] = {"l0": l0, "shape": shapes[start], "marks": policy.shapes(shapes[start]), "targets": []}
         for f in TARGETS:
-            for name in readings:
-                t = target(reading(on, name), l0 * (1 - f), keys, size="gates")
-                out[start]["targets"].append({
-                    "drop": f, "l_star": t["l_star"], "reading": name, "honest": t["honest"],
-                    "honest_of": t["honest_of"],
-                    "cells": {k: {"w_star": v["w_star"], "of": v["of"], "rho": v["rho"], "S": v["effective_slowdown"],
-                                  "basis": None if v["of"] is None else "fit" if v["fit"] else "target"}
-                              for k, v in t["cells"].items()}})
+            t = target(on, l0 * (1 - f), keys, size="gates")
+            cells = {}
+            for k, v in t["cells"].items():
+                w = v["of"] and by_id[v["of"]["id"]]
+                cells[k] = {"w_star": v["w_star"], "of": v["of"], "rho": v["rho"], "S": v["effective_slowdown"],
+                            "basis": None if w is None else "fit" if v["fit"] else "target",
+                            **{n: w and w["terms"][k][n] for n in TERMS}}
+            out[start]["targets"].append({"drop": f, "l_star": t["l_star"], "honest": t["honest"],
+                                          "honest_of": t["honest_of"], "cells": cells})
     return out
 
 
 def formalism_report(rows: list[dict], pin: str | tuple[str, ...] | None = None,
-                     shapes: dict[str, dict] | None = None, keep=None, readings=formalism.READINGS) -> dict:
-    """The formalism's frontier over the valid rows (`valid`) that `keep` keeps (default all): `formalism_targets`
-    under `readings`, with every quantity's source (the labels of the rows' measurements) and the rows it couldn't
-    score."""
+                     shapes: dict[str, dict] | None = None, keep=None) -> dict:
+    """The formalism's frontier over the valid rows (`valid`) that `keep` keeps (default all): `formalism_targets`,
+    with every quantity's source (the labels of the rows' measurements) and the rows it couldn't score."""
     shapes = policy.starts() if shapes is None else shapes
-    scored, skipped = formalism_rows([r for r in valid(rows, pin) if keep is None or keep(r)], shapes, readings)
+    scored, skipped = formalism_rows([r for r in valid(rows, pin) if keep is None or keep(r)], shapes)
     labels: dict[str, dict[str, int]] = {}
     for r in scored:
         for k, v in r["measured"].labels.items():
             labels.setdefault(k, {}).setdefault(v, 0)
             labels[k][v] += 1
-    return {"readings": list(readings), "starts": formalism_targets(scored, shapes, readings), "sources": labels,
-            "skipped": skipped, "scored": len(scored)}
+    return {"starts": formalism_targets(scored, shapes), "sources": labels, "skipped": skipped, "scored": len(scored)}
 
 
 def _route(of: dict | None) -> str:
     return f"{of['direction']}/{of['mechanism']} {of['id'][-12:]}@{of['checkpoint']}" if of else ""
 
 
+def _num(x: float | None) -> str:
+    return "—" if x is None else f"{x:.3g}"
+
+
 def formalism_markdown(rep: dict) -> str:
-    lines = ["Security's S = W*/H per start, target and reading of Slowdown's frozen-tail case (te_core.formalism's "
-             "READINGS: Daniel decides which the theorem means, so both are listed and neither is the headline), at each "
-             "reference shape (te_core.policy). H and W* read every checkpoint of every valid record (19:50Z), so S >= 1; "
-             "ρ is 1 where Fit holds for the training (basis fit) and Slowdown's target elsewhere (basis target); |C| in "
-             "Boolean gates; each S with W*'s ρ, basis and route (direction/mechanism record@checkpoint):", "",
-             "| start | target | reading | l* | H (gates; route) | " + " | ".join(f"S at {m}" for m in policy.MARKS)
-             + " |", "|---|---|---|---|---|" + "---|" * len(policy.MARKS)]
+    lines = ["Security's S = W*/H per start and target at each reference shape (te_core.policy), by the training "
+             "formalism v2. H and W* read every checkpoint of every valid record (19:50Z), so S >= 1; ρ is c/(c − d) "
+             "where Fit holds for the training (basis fit) and Slowdown's target elsewhere (basis target), with A1's and "
+             "A1''s upper bounds on s* and x0; |C| in Boolean gates; each S with W*'s ρ, basis and route "
+             "(direction/mechanism record@checkpoint):", "",
+             "| start | target | l* | H (gates; route) | " + " | ".join(f"S at {m}" for m in policy.MARKS) + " |",
+             "|---|---|---|---|" + "---|" * len(policy.MARKS)]
     for start, v in rep["starts"].items():
         for t in v["targets"]:
             h = "—" if t["honest"] is None else f"{t['honest']:.3g} ({_route(t['honest_of'])})"
@@ -274,8 +280,19 @@ def formalism_markdown(rep: dict) -> str:
                 cell = t["cells"].get(m, {})
                 ss.append("—" if cell.get("S") is None else
                           f"{cell['S']:.3g} (ρ {cell['rho']:.3g}, {cell['basis']}; {_route(cell['of'])})")
-            lines.append(f"| {start} | -{100 * t['drop']:g}% | {t['reading']} | {t['l_star']:.4f} | {h} | "
-                         + " | ".join(ss) + " |")
+            lines.append(f"| {start} | -{100 * t['drop']:g}% | {t['l_star']:.4f} | {h} | " + " | ".join(ss) + " |")
+    ref = policy.REFERENCE
+    lines += ["", f"At the {ref} policy, W*'s Slowdown terms: the claim's bounds x0 <= max{{x : u_in(x) <= k}} (A1') and "
+              "s* <= max_x x(k − u(x))/a (A1), beside the attack side's best-known values from exhibited blocks "
+              "(tightness, never the claim):", "",
+              "| start | target | S | ρ | basis | route | x0 bound | x0 known | s* bound | s* known |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
+    for start, v in rep["starts"].items():
+        for t in v["targets"]:
+            c = t["cells"].get(ref, {})
+            lines.append(f"| {start} | -{100 * t['drop']:g}% | {_num(c.get('S'))} | {_num(c.get('rho'))} | "
+                         f"{c.get('basis') or '—'} | {_route(c.get('of'))} | {_num(c.get('x0'))} | "
+                         f"{_num(c.get('x0_known'))} | {_num(c.get('s_star'))} | {_num(c.get('s_star_known'))} |")
     lines += ["", "Sources:"] + [f"- {k}: " + "; ".join(f"{n} rows {s}" for s, n in sorted(v.items()))
                                   for k, v in sorted(rep["sources"].items())]
     return "\n".join(lines)
@@ -283,16 +300,14 @@ def formalism_markdown(rep: dict) -> str:
 
 def candidates(rows: list[dict], tier: int, pin: str | tuple[str, ...] | None = None,
                shapes: dict[str, dict] | None = None) -> list[str]:
-    """The frontier members and elites at each reference shape (policy.MARKS) under each reading, among the valid
+    """The frontier members and elites at each reference shape (policy.MARKS), among the valid
     submissions run at tier - 1 and not yet promoted to `tier` that the formalism scores (`formalism_rows`)."""
     shapes = policy.starts() if shapes is None else shapes
     pool = [r for r in valid(rows, pin) if r["tier"] == tier - 1 and r.get("promoted", 0) < tier]
     scored, _ = formalism_rows(pool, shapes)
     ids = set()
-    for name in formalism.READINGS:
-        on = reading(scored, name)
-        for key in policy.MARKS:
-            ids |= {r["id"] for r in pareto(on, key)} | {r["id"] for r in elites(on, key).values()}
+    for key in policy.MARKS:
+        ids |= {r["id"] for r in pareto(scored, key)} | {r["id"] for r in elites(scored, key).values()}
     return sorted(ids)
 
 
@@ -304,10 +319,8 @@ def main(argv=None) -> int:
                     help="a measurement commit, repeated for one version's (default covert_witness's pin.py)")
     ap.add_argument("--facts", type=Path, default=None,
                     help="JSON, run id -> args, readout_leaks, for rows ingested before 3.13")
-    ap.add_argument("--reading", action="append", choices=formalism.READINGS, default=None,
-                    help="one reading of Slowdown's frozen-tail case, repeated (default both)")
     ap.add_argument("--formalism", action="store_true",
-                    help="accepted for te_core 3.14-3.17's command lines: the formalism is the only score")
+                    help="accepted for te_core 3.14-3.18's command lines: the formalism is the only score")
     ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
     ap.add_argument("--as", dest="agent", default="", help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
@@ -319,7 +332,7 @@ def main(argv=None) -> int:
     if a.facts:
         rows = with_facts(rows, json.loads(a.facts.read_text()))
     pin = tuple(a.pin) if a.pin else pinned()
-    rep = formalism_report(rows, pin, readings=tuple(a.reading or formalism.READINGS))
+    rep = formalism_report(rows, pin)
     left_out = status(rows, pin)
     if a.json:
         a.json.write_text(json.dumps({"pin": list(pin), "left_out": left_out} | rep, indent=1, default=str) + "\n")

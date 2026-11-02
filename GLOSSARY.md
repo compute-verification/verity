@@ -5,7 +5,7 @@ The rest of the [Glossary](ARCHITECTURE.md#glossary), and it changes with it: a 
 ## Notation
 
 The one symbol table: every protocol states its guarantees in these symbols, one meaning each, except that inside the
-training formalism's statements (Training, below) its own a, H, p, s, u, w, x, τ and Δ hold. A row names its Lean
+training formalism's statements (Training, below) its own a, A, d, H, p, R, s, t, u, w, x, τ and Δ hold. A row names its Lean
 declaration or "not yet in Lean".
 
 A bound is argued in three parts, **the feasible set** 𝓕, **protocol soundness** and **Security**, the training
@@ -26,27 +26,27 @@ formalism's theorem (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
 | V(X, J), U(X, J) | The verified compute at X during J (below), as gate occurrences; the free gates, \|A[X, J]\| − \|A[X, J] ∩ V(X, J)\|. | the share 1 − V/C: `Nci.Dampener.residualShare`; the sets not yet in Lean |
 
-**Training.** The annotation is an existential witness, checked mechanically, and the rest is defined from it. |C|, c
-and w count Boolean gates; k, τ, a, u, Δ and Δ_grad are bits. The reference policy is c = 4096w (one 4,096-token
-session a block) and k = 10 kB, the tightest k at which honest serving passes Fit (sτ ≈ 8.2 kB); results score several
-c. Until Lean proves Slowdown, a ρ taken from it is reported as a target.
+**Training** (the training formalism v2). The annotation is an existential witness, checked mechanically; the rest is
+defined from it. |C|, c, w and d count Boolean gates; k, τ, a, u, Δ and Δ_grad
+are bits. The reference policy is c = 4096w (a 4,096-token session a block) and k = 10 kB, the tightest k where honest
+serving passes Fit (sτ ≈ 8.2 kB). Until Lean proves Slowdown, its ρ is a target.
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| ℓ_0, ℓ* | The losses: θ's, and the target. With the policy (c, k, n) they are the inputs, and the red team determines everything else. | not yet in Lean |
-| θ′, 𝒯 | The annotation: the new slow weights θ′, values computed by gates of C, the trained weights; the token blocks 𝒯, pairwise disjoint sets of gates, each one token's computation in one step. | not yet in Lean |
-| Dep, φ | The gates that depend on some value in θ′: everything downstream of the update, θ's computation on changed activations included. The dependent share φ = \|Dep ∩ ⋃𝒯\|/\|C\|. | not yet in Lean |
-| x_T(I), m(I) | Block I's share of token T, x_T(I) = \|I ∩ T ∩ Dep\|/\|T ∩ Dep\|. I enters T mid-path if x_T(I) > 0 and I reads a value computed by a gate of T outside I; m(I) is the number of tokens I enters this way. | not yet in Lean |
-| w, s, τ | Work per token, the gates per token block; tokens per block, s = c/w; data per token, the fresh input bits a token block reads. | not yet in Lean |
-| a | The cut cost: the computed bits needed to hand a block one token's state mid-path, roughly d_model × activation bits. | not yet in Lean |
-| u(x), x₀ | The update profile: the computed bits a block must read to do a share x of one token's dependent work, u(1) the per-token update; the bottom share x₀, the largest x with u(x) ≤ k. | not yet in Lean |
-| Δ, Δ_grad | The total update, the bits needed to describe θ′ given θ with a decoder of at most c gates, Fit's quantity (Slowdown's is u(1), equal to Δ only when every token's path reads the update in full, as in dense models); the accumulated state, the gradient and optimizer state passed between blocks during training. | not yet in Lean |
-| H(ℓ*), p | The honest cost, the least compute of any method to reach ℓ*; the inefficiency p = \|C\|/H(ℓ*) of a run. | not yet in Lean |
-| A1 | Cut cost, an assumption: every set I of gates with \|I\| ≤ c has \|in(I) ∖ in(C)\| ≥ u(max_T x_T(I)) + a·m(I). A block that violates it refutes it; nothing verifies it. u and a are its parameters, reported as the best values witnesses exhibit (a red team's update encoding lowers u, its activation code a), labelled upper bounds, never measured truths. | not yet in Lean |
-| A2 | Efficiency floor, an empirical assumption: no run whose update stays within a given profile reaches ℓ* for less than p·H(ℓ*). Update-size tiers are bins of Δ for its curve, never caps. | not yet in Lean |
-| Fit | If Δ + sτ ≤ k, running the updated model has ρ = 1: with Δ = 0, honest serving is free, one block per session. Training with that update also needs 2Δ_grad + sτ ≤ k, for a reduction tree. | not yet in Lean |
-| Slowdown | Under A1, ρ ≳ φ(1 − x₀)·s·a/max_x x(k − u(x)). An evenly spread update (u(x) = x·u(1), u(1) ≫ k) gives ρ ≳ 4φ·s·a·u(1)/k²; a single updated layer with a frozen tail, ρ ≈ φ·s·a/(k·tail share). | not yet in Lean |
-| Security, W* | Under A1 and A2, reaching ℓ* covertly costs at least H(ℓ*)·min ρp, with at most nc available per period. W* is the least \|C\|ρ(C) of a circuit that reaches ℓ*, so W*/H(ℓ*) = min ρp ≥ 1. | not yet in Lean |
+| ℓ_0, ℓ* | The losses: θ's, and the target. With the policy they are the inputs; the red team picks everything else. | not yet in Lean |
+| θ′, 𝒯 | The annotation: the new slow weights θ′, computed values; the token blocks 𝒯, disjoint sets of gates, each one token's computation in one step. | not yet in Lean |
+| A, R | The affected gates, those depending on a value in θ′ (changed activations included); the reachable R ⊆ A, those of a token block T in some block reading no computed value from T's gates outside it. | not yet in Lean |
+| x_T(I), m(I) | x_T(I) = \|I ∩ T ∩ A\|/\|T ∩ A\|; m(I), the token blocks T where I holds a gate of T ∩ A and reads a computed value from T outside I. | not yet in Lean |
+| w, s, σ, τ | Gates per token block; s = c/w; C's share of gates in token blocks; the inputs outside θ a token block reads. | not yet in Lean |
+| x₀, s* | x₀ = \|T ∩ R\|/\|T ∩ A\|; s*, the most tokens' worth of unreachable work, Σ_T \|I ∩ T ∩ (A ∖ R)\|/\|T ∩ A\|, any block I does. | not yet in Lean |
+| a, u(x), u_in(x) | The cut cost, computed bits a block reads to do a token's affected work without computing it from its inputs; the update bits (of θ′ or an encoding, never a·m's) read to do a share x of it, u(1) per token; u_in, the first x in dependency order, from the inputs. | not yet in Lean |
+| Δ, d, Δ_grad, t | The bits describing θ′ given θ with a decoder of d ≤ c gates; the gradient and optimizer state passed between blocks in training; frozen layers' share of a token's affected work above changed ones. | not yet in Lean |
+| H(ℓ*), p | The honest cost, the least compute of any method to reach ℓ*; a run's inefficiency p = \|C\|/H(ℓ*). | not yet in Lean |
+| A1, A1′ | Assumptions a violating block refutes: every block I has \|in(I) ∖ in(C)\| ≥ u(max_T x_T(I)) + a·m(I) (cut cost); a block computing a token from its inputs and doing the first x of its affected work reads ≥ u_in(x) update bits (update cost from the inputs). | not yet in Lean |
+| A2 | Efficiency floor, an empirical assumption: no run whose update stays within a given profile reaches ℓ* for less than p·H(ℓ*). | not yet in Lean |
+| Fit | Running θ′ with Δ + sτ ≤ k: ρ ≤ c/(c − d), exactly 1 for honest serving (Δ = 0, no decoder). Training: compute blocks Δ + sτ ≤ k, reduction 2Δ_grad ≤ k, update application Δ + Δ_grad ≤ k. | not yet in Lean |
+| Slowdown | The counting lemma ρ ≥ (\|B\|/\|C\|)/(max_I \|I ∩ B\|/c) at B = A ∖ R; in token form ρ ≥ σ(1 − x₀)·s/s* (varying token blocks: the largest per-token count). The claim takes s* ≤ max_x x(k − u(x))/a (A1) and x₀ ≤ max{x : u_in(x) ≤ k} (A1′), never best-known ones (the attack side). A frozen tail is charged: ρ ≳ σ·s·a/(t·k). | not yet in Lean |
+| Security, W* | Under A1, A1′ and A2, reaching ℓ* covertly costs at least H(ℓ*)·min ρp, with at most nc available per period. W* is the least \|C\|ρ(C) of a circuit that reaches ℓ*, so W*/H(ℓ*) = min ρp ≥ 1. | not yet in Lean |
 
 **The physical model**
 
@@ -198,12 +198,12 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | the training task 𝒢 (a random input, a success test C(x) ∈ 𝒴), G for the target, η, P_α and η_cov; GPU-hours, cost(C) and "server-time" for the cost; the training cost T_𝒢(η; S), "threshold"; the Lean's `Accounting.Overhead.serverTime`, until restated | the losses ℓ_0 and ℓ*; compute, in gates; the honest cost H(ℓ*) |
 | "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
-| "coverage", "materialization", "work requirement" and "necessary subcomputation" N for what every successful training run must compute; its counted objects ("counted products", s_×, U/s_×), counting only products that read updated weights | Dep, the gates that depend on θ′ (the inventory's coverage keeps its name) |
+| "coverage", "materialization", "work requirement" and "necessary subcomputation" N for what every successful training run must compute; its counted objects ("counted products", s_×, U/s_×), counting only products that read updated weights | the affected gates A (the inventory's coverage keeps its name) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", the yields q, q_S, q(c, k) and q_T(c, k), "the straddle term", and `benchmarks/rho`'s `Cap`, until renamed | Security; A1's bound on one block |
 | "registered computation" | the registered circuit |
-| "training class" for a premise set and the yield it gives; "pricing argument", "bounding strategy", "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/rho`'s `CLASSES` and `Allowance`, until renamed | A1, A2 and Slowdown (`benchmarks/nci`'s tiers are mechanism sets, `benchmarks/rho`'s routes free-compute sources) |
+| "training class" for a premise set and the yield it gives; "pricing argument", "bounding strategy", "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/rho`'s `CLASSES` and `Allowance`, until renamed | A1, A1′, A2 and Slowdown (`benchmarks/nci`'s tiers are mechanism sets, `benchmarks/rho`'s routes free-compute sources) |
 | the receiver form of in(S), S's gates with an outside predecessor (`Nci.Cover.Circuit.inputs`); out(S) (`Circuit.exits`); input nodes and wires as formal objects (`Circuit.isInput`, `Circuit.reads`), until restated | in(S), the sender form (Notation); inputs are values |
-| a cover and the covering bounds and forms (`Nci.Cover`, its `MulBlocks` and `UpdateHardness`; `benchmarks/nci`'s `covering_priced.py`); "multiplication block", a formal MAC block; the deep share and depth, per-MAC β, the r sweep; until restated | a (c, k)-partition; Slowdown, under A1 (MAC blocks still measure a); φ, u(x) and x₀ |
+| a cover and the covering bounds and forms (`Nci.Cover`, its `MulBlocks` and `UpdateHardness`; `benchmarks/nci`'s `covering_priced.py`); "multiplication block", a formal MAC block; the deep share and depth, per-MAC β, the r sweep; formalism v1's Dep, φ, Θ, w_dep, N and x₀, a frozen tail's two readings; until restated | a (c, k)-partition; Slowdown, under A1 and A1′ (MAC blocks still measure a); A, σ, u, u_in, s*, x₀ through R; the tail charged |
 | (Γ, α) for the policy, Γ gates and α fresh bits per gate (αΓ a block), and the block size s = w₀Γ + αΓ + width(θ); the Lean's `Nci.Complies Γ α`, `Nci.novelReads`, `Partition.IsCK`'s exactly c gates and `Nci.Guarantees.CoverTraining`, until restated | the policy (c, k, n) (Notation) |
 | "annotation" α for a labelling of gates (blocks, placements, selections); the Lean's `Verity.Annotation`, until renamed | the partition, placement or selection; the annotation is (θ′, 𝒯) |
 | ρ for 𝓜's per-resource rates; the Lean's `Verity.Accel.Card.ρ`, until renamed | a card's rates (ρ is the slowdown) |
