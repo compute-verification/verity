@@ -1,6 +1,7 @@
 import Definitions.Pouw.Guarantees.OnsiteFreed
 import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
+import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # The onsite PoUW protocol's freed compute: the proof

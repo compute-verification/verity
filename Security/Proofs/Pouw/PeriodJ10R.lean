@@ -2,6 +2,7 @@ import Properties.Pouw.PeriodJ10R
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.Compose.SplitRateClosed
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # Proof of `H1J10RCheckedCreditPeriod`

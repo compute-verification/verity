@@ -1,4 +1,5 @@
 import Definitions.Accounting.Guarantees.HMu
+import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # Lemma B′ for a persistent pattern, one word a unit

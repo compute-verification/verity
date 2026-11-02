@@ -1,6 +1,8 @@
 import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.ServiceCovers
 import Proofs.Accounting.Compose.CircuitWork
+import Proofs.Accounting.Lemmas.Compose
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # `CircuitWorkSeeded`: the circuit's work under seeded coins

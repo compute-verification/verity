@@ -1,4 +1,3 @@
-import Definitions.Nci.Guarantees
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
 import Proofs.Core
@@ -39,6 +38,7 @@ import Proofs.Nci.Cover
 import Proofs.Nci.PartitionCovers
 import Proofs.Nci.CompliesCK
 import Proofs.Nci.Ldl
+import Proofs.Nci.Lemmas
 
 /-!
 # Proofs of NCI's guarantees

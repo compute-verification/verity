@@ -1,5 +1,6 @@
 import Definitions.Nci.Guarantees.Activations
 import Proofs.Nci.Threads
+import Proofs.Nci.Lemmas.Activations
 
 /-!
 # Proofs of NCI's activations bound over all of training

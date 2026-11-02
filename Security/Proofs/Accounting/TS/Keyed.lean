@@ -1,5 +1,6 @@
 import Proofs.Accounting.TS.Drawn
 import Proofs.Accounting.TS.ProofsSound
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # An honest coin-keyed proof layer meets (I8)'s premises

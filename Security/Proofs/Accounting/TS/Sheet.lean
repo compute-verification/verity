@@ -1,4 +1,5 @@
 import Definitions.Accounting.Guarantees.Sheet
+import Proofs.Accounting.Lemmas.Sheet
 
 /-!
 # The data-sheet axioms' bridges

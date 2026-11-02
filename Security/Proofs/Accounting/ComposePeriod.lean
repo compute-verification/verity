@@ -2,6 +2,9 @@ import Definitions.Accounting.Guarantees.ComposePeriod
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.Compose.CircuitWork
 import Proofs.Accounting.ComposePeriod.Covers
+import Proofs.Accounting.Lemmas.TS.Receipt
+import Proofs.Accounting.Lemmas.ComposePeriod
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # PoUW's work over a monitoring period: proofs

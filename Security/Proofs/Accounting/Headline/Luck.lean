@@ -1,5 +1,7 @@
 import Proofs.Accounting.TS
 import Proofs.Accounting.HMu
+import Proofs.Accounting.Lemmas.TS.Receipt
+import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # The headlines' luck from the receipt

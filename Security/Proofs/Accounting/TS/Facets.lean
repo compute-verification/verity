@@ -1,4 +1,5 @@
 import Definitions.Accounting.Guarantees.TS
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The tensor–scalar model's facet guarantees

@@ -1,4 +1,5 @@
 import Definitions.Accounting.Guarantees.Compose
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The sharp rate: proof

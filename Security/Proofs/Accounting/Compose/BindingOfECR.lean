@@ -1,5 +1,7 @@
 import Definitions.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS.Drawn
+import Proofs.Accounting.Lemmas.Compose
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # A prover's `δ_bind` through `ecr/sha-512`: proof

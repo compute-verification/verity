@@ -2,6 +2,7 @@ import Definitions.Pouw.Guarantees.Game
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Theorem1
 import Proofs.Pouw.Reduction
+import Proofs.Pouw.Lemmas.Game
 
 /-!
 # Proofs of the game's guarantees

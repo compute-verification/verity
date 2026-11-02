@@ -1,6 +1,7 @@
 import Properties.Accounting.Served
 import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Flock.Claims.Sampling.Select.Bounds
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The served window's draw misses a set no more often than a uniform permutation's subset (`DrawMissesSubset`)

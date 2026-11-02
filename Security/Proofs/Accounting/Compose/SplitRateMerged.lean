@@ -1,4 +1,5 @@
 import Proofs.Accounting.Compose.SplitRateClosed
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The merged rate: proof

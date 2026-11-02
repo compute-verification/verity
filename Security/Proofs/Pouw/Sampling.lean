@@ -6,6 +6,7 @@ import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.Ring
 import Definitions.Pouw.Guarantees.Game
+import Proofs.Pouw.Lemmas.Game
 
 /-!
 # (c) Work-weighted sampling: `δ_s = (1 − ε_s)^t`

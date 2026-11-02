@@ -1,5 +1,5 @@
-import Definitions.Nci.Guarantees
 import Proofs.Nci.LoomisWhitneyBase
+import Proofs.Nci.Lemmas
 
 /-!
 # The discrete Loomis–Whitney inequality

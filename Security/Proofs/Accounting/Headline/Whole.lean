@@ -1,4 +1,5 @@
 import Proofs.Accounting.TS
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # Theorem D-ideal with fold skippers charged

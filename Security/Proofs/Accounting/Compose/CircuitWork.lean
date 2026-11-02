@@ -1,6 +1,9 @@
 import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.ServiceCovers
 import Proofs.Accounting.Headline.Luck
+import Proofs.Accounting.Lemmas.TS.Receipt
+import Proofs.Accounting.Lemmas.Compose
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # `CircuitWork`: the circuit's work under live coins

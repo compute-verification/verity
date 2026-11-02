@@ -6,7 +6,7 @@ import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.NormNum.Basic
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
-import Definitions.Accounting.Guarantees.GatesBitwise
+import Proofs.Accounting.Lemmas.GatesBitwise
 
 /-!
 # Bits for free, proved

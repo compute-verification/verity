@@ -1,4 +1,5 @@
 import Definitions.Accounting.Guarantees.TS
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The tensor slots and the output count

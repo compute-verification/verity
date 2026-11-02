@@ -1,6 +1,7 @@
 import Definitions.Nci.Guarantees.Packed
 import Definitions.Nci.Guarantees.Training
 import Proofs.Nci.Contained
+import Proofs.Nci.Lemmas
 
 /-!
 # The fan-out bound on a chain with several products to a gate

@@ -1,6 +1,7 @@
 import Proofs.Pouw.NCP.RelationProofs
 import Proofs.Pouw.NCP.GameProofs
 import Definitions.Pouw.Guarantees.NCP
+import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # The shift by 24: independent checkpoints, hence relation-free; FinalOnly and the floor under independence

@@ -1,4 +1,5 @@
 import Proofs.Accounting.Compose.SplitRateExp
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The closed rate: proof

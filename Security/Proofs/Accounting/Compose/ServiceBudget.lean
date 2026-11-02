@@ -1,5 +1,6 @@
 import Definitions.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS.Stages
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The service's window budget: proof

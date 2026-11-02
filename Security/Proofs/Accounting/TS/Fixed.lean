@@ -1,5 +1,5 @@
 import Proofs.Accounting.TS.Drawn
-import Definitions.Accounting.Guarantees.TS.Fixed
+import Proofs.Accounting.Lemmas.TS.Fixed
 
 /-!
 # `UnitFixed` from a fixed word, and the additive lemma

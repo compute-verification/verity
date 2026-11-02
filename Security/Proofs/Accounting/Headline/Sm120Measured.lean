@@ -1,5 +1,6 @@
 import Proofs.Accounting.Headline.EpsJl
 import Proofs.Accounting.Headline.Sm120
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # sm_120's headline on its measured vector

@@ -1,4 +1,5 @@
 import Proofs.Accounting.HeadlineDc.Sm90Measured
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The H200's headline on its measured vector under (I3) at 3/5
