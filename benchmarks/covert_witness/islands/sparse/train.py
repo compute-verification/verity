@@ -1,7 +1,8 @@
 """Island `sparse` (classes e1mb and e100kb): which parameters a capped update should touch, chosen from the gradient at θ,
 encoded as mask plus values in the fixed formats; and the first-order trade between the mask's encoding cost and its values.
 
-`islands/e1mb/train.py` and `islands/e100kb/train.py` on this branch run this file with `--klass` set to their class.
+`islands/e1mb/train.py` and `islands/e100kb/train.py` on this branch are links to this file, which takes the class as
+`--klass` (the harness runs the resolved path, so the link's directory doesn't reach it).
 
 A probe (`--probe N` batches) takes the mean gradient G at θ of every tensor, priced in the step log as a forward pass plus
 the full backward's FLOPs (`extra`). From G the record's notes get, for each budget in BUDGETS, the share of ||G||² that each
@@ -18,7 +19,10 @@ decoder can carry) or with a list index, and single entries with an entropy-code
 The gains (`--norms`) can ride along with `lines` and `lora`. `--layers top:N` keeps every touched tensor in the top N
 blocks (the final norm included), so the backward stops there and a step costs less.
 
-    python guard.py islands/e1mb/train.py --start s50 --out SUB --mech lines [--targets all] [--norms all] [--lr 3e-4]
+E is encoded at the end of every 5% of the harness's steps (the probe's batches included, `hooks.plan`), so each of the
+harness's checkpoints scores the most training its 5% holds.
+
+    python launch.py e1mb s50 --note TEXT -- --klass e1mb --mech lines [--targets all] [--norms all] [--lr 3e-4]
 """
 from __future__ import annotations
 
@@ -33,6 +37,7 @@ import torch
 import torch.nn.functional as F
 
 import prepare
+from te_core import hooks
 
 LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 TARGETS = {"all": set(LF_MATS), "out": {"wo", "w_down"}, "mlp": {"w_gate", "w_up", "w_down"}, "attn": {"wq", "wk", "wv", "wo"}}
@@ -269,13 +274,22 @@ def encode(mech: str, theta: dict, params: dict, norms: list[str], plan, train_v
 
 
 def e_bytes(mech: str, theta: dict, norms: list[str], plan) -> int:
-    full = {n: theta[n] for n in norms}
-    if mech == "norms":
-        return len(prepare.encode_lora({}, "bf16", full))
+    """len(encode(...)) without encoding: under the harness every encode during the steps is a checkpoint candidate."""
+    ranks = {}
     if mech == "lines":
-        return len(prepare.encode_lora(line_factors(theta, plan), "bf16", full))
-    fac = {n: (torch.zeros(r, theta[n].shape[1]), torch.zeros(theta[n].shape[0], r), 1.0) for n, r in plan.items()}
-    return len(prepare.encode_lora(fac, "bf16", full))
+        ranks = {n: (len(r) + len(c), 1.0) for n, (r, c) in plan.items()}
+    elif mech == "lora":
+        ranks = {n: (r, math.sqrt(theta[n].shape[1] / r)) for n, r in plan.items()}
+    header = {"dtype": "bf16", "factors": [], "full": []}
+    elems = 0
+    for n in sorted(ranks):
+        r, s = ranks[n]
+        header["factors"].append([n, r, float(s)])
+        elems += r * sum(theta[n].shape)
+    for n in sorted(norms):
+        header["full"].append(n)
+        elems += theta[n].numel()
+    return len(prepare._pack(b"CWLORA1\n", header, b"")) + 2 * elems
 
 
 # ---- main --------------------------------------------------------------------------------------------------------------
@@ -433,8 +447,9 @@ def main() -> int:
     notes["summary"] = summary
     print(json.dumps(summary), flush=True)
     fwd = torch.compile(net) if dev.startswith("cuda") else net
-    snaps = []
-    marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
+    planned = (a.probe if steps else 0) + n_steps
+    hooks.plan(planned)
+    marks = {planned * k // 20 for k in range(1, 21)}
     t0 = time.perf_counter()
     lrs = [grp["lr"] for grp in opt.param_groups]
     loss = torch.zeros(())
@@ -456,14 +471,13 @@ def main() -> int:
         if (step + 1) % 100 == 0 or step + 1 == n_steps:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step + 1 in marks:
-            snaps.append((encode(a.mech, theta, params, norms, plan, train_vals), len(steps)))
+        if planned - n_steps + step + 1 in marks:
+            encode(a.mech, theta, params, norms, plan, train_vals)
     blob = encode(a.mech, theta, params, norms, plan, train_vals)
     model = prepare.decode(theta, blob)
     changed = sorted(set(norms) | set(adapters))
     notes["seconds"] = round(time.perf_counter() - t_start, 1)
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=changed, notes=notes,
-                   snapshots=snaps)
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=changed, notes=notes)
     return 0
 
 
