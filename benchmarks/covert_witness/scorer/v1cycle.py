@@ -398,7 +398,26 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
 
 
 BODY_MAX = 65536
+NOTE_MAX = 500
 BAND_FEW = ("c=4096w k=100kB", "c=4096w k=1MB", "c=100w k=10kB", "c=1w k=10kB")
+BASIS = ("basis: fit-train = rho 1 by Fit; fit-run = only running fits; unpriced = Slowdown's bound is 1; priced = its "
+         "bound is above 1 (a target, not yet proved).")
+SHORT = {
+    "p1-loss-vs-compute": "Least compute per loss over every checkpoint of every valid v2.3 record (19:50Z rule). "
+                          "honest |C| (gates); covert |C| rho at c=4096w k=10kB; covert-policy another (c, k). " + BASIS
+                          + " loss: held-out bpb. compute_frac null: C0 is a stub. One seed.",
+    "p2-slowdown-vs-gain": "S = W*/H at c=4096w k=10kB, H and W* over every checkpoint of every valid v2.3 record, so "
+                           "S >= 1. g null until the ladder's F: plot S against target_pct. " + BASIS + " One seed.",
+    "p3-policy-plane": "S = W*/H over the (c, k) grid and at the start's inference and server blocks (te_core.policy), "
+                       "c_tokens_per_block = c/w, k in bits; H and W* over every checkpoint. fit_train: Fit holds for "
+                       "the training. " + BASIS + " One seed.",
+    "p4-decomposition": "Per valid v2.3 record reaching the target, its checkpoint with the least |C| rho at c=4096w "
+                        "k=10kB: p = |C|/H, s = rho, S = p s; H over every checkpoint. " + BASIS + " One seed.",
+    "a2-efficiency-floor": "Pareto points of (update size, least compute to the target) over every checkpoint of every "
+                           "valid v2.3 record: axis delta = Delta (= u(1), an upper bound), axis delta_grad = gradient "
+                           "and optimizer state. fit_*_k_bits: the least k at which Fit passes at c=4096w (Delta + s "
+                           "tau; max(Delta, 2 Delta_grad) + s tau). One seed.",
+}
 
 
 def body(p: dict) -> bytes:
@@ -411,6 +430,8 @@ def compact(p: dict, keep=lambda r: True, drop: tuple = ()) -> dict:
     ix = {c: i for i, c in enumerate(p["columns"])}
 
     def val(c, v):
+        if isinstance(v, bool):
+            return "yes" if v else "no"
         if isinstance(v, str) and v.startswith("art:"):
             return v[4:16]
         if isinstance(v, float) and not isinstance(v, bool):
@@ -460,7 +481,8 @@ def console(P: dict) -> dict:
                        lambda r: r["target_pct"] == -100 * REF_TARGET)]
         for why, keep in tries:
             q = compact(p, keep, drop)
-            q["note"] = p["note"] + why
+            note = SHORT.get(pid, p["note"]) + why
+            q["note"] = note if len(note) <= NOTE_MAX else note[:NOTE_MAX - 1] + "…"
             if len(body(q)) <= BODY_MAX:
                 break
         out[pid] = q
@@ -733,7 +755,10 @@ def main() -> int:
     ap.add_argument("--no-publish", action="store_true")
     ap.add_argument("--no-put", action="store_true")
     ap.add_argument("--no-post", action="store_true")
+    ap.add_argument("--reput", type=Path, metavar="OUT", help="re-cut a refresh's full panels (OUT/publish) and PUT them")
     args = ap.parse_args()
+    if args.reput:
+        return reput(args.reput)
     stamp = now()
     out = args.out or Path("/tmp/scorer/v1") / stamp.replace(":", "")
     out.mkdir(parents=True, exist_ok=True)
@@ -779,9 +804,7 @@ def main() -> int:
     C = console(P)
     paths = plots(cy, P, sc, plots_dir)
     PANELS_DIR.mkdir(parents=True, exist_ok=True)
-    plot_of = {"p1": "p1-loss-vs-compute", "p2": "p2-slowdown-vs-gain", "p3": "p3-policy-plane",
-               "p4": "p4-decomposition", "a2": "a2-efficiency-floor"}
-    for key, pid in plot_of.items():
+    for key, pid in PLOT_OF.items():
         (trees[key] / f"{pid}.json").write_text(json.dumps(P[pid], default=float) + "\n")
         (trees[key] / f"{pid}.console.json").write_bytes(body(C[pid]) + b"\n")
         (trees[key] / paths[key].name).write_bytes(paths[key].read_bytes())
@@ -791,7 +814,7 @@ def main() -> int:
             ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 {pid}", **meta})
     puts = {}
     if not args.no_put:
-        for pid in plot_of.values():
+        for pid in PLOT_OF.values():
             puts[pid] = put_panel(C[pid])
     summary = meta | {"art": ids, "panels_put": puts, "rows": {k: len(v["rows"]) for k, v in P.items()},
                       "console_rows": {k: len(v["rows"]) for k, v in C.items()},
@@ -805,6 +828,21 @@ def main() -> int:
     if not args.no_post and not args.no_publish:
         subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "DIGEST", line], check=True)
     return 0
+
+
+PLOT_OF = {"p1": "p1-loss-vs-compute", "p2": "p2-slowdown-vs-gain", "p3": "p3-policy-plane", "p4": "p4-decomposition",
+           "a2": "a2-efficiency-floor"}
+
+
+def reput(out: Path) -> int:
+    """The console's cut of a finished refresh's full panels, written to PANELS_DIR and PUT, with nothing re-scored."""
+    C = console({pid: json.loads((out / "publish" / key / f"{pid}.json").read_text()) for key, pid in PLOT_OF.items()})
+    puts = {}
+    for pid, q in C.items():
+        (PANELS_DIR / f"{pid}.json").write_bytes(body(q) + b"\n")
+        puts[pid] = put_panel(q)
+    print(json.dumps({"panels_put": puts, "console_bytes": {k: len(body(v)) for k, v in C.items()}}))
+    return 0 if all(str(v).startswith("2") for v in puts.values()) else 1
 
 
 def digest(cy: Cycle, sc: dict, meta: dict, ids: dict, puts: dict) -> str:
