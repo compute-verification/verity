@@ -1495,6 +1495,10 @@ def main(argv: list[str] | None = None) -> int:
               f"{os.path.relpath(READS, REPO)}" + (f"; left as they were, a target with no entry: {', '.join(incomplete[:8])}"
                                               if incomplete else ""))
         unread = 1 if incomplete else 0
+    elif a.binding is not None and (beyond := rep.get("undeclared", {}).get(a.binding)):
+        print(f"circuit-check --binding {a.binding}: read beyond what {os.path.relpath(READS, REPO)} declares of it "
+              f"({', '.join(sorted(beyond))}; the report's undeclared): run it again with --update-reads and commit "
+              f"{os.path.relpath(READS, REPO)}", file=sys.stderr)
     if a.binding is not None:
         return max(unread, verdict(rep, everything=False, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings,
                                    what=f"binding {a.binding}: {len(rep['targets'])} target(s)"))
