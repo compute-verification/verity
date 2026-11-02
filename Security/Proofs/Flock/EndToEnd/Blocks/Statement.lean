@@ -11,8 +11,9 @@ sessions), adaptively, so a block's sessions may depend on everything the prover
 
 * `IntegrityBlock`: for block `b`, the probability that every session of block `b` is accepted and its wrong units total
   at least `ln(1/δ)/q` is at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, where each of block `b`'s draws covers at least a
-  fraction `q` of its session's units. The block's bound holds inside the horizon, against the prover that played the
-  blocks before it.
+  fraction `q` of its session's units. The block's bound holds inside the monitoring period, against the prover that
+  played the blocks before it. It is a lemma: the listed guarantee of the per-block reading is `IntegrityBlockCarried`,
+  which also covers carried state and is `IntegrityBlock` with no carried leaf.
 * `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` wrong units is at most
   `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other legs.
 * `IntegrityHorizonBlocks`: the probability that every session of every block is accepted and the wrong units over the
@@ -27,7 +28,7 @@ for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/
 A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
 statements say nothing of whether the value a session reads there is the one the block before committed;
-`IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) does.
+`IntegrityBlockCarried` and `IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) do.
 -/
 
 namespace Flock.Guarantees
