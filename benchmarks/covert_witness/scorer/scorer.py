@@ -1831,7 +1831,8 @@ def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None
         return
     fig, axes = plt.subplots(len(starts), 3, figsize=(15, 4.2 * len(starts)), squeeze=False)
     dirs = sorted({x["direction"] for x in subs if not x["reference"]})
-    color = {d: plt.cm.tab20(i % 20) for i, d in enumerate(dirs)}
+    palette = [plt.cm.tab10(i) for i in range(10)] + [plt.cm.tab20(2 * i + 1) for i in range(10)]
+    color = {d: palette[i % 20] for i, d in enumerate(dirs)}
     for row, s in zip(axes, starts):
         on = [x for x in subs if x["start"] == s]
         refs, cov = honest_refs(on), [x for x in on if not x["reference"]]
@@ -1861,8 +1862,10 @@ def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None
             ax.set_xlabel("FLOPs (reference: |C|; covert: |C| rho)", fontsize=8)
             ax.set_ylabel("bpb", fontsize=8)
             ax.tick_params(labelsize=7)
-    h, lab = axes[0][0].get_legend_handles_labels()
-    seen = dict(zip(lab, h))
+    seen: dict = {}
+    for ax in axes.flat:
+        for h, lab in zip(*ax.get_legend_handles_labels()):
+            seen.setdefault(lab, h)
     fig.legend(seen.values(), seen.keys(), loc="lower center", ncol=min(8, len(seen)), fontsize=7)
     fig.suptitle(title, fontsize=10)
     fig.tight_layout(rect=(0, 0.05, 1, 0.97))
