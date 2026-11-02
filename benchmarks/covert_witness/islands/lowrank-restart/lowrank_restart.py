@@ -4,7 +4,7 @@ reference. `islands/<class>/train.py` on this branch runs `main(class)`; E alway
 Mechanisms (`--mech`):
 
 - `relora`: K pieces of rank r. Each piece is a LoRA (A ~ N(0, 1/d_in), B = 0, scale sqrt(d_in / r)) trained by AdamW
-  for its share of the steps, then merged into the fp32 running weights (its bf16-rounded factors, the scale folded into
+  for its share of the steps, then merged into the fp32 running weights (its factors rounded to E's dtype, the scale folded into
   B), and the factors and their optimizer state restart. K = 1 is plain LoRA.
 - `galore`: every target matrix is trained in full through a rank-r projected Adam (GaLore). The projector is the top-r
   singular basis of the gradient, refreshed K times, so each period's update is exactly P_j @ N_j, one rank-r piece.
@@ -40,6 +40,8 @@ LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 GROUPS = {"all": LF_MATS, "out": ("wo", "w_down"), "mlp": ("w_gate", "w_up", "w_down"), "attn": ("wq", "wk", "wv", "wo")}
 DEV = prepare.DEVICE
 HEADER_MARGIN = 64
+#: the factors' and full tensors' storage in E (`--dtype`); f16 keeps 4x bf16's mantissa for norm gains near 1
+CODE = {"name": "f16", "dtype": torch.float16}
 
 
 # ---- targets and byte accounting --------------------------------------------------------------------------------------
@@ -58,7 +60,7 @@ def targets_of(params: dict, spec: str, blocks: str) -> list[str]:
 
 def lora_size(theta: dict, ranks: dict[str, int], norms: list[str]) -> int:
     fac = {n: (torch.zeros(r, theta[n].shape[1]), torch.zeros(theta[n].shape[0], r), 1.0) for n, r in ranks.items() if r}
-    return len(prepare.encode_lora(fac, "bf16", {n: theta[n] for n in norms}))
+    return len(prepare.encode_lora(fac, CODE["name"], {n: theta[n] for n in norms}))
 
 
 def dense(x: torch.Tensor) -> torch.Tensor:
@@ -80,7 +82,7 @@ def encode_pieces(pieces: dict[str, list], norm_vals: dict[str, torch.Tensor]) -
     for n, ps in pieces.items():
         if ps:
             fac[n] = (torch.cat([a for a, _ in ps], 0), torch.cat([b for _, b in ps], 1), 1.0)
-    return prepare.encode_lora(fac, "bf16", norm_vals)
+    return prepare.encode_lora(fac, CODE["name"], norm_vals)
 
 
 class Truncator:
@@ -125,7 +127,7 @@ class Truncator:
         base = lora_size(theta, {n: 1 for n in self.svd}, list(norm_vals)) - sum(self.cost.values()) + HEADER_MARGIN
         ranks = self.ranks(budget, base)
         while True:
-            blob = prepare.encode_lora(self.factors(ranks), "bf16", norm_vals)
+            blob = prepare.encode_lora(self.factors(ranks), CODE["name"], norm_vals)
             if len(blob) <= budget:
                 return blob, ranks
             worst = min((float(self.svd[n][1][r - 1]) ** 2 / self.cost[n], n) for n, r in ranks.items() if r)[1]
@@ -335,7 +337,7 @@ def run_relora(run: Run) -> int:
             torch.backends.cuda.matmul.allow_tf32 = False
             with torch.no_grad():
                 for n, (A, B, s) in fac.items():
-                    aq, bq = A.detach().to(torch.bfloat16), (s * B.detach()).to(torch.bfloat16)
+                    aq, bq = A.detach().to(CODE["dtype"]), (s * B.detach()).to(CODE["dtype"])
                     params[n].data += bq.float() @ aq.float()
                     pieces[n].append((aq, bq))
             torch.backends.cuda.matmul.allow_tf32 = tf32
@@ -348,6 +350,114 @@ def run_relora(run: Run) -> int:
         with torch.no_grad():
             B.zero_()
     return run.finish(pieces, trainable, {"pieces": K, "rank": r, "steps": n_steps})
+
+
+def run_stack(run: Run) -> int:
+    """K pieces of rank r kept as adapters on θ, never merged: every base W x stays θ's, and the forward adds the finished
+    pieces (frozen, preallocated at rank K·r) and the active one. `--basis lora`: the active piece is a LoRA (ReLoRA's
+    restarts without the merge, the same function). `--basis galore`: GaLore in adapter form; at each piece's first step one
+    backward also takes the target matrices' gradient G, the active piece's frozen factor is G's top-r singular basis (P on
+    the left when d_out <= d_in, Q on the right otherwise) and only the other factor N trains, so dL/dN = P^T G is GaLore's
+    projected gradient and AdamW on N is its projected Adam."""
+    a, params, targets = run.a, run.params, run.targets
+    r, K, galore = a.rank, a.pieces, a.basis == "galore"
+    nopt = run.norm_opt()
+    g = torch.Generator(device=DEV).manual_seed(a.seed)
+    st = {}
+    for n in targets:
+        d_out, d_in = params[n].shape
+        left = d_out <= d_in
+        s = 1.0 if galore else a.alpha * math.sqrt(d_in / r)
+        A_all = torch.zeros(K * r, d_in, device=DEV)
+        B_all = torch.zeros(d_out, K * r, device=DEV)
+        A = torch.nn.Parameter(torch.zeros(r, d_in, device=DEV), requires_grad=not galore or left)
+        B = torch.nn.Parameter(torch.zeros(d_out, r, device=DEV), requires_grad=not galore or not left)
+        st[n] = {"A_all": A_all, "B_all": B_all, "A": A, "B": B, "s": s, "left": left}
+        mod = run.net.inner.get_submodule(n.removesuffix(".weight"))
+        mod.register_forward_hook(lambda m, inp, out, A_all=A_all, B_all=B_all, A=A, B=B, s=s:
+                                  out + F.linear(F.linear(inp[0], A_all), B_all) + s * F.linear(F.linear(inp[0], A), B))
+    active = [p for v in st.values() for p in (v["A"], v["B"]) if p.requires_grad]
+
+    def restart():
+        with torch.no_grad():
+            for v in st.values():
+                if galore:
+                    v["A"].zero_()
+                    v["B"].zero_()
+                else:
+                    v["A"].copy_(torch.randn(v["A"].shape, device=DEV, generator=g) / math.sqrt(v["A"].shape[1]))
+                    v["B"].zero_()
+        return torch.optim.AdamW(active, lr=a.lr, betas=(0.9, 0.95), weight_decay=0.0)
+
+    trainable = {"full": run.norms, "adapters": {n: (K + 1) * r for n in targets}}
+    per_step = prepare.train_flops(run.rec, trainable, [{"op": "train", "tokens": run.tokens}])["flops"]
+    wgrad = sum(2 * params[n].shape[0] * params[n].shape[1] for n in targets) * run.tokens if galore else 0
+    svd = sum(svd_flops(tuple(params[n].shape)) for n in targets)
+    n_steps = run.n_steps(per_step, K * (wgrad + (svd if galore else 0)) + svd)
+    bounds = [round(n_steps * j / K) for j in range(K + 1)]
+    fwd = torch.compile(run.net) if a.compile else run.net
+    print(json.dumps({"mech": "stack", "basis": a.basis, "steps": n_steps, "rank": r, "pieces": K, "targets": len(targets),
+                      "norms": len(run.norms), "piece_bytes": lora_size(run.theta, {n: r for n in targets}, []),
+                      "flops_per_step": per_step}), flush=True)
+
+    def pieces_so_far(j: int) -> dict:
+        return {n: [(v["A_all"][: j * r].to(CODE["dtype"]), v["B_all"][:, : j * r].to(CODE["dtype"]))] if j else []
+                for n, v in st.items()}
+
+    opt, piece = restart(), 0
+    for step in range(n_steps):
+        refresh = galore and step == bounds[piece]
+        frac = schedule(step, n_steps, a.warmup, bounds[piece], a.rewarm)
+        for grp in opt.param_groups:
+            grp["lr"] = a.lr * frac
+        if nopt:
+            for grp in nopt.param_groups:
+                grp["lr"] = a.norm_lr * schedule(step, n_steps, a.warmup)
+        if refresh:
+            for n in targets:
+                params[n].requires_grad_(True)
+        loss = loss_backward(fwd, run.data.next(a.batch), a)
+        if refresh:
+            with torch.no_grad():
+                for n, v in st.items():
+                    u, _, vh = torch.linalg.svd(params[n].grad.float(), full_matrices=False)
+                    if v["left"]:
+                        v["B"].copy_(u[:, :r])
+                    else:
+                        v["A"].copy_(vh[:r])
+                    params[n].grad = None
+                    params[n].requires_grad_(False)
+            run.steps.append({"op": "extra", "flops": wgrad + svd, "what": f"target weight gradients and SVDs, piece {piece}"})
+            opt.zero_grad(set_to_none=True)
+        else:
+            torch.nn.utils.clip_grad_norm_(active + [params[n] for n in run.norms], 1.0)
+            opt.step()
+            opt.zero_grad(set_to_none=True)
+        if nopt:
+            nopt.step()
+            nopt.zero_grad(set_to_none=True)
+        run.steps.append({"op": "train", "tokens": run.tokens})
+        run.report(step, loss, piece=piece)
+        if step + 1 == bounds[piece + 1]:
+            with torch.no_grad():
+                for v in st.values():
+                    sl = slice(piece * r, (piece + 1) * r)
+                    v["A_all"][sl] = v["A"].to(CODE["dtype"]).float()
+                    v["B_all"][:, sl] = (v["s"] * v["B"]).to(CODE["dtype"]).float()
+            piece += 1
+            if piece < K:
+                run.snapshot_pieces(pieces_so_far(piece))
+                opt = restart()
+    with torch.no_grad():
+        for n, v in st.items():
+            v["A"].zero_()
+            v["B"].zero_()
+            tf32 = torch.backends.cuda.matmul.allow_tf32
+            torch.backends.cuda.matmul.allow_tf32 = False
+            params[n].data = run.theta_dev[n].float() + v["B_all"] @ v["A_all"]
+            torch.backends.cuda.matmul.allow_tf32 = tf32
+    return run.finish(pieces_so_far(K), trainable, {"pieces": K, "rank": r, "basis": a.basis, "steps": n_steps,
+                                                    "merged": False})
 
 
 class GaloreState:
@@ -368,8 +478,8 @@ class GaloreState:
 
     def piece(self) -> tuple[torch.Tensor, torch.Tensor]:
         if self.left:
-            return dense(self.N.to(torch.bfloat16)), dense(self.P.to(torch.bfloat16))
-        return dense(self.P.T.to(torch.bfloat16)), dense(self.N.to(torch.bfloat16))
+            return dense(self.N.to(CODE["dtype"])), dense(self.P.to(CODE["dtype"]))
+        return dense(self.P.T.to(CODE["dtype"])), dense(self.N.to(CODE["dtype"]))
 
     @torch.no_grad()
     def step(self, w: torch.Tensor, grad: torch.Tensor, lr: float, b1=0.9, b2=0.95, eps=1e-8) -> None:
@@ -499,7 +609,7 @@ def run_full(run: Run) -> int:
             fac = tr.factors(ranks)
             with torch.no_grad():
                 for n in targets:
-                    lo = (fac[n][1].to(torch.bfloat16).float() @ fac[n][0].to(torch.bfloat16).float()) if n in fac else 0
+                    lo = (fac[n][1].to(CODE["dtype"]).float() @ fac[n][0].to(CODE["dtype"]).float()) if n in fac else 0
                     params[n].data.copy_(run.theta_dev[n].float() + lo)
             run.steps.append({"op": "extra", "flops": tr.flops, "what": "rank projection"})
     return run.finish(None, trainable, {"steps": n_steps, "opt": a.opt})
@@ -564,7 +674,8 @@ def main(klass: str) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mech", choices=("relora", "galore", "full", "subspace"), required=True)
+    ap.add_argument("--mech", choices=("relora", "stack", "galore", "full", "subspace"), required=True)
+    ap.add_argument("--basis", choices=("lora", "galore"), default="lora", help="stack: the active piece's form")
     ap.add_argument("--targets", default="all", help="all, out, mlp, attn, or leaf names (wq,wo,...)")
     ap.add_argument("--blocks", default="all", help="all, or LO-HI (0-based, inclusive)")
     ap.add_argument("--rank", type=int, default=4)
@@ -583,6 +694,7 @@ def main(klass: str) -> int:
     ap.add_argument("--ladder", default="", help="byte budgets for truncation snapshots of the final update")
     ap.add_argument("--no-piece-snaps", action="store_true")
     ap.add_argument("--dirs", type=int, default=64, help="subspace: directions per step")
+    ap.add_argument("--dtype", choices=("f16", "bf16"), default="f16", help="E's factors and norm gains")
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
@@ -591,5 +703,7 @@ def main(klass: str) -> int:
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     a = ap.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = True
+    CODE.update(name=a.dtype, dtype=prepare.DTYPES[a.dtype])
     run = Run(a, klass)
-    return {"relora": run_relora, "galore": run_galore, "full": run_full, "subspace": run_subspace}[a.mech](run)
+    return {"relora": run_relora, "stack": run_stack, "galore": run_galore, "full": run_full,
+            "subspace": run_subspace}[a.mech](run)
