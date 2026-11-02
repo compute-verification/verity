@@ -26,12 +26,12 @@ The named assumptions:
 
 * `DetectionPressure μ κ A`: whatever the prover has seen, a window whose egress leaks `ℓ` escapes with probability at
   most `exp (-κ ℓ)`. Live coins and a draw that includes each unit with probability at least `κ E(u) / (1 - p)`, `E(u)`
-  its cone egress and `p` a drawn wrong unit's luck, give it (`Exfil.escape_le_exp`).
+  its cone egress and `p` a drawn wrong unit's luck, give it (`Exfil.acceptProb_le_exp`).
 * `TrustedModel ρ S hon g`: from the honest egress alone no guess of the target `S` (a function of the weights drawn
   from `ρ`) succeeds with probability above `g`. It is what trusted training buys: a model with a trigger that makes its
   honest outputs carry weight bits fails it.
 
-`indepDraw a` is the draw that catches unit `u` independently with probability `a u`, and `escapes B` its coins that
+`indepDraw a` is the draw that catches unit `u` independently with probability `a u`, and `acceptCoins B` its coins that
 miss the wrong set `B`. A deployment's egress is its honest egress with a deviation (`Dev`, `Dev.apply`) applied: the
 slots that differ, and their values. `changedThrough` collects the slots each window changes, through the first
 detection.
@@ -109,7 +109,7 @@ def TrustedModel {W H T : Type} [Fintype W] (ρ : W → ℝ) (S : W → T) (hon 
 def indepDraw {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := ∏ u, if c u then a u else 1 - a u
 
 /-- The coins of the independent draw on which the wrong set `B` escapes: none of its units is caught. -/
-def escapes {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
+def acceptCoins {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
   univ.filter fun c => ∀ u ∈ B, c u = false
 
 /-- **The slots changed through the first detection**: window `i` of `n` changes its egress slots `chg h ⊆ O`, which
