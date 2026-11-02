@@ -38,6 +38,7 @@ import Proofs.Flock.Recursive.FirewallLive
 import Proofs.Flock.Recursive.FirewallAccepts
 import Proofs.Flock.Recursive.FirewallWire
 import Proofs.Flock.Recursive.FirewallJson
+import Proofs.Flock.Recursive.FirewallObj
 import Proofs.Flock.Recursive.FirewallHonest
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
