@@ -66,10 +66,11 @@ def test_named_targets_run_on_every_core_and_reuse_checks_cache(runs, tmp_path, 
 def test_a_check_that_runs_a_cpp_model_is_stored_after_the_prebuild(tmp_path, monkeypatch):
     """The C++ models compile on first use, and a check that compiled one would start a program the tracer cannot see, so its
     verdict would not be stored.  The prebuild builds every one of them before the tracer starts: from an empty build directory,
-    a check of a target that runs fa2's model is stored, and the directory holds one library per source.  In a process of
-    its own, since a model's library path is fixed when its module is imported, run as the ``circuit-check`` script runs, with
-    no working directory on the import path, from outside the tree: torch's bare ``__file__`` names (``_ops.py``) name no file
-    wherever it runs (`cache._module_file`)."""
+    a check of a target that runs fa2's model is stored, and the directory holds one library per source.  The library was
+    loaded before the check, from a build directory its sources don't name, so the entry holds fa2's sources because the check
+    called it (`cache.MODEL`).  In a process of its own, since a model's library path is fixed when its module is imported, run
+    as the ``circuit-check`` script runs, with no working directory on the import path, from outside the tree: torch's bare
+    ``__file__`` names (``_ops.py``) name no file wherever it runs (`cache._module_file`)."""
     monkeypatch.setenv("VERITY_NUMERICS_BUILD_DIR", str(tmp_path / "libs"))
     r = subprocess.run([sys.executable, "-P", "-m", "circuit_check", ATTENTION, "--cache", str(tmp_path / "cache"), "-j", "1", "-q",
                         "--out", str(tmp_path / "report.json")], cwd=tmp_path, capture_output=True, text=True)
@@ -77,6 +78,10 @@ def test_a_check_that_runs_a_cpp_model_is_stored_after_the_prebuild(tmp_path, mo
     assert sorted(p.name for p in (tmp_path / "libs").glob("*.so")) == sorted(f"lib{p.stem}.so" for p in CPP.glob("*.cpp"))
     c = json.loads((tmp_path / "report.json").read_text())["cache"]
     assert (c["stored"], c["untraced"]) == (1, []), c
+    (entry,) = [e for p in (tmp_path / "cache").glob("*/*/*.json")
+                if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == ATTENTION]
+    held = {f"{CPP.relative_to(TG.REPO).as_posix()}/{s}" for s in ("fa2_model.cpp", "tc_model.cpp")}
+    assert held <= set(entry["reads"]["files"]), sorted(entry["reads"]["files"])
 
 
 def test_a_prebuild_that_fails_refuses_the_run_saying_why(tmp_path, monkeypatch, capsys):

@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from circuit_check import entries as E
+from verity.ml.definitions.numerics import _jit
 
 REPO = Path(__file__).resolve().parents[4]
 
@@ -324,9 +325,9 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _run(root: Path, harness: str = HARNESS, cwd: Path = REPO) -> dict:
+def _run(root: Path, harness: str = HARNESS, cwd: Path = REPO, env: dict[str, str] | None = None) -> dict:
     # no bytecode: an edit that keeps a file's size within the second its bytecode was written would run the old code
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **(env or {})}
     r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=cwd, env=env)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
@@ -341,9 +342,9 @@ def _edit(root: Path, rel: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new, 1))
 
 
-def _values(root: Path, target: str) -> list:
-    """The values every stored entry of ``target`` reported."""
-    return sorted(e["report"]["value"] for p in (root / "cache").glob("*/*/*.json")
+def _values(root: Path, target: str, field: str = "value") -> list:
+    """The ``field`` every stored entry of ``target`` reported."""
+    return sorted(e["report"][field] for p in (root / "cache").glob("*/*/*.json")
                   if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == target)
 
 
@@ -466,6 +467,51 @@ def test_a_module_whose_file_is_a_bare_name_names_no_file_wherever_the_check_run
             reads = _entry(root, t)["reads"]
             assert not [f for f in [*reads["files"], *reads["probes"]] if "_bare" in f or "<" in f], (first, reads)
         assert _run(root, BARE, cwd=then)["hits"] == ["SynOther_v1", "SynTop_v1"], then
+
+
+#: a C++ model of the synthetic tree, loaded as `_jit.Model` (its library built on first use, in `_jit.lib_path`)
+NATIVE_PY = """
+from pathlib import Path
+
+from verity.ml.definitions.numerics import _jit
+
+SRC = Path(__file__).resolve().parents[1] / "cpp" / "m.cpp"
+_lib = []
+
+
+def answer():
+    if not _lib:
+        lib = _jit.atomic_build(_jit.lib_path("libsyn_model.so"), [SRC], lambda out: _jit.cxx_compile(out, SRC))
+        _lib.append(_jit.Model(lib, [SRC]))
+    return _lib[0].answer()
+"""
+#: the harness with the model built and loaded before tracing, as a process's first check of it would leave it
+NATIVE = HARNESS.replace("CC.trace(root)", "import syn.native\nsyn.native.answer()\nCC.trace(root)")
+
+
+@pytest.mark.skipif(shutil.which(_jit.cxx()) is None, reason="no C++ compiler")
+def test_editing_a_cpp_models_source_reruns_the_check_that_called_it_whatever_its_build_directory(tmp_path):
+    """SynTop's check calls a C++ model whose library was built in ``VERITY_NUMERICS_BUILD_DIR`` and loaded before the check, so
+    no read of its source picks the library or happens in the check: the call itself says the source (`_jit.Model`,
+    `cache.MODEL`).  Its entry holds the source by content, SynOther's doesn't, and an edit reruns SynTop alone."""
+    from circuit_check import cache as CC
+
+    assert CC.MODEL == _jit.CALLED
+    root = _tree(tmp_path / "tree")
+    (root / "cpp").mkdir()
+    (root / "cpp" / "m.cpp").write_text('extern "C" int answer() { return 7; }\n')
+    (root / "syn" / "native.py").write_text(NATIVE_PY.lstrip("\n"))
+    _edit(root, "syn/check.py", "from syn import reg", "from syn import native, reg")
+    _edit(root, "syn/check.py", '"kind": reg.KINDS.get(fn.id)}',
+          '"kind": reg.KINDS.get(fn.id), "native": native.answer() if fn.id == "SynTop_v1" else None}')
+    env = {"VERITY_NUMERICS_BUILD_DIR": str(tmp_path / "libs")}
+    assert _run(root, NATIVE, env=env)["hits"] == []
+    assert "cpp/m.cpp" in _entry(root, "SynTop_v1")["reads"]["files"] and _values(root, "SynTop_v1", "native") == [7]
+    assert "cpp/m.cpp" not in _entry(root, "SynOther_v1")["reads"]["files"]
+    assert _run(root, NATIVE, env=env)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, "cpp/m.cpp", "return 7", "return 8")
+    out = _run(root, NATIVE, env=env)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1 and _values(root, "SynTop_v1", "native") == [7, 8]
 
 
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):

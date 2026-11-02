@@ -7,8 +7,10 @@ the task list's build, nor an earlier target's check):
 - every file the check opened for reading and every directory it listed (an audit hook on ``open``, ``os.listdir`` and
   ``os.scandir``; not the import system reading a module's source or searching a directory for a module, which the module's
   name and content stand for), every path it only probed (``os.stat``: whether it was a file, a directory or absent; when
-  `inspect` or `linecache` probes a loaded module's source file, the module, by its name), and every library built in the tree
-  that it loaded (``ctypes.dlopen``: by its bytes);
+  `inspect` or `linecache` probes a loaded module's source file, the module, by its name), every library built in the tree
+  that it loaded (``ctypes.dlopen``: by its bytes), and the sources of every C++ model it called (`MODEL`, which each call of a
+  `verity.ml.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  loaded it);
 - the module of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
   and every module it imported, already loaded or not (``__import__`` and ``importlib.import_module``: what a module registered
   at import decides a lookup that runs none of its code); a module imported by a name computed at run time (``import_module``,
@@ -90,7 +92,9 @@ module now imports through is one it held, or empty or a docstring alone; each e
 each it lists no longer is imported anyway and each new one it lists is a renamed one or empty; and each module whose source
 `inspect` looked for still resolves by its name (its content may differ: only where it is was asked), or is the one imported
 module of its content.  Not covered: a file a C extension reads with its own I/O (none here); anything outside the repository,
-which the interpreter, platform, distribution list and ``sys.path`` stand for; a file a module read while it was imported before
+which the interpreter, platform, distribution list and ``sys.path`` stand for (the compiler a C++ model's library was built with
+among it: ``$CXX``, and whether the library a build directory holds is the one its sources compile to, which `_jit.stale`
+judges by their times); a file a module read while it was imported before
 tracing began (the checker's own imports, ``verity.ml.circuits`` and ``verity.ml.circuits.evaluation`` among them: their sources are inputs, data
 they opened at import is not); what a function read or imported in its body when it did not run in the recording (a value a
 process-wide cache, ``functools.cache`` and the like, holds from a call another target's check made, beyond the function's own
@@ -151,6 +155,9 @@ _ROOT: list[Path] = []
 _LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
+#: the audit event each call of a C++ model raises with the files its library is built from
+#: (`verity.ml.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+MODEL = "verity.numerics.model"
 _UNTRACED: list[str] = []
 _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
@@ -486,6 +493,8 @@ def _hook(event: str, args: tuple) -> None:
         _UNTRACED.append(f"{event} {' '.join(map(str, argv))[:240]}")
     elif event == "ctypes.dlopen" and args and args[0] and (rel := _rel(args[0])) is not None:
         _FRAMES[-1].libs.add(rel)                      # a library built in the tree: an input by its bytes (`_digests`)
+    elif event == MODEL and args:
+        _FRAMES[-1].files.update(rel for s in args[0] if (rel := _rel(s)) is not None)
 
 
 def _probing(fn):
