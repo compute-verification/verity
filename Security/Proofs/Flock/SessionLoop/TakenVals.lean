@@ -26,6 +26,8 @@ states the switched session's side by pad index, as the firewall's words:
   its pad is `vs`'s `final_c`.
 * **`Loop.swSrcE_masked_vsWord`**: below `n_E`, the switched source's masked value is `vsWord` plus the session's pad
   (`padsOf`), with no premise on the rows.
+* **`Loop.vsTau`**: table `j`'s rep `r` `τ` commitment at `vs`, the switched source's, a SHA-512 digest whatever the
+  values (`swSrcE_tauCom_size`).
 
 `LiveRoundEq` at `SessionLoopZKDeployed`'s release (`LeanRelease.ofLoopLink`) splits where the loop schedules a round of
 its own and where it doesn't:
@@ -45,7 +47,7 @@ its own and where it doesn't:
 
 * **`Loop.valsWk vs L`**: the honest worker at the device `Loop.valsDev vs L`, which sends the scheduled round with `vs`'s
   value in each word the frame frees, at the inner proof's round 0 `vs`'s `final_c` under its pad, and at its round 2
-  `vs`'s `τ` commitment (`Loop.tauAt`, the switched source's), which `Loop.TakesTau` reads.
+  `vs`'s `τ` commitment (`Loop.vsTauAt`, `vsTau` at the round's rep), which `Loop.TakesTau` reads.
   `Loop.live_valsWk`: its run is live short of the `Finish` wherever its rounds pass the frame's checks
   (`LeanRelease.live_withDevice`: the server's checks don't read the device).
 * `Loop.takesVals_valsWk`, `Loop.takesFinalC_valsWk`: it meets both at every `vs`; `Loop.takes_honestVals_ofLoopLink`:
@@ -176,6 +178,31 @@ theorem swSrcE_masked_vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).
   split
   · rfl
   · contradiction
+
+/-- **`vs`'s `τ` commitment** at table `j`'s rep `r`, at the opened coins `c` and at table `j`'s base on the tape `τ`:
+the switched source's (`Masked.swSrcE`), which where the rows hold commits the worker's view's `τ` (`swSrcE_tauCom`). -/
+noncomputable def vsTau (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
+    (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
+    ByteArray :=
+  ((swSrcE x c w (vs x w ν c) τ j.val).rep r.val).tauCom
+
+set_option smartUnfolding false in
+/-- The switched source's `τ` commitment is a SHA-512 digest at any values. -/
+theorem swSrcE_tauCom_size (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Flock.Wit)
+    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
+    ((swSrcE x c w v τ j.val).rep r.val).tauCom.size = 64 := by
+  have e : (swCutE x c w v τ j).tauCom r = _root_.Flock.Hm96.Default512.leaf
+      (((tabC PE x j).T (czExe PE x c j)).swContent (wtOf PE x w j) (v j) ((UE.tape x τ).1 j) (.inr (.inr r)))
+      (FlockSoundness.Discharge.ZkView.saltBytes ((UE.tape x τ).2.1 ⟨j, .inr (.inr r)⟩)) := rfl
+  rw [swSrcE_rep]
+  show ((swCutE x c w v τ j).tauCom r).size = 64
+  rw [e]
+  exact FlockSoundness.Refine.sha512_size _
+
+theorem vsTau_size (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
+    (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
+    (vsTau vs x w ν c τ j r).size = 64 :=
+  swSrcE_tauCom_size x c w (vs x w ν c) τ j r
 
 end Loop
 
@@ -891,31 +918,46 @@ theorem vsAt_eq (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     Fin.ext (by dsimp only; rw [hrep]; omega)
   rw [e1, e2]
 
-/-- **`vs`'s `τ` commitment for the round after `h`**: the switched source's (`Masked.swSrcE`) at rep stream
-`L.rep x |h|`'s table and rep, at the coins `h`'s openings open and the tape. -/
-noncomputable def tauAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+/-- **`vs`'s `τ` commitment for the round after `h`**: `vsTau` at rep stream `L.rep x |h|`'s table and rep, at the
+coins `h`'s openings open and the tape; empty past the tables. -/
+noncomputable def vsTauAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
     (x : Msg) (w : Flock.Wit)
     (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (h : List (Msg × Msg)) : ByteArray :=
-  ((swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad
-      (h.tail.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) w
-    (vs x w ρ.1 ((CoinLayer.session Loop.loopNr Masked.dataE).pad
-      (h.tail.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2))) ρ.2
-    (L.rep x h.length / 2)).rep (L.rep x h.length % 2)).tauCom
+  if hj : L.rep x h.length / 2 < jOf x then
+    vsTau vs x w ρ.1 ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+      (h.tail.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) ρ.2
+      ⟨L.rep x h.length / 2, hj⟩ ⟨L.rep x h.length % 2, Nat.mod_lt _ (by decide)⟩
+  else ByteArray.empty
 
-theorem tauAt_size (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+theorem vsTauAt_eq (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
     (x : Msg) (w : Flock.Wit)
     (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (h : List (Msg × Msg)) {j : Fin (jOf x)} {r : Fin 2} (hrep : L.rep x h.length = 2 * j.val + r.val) :
-    (tauAt vs L x w ρ h).size = 64 := by
+    vsTauAt vs L x w ρ h = vsTau vs x w ρ.1 ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+      (h.tail.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) ρ.2 j r := by
   have hr := r.isLt
-  unfold tauAt
-  rw [hrep, show (2 * j.val + r.val) / 2 = j.val by omega, show (2 * j.val + r.val) % 2 = r.val by omega, swSrcE_rep]
-  exact _root_.Flock.Hm96.Default512.leaf_size _ _
+  have hj : L.rep x h.length / 2 < jOf x := by rw [hrep]; omega
+  unfold vsTauAt
+  rw [dite_eq_left hj]
+  have e1 : (⟨L.rep x h.length / 2, hj⟩ : Fin (jOf x)) = j := Fin.ext (by dsimp only; rw [hrep]; omega)
+  have e2 : (⟨L.rep x h.length % 2, Nat.mod_lt _ (by decide)⟩ : Fin 2) = r :=
+    Fin.ext (by dsimp only; rw [hrep]; omega)
+  rw [e1, e2]
+
+theorem vsTauAt_size (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (x : Msg) (w : Flock.Wit)
+    (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
+    (h : List (Msg × Msg)) {j : Fin (jOf x)} {r : Fin 2} (hrep : L.rep x h.length = 2 * j.val + r.val) :
+    (vsTauAt vs L x w ρ h).size = 64 := by
+  rw [vsTauAt_eq vs L x w ρ h hrep]
+  exact vsTau_size vs x w _ _ _ j r
 
 open Classical in
 /-- **The device round with `vs`'s values**: the scheduled round `r` in the device round's place after `h`, with `vs`'s
@@ -939,7 +981,7 @@ noncomputable def valsDev (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwV
       | .error _ => L.scheduled x w ρ h cv
       | .ok (_, _, fr) =>
         if Frames (L.scheduled x w ρ h cv) (L.coins x h.length) then
-          setTau m (tauAt vs L x w ρ h)
+          setTau m (vsTauAt vs L x w ρ h)
             (setFinalC (vsAt vs L x w ρ h (L.cfg x ρ h).lay.fc + (L.cfg x ρ h).h.getD (L.cfg x ρ h).lay.fc 0)
               (fill (L.scheduled x w ρ h cv) fr fun k => vsAt vs L x w ρ h ((L.cfg x ρ h).order[m.pos + k]!)))
         else []
@@ -1031,7 +1073,7 @@ theorem takesVals_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
     · subst hvd
       have h0' := hfr
       rw [Array.toArray_toList] at h0'
-      have h00 : frr = #[] := roundFree_inner2 (tauAt_size vs L x w (ν, t) ((m₀, ρ₀) :: ops) hrep) h0'
+      have h00 : frr = #[] := roundFree_inner2 (vsTauAt_size vs L x w (ν, t) ((m₀, ρ₀) :: ops) hrep) h0'
       subst h00
       exact absurd hk (Nat.not_lt_zero k)
     by_cases hS : ∃ w' : ByteArray, w'.size = 16 ∧ fill (L.scheduled x w (ν, t) ((m₀, ρ₀) :: ops)
