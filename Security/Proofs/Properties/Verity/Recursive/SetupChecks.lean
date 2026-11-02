@@ -11,7 +11,9 @@ Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`
 verifier's own checks on it (`BaseSetup`), then V\*'s checks block, `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`,
 `RecVStar.checkLabels` and the draw's law. The model's recursive setup (`RecDeploy.RecIns.setup`, which `setupO` runs on
-a V\* statement) makes the same calls in the same order. This module matches them.
+a V\* statement) makes the same calls in the same order, and two more on the link table, `RecLinkPart.checkShape` and
+`RecLinkPart.check`. This module matches them; the link table's two pass because the statement carries none and the
+compiled inner shape names none (`innerHeld_links`), so no table is a `rec-link/…` unit (`name_not_link`).
 
 * `recIns_setup_of_compiled`: where the staged statement's inputs `i` are the compiled part's (`SetupMatch`, `PartStatement`),
   the model's Flock setup and its registered-reads checks pass with the compiled session (`BaseSetup`), and the compiled
@@ -39,7 +41,7 @@ and the scope check read): the model's reading `i` of part `j`'s staged statemen
 compiled part `j`'s check passes to the same calls: `--zk`, the statement's tags (`tags0`) and the session's
 (`tags`), the part's circuit and staged public file, no lookup table, one table, the part's partition and program, the
 verifier's registered reads, the record's draw, the inner shape, check 5's source, the inner commits and link the
-compiled component holds (`h`), `--rec-part j`, the bindings and the rows. -/
+compiled component holds (`h`), `--rec-part j`, the bindings and the rows, and no link table. -/
 structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags)
     (circuitB pubB : ByteArray) (partition : Lean.Json) (program : ByteArray)
     (registered : Option (Array Registered.Port)) (bindings : VStar.Bindings)
@@ -64,6 +66,7 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
   part : i.part = some j
   bindings : i.bindings = some bindings
   rows : i.rows = rows
+  links : i.links = none
 
 /-- **The compiled part's checks block** after Flock's session and the checks `BaseSetup` matches, each as the compiled
 part `j`'s check calls it on the session's tables `sts`: the inner checks, the registration's and V\*'s list's caps,
@@ -109,9 +112,164 @@ theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit → V (For
     rw [hb c (by simp) PUnit.unit]
     exact ih fun a ha u => hb a (by simp_all) u
 
+/-- A loop each of whose steps passes passes. -/
+theorem list_forM_ok_of_all {α : Type} {f : α → V Unit} :
+    ∀ {l : List α}, (∀ a ∈ l, f a = .ok ()) → l.forM f = .ok ()
+  | [], _ => rfl
+  | a :: l, h => by
+    show (f a >>= fun _ => l.forM f) = .ok ()
+    rw [h a List.mem_cons_self]
+    exact list_forM_ok_of_all fun b hb => h b (List.mem_cons_of_mem _ hb)
+
+theorem forM_ok_of_all {α : Type} {f : α → V Unit} {xs : Array α} (hf : ∀ a ∈ xs, f a = .ok ()) :
+    xs.forM f = .ok () := by
+  rcases xs with ⟨l⟩
+  have h := list_forM_ok_of_all (f := f) (l := l) fun a ha => hf a (by simpa using ha)
+  simpa using h
+
+/-! ## No link table -/
+
+/-- `innerOf` without a link table's rows leaves the shape without a link table. -/
+theorem innerOf_links {cB pB : ByteArray} {pa : Option Lean.Json} {pr : Option ByteArray} {hl : Bool}
+    {v : RecVStar.Inner} (h : RecVStar.innerOf cB pB pa pr hl = .ok v) : v.links = none := by
+  unfold RecVStar.innerOf at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; rfl)
+
+/-- **The compiled inner shape names no link table** (`shapeOf` is `innerOf` without one). -/
+theorem innerHeld_links {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
+    {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) : h.shape.links = none := by
+  obtain ⟨-, -, -, -, hs⟩ := innerHeld_shape hh
+  exact innerOf_links (shapeOf_ok hs)
+
+/-- `checkShape` passes a shape without a link table and a statement without one. -/
+theorem checkShape_none {sh : RecVStar.Inner} (hl : sh.links = none) :
+    RecLinkPart.checkShape (some sh) none = .ok () := by
+  unfold RecLinkPart.checkShape
+  rw [show (some sh).bind (·.links) = none from hl]
+  rfl
+
+/-- A name starting with a prefix of five or more characters other than `rec-l…` doesn't start with `rec-link/`. -/
+theorem startsWith_link_false {x p : String} (hp : x.startsWith p = true) (h5 : 5 ≤ p.toList.length)
+    (hne : p.toList.take 5 ≠ "rec-link/".toList.take 5) : x.startsWith "rec-link/" = false := by
+  cases hl : x.startsWith "rec-link/" with
+  | false => rfl
+  | true =>
+    obtain ⟨t, ht⟩ := String.startsWith_string_iff.1 hp
+    obtain ⟨u, hu⟩ := String.startsWith_string_iff.1 hl
+    have e := congrArg (List.take 5) (ht.trans hu.symm)
+    rw [FlockC3.PubRows.take_five h5, FlockC3.PubRows.take_five (p := "rec-link/") (by decide)] at e
+    exact absurd e hne
+
+theorem recOpen_not_link (l L H n : ℕ) : (VStar.Stmt.recOpen l L H n).name.startsWith "rec-link/" = false :=
+  show (RecOpen.unitName L H).startsWith "rec-link/" = false from
+    startsWith_link_false (FlockVBridge.startsWith_unitName L H) (by decide) (by decide)
+
+theorem inner_not_link (j m k c : ℕ) (pt : VStar.Part) :
+    (VStar.Stmt.inner j s!"rec-residuals/m{m}-k{k}-c{c}-p{j}" pt).name.startsWith "rec-link/" = false :=
+  show (RecResiduals.unitName m k c j).startsWith "rec-link/" = false from
+    startsWith_link_false (FlockVBridge.Family.startsWith_resUnitName m k c j) (by decide) (by decide)
+
+theorem stacked_not_link (l L H n : ℕ) :
+    (VStar.Stmt.recOpenStacked l L H n).name.startsWith "rec-link/" = false :=
+  show (RecOpen.stackedName L H).startsWith "rec-link/" = false from
+    startsWith_link_false (Flock.Readable.stackedName_startsWith L H) (by decide) (by decide)
+
+theorem sparse_not_link (sh : RecSparse.Shape) (r : ℕ) :
+    (VStar.Stmt.sparse sh r).name.startsWith "rec-link/" = false :=
+  show (RecSparse.unitName sh).startsWith "rec-link/" = false from
+    startsWith_link_false (Flock.Readable.sparseName_startsWith sh) (by decide) (by decide)
+
+theorem opening_not_link (m c j : ℕ) (S : RecOpen.GfS) (ports : List (String × ℕ)) (nv : ℕ) :
+    (VStar.Stmt.opening m c j S ports nv).name.startsWith "rec-link/" = false :=
+  show (RecOpening.unitName m c j).startsWith "rec-link/" = false from
+    startsWith_link_false (Flock.Readable.openingName_startsWith m c j) (by decide) (by decide)
+
+theorem cap_not_link (l N : ℕ) : (VStar.Stmt.cap l N).name.startsWith "rec-link/" = false :=
+  show (VStar.capName l N).startsWith "rec-link/" = false from
+    startsWith_link_false (RecDeploy.capName_startsWith l N) (by decide) (by decide)
+
+/-- **Without a link table, no statement of V\*'s list is a `rec-link/…` unit**: the list is V\*'s levels and parts,
+candidate 3's, and the caps (`statements_ok`), with no link part (`linkStatements_ok`). -/
+theorem name_not_link {i : RecVStar.Inner} {ss : Array VStar.Stmt} (hss : RecVStar.statements i = .ok ss)
+    (hl : i.links = none) {s : VStar.Stmt} (hs : s ∈ ss) : s.name.startsWith "rec-link/" = false := by
+  obtain ⟨vsh, A, C, K, L, n, hA, hC, hK, -, hL, -, rfl, -⟩ := FlockC3.VStarList.statements_ok hss
+  obtain rfl : L = #[] := by
+    rcases FlockC3.VStarList.linkStatements_ok hL with ⟨-, h⟩ | ⟨l, h, -⟩
+    · exact h
+    · rw [hl] at h
+      cases h
+  obtain ⟨sc, sp, ps, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
+  rcases Array.mem_append.1 hs with hs | hs
+  · rcases Array.mem_append.1 hs with hs | hs
+    · rcases Array.mem_append.1 hs with hs | hs
+      · obtain ⟨l, -, rfl⟩ := List.mem_map.1 (List.mem_toArray.1 hs)
+        exact recOpen_not_link l _ _ _
+      · obtain ⟨j, -, rfl⟩ := List.mem_map.1 (List.mem_toArray.1 hs)
+        exact inner_not_link j vsh.m vsh.kLog vsh.claims _
+    · rcases FlockC3.Reps.candidate3_kinds hC s hs with ⟨sh, r, rfl⟩ | ⟨l, L', H, n', rfl⟩ |
+        ⟨m, c, k, S, ports, nv, rfl⟩
+      · exact sparse_not_link sh r
+      · exact stacked_not_link l L' H n'
+      · exact opening_not_link m c k S ports nv
+  · rcases Array.mem_append.1 hs with hs | hs
+    · rcases Array.mem_append.1 hs with hs | hs
+      · obtain ⟨l, N, -, rfl⟩ := FlockC3.VStarList.levelCaps_cap hK s hs
+        exact cap_not_link l N
+      · simp at hs
+    · simp only [List.mem_toArray, List.mem_singleton] at hs
+      subst hs
+      exact cap_not_link 0 n
+
+/-- `linkParams` names a link part only under `rec-link/u…`. -/
+theorem linkParams_none {name : String} (hn : name.startsWith "rec-link/" = false) : VStar.linkParams name = none := by
+  have hu : name.startsWith "rec-link/u" = false := by
+    cases h : name.startsWith "rec-link/u" with
+    | false => rfl
+    | true =>
+      have hp : "rec-link/".toList <+: "rec-link/u".toList := ⟨['u'], by decide⟩
+      rw [String.startsWith_string_iff.2 (hp.trans (String.startsWith_string_iff.1 h))] at hn
+      cases hn
+  unfold VStar.linkParams
+  rw [hu]
+  rfl
+
+/-- `RecLinkPart.check` passes a table whose unit isn't a `rec-link/…` one. -/
+theorem linkCheck_ok {st : Stmt} {own : Option (Array Registered.Port)} {files : Option RecCoins.Source}
+    {links : Option (ByteArray × ℕ)} (hn : st.c.unit.name.startsWith "rec-link/" = false) :
+    RecLinkPart.check st own files links = .ok () := by
+  unfold RecLinkPart.check
+  dsimp only
+  rw [linkParams_none hn]
+  dsimp only
+  rw [hn]
+  rfl
+
+/-- **The link part's check passes every table V\*'s checks passed at a shape without a link table**: each table's
+unit is one of V\*'s statements (`RecVStar.check`), none of them a `rec-link/…` unit (`name_not_link`). -/
+theorem linkPart_ok_of_checks {sh : RecVStar.Inner} (hl : sh.links = none) {commits : Option RecVStar.InnerCommits}
+    {tags : Tags} {tables : List (String × ByteArray)} {sts : Array Stmt} {circuitB : ByteArray}
+    {partition : Option Lean.Json} {program : Option ByteArray} {registered : Option (Array Registered.Port)}
+    {part : Option ℕ} {bindings : Option VStar.Bindings} {rows : Option (Array Registered.Port)}
+    (h : RecSetup.checks (some sh) commits tags tables sts circuitB partition program registered part bindings rows =
+      .ok ())
+    (own : Option (Array Registered.Port)) (files : Option RecCoins.Source) (links : Option (ByteArray × ℕ)) :
+    sts.forM (RecLinkPart.check · own files links) = .ok () := by
+  refine forM_ok_of_all fun st hst => ?_
+  obtain ⟨t, ht, rfl⟩ := Array.mem_iff_getElem.1 hst
+  obtain ⟨j, f, sv, -, -, hc⟩ := RecDeploy.checkStmt_circuit (RecDeploy.checks_stmt h t ht)
+  obtain ⟨hk, -⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hc
+  obtain ⟨ss, hss, hj, hn, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hk
+  show RecLinkPart.check sts[t] own files links = .ok ()
+  apply linkCheck_ok
+  rw [← hn]
+  exact name_not_link hss hl (Array.mem_of_getElem? hj)
+
 /-- **The model's recursive setup passes where the compiled part's does.** Suppose the model's reading `i` of part
-`j`'s staged statement holds the compiled part's inputs (`SetupMatch`), the inner shape has no RecSparse phase and the
-session's tags hm96-sha512 rows (as the compiled part's do wherever it has a draw). Suppose the model's Flock setup
+`j`'s staged statement holds the compiled part's inputs (`SetupMatch`), the inner shape has no RecSparse phase and no
+link table (as the compiled one: `innerHeld_links`) and the session's tags hm96-sha512 rows (as the compiled part's do
+wherever it has a draw). Suppose the model's Flock setup
 gives the compiled session `(spec, sts)`, every table passes the registered-reads and identifier checks and the
 registration is full (`BaseSetup`'s conclusion), and the compiled checks block passes on `sts` (`RecChecks`). Then the
 model's recursive setup (`RecIns.setup`) passes with `(spec, sts)`. -/
@@ -120,7 +278,7 @@ theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j
     {registered : Option (Array Registered.Port)} {bindings : VStar.Bindings}
     {rows : Option (Array Registered.Port)} {draw : Option Lean.Json} {spec : SessionSpec} {sts : Array Stmt}
     (hm : SetupMatch i h j tags0 tags circuitB pubB partition program registered bindings rows draw)
-    (hsparse : h.shape.sparse = none) (hhm : tags.hm96Rows = true)
+    (hsparse : h.shape.sparse = none) (hlinks : h.shape.links = none) (hhm : tags.hm96Rows = true)
     (hset : i.base.read.setup = .ok (spec, sts))
     (hregs : ∀ st ∈ sts, checkRegistered st i.base.registered = .ok () ∧ noIdentifier st = .ok ())
     (hfull : Registered.checkFull i.base.registered i.base.read.draw = .ok ())
@@ -130,16 +288,22 @@ theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j
   have hin : RecSetup.checkInner i.inner i.src i.bound = .ok () := by
     rw [hm.inner, hm.src, checkInner_dense hsparse]
     exact hc.inner
+  have hcs : RecLinkPart.checkShape i.inner i.links = .ok () := by
+    rw [hm.inner, hm.links]
+    exact checkShape_none hlinks
   have hbr : RecBudget.regs i.inner i.base.registered = .ok () := by rw [hm.inner, hm.registered]; exact hc.regs
   have hbs : RecBudget.statements i.inner = .ok () := by rw [hm.inner]; exact hc.statements
+  have hlp : sts.forM (RecLinkPart.check · registered (some h.src) none) = .ok () :=
+    linkPart_ok_of_checks hlinks hc.checks _ _ _
   unfold RecIns.setup
-  simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hin, hbr, hbs, hset, bind, Except.bind, pure, Except.pure]
+  simp only [hsh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hin, hcs, hbr, hbs, hset, bind, Except.bind, pure,
+    Except.pure]
   rw [forIn_ok_of_all fun a ha u => by simp only [(hregs a ha).1, (hregs a ha).2]]
   simp only [hfull]
   simp only [hm.zk, hm.stmtTags, hm.tags, hm.tables, hm.circuitFile, hm.partition, hm.program, hm.registered,
-    hm.part, hm.bindings, hm.rows, hm.inner, hm.commits, hm.link, hm.src, hm.draw, hm.count, ↓reduceIte,
+    hm.part, hm.bindings, hm.rows, hm.inner, hm.commits, hm.link, hm.src, hm.links, hm.draw, hm.count, ↓reduceIte,
     Option.isSome_some, hc.regs, hc.statements, hc.checks, hc.oneFull, hc.table, hc.shapeOk, hc.coins, hc.pubRows,
-    hc.linkRounds, hc.topRows, hc.link, hc.labels]
+    hc.linkRounds, hc.topRows, hc.link, hlp, hc.labels]
   by_cases hd : draw.isSome = true
   · simp only [hd, ↓reduceIte, hc.law hd]
   · simp only [hd, Bool.false_eq_true, ↓reduceIte]
@@ -157,13 +321,13 @@ theorem setupO_staged_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : L
     (hdec : decodeRec (partRaw r st x ms s p).encode = some (partRaw r st x ms s p))
     (hi : (partRaw r st x ms s p).ins = .ok i)
     (hm : SetupMatch i h j tags0 tags circuitB pubB partition program registered bindings rows draw)
-    (hsparse : h.shape.sparse = none) (hhm : tags.hm96Rows = true)
+    (hsparse : h.shape.sparse = none) (hlinks : h.shape.links = none) (hhm : tags.hm96Rows = true)
     (hset : i.base.read.setup = .ok (spec, sts))
     (hregs : ∀ st ∈ sts, checkRegistered st i.base.registered = .ok () ∧ noIdentifier st = .ok ())
     (hfull : Registered.checkFull i.base.registered i.base.read.draw = .ok ())
     (hc : RecChecks h j tags0 tags circuitB partition program registered bindings rows draw sts) :
     setupO (staged st x ms s) = some (i, spec, sts) := by
-  have hsu := recIns_setup_of_compiled hm hsparse hhm hset hregs hfull hc
+  have hsu := recIns_setup_of_compiled hm hsparse hlinks hhm hset hregs hfull hc
   have hzk : (partRaw r st x ms s p).base.zk = true := by
     rw [← FlockDeploy.Raw.ins_zk (RecRaw.ins_base hi)]
     exact hm.zk
@@ -203,7 +367,7 @@ def PartSetup (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × C
     (spec : SessionSpec) (sts : Array Stmt),
     (partRaw r st x ms s p).ins = .ok i ∧
     SetupMatch i h j tags0 tags circuitB pubB partition program registered bindings rows draw ∧
-    h.shape.sparse = none ∧ tags.hm96Rows = true ∧
+    h.shape.sparse = none ∧ h.shape.links = none ∧ tags.hm96Rows = true ∧
     i.base.read.setup = .ok (spec, sts) ∧
     (∀ st ∈ sts, checkRegistered st i.base.registered = .ok () ∧ noIdentifier st = .ok ()) ∧
     Registered.checkFull i.base.registered i.base.read.draw = .ok () ∧
@@ -219,8 +383,8 @@ theorem readX_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Cla
       ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.parts vs = true := by
   have hrx : readX x = some r := readX_of_sessions hr fun s p hp => by
     obtain ⟨i, h, j, tags0, tags, circuitB, pubB, partition, program, registered, bindings, rows, draw, spec, sts,
-      hi, hm, hsp, hhm, hset, hregs, hfull, hc, hscope⟩ := hparts s p hp
-    exact ⟨st, ms, i, spec, sts, hi, recIns_setup_of_compiled hm hsp hhm hset hregs hfull hc,
+      hi, hm, hsp, hlk, hhm, hset, hregs, hfull, hc, hscope⟩ := hparts s p hp
+    exact ⟨st, ms, i, spec, sts, hi, recIns_setup_of_compiled hm hsp hlk hhm hset hregs hfull hc,
       read_check_of_scope hm hscope⟩
   obtain ⟨vs, hvs, hpv⟩ := readX_parts hrx
   exact ⟨hrx, vs, hvs, hpv⟩

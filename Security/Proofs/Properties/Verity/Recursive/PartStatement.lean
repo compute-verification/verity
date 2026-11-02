@@ -693,7 +693,8 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
 /-- **Compiled part `j`'s recursive inputs**, as `partVerdict` hands them to its setup: the statement's tags `tags0`,
 the part's circuit `circuitB` and public file `pubB`, its partition and program (`pj`'s), its registered reads, its draw,
 the inner session held (`h`: the verifier's inner shape, check 5's source, the inner circuit's binding, the commits and
-the link points), `--rec-part j`, the bindings and the rows. -/
+the link points), `--rec-part j`, the bindings and the rows, with no link table: the statement the compiled inputs name
+carries none (`InnerNames.links`). -/
 def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) : RecIns where
@@ -716,6 +717,7 @@ def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.Par
   commits := some h.commits
   link := some h.link
   rows
+  links := none
 
 /-- `withCoins` changes a statement's tags only for the coin server's coins, never for a keyed coin tree. -/
 theorem withCoins_tree (t : Tags) (s : CoinTree.Spec) : t.withCoins (.tree s) = t := by
@@ -734,7 +736,7 @@ theorem partIns_tags (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recu
 /-- **What the recursive setup reads of `partIns`** (`SetupChecks`'s `SetupMatch`, field by field, in its order): `--zk`, the
 statement's and the session's tags, the part's circuit and staged public file, no lookup table, one table, the part's
 partition and program, no public input words, the registered reads, the draw `draw`, the inner shape, check 5's
-source, the commits, the link, `--rec-part j`, the bindings and the rows. -/
+source, the commits, the link, `--rec-part j`, the bindings, the rows and no link table. -/
 theorem partIns_fields (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
@@ -746,9 +748,9 @@ theorem partIns_fields (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Re
       i.base.read.I.program = some pj.program ∧ i.base.read.publicInputs = none ∧ i.base.registered = registered ∧
       i.base.read.registered = registered.isSome ∧ i.base.read.draw = draw ∧ i.inner = some h.shape ∧
       i.src = some h.src ∧ i.commits = some h.commits ∧ i.link = some h.link ∧ i.part = some j ∧
-      i.bindings = some bindings ∧ i.rows = rows :=
+      i.bindings = some bindings ∧ i.rows = rows ∧ i.links = none :=
   ⟨rfl, rfl, partIns_tags tags0 circuitB pubB pj registered draw h j bindings rows, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
-    rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem mapM_some_ok {ε α β : Type} {f : α → Except ε β} {a : α} {b : β} (h : f a = .ok b) :
     (some a).mapM f = .ok (some b) := by
@@ -767,10 +769,10 @@ theorem recIns_of {w : RecRaw} {b : FlockDeploy.Ins} {i : Option RecVStar.Inner}
       (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok rw) :
     w.ins = .ok
       { base := b, inner := i, part := w.recPart, bindings := f, src := src, bound := boundOf w.innerCircuit,
-        commits := c, link := l, rows := rw } := by
+        commits := c, link := l, rows := rw, links := none } := by
   unfold RecRaw.ins
   rw [h1]; simp only [ok_bind]
-  rw [show linksOf w = .ok () by simp [linksOf, hL]]; simp only [ok_bind]
+  rw [show linksOf w = .ok none by unfold linksOf; rw [hL]; rfl]; simp only [ok_bind]
   rw [h2]; simp only [ok_bind]
   rw [h3]; simp only [ok_bind]
   rw [h4]; simp only [ok_bind]

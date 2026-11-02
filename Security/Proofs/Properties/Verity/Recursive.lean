@@ -261,9 +261,10 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
     { zk := rfl, stmtTags := rfl, tags := Part.partIns_tags _ _ _ _ _ _ _ _ _ _, circuitFile := rfl,
       publicFile := rfl, tables := rfl, count := rfl, partition := rfl, program := rfl, publicInputs := rfl,
       readRegistered := rfl, registered := rfl, draw := rfl, inner := rfl, src := rfl, commits := rfl, link := rfl,
-      part := rfl, bindings := rfl, rows := rfl }
+      part := rfl, bindings := rfl, rows := rfl, links := rfl }
   exact ⟨tags0, registered, bindings, recordB, record, d, spec, sts, hT, hregB, hrecB, hrec, hrd, hins,
-    recIns_setup_of_compiled hm hsp hhm hbset hregs hfull hc, read_check_of_scope hm hscope, hbuild⟩
+    recIns_setup_of_compiled hm hsp (innerHeld_links hh) hhm hbset hregs hfull hc, read_check_of_scope hm hscope,
+    hbuild⟩
 
 /-- **The staged statement sets up** where it reads back as itself and the model's recursive setup passes on its
 reading (D2's `setupO_staged_of_compiled`, at the setup's result). -/
