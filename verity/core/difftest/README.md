@@ -17,7 +17,8 @@ is what the Lean is checked against; after, the Python is held to the Lean.
   `flock-json-difftest` is C-Flock's JSON parser's port (C-Flock's package has no dependencies): `Flock.JsonParse.parse`
   and Lean core's `Lean.Json.parse` against one Python mirror, value and refusal text alike (`tests/test_flock_json_port.py`).
   `firewall-honest-difftest` is the port of the honest worker's requests in an inner session, `Flock.Firewall.honestReqs`,
-  which `verity/ml/flock/tests/test_honest_reqs.py` holds to `rec_live`'s requests on a real prover's recorded session.
+  which `verity/ml/flock/tests/test_honest_reqs.py` holds to `rec_live`'s requests on a real prover's recorded session,
+  and `verity/ml/flock/tests/test_honest_session.py` to every request `rec_live` relayed to Lean's live firewall on a recorded honest session.
 - `python/verity_difftest` is the Python side: `Port`, `run`, `replay`, `Server`, `server_fixture`, `canonical`. `run`
   keeps one server open, compares outputs as canonical JSON, requires reject parity (both reject or neither; reasons may
   differ), treats an undeclared exception or a protocol fault as a difference, and fails a vacuous run (no output, or no
