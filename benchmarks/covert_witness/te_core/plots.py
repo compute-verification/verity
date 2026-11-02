@@ -46,11 +46,11 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
 
-from . import formalism, frontier, policy  # noqa: E402
-from .ledger import Ledger  # noqa: E402
+from . import formalism, frontier, policy
+from .ledger import Ledger
 
 LEVELS = (1, 10, 100, 1000, 10000)
 NAMES = ("p1-loss-vs-compute", "p2-slowdown-vs-gain", "p3-policy-plane", "p4-decomposition", "a2-efficiency-floor")
