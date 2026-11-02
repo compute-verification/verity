@@ -162,5 +162,10 @@ def test_measured_rows_are_scored_beside_the_analysis(tmp_path, monkeypatch, tai
     assert r0["ratio"]["u1_bits"] == pytest.approx(4e8 / (8 * 9e7))
     assert r0["update_cut_over_delta"] == pytest.approx(4e8 / (8 * 9e7))
     assert {"rho", "fit", "x0", "s_star"} <= set(r0["cell"]) and r0["cell_analysis"]["x0"] == 0
+    f = r0["factors"]
+    assert f["sigma"] * f["reach"] * f["s"] * f["a"] * f["alpha"] / f["room"] == pytest.approx(
+        r0["cell"]["slowdown"] / r0["cell_analysis"]["slowdown"])
     assert {(e["start"], e["drop"]) for e in c["S"]} == {("s1", d) for d in (0.005, 0.01, 0.02, 0.05)}
+    routed = [e["routes"]["measured"] for e in c["S"] if e["measured"]["id"]]
+    assert routed and all(w["id"] in {"r0", "r1"} and w["factors"] for w in routed)
     assert "| s1 |" in (out / "compare.md").read_text()

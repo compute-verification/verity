@@ -17,8 +17,9 @@ side's best-known values beside it), with H and W* over every checkpoint of ever
   `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT;
 - `formalism.jsonl`: each scored row's block and its source;
 - with the measured quantities and the analysis in the checkout, `compare.json` and `compare.md`: each scored row's
-  quantities beside the analysis's for the same checkpoint (their ratios), and the policy's S and route per start and
-  target under each.
+  quantities beside the analysis's for the same checkpoint (their ratios), the policy's S and route per start and
+  target under each, and each route row's Slowdown bound measured over analysis as the ratios of its factors
+  (`FACTORS`), which say why S moved.
 
 `--quantities measured` (the default) scores the rows whose `formalism` block ingest measured on the record's traced
 step (te_core.capture.circuit through `annotate.with_structures`: σ, the affected share, the consumed tokens, τ, a,
@@ -84,6 +85,9 @@ COMPARED = ("sigma", "affected_share", "w", "tokens", "gates", "tau_bits", "a_bi
             "delta_bits", "delta_grad_bits")
 TRACE_FIELDS = ("sigma", "affected_share", "affected_all_share", "token_factor", "frozen_tail_share", "a_x",
                 "update_cut_bits", "grad_cut_bits", "state_bits", "a_cut_bits")
+CELL = ("rho", "fit", "x0", "s_star", "slowdown", "sigma", "s", "alpha_ratio")
+#: Slowdown's bound σ (1 − x0) (s/s*) (ᾱ/α_max) with s* = room(u, k)/a, as the factors whose ratios multiply to its ratio
+FACTORS = ("sigma", "reach", "s", "a", "room", "alpha")
 
 
 def load_analysis(path: Path):
@@ -153,15 +157,24 @@ def _ratio(a, b):
 
 def reference_s(rep: dict, name: str) -> dict:
     """(start, drop) -> the `name` cell's S, ρ, basis, Slowdown terms and the route that sets W* in `rep`
-    (`formalism_report`)."""
+    (`formalism_report`), with the route's row id."""
     out = {}
     for start, v in rep["starts"].items():
         for t in v["targets"]:
             c = t["cells"].get(name) or {}
             out[(start, t["drop"])] = {"S": c.get("S"), "rho": c.get("rho"), "basis": c.get("basis"),
-                                       "route": frontier._route(c.get("of")), "honest": t["honest"],
-                                       **{n: c.get(n) for n in frontier.TERMS}}
+                                       "route": frontier._route(c.get("of")), "id": (c.get("of") or {}).get("id"),
+                                       "honest": t["honest"], **{n: c.get(n) for n in frontier.TERMS}}
     return out
+
+
+def factors(v: dict, va: dict, a: float, a_analysis: float) -> dict:
+    """Slowdown's bound in cell `v` over cell `va`, factor by factor (`FACTORS`): reach is 1 − x0 and room is s*·a;
+    σ·reach·s·a·alpha over room is the bound's ratio."""
+    room, room_a = v["s_star"] * a, va["s_star"] * a_analysis
+    return {"sigma": _ratio(v["sigma"], va["sigma"]), "reach": _ratio(1 - v["x0"], 1 - va["x0"]),
+            "s": _ratio(v["s"], va["s"]), "a": _ratio(a, a_analysis), "room": _ratio(room, room_a),
+            "alpha": _ratio(v["alpha_ratio"], va["alpha_ratio"])}
 
 
 def compare(scored: list[dict], analysed_rows: list[dict], shapes: dict, rep: dict, rep_a: dict, name: str) -> dict:
@@ -185,11 +198,24 @@ def compare(scored: list[dict], analysed_rows: list[dict], shapes: dict, rep: di
                      "ratio": {x: _ratio(q[x], qa[x]) for x in COMPARED},
                      "trace": {x: tr.get(x) for x in TRACE_FIELDS},
                      "update_cut_over_delta": _ratio(tr.get("update_cut_bits"), m.delta_bits),
-                     "cell": {x: v[x] for x in ("rho", "fit", "x0", "s_star", "slowdown")},
-                     "cell_analysis": {x: va[x] for x in ("rho", "fit", "x0", "s_star", "slowdown")}})
+                     "cell": {x: v[x] for x in CELL}, "cell_analysis": {x: va[x] for x in CELL},
+                     "factors": factors(v, va, m.a_bits, ma.a_bits)})
     s, sa = reference_s(rep, name), reference_s(rep_a, name)
-    cells = [{"start": x[0], "drop": x[1], "measured": s[x], "analysis": sa.get(x)} for x in s]
+    by_row = {r["id"]: r for r in rows}
+    cells = [{"start": x[0], "drop": x[1], "measured": s[x], "analysis": sa.get(x),
+              "routes": {k: _why(by_row.get((e or {}).get("id"))) for k, e in (("measured", s[x]), ("analysis", sa.get(x)))}}
+             for x in s]
     return {"cell": name, "rows": rows, "S": cells}
+
+
+def _why(r: dict | None) -> dict | None:
+    """A route row's ρ and Slowdown's bound under each set of quantities, and the bound's factors."""
+    if r is None:
+        return None
+    return {"id": r["id"], "checkpoint_step": r["checkpoint_step"], "rho": r["cell"]["rho"],
+            "rho_analysis": r["cell_analysis"]["rho"], "slowdown": r["cell"]["slowdown"],
+            "slowdown_analysis": r["cell_analysis"]["slowdown"], "fit": r["cell"]["fit"],
+            "fit_analysis": r["cell_analysis"]["fit"], "factors": r["factors"]}
 
 
 def _g(x) -> str:
@@ -214,6 +240,20 @@ def compare_markdown(c: dict) -> str:
         m, a = e["measured"], e["analysis"] or {}
         lines.append(f"| {e['start']} | -{100 * e['drop']:g}% | {_g(m['S'])} | {m['route']} | "
                      f"{_g(a.get('S'))} | {a.get('route', '')} |")
+    lines += ["", "Why S moved: each route row's ρ measured (analysis), and Slowdown's bound measured over analysis as "
+              "its factors (σ, reach 1 − x0, s, a, room = s*·a, ᾱ/α_max; σ·reach·s·a·alpha/room is the ratio).", "",
+              "| start | target | S measured / analysis | route | ρ | σ | reach | s | a | room | alpha |",
+              "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for e in c["S"]:
+        m, a = e["measured"], e["analysis"] or {}
+        for k in ("measured", "analysis"):
+            w = e["routes"][k]
+            if w is None:
+                continue
+            f = w["factors"]
+            lines.append(f"| {e['start']} | -{100 * e['drop']:g}% | {_g(_ratio(m['S'], a.get('S')))} | {k}: "
+                         f"{(m if k == 'measured' else a)['route']} | {_g(w['rho'])} ({_g(w['rho_analysis'])}) | "
+                         + " | ".join(_g(f[x]) for x in FACTORS) + " |")
     return "\n".join(lines)
 
 
