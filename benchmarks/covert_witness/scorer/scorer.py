@@ -39,7 +39,7 @@ REPO = HERE.parents[2]
 STATE = Path(os.environ.get("TE_SCORER_STATE", Path.home() / ".research" / "te-scorer"))
 SINCE = os.environ.get("TE_SCORER_SINCE", "2026-11-02T06:30:00Z")
 SEARCH_START = "2026-11-02T08:30:00Z"  # the board's opening: earlier records are the integrator's seed smokes
-TE_CORE = Path(os.environ.get("TE_CORE_PATH", "/tmp/scorer/te-core/benchmarks/covert_witness"))
+TE_CORE = Path(os.environ.get("TE_CORE_PATH", Path(__file__).resolve().parents[1]))
 BOARD = Path(os.environ.get("TE_BOARD", Path(__file__).resolve().parents[1] / "islands" / "scorer" / "BOARD.md"))
 BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `HH:MMZ scorer [TAG] text (record ids)`. The "
               "coordinator merges them into benchmarks/covert_witness/BOARD.md on cursor/te-digest-4207. The scorer's lines "
@@ -656,6 +656,7 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
     if append and lines:
         append_board(lines)
         if promote:
+            ledger_promote(pr["new"], rows)
             for p in pr["new"]:
                 promoted[p["id"]] = {"at": hhmm, "reasons": p["reasons"]}
             ppath.write_text(json.dumps(promoted, indent=1) + "\n")
