@@ -4,32 +4,53 @@ The rest of the [Glossary](ARCHITECTURE.md#glossary), and it changes with it: a 
 
 ## Notation
 
-The one symbol table: every protocol states its guarantees in these symbols, one meaning each. A row names its Lean
+The one symbol table: every protocol states its guarantees in these symbols, one meaning each, except that inside the
+training formalism's statements (Training, below) its own a, H, p, s, u, w, x, τ and Δ hold. A row names its Lean
 declaration or "not yet in Lean".
 
-A bound is argued in three parts, **the feasible set** 𝓕, **protocol soundness**
-and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
+A bound is argued in three parts, **the feasible set** 𝓕, **protocol soundness** and **Security**, the training
+formalism's theorem (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 
 **Circuits**
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| C, \|C\|, C(x) | A circuit: gates in topological order, each holding one value. \|C\| is its size, the number of its operation (non-input) gates. C(x) is the value of its output gates on the fresh input x. | `Verity.Circuit`, `Circuit.computed`, `Circuit.size`, `Circuit.eval` |
-| in(S), out(S) | For a set S of gates: the gates outside S with a wire into S; the gates of S read outside it, and its output gates. in(C) is C's input gates and out(C) its output gates. | `Circuit.into`, `Circuit.exits`; `Circuit.isInput`, `Circuit.outputs` |
-| annotation α | The gates α(ℓ) each label ℓ of a circuit holds; blocks, placements, covers and selections are annotations, each a predicate on α. | `Verity.Annotation`, `Annotation.IsPartition`, `Partition.toAnnotation` |
-| θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
-| D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R commits it once: θ's values, D and 𝓘, its private (c, k)-partition into inference blocks, checked from D and θ alone (the inference-only policy). | `Verity.Declaration.D`, `Verity.Committed`; 𝓘 is a `Verity.Partition`; the policy, `Nci.Complies` in an older form |
-| (c, k), 𝒞_{c,k} | A partition's budgets per block: gate budget c, exactly (padded), and fresh-input budget k, at most; \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition `Partition.IsCK` not yet in Lean |
+| C, value, input | A circuit C is a set of gates. Each gate reads one or two values and computes one value, a bit, as a Boolean function of them. Each value is either computed by exactly one gate or is an input to C, and is identified by its source (the gate that computes it, or its position among C's inputs), not by the bit it carries. A run's trace is the bit each value carries. | `Verity.Circuit`, an older form with input gates (`Circuit.isInput`); the run, `Circuit.eval` |
+| depends on | A gate depends on a value if it reads it, or reads a value computed by a gate that depends on it. No gate depends on the value it computes. | `Circuit.Feeds`, reflexive, between gates |
+| in(S), \|S\| | For a set S of gates, in(S) is the set of values read by gates in S that no gate in S computes, and \|S\| the number of gates in S; in(C) is C's inputs. The values in in(S) determine every value S computes in \|S\| gate evaluations, S itself the witness (reconstruction). | `Circuit.into`, with inputs as input gates; `Circuit.size` |
+| θ, x | The registered inputs θ ⊆ in(C), the committed weights and every input registered with them, fixed before the period and the same in every circuit compared; the fresh input x, the rest of in(C) (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
+| D, R = (θ, D, 𝓘) | The registered circuit, what the developer claims it computed: its registered programs on its committed inputs. R commits it once: θ's values, D and 𝓘, its private (c, k)-partition into inference blocks, checked from D and θ alone (the inference-only policy). | `Verity.Declaration.D`, `Verity.Committed`; 𝓘 is a `Verity.Partition`; the policy, `Nci.Complies` in an older form |
+| (c, k, n), 𝓘 | The policy: c, the maximum gates per block; k, the maximum bits a block reads beyond θ; n, the blocks allowed per period. A (c, k)-partition 𝓘 divides C's gates into blocks I with \|I\| ≤ c and \|in(I) ∖ θ\| ≤ k. I's inputs split three ways: registered values in(I) ∩ θ, which are free; other inputs in(I) ∩ (in(C) ∖ θ), which are data; computed values in(I) ∖ in(C), from other blocks. k bounds the last two together. | `Verity.Partition`, `Declaration.unregistered` (in(I) ∖ θ); older forms, `Partition.IsCK` (exactly c gates) and `Nci.Complies` (Γ, α) |
+| ρ(C) | The slowdown: ρ(C) = min_𝓘 \|𝓘\|c/\|C\| over C's (c, k)-partitions, or ∞ if none exists. | not yet in Lean; `Verity.slowdown` and `Nci.slowdown` are older forms |
 | A, x(g), t(g) | The actual circuit: everything the hardware computed in the period, hidden work included, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
 | V(X, J), U(X, J) | The verified compute at X during J (below), as gate occurrences; the free gates, \|A[X, J]\| − \|A[X, J] ∩ V(X, J)\|. | the share 1 − V/C: `Nci.Dampener.residualShare`; the sets not yet in Lean |
-| s_× | The fewest gates of a counted operation, in the same count: U free gates complete at most U/s_× counted operations. | not yet in Lean |
+
+**Training.** The annotation is an existential witness, checked mechanically, and the rest is defined from it. |C|, c
+and w count Boolean gates; k, τ, a, u, Δ and Δ_grad are bits.
+
+| Symbol | Meaning | Lean |
+|---|---|---|
+| ℓ_0, ℓ* | The losses: θ's, and the target. With the policy (c, k, n) they are the inputs, and the red team determines everything else. | not yet in Lean |
+| θ′, 𝒯 | The annotation: the new slow weights θ′, values computed by gates of C, the trained weights; the token blocks 𝒯, pairwise disjoint sets of gates, each one token's computation in one step. | not yet in Lean |
+| Dep, φ | The gates that depend on some value in θ′, θ's computation on changed activations included; the dependent share φ = \|Dep ∩ ⋃𝒯\|/\|C\|. | not yet in Lean |
+| x_T(I), m(I) | Block I's share of token T, x_T(I) = \|I ∩ T ∩ Dep\|/\|T ∩ Dep\|. I enters T mid-path if x_T(I) > 0 and I reads a value computed by a gate of T outside I; m(I) is the number of tokens I enters this way. | not yet in Lean |
+| w, s, τ | Work per token, the gates per token block; tokens per block, s = c/w; data per token, the unregistered inputs a token block reads. | not yet in Lean |
+| a | The cut cost: the computed bits needed to hand a block one token's state mid-path, roughly d_model × activation bits. | not yet in Lean |
+| u(x), x₀ | The update profile: the computed bits a block must read to do a share x of one token's dependent work, u(1) the per-token update; the bottom share x₀, the largest x with u(x) ≤ k. | not yet in Lean |
+| Δ, Δ_grad | The total update, the bits needed to describe θ′ given θ with a decoder of at most c gates; the accumulated state, the gradient and optimizer state passed between blocks during training. | not yet in Lean |
+| H(ℓ*), p | The honest cost, the least compute of any method to reach ℓ*; the inefficiency p = \|C\|/H(ℓ*) of a run. | not yet in Lean |
+| A1 | Cut cost, an assumption: every set I of gates with \|I\| ≤ c has \|in(I) ∖ in(C)\| ≥ u(max_T x_T(I)) + a·m(I). Exhibiting a block that violates it refutes it; nothing verifies it. A shorter update encoding lowers u, an activation code lowers a. | not yet in Lean |
+| A2 | Efficiency floor, an empirical assumption: no run whose update stays within a given profile reaches ℓ* for less than p·H(ℓ*). | not yet in Lean |
+| Fit | If Δ + sτ ≤ k, running the updated model has ρ = 1: with Δ = 0, honest serving is free, one block per session. Training with that update also needs 2Δ_grad + sτ ≤ k, for a reduction tree. | not yet in Lean |
+| Cover | Under A1, ρ ≳ φ(1 − x₀)·s·a/max_x x(k − u(x)). An evenly spread update (u(x) = x·u(1), u(1) ≫ k) gives ρ ≳ 4φ·s·a·u(1)/k²; a single updated layer with a frozen tail, ρ ≈ φ·s·a/(k·tail share). | not yet in Lean |
+| Security, W* | Under A1 and A2, reaching ℓ* covertly costs at least H(ℓ*)·min ρp, with at most nc available per period. W* is the least \|C\|ρ(C) of a circuit that reaches ℓ*, so W*/H(ℓ*) = min ρp ≥ 1. | not yet in Lean |
 
 **The physical model**
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| 𝓜, ρ | The ACCEL model (below), each resource's rate ρ a ceiling no program exceeds, at the firmware maximum; the card files `verity/hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ`, `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
+| 𝓜 | The ACCEL model (below), each resource's rate a ceiling no program exceeds, at the firmware maximum; the card files `verity/hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ` (the rates), `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device`, `FixedMachine` and `InitialBudget` not yet in Lean |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its fresh-input budget does not already count. | not yet in Lean |
 | HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a memory wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
@@ -46,23 +67,13 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | Break, B^τ, 𝒟_b^τ | The event that the fixed finder exhibits a SHA-512 collision, or the fixed forger a valid LMS signature under a device's registered key on a message the device's log never signed, charged as f(Pr[B^τ collides]) + Pr[the forger succeeds] and never assumed away; B^τ and 𝒟_b^τ are the finder and the distinguisher at server block b built from τ, Adv_PRF(𝒟_b^τ) the PRF term. | not yet in Lean |
 | ε_Wipe,b | The streamed wipe's failure bound at server block b, 2^-128 + Adv_PRF. | `StreamedWipeMeetsServer5GB`, not yet in Lean |
 
-**Training tasks, cost and slowdown**
-
-| Symbol | Meaning | Lean |
-|---|---|---|
-| 𝒢, 𝒴 | The training task: one random input x, drawn once, and a success test on the output at positions fixed before the draw, C(x) ∈ 𝒴: a set, since many trained models pass. Tasks are static; an interactive world is a causal experiment with each candidate's own queries. | `Accounting.Slowdown.Task`, `Accounting.Slowdown.Succeeds` |
-| η, P_α, η_cov | A success probability; the properties P_α a bound lower-bounds pointwise, each that the run computes a necessary subcomputation (below); the exception, Pr[success ∧ ¬⋁_α P_α] ≤ η_cov, uniform over strategies. | not yet in Lean |
-| GPU-hours, cost(C) | The unit of cost, by whole servers, since the memory wipe and the server block are per server: cost(C) sums each server's occupied time times its GPUs, on C's worst input, never wall-clock. | `Accounting.Slowdown.cost`; `Accounting.Slowdown.fleetTime` |
-| T_𝒢(η; S) | The training cost of a set S of computations, inf{cost(C) : Pr[(C, x) ∈ S ∧ C(x) ∈ 𝒴] > η}. | `Accounting.Slowdown.threshold`, renamed later; `Accounting.Slowdown.success` |
-| slowdown(𝒢, 𝒜, η) | T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), with the same a and Λ on both sides, defined when the denominator is in (0, ∞). | `Accounting.Slowdown.slowdown` |
-
 **Registered or not**, the bound's three yes/no distinctions. Each share states its
 denominator, an overlap counted once:
 
 | Symbol | Meaning | Lean |
 |---|---|---|
 | registered hardware, L_unreg | Hardware in the auditors' inventory; unregistered hardware is the rest, its devices L_unreg. | not yet in Lean |
-| registered information, fresh input | θ and x (above). A block can read any amount of registered information; its fresh-input budget caps the fresh input it takes in. | `Verity.Declaration.θ`; the budget not yet in Lean |
+| registered information, fresh input | θ and x (above). A block reads registered values free; k bounds the rest it reads, data and computed values. | `Verity.Declaration.θ`; the bound, `Declaration.unregistered` |
 | verified compute, utilization | V (above), the part of the actual circuit proved to match the registered circuit: served inference and the protocols' own work at the public best's cost, prover overhead γ ≤ 10 allowed. Utilization, the registered programs' operations per second over the card's ceiling (their MFU), and γ are the honest developer's costs, not shares of a bound. | its share V/C is 1 − `Nci.Dampener.residualShare`; utilization not yet in Lean |
 | free compute | Everything else in the actual circuit, U (above): one number with three sources, ε_undecl, ε_skip and ε_unreg (below); ε_undecl + ε_skip, its part on registered hardware, is driven to 0. | the part on registered hardware: `Nci.Dampener.residualShare`; the whole not yet in Lean |
 | ε_undecl | Registered hardware not running proved work, a share of the registered capacity C_X: idle or uncredited pipes, host CPUs, the clock above the credited one, filler, and the honest implementation's excess over the public best. C_X is the location's capacity in 𝓜's resources at each SKU's ceiling, as counted operations (Φ_X stays for the partition and c_S). | with ε_skip, `Nci.Dampener.residualShare`; alone not yet in Lean |
@@ -70,43 +81,29 @@ denominator, an overlap counted once:
 | ε_unreg | Unregistered hardware's share of the fleet's capacity, Φ(L_unreg) = ε_unreg·Φ_total; mainline 10^-3, range 10^-4 to 10^-2. | `Nci.Dampener.unmonitoredShare`, renamed later |
 | ε_break | The gates of the incorrect set F. | `Nci.Guarantees.Dampener` (its χ) |
 
-**Blocks, yields and bounding strategies.** Gates on unregistered hardware are in no block:
+**Blocks.** Gates on unregistered hardware are in no block:
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| server block S, c_S, k_S | The actual circuit's gates on one registered server between two memory wipes. Its gate budget is c_S = ⌊Φ_s·Δ_wipe⌋ (padded); its fresh-input budget k_S = k_wipe + (r_in + r_side)·Δ_wipe is what the memory wipe leaves of M_s (≤ 4×10^10 bits plus egress) plus the network bits entering during it. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the sum over server blocks not yet in Lean |
+| server block S, c_S, k_S | The actual circuit's gates on one registered server between two memory wipes, at most c_S = ⌊Φ_s·Δ_wipe⌋ of them; its fresh-input budget k_S = k_wipe + (r_in + r_side)·Δ_wipe is what the memory wipe leaves of M_s (≤ 4×10^10 bits plus egress) plus the network bits entering during it. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe` |
 | inference block I, c, k | A block of 𝓘 (above; "(c, k)-block" only in technical detail). In verified compute 𝓘 refines the server blocks. | 𝓘 is a `Verity.Partition`, nested by `Verity.Partition.Refines`; the nesting not yet in Lean |
-| N | The necessary subcomputation: what every successful training run must compute (the P_α above), N counted objects of a kind we choose: products (weight × activation multiplies), products with their partial sums, or outputs the update can be recovered from. | not yet in Lean |
-| pricing argument, bounding strategy | How much of a block's fresh-input budget one counted object needs, which gives the yields (HeldRate is one, for products); a bounding strategy is a choice of necessary subcomputation and a pricing argument for it, and the bound takes the strongest that applies. | `Nci.Guarantees.ThreadedReads`, `Nci.Guarantees.ContainedTraining`; strategies not yet in Lean |
-| q_S, q(c, k) | The server-block yield, the most counted objects one server block can complete within its budgets; the inference-block yield, the same for one inference block. | not yet in Lean |
-| straddle term | The counted objects computed partly in verified and partly in free compute inside one block, bounded by the bits crossing between them. | not yet in Lean |
-| T_min, T_ref, slowdown lower bound | The least GPU-hours that can fit N; those of the reference training algorithm, the best known way to train with no protocol, which bound T_𝒢(η; 𝓕); the result, T_min/T_ref ≤ slowdown(𝒢, 𝒜, η) (below). | T_min, T_ref not yet in Lean; the result `Nci.Guarantees.Dampener`, `Nci.Guarantees.DampenerRemote`, renamed later |
 
-## Size, credit and the slowdown lower bound
+## Size and credit
 
 Credit and all reporting are in circuit size (tentative).
 
 - **Size** is a circuit's or a region's AND-gate count, what Flock pays for, in place of work, FLOPs, MAC-times and
   pricing.
-  U/s_× (above) replaces κ/2.
 - **Credit** is of two kinds (ASK-166 A). Sampled proofs' is declared size, values certified: an accepted run credits
   S, and Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤
   δ_coin + δ_crypto, with no algorithmic premise. Dither's compute credit also needs values that read live noise and SAK
   (`SAKResidual`), over noised operands only; an un-noised call earns none. PoUW's bar is T1–T3
   (`verity/core/protocols/pouw/README.md`). PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's
   guarantee beside it is its compute credit alone.
-- **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
-  verified compute (products the registered circuit computes anyway, through inference-block yields) and free compute: a
-  server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free compute can
-  do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split between the two.
-  Onsite q_S is the smaller term (the fresh-input budget is small); remotely the other is: inference blocks yield
-  little, and free compute sets the number. It is the one place 𝓜's resources appear, because gates can't measure a
-  device's capacity. Its result is in counted operations, each labelled with its canonical AND count, never "ANDs of
-  hidden work" (that would need a vacuous ceiling on ANDs per resource unit over all programs).
-- **What counts every gate.** The (c, k)-partitions (inference blocks, a server block's c_S) and the Lean's counting
-  results (`Circuit.size`) count every gate, so a report that reads one converts it explicitly (`Circuit.andSize` beside
-  `Circuit.size`, and credit as `Verity.creditSize`: not yet in Lean). In Credit, S is the AND count of the
-  registered circuit under one public lowering pinned at registration, never the prover's own.
+- **What counts every gate.** The (c, k)-partitions (inference blocks, a server block's c_S), the training formalism's
+  |C|, c and w, and the Lean's counting results (`Circuit.size`) count every gate, so a report that reads one converts it
+  explicitly (`Circuit.andSize` beside `Circuit.size`, and credit as `Verity.creditSize`). In Credit, S is the AND count
+  of the registered circuit under one public lowering pinned at registration, never the prover's own.
 - **Not yet restated.** The Lean's device-model audits still price work per op (`Accounting.Run.ComputeSound` at a
   `Price`, and the covert residual F·T − V, one device's free compute), and Dither's `PROTOCOL.md` credits at
   pub(μ°) against W_reg.
@@ -174,12 +171,12 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block" for G of the certifier's served rows; the Definition `CompileSliceBlocks_v1` | row group |
 | "compile unit" | the compile slice's proof block |
 | "isolation unit" (IU), "isolation block", "certified block" | inference block |
-| "novel communication intensity" (NCI); "baseline" for θ; `Nci*`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered information θ |
+| "novel communication intensity" (NCI); "baseline" for θ; `Nci*`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered inputs θ |
 | "replay unit" (RU) | proof block (optimizer: replay block) |
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
-| "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
-| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
+| "row" for a server's window (s, w), "per-row bound" | server block |
+| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; for κ, the dependent share φ. "Work" stays for resources spent in 𝓜, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |
@@ -189,27 +186,30 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`Security/Definitions/Pouw/Assumptions/Dither.lean`), until renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
-| "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `benchmarks/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`, the `rho` command), until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (prover overhead γ, and ρ as 𝓜's resource rate, stay) |
+| "overhead", "rho" and ρ for overhead(𝒢, 𝒜, η), slowdown(𝒢, 𝒜, η) = T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕) and T_min/T_ref, "the overhead lower bound", "the slowdown lower bound"; "the circuit-size slowdown" \|C\|/T_0, "training efficiency" η, "hardware multiple"; `benchmarks/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`, the `rho` command) and the Lean's `Accounting.Slowdown`, `Verity.slowdown`, `Nci.slowdown`, until restated | the slowdown ρ(C); Security's H(ℓ*)·min ρp (prover overhead γ stays) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
-| T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕); the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |
-| A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝓕, 𝒜_p, δ_p, 𝒜; the feasible set, protocol soundness, the slowdown lower bound |
+| T_0, T_ref, C_0, "the reference training algorithm", "reference construction" and "reference run" as the normalizer; T_target ≥ L·T_0/Φ_total | the honest cost H(ℓ*); for the time, Security (at most nc a period) |
+| A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝓕, 𝒜_p, δ_p, 𝒜; the feasible set, protocol soundness, Security |
 | ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜; set; the initial state a |
-| "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
-| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
+| the training task 𝒢 (a random input, a success test C(x) ∈ 𝒴), G for the target, η, P_α and η_cov; GPU-hours, cost(C) and "server-time" for the cost; the training cost T_𝒢(η; S), "threshold"; the Lean's `Accounting.Slowdown` and `Accounting.Overhead.serverTime`, until restated | the losses ℓ_0 and ℓ*; compute, in gates; the honest cost H(ℓ*) |
+| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
-| "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
-| "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap`, until renamed | the slowdown lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
+| "coverage", "materialization", "work requirement" and "necessary subcomputation" N for what every successful training run must compute, η_cov's subscript; its counted objects ("counted products", s_×, U/s_×), counting only products that read updated weights | Dep, the gates that depend on θ′ (the inventory's coverage keeps its name) |
+| "exclusion bound", "exclusion" and "the slowdown lower bound" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", the yields q, q_S, q(c, k) and q_T(c, k), "the straddle term", and `benchmarks/rho`'s `Cap`, until renamed | Security; A1's bound on one block |
 | "registered computation" | the registered circuit |
-| "training class" for a premise set and the yield it gives; "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/rho`'s `CLASSES` and `Allowance`, until renamed | pricing argument (`benchmarks/nci`'s tiers are mechanism sets, `benchmarks/rho`'s routes free-compute sources) |
-| "reference construction", "reference run", "reference circuit" | the reference training algorithm |
+| "training class" for a premise set and the yield it gives; "pricing argument", "bounding strategy", "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/rho`'s `CLASSES` and `Allowance`, until renamed | A1, A2 and Cover (`benchmarks/nci`'s tiers are mechanism sets, `benchmarks/rho`'s routes free-compute sources) |
+| the receiver form of in(S), S's gates with an outside predecessor (`Nci.Cover.Circuit.inputs`); out(S) (`Circuit.exits`); input nodes and wires as formal objects (`Circuit.isInput`, `Circuit.reads`), until restated | in(S), the values S reads and doesn't compute (the sender form); inputs are values |
+| a cover and the covering bounds and forms (`Nci.Cover`, its `MulBlocks` and `UpdateHardness`; `benchmarks/nci`'s `covering_priced.py`); "multiplication block", a formal MAC block; the deep share and depth, per-MAC β, the r sweep; until restated | a (c, k)-partition; Cover, under A1 (MAC blocks still measure a); φ, u(x) and x₀ |
+| (Γ, α) for the policy, Γ gates and α fresh bits per gate (αΓ a block), and the block size s = w₀Γ + αΓ + width(θ); the Lean's `Nci.Complies Γ α`, `Nci.novelReads`, `Partition.IsCK`'s exactly c gates and `Nci.Guarantees.CoverTraining`, until restated | the policy (c, k, n): \|I\| ≤ c and \|in(I) ∖ θ\| ≤ k |
+| "annotation" α for a labelling of gates (blocks, placements, selections); the Lean's `Verity.Annotation`, until renamed | the partition, placement or selection; the annotation is (θ′, 𝒯) |
+| ρ for 𝓜's per-resource rates; the Lean's `Verity.Accel.Card.ρ`, until renamed | a card's rates (ρ is the slowdown) |
 | "dark" (compute, fleet, leaves), "unmonitored", "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/rho`'s `eps_dark` until renamed; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
 | "certified work", "credited work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`) and the block record (`verity/block-record/v1`), `w_cert`, until renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays for what a certifier certifies); utilization |
 | "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute", "monitored residual" (r, r̂) | free compute, U (its registered part is ε_undecl + ε_skip). "Slack" keeps its other senses |
 | "unregistered input", "unregistered input bits", "unregistered information", "novel information" | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
 | a for the protocol index: 𝒜_a, δ_a | p: 𝒜_p, δ_p (a is the initial state) |
-| G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |
 | θ for a card's numbers | the card table (θ is the registered inputs) |
 | "envelope ISA", "envelope op"; `machine_model`'s `cover` command and its `envelope` key, until renamed | the ACCEL ops (𝒜_p is the admissible set) |
 | "coverage premise", "coverage table"; `machine_model/data/cover/`, until renamed | the card premise, the opcode table (coverage is the inventory's) |
@@ -241,7 +241,7 @@ pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_t
 - **The ACCEL model** 𝓜 is the physical model: a period's devices as the Lean's `Accel` reads them
   (`Security/Definitions/Core/Accel/`), their resources (tensor cores, issue slots, shared-memory and register ports,
   device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000.
-- **The card table** is one SKU's numbers at its firmware maximum: its per-resource rates ρ, stores, formats and clock
+- **The card table** is one SKU's numbers at its firmware maximum: its per-resource rates, stores, formats and clock
   ceiling (`benchmarks/pouw/machine_model/`'s data).
 - **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Op`), each priced by a card's rates.
 - **The card premise** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within T at
@@ -302,7 +302,8 @@ pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_t
 ## Terms of one area
 
 - **Slot**: one sequence of a served batch, one row of a step's activations (`commit_slots`).
-- **Wire**: an edge from a gate to one that reads it, carrying its source gate's value and none of its own.
+- **Wire**: no formal object: a gate reads values, each identified by its source (Notation). A constraint system's wires
+  (Flock's) and a network's wire keep their senses.
 - **Port** and **element**: a port is a named array of fixed-width elements on a circuit definition's boundary, one of its
   parameters or results, bound by each call to gates of the caller; under `Q_call`, a Call whose result ports fit in X bits
   is one proof block. An element is one member, such as 16 bits. A leaf serializes whole elements, but a partition counts
