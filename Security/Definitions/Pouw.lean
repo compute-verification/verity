@@ -124,21 +124,42 @@ topic. This module, `Assumptions` and `Guarantees` are the spec: they import onl
 `Definitions.Core` (`Definitions.Pouw.PearlC.Defs` also Batteries). The proofs are `Proofs.Pouw`, where a topic's
 modules keep their basenames (`Definitions.Pouw.Fp8Atom.Atom`, `Proofs.Pouw.Fp8Atom.Proofs`).
 
-The topics:
-* `Fp8Atom`: a bit-exact `HOPPER_E4M3_K32` (its codec, step and FP32 add), its conformance vectors from
-  `verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py` and their kernel checks. H-1T's forming map, checked
-  chain and credited words (`H1T`, vectors from `h1t_vectors.py` beside it), its named assumptions, and its per-tile
-  count (`H1TTile`).
-* `FpG1`: FP8-g1 and W4A8-g1's operand encodings, the int8 GEMM and its epilogue, and g1 on sm_120's record H1.
-* `H1Zy`: H1's sampled-leaf checks on words (`Combine`, `Lane`, `Tile`), as
-  `verity/core/protocols/pouw/circuit/h1zy.py` builds them.
-* `PearlC`: Pearl-C's Π: its shared definitions (`Defs`), the clean-up chain (`Peel`), freezing and the forming credit,
-  the game and TT_OUT (`TTOut`), the hidden tile audit (`Hidden`, `HiddenTile`, `HiddenGamma`) and its completeness.
-* `Receipt`: the receipt folds duo, sm_120's `Fx1` and li (`benchmarks/pouw/receipts/receipt_folds.py`), whose binding
-  statements are `Definitions.Pouw.Guarantees.Receipt`.
-* `TileBound`: the FP4-tile model over `BLACKWELL_SM120_NVF4`'s tile gate.
-* `Window`: an execution phase's calls, one sample that depends on the registration and then the calls' sessions in
-  order, in the form of Flock's one-stage audit; its guarantees (`Definitions.Pouw.Guarantees.Window`) are open.
+## `Fp8Atom`: a bit-exact `HOPPER_E4M3_K32`
+
+Its codec, step and FP32 add, its conformance vectors from `verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py`
+and their kernel checks. H-1T's forming map, checked chain and credited words (`H1T`, vectors from `h1t_vectors.py`
+beside it), its named assumptions, and its per-tile count (`H1TTile`).
+
+## `FpG1`: FP8-g1 and W4A8-g1's operands
+
+The operand encodings, the int8 GEMM and its epilogue, and g1 on sm_120's record H1.
+
+## `H1Zy`: H1's drawn-leaf statements on words
+
+H1's sampled-leaf checks on words (`Combine`, `Lane`, `Tile`), as `verity/core/protocols/pouw/circuit/h1zy.py` builds
+them.
+
+## `PearlC`: Pearl-C's Π and the statements about it
+
+Its shared definitions (`Defs`), the clean-up chain (`Peel`), freezing and the forming credit, the game and TT_OUT
+(`TTOut`), the hidden tile audit (`Hidden`, `HiddenTile`, `HiddenGamma`) and its completeness.
+
+## `Receipt`: the receipt folds
+
+Duo, sm_120's `Fx1` and li (`benchmarks/pouw/receipts/receipt_folds.py`), whose binding statements are
+`Definitions.Pouw.Guarantees.Receipt`.
+
+## `TileBound`: the FP4-tile model
+
+The model over `BLACKWELL_SM120_NVF4`'s tile gate.
+
+## `Window`: a window of calls
+
+An execution phase's calls, one sample that depends on the registration and then the calls' sessions in order, in the
+form of Flock's one-stage audit; its guarantees (`Definitions.Pouw.Guarantees.Window`) are open.
+
+## The other topics
+
 * `Dither`, `DitherInstance`, `Eps1`: the Dither protocol, its model on the H200 and the RTX PRO 6000, and the model of
   its words.
 * `D1`, `NCP`, `Barrier`, `Dimension`, `Basic`: protocol D1's low-rank noise and its named instance, noise that cancels

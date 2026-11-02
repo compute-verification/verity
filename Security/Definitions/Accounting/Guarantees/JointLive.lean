@@ -4,7 +4,7 @@ import Definitions.Core.Blocks
 /-!
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
 
-Soundness's R5 and R4′: a period is one causal game (`Verity.Game`), each device release
+Soundness's R5 and R4′ (26 Oct, LEAN-62, LEAN-64): a period is one causal game (`Verity.Game`), each device release
 drawn after the bytes it answers and the evidence last; its claims are read off the run it ends in
 (`Accounting.PeriodLive`), the sampled-proofs claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
 gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
