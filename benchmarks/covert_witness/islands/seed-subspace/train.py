@@ -178,6 +178,9 @@ def main() -> int:
     width = 4 if a.coeff == "f32" else 2
     header = len(prepare.encode_seedlog(names, a.seed, [], a.coeff))
     d_cap = (cap - header) // width
+    # the header is compressed JSON whose length moves with its step count
+    while len(prepare.encode_seedlog(names, a.seed, [0.0] * d_cap, a.coeff)) > cap:
+        d_cap -= 1
     steps = []
     grads = probe(net, rec, params, a.micro, a.data_seed, steps) if a.probe else None
     fwd = torch.compile(net) if a.compile else net
