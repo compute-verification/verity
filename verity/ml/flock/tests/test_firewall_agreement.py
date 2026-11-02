@@ -445,11 +445,10 @@ def test_a_real_provers_session_passes_the_lean_firewall_as_run_does(built):
     assert lean_run([("real", schedule, reqs)], [drawn]) == [{"record": got, "calls": calls}]
 
 
-def test_main_serves_live_coins_only_through_the_lean_firewall(tmp_path, capsys, monkeypatch):
-    monkeypatch.delenv("FC_FIREWALL_LEAN", raising=False)
+def test_main_serves_live_coins_only_through_the_lean_firewall(tmp_path, capsys):
     (tmp_path / "s.json").write_text(json.dumps(SCHEDULE))
     base = ["--listen", "127.0.0.1:0", "--out", str(tmp_path / "o"), "--schedule", str(tmp_path / "s.json")]
-    for argv, why in [(base, "--lean BIN (or FC_FIREWALL_LEAN)"),
+    for argv, why in [(base, "--lean BIN: Lean's flock-firewall"),
                       (base + ["--lean", "x", "--coin-tree", "--tree-test-os"], "the Lean firewall holds no coin tree")]:
         with pytest.raises(SystemExit) as e:
             RL.main(argv)
