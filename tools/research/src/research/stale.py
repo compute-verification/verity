@@ -61,7 +61,7 @@ def commit_times(repo, shas: Iterable[str]) -> dict[str, float]:
     present = [line.split()[0] for line in r.stdout.splitlines() if line.endswith(" commit")]
     if not present:
         return {}
-    out = _git(repo, "show", "-s", "--format=%H %ct", *present).stdout
+    out = _git(repo, "log", "--no-walk=unsorted", "--format=%H %ct", *present).stdout       # `show -s` took seconds for ~900
     return {sha: float(ct) for sha, ct in (line.split() for line in out.splitlines())}
 
 

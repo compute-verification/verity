@@ -68,7 +68,7 @@ from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
 from test_challenger_difftest import DRAW_MUTATIONS, Drawn, _mutated, lms_verify
 
@@ -291,7 +291,7 @@ REGISTERED_SETUPS = [
         ("W", Array(6, Value(16))), ("D", Array(4, Value(12))), ("E", Array(0, Value(16))), ("M", Tuple(Value(8), Value(16))),
         ("V", Value(40))), ("W", "D")), [{"W": 2}, {"D": 1, "W": 3}, {"D": 4}, {"W": 6, "x": 2}]),
     RegisteredSetup(_registered_program("CoreSampledProofsRegistered32", 2, (
-        ("T", Array(4, Value(32))), ("U", Record(("a", Array(3, Value(20))),))), ("T", "U")),
+        ("T", Array(4, Value(32))), ("U", RecordType(("a", Array(3, Value(20))),))), ("T", "U")),
         [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}, {"T": 4, "x": 1}]),
     RegisteredSetup(_registered_program("CoreSampledProofsRegisteredBits", 2, (
         ("A", Array(8, Value(8))), ("B", Array(4, Value(16)))), ("A", "B")),
@@ -458,7 +458,7 @@ def _type(j):
     if (tag == "Record" and len(j) == 2 and isinstance(j[1], list)
             and all(isinstance(f, list) and len(f) == 2 and isinstance(f[0], str) for f in j[1])
             and len({k for k, _ in j[1]}) == len(j[1])):
-        return Record(*[(k, _type(t)) for k, t in j[1]])
+        return RecordType(*[(k, _type(t)) for k, t in j[1]])
     raise D.Reject(f"type {j!r}")
 
 
@@ -467,7 +467,7 @@ def _lower(t) -> list[tuple[int, int]]:
     w = t.homogeneous_width()
     if w is not None:
         return [(w, t.leaves)]
-    fields = [t.elem] * t.n if isinstance(t, Array) else [f[1] if isinstance(t, Record) else f for f in t.fields]
+    fields = [t.elem] * t.n if isinstance(t, Array) else [f[1] if isinstance(t, RecordType) else f for f in t.fields]
     return [node for f in fields for node in _lower(f)]
 
 
@@ -948,10 +948,10 @@ def select(j):
 
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its sample's
-    checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
-    gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
-    (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
-    blocks are `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
+    checked proof blocks. The population's strata are `partition.strata`'s, each unit a proof block, its gates
+    (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes (`program.is_input`),
+    each its own proof block. A proof block's slot is its index in that order, and the checked proof blocks are
+    `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
@@ -963,8 +963,8 @@ def slots(j):
               for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)]
     classes = [pop, [inputs] if inputs else []]
     proved = set(DR.proved(out["draw"]))
-    rus = [r for c in classes for s in c for r in s]
-    return {"checked": [[v, 0] for v, r in enumerate(rus) if r["unit"] is None or r["unit"] in proved], "classes": classes}
+    blocks = [b for c in classes for s in c for b in s]
+    return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
 
 
 def bound(j):
@@ -1154,7 +1154,7 @@ REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "pr
 
 
 def _record_input(j) -> Fraction:
-    """`Record.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does; δ."""
+    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does; δ."""
     ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
     _exactly(j, RECORD_INPUT_KEYS, "the record's input")
     reg, draw_ = j["registration"], j["draw"]
@@ -3176,7 +3176,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
-    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
+    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the proof blocks' gates and
     the input class's are every gate of the program once; and the checked proof blocks are the sampled proof blocks' slots and
     every input slot, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
@@ -3186,10 +3186,10 @@ def test_the_slots_follow_the_strata(pieces):
     out = slots(copy.deepcopy(case))
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
     assert [[r["unit"] for r in s] for s in out["classes"][0]] == [[0, 1, 5, 6, 7, 8], [2, 3, 4], [9]]
-    rus = [r for c in out["classes"] for s in c for r in s]
-    gates = sorted(g for r in rus for lo, hi in r["pus"] for g in range(lo, hi))
+    blocks = [b for c in out["classes"] for s in c for b in s]
+    gates = sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi))
     assert gates == list(range(PROGRAMS[PO.program_sha512(desc)].circuit.size))
-    units = [r["unit"] for r in rus]
+    units = [b["unit"] for b in blocks]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
 

@@ -39,9 +39,8 @@ completing.
   bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
   every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsDrawn`), under the draw's own
   premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
-  advantage plus the coin commitment's hiding terms (`Accounting.Remote.Draw.Committed.hide`, hm96's) plus the
-  receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`: an opened receipt moved off the row its root
-  holds, a SHA-512 collision between its held and presented openings).
+  advantage plus the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`: an opened receipt moved off
+  the row its root holds, a SHA-512 collision between its held and presented openings).
 -/
 
 namespace Accounting.Remote.Held.Assumptions

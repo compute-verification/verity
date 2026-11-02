@@ -19,16 +19,43 @@ binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and t
 
 `verify` fails closed (§16.15): a session whose statement form, draw or setting no soundness theorem covers is refused,
 once every check has passed, with `refused: <why>: …`, so a session that fails a check keeps that check's reason.
-`flock_verify_sound` is the one theorem over everything it accepts (`Security/Proofs/Flock/`).
+`flock_verify_sound` is the one theorem over everything it accepts (`Security/Proofs/Flock/`). Under `--rec-inner`
+that includes a session at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`: `RecursiveKS` covers the dense
+form only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`) and a recursive session without
+`--zk` (`Flock.RecSetup.zkOnly`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
 (`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file it read
-(`rec_inner_sha512`), and of the inner session's record and its transcript (`rec_inner_session_sha512`,
-`rec_inner_transcript_sha512`). `flock-verify rec-compose --rec-inner F --rec-rows F LOG...` (`Flock.RecCompose.check`)
-gives the statement's verdict: it accepts only when there is one log per V* statement and every part is accepted at the
-one rows file the prover staged (`acc0`, the tops, the `rec-c<k>` rows), at the composition's own inner shape file, and
-at the one inner session and transcript the first part names. The pod's Lean step (`85-rec-reprice.sh`,
-`lean_verdicts.py --compose`) gives every part those files.
+(`rec_inner_sha512`), of the inner session's record and its transcript (`rec_inner_session_sha512`,
+`rec_inner_transcript_sha512`) and of every input V*'s parts share (`rec_shared`: the inner shape, the inner
+statement's files and how it is set up, the inner session's record, the coin server's transcript, the registration),
+whether it ran `--zk` and its session's coin key. `flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F
+LOG...` (`Flock.RecCompose.check`) gives the statement's verdict: it accepts only when there is one log per V* statement
+with one `VERDICT`, every part is accepted under `--zk` without an identifier at the one rows file the prover staged
+(`acc0`, the tops, the `rec-c<k>` rows) and the composition's own inner shape, every part read one set of the other
+shared inputs, in the compiled verifier's form, and no two sessions share a coin key (`RecCompose.Accepts`,
+`check_accepts`; `Proofs.Flock.Claims.Recursion.ComposeParts.composed_parts` reads it at the compiled verifier's parts).
+
+It also holds the parts to one run, C10 `OneRun`, through `--rec-run`: the challenger's interactive-run record
+(`verity/rec-run/v1`, written by `sampled_proofs.challenger.RunRecord`). The record stages the rows file and
+`rec_shared` before any session, logs every session the challenger opened for the run's parts (a retry's too) and is
+closed after the last; it holds no coin, since each part's coins are drawn fresh at its own Hello and never committed
+before the run. The live challenger writes it: its operator stages it before any session and closes it after the last,
+and C-Flock's `flock-circuit serve --zk --rec-run FILE --rec-part J` appends one `open` for every Hello it answers with
+coins, in one write, before the answer carrying the session's fresh coin key leaves; a Hello it can't log is refused
+(`flock_live::run_record`). `rec-compose` refuses a part with two sessions or none, a session opened and not composed, a composed
+session the record didn't open, a staging after the first Hello, a second staging or one of other inputs, and a record
+that isn't closed (`RecCompose.checkRun`; `check_oneRun` proves acceptance gives `OneRun`, and
+`ComposeParts.composed_run` reads it at the compiled verifier's parts). The record is the auditor's: it is read from the
+challenger's host (`trusted-host`), never from the prover's bundle. `verity_flock.rec_compose` is its Python mirror
+(`tests/test_lean_rec_compose.py`). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every
+part those files and composes V*'s parts over the run's record: on loopback the pod is the challenger's host, and under
+`MODES=firewall` (one session per staged statement) its oprove step keeps the record (`v-sess/rec-run.jsonl`, one event
+a line): it stages the rows file and the shared set of the files every part is given (`rec_compose.shared_of_args`,
+not read from any part's `VERDICT`) before any session, each V* part's `serve --rec-run` logs its Hellos, and it closes
+the record after the last session; `lean_verdicts.run_record` reads it as one `verity/rec-run/v1` record. `RETRY=NAME`
+gives one statement a second session, which the record shows, and the step passes only when the composition is refused
+as a retry. Under `MODES=dev` or `host`, with WARM + RUNS sessions a part, it doesn't compose the statement.
 
 **Archived formats.** The statement names pinned at older commits (`verity/flock-circuit@<commit>`, back to
 `verity/flock-netlist/v1`) are still parsed, so recorded sessions keep their names, and every one before `hm96-sha512`

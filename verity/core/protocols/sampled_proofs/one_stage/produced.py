@@ -12,8 +12,8 @@ hiding salts, and only their check bits leave.
   digest of the registration record whose draw the values follow (`registration.digest`): a produced tree opens under no
   other registration's domain, so a leaf's partials are refused in any other leaf's, window's or prover's session, and a
   registered value's root (whose binding never has ``produced``) opens under none.
-* **The record** (`record`, `FORMAT`), fixed after the sample and before any session that reads the values or flips its
-  audit coins: ``{"format", "registration": D, "draw": the sample's digest, "produced": [{"value", "root", "leaves", "words",
+* **The record** (`record`, `FORMAT`), fixed after the sample and before any session that reads the values or flips the
+  challenger's coins: ``{"format", "registration": D, "draw": the sample's digest, "produced": [{"value", "root", "leaves", "words",
   "domain"} ...], "openings": {value: [[position, b || c] ...]}}`` (``"word_bits"`` beside an entry whose leaves are not 16
   bits). ``openings`` is each row's commit-time opening, by its digest ``b || c`` (the hiding commitment the tree's leaf
   is over): every row of each produced value, and every row of a registered value the sessions read (H1's leaf: its rows
