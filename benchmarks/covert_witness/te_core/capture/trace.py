@@ -253,7 +253,7 @@ def _trace(step: Callable[[torch.nn.Module, Any, list], Any], model: torch.nn.Mo
     try:
         with _marked_backward(), sdpa_kernel([SDPBackend.MATH]):
             gm = make_fx(run, tracing_mode="fake", _allow_non_fake_inputs=True)(*[fakes[i] for i in tensor_at])
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise _refusal(e) from e
     _refuse_graph(gm)
     names: dict[int, tuple[str, str, list[str]]] = {}

@@ -1,28 +1,37 @@
 """Script mode: a covert_witness-shaped train.py runs unmodified under the harness (cw.py), and the counter recognizes θ's
 weights by value after a recast."""
+import gc
 import json
 import math
 import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
+import safetensors.torch
 import torch
+from torch.overrides import TorchFunctionMode
 
 from te_core import run as te_run
-from te_core.flops import Counter
+from te_core.flops import Counter, plain
 
 FAKE = Path(__file__).parent / "cw_fake"
 
 
-@pytest.fixture
-def cw_root(tmp_path, monkeypatch):
-    monkeypatch.setenv("CW_FAKE_ROOT", str(tmp_path / "root"))
+def fake_root(root: Path, monkeypatch) -> Path:
+    """A held-out set under `root`. A run's audit hook outlives it, so two runs in one process need two roots."""
+    monkeypatch.setenv("CW_FAKE_ROOT", str(root / "root"))
     for split in ("search", "final"):
-        d = tmp_path / "root" / "eval" / split
+        d = root / "root" / "eval" / split
         d.mkdir(parents=True)
         torch.save(torch.randint(0, 32, (4, 9), generator=torch.Generator().manual_seed(7)), d / "rows.pt")
-    return tmp_path
+    return root
+
+
+@pytest.fixture
+def cw_root(tmp_path, monkeypatch):
+    return fake_root(tmp_path, monkeypatch)
 
 
 def run_island(tmp_path, *island_args, harness=()) -> tuple[int, dict]:
@@ -66,6 +75,7 @@ def test_an_island_runs_unmodified_and_its_encodings_are_scored_by_the_evaluatio
     assert [cp["step"] for cp in cps] == [1, 3, 5, 7]
     # the training job scores nothing: each checkpoint is its E, written for the evaluation job
     assert all(cp["source"] == "encode" and cp["val_bpb"] is None and "val_bpb" not in rec["start"] for cp in cps)
+    assert all(cp["format"] == "full" and cp["rebuild_macs"] == 0 for cp in cps)
     assert all((cw_root / "out" / cp["path"]).is_file() for cp in cps)
     assert cps[-1]["submitted"] and rec["submitted"]["e_sha256"] == cps[-1]["e_sha256"]
     assert cps[0]["macs"] < cps[-1]["macs"] == rec["totals"]["macs"]
@@ -94,12 +104,38 @@ def test_a_sealed_split_is_never_returned(cw_root):
     assert rec["checkpoints"] and all("test_bpb" not in cp for cp in rec["checkpoints"])
 
 
-@pytest.mark.parametrize("flag", ["--peek", "--peek-sealed"])
-def test_the_held_out_and_sealed_sets_are_unreadable_to_the_island(cw_root, flag):
+@pytest.mark.parametrize("flags", [("--peek",), ("--peek-sealed",),
+                                   *(("--peek-with", w) for w in ("from_file", "storage", "load_file", "safe_open"))],
+                         ids=lambda f: f[-1])
+def test_the_held_out_and_sealed_sets_are_unreadable_to_the_island(cw_root, flags):
+    """Also through the loaders that open their file in C++ or Rust (`cw.c_readers`), which raise no audit event."""
     (cw_root / "root" / "sealed").mkdir()
-    rc, rec = run_island(cw_root, "--steps", "2", flag)
-    assert rc == 1 and "PermissionError" in rec["error"]
+    safetensors.torch.save_file({"w": torch.zeros(2)}, cw_root / "root" / "eval" / "search" / "w.safetensors")
+    rc, rec = run_island(cw_root, "--steps", "2", *flags)
+    assert rc == 1 and "PermissionError" in rec["error"] and "held out" in rec["error"]
     assert any("PermissionError" in p for p in rec["invalid"])
+
+
+@pytest.mark.parametrize("how, path, refused", [
+    ("read", "runs/r0/out/E.bin", True), ("move", "runs/r0/out/E.bin", True),
+    ("read", "root/candidates/e100kb.b/sub/E.bin", True),
+    ("read", "runs/r1/inputs/E.bin", False), ("read", "root/candidates/e100kb.a/sub/E.bin", False)])
+def test_a_run_reads_its_own_outputs_and_no_other_runs(cw_root, monkeypatch, how, path, refused):
+    """An earlier run's E (beside this run's `$RESEARCH_RUN_DIR`) or another candidate's scratch would hand this run
+    compute it never did; its own run directory and its own scratch (its families' parent) stay readable."""
+    for rel in ("runs/r0/out/E.bin", "root/candidates/e100kb.b/sub/E.bin", "runs/r1/inputs/E.bin",
+                "root/candidates/e100kb.a/sub/E.bin"):
+        (cw_root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (cw_root / rel).write_bytes(b"E")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(cw_root / "runs" / "r1"))
+    act = ("--peek-path", str(cw_root / path)) if how == "read" else ("--move", str(cw_root / path),
+                                                                      str(cw_root / "runs" / "r1" / "E.bin"))
+    families = cw_root / "root" / "candidates" / "e100kb.a" / "families"
+    rc, rec = run_island(cw_root, "--steps", "2", *act, harness=("--families", str(families)))
+    if refused:
+        assert rc == 1 and "another run's" in rec["error"] and (cw_root / path).exists()
+    else:
+        assert rc == 0 and rec["invalid"] == []
 
 
 def test_a_recast_copy_of_theta_is_theta_and_a_lossy_one_is_not():
@@ -130,9 +166,178 @@ def test_a_recast_copy_of_theta_is_theta_and_a_lossy_one_is_not():
 
 def test_the_screen_reads_names_not_substrings():
     assert te_run.screen("t0 = time.perf_counter()\nfwd = torch.compile(net)\nfrom te_core import hooks\n") == []
+    assert te_run.screen("model.eval()\npat = re.compile(r'x')\nempty = torch.empty(3)\n") == []
+    prose = '"""Runs under te_core.run --script."""\n\n\ndef f():\n    """No threading here."""\n    return 1  # nor subprocess\n'
+    assert te_run.screen(prose) == [] and te_run.screen(prose + "x = 'subprocess'\n") == ["subprocess"]
     for bad in ("te.counter.paused = 1", "from te_core import flops", "import te_core.run", "torch._dynamo.reset()",
-                "with uncounted():", "sys.modules['x']"):
+                "with uncounted():", "sys.modules['x']", "import threading", "from concurrent import futures",
+                "os.fork()", "os.popen('ls')", "torch.library.custom_op", "exec('x = 1')", "eval ('1')",
+                "compile(src, 'f', 'exec')", "import builtins", "torch._C.TensorBase.numpy(t)",
+                "torch._C._VariableFunctions.from_file(p)", "from torch import nn, _C", "torch.UntypedStorage.__mro__[1]",
+                "torch.from_file.__closure__[0].cell_contents", "import pyarrow.parquet as pq", "from datasets import Dataset"):
         assert te_run.screen(bad), bad
+    assert te_run.screen("datasets = {}\nfrom torch import nn\ntorch.from_file(p)\n") == []
+
+
+def run_probe(tmp_path, monkeypatch, variant: str) -> dict:
+    out = fake_root(tmp_path / variant, monkeypatch) / "out"
+    te_run.main(["--script", str(FAKE / "islands" / "probe" / "train.py"), "--out", str(out), "--",
+                 "--start", "fake", "--out", str(out / "sub"), "--variant", variant])
+    return json.loads((out / "run.json").read_text())
+
+
+def test_the_programs_code_in_what_it_hands_the_encoder_is_counted(tmp_path, monkeypatch):
+    base, hidden = run_probe(tmp_path, monkeypatch, "baseline"), run_probe(tmp_path, monkeypatch, "dict_encoder")
+    assert base["invalid"] == [] and hidden["invalid"] == []
+    (b,), (h,) = base["steps"], hidden["steps"]
+    assert h["tokens"] == b["tokens"] == 4 * 8
+    assert h["by"]["fwd/updated"] - b["by"]["fwd/updated"] == 50 * 4 * 8 * 16 * 16
+
+
+def test_the_evaluation_job_decodes_with_its_own_prepare(tmp_path, monkeypatch):
+    """A program that rebinds prepare.decode changes its own decoding, not the evaluation job's: E is θ, so its score
+    is θ's."""
+    run_probe(tmp_path, monkeypatch, "rebind_decode")
+    rec, _ = score(tmp_path / "rebind_decode" / "out")
+    (cp,) = rec["checkpoints"]
+    assert cp["val_bpb"] == rec["start"]["val_bpb"]
+
+
+@pytest.mark.parametrize("variant,name", [("rebind_torch", "torch.nn.functional.cross_entropy"),
+                                          ("rebind_coin", "os.urandom")])
+def test_rebinding_what_the_harness_calls_makes_the_run_invalid(tmp_path, monkeypatch, variant, name):
+    rec = run_probe(tmp_path, monkeypatch, variant)
+    assert any(name in p for p in rec["invalid"]), rec["invalid"]
+
+
+def test_the_watch_covers_the_fixed_modules_prepare_imports(tmp_path, monkeypatch):
+    """A module beside prepare.py that it imports (covert_witness's `sealed`) is the harness's too."""
+    from types import SimpleNamespace
+
+    from te_core import cw
+
+    (tmp_path / "fixed_sibling.py").write_text("VALUES = 'values'\n")
+    (tmp_path / "prepare.py").write_text("from fixed_sibling import VALUES\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        own = cw.private_copy(SimpleNamespace(__file__=str(tmp_path / "prepare.py")))
+        watched = {(name, k) for name, _, k, _ in cw.watched(own)}
+    finally:
+        sys.modules.pop("fixed_sibling", None)
+    assert ("fixed_sibling", "VALUES") in watched and ("os", "urandom") in watched
+
+
+def test_writing_the_theta_load_start_returned_does_not_move_the_harness_theta(tmp_path, monkeypatch):
+    base, moved = run_probe(tmp_path, monkeypatch, "baseline"), run_probe(tmp_path, monkeypatch, "theta_write")
+    assert moved["invalid"] == [] and moved["steps"][0]["by"] == base["steps"][0]["by"]
+    assert moved["theta_sha256"] == base["theta_sha256"]
+
+
+def test_the_stream_batch_is_token_data_without_an_embedding(tmp_path, monkeypatch):
+    rec = run_probe(tmp_path, monkeypatch, "index_lookup")
+    assert rec["invalid"] == [], rec["invalid"]
+    (s,) = rec["steps"]
+    assert s["tokens"] == 4 * 8 and s["by"]["fwd/updated"] == 4 * 8 * 16 * 16
+
+
+@pytest.mark.parametrize(("variant", "why"), [
+    ("custom_op", "outside torch's own"), ("bilinear", "no formula for"), ("numpy_mm", "read out of torch"),
+    ("thread", "started threads or processes"),
+    pytest.param("fork", "started threads or processes",
+                 marks=pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")),
+    ("sibling", "modules the program imported"),
+])
+def test_a_route_past_the_counter_makes_the_run_invalid(tmp_path, monkeypatch, variant, why):
+    rec = run_probe(tmp_path, monkeypatch, variant)
+    assert any(why in p for p in rec["invalid"]), rec["invalid"]
+
+
+@pytest.mark.parametrize("variant", ["div_mm", "add_exp"])
+def test_a_matmul_written_without_a_multiplication_is_counted_as_one(tmp_path, monkeypatch, variant):
+    rec = run_probe(tmp_path, monkeypatch, variant)
+    assert rec["invalid"] == [], rec["invalid"]
+    (s,) = rec["steps"]
+    assert s["tokens"] == 4 * 8 and s["by"]["fwd/updated"] == 4 * 8 * 16 * 16
+
+
+def test_a_statistic_per_sequence_may_leave_torch(tmp_path, monkeypatch):
+    rec = run_probe(tmp_path, monkeypatch, "numpy_stat")
+    assert rec["invalid"] == [], rec["invalid"]
+    (s,) = rec["steps"]
+    assert s["exited"] == 4 + 4 < s["tokens"]
+
+
+def test_the_fixed_prepare_above_an_island_wins_and_its_modules_are_imported_first(tmp_path, monkeypatch):
+    from te_core import cw
+
+    (tmp_path / "prepare.py").write_text("def load():\n    import te_fixed_lazy\n    return te_fixed_lazy.WHO\n")
+    (tmp_path / "te_fixed_lazy.py").write_text("WHO = 'fixed'\n")
+    island = tmp_path / "islands" / "x"
+    island.mkdir(parents=True)
+    (island / "prepare.py").write_text("def load():\n    return 'island'\n")
+    (island / "te_fixed_lazy.py").write_text("WHO = 'island'\n")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.delitem(sys.modules, "te_fixed_lazy", raising=False)
+    monkeypatch.setitem(sys.modules, "prepare", None)
+    prepare = cw.import_prepare(island / "train.py")
+    sys.path.insert(0, str(island))
+    assert Path(prepare.__file__) == tmp_path / "prepare.py" and prepare.load() == "fixed"
+    assert Path(sys.modules["te_fixed_lazy"].__file__) == tmp_path / "te_fixed_lazy.py"
+
+
+def test_the_harness_work_imports_from_the_path_it_began_with(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    te = te_run.Session({}, tmp_path)
+    sys.path.insert(0, str(tmp_path / "program"))
+    with te.uncounted():
+        inside = list(sys.path)
+    assert str(tmp_path / "program") not in inside and sys.path[0] == str(tmp_path / "program")
+
+
+def test_plain_copies_containers_and_refuses_what_could_run_code():
+    class Sub(dict):
+        pass
+
+    class T(torch.Tensor):
+        pass
+
+    t = torch.randn(3)
+    out = plain(Sub(a=t, b=[1, (2.0, "x")], c=np.float32(1.5), d=Path("/x"), p=torch.nn.Parameter(t), e=bytearray(b"1")))
+    assert type(out) is dict and type(out["a"]) is torch.Tensor and type(out["p"]) is torch.Tensor
+    assert out["b"] == [1, (2.0, "x")] and type(out["c"]) is float and out["d"] == Path("/x") and out["e"] == b"1"
+    for bad in (t.as_subclass(T), object(), {"k": lambda: 0}):
+        with pytest.raises(TypeError):
+            plain(bad)
+
+
+def test_the_harness_work_runs_no_mode_hook_or_profiler_of_the_programs(tmp_path):
+    te = te_run.Session({}, tmp_path)
+    seen = []
+
+    class Mode(TorchFunctionMode):
+        def __torch_function__(self, func, types, args=(), kwargs=None):
+            seen.append("mode")
+            return func(*args, **(kwargs or {}))
+
+    def profiler(*args):
+        return None
+
+    lin = torch.nn.Linear(2, 2)
+    hook = torch.nn.modules.module.register_module_forward_hook(lambda m, i, o: seen.append("hook"))
+    sys.setprofile(profiler)
+    try:
+        with Mode():
+            with te.uncounted():
+                n, collecting, profiling = len(seen), gc.isenabled(), sys.getprofile()
+                lin(torch.ones(2))
+                inside = seen[n:]
+            lin(torch.ones(2))
+        restored = sys.getprofile() is profiler
+    finally:
+        sys.setprofile(None)
+        hook.remove()
+    assert inside == [] and not collecting and profiling is None and restored and gc.isenabled()
+    assert "mode" in seen and "hook" in seen
 
 
 
@@ -151,6 +356,18 @@ def test_declared_steps_are_a_family_rebuilt_by_prepares_decoder(cw_root):
     (fam,) = rec["families"]
     assert fam["family"] == "E" and fam["failed"] == {} and fam["covers"] == list(range(6))
     assert all(b > 0 for b in fam["beta"].values())
+
+
+def test_a_declared_steps_cost_is_at_least_prepares_rebuild_rule():
+    from types import SimpleNamespace
+
+    from te_core.cw import CWPlan, frame
+
+    theta = {"w": torch.zeros(2)}
+    priced = CWPlan(SimpleNamespace(rebuild_macs=lambda th, blob: 10 * len(blob)), theta, "cpu")
+    assert priced.cost_macs(frame(b"abc", (b"de", b"f")), {}) == 60
+    assert priced.cost_macs(frame(b"", (b"de",)), {}) == 20
+    assert CWPlan(SimpleNamespace(), theta, "cpu").cost_macs(frame(b"abc", ()), {}) == 0
 
 
 def test_a_step_that_reads_what_it_did_not_declare_fails_its_rebuild(cw_root):

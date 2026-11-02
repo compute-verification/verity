@@ -5,5 +5,7 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
-# The tests read te_core alone: script mode runs `tests/cw_fake/`'s island against its own fake `prepare`.
-inputs = []
+# Script mode runs `tests/cw_fake/`'s island against its own fake `prepare`; test_formats reads covert_witness's real one,
+# whose E formats and rebuild costs it checks, and the fixed modules it imports.
+inputs = ["benchmarks/covert_witness/prepare.py", "benchmarks/covert_witness/sealed.py",
+          "benchmarks/covert_witness/starts_store.py"]
