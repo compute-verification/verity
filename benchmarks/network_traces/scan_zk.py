@@ -60,7 +60,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   Proved first; accepted, with no output opened.
 * **V3c's trees** (``--v3c WINDOW``, `v3c_trees`; a group of 1): in place of the scan's own, the trees V3c's window
   (`prove_path.py window-commit`'s directory, at w63k4's class) committed before its coins: ``state`` its
-  `SCAN_STATE` (its registration's window activations entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
+  `SCAN_STATE` (its registration's ``registered`` entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
   j's ``prog<j>`` chunk j's o0 of its `SELECT_ENTRY` template (``<descriptor id>/c<j>/o0`` in its ``roots``, the rows
   and salts its member's prover body), each a `Held` tree at that registration's root and domain, refused by name where
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
@@ -720,20 +720,20 @@ def _v3c_refused(window: Path, why: str) -> SystemExit:
 
 
 def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
-    """V3c's `SCAN_STATE` (`ingress_scan.SCAN_STATE`): its entry in its registration's window activations (the
-    ``window`` provenance window-commit writes: ``activations.values``), its rows and salts the prover's
-    `SCAN_STATE_FILE`, under the domain that provenance gives (the window circuit's program and the window's run root,
-    `registered.domain`), held to the entry's root and domain and to the scan's ``states``."""
-    prov = rec.get("window") or {}
-    acts = prov.get("activations") or {}
-    e = (acts.get("values") or {}).get(IS.SCAN_STATE)
-    if not e or e.get("value") != IS.SCAN_STATE:
-        raise _v3c_refused(window, f"its registration's window activations register no {IS.SCAN_STATE}")
+    """V3c's `SCAN_STATE` (`ingress_scan.SCAN_STATE`): its registration's one ``registered`` entry of it (v2: the
+    window's own value, registered under the domain R7 derives from the population Program's digest, the value, its
+    shape and the window's open root, its run root, `registered.domain`), its rows and salts the prover's
+    `SCAN_STATE_FILE`, held to the entry's root and domain and to the scan's ``states``."""
+    got = [e for e in rec.get("registered") or () if isinstance(e, dict) and e.get("value") == IS.SCAN_STATE]
+    if len(got) != 1:
+        raise _v3c_refused(window, f"its registration registers {IS.SCAN_STATE} {len(got)} times, not once in its "
+                                   "registered (v2)")
+    e = got[0]
     n, W = int(e["leaves"]), int(e["words"])
     if n != len(states) or 16 * W != len(states[0]):
         raise _v3c_refused(window, f"its {IS.SCAN_STATE} is {n} rows of {16 * W} bits, not the scan's {len(states)} "
                                    f"of {len(states[0])}")
-    dom = REG.domain(acts.get("program", ""), IS.SCAN_STATE, W, n, window=prov.get("run"))
+    dom = REG.domain(rec.get("program", ""), IS.SCAN_STATE, W, n, window=(rec.get("window") or {}).get("run"))
     data = (window / SCAN_STATE_FILE).read_bytes()
     if len(data) != n * (2 * W + ADV.INST.salt_bytes):
         raise _v3c_refused(window, f"{SCAN_STATE_FILE} is {len(data)} bytes, not {n} rows of {W} words and their salts")
@@ -741,8 +741,8 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
     held = Held(dom, 16 * W, tuple(bit_row((r, 16))[0] for r in words),
                 tuple(data[at + step * t:at + step * (t + 1)] for t in range(n)))
     if (held.root.hex(), dom.domain_id.hex()) != (e["root"], e["domain"]):
-        raise _v3c_refused(window, f"{SCAN_STATE_FILE} under its provenance's domain isn't its registered "
-                                   f"{IS.SCAN_STATE}'s root and domain")
+        raise _v3c_refused(window, f"{SCAN_STATE_FILE} under its registration's Program and run root isn't its "
+                                   f"registered {IS.SCAN_STATE}'s root and domain")
     if bad := [t for t in range(n) if words[t] != _words(states[t])]:
         raise _v3c_refused(window, f"its {IS.SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
                                    "empty state of link-window 0): it scanned another warden run or link-window")

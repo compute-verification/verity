@@ -2,9 +2,10 @@
 that registration's roots and domains, so the honest round's ``scan/state`` and ``scan/prog<j>`` are the roots the
 consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's audit, and no block round
 is proved. The window here is `prove_path.py window-commit`'s layout with roots made by the implementations the window
-commit uses (the `SCAN_STATE` by `registered.Registered`, each `SelectEntry_v1` chunk's o0 by
-`windows.rows.commit_ports`), so a held tree's root is theirs; a window whose rows, roots or chunks aren't the scan's
-is refused by name."""
+commit uses (the `SCAN_STATE` by `registered.Registered`, an entry of its v2 registration's ``registered``, each
+`SelectEntry_v1` chunk's o0 by `windows.rows.commit_ports`), so a held tree's root is theirs; a window whose rows,
+roots or chunks aren't the scan's, whose state is under another Program's domain, or whose registration is v1, is
+refused by name."""
 from __future__ import annotations
 
 import hashlib
@@ -56,8 +57,8 @@ def v3c_window(d: Path, states: list[list[int]], entries: list[list[list[int]]])
                             "bindings": {"o0": dom.binding.hex()}, "owner": RWS.OWNER, "schemas": {"o0": V2}}})
         roots.append({"port": f"{name}/o0", "root": got["o0"].hex(), "leaves": n, "domain": dom.domain_id.hex()})
     (d / "window.json").write_text(json.dumps({"members": members}))
-    (d / "registration.json").write_text(json.dumps({"roots": roots, "window": {
-        "kind": "served", "run": RUN, "activations": {"program": PROGRAM, "values": {sz.IS.SCAN_STATE: st.entry()}}}}))
+    (d / "registration.json").write_text(json.dumps({"format": sz.RG.FORMAT_V2, "program": PROGRAM, "roots": roots,
+                                                     "registered": [st.entry()], "window": {"kind": "served", "run": RUN}}))
     return d
 
 
@@ -75,7 +76,7 @@ def scanned(tmp_path_factory):
 def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_path, scanned):
     window = scanned["window"]
     rec = json.loads((window / "registration.json").read_text())
-    state, roots = rec["window"]["activations"]["values"][sz.IS.SCAN_STATE], {r["port"]: r for r in rec["roots"]}
+    (state,), roots = rec["registered"], {r["port"]: r for r in rec["roots"]}
     h = sz.host(tmp_path / "host", setup=S, v3c=window)
     assert set(h.rounds) == scanned["rounds"] - {"block"} and "block" in scanned["rounds"]
     trees = h.at.trees
@@ -104,7 +105,8 @@ def _rewrite(window: Path, f: str, change) -> None:
     (window / f).write_text(json.dumps(doc))
 
 
-@pytest.mark.parametrize("case", ["state row", "state root", "entry row", "entry root", "chunks", "body"])
+@pytest.mark.parametrize("case", ["state row", "state root", "state program", "state v1", "entry row", "entry root",
+                                  "chunks", "body"])
 def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, case):
     states, entries = [list(r) for r in scanned["states"]], [[list(e) for e in lane] for lane in scanned["entries"]]
     if case == "state row":
@@ -113,8 +115,12 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
         entries[1][1][-1] ^= 1
     w = v3c_window(tmp_path / "window", states, entries)
     if case == "state root":
-        _rewrite(w, "registration.json",
-                 lambda d: d["window"]["activations"]["values"][sz.IS.SCAN_STATE].update(root="ee" * 64))
+        _rewrite(w, "registration.json", lambda d: d["registered"][0].update(root="ee" * 64))
+    if case == "state program":
+        _rewrite(w, "registration.json", lambda d: d.update(program="ef" * 64))
+    if case == "state v1":
+        _rewrite(w, "registration.json", lambda d: d["window"].update(
+            activations={"program": PROGRAM, "values": {sz.IS.SCAN_STATE: d.pop("registered")[0]}}))
     if case == "entry root":
         _rewrite(w, "registration.json", lambda d: d["roots"][2].update(root="ee" * 64))
     if case == "chunks":
@@ -123,6 +129,8 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
         (w / "m2-private.bin").write_bytes((w / "m2-private.bin").read_bytes()[:-1])
     why = {"state row": f"its {sz.IS.SCAN_STATE} rows [3] aren't the scan's",
            "state root": f"isn't its registered {sz.IS.SCAN_STATE}'s root and domain",
+           "state program": f"isn't its registered {sz.IS.SCAN_STATE}'s root and domain",
+           "state v1": f"registers {sz.IS.SCAN_STATE} 0 times, not once in its registered (v2)",
            "entry row": f"{TID}/c1's o0 rows [1] aren't the scan's lane 1 slot entries",
            "entry root": f"isn't the root and domain its registration names for {TID}/c2/o0",
            "chunks": "not one template's 4 chunks of 2 proof blocks, a lane each",
