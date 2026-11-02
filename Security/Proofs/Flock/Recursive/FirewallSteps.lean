@@ -395,4 +395,104 @@ theorem run_finish (s : Schedule) {st : State} (hf : st.finished = false) (hc : 
   refine Runs.ite_neg (by simp [hr]) ?_
   exact Runs.lift_bind (pinned_ok hpin) (Runs.set_bind (Runs.send rfl))
 
+theorem bne_self (a : ByteArray) : (a != a) = false := by
+  show (!(a == a)) = false
+  rw [FirewallWire.beq_iff.mpr rfl]
+  rfl
+
+theorem some_bne_self (a : ByteArray) : (some a != some a) = false := bne_self a
+
+/-- **A round** on an opened stream whose content `split` reads, as the schedule's entry has it: its binding's cap and
+its first copies the committed top of its stream's table, its other caps fresh tops of the entry's node counts, its
+message the entry's rows. It draws a salt for each node of its fresh tops and each message row, and sends the round
+after its stream's `Open` where it is the stream's first. -/
+theorem run_round (s : Schedule) (stream : String) (content : ByteArray) (n : Nat) {st : State} {w parent : String}
+    {k : Nat} {sp : Split} (hf : st.finished = false)
+    (hfind : st.streams.find? (·.1 == stream) = some (w, parent, k))
+    (hsplit : split content (k == 0 && parent == "") = .ok sp) (hn : sp.n = n)
+    (hbind : (k == 0 && parent == "") = true →
+      ∃ c, sp.caps[0]? = some c ∧ (st.roots.find? (·.1 == tableOf stream)).map (·.2) = some c)
+    (hcopies : copiesOf s st.rounds ≤ sp.caps.size)
+    (hcopy : ∀ c ∈ sp.caps.toList.take (copiesOf s st.rounds),
+      some c = (st.roots.find? (·.1 == tableOf stream)).map (·.2))
+    (hcaps : ∀ c ∈ sp.caps.toList, isCap c = true)
+    (hspec : roundSpec (s.rounds.getD st.rounds .null) = some (stream, k, n,
+      (sp.caps.toList.drop (copiesOf s st.rounds)).map (·.size / NODE_BYTES), copiesOf s st.rounds,
+      (messageRows sp.free).length))
+    (hpin : canonForm (s.rounds.getD st.rounds .null) = canonForm (specJson (stream, k, n,
+      (sp.caps.toList.drop (copiesOf s st.rounds)).map (·.size / NODE_BYTES), copiesOf s st.rounds,
+      (messageRows sp.free).length)))
+    (hl : st.linked = true) (hopen : k = 0 → (s.streams.find? (·.1 == stream)).isSome)
+    (hsalts : ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows).length +
+      (messageRows sp.free).length ≤ st.salts.length) :
+    Runs (step s (.round stream content n)) st fun _ t => ∃ (x : Array Sent) (tops : List (List ByteArray)) (bcs : List ByteArray),
+      t = { st with
+        salts := (st.salts.drop ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows).length).drop
+          (messageRows sp.free).length,
+        rounds := st.rounds + 1,
+        streams := st.streams.map fun e => if e.1 == stream then (e.1, e.2.1, e.2.2 + 1) else e,
+        sent := x.push (.round stream tops (copiesOf s st.rounds) bcs n) } ∧
+      (∃ e, x.toList = st.sent.toList ++ e ∧ e.flatMap FirewallRun.holes = []) ∧
+      tops.flatten = cs ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows) st.salts ∧
+      bcs = cs (messageRows sp.free) (st.salts.drop ((sp.caps.toList.drop (copiesOf s st.rounds)).flatMap topRows).length) := by
+  rw [step]
+  refine Runs.get (Runs.ite_neg (by simp [hf]) ?_)
+  refine Runs.get ?_
+  generalize ho : List.find? _ st.streams = o
+  rw [hfind] at ho
+  subst ho
+  refine Runs.lift_bind hsplit ?_
+  refine Runs.ite_neg (by simp [hn]) ?_
+  refine Runs.get ?_
+  refine Runs.ite_jp (fun t => t = st) (fun t ht => ?_) (fun _ => rfl) fun hfirst hJ => ?_
+  · subst ht
+    refine Runs.get ?_
+    refine Runs.ite_neg ?_ ?_
+    · simp only [Bool.or_eq_true, decide_eq_true_eq, List.any_eq_true, not_or, not_exists, not_and]
+      exact ⟨by omega, fun c hc => by rw [← hcopy c hc, some_bne_self]; simp⟩
+    refine Runs.bind ((draws_mapM (α := ByteArray) (β := List ByteArray) (γ := Unit) _ topRows id (fun _ => ())
+      (fun _ => ()) _ fun c _ => fun st' hl' => ?_).runs (by omega)) ?_
+    · obtain ⟨l, hm, hl1⟩ := draws_saltedTop c st' hl'
+      exact ⟨l, hm, hl1, rfl⟩
+    rintro tops t ⟨rfl, hT, -⟩
+    refine Runs.bind (Q := fun c t' => c = (sp.caps.toList.drop (copiesOf s t.rounds)).map
+        (fun c => jnat (c.size / NODE_BYTES)) ∧ t' = _)
+      ⟨_, _, run_mapM_pure _ (fun c => jnat (c.size / NODE_BYTES)) _ ?_ _, rfl, rfl⟩ ?_
+    · intro c hc st'
+      show (liftM (nodes c) >>= fun x => Pure.pure (jnat x) : Fw _).run st' = _
+      rw [nodes_ok (hcaps c (List.mem_of_mem_drop hc))]
+      rfl
+    rintro topNodes t' ⟨rfl, rfl⟩
+    refine Runs.lift_bind (pinned_ok ?_) ?_
+    · rw [hpin]
+      simp only [specJson, List.map_map]
+      rfl
+    refine Runs.ite_neg (fun h => h hspec) ?_
+    refine Runs.bind ((draws_salteds (messageRows sp.free)).runs (by simp only [List.length_drop]; omega)) ?_
+    rintro bcs t₂ ⟨ht₂, hB⟩
+    subst ht₂
+    refine Runs.get (Runs.ite_neg (by simp [hl]) ?_)
+    refine Runs.ite_jp (fun u => ∃ x, u = { t with
+          sent := x
+          salts := (t.salts.drop ((sp.caps.toList.drop (copiesOf s t.rounds)).flatMap topRows).length).drop
+            (messageRows sp.free).length } ∧
+        ∃ e, x.toList = t.sent.toList ++ e ∧ e.flatMap FirewallRun.holes = [])
+      (fun u hu => ?_) (fun _ => ⟨t.sent, rfl, [], by simp, rfl⟩) fun hk hJ => ?_
+    · obtain ⟨x, hu, e, hx, he⟩ := hu
+      subst hu
+      exact Runs.modify_bind (Runs.send ⟨x, tops, bcs, rfl, ⟨e, hx, he⟩, by rw [← List.flatMap_id]; exact hT, hB⟩)
+    · obtain ⟨⟨w', wp, pos, c'⟩, hw⟩ := Option.isSome_iff_exists.mp (hopen (by simpa using hk))
+      generalize ho : List.find? _ s.streams = o
+      rw [hw] at ho
+      subst ho
+      exact Runs.send_bind (hJ _ ⟨_, rfl, [.openStream stream wp pos], by simp, rfl⟩)
+  · obtain ⟨c, hc0, hroot⟩ := hbind hfirst
+    generalize List.find? _ st.roots = o₁ at hroot hJ ⊢
+    generalize sp.caps[0]? = o₂ at hc0
+    subst hc0
+    rcases o₁ with _ | ⟨w₁, rootB⟩
+    · cases hroot
+    cases hroot
+    exact Runs.ite_neg (by simp [bne_self]) (hJ st rfl)
+
 end FlockSoundness.Discharge.Recursion.FirewallSteps
