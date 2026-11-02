@@ -1,1 +1,1 @@
-{"commit": "359505906864217d9fe43528856d2f838c3aabb5", "version": "2.2", "te_core": "2.3", "data": "v2.2", "witness": "covert-witness/witness/v4", "pinned_at": "2026-11-02T12:40Z"}
+{"commit": "11d96c1b8745d8093746ea11e3e33fe6f07f7d3b", "version": "2.3", "te_core": "3.5.1", "data": "v2.2", "witness": "covert-witness/witness/v4", "pinned_at": "2026-11-02T14:24Z", "same_version": ["36aac280a62be7a04cbf510b50636b5ad875ba54"]}

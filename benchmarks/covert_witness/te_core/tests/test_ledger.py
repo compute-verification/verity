@@ -1,4 +1,6 @@
 import json
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -130,6 +132,40 @@ def test_a_record_repeating_an_earlier_e_is_left_out_of_the_frontier(tmp_path):
     rows = Ledger(tmp_path).index()
     assert frontier.status(rows, PIN) == {copy["id"]: "duplicate-e"}
     assert {r["id"] for r in frontier.valid(rows, PIN)} == {first["id"], own["id"]}
+
+
+def test_an_agents_relaunch_at_a_new_pin_counts_and_a_copy_of_an_old_pins_e_does_not(tmp_path):
+    clock = Clock()
+    a, b = Ledger(tmp_path, "agent-a", clock=clock), Ledger(tmp_path, "agent-b", clock=clock)
+    old = sub(a, val_bpb=1.0, output={"e_sha256": "e1"}, measurement_commit="b" * 40)
+    clock.t += 1
+    copy = sub(b, val_bpb=1.0, output={"e_sha256": "e1"})
+    clock.t += 1
+    relaunch = sub(a, val_bpb=1.0, output={"e_sha256": "e1"})
+    clock.t += 1
+    again = sub(a, val_bpb=1.0, output={"e_sha256": "e1"})
+    rows = Ledger(tmp_path).index()
+    assert frontier.status(rows, PIN) == {old["id"]: "other-version", copy["id"]: "duplicate-e",
+                                          again["id"]: "duplicate-e"}
+    assert [r["id"] for r in frontier.valid(rows, PIN)] == [relaunch["id"]]
+
+
+def test_the_commits_of_one_version_are_one_pin(tmp_path, monkeypatch):
+    clock = Clock()
+    a, b = Ledger(tmp_path, "agent-a", clock=clock), Ledger(tmp_path, "agent-b", clock=clock)
+    earlier = sub(a, val_bpb=1.0, output={"e_sha256": "e1"}, measurement_commit="b" * 40)
+    clock.t += 1
+    later = sub(b, val_bpb=1.0, output={"e_sha256": "e2"})
+    clock.t += 1
+    copy = sub(b, val_bpb=1.0, output={"e_sha256": "e1"})
+    clock.t += 1
+    other = sub(a, val_bpb=1.0, measurement_commit="c" * 40)
+    rows = Ledger(tmp_path).index()
+    assert frontier.status(rows, (PIN, "b" * 40)) == {copy["id"]: "duplicate-e", other["id"]: "other-version"}
+    assert [r["id"] for r in frontier.valid(rows, (PIN, "b" * 40))] == [earlier["id"], later["id"]]
+    monkeypatch.setitem(sys.modules, "pin", SimpleNamespace(pinned=lambda: {"commit": PIN, "same_version": ["b" * 40]}))
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    assert frontier.pinned() == (PIN, "b" * 40)
 
 
 def test_a_run_with_covered_steps_counts_once_rho_is_priced_by_thresholds():
