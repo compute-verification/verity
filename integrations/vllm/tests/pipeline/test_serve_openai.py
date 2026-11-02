@@ -26,6 +26,9 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission
+from verity_vllm.records.predicted_row import FILE
+
+from tests.pipeline import predicted
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
                   "ignore_eos": True, "temperature": 0}
@@ -151,7 +154,7 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
 
 
 def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads(tmp_path):
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man)], environ={})
     with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH$"):
         so.preflight(opts, which=lambda _: None)
@@ -182,12 +185,12 @@ def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served
         (d / "serve.json").write_text(json.dumps({"model": "m", "revision": "r", "commit": True, **rec}))
         return str(d)
 
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     assert parse().scheme == ss.ROWS == ss.SCHEMES[0] == "rows-sha512" and ss.V1 in ss.SCHEMES
-    assert "(the default)" in refusal(parse()) and "--required-manifest ROW_DIR/manifest.json" in refusal(parse())
+    assert "(the default)" in refusal(parse()) and "--required-manifest DIR/manifest.json" in refusal(parse())
     assert "drop --no-gpu-tree" in refusal(parse("--no-gpu-tree", "--required-manifest", str(man)))
     assert refusal(parse("--required-manifest", str(man))) is None and refusal(parse("--no-commit")) is None
-    with pytest.raises(cli.UsageError, match="--required-manifest ROW_DIR/manifest.json"):
+    with pytest.raises(cli.UsageError, match="--required-manifest DIR/manifest.json"):
         ss.committer(parse(), llm=None)
 
     v1, old = ("--scheme", "vllm-v1"), record("v1", scheme="vllm-v1")
@@ -205,11 +208,49 @@ def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served
     assert "not under --scheme rows-sha512" in refusal(parse("--required-manifest", str(man), "--of-record", old))
 
 
+def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path):
+    """The row's manifest is the one the ahead-of-time compiler wrote with the row's Build of record (`predict row`): a manifest
+    with no record of predict's beside it (a traced Build's), another schema's, or a record naming other bytes is refused
+    before the model loads, committing or not, and by the committer; the Build is the manifest's own dir (no --programs-root)."""
+    def parse(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+
+    def refusal(*more: str) -> str | None:
+        try:
+            so.preflight(parse(*more), which=lambda _: "/v/bin/ninja")
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    (traced := tmp_path / "traced").mkdir()
+    (traced / "manifest.json").write_text("{}")
+    (traced / "build_summary.json").write_text("{}")
+    for more in ((), ("--no-commit",)):
+        why = refusal("--required-manifest", str(traced / "manifest.json"), *more)
+        assert "no record of predict's beside it" in why and "`verity-vllm predict row --row ROW --out DIR`" in why, more
+    assert refusal("--required-manifest", str(tmp_path / "none" / "manifest.json")).endswith("manifest.json: no such file")
+    (row := tmp_path / "row").mkdir()
+    man = predicted.row(row, {"manifest_digest": "m"})
+    assert refusal("--required-manifest", str(man)) is None
+    rec = json.loads((row / FILE).read_text())
+    (row / FILE).write_text(json.dumps(rec | {"schema": "verity-vllm/aot-comparison/v1"}))
+    assert "'schema' is 'verity-vllm/aot-comparison/v1'" in refusal("--required-manifest", str(man))
+    (row / FILE).write_text(json.dumps(rec))
+    man.write_text(json.dumps({"manifest_digest": "m2"}))
+    assert "so predict didn't write it" in refusal("--required-manifest", str(man), "--no-commit")
+    with pytest.raises(cli.UsageError, match="so predict didn't write it"):
+        ss.committer(parse("--required-manifest", str(man)), llm=None)
+    opts = parse("--required-manifest", str(predicted.row(row)))
+    assert ss.programs_root_of(opts) == str(row.resolve()) == ss.committer_args(opts).programs_root
+    with pytest.raises(SystemExit):
+        parse("--required-manifest", str(man), "--programs-root", str(traced))
+
+
 def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
     """``--retain-exclude`` (default off, and $VERITY_RETAIN_EXCLUDE's value when set) names the attention interiors only, the
     values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
     loads, and by the committer before it builds anything."""
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man))
 
     def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:

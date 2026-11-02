@@ -285,12 +285,9 @@ def lean_definitions(text: str) -> tuple[list[tuple[str, Hit]], list[tuple[str, 
 
 def _python_code(text: str) -> str:
     """`text` with its string literals and comments blanked to spaces, newlines and offsets kept, so prose that wraps to
-    begin a line with `class X` isn't read as a header; `text` itself when it doesn't tokenize."""
+    begin a line with `class X` isn't read as a header.  Every tracked file compiles, so one that doesn't tokenize raises."""
     lines = text.splitlines(keepends=True)
-    try:
-        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
-    except (tokenize.TokenError, SyntaxError):
-        return text
+    tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
     prose = {tokenize.STRING, tokenize.COMMENT, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
     chars = [list(line) for line in lines]
     for t in tokens:
@@ -795,8 +792,6 @@ KNOWN: dict[str, str] = {
     "infra/cluster/src/cluster/route.py::Placement": "homonym, a routed job's node: rename (infra)",
     "infra/ops/verity_ops/deploy.py::Node": "homonym, a deploy target: rename (infra)",
     # integrations/
-    "integrations/vllm/tools/migrate/superseded_quarantine.py::Site":
-        "homonym, a migration step's source site: rename (vllm)",
     "integrations/vllm/verity_vllm/acquire/committer_api.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (circuits)",
     "integrations/vllm/verity_vllm/acquire/plan.py::Site": "homonym, a quantisation site: rename (circuits)",
@@ -814,15 +809,6 @@ KNOWN: dict[str, str] = {
         "homonym, one CUDA device's build of a kernel library: rename (circuits)",
     "integrations/vllm/verity_vllm/commit/served_record.py::Record":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes an execution block's committed values (circuits)",
-    "integrations/vllm/verity_vllm/observe/fold/resolver.py::Witness":
-        "homonym, a request's witness leaves a row consumes: rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/c2_replay.py::Site": "homonym, what one C2 replay reads: rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/commit_coins.py::Gate":
-        "homonym, infra's challenger gate (an SSH host): rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/commit_coins.py::Session":
-        "homonym, the old word for a run, here the commit's challenge phase: rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/report.py::Card": "homonym, a report's summary card: rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/serve_commit.py::Ledger": "homonym, one request as served: rename (vllm)",
     "integrations/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":

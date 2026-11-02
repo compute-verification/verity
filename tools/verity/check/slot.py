@@ -329,6 +329,14 @@ DISK = Path("/workspace")
 DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50
 
 
+def cache_disk() -> Path:
+    """Where the check cache (`check.py`'s $CHECK_CACHE, default ~/.cache/verity-check) lives: its nearest existing directory.
+    Its Lean build trees reach tens of GB, so its disk counts as DISK does; it is another disk (the 247 GB root) wherever
+    vm_setup.sh's link onto /workspace is missing."""
+    cache = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
+    return next((p for p in (cache, *cache.parents) if p.is_dir()), Path("/"))
+
+
 def disk_short(path: Path | None = None) -> str | None:
     """Why the disk holding `path` (DISK) can't take a check now, or None; a missing path is no refusal."""
     if not (path or DISK).is_dir():
@@ -349,7 +357,7 @@ def blocked(slot: dict, now: datetime, priority: bool = False) -> str | None:
     for raw, start, minutes, _note in _windows(slot):
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
-    if short := disk_short():
+    if short := disk_short() or disk_short(cache_disk()):
         return short
     train = priority or bool(slot.get("trains"))
     if slot.get("mem") and (free := memory_gb() - (held := reserved_gb(priority=train))) < slot["mem"]:

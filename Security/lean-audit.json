@@ -2952,7 +2952,6 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
   "NetTiming.SecurityProofs.HorizonLeakAccepted": "42d2a4cd8f85bfae4af68ef6494ced78b576913d56207b74ad57533b9beafae2",
-  "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "a04fb3c7473ce600dcf3b75eae2ce8f5c3f7126156b07cf9112a51776a52712f",
   "NetTiming.SecurityProofs.PeriodLeakAccepted": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
   "NetTiming.SecurityProofs.PooledLeakAccepted": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
   "NetTiming.SecurityProofs.SampledAuditAccepted": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
@@ -3023,8 +3022,7 @@
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
-  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-  "Pouw.SecurityProofs.OnsiteFreed_honest": "7627cc1a888bd3439b026910d2ecb4eda844722b6252425088a015b009fce70b"
+  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8"
  },
  "layers": {
   "Definitions.Core": {

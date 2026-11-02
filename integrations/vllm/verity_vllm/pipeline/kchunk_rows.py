@@ -6,7 +6,7 @@ coordinate n, then chunk c (`positions`).  Unit (row, n, c) reads ``xq[ck, (c+1)
 0, ``acc``: chunk c - 1's f32 accumulator, which serving never stores, so the reader computes the coordinate's chain with the
 twin (`fp8_moe_rows.moe_expert_fp8_block_accs`) and holds its last word to the row's served output word n; a chunk returns its
 accumulator, LAST the served word.  The window wires
-each ``acc`` row to the output row of the chunk before it (`wire`, `commit.wiring`), so a drawn chunk's input is the committed
+each ``acc`` row to the output row of the chunk before it (`wire`, `commit.wiring`), so a sampled chunk's input is the committed
 output of the chunk that wrote it."""
 from __future__ import annotations
 
