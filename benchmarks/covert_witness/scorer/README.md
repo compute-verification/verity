@@ -26,10 +26,18 @@ python scorer.py final starts|launch ID...|collect     # final-set reruns (below
 - **Who is scored**: honest(l*) reads the reference directions (`ref-*`, and the harness's reference smoke), whatever
   the class; W* reads every other direction's records, a reference-class one included. The measurement auditor's records
   (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
+- **What a record must show to count**: launch.py uploads a record from an agent's VM, so its `witness.json` and
+  `run/run.json` must be the node's (`custody_problems`: the hashes of `out/witness.json` and `out/run/run.json` in the
+  run-record the node's runner publishes, the attempt's `outputs.run_record`), and every fixed-side file at its commit
+  (`benchmarks/covert_witness` outside `islands/`, `scorer/` and docs) must be one the harness's branches
+  (`cursor/covert-witness-4207`, `cursor/te-core-4207`) held since 30 Oct (`fixed_side`). Otherwise the record is
+  invalid, with the reason in the ledger.
 - **ρ**: te_core's (`TE_CORE_PATH`, its `score.score_grid`, `w_star`, `honest`, `effective_slowdown`, `frontier.TARGETS`).
-  A record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by its run's te_core ledger records,
-  one per checkpoint, with the harness's counted |C|, U, D, φ and ρ; its entry takes |C|, φ and D from the last of them,
-  and it is unscored until they are in the store. A witness v1 record has no te_core count, so its annotation is
+  A record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by the harness's count: `collect`
+  ingests the node's `run.json` with te_core at `cursor/te-core-4207`'s head (`TE_CURRENT`, a worktree it checks out),
+  one submission per checkpoint with |C|, U, D, φ and ρ, and refuses the record if te_core's |C| isn't the witness's or a
+  ρ is below 1; its entry takes |C|, φ and D from the last checkpoint. The te_core records agents publish themselves are
+  listed and never scored; a final rerun is re-ingested the same way. A witness v1 record has no te_core count, so its annotation is
   analytic (`scorer.analytic`): U is every forward multiplication whose weight operand is trained (a fully trained
   tensor's matmul or norm gain, both factors of an adapter; a frozen W·x is θ's, except in a run that merges its pieces,
   `notes.mech` relora with `notes.pieces` > 1, whose targets are full for the whole run), a node's upstream is the updated
@@ -44,7 +52,7 @@ python scorer.py final starts|launch ID...|collect     # final-set reruns (below
   than steps (a trained subspace, read from E's header), adapter and full E's, and a piece run's snapshots show no step
   rebuilt bit for bit and get none; an adapter's ρ is low because its φ is.
 - **Cells**: mechanism (the note's first word) x |E| range (decades from 10 kB) x φ range (te_core's `PHI_EDGES`, on
-  the witness's φ) x start. A cell is thin at two valid records or fewer.
+  te_core's φ for a v2 record, else the witness's φ over the tensors that actually changed) x start. A cell is thin at two valid records or fewer.
 - **Promotions** (hourly): each direction's top third by relative bpb drop from its start, and the best record of each
   thin cell, among valid records launched from 08:30Z; re-screens (a mechanism's note, less rates and seeds, on a class
   and start another direction screened first, or its own direction swept three times already) are flagged.

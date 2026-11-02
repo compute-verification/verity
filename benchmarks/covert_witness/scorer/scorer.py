@@ -9,8 +9,11 @@ STATE is `$TE_SCORER_STATE` (default ~/.research/te-scorer); everything in it is
 rebuilt by `collect`. Records are the evidence/v1 artifacts whose meta has `covert_witness.class` (launch.py's), and the
 te-core/submission/v1 ledger records (te_core.ledger's), written since `$TE_SCORER_SINCE`.
 
-A record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by the harness's count: its te_core
-ledger records, one per checkpoint, carry |C|, U, D, φ and ρ, used as is. A witness v1 record carries the witness
+A record is scored only if its witness and run.json are the node's (`custody_problems`: launch.py uploads records from an
+agent's VM, the node's runner publishes the run's out/) and its commit's fixed side is the harness's (`fixed_side`). A
+record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by the harness's count: `collect` ingests
+the node's run.json with te_core at its branch head (`te_current`), one submission per checkpoint carrying |C|, U, D, φ
+and ρ; the te_core records agents publish themselves are listed, never scored. A witness v1 record carries the witness
 (training FLOPs, φ over forward weight-matmul FLOPs, |E|, search bpb, the FLOPs-to-target curve), not te_core's count. Its
 annotation here is analytic, from the record's declared trainable set and step-log tokens over the start's tensors: U is
 every forward multiplication whose weight operand is trained (a full tensor's matmul or norm gain, an adapter's two
@@ -47,6 +50,7 @@ STATE = Path(os.environ.get("TE_SCORER_STATE", Path.home() / ".research" / "te-s
 SINCE = os.environ.get("TE_SCORER_SINCE", "2026-11-02T06:30:00Z")
 SEARCH_START = "2026-11-02T08:30:00Z"  # the board's opening: earlier records are the integrator's seed smokes
 TE_CORE = Path(os.environ.get("TE_CORE_PATH", Path(__file__).resolve().parents[1]))
+TE_CURRENT = Path(os.environ.get("TE_CURRENT", "/tmp/scorer/te-core"))  # a worktree of this repository, any branch
 BOARD = Path(os.environ.get("TE_BOARD", Path(__file__).resolve().parents[1] / "islands" / "scorer" / "BOARD.md"))
 BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `HH:MMZ scorer [TAG] text (record ids)`. The "
               "coordinator merges them into benchmarks/covert_witness/BOARD.md on cursor/te-digest-4207. The scorer's lines "
@@ -136,6 +140,7 @@ def attempts(r, since: str) -> list[dict]:
         ex_ = a.get("execution") or {}
         out.append({"run": a["id"], "state": a["status"]["state"], "rc": a["status"].get("rc"),
                     "cancelled": str(a["status"].get("class", "")).startswith("CANCELLED"),
+                    "run_record": (a.get("outputs") or {}).get("run_record"),
                     "machine": ex_.get("machine"), "start_utc": ex_.get("start_utc"), "end_utc": ex_.get("end_utc"),
                     "commit": a["source"]["commit"], "class": m.group(1) if m else "te_core",
                     "start": m.group(2) if m else "", "te_core": not m})
@@ -220,7 +225,97 @@ def seedlog_header(r, files: dict, d: Path) -> dict | None:
     return json.loads(zlib.decompress(b[12:12 + n]))
 
 
-def cw_row(r, art: str, recorded: str, man: dict, commits: dict) -> dict:
+def custody_problems(files: dict, custody: dict | None) -> list[str]:
+    """The record's witness and harness record against the node's own copy of the run's out/ (its run-record, which the
+    node's runner publishes): launch.py uploads the record from an agent's VM, so anything it holds the node didn't write is
+    the agent's."""
+    names = [n for n in ("witness.json", "run/run.json") if n in files]
+    if not names:
+        return []
+    if custody is None:
+        return ["custody: no run-record from the node for this run"]
+    cfiles = {f["path"]: f["sha256"] for f in custody["payload"].get("files", [])}
+    return [f"custody: {n} is not the node's out/{n}" for n in names if cfiles.get(f"out/{n}") != files[n]["sha256"]]
+
+
+OFFICIAL = ("cursor/covert-witness-4207", "cursor/te-core-4207")
+FREE = re.compile(r"^benchmarks/covert_witness/(islands/|scorer/)|\.md$")  # what a direction may change
+
+
+def tree(commit: str) -> list[tuple[str, str]] | None:
+    """(path, blob) of benchmarks/covert_witness at `commit`, or None if the commit isn't in this repository or origin."""
+    g = ["git", "-C", str(REPO)]
+    for attempt in range(2):
+        kind = subprocess.run(g + ["cat-file", "-t", commit], capture_output=True, text=True).stdout.strip()
+        out = subprocess.run(g + ["ls-tree", "-r", commit, "--", "benchmarks/covert_witness"], capture_output=True, text=True)
+        if kind == "commit" and out.returncode == 0:
+            return [(ln.split("\t", 1)[1], ln.split()[2]) for ln in out.stdout.splitlines()]
+        if attempt == 0:
+            subprocess.run(g + ["fetch", "-q", "origin", commit], capture_output=True, text=True)
+    return None
+
+
+def official_blobs() -> set[tuple[str, str]]:
+    """Every (path, blob) of the fixed side (benchmarks/covert_witness outside FREE) that the harness's branches held since
+    30 Oct."""
+    g = ["git", "-C", str(REPO)]
+    subprocess.run(g + ["fetch", "-q", "origin", *(f"+refs/heads/{b}:refs/remotes/origin/{b}" for b in OFFICIAL)],
+                   capture_output=True, text=True)
+    revs = subprocess.run(g + ["rev-list", "--since=2026-10-30", *(f"origin/{b}" for b in OFFICIAL), "--",
+                               "benchmarks/covert_witness"], capture_output=True, text=True, check=True).stdout.split()
+    return {pb for c in revs for pb in tree(c) or [] if not FREE.search(pb[0])}
+
+
+def fixed_side(commit: str, official: set) -> list[str]:
+    """A record's evaluator, harness and starts are the harness's own: every fixed-side file at the candidate's commit is
+    one the official branches held. A direction changes only its island (and docs)."""
+    t = tree(commit) if commit else None
+    if t is None:
+        return [f"fixed_side_unverified: commit {commit[:10] or '(none)'} not found"]
+    if not {"benchmarks/covert_witness/candidate.sh", "benchmarks/covert_witness/evaluate.py"} <= {p for p, _ in t}:
+        return [f"fixed_side_unverified: commit {commit[:10]} holds no harness"]
+    diff = sorted(p.removeprefix("benchmarks/covert_witness/") for p, b in t if not FREE.search(p) and (p, b) not in official)
+    return [f"fixed side differs from the harness's: {', '.join(diff[:4])}" + (" …" if len(diff) > 4 else "")] if diff else []
+
+
+def te_current() -> str:
+    """TE_CURRENT checked out at te_core's branch head, the te_core every harness record is re-ingested with: an agent's
+    branch can carry its own te_core, so its ledger records are listed and never scored."""
+    g = ["git", "-C", str(TE_CURRENT)]
+    subprocess.run(g + ["fetch", "-q", "origin", "cursor/te-core-4207"], capture_output=True, text=True)
+    subprocess.run(g + ["checkout", "-q", "--detach", "FETCH_HEAD"], capture_output=True, text=True, check=True)
+    return subprocess.run(g + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def te_ingest(run_dir: Path, root: Path, mechanism: str, run: str) -> list[dict] | str:
+    """te_core's submission records (TE_CURRENT's) for the run.json in `run_dir`, kept under `root`; an error string if
+    te_core refuses it."""
+    if not root.exists():
+        tmp = root.with_name(root.name + ".part")
+        subprocess.run(["rm", "-rf", str(tmp)], check=True)
+        env = {k: v for k, v in os.environ.items() if k != "TE_LEDGER"}
+        p = subprocess.run([sys.executable, "-m", "te_core.ledger", "--root", str(tmp), "--agent", "scorer-ingest", "ingest",
+                            str(run_dir), "--direction", "scored", "--mechanism", mechanism or "unnamed", "--run-id", run or ""],
+                           cwd=TE_CURRENT / "benchmarks" / "covert_witness", env=env, capture_output=True, text=True)
+        if p.returncode:
+            return f"ingest: te_core.ledger rc {p.returncode}: {(p.stderr.strip().splitlines() or [''])[-1][-200:]}"
+        tmp.rename(root)
+    return [json.loads(p.read_text()) for p in sorted((root / "records" / "scorer-ingest").glob("*.json"))]
+
+
+def ingest_run(r, art: str, recorded: str, sha: str, run: str, mechanism: str, te: str) -> list[dict] | str:
+    """te_core's submissions for a record's run, one per checkpoint, ingested here by te_core `te` from the run.json the
+    node wrote (custody checked)."""
+    h = art.removeprefix("art:")
+    d = blob(r, sha, STATE / "records" / h / "run" / "run.json").parent
+    recs = te_ingest(d, STATE / "ingest" / te[:12] / h, mechanism, run)
+    if isinstance(recs, str):
+        return recs
+    return [te_rec_row(x, f"{art}#{x['checkpoint_step']}", recorded) | {"derived": True, "record": art} for x in recs]
+
+
+def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict | None = None, te: str = "",
+           official: set | None = None) -> dict:
     cw = man["meta"]["covert_witness"]
     files = {f["path"]: f for f in man["payload"].get("files", [])}
     d = STATE / "records" / art.removeprefix("art:")
@@ -233,22 +328,42 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict) -> dict:
     if not agent and cw.get("direction"):
         direction = cw["direction"]
     checks = (w or {}).get("checks", {})
-    bad = sorted(k for k, v in checks.items() if v is not True)
+    bad = sorted(k for k, v in checks.items() if v is not True) + custody_problems(files, custody)
+    if w and official is not None:
+        bad += fixed_side(cand.get("commit", ""), official)
     curve = (w or {}).get("curve") or []
     harness = (w or {}).get("harness")
     notes = (w or {}).get("notes") or {}
+    derived = []
+    if harness and not bad:
+        if "run/run.json" not in files:
+            bad = ["harness: the record holds no run/run.json"]
+        else:
+            derived = ingest_run(r, art, recorded, files["run/run.json"]["sha256"], cw.get("run", ""),
+                                 cw.get("mechanism") or mechanism_of(cw.get("note", "")), te)
+        if isinstance(derived, str):
+            bad, derived = [derived], []
+        elif not derived or abs(derived[-1]["macs"] - harness.get("macs", -1)) > 1e-9 * derived[-1]["macs"]:
+            bad = [f"harness: te_core's |C| {derived and derived[-1]['macs']} is not the witness's {harness.get('macs')}"]
+            derived = []
+        elif any(min(t["rho"].values()) < 1 for t in derived):
+            bad, derived = ["harness: rho below 1"], []
+    for t in derived:
+        t |= {"agent": agent, "direction": direction, "start": cw.get("start"), "note": cw.get("note", ""),
+              "mechanism": mechanism_of(cw.get("note", "")), "screen": screen_key(cw.get("note", ""))}
     return {
         "id": art, "source": "launch.py", "run": cw.get("run"), "class": cw.get("class"), "start": cw.get("start"),
         "note": cw.get("note", ""), "mechanism": mechanism_of(cw.get("note", "")), "screen": screen_key(cw.get("note", "")),
         "agent": agent, "direction": direction, "commit": cand.get("commit", ""), "args": cand.get("args", ""),
         "launched": run_time(cw.get("run", "")), "recorded": recorded,
-        "valid": bool(w and w.get("valid")), "failed_checks": bad if w else ["no witness"],
+        "valid": bool(w and w.get("valid")) and not bad, "failed_checks": bad if w else ["no witness"],
+        "derived": derived,
         "witness": (w or {}).get("schema", "covert-witness/witness/v1") if w else None, "counted": bool(harness),
         "train_flops": (harness or {}).get("flops") or (w or {}).get("train", {}).get("flops"),
         "declared_flops": (w or {}).get("train", {}).get("flops"), "tokens": (w or {}).get("train", {}).get("tokens"),
         "bpb": (w or {}).get("score", {}).get("bpb"), "E_bytes": (w or {}).get("E", {}).get("bytes"),
         "E_format": (w or {}).get("E", {}).get("format"),
-        "phi": (w or {}).get("structure", {}).get("phi"),
+        "phi": ((w or {}).get("structure_actual") or (w or {}).get("structure") or {}).get("phi"),
         "lowest_updated_layer": (w or {}).get("structure", {}).get("lowest_updated_layer"),
         "gpu_seconds": (w or {}).get("gpu_seconds"), "curve": curve,
         "trainable": meta.get("trainable", {}), "method": notes.get("method"),
@@ -308,9 +423,12 @@ def run_time(run: str) -> str:
 def collect(since: str = SINCE) -> dict:
     r = store_remote()
     t0 = time.time()
-    recs = [x for x in manifests(r, since) if x[2].get("kind") == "evidence/v1"]
+    te = te_current()
+    every = manifests(r, since)
+    by_art = {art: man for art, _, man in every}
+    recs = [x for x in every if x[2].get("kind") == "evidence/v1"]
     cw = [x for x in recs if "class" in ((x[2].get("meta") or {}).get("covert_witness") or {})]
-    te = [x for x in recs if str((x[2].get("meta") or {}).get("schema", "")).startswith("te-core/")]
+    tes = [x for x in recs if str((x[2].get("meta") or {}).get("schema", "")).startswith("te-core/")]
     starts = starts_info(r, recs)
     (STATE / "starts.json").write_text(json.dumps(starts) + "\n")
     commit_of = {}
@@ -321,10 +439,14 @@ def collect(since: str = SINCE) -> dict:
             commit_of[art] = json.loads(p.read_text()).get("commit", "")
     runs = attempts(r, since)
     commits = branches(set(commit_of.values()) | {a["commit"] for a in runs})
+    custody = {a["run"]: by_art.get(a["run_record"]) for a in runs if a.get("run_record")}
+    official = official_blobs()
     with ThreadPoolExecutor(16) as ex:
-        rows = list(ex.map(lambda x: cw_row(r, x[0], x[1], x[2], commits), cw))
-        rows += [t for t in ex.map(lambda x: te_row(r, x[0], x[1], x[2]), te) if t]
-    rows += te_ledger_rows({x.get("te_id") for x in rows if x["source"] == "te_core"})
+        rows = list(ex.map(lambda x: cw_row(r, x[0], x[1], x[2], commits, custody.get(
+            x[2]["meta"]["covert_witness"].get("run")), te, official), cw))
+        rows += [d for x in rows for d in x.pop("derived")]
+        rows += [t for t in ex.map(lambda x: te_row(r, x[0], x[1], x[2]), tes) if t]
+    rows += te_ledger_rows({x.get("te_id") for x in rows if x["source"] == "te_core" and not x.get("derived")})
     recorded_runs = {x.get("run") for x in rows}
     for a in runs:
         a["agent"], a["direction"] = direction_of(commits.get(a["commit"], []), a["class"])
@@ -346,7 +468,7 @@ def collect(since: str = SINCE) -> dict:
            "runs_without_record": [a["run"] for a in runs if not a["record"] and not a.get("cancelled")
                                     and run_time(a["run"]) >= SEARCH_START],
            "cancelled": len([a for a in runs if a.get("cancelled")]),
-           "seconds": round(time.time() - t0, 1)}
+           "te_core_commit": te, "seconds": round(time.time() - t0, 1)}
     (STATE / "collect.json").write_text(json.dumps(out, indent=1) + "\n")
     return out
 
@@ -364,12 +486,13 @@ def index_md(rows: list[dict], runs: list[dict], starts: dict) -> str:
     for x in entries(rows, audit=True):
         s0 = starts.get(x["start"], {}).get("bpb")
         drop = 100 * (s0 - x["bpb"]) / s0 if s0 and x["bpb"] is not None else None
-        if x.get("te_id") or x.get("counted"):
+        if x["source"] == "te_core" or x.get("counted"):
             D, how = x.get("D"), "c"
         else:
             ann = analytic(x, starts) if x["valid"] and x["start"] in starts else None
             D, how = ann and ann["depth"], "a"
-        d = x["direction"] + (" (not scored)" if is_audit(x) else " (cancelled unrun)" if x.get("cancelled") else "")
+        d = x["direction"] + (" (not scored)" if is_audit(x) else " (cancelled unrun)" if x.get("cancelled") else
+                              " (not scored: no launch.py record)" if x.get("unrecorded") else "")
         lines.append(f"| `{short(x['id'])}` | {(x['agent'] or '').removeprefix('cursor/') or '—'} | {d} | {x['class']} | "
                      f"{x['note']} | {x['start']} | {(x['launched'] or '')[11:16]} | {fmt(x['train_flops'])} | "
                      f"{fmt(x['bpb'], '.4f')} | {fmt(drop, '.2f')} | {fmt(x['E_bytes'], ',')} | {fmt(x['phi'], '.3f')} | "
@@ -505,16 +628,17 @@ def run_rows(rows: list[dict]) -> dict[str, dict]:
 
 def submissions(rows: list[dict], starts: dict) -> list[dict]:
     """Every checkpoint of every valid record as a te_core submission: {id, cp, start, macs, val_bpb, rho, phi, depth}.
-    A record made inside te_core's harness (witness v2) is scored from its te_core ledger records, one per checkpoint,
-    with the harness's counted annotation; the analytic annotation is only for witness v1 records."""
+    A record made inside te_core's harness (witness v2) is scored from the te_core submissions `collect` ingested from the
+    node's run.json (one per checkpoint, the harness's counted annotation); the analytic annotation is only for witness
+    v1 records. The te_core records agents publish themselves are listed, never scored."""
     out = []
     launched = run_rows(rows)
     for x in rows:
+        if x["source"] == "te_core" and not x.get("derived"):
+            continue
         rec = launched.get(x.get("run")) if x["source"] == "te_core" else None
-        if rec:
-            if not rec["valid"]:
-                continue
-            x = x | {"direction": rec["direction"], "start": rec["start"], "note": rec["note"]}
+        if x["source"] == "te_core" and not (rec and rec["valid"]):
+            continue
         if not x.get("valid") or x.get("start") not in starts or is_audit(x):
             continue
         if x["source"] == "te_core":
@@ -555,7 +679,9 @@ def score(write: bool = True) -> dict:
     rows = [json.loads(x) for x in (STATE / "index.jsonl").read_text().splitlines() if x.strip()]
     starts = json.loads((STATE / "starts.json").read_text())
     subs = submissions(rows, starts)
+    col = STATE / "collect.json"
     rep = {"at": now(), "te_core": TE_CORE_VERSION,
+           "te_core_commit": json.loads(col.read_text()).get("te_core_commit", "") if col.exists() else "",
            "annotation": "the harness's count for witness v2 records, analytic for witness v1 (module docstring)",
            "p_bits": P_BITS, "c_per_forward_token": C_PER_FORWARD_TOKEN, "starts": {}, "submissions": len(subs)}
     for s in STARTS:
@@ -627,25 +753,28 @@ def drop_of(x: dict, starts: dict) -> float | None:
 
 
 def entries(rows: list[dict], audit: bool = False) -> list[dict]:
-    """One row per candidate: a launch.py record, or a te_core run's last checkpoint (φ and D read at 10kB/r1). A witness
-    v2 record takes |C|, φ and D from its run's last te_core checkpoint (the harness's count). The auditor's records and
-    the records of runs cancelled unrun only with `audit` (the ledger lists them; nothing scores or counts them)."""
-    launched = run_rows(rows)
+    """One row per candidate: a launch.py record, or (listed with `audit` only) a te_core run no record of launch.py's
+    holds. A witness v2 record takes |C|, φ and D (read at 10kB/r1) from the last te_core checkpoint `collect` ingested
+    from its node's run.json, and the te id of its agent's own last checkpoint, if any, for the ledger's promotion. The
+    auditor's records and the records of runs cancelled unrun only with `audit` (the ledger lists them; nothing scores or
+    counts them)."""
     last: dict[str, dict] = {}
+    own: dict[str, dict] = {}
     for x in rows:
         if x["source"] == "te_core" and x.get("te_kind") == "submission":
-            k = x.get("run") or x["te_id"]
-            if k not in last or (x.get("fraction") or 0) > (last[k].get("fraction") or 0):
-                last[k] = x
+            m, k = (last, x["record"]) if x.get("derived") else (own, x.get("run") or x["te_id"])
+            if k not in m or (x.get("fraction") or 0) > (m[k].get("fraction") or 0):
+                m[k] = x
     out = []
     for x in rows:
         if x["source"] != "launch.py":
             continue
-        t = last.pop(x["run"], None) if x.get("counted") else None
-        out.append(x | ({"phi": at10(t["phi"]), "D": at10(t["D"]), "train_flops": 2 * t["macs"], "te_id": t["te_id"],
-                         "tier": t.get("tier"), "families": t.get("families")} if t else {}))
-    out += [x | {"phi": at10(x.get("phi")), "D": at10(x.get("D"))} for x in last.values()]
-    return sorted((x for x in out if audit or not (is_audit(x) or x.get("cancelled"))),
+        t = last.get(x["id"])
+        o = own.pop(x["run"], None) if x.get("run") else None
+        out.append(x | ({"phi": at10(t["phi"]), "D": at10(t["D"]), "train_flops": 2 * t["macs"], "te_id": o and o["te_id"],
+                         "tier": t.get("tier"), "families": t.get("families"), "ingested": True} if t else {}))
+    out += [x | {"phi": at10(x.get("phi")), "D": at10(x.get("D")), "unrecorded": True} for x in own.values()]
+    return sorted((x for x in out if audit or not (is_audit(x) or x.get("cancelled") or x.get("unrecorded"))),
                   key=lambda x: (x.get("launched") or "", x["id"]))
 
 
@@ -765,7 +894,7 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     nc = len([x for x in rows if x["source"] == "launch.py" and x.get("cancelled")])
     out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid; direction audit's and {nc} of runs cancelled unrun not "
                f"counted). Frontier per target "
-               f"below: honest = least FLOPs of the reference directions (ref-*) reaching l*; W*/honest per (k, r) in the "
+               f"below: honest = least |C| (MACs) of the reference directions (ref-*) reaching l*; W*/honest per (k, r) in the "
                f"order 10kB r1,r10,r100 | 100kB | 1MB, te_core rho, with the W* entries, (c) priced by the harness's "
                f"count, (a) by the analytic annotation (p 16); full tables in the scorer's score.md.")
     for s, st in rep["starts"].items():
@@ -796,7 +925,7 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     cred = [(x, analytic(x, starts)["credit"]) for x in cw
             if x["source"] == "launch.py" and not x.get("counted") and x["valid"] and x["start"] in starts]
     cred = [(x, c) for x, c in cred if c and c["covered_share"] > 0]
-    fam = [x for x in cw if x.get("te_id") and any(f["covers"] for f in x.get("families") or [])]
+    fam = [x for x in cw if x.get("ingested") and any(f["covers"] for f in x.get("families") or [])]
     out.append(f"{hhmm} scorer [DIGEST] E credited as a T1 counterexample family (its decoder rebuilds each covered "
                f"step's weights from theta within c): witness v1 seed logs as the witness states them, " + (", ".join(
                    f"{short(x['id'])} (prefix log of {c['coefficients']} coefficients, "
@@ -806,12 +935,18 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
                + (", ".join(f"{short(x['id'])} ({families_of(x)})" for x in fam) or "none")
                + "; no other entry's E is credited.")
     v2 = [x for x in cw if x["source"] == "launch.py" and x.get("counted")]
-    missing = [x for x in v2 if not x.get("te_id")]
-    out.append(f"{hhmm} scorer [DIGEST] counted: {len(v2)} witness v2 records priced by the harness's count"
-               + (f" ({len(missing)} with no te_core ledger record yet, unscored: "
-                  + ", ".join(short(x["id"]) for x in missing) + ")" if missing else "")
+    refused = [x for x in v2 if not x.get("ingested")]
+    unrec = [x for x in entries(rows, audit=True) if x.get("unrecorded")]
+    out.append(f"{hhmm} scorer [DIGEST] counted: {len(v2)} witness v2 records priced by the harness's count, re-ingested "
+               f"here by te_core {rep.get('te_core_commit', '')[:10]} from the run.json the node wrote (custody: the "
+               f"record's witness and run.json are the node's out/)"
+               + (f" ({len(refused)} refused: " + ", ".join(f"{short(x['id'])} {';'.join(x['failed_checks'])}"
+                                                            for x in refused) + ")" if refused else "")
                + f"; {len([x for x in cw if x['source'] == 'launch.py' and not x.get('counted')])} witness v1 records "
-               "priced by the analytic annotation (self-reported trainable set and step log).")
+               "priced by the analytic annotation (the declared trainable set, which the witness checks covers every "
+               "changed tensor, so U, phi and D are never understated; the step log's tokens are self-reported); "
+               + (f"{len(unrec)} te_core runs with no launch.py record listed, not scored." if unrec else
+                  "te_core ledger records agents publish are listed, never scored."))
     for d in sorted({x["direction"] for x in cw}):
         out.append(f"{hhmm} scorer [DIGEST] {d}: " + direction_sentence(d, rows, starts))
     return out
@@ -929,7 +1064,7 @@ def final_collect() -> list[dict]:
     """Every launched final run's state and, once it ended, its scores (from the run's out/)."""
     path = FINAL / "launches.jsonl"
     launches = [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
-    out = []
+    out, te = [], ""
     for la in launches:
         run = la.get("run")
         if not run:
@@ -956,9 +1091,13 @@ def final_collect() -> list[dict]:
                 elif f.name.startswith("start."):
                     _, s, sp, _ = f.name.split(".")
                     row.setdefault("starts", {}).setdefault(s, {})[sp] = (d.get("score") or {}).get("bpb")
-            led = sorted((o / "ledger" / "records").glob("*/*.json")) if o.is_dir() else []
-            row["ledger"] = [r for r in (te_rec_row(json.loads(p.read_text()), "", "") for p in led)
-                             if r["te_kind"] == "submission"]
+            if (o / "run" / "run.json").exists():
+                te = te or te_current()
+                a = la.get("args") or []
+                m = a[a.index("--mechanism") + 1] if "--mechanism" in a[:-1] else ""
+                recs = te_ingest(o / "run", FINAL / "ingest" / te[:12] / run, m, run)
+                row["ledger"] = [] if isinstance(recs, str) else [te_rec_row(x, "", "") | {"derived": True} for x in recs]
+                row["ingest_error"] = recs if isinstance(recs, str) else None
         out.append(row)
     FINAL.mkdir(parents=True, exist_ok=True)
     (FINAL / "results.jsonl").write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in out))
