@@ -6,6 +6,8 @@
 - `--store bf16` writes every full tensor through the `lora` format's bf16 `full` list: the evaluator multiplies weights at
   bf16 under autocast, so the f32 low halves `encode_full` would carry never reach a matmul. `--store f32` is `encode_full`.
 - `--select-pool P`: draw P·batch windows, score them with a forward (logged), train on the `--select-by` share.
+- `--head sampled`: the loss's softmax runs over each micro-batch's distinct targets plus `--head-neg` uniform negatives
+  (log-Q corrected), so a shallow step skips most of the tied head's forward and input gradient (2·50304·d MACs a token).
 
 SPEC is comma-separated `BLOCKS:LEAVES`: BLOCKS `all`, `i`, `i-j` or a negative index from the top; LEAVES `+`-joined leaf
 names (`wq wk wv wo w_gate w_up w_down`) or groups (`qkv`, `attn`, `gu`, `mlp`, `all`). `--klass` must equal the class the
@@ -156,6 +158,11 @@ def main() -> int:
     ap.add_argument("--select-by", choices=("high", "low", "mid"), default="high")
     ap.add_argument("--fresh", action=argparse.BooleanOptionalAction, default=False,
                     help="train only on windows the start never read")
+    ap.add_argument("--head", choices=("full", "sampled"), default="full",
+                    help="sampled: softmax over each micro-batch's distinct targets plus --head-neg uniform negatives")
+    ap.add_argument("--head-neg", type=int, default=2048)
+    ap.add_argument("--head-plan", type=int, default=10240,
+                    help="head rows a micro-batch is planned at, for the step count (the log prints the mean measured)")
     ap.add_argument("--snaps", type=int, default=8, help="E snapshots at k/SNAPS of each arm, for the FLOPs-to-target curve")
     ap.add_argument("--arms", default="", help="a packed LR sweep: comma-separated multipliers of every LR, one arm each, "
                     "each from θ on the same data order with its share of the budget (later arms' checkpoints are "
@@ -238,19 +245,24 @@ def main() -> int:
     pool = a.select_pool * a.batch
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}]
                                    + ([{"op": "forward", "tokens": pool * prepare.EVAL_CTX}] if a.select_pool > 1 else []))["flops"] + extra
+    V, d = net.inner.embed.shape if a.head == "sampled" else (0, 0)
+    if a.head == "sampled":
+        per_step -= 2 * 2 * (V - a.head_plan) * d * tokens
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
     mults = [float(x) for x in a.arms.split(",")] if a.arms else [1.0]
     n_arm = n_steps // len(mults)
     fwd = torch.compile(net) if fused else net
     dev = prepare.DEVICE.split(":")[0]
     structure = prepare.deep_share(rec, set(full + lora))
-    steps, snaps, arms = [], [], []
+    steps, snaps, arms, cands = [], [], [], []
+    gneg = torch.Generator(device=prepare.DEVICE)
     marks = {round(n_arm * k / a.snaps) for k in range(1, a.snaps)}
     t0 = time.perf_counter()
     for arm, mult in enumerate(mults):
         if arm:
             reset()
         opts = optimizers(mult)
+        gneg.manual_seed(a.seed + 1)
         base_lrs = [[grp["lr"] for grp in o.param_groups] for o in opts]
         data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
         fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
@@ -273,8 +285,13 @@ def main() -> int:
             for i in range(0, a.batch, a.micro):
                 x = rows[i: i + a.micro]
                 with torch.autocast(dev, dtype=torch.bfloat16):
-                    logits = fwd(x[:, :-1])
-                loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
+                    if a.head == "sampled":
+                        loss, n_cand = sampled_loss(net.inner, x, a.head_neg, gneg)
+                        cands.append(n_cand)
+                    else:
+                        logits = fwd(x[:, :-1])
+                        loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
+                loss = loss * (len(x) / a.batch)
                 loss.backward()
             torch.nn.utils.clip_grad_norm_([p for o in opts for grp in o.param_groups for p in grp["params"]], 1.0)
             for o in opts:
@@ -285,16 +302,35 @@ def main() -> int:
                 steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
             if (step + 1) % 100 == 0:
                 print(json.dumps({"arm": arm, "step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
-                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+                                  "s": round(time.perf_counter() - t0, 1),
+                                  **({"candidates": round(sum(cands) / len(cands))} if cands else {})}), flush=True)
             if step + 1 in marks or (step + 1 == n_arm and arm < len(mults) - 1):
                 snaps.append((encode(a.store, factors, params, full, theta), len(steps)))
     blob = encode(a.store, factors, params, full, theta)
     model = prepare.decode(theta, blob)
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=full + lora,
                    notes={"method": "hybrid", "rank": rank if lora else None, "args": vars(a), "steps": n_steps,
-                          "arms": arms, "data": fresh},
+                          "arms": arms, "data": fresh,
+                          **({"head_candidates_mean": sum(cands) / len(cands)} if cands else {})},
                    snapshots=snaps)
     return 0
+
+
+def sampled_loss(lm, x: torch.Tensor, k: int, gen: torch.Generator) -> tuple[torch.Tensor, int]:
+    """Cross-entropy through the tied head over the micro-batch's distinct targets plus k negatives drawn uniformly from the
+    rest of the vocabulary, each carrying log((V - |targets|) / k) for the rest's share of the partition function (sampled
+    softmax with its log-Q correction). The head rows are gathered with index_select, so the token count stays the batch's."""
+    inp, tgt = x[:, :-1], x[:, 1:]
+    h = F.rms_norm(lm.hidden(inp), (lm.embed.shape[1],), lm.norm)
+    cand, idx = torch.unique(tgt, return_inverse=True)
+    z = F.linear(h, lm.embed.index_select(0, cand))
+    V = lm.embed.shape[0]
+    if k and V - len(cand) > k:
+        rest = torch.ones(V, device=x.device)
+        rest[cand] = 0.0
+        neg = torch.multinomial(rest, k, replacement=False, generator=gen)
+        z = torch.cat([z, F.linear(h, lm.embed.index_select(0, neg)) + math.log((V - len(cand)) / k)], -1)
+    return F.cross_entropy(z.float().view(-1, z.shape[-1]), idx.reshape(-1)), len(cand)
 
 
 @torch.no_grad()
