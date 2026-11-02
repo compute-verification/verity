@@ -1,9 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-import Proofs.Flock.Soundness.Discharge.DecodeZL
-import Proofs.Flock.Soundness.Discharge.HiddenDec
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ
-import Proofs.Flock.Soundness.Discharge.Tables
+import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Assemble
+import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
 
 /-!
 # The headlines with R11b's message half discharged

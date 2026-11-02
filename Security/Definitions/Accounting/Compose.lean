@@ -103,7 +103,7 @@ The logical layer:
   and the service's commit order (`LayerCommitted`), the logical layer's bound `Λ·ln(1/δ_s) + min(a, b)·D₀` with `D₀`
   the cone weight on tiles of no words, and its conclusion on an accepted run: all but a share `d` of the committed
   words fixed right and all but `d₀ ≤ d` folded, with `a·(d − d₀) + b·d₀ < r`.
-* `Declared.Seeded`, `SeedNamed`, `ScopeSeeded`, `setAt`, `redraw`, `tileRound`, `roundGain`, `roundWords`,
+* `Declared.Seeded`, `SeedNamed`, `ScopeSeeded`, `setAt`, `resample`, `tileRound`, `roundGain`, `roundWords`,
   `roundRate`, `roundCone`, `seedTheta`, `wholeTheta`, `roundPremium`, `premiumOf`, `rOfSeeded`: the seeded
   statements' scope (every round holding a credited tile seeded, one call site a round, so a round is a seed group,
   and every value a seeded round reads named by its seed's preimage or registered before the salt,
@@ -357,8 +357,10 @@ unit's gate reads, glue fed by one) before the next round's; and a receipt, whic
 later round's root up to the draw's. A run input committed after its reader's coin lets the prover choose tokens or
 decode feedback to match the reader's noise: that breaks (H-μ)'s salt-independence (E3) for the reader.
 
-Today's code has a coin a round, and nothing shows that it meets this order. A live window's coins are its salt coin, its
-draw coin and one round coin a round (`verity/core/protocols/pouw/window.py`'s `live_families`). Round r's coin opens
+Today's code has a coin a round, and nothing shows that it meets this order. A live window's coins are its salt coin and
+one round coin a round (`verity/core/protocols/pouw/window.py`'s `live_families`), and its draw coin is a session of its
+own (`DRAW_FAMILIES`), opened withheld on the draw root so its coin root is released only after the prover's
+commitment. Round r's coin opens
 once, after the round root the challenger's signed log shows it received (`core_check.rounds`), and round r's noise key
 is that coin's and that root's (`window.round_key`). Each round's root commits that round's rows of every A value
 before its coin (`credit.a_link`). A seeded window's coins are still one salt a window and the draw
@@ -824,7 +826,7 @@ def setAt {C : Type} : {n : ℕ} → Paths C n → Fin n → C → Paths C n
 /-- **One oracle answer of the window redrawn**: the window's oracle answers `a` (round `r`'s seed queries' answers
 its `r`-th coin, `Fin T_q → B`) with query `q` of round `r` answered `b`, every other answer of every round as `a`
 has it. GRIND's per-query moment (`Assumptions.Compose.SeedLuckAt`) is over this one answer. -/
-def redraw {B : Type} {M Tq : ℕ} (a : Paths (Fin Tq → B) M) (r : Fin M) (q : Fin Tq) (b : B) :
+def resample {B : Type} {M Tq : ℕ} (a : Paths (Fin Tq → B) M) (r : Fin M) (q : Fin Tq) (b : B) :
     Paths (Fin Tq → B) M :=
   setAt a r (Function.update (coinAt a r) q b)
 

@@ -226,15 +226,15 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | a served span: "window", `IntegrityPeriod`, PoUW's "commit period" and `window`, "sampling block", until renamed | execution phase |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
-| "proof service" | the proof system |
-| "audit coin"; "the audit" as a step | the challenger's coins; the verification phase |
+| "proof service" | proof system |
+| "audit coin"; "the audit" as a step | challenger's coins; verification phase |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
 | tick(g) | t(g) |
 | D for the chosen-state budget | Λ (D is the registered circuit) |
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
 
-The `veritor.*` gate families (`verity/ml/circuits/targets/target.py`) keep their spelling, which the `*_FAMILY_DIGEST`
-pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).
+The `veritor.*` gate families (`verity/ml/circuits/targets/target.py`) keep their spelling, which `*_FAMILY_DIGEST`
+pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).
 
 ## The ACCEL model and Dither
 
@@ -275,7 +275,7 @@ pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_t
     limit** is k_log ≤ 27 (`MAX_K_LOG`; the range the soundness bound covers, `Stmt.InRange`, with at most 1024 regions
     and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one R1CS block can't be proved as one.
 
-  An R1CS block is never a proof block, and `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
+  An R1CS block is never a proof block; `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`).
@@ -287,8 +287,8 @@ pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_t
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
     statements). A matrix's row stays plain English. A workload or a server block is never a row (Older names).
   - **Transcript**: the messages of a proof or a session, what its verifier sees (C-Flock's, PoUS's transcript hash).
-    The values of a run's gates are its trace; `evaluate_call`'s `transcript` argument and `ExecutionTranscript` keep
-    the old word until they are renamed.
+    The values of a run's gates are its trace (`evaluation.reference.Trace`); the Python and Lean evaluators'
+    shared refusal text keeps the old word.
   - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
     sense (above).

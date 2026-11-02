@@ -43,10 +43,10 @@ open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
 
 /-- The registration a registered port reads: its value, root, leaf count, row width, domain and leaf schema, all its
 fields but its name and its read positions (`Registered.Port`; rec_outer.py:235, `read(chain.reg.entry(), …)`). -/
-abbrev Site := String × ByteArray × ℕ × Option ℕ × ℕ × ByteArray × String
+abbrev RegFields := String × ByteArray × ℕ × Option ℕ × ℕ × ByteArray × String
 
-/-- A port's registration (`Site`). -/
-def site (p : Flock.Registered.Port) : Site := (p.value, p.root, p.leaves, p.words, p.wordBits, p.domain, p.schema)
+/-- A port's registration (`RegFields`). -/
+def site (p : Flock.Registered.Port) : RegFields := (p.value, p.root, p.leaves, p.words, p.wordBits, p.domain, p.schema)
 
 /-! ## A drawn unit's registered reads -/
 
@@ -109,7 +109,7 @@ theorem colKeyed_drawn {ω : Lv.Ω} {R' : Reg'} {o}
 /-- **A column keyed at the registration `s`** (`ColKeyed`, the read's port's `site` `s` in place of the port): its Δ
 key is bit `k` of row port `q`, the session's reads file names `q`, and unit `u`'s row `q` is read at a port of
 registration `s`, position `pos`. -/
-def ColKeyedS (u : Fin nv) (col k : ℕ) (s : Site) (pos : ℕ) : Prop :=
+def ColKeyedS (u : Fin nv) (col k : ℕ) (s : RegFields) (pos : ℕ) : Prop :=
   ∃ (_ : col < (Rows.ofNet hU).nIn) (q : Fin c.ports.size) (_ : k < Layout.portRowW c q),
     Aliased.srcKey c (0 * (Rows.ofNet hU).nIn + col) = .msg q.val (k / 8) (k % 8) ∧
       (∃ pt ∈ zo.own, pt.name = c.ports[q].name) ∧ site (zo.rd.port (.inl (u, q))) = s ∧
@@ -121,7 +121,7 @@ theorem colKeyedS_of {u : Fin nv} {col k pos : ℕ} {pa : Flock.Registered.Port}
   exact ⟨hc, q, hk, hkey, hown, by rw [hport], hat⟩
 
 /-- **A column keyed at a registration is a registered bit of the registrant's row** (`regBit_of_colKeyed`). -/
-theorem regBit_of_colKeyedS {u : Fin nv} {col k : ℕ} {s : Site} {pos : ℕ} {K : ℕ} (hkK : k < K)
+theorem regBit_of_colKeyedS {u : Fin nv} {col k : ℕ} {s : RegFields} {pos : ℕ} {K : ℕ} (hkK : k < K)
     (hread : ∀ q : Fin c.ports.size, (∃ pt ∈ zo.own, pt.name = c.ports[q].name) → zo.rd.isRead (.inl (u, q)))
     (row : ℕ → ℕ → Bool)
     (hval : ∀ q : Fin c.ports.size, zo.rd.isRead (.inl (u, q)) → site (zo.rd.port (.inl (u, q))) = s →
@@ -352,7 +352,7 @@ end Shared
 /-- **The registrant's rows of registration `s` are `V`'s** (`AccRowsAre` at `site`). It holds at `V := accRegS s`
 from `SiteRowsShared` (`accRowsAreS_of_shared`). -/
 def AccRowsAreS (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
-    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) : Prop :=
+    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) →
       site ((F.zs R ω t R₂ j).rd.port (.inl (u, q))) = s R ω t R₂ → ∀ b < 256,
@@ -362,7 +362,7 @@ def AccRowsAreS (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ
           bitL (MerkleScheme.rowBytes (V R ω t R₂ ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))))).data.toList b
 
 /-- A registered read of registration `s` at position `p`, in some session, whose row has bit `b`. -/
-def AccReadS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) (R : Reg) (ω : L.Ω)
+def AccReadS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p b : ℕ)
     (x : Σ j : Fin F.stmts.size, Fin (F.Vs j).nv × Fin (F.Vs j).c.ports.size) : Prop :=
   (F.zs R ω t R₂ x.1).rd.isRead (.inl (x.2.1, x.2.2)) ∧
@@ -372,7 +372,7 @@ def AccReadS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) 
 open Classical in
 /-- Bit `b` of the registrant's row of registration `s` at position `p`: its bit at some registered read there
 (`AccReadS`), `false` if there is none. -/
-noncomputable def accBitS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) (R : Reg) (ω : L.Ω)
+noncomputable def accBitS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p b : ℕ) : Bool :=
   if h : ∃ x, F.AccReadS s R ω t R₂ p b x then
     (Decode.regVal (F.zs R ω t R₂ (Classical.choose h).1)
@@ -382,11 +382,11 @@ noncomputable def accBitS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
 
 /-- **`rec-acc`'s rows as registered at registration `s`**: row `p`'s first two elements are the registrant's
 (`accBitS`). -/
-noncomputable def accRegS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) (R : Reg) (ω : L.Ω)
+noncomputable def accRegS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p : ℕ) : Array F128 :=
   #[ofBits fun e => F.accBitS s R ω t R₂ p e, ofBits fun e => F.accBitS s R ω t R₂ p (128 + e)]
 
-theorem bitL_accRegS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) (R : Reg) (ω : L.Ω)
+theorem bitL_accRegS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p : ℕ) {b : ℕ} (hb : b < 256) :
     bitL (MerkleScheme.rowBytes (F.accRegS s R ω t R₂ p)).data.toList b = F.accBitS s R ω t R₂ p b := by
   have hl : (F.accRegS s R ω t R₂ p).toList =
@@ -403,7 +403,7 @@ theorem bitL_accRegS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
 /-- **`AccRowsAreS` at `rec-acc`'s rows as registered** (`accRegS`), from one registrant row per registration and
 position (`SiteRowsShared`). -/
 theorem accRowsAreS_of_shared (hshared : F.SiteRowsShared dg N k Rw)
-    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) :
+    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) :
     F.AccRowsAreS dg N k Rw (F.accRegS s) s := by
   intro R ω t R₂ τ o h j u q hread hsite b hb256 hb
   rw [F.bitL_accRegS s R ω t R₂ _ hb256]
@@ -415,7 +415,7 @@ theorem accRowsAreS_of_shared (hshared : F.SiteRowsShared dg N k Rw)
   exact (hshared R ω t R₂ τ o h _ j _ u _ q hx.1 hread (hx.2.1.trans hsite.symm) hx.2.2.1 b hx.2.2.2 hb).symm
 
 /-- **`AccRowsAreS` at `rec-acc`'s rows as registered** (`accRegS`; `siteRowsShared`), where no read is segmented. -/
-theorem accRowsAreS (hu : F.ReadsUnsegmented dg N k Rw) (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) :
+theorem accRowsAreS (hu : F.ReadsUnsegmented dg N k Rw) (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) :
     F.AccRowsAreS dg N k Rw (F.accRegS s) s :=
   F.accRowsAreS_of_shared dg N k Rw (F.siteRowsShared dg N k Rw hu) s
 
@@ -425,7 +425,7 @@ one registration.
 **The algebra unit's end columns are keyed by `rec-acc`'s rows at the rep's ends, at registration `s`** (`EndKeys`
 at `site`): bit `b` of `acc0 i` and of `acc1 i` at rep `r`'s algebra unit is bit `128 i + b` of a row `own` names,
 read at a port of registration `s` at the rep's first row `r · nOpen` and its last `r · nOpen + nOpen`. -/
-def EndKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) (sA : Fin 2 → Fin F.stmts.size)
+def EndKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (sA : Fin 2 → Fin F.stmts.size)
     (uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv) (col0 col1 : Fin 2 → ℕ → ℕ → ℕ) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ i < 2, ∀ b < 128,
     ColKeyedS (F.zs R ω t R₂ (sA r)) (uA r) (col0 r i b) (128 * i + b) (s R ω t R₂) (r.val * F.nOpen) ∧
@@ -433,7 +433,7 @@ def EndKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) 
 
 /-- **`HEnds` from the registrant's rows at a registration** (`hEnds_of_regs` at `regBit_of_colKeyedS`). -/
 theorem hEnds_of_regsS (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
-    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) (sA : Fin 2 → Fin F.stmts.size)
+    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (sA : Fin 2 → Fin F.stmts.size)
     (uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv) (col0 col1 : Fin 2 → ℕ → ℕ → ℕ)
     (hd0 : ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ i < 2, ∀ b < 128,
       Decode.RegBit (F.zs R ω t R₂ (sA r)) (uA r) 0 (col0 r i b)
@@ -459,7 +459,7 @@ theorem hEnds_of_regsS (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ 
 /-- **`HEnds` from `HResL` and the registrant's rows at a registration** (`hEnds_of_part` at `EndKeysS`). -/
 theorem hEnds_of_partS {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hst : F.HStruct GS gs) (hres : F.HResL dg N k Rw gs) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
-    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) {pA : ℕ} {a0 a1 : ℕ → ℕ}
+    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) {pA : ℕ} {a0 a1 : ℕ → ℕ}
     (hin : F.EndsInPart pA a0 a1) (hreg : F.RowsRegistered dg N k Rw) (hacc : F.AccRowsAreS dg N k Rw V s)
     (hkeys : F.EndKeysS dg N k Rw s (fun _ => F.sess pA) (F.un pA) (fun _ i b => rowColOf F.sh pA (128 * a0 i + b))
       (fun _ i b => rowColOf F.sh pA (128 * a1 i + b))) :
@@ -481,7 +481,7 @@ reads `rec-acc` at the level's chain positions, rec_outer.py:236) and a verifier
 entry is one registration.
 **Each opening's `acc` columns are keyed by `rec-acc`'s row at its chain position, at registration `s`** (`OpenKeys`
 at `site`). -/
-def OpenKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) : Prop :=
+def OpenKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∀ b < 256,
       ColKeyedS (F.zs R ω t R₂ (F.sessO ℓ)) (F.unO ℓ r j) (accCol (levelLanes F.sh ℓ) (F.depth ℓ) + b) b (s R ω t R₂)
@@ -491,7 +491,7 @@ def OpenKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site)
 /-- **`HAccRows` from the registrant's rows at a registration and the openings' outputs** (`hAccRows_of_keys` at
 `OpenKeysS`, `AccRowsAreS`). -/
 theorem hAccRows_of_keysS (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
-    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) (hreg : F.RowsRegistered dg N k Rw)
+    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (hreg : F.RowsRegistered dg N k Rw)
     (hacc : F.AccRowsAreS dg N k Rw V s) (hk : F.OpenKeysS dg N k Rw s) (hout : F.AccOutL dg N k Rw V) :
     F.HAccRows dg N k Rw V := by
   intro R ω t R₂ τ o h r ℓ hℓ j hj i hi

@@ -111,7 +111,7 @@ theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool
     · exact absurd h (throw_ne_ok _ _)
 
 /-- **Every port of a complete statement opens at its registered root.** If `check` accepts the statement and the
-complete check does too (`checkComplete`, which flock-verify runs when the `--registered` file sets `complete`), and the
+complete check does too (`checkComplete`, which flock-verify runs whenever `--registered` is given), and the
 circuit names each port once, then every port `q` of the circuit, each input port and each output row (so whatever an
 output's cone reads), is a port `reg` of `own` of its name, `reg`'s schema and rows, and every instance's row of it
 climbs, from its frame-v3-sha512 leaf at the position the verifier's program reads for the instance's unit, to `reg`'s
@@ -306,7 +306,7 @@ theorem opensLeaf_binding (reg : Port) (pos : Nat) (x path y path' : ByteArray) 
 /-- The proposition `opensLeaf_binding` implies (satisfiable by counting on its own; `opensLeaf_binding` is the
 reduction). -/
 theorem opensLeaf_collision (reg : Port) (pos : Nat) (x path y path' : ByteArray) (hx : x.size = 64) (hy : y.size = 64)
-    (hne : x ≠ y) (h1 : opensLeaf reg x pos path = true) (h2 : opensLeaf reg y pos path' = true) : Sha512.Collision :=
+    (hne : x ≠ y) (h1 : opensLeaf reg x pos path = true) (h2 : opensLeaf reg y pos path' = true) : Sha512.HasCollision :=
   let h := opensLeaf_binding reg pos x path y path' hx hy hne h1 h2
   ⟨_, _, h.1, h.2⟩
 

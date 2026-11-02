@@ -1,5 +1,5 @@
-import Proofs.Flock.Claims.Recursion.BoundRouteMerged
 import Proofs.Flock.Claims.Recursion.BoundMergedLin
+import Proofs.Flock.Claims.Recursion.BoundRouteCols
 
 /-!
 # `KSBoundLin` at the deployment with no bridge and no `WeightCovers` (route 2B, linearly)

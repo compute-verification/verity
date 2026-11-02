@@ -74,8 +74,9 @@ def test_demo_bs_store_is_certified_by_period_held_at():
 
 def test_320_reads_keep_the_105_read_certificates():
     """At `k ≥ 320` challenges the run keeps the 105-read certificates and their `1% + 2^-128`: the registered point
-    under `P2SlackFamilyUncond`, Demo B's store and `2^27` blocks under `periodHeldAt`. `ObligationWide320`'s `2^-20`
-    (`p2.wide320_certificate`, from the open conjecture `P2RingRoundSecureWide`) is no run's certificate."""
+    under `P2SlackFamilyUncond`, Demo B's store and `2^27` blocks under `periodHeldAt`. `ObligationWide320`'s
+    `2^-20 + 2^-127` (`p2.wide320_certificate`, from the open conjecture `P2RingRoundSecureWide`, and `Sha512Prf`'s
+    `ε_prf` at the memory challenger's indices) is no run's certificate."""
     def at(bps: int, segments: int, k: int) -> R.Point:
         return R.Point(P2Params(16448, 21065, bps, segments), k, R.DEPLOYED.limit_ns)
 
@@ -112,7 +113,7 @@ def test_a_kept_store_is_audited_again(tmp_path):
     got = [period.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
                         protocol=TEST_ID, clock=Clock(10 ** 9)) for i in range(2)]
     assert [p.verdict for p in got] == ["accept", "accept"] and got[0].case["params"] != got[1].case["params"]
-    assert {p.s_bits for p in got} == {0}
+    assert {p.public("s_bits") for p in got} == {0}
 
 
 def _certified_store() -> period.Store:
@@ -134,7 +135,7 @@ def _run_of(case: dict) -> tuple:
     ev, p = json.loads(bytes.fromhex(case["evidence"])), case["params"]
     return (period.point_of(p["point"]), SCHEMES, [bytes.fromhex(t) for t in p["trusted"]],
             R.Setup.from_json(json.loads(bytes.fromhex(case["commitment"]))), bytes.fromhex(ev["digests"]),
-            R.Session.from_json(ev["session"]), bytes.fromhex(p["session_id"]))
+            R.ChallengerRecord.from_json(ev["session"]), bytes.fromhex(p["session_id"]))
 
 
 def test_an_audit_at_the_certified_point_checks_its_run():
@@ -152,7 +153,7 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond"
     zeros = period.audit("n0", held, hashlib.sha512(b"coins 2").digest(),
                          prover=lambda blocks: lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i], **kw)
-    assert zeros.verdict == "reject" and (zeros.s_bits, zeros.eps) == (0, 0)
+    assert zeros.verdict == "reject" and (zeros.public("s_bits"), zeros.eps) == (0, 0)
     with pytest.raises(R.Refused):
         R.check_at(*_run_of(zeros.case))
 

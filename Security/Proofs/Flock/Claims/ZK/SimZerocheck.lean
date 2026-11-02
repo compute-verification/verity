@@ -181,11 +181,11 @@ theorem liftTM_inv {α : Type} {x : TM α} {t t' : Transcript} {l l' : Array Cla
 
 /-- **The zerocheck's coins at the cut's coins** from round `L` on: `r_skip`'s at `L`, `r_outer`'s at `L + 1`, `z`'s at
 `L + 2`, residual round `i`'s at `L + 3 + i`. -/
-def zcCoins (coin : ℕ → ℕ → F128) (L : ℕ) : Zc.Coins :=
+def zcCoins (coin : ℕ → ℕ → F128) (L : ℕ) : Zc.Challenges :=
   ⟨coin L, coin (L + 1), coin (L + 2), fun i => coin (L + 3 + i)⟩
 
 /-- **A zerocheck's `z`, `ρ` and `r` at the coins `cs`**, those `Zc.out` returns. -/
-abbrev ZcOutAt (m : ℕ) (cs : Zc.Coins) (o : ZcOut) : Prop :=
+abbrev ZcOutAt (m : ℕ) (cs : Zc.Challenges) (o : ZcOut) : Prop :=
   o.z = cs.z ∧ o.rho = pushes cs.ρ (m - 6) ∧ o.rRest = cs.r m
 
 /-- **The cut's zerocheck in lockstep with the session's**: answered by `asksCut` from `l`, where the masked values `mk`

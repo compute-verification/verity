@@ -3,9 +3,10 @@ import Proofs.Flock.Claims.Complete.Custody
 import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.Complete.Files
 import Proofs.Flock.Claims.Complete.Link
-import Proofs.Flock.Claims.Complete.Replay
 import Proofs.Flock.Claims.Complete.Runs
 import Proofs.Flock.Claims.Complete.Shape
+import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
+import Proofs.Flock.Claims.Complete.Replay.ProverOk
 
 /-!
 # The session walk
@@ -218,11 +219,11 @@ theorem repP_prefix (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (s
   obtain ⟨rs, -, hrs', -, -⟩ := JsonRT.Rec.go (JsonRT.ligeritoP_rec resp h st.merkle sch _ cm0 tbl _ salt nonce) h1
   exact ⟨rs.toArray, Array.toList_inj.1 (by simpa using hrs')⟩
 
-theorem Lc.prefix_tEnd {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Lc.Coins}
+theorem Lc.prefix_tEnd {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Lc.Challenges}
     (t : Transcript) : Prefix t.rounds (Lc.tEnd c m tr zc full cs t).rounds :=
   (Prefix.push _ _).trans (Lc.prefix_t₂ t)
 
-theorem Rs.prefix_tEnd {tr : Trace} {claims : Array Claim} {cs : Rs.Coins} (t : Transcript) :
+theorem Rs.prefix_tEnd {tr : Trace} {claims : Array Claim} {cs : Rs.Challenges} (t : Transcript) :
     Prefix t.rounds (Rs.tEnd tr claims cs t).rounds :=
   Rs.prefix_loop (i := 0) t (Nat.zero_le _)
 

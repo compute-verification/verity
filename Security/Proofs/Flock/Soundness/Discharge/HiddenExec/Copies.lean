@@ -1,5 +1,4 @@
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-import Proofs.Flock.Soundness.Discharge.Zero
 
 /-!
 # `Layout.Aliased` at a hidden-output statement, from its flat twin's copy positions
