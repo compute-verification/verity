@@ -42,13 +42,14 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
   bytes, so scores compare across tokenizers. Training streams: learning_frontier's GPT-2 shards 000-002, and shard 000
   in Pythia's tokens.
 - **Search scores** (`prepare.Scorer`): every search evaluation, the harness's and the checker's, hashes the weights and
-  then draws a slice of the pool (`prepare.draw_slice`: a coin of 16 bytes from the OS, sha256(coin ‖ digest) seeding a
-  permutation of the pool's documents, the first of them that hold 2^21 tokens). The score is the start's bpb on the
-  whole pool plus the candidate's minus the start's on the slice, so a slice's difficulty cancels. The record names the
-  coin and the digest, which reproduce the slice.
+  then draws a slice of the pool (`prepare.draw_slice`: a coin of 16 bytes from the OS, and 1,024 of the pool's 8,192
+  evaluation windows, 2^20 tokens, drawn by a generator seeded with sha256(coin ‖ digest)). The score is the start's bpb
+  on the whole pool plus the candidate's minus the start's on the same windows, so a slice's difficulty cancels; the
+  start's windows are scored once per process. The record names the coin and the digest, which reproduce the slice.
 - **The sealed side** (`sealed.py`; `CW_SEALED`, `/workspace/research/te/sealed` on the node): the promotion and final
   sets, the final start, the sealed values and the decisions. At each of its evaluations the harness also scores the
-  promotion set and writes the value (the search and promotion bpb, and the start's) once under the weights' digest
+  promotion set's first 2^20 tokens (`prepare.PROMOTION_TOKENS`) and writes the value (the search and promotion bpb,
+  and the start's) once under the weights' digest
   (the checkpoint's `output_sha256`); nothing returns it. Promotions are the scorer's `promote.py`: it sends candidates
   (`{id, output_sha256}`) to `sealed.py decide` on the node that holds their values and gets one bit each, promote iff
   the search gain over the start is positive and the promotion gain is at least half of it (`sealed.PROMOTION_SHARE`),

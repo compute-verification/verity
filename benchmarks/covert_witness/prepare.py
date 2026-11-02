@@ -53,8 +53,10 @@ LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/lea
 SEARCH_POOL, PROMOTION, FINAL = "search-pool", "promotion", "final"
 HELD_OUT = ROOT / "heldout"
 SET_DIRS = {SEARCH_POOL: HELD_OUT / SEARCH_POOL, PROMOTION: SEALED / "heldout" / PROMOTION, FINAL: SEALED / "heldout" / FINAL}
-#: a search slice's size in GPT-2 tokens (whole documents)
-SLICE_TOKENS = 2 ** 21
+#: a search slice's GPT-2 tokens, whole windows of the pool's stream (`draw_slice`), and the promotion set's that a sealed
+#: value scores (its first windows): with the start's scores kept, a checkpoint costs about one 2^21-token evaluation
+SLICE_TOKENS = 2 ** 20
+PROMOTION_TOKENS = 2 ** 20
 #: what a candidate's train.py may not read (the harness's audit hook): the held-out sets, the sealed side, and v2.0's sets
 UNREADABLE = (HELD_OUT, SEALED, ROOT / "eval")
 #: final scoring (the scorer's, after the search): the harness scores the final set, and the sealed start loads
@@ -547,95 +549,143 @@ def held_out(split: str, tokenizer: str) -> tuple[np.ndarray, dict]:
     return toks, man
 
 
+def windows(n: int) -> tuple[list[int], list[int]]:
+    """The evaluation windows of a stream of n tokens, by their first token: EVAL_CTX + 1 tokens at stride EVAL_CTX, every
+    token after a window's first a target (so each token after the stream's first is a target once); the full windows,
+    and the shorter last one."""
+    starts = list(range(0, n - 1, EVAL_CTX))
+    full = [s for s in starts if s + EVAL_CTX + 1 <= n]
+    return full, starts[len(full):]
+
+
+def token_bytes(tokenizer: str) -> np.ndarray:
+    """Each GPT-2 token id's UTF-8 bytes, end-of-text 0: GPT-2's BPE is byte-level, so a document's tokens' bytes are its
+    text's (`data.py` encodes with `encode_ordinary`)."""
+    if tokenizer != "gpt2":
+        raise SystemExit(f"prepare: token bytes are GPT-2's, not {tokenizer}'s")
+    import tiktoken
+
+    enc = tiktoken.get_encoding("gpt2")
+    out = np.array([len(enc.decode_single_token_bytes(i)) for i in range(enc.n_vocab)], dtype=np.int64)
+    out[EOT["gpt2"]] = 0
+    return out
+
+
 def draw_slice(weights_digest: str, coin: str | None = None) -> dict:
     """A fresh slice of the search pool for weights already hashed to `weights_digest`: a live coin (16 bytes from the
-    OS, drawn now), the pool's documents permuted by a generator seeded with sha256(coin ‖ digest), and the first of them
-    that hold SLICE_TOKENS GPT-2 tokens, in row order. The recorded coin (hex) and the digest reproduce it."""
-    man = manifest(SEARCH_POOL)
+    OS, drawn now), and SLICE_TOKENS / EVAL_CTX of the pool's full windows (`windows`, by index) drawn without
+    replacement by a generator seeded with sha256(coin ‖ digest). The recorded coin (hex) and the digest reproduce it."""
+    full, _ = windows(manifest(SEARCH_POOL)["tokenizers"]["gpt2"]["tokens"])
     raw = os.urandom(16) if coin is None else bytes.fromhex(coin)
     seed = int.from_bytes(hashlib.sha256(raw + weights_digest.encode()).digest(), "little")
-    order = np.random.default_rng(seed).permutation(man["documents"])
-    have = np.cumsum(np.asarray(man["tokenizers"]["gpt2"]["doc_tokens"])[order])
-    n = min(int(np.searchsorted(have, SLICE_TOKENS)) + 1, len(order))
-    return {"coin": raw.hex(), "weights_digest": weights_digest, "documents": sorted(int(i) for i in order[:n])}
+    pick = np.random.default_rng(seed).choice(len(full), size=min(SLICE_TOKENS // EVAL_CTX, len(full)), replace=False)
+    return {"coin": raw.hex(), "weights_digest": weights_digest, "windows": sorted(int(i) for i in pick)}
 
 
 @torch.no_grad()
-def evaluate_bpb(net: Net, split: str, tokenizer: str, micro: int = 32, device: str = DEVICE,
-                 docs: list[int] | None = None) -> dict:
-    """Bits per byte of a held-out set, or of its documents `docs`: windows of EVAL_CTX + 1 tokens at stride EVAL_CTX over
-    the documents' stream (the last one shorter), every token after the first a target, the summed negative
-    log-likelihood over the documents' UTF-8 bytes."""
-    toks, man = held_out(split, tokenizer)
-    man = dict(man)
-    if docs is not None:
-        at = np.concatenate([[0], np.cumsum(man["tokenizers"][tokenizer]["doc_tokens"])])
-        toks = np.concatenate([toks[at[i]:at[i + 1]] for i in docs])
-        man["bytes"], man["documents"] = int(sum(man["doc_bytes"][i] for i in docs)), len(docs)
+def window_nats(net: Net, toks: np.ndarray, starts: list[int], micro: int = 32, device: str = DEVICE) -> np.ndarray:
+    """Each window's summed negative log-likelihood of its targets, in nats (the windows of `toks` that begin at `starts`;
+    one running past the stream's end is shorter)."""
     t = torch.from_numpy(toks.astype(np.int64))
-    n = len(t)
-    starts = list(range(0, n - 1, EVAL_CTX))
-    full = [s for s in starts if s + EVAL_CTX + 1 <= n]
-    total = torch.zeros((), dtype=torch.float64, device=device)
+    out = torch.zeros(len(starts), dtype=torch.float64, device=device)
+    full = [i for i, s in enumerate(starts) if s + EVAL_CTX + 1 <= len(t)]
     net.eval()
-    for i in range(0, len(full), micro):
-        rows = torch.stack([t[s: s + EVAL_CTX + 1] for s in full[i: i + micro]]).to(device)
+    for j in range(0, len(full), micro):
+        idx = full[j: j + micro]
+        rows = torch.stack([t[starts[i]: starts[i] + EVAL_CTX + 1] for i in idx]).to(device)
         with torch.autocast(device.split(":")[0], dtype=torch.bfloat16):
             logits = net.logits(rows[:, :-1])
-        total += F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1), reduction="sum").double()
-    for s in starts[len(full):]:
-        rows = t[s:].unsqueeze(0).to(device)
+        nll = F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1), reduction="none")
+        out[torch.tensor(idx, device=device)] = nll.view(len(idx), -1).double().sum(1)
+    for i in sorted(set(range(len(starts))) - set(full)):
+        rows = t[starts[i]:].unsqueeze(0).to(device)
         with torch.autocast(device.split(":")[0], dtype=torch.bfloat16):
             logits = net.logits(rows[:, :-1])
-        total += F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1), reduction="sum").double()
-    nats = float(total)
+        out[i] = F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1),
+                                 reduction="none").double().sum()
+    return out.cpu().numpy()
+
+
+def evaluate_bpb(net: Net, split: str, tokenizer: str, micro: int = 32, device: str = DEVICE) -> dict:
+    """Bits per byte of a held-out set: every window's negative log-likelihood (`windows`) over the documents' UTF-8
+    bytes."""
+    toks, man = held_out(split, tokenizer)
+    full, tail = windows(len(toks))
+    nats = float(window_nats(net, toks, full + tail, micro, device).sum())
     return {"split": split, "bpb": nats / man["bytes"] / math.log(2), "nats_per_byte": nats / man["bytes"],
-            "targets": n - 1, "bytes": man["bytes"], "documents": man["documents"], "tokenizer": tokenizer}
+            "targets": len(toks) - 1, "bytes": man["bytes"], "documents": man["documents"], "tokenizer": tokenizer}
 
 
 class Scorer:
     """The fixed scores of models with one start's architecture, the start θ their pairing base. Both the harness (at
     every checkpoint) and `evaluate.py` (the submission) score through it.
 
-    - `start_bpb`: the start's bpb on the whole search pool (in final mode, the final set).
+    - `start_bpb`: the start's bpb on the whole search pool (in final mode, the final set), each of the pool's windows'
+      negative log-likelihood under the start kept.
     - `search(state, digest)`: the model's search score on a fresh slice drawn after its weights were hashed to `digest`
-      (`draw_slice`), paired: start_bpb plus the model's bpb on the slice less the start's on the same slice, which
-      cancels most of the slice's own difficulty. In final mode, the model's bpb on the final set.
-    - `seal(key, state, search)`: the model's and the start's bpb on the promotion set, with `search`'s scores, written
-      once to the sealed values (`sealed.py`) under `key`, the model's output digest; nothing returns them. A no-op in
-      final mode."""
+      (`draw_slice`), paired: start_bpb plus the model's bpb on the slice's windows less the start's on the same windows,
+      which cancels most of the slice's own difficulty. In final mode, the model's bpb on the final set.
+    - `seal(key, state, search)`: the model's and the start's bpb on the promotion set's first PROMOTION_TOKENS, with
+      `search`'s scores, written once to the sealed values (`sealed.py`) under `key`, the model's output digest; nothing
+      returns them. A no-op in final mode."""
 
     def __init__(self, rec: dict, theta: dict[str, torch.Tensor], device: str = DEVICE):
         self.rec, self.tok, self.device = rec, rec["tokenizer"], device
         with torch.device(device):
             self.base, self.net = Net(rec["config"]), Net(rec["config"])
         self.base.load(theta)
-        self.split = FINAL if FINAL_MODE else SEARCH_POOL
-        self.start_bpb = evaluate_bpb(self.base, self.split, self.tok, device=device)["bpb"]
         self.start_promotion_bpb: float | None = None
+        self.promotion: tuple[np.ndarray, list[int], int] | None = None
+        if FINAL_MODE:
+            self.split = FINAL
+            self.start_bpb = evaluate_bpb(self.base, FINAL, self.tok, device=device)["bpb"]
+            return
+        self.split = SEARCH_POOL
+        self.pool, man = held_out(SEARCH_POOL, self.tok)
+        self.token_bytes = token_bytes(self.tok)
+        at = np.concatenate([[0], np.cumsum(self.token_bytes[self.pool])])
+        if int(at[-1] - at[1]) != man["bytes"]:
+            raise SystemExit("prepare: the search pool's tokens' bytes are not its documents' bytes")
+        self.full, tail = windows(len(self.pool))
+        nats = window_nats(self.base, self.pool, self.full + tail, device=device)
+        self.start_nats = nats[: len(self.full)]
+        self.window_bytes = np.array([at[s + EVAL_CTX + 1] - at[s + 1] for s in self.full], dtype=np.int64)
+        self.start_bpb = float(nats.sum()) / man["bytes"] / math.log(2)
 
     def search(self, state: dict[str, torch.Tensor], weights_digest: str) -> dict:
         self.net.load(state)
         if FINAL_MODE:
             return evaluate_bpb(self.net, FINAL, self.tok, device=self.device) | {"start_bpb": self.start_bpb}
         sl = draw_slice(weights_digest)
-        a = evaluate_bpb(self.net, SEARCH_POOL, self.tok, device=self.device, docs=sl["documents"])
-        b = evaluate_bpb(self.base, SEARCH_POOL, self.tok, device=self.device, docs=sl["documents"])
-        return {"split": "search", "bpb": self.start_bpb + a["bpb"] - b["bpb"], "slice_bpb": a["bpb"],
-                "start_slice_bpb": b["bpb"], "start_bpb": self.start_bpb, "tokenizer": self.tok,
-                "slice": {"coin": sl["coin"], "weights_digest": weights_digest, "documents": a["documents"],
-                          "bytes": a["bytes"], "targets": a["targets"]},
-                "rule": "start_bpb (the whole search pool) + slice_bpb - start_slice_bpb; the slice drawn after the "
-                        "weights were hashed (prepare.draw_slice)"}
+        pick = np.asarray(sl["windows"])
+        nbytes = int(self.window_bytes[pick].sum())
+        a = float(window_nats(self.net, self.pool, [self.full[i] for i in pick], device=self.device).sum())
+        b = float(self.start_nats[pick].sum())
+        a, b = a / nbytes / math.log(2), b / nbytes / math.log(2)
+        return {"split": "search", "bpb": self.start_bpb + a - b, "slice_bpb": a, "start_slice_bpb": b,
+                "start_bpb": self.start_bpb, "tokenizer": self.tok,
+                "slice": {"coin": sl["coin"], "weights_digest": weights_digest, "windows": len(pick), "bytes": nbytes,
+                          "targets": len(pick) * EVAL_CTX},
+                "rule": "start_bpb (the whole search pool) + slice_bpb - start_slice_bpb on the same windows; the slice "
+                        "drawn after the weights were hashed (prepare.draw_slice(weights_digest, coin) reproduces it)"}
+
+    def _promotion_bpb(self, net: Net) -> float:
+        if self.promotion is None:
+            toks, _ = held_out(PROMOTION, self.tok)
+            starts = windows(len(toks))[0][: PROMOTION_TOKENS // EVAL_CTX]
+            tb = self.token_bytes[toks]
+            self.promotion = (toks, starts, int(sum(tb[s + 1: s + EVAL_CTX + 1].sum() for s in starts)))
+        toks, starts, nbytes = self.promotion
+        return float(window_nats(net, toks, starts, device=self.device).sum()) / nbytes / math.log(2)
 
     def seal(self, key: str, state: dict[str, torch.Tensor], search: dict) -> bool:
         path = value_path(key)
         if FINAL_MODE or path.exists():
             return False
         self.net.load(state)
-        bpb = evaluate_bpb(self.net, PROMOTION, self.tok, device=self.device)["bpb"]
+        bpb = self._promotion_bpb(self.net)
         if self.start_promotion_bpb is None:
-            self.start_promotion_bpb = evaluate_bpb(self.base, PROMOTION, self.tok, device=self.device)["bpb"]
+            self.start_promotion_bpb = self._promotion_bpb(self.base)
         rec = {"schema": "covert-witness/sealed-value/v1", "key": key, "start": self.rec["name"],
                "start_digest": self.rec["digest"], "search_bpb": search["bpb"], "start_search_bpb": search["start_bpb"],
                "promotion_bpb": bpb, "start_promotion_bpb": self.start_promotion_bpb, "salt": os.urandom(16).hex(),
