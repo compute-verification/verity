@@ -514,15 +514,15 @@ theorem reqsFrom_take (req : ℕ → String × ℕ) :
       ((req j).1, (req j).2, m) :: (reqsFrom req (j + 1) ms).take k
     rw [reqsFrom_take req (j + 1) ms k]
 
-/-- The coin check's openings stop at the first refusal (`Session.openAll`), so where it passes them all it passes each
+/-- The coin check's openings stop at the first refusal (`Release.openAll`), so where it passes them all it passes each
 prefix. -/
-theorem openAll_take (S : _root_.Flock.Firewall.Coins.Session) :
+theorem openAll_take (S : _root_.Flock.Firewall.Coins.Release) :
     ∀ (os : List (String × ℕ × Msg)) (k : ℕ), (S.openAll os).isOk = true → (S.openAll (os.take k)).isOk = true
   | [], k, h => by rw [List.take_nil]; exact h
   | _ :: _, 0, _ => rfl
   | (st, n, m) :: os, k + 1, h => by
     rw [List.take_succ_cons]
-    unfold _root_.Flock.Firewall.Coins.Session.openAll at h ⊢
+    unfold _root_.Flock.Firewall.Coins.Release.openAll at h ⊢
     cases hop : S.open st n m with
     | error e => simp [hop, Except.isOk, Except.toBool] at h
     | ok p =>
@@ -537,13 +537,13 @@ theorem coinVerdict_take (hl : Except String _root_.Flock.Firewall.Coins.Hello) 
   cases hl with
   | error e => exact h
   | ok hl =>
-    cases hS : _root_.Flock.Firewall.Coins.Session.start hl a with
+    cases hS : _root_.Flock.Firewall.Coins.Release.start hl a with
     | error e =>
-      change (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os)).isOk = true at h
+      change (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll os)).isOk = true at h
       simp [Except.bind, hS, Except.isOk, Except.toBool] at h
     | ok S =>
-      change (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os)).isOk = true at h
-      show (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll (os.take k))).isOk = true
+      change (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll os)).isOk = true at h
+      show (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll (os.take k))).isOk = true
       rw [hS] at h ⊢
       exact openAll_take S os k h
 
