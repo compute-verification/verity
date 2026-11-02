@@ -11,7 +11,7 @@ Writes $OUT/reach.json:
 - os.access(R_OK / W_OK) on the held-out files, the starts' θ and records, the training stream, and the other candidates'
   scratch directories (counted, never opened), as the run's user.
 
-    python benchmarks/covert_witness/islands/audit/node/reach.py
+    uv run --no-project --with pyarrow --with numpy python benchmarks/covert_witness/islands/audit/node/reach.py
 """
 from __future__ import annotations
 
@@ -99,7 +99,8 @@ def main() -> int:
     lfman = LF / "manifest.json"
     rep["lf_manifest"] = json.loads(lfman.read_text()) if lfman.exists() else None
     search = np.fromfile(ROOT / "eval" / "search" / "gpt2.bin", dtype=np.uint16)
-    final = np.fromfile(ROOT / "eval" / "final" / "gpt2.bin", dtype=np.uint16)
+    fp = ROOT / "eval" / "final" / "gpt2.bin"
+    final = np.fromfile(fp, dtype=np.uint16) if fp.exists() else np.zeros(0, dtype=np.uint16)
     for name in ("val.bin",):
         p = LF / name
         if p.exists():
@@ -115,15 +116,6 @@ def main() -> int:
             p = LF / shards[name]["path"]
             shards[name]["sha256_matches_" + s] = sha256(p) == m["shard_sha256"]
     rep["lf_parquet"] = shards
-    if "013_00000.parquet" in shards and all(f"00{i}_00000.parquet" in shards for i in range(3)):
-        n = man["search"]["documents"]
-        mine = doc_hashes(LF / shards["013_00000.parquet"]["path"], n)
-        train = set()
-        for i in range(3):
-            train.update(doc_hashes(LF / shards[f"00{i}_00000.parquet"]["path"]))
-        rep["search_docs_in_train_shards"] = {"search_documents": len(mine), "distinct": len(set(mine)),
-                                              "exact_duplicates_in_000_002": sum(h in train for h in mine),
-                                              "train_documents": len(train)}
     paths = [ROOT / "eval" / "search" / "gpt2.bin", ROOT / "eval" / "search" / "manifest.json",
              ROOT / "eval" / "final" / "gpt2.bin", LF / "train.bin", LF / "val.bin"]
     for d in sorted((ROOT / "starts").glob("*"))[:8]:
@@ -140,6 +132,17 @@ def main() -> int:
                        "witness_E_files": len(list(runs.glob("*/out/E.bin"))) if runs.exists() else None}
     rep["seconds"] = round(time.time() - t0, 1)
     (OUT / "reach.json").write_text(json.dumps(rep, indent=1) + "\n")
+    if "013_00000.parquet" in shards and all(f"00{i}_00000.parquet" in shards for i in range(3)):
+        n = man["search"]["documents"]
+        mine = doc_hashes(LF / shards["013_00000.parquet"]["path"], n)
+        train = set()
+        for i in range(3):
+            train.update(doc_hashes(LF / shards[f"00{i}_00000.parquet"]["path"]))
+        rep["search_docs_in_train_shards"] = {"search_documents": len(mine), "distinct": len(set(mine)),
+                                              "exact_duplicates_in_000_002": sum(h in train for h in mine),
+                                              "train_documents": len(train)}
+        rep["seconds"] = round(time.time() - t0, 1)
+        (OUT / "reach.json").write_text(json.dumps(rep, indent=1) + "\n")
     print(json.dumps({k: rep[k] for k in rep if k.startswith(("lf_val", "search_docs", "candidates", "runs_dir"))}))
     return 0
 
