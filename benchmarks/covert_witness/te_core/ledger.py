@@ -181,6 +181,7 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
            reference: bool = False, p: float | None = None) -> list[dict]:
     """One submission record per checkpoint of the run in `run_dir` (its `run.json`)."""
     record = json.loads((Path(run_dir) / "run.json").read_text())
+    ev = record.get("evaluation", {})
     cov = coverage_of(record.get("families", []))
     last = record["steps"][-1]["step"] if record["steps"] else -1
     out = []
@@ -193,6 +194,9 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
             "program_sha256": record.get("program_sha256", ""), "direction": direction, "mechanism": mechanism,
             "parent": parent, "reference": reference, "tier": record["tier"], "start": record["start"].get("name", ""),
             "start_bpb": record["start"].get("val_bpb"), "seed": record["seed"], "hardware": record.get("hardware", ""),
+            "node": record.get("node", ""), "run_te_core": record.get("te_core", ""),
+            "measurement_commit": ev.get("measurement_commit", ""), "island": ev.get("island"), "tree": ev.get("tree"),
+            "val_slice": {k: cp["score"]["slice"][k] for k in ("coin", "weights_digest")} if "score" in cp else None,
             "theta_sha256": record["theta_sha256"], "checkpoint_step": cp["step"],
             "fraction": (cp["step"] + 1) / max(record.get("planned_steps") or len(record["steps"]), 1),
             "macs": sub["macs"], "macs_log": _macs_log(record, through), "annotation": sub["annotation"],

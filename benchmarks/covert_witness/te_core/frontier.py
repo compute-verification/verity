@@ -1,8 +1,13 @@
 """The search's frontier, read from the ledger's index.
 
-    python -m te_core.frontier [--root DIR] [--json OUT] [--promote TIER --as scorer]
+    python -m te_core.frontier [--root DIR] [--json OUT] [--pin COMMIT]
 
-Per (k, r) cell of the grid (score.K_BITS x score.R):
+It reads only the submissions measured by the pinned measurement commit (covert_witness's `pin.py`; `--pin` names
+another), and leaves out, each marked with its reason (`status`): an invalid record, an unscored one, one measured by
+another commit (`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the
+first to submit an E is the one its compute is counted for), and one with covered steps ingested by a te_core before
+3.0 (`re-ingest`: 3.0 prices ρ by thresholds; `python -m te_core.ledger ingest RUN_DIR` prices it again). Per (k, r)
+cell of the grid (score.K_BITS x score.R):
 
 - the frontier: the valid submissions no other beats on both |C| ρ and val bits per byte;
 - the elites: per niche (mechanism tag x β range x φ range x start), the submission with the least val bits per byte,
@@ -11,8 +16,8 @@ Per (k, r) cell of the grid (score.K_BITS x score.R):
 - W*(l*), honest(l*) and the effective slowdown W*/honest at l* = the start's bits per byte less 0.5%, 1%, 2% and 5%,
   honest(l*) being the least |C| over the reference runs (`reference` records) on that start.
 
-`--promote T`, run as the scorer, writes a promotion to tier T for every frontier member and elite at tier T - 1 not yet
-promoted.
+`candidates(rows, T)` are the frontier members and elites at tier T - 1 not yet promoted to T; which of them are promoted
+is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as the scorer).
 """
 from __future__ import annotations
 
@@ -22,7 +27,7 @@ import math
 import sys
 from pathlib import Path
 
-from .ledger import SCORER, Ledger
+from .ledger import Ledger, coverage_of
 from .score import K_BITS, R, cell, effective_slowdown, honest, w_star
 
 BETA_EDGES = (1e-3, 1e-2, 1e-1, 1.0, 10.0)
@@ -35,8 +40,48 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
     return sum(x >= e for e in edges)
 
 
-def valid(rows: list[dict]) -> list[dict]:
-    return [r for r in rows if not r.get("invalid") and r.get("val_bpb") is not None]
+#: the first te_core whose ingest prices ρ by thresholds (a row's `te_core`): an earlier ingest could price a run with
+#: covered steps at its cheapest step's β, so such a row counts once its run is ingested again
+PRICED_FROM = (3, 0)
+
+
+def version(v) -> tuple[int, ...]:
+    try:
+        return tuple(int(x) for x in str(v).split("."))
+    except ValueError:
+        return ()
+
+
+def pinned() -> str:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from pin import pinned as read
+
+    return read()["commit"]
+
+
+def status(rows: list[dict], pin: str) -> dict[str, str]:
+    """Each left-out record's reason: invalid, unscored, other-version, duplicate-e, re-ingest."""
+    out, first = {}, set()
+    for r in sorted(rows, key=lambda r: (r.get("written_ts", 0), r["id"])):
+        e = (r.get("output") or {}).get("e_sha256")
+        if e and e in first:
+            out[r["id"]] = "duplicate-e"
+        elif r.get("invalid"):
+            out[r["id"]] = "invalid"
+        elif r.get("val_bpb") is None:
+            out[r["id"]] = "unscored"
+        elif r.get("measurement_commit") != pin:
+            out[r["id"]] = "other-version"
+        elif version(r.get("te_core")) < PRICED_FROM and coverage_of(r.get("families", [])):
+            out[r["id"]] = "re-ingest"
+        if e:
+            first.add(e)
+    return out
+
+
+def valid(rows: list[dict], pin: str | None = None) -> list[dict]:
+    left_out = status(rows, pin or pinned())
+    return [r for r in rows if r["id"] not in left_out]
 
 
 def cost(r: dict, key: str) -> float:
@@ -90,8 +135,8 @@ def targets(rows: list[dict], key: str) -> list[dict]:
     return out
 
 
-def report(rows: list[dict]) -> dict:
-    rows = valid(rows)
+def report(rows: list[dict], pin: str | None = None) -> dict:
+    rows = valid(rows, pin)
     out = {}
     for key in KEYS:
         el = elites(rows, key)
@@ -106,9 +151,9 @@ def report(rows: list[dict]) -> dict:
     return out
 
 
-def candidates(rows: list[dict], tier: int) -> list[str]:
+def candidates(rows: list[dict], tier: int, pin: str | None = None) -> list[str]:
     """The frontier members and elites, in any cell, among submissions run at tier - 1 and not yet promoted to `tier`."""
-    pool = [r for r in valid(rows) if r["tier"] == tier - 1 and r.get("promoted", 0) < tier]
+    pool = [r for r in valid(rows, pin) if r["tier"] == tier - 1 and r.get("promoted", 0) < tier]
     ids = set()
     for key in KEYS:
         ids |= {r["id"] for r in pareto(pool, key)} | {r["id"] for r in elites(pool, key).values()}
@@ -128,22 +173,24 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--json", type=Path, default=None)
-    ap.add_argument("--promote", type=int, choices=(1, 2), default=None)
-    ap.add_argument("--as", dest="agent", default="")
+    ap.add_argument("--pin", default=None, help="the measurement commit (default covert_witness's pin.py)")
+    ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--as", dest="agent", default="", help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
-    led = Ledger(a.root, a.agent)
-    rows = led.index()
-    rep = report(rows)
-    if a.json:
-        a.json.write_text(json.dumps(rep, indent=1) + "\n")
-    print(markdown(rep))
     if a.promote:
-        if a.agent != SCORER:
-            print("--promote runs as the scorer (--as scorer)", file=sys.stderr)
-            return 2
-        for rid in candidates(rows, a.promote):
-            led.promote(rid, a.promote, "frontier or elite at the tier below")
-            print(f"promoted {rid} to tier {a.promote}")
+        print(f"promotions are decided on the sealed promotion set, one bit each: from benchmarks/covert_witness/, "
+              f"`python promote.py --tier {a.promote}` (the scorer's)", file=sys.stderr)
+        return 2
+    rows = Ledger(a.root).index()
+    pin = a.pin or pinned()
+    rep = report(rows, pin)
+    left_out = status(rows, pin)
+    if a.json:
+        a.json.write_text(json.dumps({"pin": pin, "left_out": left_out, "cells": rep}, indent=1) + "\n")
+    print(markdown(rep))
+    reasons = sorted(set(left_out.values()))
+    print(f"pin {pin[:12]}: {len(rows) - len(left_out)} of {len(rows)} submissions; left out: "
+          + (", ".join(f"{sum(v == x for v in left_out.values())} {x}" for x in reasons) or "none"))
     return 0
 
 

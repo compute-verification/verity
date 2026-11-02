@@ -1,10 +1,12 @@
 """A stand-in for covert_witness's prepare.py with the interface cw.py wraps: a two-layer model with a buffer, its θ, a
-token stream, the `full` encoding, a held-out set and `evaluate_bpb`."""
+token stream, the `full` encoding, a held-out set, a sealed directory, `evaluate_bpb` and a `Scorer`."""
 from __future__ import annotations
 
 import io
+import json
 import math
 import os
+import sys
 from pathlib import Path
 
 import torch
@@ -12,6 +14,9 @@ import torch.nn.functional as F
 
 ROOT = Path(os.environ["CW_FAKE_ROOT"])
 HELD_OUT = ROOT / "eval"
+SEALED = ROOT / "sealed"
+UNREADABLE = (HELD_OUT, SEALED)
+FINAL_MODE = False
 DEVICE = "cpu"
 EVAL_CTX = 8
 TRAIN_FLOP_BUDGET = 2e6
@@ -85,6 +90,10 @@ def format_of(blob):
     return "full" if blob[:8] == b"CWFULL1\n" else "unknown"
 
 
+def rebuild_macs(theta, blob):
+    return 0
+
+
 def same_bits(a, b):
     return a.dtype == b.dtype and a.shape == b.shape and torch.equal(a, b)
 
@@ -100,3 +109,28 @@ def evaluate_bpb(net, split, tokenizer, micro: int = 32, device: str = DEVICE):
     rows = torch.load(HELD_OUT / split / "rows.pt", weights_only=True)
     nats = float(F.cross_entropy(net.logits(rows[:, :-1]).reshape(-1, VOCAB), rows[:, 1:].reshape(-1), reduction="sum"))
     return {"bpb": nats / (4 * rows[:, 1:].numel()) / math.log(2)}
+
+
+#: the keys sealed in this process (the harness's audit hook outlives a run, so a test can't list SEALED after one), one
+#: list for the program's instance and the harness's own (`cw.private_copy`)
+SEALED_KEYS: list[str] = getattr(sys.modules.get("prepare"), "SEALED_KEYS", [])
+
+
+class Scorer:
+    """The search set's bpb (no slices), and each scored model's value written to SEALED/<key>.json."""
+
+    def __init__(self, rec, theta, device: str = DEVICE):
+        self.rec, self.split = rec, "search"
+        self.base, self.net = Net(rec["config"]).load(theta), Net(rec["config"])
+        self.start_bpb = evaluate_bpb(self.base, "search", "fake")["bpb"]
+
+    def search(self, state, weights_digest):
+        self.net.load(state)
+        return {"bpb": evaluate_bpb(self.net, "search", "fake")["bpb"], "start_bpb": self.start_bpb,
+                "slice": {"weights_digest": weights_digest}}
+
+    def seal(self, key, state, search):
+        SEALED.mkdir(parents=True, exist_ok=True)
+        (SEALED / f"{key}.json").write_text(json.dumps({"search_bpb": search["bpb"]}))
+        SEALED_KEYS.append(key)
+        return True
