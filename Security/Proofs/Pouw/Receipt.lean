@@ -7,6 +7,7 @@ import Proofs.Pouw.Receipt.Run
 import Proofs.Pouw.Receipt.DuoReceipt
 import Proofs.Pouw.Receipt.AtState
 import Proofs.Pouw.Receipt.Xor
+import Proofs.Pouw.Lemmas.Receipt
 
 /-!
 # The receipt folds duo's, fx1's and li's guarantees

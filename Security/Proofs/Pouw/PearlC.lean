@@ -10,6 +10,7 @@ import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutFp4W1
 import Proofs.Pouw.PearlC.TTOutW1Item1
+import Proofs.Pouw.Lemmas.PearlC
 
 /-!
 # Proofs of Pearl-C's guarantees

@@ -1,5 +1,6 @@
 import Definitions.Accounting.Guarantees.TS
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # Binding from the fork form

@@ -1,8 +1,8 @@
-import Definitions.Accounting.Guarantees.TS.Receipt
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.TS.ReceiptLi
 import Proofs.Accounting.TS.ReceiptDuoCP
 import Proofs.Pouw.Receipt.Fx1
+import Proofs.Accounting.Lemmas.TS.Receipt
 
 /-!
 # (I7) from the receipt: proofs

@@ -1,5 +1,6 @@
 import Proofs.Accounting.HeadlineDc.Branches
 import Definitions.Accounting.Guarantees.HeadlineDc
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The B200's headline at the data sheet

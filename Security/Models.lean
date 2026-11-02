@@ -1,18 +1,14 @@
 import Definitions.Core.Assumptions
 import Definitions.Core.Guarantees
 import Definitions.Nci.Assumptions
-import Definitions.Nci.Guarantees
-import Definitions.Nci.Guarantees.Reads
 import Definitions.Nci.Guarantees.Threads
 import Definitions.Nci.Guarantees.Layered
-import Definitions.Nci.Guarantees.Contained
 import Definitions.Nci.Guarantees.Fit
 import Definitions.Nci.Guarantees.FitRate
 import Definitions.Nci.Guarantees.Dampener
 import Definitions.Nci.Guarantees.Remote
 import Definitions.Nci.Guarantees.RemotePeriod
 import Definitions.Nci.Guarantees.Info
-import Definitions.Nci.Guarantees.Fmt
 import Definitions.Nci.Guarantees.Fmt2
 import Definitions.Nci.Guarantees.Training
 import Definitions.Nci.Guarantees.Packed
@@ -43,6 +39,7 @@ import Definitions.Accounting.Assumptions.RemoteOutside
 import Definitions.Accounting.Assumptions.CreditedWords
 import Definitions.Accounting.Assumptions.RemoteP2
 import Definitions.Accounting.Assumptions.Parties
+import Definitions.Accounting.Assumptions.TS.Fixed
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Period

@@ -1,5 +1,5 @@
-import Definitions.Pouw.Guarantees.Barrier
 import Proofs.Pouw.Barrier.Proofs
+import Proofs.Pouw.Lemmas.Barrier
 
 /-!
 # Proofs of the degenerate-input barrier's guarantee

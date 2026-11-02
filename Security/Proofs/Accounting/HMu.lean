@@ -1,6 +1,7 @@
 import Proofs.Accounting.HMu.Luck
 import Proofs.Accounting.HMu.Persist
 import Proofs.Accounting.HMu.Gaps
+import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # (H-μ⁺)'s guarantees

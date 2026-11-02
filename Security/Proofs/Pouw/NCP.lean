@@ -4,6 +4,7 @@ import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.NCP.RelationWitness
 import Proofs.Pouw.NCP.RouteUProofs
 import Proofs.Pouw.NCP.RouteUWordProofs
+import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # Proofs of NCP's guarantees

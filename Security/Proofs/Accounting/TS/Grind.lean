@@ -1,6 +1,6 @@
-import Definitions.Accounting.Guarantees.TS.Grind
 import Proofs.Accounting.TS.Steer
 import Mathlib.Analysis.MeanInequalitiesPow
+import Proofs.Accounting.Lemmas.TS.Grind
 
 /-!
 # The grinding premium under hashed seeds: proofs

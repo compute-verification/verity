@@ -1,4 +1,5 @@
 import Definitions.Accounting.Guarantees.Compose
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # A whole-tile luck per query from its tiles' entropy: proof

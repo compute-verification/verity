@@ -1,5 +1,6 @@
 import Definitions.Accounting.Guarantees.HMu
 import Proofs.Accounting.Tag.LittlewoodOfford
+import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # Lemma B, and (H-μ) from the coins

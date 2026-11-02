@@ -2,7 +2,9 @@ import Definitions.Accounting.Assumptions.TS
 import Definitions.Accounting.TS.Receipt
 
 /-!
-# (I7) from the receipt (trusted)
+# (I7) from the receipt: lemmas
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5), each
 `def G : Prop` proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Receipt`:

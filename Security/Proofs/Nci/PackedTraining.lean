@@ -1,6 +1,7 @@
 import Definitions.Nci.Guarantees.PackedTraining
 import Proofs.Nci.Packed
 import Proofs.Nci.Training
+import Proofs.Nci.Lemmas
 
 /-!
 # The partial-sum law with dark gates, on a chain with several products to a gate

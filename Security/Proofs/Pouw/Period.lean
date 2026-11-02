@@ -2,6 +2,7 @@ import Properties.Pouw.Period
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.Compose.SplitRateClosed
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # Proofs: a period's work over the windows PoUW's deployed check accepts (`Properties.Pouw.Period`)

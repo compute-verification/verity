@@ -1,5 +1,6 @@
 import Definitions.Accounting.Guarantees.TS.Stages
 import Proofs.Accounting.TS
+import Proofs.Accounting.Lemmas.TS.Stages
 
 /-!
 # Sampled proofs under per-stage coins: proofs

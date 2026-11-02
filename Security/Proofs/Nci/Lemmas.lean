@@ -5,7 +5,9 @@ import Definitions.Core.Partition
 import Definitions.Nci
 
 /-!
-# NCI's guarantees
+# NCI's lemmas
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, proved as
 `Nci.SecurityProofs.G : Nci.Guarantees.G`.
@@ -33,31 +35,6 @@ def Inference : Prop :=
     (∀ u, (d.D.width (prompt u) : ℝ) ≤ α * d.D.size (P.gates u)) →
       Complies Γ α d ∧ slowdown (Complies Γ α) d ≤ 1
 
-/-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
-multiplications"): under compute-bounded incompressibility, every declared circuit `D ⊨ 𝒫` that runs updated matrix
-multiplications is larger than those multiplications by a factor of at least `F`. The multiplications have about `2G`
-gates: `G` products, and about as many additions. `K = αΓ` is the most an IU reads, `b_w` and `b_a` are the widths of a
-weight entry and an activation entry, and `d` is the smallest inner dimension (a smaller `d` gives a smaller `F`). -/
-def UpdatedMatMul : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : Declaration) (c : Chain D.D) (d : ℕ),
-    0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) → Complies Γ α D →
-    Assumptions.ActivationsIncompressible D c Γ (α * Γ) b_w b_a →
-    Assumptions.PartialSumsIncompressible D c Γ (α * Γ) b_w b_a →
-      F α (α * Γ) b_w b_a d * (2 * c.G) ≤ D.D.size D.D.computed
-
-/-- **Frontier training is throttled** (the draft, "From updated matrix multiplications to training"): let `T` be a
-training circuit in the class `𝒯`, so that every declared circuit that implements `T` and complies runs updated matrix
-multiplications, which take up a fraction `κ` of `size(T)` (the coverage `κ(T)`). If compute-bounded incompressibility
-holds for the multiplications each of them runs, then `ρ_𝒫(T) ≥ κ F`. -/
-def Training : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (T : Declaration) (d : ℕ),
-    0 < α → 0 < b_w → 0 < b_a → 0 < T.D.size T.D.computed →
-    (∀ D, T.Implements D → Complies Γ α D → ∃ c : Chain D.D,
-      (∀ ℓ, d ≤ c.d ℓ) ∧ κ * T.D.size T.D.computed ≤ 2 * c.G ∧
-      Assumptions.ActivationsIncompressible D c Γ (α * Γ) b_w b_a ∧
-      Assumptions.PartialSumsIncompressible D c Γ (α * Γ) b_w b_a) →
-    ENNReal.ofReal (κ * F α (α * Γ) b_w b_a d) ≤ slowdown (Complies Γ α) T
-
 end Nci.Guarantees
 
 namespace Nci.SecurityProofs
@@ -81,19 +58,6 @@ end Nci.SecurityProofs
 
 namespace Nci.SecurityProofs
 open Verity Finset
-
-open Classical in
-/-- **What an IU reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"): "By the lemmas
-and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an IU `R` of at most `Γ` computed
-gates that reads at most `K` bits of novel information, under `Assumptions.ActivationsSupport` at cap `K + b_w + b_a`
-for some committed values `θv` of θ. `p_R` is the number of weight entries `R` uses, `τ_R` its number of full
-positions, `Q_R` the number of input entries it uses at positions that are not full, and `d` the smallest inner
-dimension. -/
-def _root_.Nci.Guarantees.IuReads : Prop :=
-  ∀ (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (hb_w : 0 ≤ b_w) (θv : D.D.Transcript) (h : Assumptions.ActivationsSupport D θv c (K + b_w + b_a) b_w b_a) (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K),
-    b_w * (c.weightsUsed R).card +
-      b_a * (d * (univ.filter (c.Full R)).card + ((c.inputsUsed R).filter fun x => ¬ c.Full R x.2.1).card) ≤
-    novelReads D R
 
 end Nci.SecurityProofs
 

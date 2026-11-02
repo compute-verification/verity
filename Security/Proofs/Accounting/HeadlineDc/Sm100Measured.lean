@@ -1,4 +1,5 @@
 import Proofs.Accounting.HeadlineDc.Sm100
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The B200's headline on its measured vector

@@ -1,5 +1,5 @@
-import Definitions.Accounting.Guarantees.TS.Steer
 import Proofs.Accounting.TS.Stages
+import Proofs.Accounting.Lemmas.TS.Steer
 
 /-!
 # Steering under one σ: proofs

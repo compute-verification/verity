@@ -1,5 +1,6 @@
 import Definitions.Accounting.Guarantees.TS
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Accounting.Lemmas.TS
 
 /-!
 # (I8) from its pieces

@@ -1,5 +1,6 @@
-import Definitions.Accounting.Guarantees.TS.SharedNoise
 import Proofs.Accounting.TS.Grind
+import Proofs.Accounting.Lemmas.TS.SharedNoise
+import Proofs.Accounting.Lemmas.TS.Grind
 
 /-!
 # One noise seed a call: proofs

@@ -1,6 +1,7 @@
 import Proofs.Pouw.PearlC.DeviceFp4Gamma
 import Definitions.Pouw.PearlC.DeviceFp4Issue
 import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.Lemmas.PearlC
 
 /-!
 # Pearl-C4 at the issue-bound FP32 price (staged)

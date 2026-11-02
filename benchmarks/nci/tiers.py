@@ -14,9 +14,8 @@ proved.
   ``residual_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
-  information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport,
-  ``ThreadedOfStateFmt`` on the falsified WeightsSupportFmt and ``ThreadedOfStateFmt2`` on its restatement
-  WeightsSupportFmt2, not yet signed off), declared or not. The state is all memory,
+  information, which a wipe would bound, is open: its first two support forms were falsified, and
+  ``ThreadedOfStateFmt2`` rests on their restatement WeightsSupportFmt2, not yet signed off), declared or not. The state is all memory,
   disks included unless they're unplugged; after a wipe, the wipe residual R_wipe: memory the fill doesn't reach, the proof of
   space's slack on the filled memory, and what helpers refill within the read deadline; under exhaustion, the HBM the
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
@@ -162,7 +161,7 @@ SPEC = [
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies a Dot16 reference circuit 17 - E legs below E + 1 lookup columns, none at 17: 17 x 163,840 x 16 bits = 4.46e7 at the bf16 embeddings ReferenceLayered states; at C1's 2.5-bit floor 7.0e6, below K, so a reference circuit C1 allows may get no (d, e) at K; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified legs fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e6, "max": 1e11, "log": True},
     {"key": "block_mults", "label": "Model: counted multiplications one inference block can hold, as a share of its gates (1 with no premise; kappa/2 if each block's counted share were the recipe's)", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695); 0 turns the partial-sum law off, as its support premises (PartialSumsSupport, ActivationsSupport) are falsified", "unit": "", "min": 0.01, "max": 1, "log": True, "zero": True},
+    {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695); 0 turns the partial-sum law off, as its support-form premises are falsified", "unit": "", "min": 0.01, "max": 1, "log": True, "zero": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
     {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "b_p", "label": "Model: partial-sum width a relay op reads", "unit": "bit", "min": 4, "max": 64, "log": True},
@@ -189,8 +188,8 @@ STATUS = [
      "the open conjecture ReferenceLayered, whose lookups need the embedding columns to be inputs: a run that trains its "
      "embedding reads them as updated weights, so the default is the structural d = 1 until Layered's lookups may read "
      "weight columns."),
-    ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
-     "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
+    ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): its support-form premises were reproduced as false, and "
+     "IncompressibleContainedTraining, which states it under TrainingIncompressible, carries no estimate yet."),
     ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
      "(#3646). PoUW's deficit epsilon_W = 0.744% (CircuitCredit, draft #2638) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "

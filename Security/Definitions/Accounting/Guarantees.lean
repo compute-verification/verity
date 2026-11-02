@@ -18,7 +18,6 @@ import Definitions.Accounting.Guarantees.FpG1
 import Definitions.Accounting.Guarantees.HMu
 import Definitions.Accounting.Guarantees.DeclaredCircuit
 import Definitions.Accounting.Guarantees.Gates
-import Definitions.Accounting.Guarantees.GatesBitwise
 import Definitions.Accounting.Guarantees.Headline
 import Definitions.Accounting.Guarantees.HeadlineDc
 import Definitions.Accounting.Guarantees.Joint
@@ -47,20 +46,14 @@ import Definitions.Accounting.Guarantees.RemoteSketch
 import Definitions.Accounting.Guarantees.RemoteSketchLine
 import Definitions.Accounting.Guarantees.RemoteSketchP2
 import Definitions.Accounting.Guarantees.Requirement
-import Definitions.Accounting.Guarantees.RequirementPouw
 import Definitions.Accounting.Guarantees.Sketch
 import Definitions.Accounting.Guarantees.Stacking
 import Definitions.Accounting.Guarantees.Tag
 import Definitions.Accounting.Guarantees.TS
 import Definitions.Accounting.Guarantees.Sheet
-import Definitions.Accounting.Guarantees.TS.Receipt
-import Definitions.Accounting.Guarantees.TS.Grind
-import Definitions.Accounting.Guarantees.TS.SharedNoise
 import Definitions.Accounting.Guarantees.TS.Stages
-import Definitions.Accounting.Guarantees.TS.Steer
 import Definitions.Accounting.Guarantees.TS.FoldFanIn
 import Definitions.Accounting.Guarantees.TS.LowBit
-import Definitions.Accounting.Guarantees.TS.Fixed
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, the joint guarantee over
 a period audited by every protocol, over a horizon of periods and over a horizon of server-time blocks and the

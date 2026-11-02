@@ -1,6 +1,7 @@
 import Proofs.Pouw.PearlC.Fp4IssueGamma
 import Definitions.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
 import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.Lemmas.PearlC
 
 /-!
 # Pearl-C4 under the chain-only reading, at any FP32 price and scale path (staged)

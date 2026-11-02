@@ -1,5 +1,6 @@
 import Proofs.Accounting.ServingBlocks
 import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+import Proofs.Accounting.Lemmas.ServingBlocks.Witnesses
 
 /-!
 # The serving-block bound: honest and nontrivial lemmas

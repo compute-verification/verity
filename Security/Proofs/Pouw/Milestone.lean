@@ -1,6 +1,7 @@
 import Proofs.Pouw.Theorem1
 import Proofs.Pouw.Exact
 import Proofs.Pouw.M1
+import Proofs.Pouw.Lemmas.Game
 
 /-!
 # (d′) §3.3's requirement at the milestone, in budget form

@@ -1,5 +1,6 @@
 import Definitions.Accounting.Guarantees.FillerLuck
 import Proofs.Accounting.TS.Rounds
+import Proofs.Accounting.Lemmas.FillerLuck
 
 /-!
 # The filler's per-check luck

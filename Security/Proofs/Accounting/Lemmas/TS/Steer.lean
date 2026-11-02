@@ -2,7 +2,9 @@ import Definitions.Accounting.Assumptions.TS
 import Definitions.Accounting.TS.Steer
 
 /-!
-# Steering under one σ (trusted)
+# Steering under one σ: lemmas
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 STEER-PROOF's route B, each `def G : Prop` proved as
 `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Steer`:
@@ -26,6 +28,17 @@ STEER-PROOF's route B, each `def G : Prop` proved as
   needs may depend on every other answer but not its own, and the chance that some query zeroes some `n` segments is at
   most `T·C(G, n)·μ^n`.
 -/
+
+namespace Accounting.Assumptions.TS
+
+open Accounting.TS
+
+/-- **LIN-STEER** (SAMPLING's, false: `LinSteerSegments`, `LinSteerFalse`): zeroing a fraction `φ = |Z|/|act|` of the
+row's noise-active coordinates saves at most `φ` of the consumer's work. -/
+def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
+  ∀ Z ⊆ c.act, c.cost ∅ - c.cost Z ≤ (Z.card : ℝ) / c.act.card * c.cost ∅
+
+end Accounting.Assumptions.TS
 
 namespace Accounting.Guarantees.TS
 

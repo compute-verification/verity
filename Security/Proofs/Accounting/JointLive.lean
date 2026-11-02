@@ -3,6 +3,7 @@ import Proofs.Core.Game.Prob
 import Proofs.Core.Blocks
 import Proofs.Core.Circuit
 import Proofs.Pouw.PearlC.WholeCircuit
+import Proofs.Accounting.Lemmas.JointLive
 
 /-!
 # Proof of the joint guarantee over a causal game

@@ -1,6 +1,7 @@
 import Properties.Pouw.ServedFreed
 import Proofs.Pouw.ServedWork
 import Proofs.Pouw.OnsiteFreed
+import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # Proof of `ServedFreed`

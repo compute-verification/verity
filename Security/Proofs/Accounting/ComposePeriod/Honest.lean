@@ -1,5 +1,6 @@
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.Compose.SplitRateClosed
+import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # An honest period meets `CircuitWorkPeriod`'s premises
