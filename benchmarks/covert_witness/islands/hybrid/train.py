@@ -10,6 +10,9 @@
   MLP's input, and trains E shuffled passes over that cache, so a pass costs the top MLP and the head, not the prefix.
 - `--head sampled`: the loss's softmax runs over each micro-batch's distinct targets plus `--head-neg` uniform negatives
   (log-Q corrected), so a shallow step skips most of the tied head's forward and input gradient (2·50304·d MACs a token).
+- `--arms`: several settings in one candidate, each from θ with an equal share of the budget, either LR multipliers
+  (`0.3,1,3`) or `;`-separated arms of `KEY=VALUE` overrides (`head=full;head=sampled;head=sampled,cache_windows=640`, keys
+  in `ARM_KEYS`). The trained set is the same in every arm. A later arm's checkpoints carry the arms before it.
 
 SPEC is comma-separated `BLOCKS:LEAVES`: BLOCKS `all`, `i`, `i-j` or a negative index from the top; LEAVES `+`-joined leaf
 names (`wq wk wv wo w_gate w_up w_down`) or groups (`qkv`, `attn`, `gu`, `mlp`, `all`). `--klass` must equal the class the
@@ -36,6 +39,13 @@ from model import rope
 LEAVES = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 GROUPS = {"qkv": ("wq", "wk", "wv"), "attn": ("wq", "wk", "wv", "wo"), "gu": ("w_gate", "w_up"),
           "mlp": ("w_gate", "w_up", "w_down"), "all": LEAVES}
+ARM_KEYS = {"lr_mult": float, "lr": float, "lora_lr": float, "norm_lr": float, "lora_b_mult": float, "wd": float,
+            "opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd"), "warmup": int, "cooldown": float,
+            "batch": int, "micro": int, "select_pool": int, "select_by": ("high", "low", "mid"), "fresh": bool,
+            "head": ("full", "sampled"), "head_neg": int, "head_plan": int, "cache_windows": int, "cache_epochs": int,
+            "data_seed": int, "seed": int}
+#: te_core takes the first E encoded in each 5% of the run's MAC budget as a checkpoint
+CHECKPOINTS = 20
 
 
 def select(spec: str, L: int) -> list[str]:
@@ -55,6 +65,29 @@ def select(spec: str, L: int) -> list[str]:
             raise SystemExit(f"hybrid: unknown leaves {sorted(bad)}")
         out |= {f"blocks.{i}.{n}.weight" for i in idx for n in names}
     return sorted(out)
+
+
+def parse_arms(spec: str, a: argparse.Namespace) -> list[argparse.Namespace]:
+    if not spec:
+        items = [{}]
+    elif "=" not in spec:
+        items = [{"lr_mult": float(x)} for x in spec.split(",")]
+    else:
+        items = []
+        for arm in filter(None, (s.strip() for s in spec.split(";"))):
+            kv = {}
+            for pair in filter(None, arm.split(",")):
+                key, _, val = pair.partition("=")
+                key, val = key.strip().replace("-", "_"), val.strip()
+                kind = ARM_KEYS.get(key)
+                if kind is None:
+                    raise SystemExit(f"hybrid: --arms key {key!r} is not one of {sorted(ARM_KEYS)}")
+                if isinstance(kind, tuple) and val not in kind:
+                    raise SystemExit(f"hybrid: --arms {key}={val} is not one of {kind}")
+                kv[key] = (val if isinstance(kind, tuple) else val.lower() in ("1", "true", "yes") if kind is bool
+                           else kind(val))
+            items.append(kv)
+    return [argparse.Namespace(**{**vars(a), "lr_mult": 1.0, **kv}) for kv in items]
 
 
 def pos(rec: dict) -> dict[str, tuple[int, int]]:
@@ -170,9 +203,9 @@ def main() -> int:
                     help="cache θ's top-MLP input for this many windows per step and train --cache-epochs passes on it")
     ap.add_argument("--cache-epochs", type=int, default=1)
     ap.add_argument("--snaps", type=int, default=8, help="E snapshots at k/SNAPS of each arm, for the FLOPs-to-target curve")
-    ap.add_argument("--arms", default="", help="a packed LR sweep: comma-separated multipliers of every LR, one arm each, "
-                    "each from θ on the same data order with its share of the budget (later arms' checkpoints are "
-                    "charged the arms before them)")
+    ap.add_argument("--arms", default="", help="LR multipliers (0.3,1,3) or ';'-separated arms of KEY=VALUE overrides, "
+                    "each from θ with an equal share of the budget (later arms' checkpoints are charged the arms "
+                    "before them)")
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
@@ -221,149 +254,165 @@ def main() -> int:
         mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
     fused = prepare.DEVICE.startswith("cuda")
 
-    def optimizers(mult: float) -> list[torch.optim.Optimizer]:
+    def optimizers(aa: argparse.Namespace) -> list[torch.optim.Optimizer]:
+        m = aa.lr_mult
         groups = []
         if norms:
-            groups.append({"params": [params[n] for n in norms], "lr": a.norm_lr * mult, "weight_decay": 0.0})
+            groups.append({"params": [params[n] for n in norms], "lr": aa.norm_lr * m, "weight_decay": 0.0})
         if factors:
-            groups.append({"params": [A for A, _, _ in factors.values()], "lr": a.lora_lr * mult, "weight_decay": 0.0})
-            groups.append({"params": [B for _, B, _ in factors.values()], "lr": a.lora_lr * a.lora_b_mult * mult,
+            groups.append({"params": [A for A, _, _ in factors.values()], "lr": aa.lora_lr * m, "weight_decay": 0.0})
+            groups.append({"params": [B for _, B, _ in factors.values()], "lr": aa.lora_lr * aa.lora_b_mult * m,
                            "weight_decay": 0.0})
-        if full_m and a.opt == "adamw":
-            groups.append({"params": [params[n] for n in full_m], "lr": a.lr * mult, "weight_decay": a.wd})
+        if full_m and aa.opt == "adamw":
+            groups.append({"params": [params[n] for n in full_m], "lr": aa.lr * m, "weight_decay": aa.wd})
         opts = [torch.optim.AdamW(groups, betas=(0.9, 0.95), fused=fused)] if groups else []
-        if full_m and a.opt == "muon":
-            opts.append(Muon([params[n] for n in full_m], lr=a.lr * mult, wd=a.wd))
+        if full_m and aa.opt == "muon":
+            opts.append(Muon([params[n] for n in full_m], lr=aa.lr * m, wd=aa.wd))
         return opts
 
     @torch.no_grad()
-    def reset() -> None:
+    def reset(seed: int) -> None:
         for n in full:
             params[n].copy_(theta[n].to(params[n].device, torch.float32))
-        g.manual_seed(a.seed)
+        g.manual_seed(seed)
         for A, B, _ in factors.values():
             A.copy_(torch.randn(A.shape, device=prepare.DEVICE, generator=g) / math.sqrt(A.shape[1]))
             B.zero_()
 
     trainable = {"full": full, "adapters": {n: rank for n in lora}}
-    tokens = a.batch * prepare.EVAL_CTX
-    extra = sum(ns_flops(tuple(params[n].shape)) for n in full_m) if a.opt == "muon" else 0
-    pool = a.select_pool * a.batch
-    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}]
-                                   + ([{"op": "forward", "tokens": pool * prepare.EVAL_CTX}] if a.select_pool > 1 else []))["flops"] + extra
     V, d = net.inner.embed.shape
-    head_saving = 2 * 2 * (V - a.head_plan) * d if a.head == "sampled" else 0
-    per_step -= head_saving * tokens
-    mults = [float(x) for x in a.arms.split(",")] if a.arms else [1.0]
-    W, E = a.cache_windows, a.cache_epochs
-    if W:
+    arms = parse_arms(a.arms, a)
+    share = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET / len(arms)
+    cached = [aa for aa in arms if aa.cache_windows]
+    if cached:
         top = {f"blocks.{L - 1}.{x}.weight" for x in ("w_gate", "w_up", "w_down")}
-        if set(full_m + lora) - top or a.select_pool > 1 or W % a.batch:
+        if set(full_m + lora) - top or any(aa.select_pool > 1 or aa.cache_windows % aa.batch for aa in cached):
             raise SystemExit("hybrid: --cache-windows trains only the top block's MLP (and the gains above it), without "
                              "selection, on a multiple of --batch windows")
         nodes = prepare.positions(rec)
         fwd_tok = prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": 1}])["flops"]
         prefix_tok = fwd_tok - sum(n["flops"] for n in nodes if (n["layer"], n["stage"]) >= (L, 4))
-        epoch_tok = per_step / tokens - prefix_tok
-        chunk = W * prepare.EVAL_CTX * (prefix_tok + E * (epoch_tok + extra / tokens))
-        n_chunks = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // chunk) // len(mults)
-        n_arm = n_chunks * E * (W // a.batch)
-        n_steps = n_arm * len(mults)
-    else:
-        n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
-        n_arm = n_steps // len(mults)
+
+    def plan(aa: argparse.Namespace) -> dict:
+        """An arm's steps within its share: n_data data steps (TrainData.next calls), n_train optimizer steps."""
+        tokens = aa.batch * prepare.EVAL_CTX
+        extra = sum(ns_flops(tuple(params[n].shape)) for n in full_m) if aa.opt == "muon" else 0
+        pool = aa.select_pool * aa.batch
+        per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}] + (
+            [{"op": "forward", "tokens": pool * prepare.EVAL_CTX}] if aa.select_pool > 1 else []))["flops"]
+        if aa.head == "sampled":
+            per_step -= 2 * 2 * (V - aa.head_plan) * d * tokens
+        p = {"tokens": tokens, "extra": extra, "pool": pool, "flops_per_step": per_step + extra}
+        W, E = aa.cache_windows, aa.cache_epochs
+        if W:
+            epoch_tok = per_step / tokens - prefix_tok
+            chunk = W * prepare.EVAL_CTX * (prefix_tok + E * epoch_tok) + E * (W // aa.batch) * extra
+            n_chunks = int(share // chunk)
+            p.update(epoch_tok=epoch_tok, flops_per_chunk=chunk, n_data=n_chunks, n_train=n_chunks * E * (W // aa.batch),
+                     reads=n_chunks * W)
+        else:
+            n = int(share // (per_step + extra))
+            p.update(n_data=n, n_train=n, reads=n * pool)
+        return p
+
+    plans = [plan(aa) for aa in arms]
     fwd = torch.compile(net) if fused else net
     dev = prepare.DEVICE.split(":")[0]
     structure = prepare.deep_share(rec, set(full + lora))
-    steps, snaps, arms, cands = [], [], [], []
+    steps, snaps, arms_out, cands = [], [], [], []
     gneg = torch.Generator(device=prepare.DEVICE)
-    marks = {round(n_arm * k / a.snaps) for k in range(1, a.snaps)}
     t0 = time.perf_counter()
-    for arm, mult in enumerate(mults):
-        if arm:
-            reset()
-        opts = optimizers(mult)
-        gneg.manual_seed(a.seed + 1)
+    for arm, (aa, p) in enumerate(zip(arms, plans)):
+        reset(aa.seed)
+        opts = optimizers(aa)
+        gneg.manual_seed(aa.seed + 1)
         base_lrs = [[grp["lr"] for grp in o.param_groups] for o in opts]
-        data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
-        fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
-        reads = n_chunks * W if W else n_arm * pool
-        if a.fresh and fresh.get("kept", 0) < reads:
-            raise SystemExit(f"hybrid: --fresh leaves {fresh.get('kept')} windows, the run reads {reads}")
-        arms.append({"lr_mult": mult, "first_step": arm * n_arm, "steps": n_arm})
-        print(json.dumps({"arm": arm, "lr_mult": mult, "steps": n_arm, "full": len(full_m), "lora": len(lora),
-                          "rank": rank if lora else None, "norms": len(norms), "E_bytes": size, "flops_per_step": per_step,
-                          "phi": structure["phi"], "lowest_updated_layer": structure["lowest_updated_layer"],
-                          "data": fresh}), flush=True)
+        data = prepare.TrainData(rec["tokenizer"], seed=aa.data_seed)
+        fresh = fresh_order(data, rec) if aa.fresh else {"fresh": False}
+        if aa.fresh and fresh.get("kept", 0) < p["reads"]:
+            raise SystemExit(f"hybrid: --fresh leaves {fresh.get('kept')} windows, the arm reads {p['reads']}")
+        n_data, n_train, last = p["n_data"], p["n_train"], arm == len(arms) - 1
+        # a non-last arm's end must be the first E encoded in its 5%, so no snapshot within a 5% (10% slack) of it
+        keep = 1.0 if last else 1 - 1.1 * len(arms) / CHECKPOINTS
+        marks = {round(n_data * j / a.snaps) for j in range(1, a.snaps) if j / a.snaps < keep} - {0}
+        if not last:
+            marks.add(n_data)
+        overrides = {k: v for k, v in vars(aa).items() if k not in vars(a) or v != vars(a)[k]}
+        arms_out.append({**overrides, "first_train_step": sum(q["n_train"] for q in plans[:arm]), "train_steps": n_train,
+                         "data_steps": n_data, "planned_flops": share})
+        print(json.dumps({"arm": arm, **overrides, "train_steps": n_train, "data_steps": n_data, "full": len(full_m),
+                          "lora": len(lora), "rank": rank if lora else None, "norms": len(norms), "E_bytes": size,
+                          "flops_per_step": p["flops_per_step"], "phi": structure["phi"],
+                          "lowest_updated_layer": structure["lowest_updated_layer"], "data": fresh}), flush=True)
         k = 0
 
         def train_step(micro_losses) -> None:
             nonlocal k
-            frac = lr_frac(k, n_arm, a.warmup, a.schedule, a.cooldown)
+            frac = lr_frac(k, n_train, aa.warmup, aa.schedule, aa.cooldown)
             for o, lrs in zip(opts, base_lrs):
                 for grp, lr in zip(o.param_groups, lrs):
                     grp["lr"] = lr * frac
             total = 0.0
-            for fn, share in micro_losses:
+            for fn, part in micro_losses:
                 with torch.autocast(dev, dtype=torch.bfloat16):
                     loss = fn()
-                (loss * share).backward()
-                total += float(loss.detach()) * share
-            torch.nn.utils.clip_grad_norm_([p for o in opts for grp in o.param_groups for p in grp["params"]], 1.0)
+                (loss * part).backward()
+                total += float(loss.detach()) * part
+            torch.nn.utils.clip_grad_norm_([q for o in opts for grp in o.param_groups for q in grp["params"]], 1.0)
             for o in opts:
                 o.step()
                 o.zero_grad(set_to_none=True)
-            if extra:
-                steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+            if p["extra"]:
+                steps.append({"op": "extra", "flops": p["extra"], "what": "muon newton-schulz"})
             k += 1
             if k % 100 == 0:
                 print(json.dumps({"arm": arm, "step": k, "loss": round(total, 5), "s": round(time.perf_counter() - t0, 1),
                                   **({"candidates": round(sum(cands) / len(cands))} if cands else {})}), flush=True)
-            if k in marks or (k == n_arm and arm < len(mults) - 1):
-                snaps.append((encode(a.store, factors, params, full, theta), len(steps)))
 
         def head(hn, tgt):
-            if a.head == "full":
+            if aa.head == "full":
                 return F.cross_entropy(F.linear(hn, net.inner.embed).float().view(-1, V), tgt.reshape(-1))
-            loss, n_cand = sampled_loss(net.inner, hn, tgt, a.head_neg, gneg)
+            loss, n_cand = sampled_loss(net.inner, hn, tgt, aa.head_neg, gneg)
             cands.append(n_cand)
             return loss
 
-        if W:
-            gshuf = torch.Generator(device="cpu").manual_seed(a.seed + 2)
-            for _ in range(n_chunks):
+        W, E, B, mb = aa.cache_windows, aa.cache_epochs, aa.batch, aa.micro
+        gshuf = torch.Generator(device="cpu").manual_seed(aa.seed + 2)
+        for c in range(1, n_data + 1):
+            if W:
                 rows = data.next(W)
                 with torch.no_grad(), torch.autocast(dev, dtype=torch.bfloat16):
-                    mids = torch.cat([after_attention(net.inner, rows[i: i + a.micro, :-1]) for i in range(0, W, a.micro)])
+                    mids = torch.cat([after_attention(net.inner, rows[i: i + mb, :-1]) for i in range(0, W, mb)])
                 steps.append({"op": "forward", "tokens": W * prepare.EVAL_CTX, "what": "cache: theta to the top MLP's input"})
                 for _ in range(E):
                     perm = torch.randperm(W, generator=gshuf).to(rows.device)
-                    for b in range(0, W, a.batch):
-                        idx = perm[b: b + a.batch]
-                        train_step([(lambda j=idx[i: i + a.micro]: head(top_mlp(net.inner, mids[j]), rows[j, 1:]),
-                                     len(idx[i: i + a.micro]) / a.batch) for i in range(0, a.batch, a.micro)])
-                        steps.append({"op": "extra", "flops": int(a.batch * prepare.EVAL_CTX * epoch_tok),
+                    for b in range(0, W, B):
+                        idx = perm[b: b + B]
+                        train_step([(lambda j=idx[i: i + mb]: head(top_mlp(net.inner, mids[j]), rows[j, 1:]),
+                                     len(idx[i: i + mb]) / B) for i in range(0, B, mb)])
+                        steps.append({"op": "extra", "flops": int(B * prepare.EVAL_CTX * p["epoch_tok"]),
                                       "what": "cached top-MLP step"})
-        else:
-            for _ in range(n_arm):
-                rows = data.next(pool)
-                if a.select_pool > 1:
-                    rows = choose(fwd, rows, a.batch, a.micro, a.select_by, dev)
-                    steps.append({"op": "forward", "tokens": pool * prepare.EVAL_CTX,
-                                  "what": f"selection by {a.select_by} loss"})
-                if a.head == "full":
-                    fns = [lambda x=rows[i: i + a.micro]: F.cross_entropy(
-                        fwd(x[:, :-1]).float().view(-1, V), x[:, 1:].reshape(-1)) for i in range(0, a.batch, a.micro)]
+            else:
+                rows = data.next(p["pool"])
+                if aa.select_pool > 1:
+                    rows = choose(fwd, rows, B, mb, aa.select_by, dev)
+                    steps.append({"op": "forward", "tokens": p["pool"] * prepare.EVAL_CTX,
+                                  "what": f"selection by {aa.select_by} loss"})
+                if aa.head == "full":
+                    fns = [lambda x=rows[i: i + mb]: F.cross_entropy(
+                        fwd(x[:, :-1]).float().view(-1, V), x[:, 1:].reshape(-1)) for i in range(0, B, mb)]
                 else:
-                    fns = [lambda x=rows[i: i + a.micro]: head(F.rms_norm(net.inner.hidden(x[:, :-1]), (d,), net.inner.norm),
-                                                               x[:, 1:]) for i in range(0, a.batch, a.micro)]
-                train_step([(fn, len(rows[i: i + a.micro]) / a.batch) for fn, i in zip(fns, range(0, a.batch, a.micro))])
-                steps.append({"op": "train", "tokens": tokens})
+                    fns = [lambda x=rows[i: i + mb]: head(F.rms_norm(net.inner.hidden(x[:, :-1]), (d,), net.inner.norm),
+                                                          x[:, 1:]) for i in range(0, B, mb)]
+                train_step([(fn, len(rows[i: i + mb]) / B) for fn, i in zip(fns, range(0, B, mb))])
+                steps.append({"op": "train", "tokens": p["tokens"]})
+            if c in marks:
+                snaps.append((encode(a.store, factors, params, full, theta), len(steps)))
     blob = encode(a.store, factors, params, full, theta)
     model = prepare.decode(theta, blob)
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=full + lora,
-                   notes={"method": "hybrid", "rank": rank if lora else None, "args": vars(a), "steps": n_steps,
-                          "arms": arms, "data": fresh,
+                   notes={"method": "hybrid", "rank": rank if lora else None, "args": vars(a),
+                          "steps": sum(q["n_train"] for q in plans), "arms": arms_out, "data": fresh,
                           **({"head_candidates_mean": sum(cands) / len(cands)} if cands else {})},
                    snapshots=snaps)
     return 0
