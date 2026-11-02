@@ -8,9 +8,12 @@ Modes:
   `--variants` quantizes the update Δ = W − θ;
 - `qat`: every trained matrix's weight is θ + Q(V) in each step's forward, Q a sign, ternary or k-bit quantizer (scaled
   by the mean |V| of a tensor, row or group) of a latent delta V that only the optimizer touches, through a
-  straight-through gradient; so every step's weights, and the trained model, are exactly a CWQUAN1 code.
-
+  straight-through gradient; so every step's weights, and the trained model, are exactly a CWQUAN1 code. `--qat fp`
+  trains the weights unquantized, as ptq does;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
+
+`--arms` (qat, qlora) packs settings into one candidate: each arm trains from θ on the same data order with an equal
+share of the budget, in its own 5%s of the run, so a later arm's checkpoints are charged every earlier arm's MACs.
 
 Until prepare.decode reads CWQUAN1 (asked of the toolsmith), E is the model through `encode_full` (`--emit full`), and
 the record's notes give its CWQUAN1 size, checked to rebuild that model bit for bit. The step count is a multiple of the
@@ -18,13 +21,15 @@ harness's 20 checkpoints (`hooks.plan`). In ptq the harness scores the fp model 
 after it the program encodes one variant of the same weights, which the harness scores as that 5%'s checkpoint: the
 variants cycle back from the last 5% (`--variants`' non-fp ones, the first at 100%), and the notes' `buckets` say which
 variant each checkpoint holds. The submission is `--variants`' first, and the notes give every variant on the final
-weights. In qat and qlora each 5%'s checkpoint is the model itself.
+weights. In qat and qlora each 5%'s checkpoint is the model itself, except a `--qat fp` arm's, which are ptq's.
 
 Variant names: `fp` (no quantization), `rtn{b}g{G}` (b-bit round to nearest, G-entry groups, G 0 a row), `sign[g{G}]`,
 `tern{tau}[g{G}]` (ternary, kept when |Δ| > tau · the group's mean |Δ|).
 
     python benchmarks/covert_witness/launch.py reference s100 --note "ptq: ..." -- --klass reference --mode ptq \
         --variants fp,rtn2g128,sign
+    python benchmarks/covert_witness/launch.py reference s100 --note "qat: ..." -- --klass reference --mode qat \
+        --arms "qat=fp/qat=tern/qat=sign"
 """
 from __future__ import annotations
 
@@ -50,12 +55,55 @@ import qformat as qf  # noqa: E402
 CHECKPOINTS = 20
 
 
-def planned(n_steps: int) -> tuple[int, set[int]]:
-    """The step count, cut to a multiple of the harness's checkpoints and told to it, and the steps after which it scores
-    the output: an E encoded right after one of them is that 5%'s checkpoint, on the same weights."""
-    n = n_steps // CHECKPOINTS * CHECKPOINTS if n_steps >= CHECKPOINTS else n_steps
-    hooks.plan(n)
-    return n, {max(0, math.ceil(n * b / CHECKPOINTS) - 1) for b in range(1, CHECKPOINTS + 1)}
+def arm_steps(n: int) -> int:
+    """An arm's step count, cut to a multiple of the harness's checkpoints."""
+    return n // CHECKPOINTS * CHECKPOINTS if n >= CHECKPOINTS else n
+
+
+class Schedule:
+    """The run's steps over its arms, told to the harness (`hooks.plan`), and which of them encode an E: the harness scores
+    the first E in each 5% of the run, so each 5% gets one, at its last step (where it also scores the output) or at an
+    arm's last step, whichever comes first."""
+
+    def __init__(self, counts: list[int]):
+        self.counts, self.total = counts, sum(counts)
+        hooks.plan(self.total)
+        self.cps = {max(0, math.ceil(self.total * b / CHECKPOINTS) - 1) for b in range(1, CHECKPOINTS + 1)}
+        self.claimed: set[int] = set()
+
+    def bucket(self, g: int) -> int:
+        return math.ceil((g + 1) * CHECKPOINTS / self.total)
+
+    def due(self, g: int, last: bool) -> bool:
+        b = self.bucket(g)
+        if (g in self.cps or last) and b not in self.claimed:
+            self.claimed.add(b)
+            return True
+        return False
+
+
+#: what an arm may set (`--arms`); the rest is the run's
+ARM_KEYS = {"qat", "qat_group", "qat_mult", "muon_lr", "adam_lr", "warmup", "data_seed", "targets", "rank", "qbits", "pow2",
+            "norms", "lr", "norm_lr", "seed"}
+
+
+def parse_arms(a) -> list[argparse.Namespace]:
+    """`--arms A/B/...`, each a comma-separated key=value list over the command line's options: one Namespace per arm."""
+    if not a.arms:
+        return [a]
+    out = []
+    for spec in a.arms.split("/"):
+        x = argparse.Namespace(**vars(a))
+        for kv in filter(None, spec.split(",")):
+            k, _, v = kv.partition("=")
+            k = k.replace("-", "_")
+            if k not in ARM_KEYS:
+                raise SystemExit(f"quant: an arm can't set {k!r} (it may set {sorted(ARM_KEYS)})")
+            cur = getattr(a, k)
+            setattr(x, k, v.lower() in ("1", "true", "yes") if isinstance(cur, bool) else type(cur)(v))
+        x.arm = spec
+        out.append(x)
+    return out
 
 
 def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
@@ -142,6 +190,8 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
 
 
 QAT_SCHEME = re.compile(r"sign|tern|rtn(\d)")
+#: a qat arm that trains the weights unquantized; its checkpoints encode `--variants` of them, as ptq's do
+QAT_FP = "fp"
 
 
 @torch.no_grad()
@@ -205,103 +255,155 @@ def factor_quant(x: torch.Tensor, bits: int, pow2: bool, rows: int = 1) -> qf.QA
     return qf.QArray(cb.to(torch.float16), s, (k + qmax).to(torch.uint8).view(-1), bits, x.shape[1], shape)
 
 
-def main_qlora(a) -> int:
-    """LoRA whose factors are k-bit in every forward (straight-through fake quantization); E is the factors' codes."""
+def lora_bytes(fac: dict, full: dict) -> int:
+    """`prepare.encode_lora(fac, "bf16", full)`'s size without encoding: every encode during the steps is a checkpoint
+    candidate."""
+    header = {"dtype": "bf16", "factors": [[n, int(fac[n][0].shape[0]), float(fac[n][2])] for n in sorted(fac)],
+              "full": sorted(full)}
+    payload = 2 * (sum(a.numel() + b.numel() for a, b, _ in fac.values()) + sum(t.numel() for t in full.values()))
+    return len(prepare._pack(b"CWLORA1\n", header, b"")) + payload
+
+
+def main_qlora(a, arms: list[argparse.Namespace]) -> int:
+    """LoRA whose factors are k-bit in every forward (straight-through fake quantization; `--qbits 0` is plain LoRA); E is
+    the factors' codes. Each arm trains from θ on the same data order; the submission is the arm with the least final
+    training loss (an exponential average over its last ~50 steps)."""
     t_start = time.perf_counter()
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     dev = prepare.DEVICE
     params = net.params()
-    targets = lora_targets(rec, params, a.targets)
-    norms = sorted(n for n, p in params.items() if p.ndim == 1) if a.norms else []
     for p in params.values():
         p.requires_grad_(False)
-    for n in norms:
+    all_norms = sorted(n for n, p in params.items() if p.ndim == 1)
+    for n in all_norms:
         params[n].data = params[n].data.float()
-        params[n].requires_grad_(True)
-    g = torch.Generator(device=dev).manual_seed(a.seed)
-    factors = {}
-
-    def fq(x, rows=1):
-        return x + (factor_quant(x.detach(), a.qbits, a.pow2, rows).value() - x).detach()
-
-    for n in targets:
-        w = params[n]
-        A = torch.nn.Parameter(torch.randn(a.rank, w.shape[1], device=dev, generator=g) / math.sqrt(w.shape[1]))
-        B = torch.nn.Parameter(torch.zeros(w.shape[0], a.rank, device=dev))
-        s = math.sqrt(w.shape[1] / a.rank)
-        factors[n] = (A, B, s)
-        mod = net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], fq(A)), fq(B, B_ROWS)))
-    opt = torch.optim.AdamW([{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": a.lr, "weight_decay": 0.0},
-                             {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}],
-                            betas=(0.9, 0.95), fused=dev.startswith("cuda"))
-    trainable = {"full": norms, "adapters": {n: a.rank for n in targets}}
+    norm0 = {n: params[n].detach().clone() for n in all_norms}
     tokens = a.batch * prepare.EVAL_CTX
-    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
-    n_steps, cps = planned(int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step))
-    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
+
+    def trainable_of(x):
+        return {"full": all_norms if x.norms else [], "adapters": {n: x.rank for n in lora_targets(rec, params, x.targets)}}
+
+    def per_step(x):
+        return prepare.train_flops(rec, trainable_of(x), [{"op": "train", "tokens": tokens}])["flops"]
+
+    sched = Schedule([arm_steps(int(a.budget_fraction / len(arms) * prepare.TRAIN_FLOP_BUDGET // per_step(x)))
+                      for x in arms])
     fwd = torch.compile(net)
-    steps = []
+    steps, results, g = [], [], 0
 
-    def entries():
-        out = {n: {"kind": "lora", "a": factor_quant(A.detach(), a.qbits, a.pow2),
-                   "b": factor_quant(B.detach(), a.qbits, a.pow2, B_ROWS), "scale": s} for n, (A, B, s) in factors.items()}
-        out |= {n: {"kind": "full", "t": params[n].detach().to(torch.bfloat16).float()} for n in norms}
-        return out
+    def pieces(x, factors, norms):
+        """(factors as E carries them, norm gains in bf16, CWQUAN1 entries or None)."""
+        if x.qbits:
+            q = {n: (factor_quant(A.detach(), x.qbits, x.pow2), factor_quant(B.detach(), x.qbits, x.pow2, B_ROWS), s)
+                 for n, (A, B, s) in factors.items()}
+            fac = {n: (qa.value(), qb.value(), s) for n, (qa, qb, s) in q.items()}
+        else:
+            q, fac = None, {n: (A.detach().clone(), B.detach().clone(), s) for n, (A, B, s) in factors.items()}
+        full = {n: params[n].detach().to(torch.bfloat16).float() for n in norms}
+        qent = None if q is None else ({n: {"kind": "lora", "a": qa, "b": qb, "scale": s} for n, (qa, qb, s) in q.items()}
+                                       | {n: {"kind": "full", "t": t} for n, t in full.items()})
+        return fac, full, qent
 
-    def emit(ent):
+    def emit(fac, full, qent):
         if a.emit == "lora":
-            fac = {n: (e["a"].value(), e["b"].value(), e["scale"]) for n, e in ent.items() if e["kind"] == "lora"}
-            return prepare.encode_lora(fac, "bf16", {n: e["t"] for n, e in ent.items() if e["kind"] == "full"})
-        qblob = qf.encode(ent, theta)
-        return qblob if a.emit == "quan" else prepare.encode_full(
-            {k: v for k, v in qf.decode(theta, qblob, dev).items() if k in ent})
+            return prepare.encode_lora(fac, "bf16", full)
+        return prepare.encode_full({k: v for k, v in qf.decode(theta, qf.encode(qent, theta), dev).items()
+                                    if k in qent})
 
-    print(json.dumps({"steps": n_steps, "rank": a.rank, "bits": a.qbits, "targets": len(targets), "norms": len(norms),
-                      "flops_per_step": per_step}), flush=True)
     t0 = time.perf_counter()
-    lrs = [grp["lr"] for grp in opt.param_groups]
-    for step in range(n_steps):
-        frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
-        for grp, lr in zip(opt.param_groups, lrs):
-            grp["lr"] = lr * frac
-        rows = data.next(a.batch)
-        for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
-            with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
-                logits = fwd(x[:, :-1])
-            loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
-            loss.backward()
-        torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
-        opt.step()
-        opt.zero_grad(set_to_none=True)
-        steps.append({"op": "train", "tokens": tokens})
-        if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
-                              "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step in cps:
-            emit(entries())
+    for k, x in enumerate(arms):
+        tr = trainable_of(x)
+        targets, norms = sorted(tr["adapters"]), tr["full"]
+        if k and results[-1]["norms"]:
+            with torch.no_grad():
+                for n in all_norms:
+                    params[n].copy_(norm0[n])
+        for n in all_norms:
+            params[n].requires_grad_(n in norms)
+        gen = torch.Generator(device=dev).manual_seed(x.seed)
+        factors, handles = {}, []
+
+        def fq(t, rows=1, x=x):
+            return t if not x.qbits else t + (factor_quant(t.detach(), x.qbits, x.pow2, rows).value() - t).detach()
+
+        for n in targets:
+            w = params[n]
+            A = torch.nn.Parameter(torch.randn(x.rank, w.shape[1], device=dev, generator=gen) / math.sqrt(w.shape[1]))
+            B = torch.nn.Parameter(torch.zeros(w.shape[0], x.rank, device=dev))
+            s = math.sqrt(w.shape[1] / x.rank)
+            factors[n] = (A, B, s)
+            mod = net.inner.get_submodule(n.removesuffix(".weight"))
+            handles.append(mod.register_forward_hook(
+                lambda m, inp, out, A=A, B=B, s=s, fq=fq: out + s * F.linear(F.linear(inp[0], fq(A)), fq(B, B_ROWS))))
+        opt = torch.optim.AdamW(
+            [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": x.lr, "weight_decay": 0.0},
+             {"params": [params[n] for n in norms], "lr": x.norm_lr, "weight_decay": 0.0}],
+            betas=(0.9, 0.95), fused=dev.startswith("cuda"))
+        data = prepare.TrainData(rec["tokenizer"], seed=x.data_seed)
+        n_k, first, ema = sched.counts[k], g, None
+        print(json.dumps({"arm": k, "spec": getattr(x, "arm", ""), "steps": n_k, "rank": x.rank, "bits": x.qbits,
+                          "targets": len(targets), "norms": len(norms), "flops_per_step": per_step(x)}), flush=True)
+        lrs = [grp["lr"] for grp in opt.param_groups]
+        for step in range(n_k):
+            frac = min(1.0, (step + 1) / x.warmup) * (1 - step / n_k)
+            for grp, lr in zip(opt.param_groups, lrs):
+                grp["lr"] = lr * frac
+            rows = data.next(a.batch)
+            total = 0.0
+            for i in range(0, a.batch, a.micro):
+                xb = rows[i: i + a.micro]
+                with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
+                    logits = fwd(xb[:, :-1])
+                loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), xb[:, 1:].reshape(-1)) * (
+                    len(xb) / a.batch)
+                loss.backward()
+                total += float(loss.detach())
+            torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
+            opt.step()
+            opt.zero_grad(set_to_none=True)
+            steps.append({"op": "train", "tokens": tokens})
+            ema = total if ema is None else 0.98 * ema + 0.02 * total
+            if (step + 1) % 100 == 0:
+                print(json.dumps({"arm": k, "step": step + 1, "loss": total, "ema": ema,
+                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+            if sched.due(g, step == n_k - 1):
+                emit(*pieces(x, factors, norms))
+            g += 1
+        results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": ema, "targets": targets, "norms": norms,
+                        "trainable": tr, "pieces": pieces(x, factors, norms),
+                        "n_entries": sum(A.numel() + B.numel() for A, B, _ in factors.values())
+                        + sum(params[n].numel() for n in norms)})
+        for h in handles:
+            h.remove()
+        del factors, opt
     t_train = time.perf_counter() - t0
-    t1 = time.perf_counter()
-    ent = entries()
-    qblob = qf.encode(ent, theta)
-    blob = emit(ent)
+    best = min(results, key=lambda r: r["loss"])
+    blob = emit(*best["pieces"])
     model = prepare.decode(theta, blob)
-    rebuilt = qf.decode(theta, qblob, dev)
-    ok = all(prepare.same_bits(rebuilt[k], model[k]) for k in theta)
-    n_entries = sum(A.numel() + B.numel() for A, B, _ in factors.values()) + sum(params[n].numel() for n in norms)
-    h_bits = sum(e["a"].entropy_bits() + e["b"].entropy_bits() for e in ent.values() if e["kind"] == "lora") + sum(
-        32 * params[n].numel() for n in norms)
-    note = variant_note(f"qlora-r{a.rank}-q{a.qbits}{'-pow2' if a.pow2 else ''}", qblob, len(qblob), h_bits, ok, 0.0,
-                        n_entries, t1, where="submission", lora_bf16_bytes=len(prepare.encode_lora(
-                            {n: (A, B, s) for n, (A, B, s) in factors.items()}, "bf16", {n: params[n] for n in norms})))
-    notes = {"direction": "quant", "mode": "qlora", "args": vars(a), "steps": n_steps, "trained_entries": n_entries,
-             "variants": [note], "train_seconds": round(t_train, 1),
+    arm_notes = []
+    for r in results:
+        t1, x = time.perf_counter(), r["x"]
+        fac, full, qent = r["pieces"]
+        if qent is None:
+            qblob, q_bytes, ok, h_bits = None, lora_bytes(fac, full), True, 16.0 * r["n_entries"]
+        else:
+            qblob = qf.encode(qent, theta)
+            q_bytes = len(qblob)
+            ok = r is not best or all(prepare.same_bits(v, model[n]) for n, v in qf.decode(theta, qblob, dev).items())
+            h_bits = sum(e["a"].entropy_bits() + e["b"].entropy_bits() for e in qent.values() if e["kind"] == "lora") \
+                + 16 * sum(t.numel() for t in full.values())
+        arm_notes.append(variant_note(f"qlora-r{x.rank}-q{x.qbits}{'-pow2' if x.pow2 and x.qbits else ''}", qblob, q_bytes,
+                                      h_bits, ok, 0.0, r["n_entries"], t1, arm=r["k"], spec=getattr(x, "arm", ""),
+                                      steps=r["steps"], final_loss_ema=r["loss"], lora_bf16_bytes=lora_bytes(fac, full),
+                                      where="submission" if r is best else "arm"))
+    notes = {"direction": "quant", "mode": "qlora", "args": vars(a), "steps": sched.total, "arms": arm_notes,
+             "variants": [n for n in arm_notes if n["where"] == "submission"], "train_seconds": round(t_train, 1),
              "process_seconds": round(time.perf_counter() - t_start, 1),
-             "E_format_note": "q_bytes is the update's CWQUAN1 size (islands/quant/qformat.py), checked to rebuild the "
-                              "submitted model bit for bit; bits_per_param is per factor entry"}
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=targets + norms, notes=notes)
+             "E_format_note": "q_bytes is the arm's CWQUAN1 size (islands/quant/qformat.py; the bf16 lora size for qbits "
+                              "0), checked to rebuild the submitted model bit for bit; bits_per_param is per trained entry"}
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, best["trainable"], steps,
+                   changed=best["targets"] + best["norms"], notes=notes)
     return 0
 
 
@@ -323,7 +425,8 @@ def main() -> int:
                     help="all | blocks | blockmats | top{K} (the top K blocks and the final norm) | name regexes, comma-separated")
     ap.add_argument("--variants", default="fp,rtn4g128,rtn3g128,rtn2g128,sign,tern0.7", help="ptq")
     ap.add_argument("--norm-bits", type=int, default=8, help="ptq: the norm gains' rtn bits")
-    ap.add_argument("--qat", default="tern", help="qat: sign | tern | rtn{b}")
+    ap.add_argument("--qat", default="tern", help="qat: sign | tern | rtn{b} | fp (unquantized; its checkpoints encode "
+                                                  "--variants, as ptq's do)")
     ap.add_argument("--qat-group", type=int, default=-1, help="qat: -1 one scale per tensor, 0 per row, else G entries")
     ap.add_argument("--qat-mult", type=float, default=1.0, help="qat: the scale over the group's mean |V|")
     ap.add_argument("--emit", choices=("full", "quan", "lora"), default="full",
@@ -335,15 +438,28 @@ def main() -> int:
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
+    ap.add_argument("--arms", default="",
+                    help="qat, qlora: A/B/..., each a comma-separated key=value list over these options (e.g. "
+                         "qat=sign,muon_lr=0.005): each arm trains from θ on the same data order with an equal share of "
+                         "--budget-fraction, and a later arm's checkpoints are charged every earlier arm's MACs")
     a = ap.parse_args()
+    arms = parse_arms(a)
     if a.mode == "qlora":
-        if a.emit == "lora" and not a.pow2:
-            raise SystemExit("quant: --emit lora carries the codes exactly only with --pow2")
-        return main_qlora(a)
-    if a.emit == "lora":
-        raise SystemExit("quant: --emit lora is qlora's")
-    if a.mode == "qat" and not QAT_SCHEME.fullmatch(a.qat):
-        raise SystemExit(f"quant: unknown --qat {a.qat!r}")
+        for x in arms:
+            if x.qbits and a.emit == "lora" and not x.pow2:
+                raise SystemExit("quant: --emit lora carries k-bit factors exactly only with pow2")
+            if not x.qbits and a.emit != "lora":
+                raise SystemExit("quant: qbits 0 (plain LoRA) is emitted as --emit lora")
+        if a.emit == "quan":
+            raise SystemExit("quant: prepare.decode doesn't read CWQUAN1 yet")
+        return main_qlora(a, arms)
+    if a.emit != "full":
+        raise SystemExit("quant: ptq and qat emit full (prepare.decode reads neither lora codes nor CWQUAN1 for them)")
+    if a.mode == "ptq" and len(arms) > 1:
+        raise SystemExit("quant: --arms is qat's and qlora's (ptq's variants already share one training)")
+    for x in arms:
+        if a.mode == "qat" and x.qat != QAT_FP and not QAT_SCHEME.fullmatch(x.qat):
+            raise SystemExit(f"quant: unknown qat scheme {x.qat!r}")
     t_start = time.perf_counter()
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
@@ -358,85 +474,102 @@ def main() -> int:
     embed = "embed" if rec["config"]["family"] == "lf" else "model.embed_tokens.weight"
     mats = [n for n in names if params[n].ndim == 2 and n != embed]
     rest = [n for n in names if n not in mats]
-    # qat: the quantized tensors (every trained matrix) train a latent delta V; their weights are θ + Q(V), rebuilt each step
-    quantized = [n for n in names if params[n].ndim == 2] if a.mode == "qat" else []
-    latent = {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
-    theta_dev = {n: theta[n].to(dev) for n in quantized}
-    opt_of = {n: latent.get(n, params[n]) for n in names}
-    muon = Muon([opt_of[n] for n in mats], lr=a.muon_lr) if mats else None
-    adam = torch.optim.AdamW([opt_of[n] for n in rest], lr=a.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
-                             fused=dev.startswith("cuda")) if rest else None
-    opts = [(o, lr) for o, lr in ((muon, a.muon_lr), (adam, a.adam_lr)) if o is not None]
+    theta_dev = {n: theta[n].to(dev) for n in names}
     trainable = {"full": names}
     tokens = a.batch * prepare.EVAL_CTX
     extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
-    n_steps, cps = planned(int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step))
-    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
+    n_arm = arm_steps(int(a.budget_fraction / len(arms) * prepare.TRAIN_FLOP_BUDGET // per_step))
+    sched = Schedule([n_arm] * len(arms))
     fwd = torch.compile(net)
-    steps, qarrays, buckets = [], {}, []
+    steps, buckets, results, g = [], [], [], 0
     cycle = [v for v in a.variants.split(",") if v != "fp"] or ["fp"]
-    if a.mode == "ptq":
+    if a.mode == "ptq" or any(x.qat == QAT_FP for x in arms):
         hooks.output(lambda: {n: p.detach() for n, p in params.items()})
-    print(json.dumps({"steps": n_steps, "flops_per_step": per_step, "trained": len(names), "quantized": len(quantized)}),
-          flush=True)
-
-    @torch.no_grad()
-    def materialize() -> None:
-        for n in quantized:
-            q = qat_quant(latent[n], a.qat, a.qat_group, a.qat_mult)
-            qarrays[n] = q
-            params[n].data.copy_((theta_dev[n].float() + q.value()).to(theta_dev[n].dtype))
-
     t0 = time.perf_counter()
-    for step in range(n_steps):
-        frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
-        for o, lr in opts:
-            for g in o.param_groups:
-                g["lr"] = lr * frac
-        rows = data.next(a.batch)
-        for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
-            with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
-                logits = fwd(x[:, :-1])
-            loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
-            loss.backward()
-        for n in quantized:
-            latent[n].grad, params[n].grad = params[n].grad, None
-        torch.nn.utils.clip_grad_norm_([opt_of[n] for n in names], 1.0)
-        for o, _ in opts:
-            o.step()
-            o.zero_grad(set_to_none=True)
-        if quantized:
-            materialize()
-        steps.append({"op": "train", "tokens": tokens})
-        if extra:
-            steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
-        if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
-                              "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step in cps:
-            if a.mode == "qat":
-                prepare.encode_full({n: params[n].detach().to(theta[n].dtype).cpu() for n in names})
-            else:
-                b = math.ceil((step + 1) * CHECKPOINTS / n_steps)
-                v = cycle[(CHECKPOINTS - b) % len(cycle)]
-                model_v, note = ptq_variant(v, {n: params[n].detach() for n in names}, theta, a.norm_bits, dev)
-                prepare.encode_full(model_v)
-                buckets.append(note | {"bucket": b, "step": step})
-                del model_v
+    for k, x in enumerate(arms):
+        if k:
+            with torch.no_grad():
+                for n in names:
+                    params[n].copy_(theta_dev[n])
+        # qat: the quantized tensors (every trained matrix) train a latent delta V; their weights are θ + Q(V), rebuilt
+        # each step
+        quantized = [n for n in names if params[n].ndim == 2] if a.mode == "qat" and x.qat != QAT_FP else []
+        latent = {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
+        opt_of = {n: latent.get(n, params[n]) for n in names}
+        muon = Muon([opt_of[n] for n in mats], lr=x.muon_lr) if mats else None
+        adam = torch.optim.AdamW([opt_of[n] for n in rest], lr=x.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
+                                 fused=dev.startswith("cuda")) if rest else None
+        opts = [(o, lr) for o, lr in ((muon, x.muon_lr), (adam, x.adam_lr)) if o is not None]
+        data = prepare.TrainData(rec["tokenizer"], seed=x.data_seed)
+        qarrays, first, ema = {}, g, None
+        print(json.dumps({"arm": k, "spec": getattr(x, "arm", ""), "steps": n_arm, "flops_per_step": per_step,
+                          "trained": len(names), "quantized": len(quantized)}), flush=True)
+
+        @torch.no_grad()
+        def materialize(x=x, latent=latent, qarrays=qarrays, quantized=quantized) -> None:
+            for n in quantized:
+                q = qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult)
+                qarrays[n] = q
+                params[n].data.copy_((theta_dev[n].float() + q.value()).to(theta_dev[n].dtype))
+
+        for step in range(n_arm):
+            frac = min(1.0, (step + 1) / x.warmup) * (1 - step / n_arm)
+            for o, lr in opts:
+                for grp in o.param_groups:
+                    grp["lr"] = lr * frac
+            rows = data.next(a.batch)
+            total = 0.0
+            for i in range(0, a.batch, a.micro):
+                xb = rows[i: i + a.micro]
+                with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
+                    logits = fwd(xb[:, :-1])
+                loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), xb[:, 1:].reshape(-1)) * (
+                    len(xb) / a.batch)
+                loss.backward()
+                total += float(loss.detach())
+            for n in quantized:
+                latent[n].grad, params[n].grad = params[n].grad, None
+            torch.nn.utils.clip_grad_norm_([opt_of[n] for n in names], 1.0)
+            for o, _ in opts:
+                o.step()
+                o.zero_grad(set_to_none=True)
+            if quantized:
+                materialize()
+            steps.append({"op": "train", "tokens": tokens})
+            if extra:
+                steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+            ema = total if ema is None else 0.98 * ema + 0.02 * total
+            if (step + 1) % 100 == 0:
+                print(json.dumps({"arm": k, "step": step + 1, "loss": total, "ema": ema,
+                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+            if sched.due(g, step == n_arm - 1):
+                if quantized:
+                    prepare.encode_full({n: params[n].detach().to(theta[n].dtype).cpu() for n in names})
+                else:
+                    b = sched.bucket(g)
+                    v = cycle[(CHECKPOINTS - b) % len(cycle)]
+                    model_v, note = ptq_variant(v, {n: params[n].detach() for n in names}, theta, a.norm_bits, dev)
+                    prepare.encode_full(model_v)
+                    buckets.append(note | {"bucket": b, "step": g, "arm": k})
+                    del model_v
+            g += 1
+        results.append({"x": x, "k": k, "steps": [first, g - 1], "loss": ema, "qarrays": qarrays,
+                        "rest": {n: params[n].detach().cpu().clone() for n in names if n not in qarrays}})
+        del latent, opt_of, muon, adam, opts
     t_train = time.perf_counter() - t0
     if a.mode == "qat":
-        blob, model, notes_v = finish_qat(a, theta, params, names, qarrays, dev)
+        blob, model, notes_v = finish_qat(a, results, theta, names, cycle, dev)
     else:
         blob, model, notes_v = finish_ptq(a, theta, params, names, cycle, dev)
-    notes = {"direction": "quant", "mode": a.mode, "args": vars(a), "steps": n_steps,
+    notes = {"direction": "quant", "mode": a.mode, "args": vars(a), "steps": sched.total,
              "trained_parameters": sum(params[n].numel() for n in names), "variants": notes_v, "buckets": buckets,
              "train_seconds": round(t_train, 1), "process_seconds": round(time.perf_counter() - t_start, 1),
              "E_format_note": "E is encode_full of the model until prepare.decode reads CWQUAN1; q_bytes is the update's "
                               "CWQUAN1 size (islands/quant/qformat.py), checked to rebuild that model bit for bit. ptq: "
                               "each 5% checkpoint scores the fp model (source output) and, on the same weights, the "
-                              "bucket's variant (source encode; `buckets`)"}
+                              "bucket's variant (source encode; `buckets`). qat: one note per arm, the submission the "
+                              "arm with the least final training loss"}
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=names, notes=notes)
     return 0
 
@@ -450,23 +583,42 @@ def variant_note(v: str, qblob: bytes | None, q_bytes: int, h_bits: float, ok: b
     return out
 
 
-def finish_qat(a, theta, params, names, qarrays, dev):
-    t1 = time.perf_counter()
-    entries = {n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
-    entries |= {n: {"kind": "full", "t": params[n].detach()} for n in names if n not in qarrays}
-    qblob = qf.encode(entries, theta)
-    rebuilt = qf.decode(theta, qblob, dev)
-    trained = {n: params[n].detach().to(theta[n].dtype).cpu() for n in names}
-    ok = all(prepare.same_bits(rebuilt[n], trained[n]) for n in names)
-    n_params = sum(params[n].numel() for n in names)
-    h_bits = sum(q.entropy_bits() for q in qarrays.values()) + sum(
-        32 * params[n].numel() for n in names if n not in qarrays)
-    nonzero = {n: float((q.codebook.float()[q.codes.long()] != 0).float().mean()) for n, q in qarrays.items()}
-    note = variant_note(f"qat-{a.qat}", qblob, len(qblob), h_bits, ok, 0.0, n_params, t1,
-                        nonzero_share=sum(nonzero[n] * params[n].numel() for n in nonzero) / max(1, sum(
-                            params[n].numel() for n in nonzero)), where="submission")
-    blob = qblob if a.emit == "quan" else prepare.encode_full(trained)
-    return blob, prepare.decode(theta, blob), [note]
+def finish_qat(a, results: list[dict], theta, names, cycle, dev):
+    """Each arm's CWQUAN1 note (an fp arm's: `--variants` of its final weights); the submission is the quantized arm with
+    the least final training loss (any arm, if none is quantized), as encode_full."""
+    best = min([r for r in results if r["qarrays"]] or results, key=lambda r: r["loss"])
+    notes, blob = [], None
+    for r in results:
+        t1, qarrays = time.perf_counter(), r["qarrays"]
+        if not qarrays:
+            weights = {n: t.to(dev) for n, t in r["rest"].items()}
+            for v in ["fp", *cycle]:
+                m, note = ptq_variant(v, weights, theta, a.norm_bits, dev)
+                notes.append(note | {"arm": r["k"], "spec": getattr(r["x"], "arm", ""), "steps": r["steps"],
+                                     "final_loss_ema": r["loss"], "where": "submission" if r is best and v == "fp"
+                                     else "arm, final weights"})
+                if r is best and v == "fp":
+                    blob = prepare.encode_full(m)
+                del m
+            continue
+        entries = {n: {"kind": "delta", "q": q} for n, q in qarrays.items()}
+        entries |= {n: {"kind": "full", "t": t} for n, t in r["rest"].items()}
+        qblob = qf.encode(entries, theta)
+        rebuilt = qf.decode(theta, qblob, dev)
+        trained = {n: (theta[n].to(dev).float() + q.value()).to(theta[n].dtype).cpu() for n, q in qarrays.items()}
+        trained |= {n: t.to(theta[n].dtype) for n, t in r["rest"].items()}
+        ok = all(prepare.same_bits(rebuilt[n], trained[n]) for n in names)
+        n_params = sum(theta[n].numel() for n in names)
+        h_bits = sum(q.entropy_bits() for q in qarrays.values()) + sum(32 * t.numel() for t in r["rest"].values())
+        q_n = sum(theta[n].numel() for n in qarrays)
+        nonzero = sum(float((q.codebook.float()[q.codes.long().cpu()] != 0).float().sum()) for q in qarrays.values())
+        notes.append(variant_note(f"qat-{r['x'].qat}", qblob, len(qblob), h_bits, ok, 0.0, n_params, t1, arm=r["k"],
+                                  spec=getattr(r["x"], "arm", ""), steps=r["steps"], final_loss_ema=r["loss"],
+                                  nonzero_share=nonzero / max(1, q_n), where="submission" if r is best else "arm"))
+        if r is best:
+            blob = prepare.encode_full(trained)
+        del rebuilt, trained
+    return blob, prepare.decode(theta, blob), notes
 
 
 def ptq_variant(v: str, weights: dict[str, torch.Tensor], theta: dict, norm_bits: int, dev) -> tuple[dict, dict]:
