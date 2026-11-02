@@ -320,7 +320,7 @@ theorem finRepErased_of_fc (vs : finS.SwVals)
     (hRows : ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops →
       ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
         (finS.wt x w j, vs x w ν (finCoins x ops) j)
-        (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1)
+        (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1)
     (hFc : FinFc vs L₀ src wk x w) :
     FinRepErased vs L₀ src (realOf src) wk x w :=
   finRepErased_of_cut vs L₀ src wk x w hsc hR hServe hS hS0 hL0 hE hc hRows

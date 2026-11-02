@@ -45,7 +45,8 @@ namespace Loop
 noncomputable abbrev tabAt (x : Msg) (ops : List (Msg × Msg)) (j : Fin (Masked.jOf x)) :=
   (Masked.tabC Masked.PE x j).T (Masked.czExe Masked.PE x (finCoins x ops) j)
 
-/-- Table `j`'s randomness from the tape's base, its mask slot `.1` and extra lanes `.2.1.2.1`. -/
+/-- Table `j`'s randomness from the tape's base: its mask slot `.1`, level 0's hiding `.2.1` and, in it, the extra lanes
+`.2.1.2.1`. -/
 noncomputable abbrev randAtT (x : Msg) (ops : List (Msg × Msg)) (t : Masked.UE.Tape) (j : Fin (Masked.jOf x)) :=
   (tabAt x ops j).randOf ((Masked.UE.tape x t).1 j) 0
 
@@ -84,13 +85,13 @@ def RepRun (ν : finS.Nonce) (t : finS.Tape) (κ : (LeanRelease.ofLoopLink L₀ 
       (.ok (p, tr), l')
 
 /-- **Consumed: the clear values below `zp 64` are the request's**: at table `j`'s rep `r`'s run, below the layout's
-`zp 64` the workers' clear values `vs`, masked at the tape's mask slot and extra lanes, are the request's `q.vals`. -/
+`zp 64` the workers' clear values `vs`, at the tape's mask slot and level 0's hiding, are the request's `q.vals`. -/
 def FinRepMsgs : Prop :=
   ∀ ν t κ m₀ ρ₀ ops s0 spec (j : Fin (Masked.jOf x)) (r : Fin 2) tb hi q f ic' l p tr l',
     RepRun L₀ src real wk x w ν t κ m₀ ρ₀ ops s0 spec (2 * j.val + r.val) tb hi q f ic' l p tr l' →
     ∀ i < (Composed.layOf (Masked.zkTab x j).table (Masked.stAt x j)).zp 64,
       (Composed.msgAt ((tabAt x ops j).tab.onVals.vals r (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j)
-        (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1) i).val = q.vals[i]!
+        (randAtT x ops t j).1 (randAtT x ops t j).2.1) i).val = q.vals[i]!
 
 /-- **Consumed: level 0's values are the masked values**: at table `j`'s rep `r`'s run, the returned proof's level 0
 (its out-of-domain value, lane messages and pair's sums) is the workers' clear values plus the request's pads
@@ -100,7 +101,7 @@ def FinRepLanes : Prop :=
     RepRun L₀ src real wk x w ν t κ m₀ ρ₀ ops s0 spec (2 * j.val + r.val) tb hi q f ic' l p tr l' →
     Masked.LaneVals (Masked.zkTab x j).table (Masked.stAt x j)
       (fun i => (tabAt x ops j).tab.onVals.vals r (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j)
-        (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 i +
+        (randAtT x ops t j).1 (randAtT x ops t j).2.1 i +
         fOf (_root_.Flock.Firewall.Finish.padsOf q.draws).h[i.val]!)
       p.proof.ligerito p.level0
 
@@ -188,7 +189,7 @@ theorem finRepRows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.
   obtain ⟨schs, hschs, hschZ⟩ := Masked.schedsPZk_live hx
   refine Composed.rowsAt_of_fw Masked.PE (Masked.zkTab x j).table (Masked.stAt x j)
     (Masked.czExe Masked.PE x (finCoins x ops) j) (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j)
-    (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 fun r => ?_
+    (randAtT x ops t j).1 (randAtT x ops t j).2.1 fun r => ?_
   -- rep stream `2j + r`
   have hk : 2 * j.val + r.val < 2 * spec.tables.size := by
     have := r.isLt
