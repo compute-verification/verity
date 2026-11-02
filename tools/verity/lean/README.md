@@ -49,9 +49,17 @@ a record: `--records PKG --update` is for the lock and the mark only (`lean_chan
 Every declaration of the package's audited modules (not a list of theorems), from the environment Lean builds:
 
 - only the allowed axioms (default `propext`, `Classical.choice`, `Quot.sound`): no `sorry`, no `native_decide`;
+- no `sorry` the elaborator made for an error it did not report (`sorryAx _ true`, `unreported`), in a declaration of an
+  audited module or of a package `proved_in` names: its module built with a warning only, and the proofs it stands for
+  never ran. `lean_changed.py --records` on a spec package audits no proving package but reads each one's facts, so this
+  fails its fast path as well, where the axioms check does not;
+- every top-level declaration in an audited module's source (or a proving package's) lies in a declaration range its
+  `.olean` holds (`dropped`): otherwise Lean elaborated nothing there and reported nothing, and the build passed without
+  it (a `variable` whose binders use a local notation over section variables can make Lean drop the declarations after
+  it; so does `#exit`);
 - no `axiom` declaration: an assumption is a named `Prop`, taken as a hypothesis;
 - every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`, `@[implemented_by]`,
-  `@[extern]`) is listed with a reason;
+  `@[extern]`) is listed under `escapes` with a reason, and every listed one still is one;
 - every `.lean` file of the package is imported by a root, or exempt with a reason;
 - no source file or lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a `bootstrap.*`
   option, `addDeclWithoutChecking` or `addDeclCore` (comments and docstrings may);
@@ -76,7 +84,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   vocabulary);
 - the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
   definitions or properties tree imports one;
-- every `Prop` a guarantee takes is named or a plain range (`inline_failures`; `shape.inline` excepts some);
+- every `Prop` a guarantee takes (its `Guarantees` definition unfolded once, past a leading `∀` over data, split at `∧`)
+  is a named assumption the lock lists, another listed guarantee's statement or a plain range (`0 < x`, `x ≤ y`,
+  `∀ i, 0 ≤ f i`, over bound variables and numerals), unless `shape.inline`, which only shrinks, lists it
+  (`inline_failures`); the size of `shape.inline` is the `AUDIT` line's inline debt;
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
@@ -97,7 +108,14 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   predicate or a field of it, so `True` or a fact of Init or Mathlib alone fails), and is neither a reflexivity
   (`a = a`, `a ↔ a`) nor one of its hypotheses, and no hypothesis is `False` (`vacuous_meets`);
 - a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses, or an `unwitnessed` entry, which
-  only shrinks (`witness_failures`);
+  only shrinks, with its statement's hash (`witness_failures`). A guarantee that states what an acceptance means (a
+  property of a function's acceptance, or a statement reading a claim, the one theorem's vocabulary or a verifier's
+  acceptance) names under `witnesses` an `honest` lemma (its hypotheses hold at the honest deployed instance) and a
+  `nontrivial` one (its conclusion fails at a verifier that accepts everything). An exclusion theorem (a bound over a
+  partition or covering, reading no acceptance) names an `honest` lemma at the deployed partition and parameters and a
+  `nontrivial` one at an explicit circuit where its other premises hold, a named premise fails and the bound fails. A
+  witness of the wrong form fails too: one that ranges over its instance instead of building it, takes a hypothesis that
+  is no named assumption the lock lists, or is an honest one at an accept-all verifier;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
@@ -108,14 +126,24 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   from the sets the `.olean` files recorded. A replay killed by a signal
   (out of memory) is reported as a kill, not as a verdict. With `--closure` it checks the whole import closure the
   same way (below);
-- each test under `runs` passes on the data whose SHA-256 the record holds (below);
+- each test under `runs` passes on the data whose SHA-256 the record holds (below), and its `generate` and `args` name no
+  path outside the package except as `{repo}/...`, which check's scratch tree would not hold;
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
   audited earlier while the audit runs: the Lean files run from a copy taken before the first build, and everything is
   sealed and checked after each package.
 
 `--build` builds in `sandbox.sh` where `unshare` and unprivileged user namespaces are available: new user, mount, network
 and PID namespaces, everything read-only but the build's `.lake` directories, no network, and nothing outliving the build.
-The audit says when it had to build without one; the `compile-time` check then stands in for the sandbox.
+The audit says when it had to build without one; the `compile-time` check then stands in for the sandbox. `--build` first
+takes one of the node's Lean audit slots, of pool `LEAN_SLOT_POOL` else `audit` (`--repo`'s `tools/verity/check/lean_slot.py`),
+unless it runs in one already (check's lean-audit step, `lean_changed.py --records`); refused, or with the node's slot file
+but no `lean_slot.py`, it exits 2.
+
+The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
+package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
+too, and no two builds that write one `.lake` run at once (`writing`): two dependents of one path dependency take turns.
+Its reading and replay run beside the builds that follow. `check.py` exits 0 when every package passes, 1 when one fails
+and 2 on a usage error or a refusal.
 
 A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
 machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
@@ -232,7 +260,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `guarantees`: the guarantees (README "Glossary"), and any lemma still listed beside them.
+- `guarantees`: the guarantees (GLOSSARY.md), and any lemma still listed beside them.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
   hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each, the
   guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
@@ -316,13 +344,15 @@ Merkle binding guarantee vacuous for unsalted schemes; the records flagged it an
 the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
-type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
+type hash, a `reads` group, an assumption's digest: what merging two PRs on `next`, each recorded on its own side, can
 leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
 `regenerated` names that file; a missing record or name, an owner or any other failure writes none. Which failures those
 are is decided by code, not by text: every failure carries one (`check.py`'s `Failure`, such as `guarantees.signature` or
 `orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
 (`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
-`RECORD_DIFFERENCE`, so rewording a message changes nothing a train commits.
+`RECORD_DIFFERENCE`, so rewording a message changes nothing drive commits. The Lean check of a commit of `next` runs with
+`--regenerate`, and drive commits the records it regenerated when it lands that commit (drive.toml's `regenerate_locks`);
+drive's after-landing run passes `--no-regenerate`, so a record difference that reaches `checked` fails there.
 When the change lands on `main` (`research merge --push`, or drive's landing), the landing DM lists each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
@@ -424,7 +454,7 @@ names. A guarantee's `owner` merges apart from the rest of its entry, so one sid
 restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
-`reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
+`reads` and assumption digests merge as the union or ours' value, named on stderr, and the Lean check of `next` regenerates
 them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
 conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree.
 

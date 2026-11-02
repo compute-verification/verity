@@ -14,7 +14,7 @@ guarantees that read one module both change, the module's definitions merge the 
 sets, and its digest is recomputed from the merged definitions (`audit.module_digest`). A side written before guarantees
 were called that (`pins`) is read under today's names (`audit.as_guarantees`).
 
-What the build determines never refuses: the records `check.py --update` writes from it and a train's Lean check
+What the build determines never refuses: the records `check.py --update` writes from it and the Lean check of `next`
 (`--regenerate`) rewrites on the merged tree whenever they differ (`audit.RECORD_DIFFERENCE`, `audit.regenerated`). Those are
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
 it), each `reads` group (which guarantees read which definition, and each definition's hash) and an assumption's `digest`.
@@ -37,9 +37,9 @@ a PR, stands as a candidate, which the Lean check of the merged commit judges.
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
-a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record; a
-train's (`--regenerate`) commits the regenerated records on landing, and the landing DM shows each one that changed
-against `main`.
+a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record; the
+Lean check of `next` (`--regenerate`) regenerates them, drive commits them when it lands, and the landing DM shows each
+one that changed against `main`.
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
@@ -176,7 +176,7 @@ def derived(path: str, o, a, b, candidate: list[str]):
     """The three-way merge of a value the build determines (a definition's hash, an assumption's digest, a guarantee's
     signature, named assumptions and type hash): as `one`, but no clash refuses.  A value both sides changed differently is
     ours' (named ``path (ours)`` in ``candidate``), and one removed on one side and changed on the other is kept (the union,
-    named ``path``): the train's Lean check regenerates it from the merged tree."""
+    named ``path``): the Lean check of `next` regenerates it from the merged tree."""
     if a == b or a == o:
         return b
     if b == o:
@@ -195,7 +195,7 @@ def owned(rec, k: str = "owner"):
 def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
     """The guarantees entry by entry, each one's `owner` apart from the rest of its record: a branch that restates a guarantee
     and one that gives it an owner merge.  The rest of a record (signature, named assumptions, type hash) is the build's, so
-    two sides that restated it differently merge as ours' record (`derived`), which the train's Lean check rebuilds from the
+    two sides that restated it differently merge as ours' record (`derived`), which the Lean check of `next` rebuilds from the
     merged statement.  Whether a guarantee is listed is not the build's: one side's removal applies over the other's
     change to its record, and refuses only when that side changed its owner."""
     out = {}
@@ -226,7 +226,7 @@ def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) 
 def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
     """The named assumptions entry by entry, each one's `owner` (hand-written) apart from its `digest` (the build's: the hash
     its `reads` record holds), which merges as `derived`.  An entry one side removed and the other changed is kept: the
-    train's Lean check drops it when no guarantee of the merged tree reads it (`assumptions.unread`)."""
+    Lean check of `next` drops it when no guarantee of the merged tree reads it (`assumptions.unread`)."""
     out = {}
     for k in keys("assumptions", a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
@@ -251,7 +251,7 @@ def core(group):
 def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str], dropped: dict | None = None) -> dict:
     """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets.  A definition one
     side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
-    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  But
+    guarantees read it, so the union is the candidate (``candidate``), and the Lean check of `next` regenerates the group.  But
     when the dropping side's `gone` (``dropped``, by "ours" and "theirs") says it renamed or deleted it, and the other side kept
     its hash, the removal applies: the union would bring back a read of a definition the merged tree no longer has (a
     `J10R.Layout` renamed `NoiseLayout` would stay beside the new name).  A hash both sides changed differently is ours'
@@ -386,7 +386,7 @@ def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
 def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = None) -> tuple[dict, list[str]]:
     """(the merged record, why it is refused: empty when it merged).  A pure function of the three records.  ``candidate``
     collects the records the build determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions'
-    digests) merged although the sides disagree on them: the union or ours' value, which the train's Lean check
+    digests) merged although the sides disagree on them: the union or ours' value, which the Lean check of `next`
     regenerates; and the `shape.inline` premises `held` keeps."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
@@ -915,7 +915,7 @@ def main(argv: list[str]) -> int:
     named = list(dict.fromkeys(candidate))
     if rest := [c for c in named if not c.endswith(" (kept)")]:
         print(f"merge.py: {path}: merged derived records as a candidate (the union, or ours' value where marked), which the "
-              f"train's Lean check regenerates: {'; '.join(rest)}", file=sys.stderr)
+              f"Lean check of `next` regenerates: {'; '.join(rest)}", file=sys.stderr)
     if inline := [c for c in named if c.endswith(" (kept)")]:
         print(f"merge.py: {path}: kept shape.inline premises one side dropped and the other has as the base had them, which "
               f"`check.py --update` drops where the merged tree's premise no longer offends: {'; '.join(inline)}",

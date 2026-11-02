@@ -152,7 +152,7 @@ def test_an_owner_merges_apart_from_the_statement():
 
 def test_a_definition_one_side_stops_reading_merges_as_the_union_when_the_other_side_changed_its_module():
     """A reads-only clash (lean's One-vocabulary PRs move definitions out of a module that queued PRs' new guarantees read):
-    the record doesn't say which guarantees read the definition, so it stays, and the train's Lean check regenerates."""
+    the record doesn't say which guarantees read the definition, so it stays, and the Lean check of `next` regenerates."""
     base = record(t=thm([F, G]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
@@ -256,7 +256,7 @@ def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
     assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
     err = capsys.readouterr().err.strip().splitlines()
     assert err == ["merge.py: Security/lean-audit.json: merged derived records as a candidate (the union, or ours' value where "
-                   "marked), which the train's Lean check regenerates: reads[Definitions.Hash.Basic].definitions[Hash.Digest] "
+                   "marked), which the Lean check of `next` regenerates: reads[Definitions.Hash.Basic].definitions[Hash.Digest] "
                    "(removed); reads[Definitions.Hash.Basic].definitions[Hash.Digest.bytes] (removed)"]
     group = json.loads((tmp_path / "ours").read_text())["reads"]["Definitions.Hash.Basic"]
     theirs = sides["theirs"]["reads"]["Definitions.Hash.Basic"]["definitions"]
