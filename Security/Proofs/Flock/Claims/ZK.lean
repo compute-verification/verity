@@ -943,7 +943,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   reads (`real_bounds`, with `sched_bounds` by `decide +kernel`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
-  round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
+  round there, the inner proof's own past it (`placeOf_sched`; `Frames.roundPlace` places that at `.sched` of the frame's
+  own round, `Frame.innerSched`), and the rep after the round's coins keeps `RepInv`.
 * `FrameInner`: at the inner proof's rounds the frame takes only the firewall's own round (`innerOwn_inv`,
   `roundFree_own_frames`), and where the deployed frame's check releases one, the placeholder's own round at zero pads
   (`ZeroCfg`) from the same state but for `stopped` leaves the same state but for `stopped`: past the inner proof's
