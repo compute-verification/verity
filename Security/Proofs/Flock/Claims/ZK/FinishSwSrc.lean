@@ -9,7 +9,8 @@ the honest prover the source is `srcE`, what the session reads from its cut (`ta
 is the switched prover's at the workers' values: the same reading of the switched cut (`RefSession.swCutOf`).
 
 * `swCutE`, `swCutOf_eq`: the switched prover's cut at the opened coins, on `w`'s table witnesses, the workers' values
-  `v` and the tape `τ`, as `cutE` has the honest prover's.
+  `v` and the tape `τ`, as `cutE` has the honest prover's; `swCutOf` reads the values at what the workers see of `τ`
+  (`RefSession.seenOf`).
 * `swSrcE`: what the session reads from it (`tabSrcCut`), as `srcE` reads `cutE`.
 * `swCutE_masked`: the switched cut's masked values are `Table.swPre`'s at the table's base.
 * `Table.swPre_masked`: where the worker's rows hold (`RowsAt`), they are the worker's own, its view's at its clear
@@ -48,8 +49,9 @@ noncomputable def swCutE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : 
     (swExeOf (tabC PE x) (czExe PE x c) (wtOf PE x w) v (UE.tape x τ).1 (UE.tape x τ).2.1)
 
 theorem swCutOf_eq (nr : Msg → ℕ → ℕ) (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
-    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) :
-    (session nr (tableData PE QE UE)).swCutOf x c (wtOf PE x w) v τ = swCutE x c w v τ := rfl
+    (v : (∀ j, ZkView.Seen (tabC PE x j).z) → ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) :
+    (session nr (tableData PE QE UE)).swCutOf x c (wtOf PE x w) v τ =
+      swCutE x c w (v ((session nr (tableData PE QE UE)).seenOf x τ)) τ := rfl
 
 /-- **What the deployed session reads from the switched cut** (`tabSrcCut`), as `srcE` reads `cutE`. -/
 noncomputable def swSrcE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
