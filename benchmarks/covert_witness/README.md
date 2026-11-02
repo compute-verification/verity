@@ -23,8 +23,9 @@ documents. v2.3, the night's last pin, adds te_core 2.7-3.5 to it: the counter's
 other runs' outputs and the C++ and Rust loaders, the screen over code it never reads (runpy, exec/compile, marshal,
 pickle, modules written during the run), ρ by thresholds, a declared step's rebuild-cost floor, the `sparse`, `lora2`
 and `quant` formats with every E's rebuild cost, and the meter's tied-embedding adapters. The pin's counter prices a
-lookup of an updated table at 0 (te_core 3.6 prices it, after the pin), so tonight's frontier leaves out a record
-whose updated set is the tied embedding without a block below the top (coordinator 13:32Z).
+lookup of an updated table at 0 (te_core 3.6 prices it, after the pin), so the scorer leaves out of tonight's frontier
+a record whose updated set is the tied embedding without a block below the top, as priced wrong (tied lookup)
+(coordinator 13:32Z); `te_core.frontier` doesn't, since a ledger row doesn't name the updated weights.
 
 ## Classes
 
