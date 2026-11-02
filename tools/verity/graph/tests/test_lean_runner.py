@@ -372,6 +372,21 @@ def test_an_env_module_whose_private_proof_holds_a_sorry_fails_its_env(tree, tmp
     assert res["status"] == "error" and any("private part" in line for line in res["detail"]["log"]), res["detail"]
 
 
+def test_a_fetched_declaration_may_use_lake_s_family_axioms_and_no_axiom_a_fetched_package_or_init_declares():
+    records = {
+        "Lake.Build.Data": {"Lake.DataType.bool": ["Lake.DataType.bool"], "Lake.get": ["Lake.DataType.bool", "propext"]},
+        "Init.Prelude": {"sorryAx": ["sorryAx"]},
+        "Init.Core": {"Lean.reduceBool": ["Lean.trustCompiler"]},
+        "Lake.Fake": {"Lake.DataType.fake": ["Lake.DataType.fake"]},
+        "runLinter": {"lint": ["Lake.DataType.bool", "propext"], "main": ["sorryAx"]},
+        "Evil": {"q": ["sorryAx"], "r": ["Lake.DataType.bool", "Lean.ofReduceBool"], "s": ["Lake.DataType.fake"]},
+    }
+    outside, unjudged = env_runner.judge(records, {"runLinter": {"main"}}, {"Lake.Build.Data", "Init.Prelude", "Init.Core"})
+    assert outside == {"Lake.DataType.fake": ["s", "Lake.DataType.fake"], "Lean.ofReduceBool": ["r"], "sorryAx": ["q"]}, \
+        "Lake's own family axioms pass; one a fetched module declares (under Lake's names too) and Init's fail"
+    assert unjudged == {"Lake.DataType.bool": 2, "Lean.trustCompiler": 1, "sorryAx": 1}
+
+
 def test_a_module_task_refuses_an_env_record_of_another_env_or_of_other_bytes_than_its_worker_s(tree, tmp_path, envs):
     doc = graph.task_graph(tree, "lean-module:ctl/Control/Defs.lean", listers=LISTERS)
     task = next(t for t in doc["tasks"] if t["kind"] == "lean-module")

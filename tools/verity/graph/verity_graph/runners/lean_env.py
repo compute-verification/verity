@@ -31,9 +31,12 @@ copies' sets under each. Every replayed module has a line, and a digest of the p
 
 The task fails when the kernel rejects a declaration, and when a declaration of a fetched package's module uses an axiom
 outside `lean_module.STANDARD` (an axiom it declares, `sorryAx` from a `sorry`, `Lean.ofReduceBool` from `native_decide`),
-unless it is unsafe: compiled code, which the kernel never checks and no checked declaration may mention. The toolchain's
-modules are recorded and not judged, since Init declares those axioms and the toolchain's own definitions use them
-(`Lean.reduceBool` takes `Lean.trustCompiler`): a module of the tree that reaches one takes it through the record and fails.
+unless it is unsafe: compiled code, which the kernel never checks and no checked declaration may mention. Lake declares
+each member of its open type families as an axiom (`family_def`, kept apart by their names), so a fetched package's code
+that uses Lake's API (a linter's executable) may use those, the toolchain's `Lake` modules' own and no others (`judge`).
+The toolchain's modules are recorded and not judged, since Init declares those axioms and the toolchain's own definitions
+use them (`Lean.reduceBool` takes `Lean.trustCompiler`): a module of the tree that reaches one takes it through the record
+and fails.
 An env that can't be made, a module under the module system whose private part is missing (its public part makes its
 theorems axioms), a replay that ends without a verdict and one that leaves out a module of the set are errors."""
 from __future__ import annotations
@@ -71,6 +74,27 @@ def write(path: Path, head: dict, files: dict[str, str], records: dict[str, dict
         for i, (m, line) in enumerate(zip(mods, lines)):
             f.write(f"{_dump(m)}:{line}{',' if i + 1 < len(mods) else ''}\n")
         f.write("}\n}\n")
+
+
+def judge(records: dict[str, dict[str, list[str]]], unsafe: dict[str, set[str]],
+          toolchain: set[str]) -> tuple[dict[str, list[str]], dict[str, int]]:
+    """The axioms outside `lean_module.STANDARD` that safe declarations use, as ({axiom: the fetched packages'
+    declarations that use it}, {axiom: how many of the ``toolchain``'s modules' declarations use it}). A fetched package's
+    declaration may also use an axiom of Lake's open type families, one that a module of the toolchain's `Lake` declares
+    (its `family_def`s); one a fetched package declares, and Init's, are outside."""
+    lake = {c for m in toolchain if m.partition(".")[0] == "Lake" for c, s in records[m].items() if c in s}
+    outside: dict[str, list[str]] = {}
+    unjudged: dict[str, int] = {}
+    for m in sorted(records):
+        for c, s in sorted(records[m].items()):
+            for a in s if c not in unsafe.get(m, ()) else ():
+                if a in lm.STANDARD:
+                    continue
+                if m in toolchain:
+                    unjudged[a] = unjudged.get(a, 0) + 1
+                elif a not in lake:
+                    outside.setdefault(a, []).append(c)
+    return outside, unjudged
 
 
 def _tail(work: Path, since: int, n: int = 20) -> list[str]:
@@ -157,19 +181,7 @@ def run(task: dict, work: Path) -> dict:
     steps["digests"] = round(time.monotonic() - t, 3)
     out.parent.mkdir(parents=True, exist_ok=True)
     write(out, head, files, records)
-    toolchain = libs[-1]
-    outside: dict[str, list[str]] = {}
-    unjudged: dict[str, int] = {}
-    for m in sorted(records):
-        mine = found[m].is_relative_to(toolchain) if m in found else False
-        for c, s in sorted(records[m].items()):
-            for a in s if c not in unsafe.get(m, ()) else ():
-                if a in lm.STANDARD:
-                    continue
-                if mine:
-                    unjudged[a] = unjudged.get(a, 0) + 1
-                else:
-                    outside.setdefault(a, []).append(c)
+    outside, unjudged = judge(records, unsafe, {m for m in records if m in found and found[m].is_relative_to(libs[-1])})
     detail |= {"modules": len(records), "constants": sum(map(len, records.values())),
                "replayed": sum(r["replayed"] or 0 for r in rounds), "deferred": sorted(later),
                "record_bytes": out.stat().st_size, "toolchain_outside_standard": unjudged}
