@@ -6,34 +6,29 @@ least β bits (update hardness, T1) and whose share φ of |C| is updated MACs wi
 
     ρ = max(1, φ c β / (k (k + β)))   if D ≥ k/β,   else 1.
 
-The scorer takes the largest ρ over thresholds τ (`score`). For each τ in {p/r} and the covered steps' β_t below p/r, the
-annotation U_τ holds the uncovered steps' U and the covered steps' with β_t ≥ τ, with β = min(p/r, τ) and φ recomputed on
-U_τ (the same |C|). Each U_τ is valid: no verified counterexample family shows a step of it below β. So a cheap covered
-step costs only its own share of φ, and covering every step at an honest β_t ≥ p/r leaves ρ where it was. τ = the least
-β_t is the annotation of all of U at that β; τ = p/r drops only the steps covered below p/r.
+A step's β_t is the least of its witnesses (`step_betas`): the narrowest cut of its traced circuit between its
+gradient-side computation and its new persistent values, per updated MAC per token block (`StepAnnotation.beta`,
+te_core.capture), and the β_t of every verified family covering it. A step with no updated MAC, or with no witness (a
+step the capture didn't trace and no family covers), is in no U. The scorer takes the largest ρ over thresholds τ
+(`score`): for each τ among the steps' β_t, the annotation U_τ holds the steps with β_t ≥ τ, at β = τ, with φ recomputed
+on U_τ (the same |C|), ties to the larger τ. Each U_τ is valid: no witness shows a step of it below τ. So a cheap step
+costs only its own share of φ.
 
-p is the bits per updated value (default: the narrowest width an updated weight is multiplied at), r in `R` its assumed
-compressibility, k in `K_BITS`, and c = `C_PER_FORWARD_TOKEN` times the start model's forward MACs per token.
+k is in `K_BITS`, and c = `C_PER_FORWARD_TOKEN` times the start model's forward MACs per token.
 """
 from __future__ import annotations
 
 import bisect
-import math
 from dataclasses import dataclass
 
 from .annotate import Annotation, annotate
 
 K_BITS = {"10kB": 80_000, "100kB": 800_000, "1MB": 8_000_000}
-R = (1, 10, 100)
 C_PER_FORWARD_TOKEN = 4096
 
 
 def block_c(forward_macs_per_token: float) -> float:
     return C_PER_FORWARD_TOKEN * forward_macs_per_token
-
-
-def cell(k: str, r: int) -> str:
-    return f"{k}/r{r}"
 
 
 def rho_of(phi: float, depth: float, beta: float, k: float, c: float) -> float:
@@ -42,81 +37,87 @@ def rho_of(phi: float, depth: float, beta: float, k: float, c: float) -> float:
     return max(1.0, phi * c * beta / (k * (k + beta)))
 
 
+def step_betas(ann: Annotation, covered: dict[int, float]) -> dict[int, float]:
+    """Each step's β_t: the least of its cut and the β_t of the families covering it (`covered`: step -> least β_t);
+    a step with no updated MAC or no witness is left out."""
+    out = {}
+    for s in ann.steps:
+        ws = [b for b in (s.beta, covered.get(s.step)) if b is not None]
+        if s.updated_macs and ws:
+            out[s.step] = min(ws)
+    return out
+
+
 @dataclass(frozen=True)
 class Option:
     tau: float
     steps: int  # the steps whose U it holds
     beta: float
-    d_min: float
+    d_min: float | None
     depth: int
     phi: float
     rho: float
 
 
 class Thresholds:
-    """An annotation's steps grouped by what they add to φ and D (their profile and depth), each group with its uncovered
-    count and its covered steps' sorted β_t, so U_τ costs a lookup per group rather than a pass over every step."""
+    """An annotation's steps grouped by what they add to φ and D (their profile and depth), each group with its steps'
+    sorted β_t, so U_τ costs a lookup per group rather than a pass over every step."""
 
-    def __init__(self, ann: Annotation, cov: dict[int, float]):
+    def __init__(self, ann: Annotation, betas: dict[int, float]):
         self.macs = ann.macs
-        groups: dict[tuple, tuple[list[int], list[float]]] = {}
+        groups: dict[tuple, list[float]] = {}
         for s in ann.steps:
-            free, betas = groups.setdefault((s.depth if s.updated_macs else 0, s.profile), ([0], []))
-            if s.step in cov:
-                betas.append(cov[s.step])
-            else:
-                free[0] += 1
+            if s.step in betas:
+                groups.setdefault((s.depth, s.profile), []).append(betas[s.step])
         self.groups = []
-        for (depth, profile), (free, betas) in groups.items():
+        for (depth, profile), bs in groups.items():
             prof = sorted(profile)
             suffix = [0] * (len(prof) + 1)
             for i in range(len(prof) - 1, -1, -1):
                 suffix[i] = suffix[i + 1] + prof[i][1]
-            self.groups.append((depth, [up for up, _ in prof], suffix, free[0], sorted(betas)))
+            self.groups.append((depth, [up for up, _ in prof], suffix, sorted(bs)))
 
-    def option(self, tau: float, beta: float, k: float, c: float) -> Option:
-        d_min = k / beta if beta > 0 else math.inf
+    def option(self, tau: float, k: float, c: float) -> Option:
+        d_min = k / tau
         steps = depth = deep = 0
-        for g_depth, ups, suffix, free, betas in self.groups:
-            n = free + len(betas) - bisect.bisect_left(betas, tau)
+        for g_depth, ups, suffix, betas in self.groups:
+            n = len(betas) - bisect.bisect_left(betas, tau)
             if n:
                 steps += n
                 depth = max(depth, g_depth)
                 deep += n * suffix[bisect.bisect_left(ups, d_min)]
         phi = deep / self.macs if self.macs > 0 else 0.0
-        return Option(tau, steps, beta, d_min, depth, phi, rho_of(phi, depth, beta, k, c))
+        return Option(tau, steps, tau, d_min, depth, phi, rho_of(phi, depth, tau, k, c))
 
 
-def score(ann: Annotation, covered: dict[int, float], k: float, r: int, p: float, c: float) -> dict:
-    """ρ at one (k, r): `covered` maps each step a verified family covers to its β_t; the largest ρ over the thresholds τ
+def score(ann: Annotation, covered: dict[int, float], k: float, c: float) -> dict:
+    """ρ at one k: `covered` maps each step a verified family covers to its β_t; the largest ρ over the thresholds τ
     (the module docstring), ties to the larger τ."""
-    base = p / r
-    here = {s.step for s in ann.steps}
-    cov = {t: b for t, b in covered.items() if t in here}
-    th = Thresholds(ann, cov)
-    best = None
-    for tau in sorted({base, *(b for b in cov.values() if b < base)}, reverse=True):
-        o = th.option(tau, min(base, tau), k, c)
-        if best is None or o.rho > best.rho:
+    betas = step_betas(ann, covered)
+    th = Thresholds(ann, betas)
+    best = Option(0.0, 0, 0.0, None, 0, 0.0, 1.0)
+    for tau in sorted({b for b in betas.values() if b > 0}, reverse=True):
+        o = th.option(tau, k, c)
+        if best.steps == 0 or o.rho > best.rho:
             best = o
-    return {"rho": best.rho, "option": f"tau={best.tau:.4g}", "tau": best.tau, "steps": best.steps, "beta": best.beta,
-            "phi": best.phi, "depth": best.depth, "d_min": best.d_min}
+    return {"rho": best.rho, "option": f"tau={best.tau:.4g}" if best.steps else "no U", "tau": best.tau,
+            "steps": best.steps, "beta": best.beta, "phi": best.phi, "depth": best.depth, "d_min": best.d_min}
 
 
-def score_grid(ann: Annotation, covered: dict[int, float], p: float, c: float) -> dict[str, dict]:
-    return {cell(name, r): score(ann, covered, k, r, p, c) for name, k in K_BITS.items() for r in R}
+def score_grid(ann: Annotation, covered: dict[int, float], c: float) -> dict[str, dict]:
+    return {name: score(ann, covered, k, c) for name, k in K_BITS.items()}
 
 
-def checkpoints(record: dict, covered: dict[int, float], c: float, p: float | None = None) -> list[dict]:
+def checkpoints(record: dict, covered: dict[int, float], c: float) -> list[dict]:
     """Every checkpoint of a run as its own submission: the prefix of C through its step, with the coverage of the steps
     it holds."""
     out = []
     last = record["steps"][-1]["step"] if record["steps"] else -1
     for cp in record.get("checkpoints", []):
         ann = annotate(record, through=None if cp["step"] >= last else cp["step"])
-        pp = p if p is not None else (ann.bits() or 16)
-        grid = score_grid(ann, covered, pp, c)
-        out.append({"checkpoint": cp, "macs": ann.macs, "p": pp, "c": c, "annotation": ann.summary(), "grid": grid})
+        here = {s.step for s in ann.steps}
+        grid = score_grid(ann, {t: b for t, b in covered.items() if t in here}, c)
+        out.append({"checkpoint": cp, "macs": ann.macs, "c": c, "annotation": ann.summary(), "grid": grid})
     return out
 
 

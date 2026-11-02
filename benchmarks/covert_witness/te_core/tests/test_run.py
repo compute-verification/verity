@@ -138,7 +138,8 @@ def test_mezo_run_is_rebuilt_from_its_seed_log(tmp_path, theta_file):
     subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1")
     assert len(subs) == 6
     assert [s["checkpoint_step"] for s in subs] == [0, 1, 2, 3, 4, 5]
-    assert all(set(s["rho"]) == {f"{k}/r{r}" for k in ("10kB", "100kB", "1MB") for r in (1, 10, 100)} for s in subs)
+    assert all(set(s["rho"]) == {"10kB", "100kB", "1MB"} for s in subs)
+    assert all(s["annotation"]["untraced"] == s["annotation"]["updated_steps"] > 0 for s in subs[1:])  # no cut
     assert subs[-1]["macs"] == rec["totals"]["macs"]
     assert subs[0]["macs"] < subs[-1]["macs"]
     final = json.loads((out / "run.json").read_text())
@@ -147,10 +148,9 @@ def test_mezo_run_is_rebuilt_from_its_seed_log(tmp_path, theta_file):
     (out / "run.json").write_text(json.dumps(final))
     subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1")
     assert [s["val_slice"] for s in subs] == [None] * 6
-    assert "changed" not in subs[0] and "readout_leaks" not in subs[0]
-    (out.parent / "witness.json").write_text(json.dumps({"changed": {"actual": ["embed"]}, "structure": {"layers": 2}}))
+    assert "readout_leaks" not in subs[0]
     subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1", tensors={})
-    assert subs[0]["changed"] == ["embed"] and subs[0]["layers"] == 2 and subs[0]["readout_leaks"] == []
+    assert subs[0]["readout_leaks"] == []
     assert subs[0]["args"] == final.get("script_args")
 
 

@@ -5,14 +5,16 @@
 It reads only the submissions measured by the pinned measurement commit or an earlier commit its `pinned.json` names as
 measuring the same version (`same_version`; covert_witness's `pin.py`; `--pin`, repeated, names others), and leaves
 out, each marked with its reason (`status`): an invalid record, one whose read-outs `cw.readout_leaks` lists
-(`read-out-leak`, invalid: the coordinator's 14:22Z rule), one that updates the tied embedding with no block below the
-top (`tied-lookup`: the scorer's rule, coordinator 13:32Z), an unscored one, one measured by any other commit
-(`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the
-first to submit an E is the one its compute is counted for), one with covered steps ingested by a te_core before
-3.0 (`re-ingest`: 3.0 prices ρ by thresholds; `python -m te_core.ledger --agent AGENT ingest RUN_DIR ... --run-id RUN`
-prices it again), and one a later ingest of its run supersedes (`re-ingested`). A row ingested before 3.13 carries
-neither the read-outs nor the changed tensors; `--facts` gives them by run id (`with_facts`). Per (k, r) cell of the
-grid (score.K_BITS x score.R):
+(`read-out-leak`, invalid: the coordinator's 14:22Z rule), an unscored one, one measured by any other commit
+(`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the first to submit
+an E is the one its compute is counted for), one ingested by a te_core before 4.0 (`re-ingest`: 4.0 reads U by update
+dependence and β from the step circuit's narrowest cut; `python -m te_core.ledger --agent AGENT ingest RUN_DIR ...
+--run-id RUN --structures TRACED.json` prices it again), one with updated steps whose circuit wasn't traced
+(`untraced`: no cut, so the steps no family covers are in no U and its ρ would read only what the families show), and
+one a later ingest of its run supersedes (`re-ingested`). A row ingested before 3.13 carries no read-outs; `--facts`
+gives them by run id (`with_facts`). Under 4.0 an update of the tied embedding alone is deep (its lookup's rows are
+update-dependent and reach every later layer), so the scorer's tied-lookup rule (coordinator 13:32Z) is retired. Per k
+of score.K_BITS:
 
 - the frontier: the valid submissions no other beats on both |C| ρ and val bits per byte;
 - the elites: per niche (mechanism tag x β range x φ range x start), the submission with the least val bits per byte,
@@ -23,7 +25,7 @@ grid (score.K_BITS x score.R):
   or direction that reaches l* by a complete schedule (`schedule_ends`), W*(l*) the least |C| ρ over the same ones, so
   W*/honest ≥ 1; where nothing complete reaches l*, any checkpoint that does, labelled `UPPER_BOUND`. The reference
   directions' honest(l*) alone, the rule before, is printed beside it as context. The table prints training FLOPs,
-  2|C|.
+  2|C|, and each cell's route: the direction of the submission that sets W*.
 
 `candidates(rows, T)` are the frontier members and elites at tier T - 1 not yet promoted to T; which of them are promoted
 is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as the scorer).
@@ -33,17 +35,16 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import re
 import sys
 from pathlib import Path
 
-from .ledger import Ledger, coverage_of, version
-from .score import K_BITS, R, cell
+from .ledger import Ledger, version
+from .score import K_BITS
 
 BETA_EDGES = (1e-3, 1e-2, 1e-1, 1.0, 10.0)
 PHI_EDGES = (0.1, 0.25, 0.5, 0.75)
 TARGETS = (0.005, 0.01, 0.02, 0.05)
-KEYS = [cell(k, r) for k in K_BITS for r in R]
+KEYS = list(K_BITS)
 REF_DIRECTIONS = ("ref-optim", "ref-data")
 UPPER_BOUND = "upper bound (checkpoint)"
 
@@ -52,9 +53,10 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
     return sum(x >= e for e in edges)
 
 
-#: the first te_core whose ingest prices ρ by thresholds (a row's `te_core`): an earlier ingest could price a run with
-#: covered steps at its cheapest step's β, so such a row counts once its run is ingested again
-PRICED_FROM = (3, 0)
+#: the first te_core whose ingest reads U by update dependence and β from the traced cut (a row's `te_core`): an
+#: earlier row's U is the MACs whose weight operand differs from θ and its β an assumed p/r, so it counts once its run
+#: is ingested again with its traced structures
+PRICED_FROM = (4, 0)
 
 
 def _run_key(r: dict):
@@ -96,17 +98,9 @@ def schedule_ends(rows: list[dict]) -> set[str]:
     return {r["id"] for r in rows if r.get("checkpoint_step", -1) == top[_run_of(r)] or fork_ladder(r)}
 
 
-def tied_lookup(changed: list[str], layers: int | None) -> bool:
-    """The scorer's rule (coordinator 13:32Z): a record that updates the tied embedding with no block below the top is
-    priced wrong, v2.3's counter pricing the updated table's lookup at 0. `changed` is the witness's
-    `changed.actual`, `layers` its `structure.layers`."""
-    below = [n for n in changed if (m := re.match(r"blocks\.(\d+)\.", n)) and layers and int(m[1]) < layers - 1]
-    return "embed" in changed and not below
-
-
 def with_facts(rows: list[dict], facts: dict[str, dict]) -> list[dict]:
-    """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args`, `changed`,
-    `layers` and `readout_leaks`, as `ledger.facts` gives them), for rows ingested before te_core 3.13."""
+    """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args` and
+    `readout_leaks`, as `ledger.facts` gives them), for rows ingested before te_core 3.13."""
     return [r | facts.get(r.get("run_id"), {}) for r in rows]
 
 
@@ -124,9 +118,9 @@ def commits(pin: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
 
 
 def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
-    """Each left-out record's reason: re-ingested, invalid, read-out-leak, tied-lookup, unscored, other-version,
-    duplicate-e, re-ingest. `pin` is a
-    commit or the commits of one version. A later ingest of the same run's checkpoint (its run id; a row without one is
+    """Each left-out record's reason: re-ingested, invalid, read-out-leak, unscored, other-version, duplicate-e,
+    re-ingest, untraced. `pin` is a commit or the commits of one version. A later ingest of the same run's checkpoint
+    (its run id; a row without one is
     never superseded) supersedes an earlier one (`re-ingested`), which then seeds no duplicate. An E repeats an earlier
     record's when that record was measured at the pin or is another agent's: an agent's own relaunch at a new pin of an
     E it had at an old one counts."""
@@ -146,14 +140,14 @@ def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
             out[r["id"]] = "invalid"
         elif r.get("readout_leaks"):
             out[r["id"]] = "read-out-leak"
-        elif r.get("changed") is not None and tied_lookup(r["changed"], r.get("layers")):
-            out[r["id"]] = "tied-lookup"
         elif r.get("val_bpb") is None:
             out[r["id"]] = "unscored"
         elif r.get("measurement_commit") not in pins:
             out[r["id"]] = "other-version"
-        elif version(r.get("te_core")) < PRICED_FROM and coverage_of(r.get("families", [])):
+        elif version(r.get("te_core")) < PRICED_FROM:
             out[r["id"]] = "re-ingest"
+        elif (r.get("annotation") or {}).get("untraced"):
+            out[r["id"]] = "untraced"
         if e and out.get(r["id"]) != "duplicate-e":
             first.setdefault(e, set()).add((r.get("measurement_commit") in pins, r.get("agent")))
     return out
@@ -201,7 +195,8 @@ def coverage_map(rows: list[dict], key: str) -> dict:
 
 
 def _of(r: dict | None) -> dict | None:
-    return r and {"id": r["id"], "checkpoint": r.get("checkpoint_step", r.get("cp")), "direction": r.get("direction")}
+    return r and {"id": r["id"], "checkpoint": r.get("checkpoint_step", r.get("cp")), "direction": r.get("direction"),
+                  "mechanism": r.get("mechanism")}
 
 
 def target(on: list[dict], l_star: float, keys=KEYS, reference=None) -> dict:
@@ -289,14 +284,16 @@ def markdown(rep: dict) -> str:
         lines.append(f"| {key} | {len(v['frontier'])} | {len(v['elites'])} | {v['coverage']['filled']}/"
                      f"{v['coverage']['cells']} |")
     keys = list(rep)
-    lines += ["", "W*/honest per cell (training FLOPs, 2|C|; honest over every complete schedule, the reference "
-              "directions' alone as context):", "",
+    lines += ["", "W*/honest per k, with the direction whose submission sets W* (training FLOPs, 2|C|; honest over every "
+              "complete schedule, the reference directions' alone as context):", "",
               "| start | target | l* | honest | reference directions only | " + " | ".join(keys) + " |",
               "|---|---|---|---|---|" + "---|" * len(keys)]
     for i, t in enumerate(rep[keys[0]]["targets"] if keys else []):
         honest = _flops(t["honest"], t["honest_of"]) + (f", {t['bound']}" if t["bound"] else "")
-        eff = ["—" if rep[k]["targets"][i]["effective_slowdown"] is None
-               else f"{rep[k]['targets'][i]['effective_slowdown']:.3g}" for k in keys]
+        cells = [rep[k]["targets"][i] for k in keys]
+        eff = ["—" if c["effective_slowdown"] is None
+               else f"{c['effective_slowdown']:.3g} ({c['w_star_of']['direction'] or c['w_star_of']['mechanism']})"
+               for c in cells]
         lines.append(f"| {t['start']} | -{100 * t['drop']:g}% | {t['l_star']:.4f} | {honest} | "
                      f"{_flops(t['honest_reference'], t['honest_reference_of'])} | " + " | ".join(eff) + " |")
     return "\n".join(lines)
@@ -309,7 +306,7 @@ def main(argv=None) -> int:
     ap.add_argument("--pin", action="append", default=None,
                     help="a measurement commit, repeated for one version's (default covert_witness's pin.py)")
     ap.add_argument("--facts", type=Path, default=None,
-                    help="JSON, run id -> args, changed, layers, readout_leaks, for rows ingested before 3.13")
+                    help="JSON, run id -> args, readout_leaks, for rows ingested before 3.13")
     ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
     ap.add_argument("--as", dest="agent", default="", help=argparse.SUPPRESS)
     a = ap.parse_args(argv)

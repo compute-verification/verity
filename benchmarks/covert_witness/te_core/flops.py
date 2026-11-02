@@ -37,7 +37,9 @@ per tensor through every op within a step:
   it has named a θ weight, so no other tensor takes its memory.
 
 A node is `updated` when it is in a forward pass (outside autograd's backward), one operand is token-indexed and another
-(the weight, or an initial accumulator) has roots: the updated multiplications U. Others are `theta` (the weight equals
+(the weight, or an initial accumulator) has roots: the counter's updated multiplications, which were U before te_core
+4.0. 4.0 reads U by update dependence from the step's traced circuit (te_core.capture, `annotate.with_structures`), and
+this count stays |C|. Others are `theta` (the weight equals
 θ's, or a fast value made in the step), `act` (two token-indexed operands: attention), `param` (no token-indexed
 operand: optimizer work), and every product in autograd's backward is `bwd/grad`. Each updated node records its MACs per token row and the updated MACs per token
 row upstream of it in its token's pass (the cone of updated forward nodes its operands were computed from). Every value

@@ -8,7 +8,7 @@ import pytest
 from te_core import VERSION, frontier, launch
 from te_core.ledger import Ledger
 from te_core.run import file_sha256
-from te_core.score import K_BITS, R
+from te_core.score import K_BITS
 
 PIN = "a" * 40
 
@@ -22,7 +22,7 @@ class Clock:
 
 
 def sub(led, **kw):
-    keys = [f"{k}/r{r}" for k in K_BITS for r in R]
+    keys = list(K_BITS)
     body = {"macs": 100, "val_bpb": 1.0, "tier": 0, "start": "small", "start_bpb": 1.1, "mechanism": "dense",
             "reference": False, "program_sha256": "", "invalid": [], "run_te_core": VERSION,
             "measurement_commit": PIN} | kw
@@ -109,7 +109,7 @@ def test_frontier_elites_targets_and_promotion_candidates(tmp_path):
     other = sub(a, macs=1, val_bpb=0.5, measurement_commit="b" * 40)
     rows = Ledger(tmp_path).index()
     rep = frontier.report(rows, PIN)
-    key = "10kB/r10"
+    key = "10kB"
     assert [f["id"] for f in rep[key]["frontier"]] == [cheap["id"], ref["id"], good["id"]]
     assert dominated["id"] not in {e["id"] for e in rep[key]["elites"]}
     assert rep[key]["coverage"]["filled"] == 3
@@ -118,7 +118,7 @@ def test_frontier_elites_targets_and_promotion_candidates(tmp_path):
     assert t["honest"] == 50 and t["w_star"] == 50 and t["honest_reference"] == 100 and not t["bound"]
     assert t["effective_slowdown"] == pytest.approx(1.0)
     assert set(frontier.candidates(rows, 1, PIN)) == {ref["id"], cheap["id"], good["id"]}
-    assert "| 10kB/r10 |" in frontier.markdown(rep)
+    assert "| 10kB |" in frontier.markdown(rep) and "| 1 (lowrank) |" in frontier.markdown(rep)
     assert frontier.status(rows, PIN) == {bad["id"]: "invalid", other["id"]: "other-version"}
 
 
@@ -153,7 +153,7 @@ def test_an_agents_relaunch_at_a_new_pin_counts_and_a_copy_of_an_old_pins_e_does
 
 def test_a_later_ingest_of_a_run_supersedes_its_earlier_rows_and_is_not_a_duplicate_of_its_own_e():
     def row(name, ts, run_id="r1", e="e1", agent="a"):
-        return {"id": name, "written_ts": ts, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": "3.8",
+        return {"id": name, "written_ts": ts, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": "4.0",
                 "families": [], "run_id": run_id, "checkpoint_step": 3, "agent": agent, "output": {"e_sha256": e}}
 
     rows = [row("first", 1), row("other-run", 2, run_id="r2", e="e2"), row("again", 3, agent="scorer")]
@@ -181,16 +181,18 @@ def test_the_commits_of_one_version_are_one_pin(tmp_path, monkeypatch):
     assert frontier.pinned() == (PIN, "b" * 40)
 
 
-def test_a_run_with_covered_steps_counts_once_rho_is_priced_by_thresholds():
-    covered = [{"covers": [0, 1], "beta": {"0": 1e-6, "1": 32.0}}]
-    rows = [{"id": name, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": ingest, "families": fams}
-            for name, ingest, fams in [("plain", "2.3", []), ("old-priced", "2.3", covered),
-                                       ("repriced", "3.0", covered), ("repriced-later", "3.10", covered)]]
-    assert frontier.status(rows, PIN) == {"old-priced": "re-ingest"}
-    assert [r["id"] for r in frontier.valid(rows, PIN)] == ["plain", "repriced", "repriced-later"]
+def test_a_row_counts_once_its_run_is_priced_by_update_dependence_and_its_traced_cut():
+    """Every row before 4.0 is priced by the old U at an assumed p/r; a 4.0 row with an updated step the capture didn't
+    trace is `untraced`."""
+    rows = [{"id": name, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": ingest,
+             "annotation": {"untraced": untraced}}
+            for name, ingest, untraced in [("old", "3.13", 0), ("older", "2.3", 0), ("traced", "4.0", 0),
+                                           ("later", "4.10", 0), ("untraced", "4.0", 3)]]
+    assert frontier.status(rows, PIN) == {"old": "re-ingest", "older": "re-ingest", "untraced": "untraced"}
+    assert [r["id"] for r in frontier.valid(rows, PIN)] == ["traced", "later"]
 
 
-def at_one_percent(rows, key="10kB/r10"):
+def at_one_percent(rows, key="10kB"):
     return next(t for t in frontier.report(rows, PIN)[key]["targets"] if t["drop"] == 0.01)  # l* = 1.1 x 0.99
 
 
@@ -238,14 +240,15 @@ def test_a_target_only_a_mid_schedule_checkpoint_reaches_is_an_upper_bound(tmp_p
     assert not frontier.fork_ladder({"direction": "sparse", "args": ladder})
 
 
-def test_a_tied_lookup_record_and_a_read_out_leak_are_left_out(tmp_path):
+def test_a_read_out_leak_is_left_out_and_a_tied_lookup_record_is_not(tmp_path):
+    """4.0 reads a tied embedding's update at its lookup's update-dependent rows, so the 13:32Z tied-lookup rule is
+    retired; a read-out leak, given by `--facts` for an older row, still is."""
     a = Ledger(tmp_path, "agent-a")
     top = sub(a, run_id="top", changed=["embed", "blocks.1.attn.weight"], layers=2)
-    below = sub(a, run_id="below", changed=["embed", "blocks.0.mlp.weight"], layers=2)
     leak = sub(a, run_id="leak", readout_leaks=[{"step": 0, "tokens": 8, "consumed": 2, "exited": 2}])
     old = sub(a, run_id="old")
     rows = Ledger(tmp_path).index()
-    assert frontier.status(rows, PIN) == {top["id"]: "tied-lookup", leak["id"]: "read-out-leak"}
-    rows = frontier.with_facts(rows, {"old": {"changed": ["embed"], "layers": 2}})
-    assert frontier.status(rows, PIN)[old["id"]] == "tied-lookup"
-    assert [r["id"] for r in frontier.valid(rows, PIN)] == [below["id"]]
+    assert frontier.status(rows, PIN) == {leak["id"]: "read-out-leak"}
+    rows = frontier.with_facts(rows, {"old": {"readout_leaks": [{"step": 1}]}})
+    assert frontier.status(rows, PIN) == {leak["id"]: "read-out-leak", old["id"]: "read-out-leak"}
+    assert [r["id"] for r in frontier.valid(rows, PIN)] == [top["id"]]
