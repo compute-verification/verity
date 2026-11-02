@@ -458,9 +458,10 @@ def Entry.ofJson (j : Json) : V Entry := do
   else if format == DECLARATION then
     exactly j ["blocks", "day", "format", "previous", "program"] "a declaration"
     let previous ← hex64 (← Flock.J.get j "previous" "an entry") "an entry's previous"
+    let day ← Flock.J.nat j "day" "a declaration"
+    let program ← hex64 (← Flock.J.get j "program" "a declaration") "a declaration's program"
     let blocks ← (← Flock.J.arr j "blocks" "a declaration").toList.mapM (Flock.J.asStr · "a declaration's block")
-    pure { previous, body := .declaration { day := ← Flock.J.nat j "day" "a declaration",
-      program := ← hex64 (← Flock.J.get j "program" "a declaration") "a declaration's program", blocks } }
+    pure { previous, body := .declaration { day, program, blocks } }
   else throw s!"an entry: format {format} is not one of [{HARDWARE}, {INFORMATION}, {DECLARATION}]"
 
 def Composite.ofJson (j : Json) (what : String) : V Composite := byName (α := Composite) [.onsite, .remote] Composite.name j what
