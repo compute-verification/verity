@@ -305,6 +305,7 @@ def plots(out: Path, report: dict) -> list[str]:
                 ax.scatter(lx, ly, marker="^", facecolors="none", edgecolors=colors[lab])
             ax.set_yscale("log")
             ax.axhline(1, color="k", lw=0.6)
+            ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(5))
             ax.set_xlabel("Δ (nats per byte below ℓ₀)")
             ax.set_ylabel("κ (FLOPs over the reference's)")
             ax.set_title(f"{size}, start at {round(100 * (s['fraction'] or 0))}%; hollow: never reached (>)", fontsize=9)
