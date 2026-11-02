@@ -4,9 +4,9 @@ checker, the classes' caps and `evaluate_bpb`. A candidate's `train.py` imports 
 A candidate starts from a registered start θ (`load_start`), trains within its class's caps and the fixed budget, and submits
 (`submit`):
 
-- E, an encoding of its update in one of the fixed formats (`encode_full`, `encode_lora`, `encode_seedlog`,
-  `encode_sparse`); `decode(θ, E)` rebuilds the model, 8·|E| bits is the update-size witness, and `rebuild_macs` is what
-  the rebuild costs;
+- E, an encoding of its update in one of the fixed formats (`encode_full`, `encode_lora`, `encode_lora2`,
+  `encode_seedlog`, `encode_sparse`); `decode(θ, E)` rebuilds the model, 8·|E| bits is the update-size witness, and
+  `rebuild_macs` is what the rebuild costs;
 - the model it claims, which the checker requires to equal decode(θ, E) bit for bit, with θ's tensors, shapes and dtypes (so
   its size, evaluation FLOPs and weight bytes per byte are θ's);
 - its step log: one record per pass over data (`{"op": "train"|"forward", "tokens": T, "ctx": C}`) and any matmul FLOPs it
@@ -53,7 +53,8 @@ CLASSES = {
     "shallow": {"max_e_bytes": None, "formats": None, "top_blocks": 2},
     "seed": {"max_e_bytes": 100_000, "formats": ["seedlog"], "top_blocks": None},
 }
-MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWSEED1\n": "seedlog", b"CWSPAR1\n": "sparse"}
+MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWLORA2\n": "lora2", b"CWSEED1\n": "seedlog",
+         b"CWSPAR1\n": "sparse"}
 DTYPES = {"bf16": torch.bfloat16, "f16": torch.float16, "f32": torch.float32}
 EOT = {"gpt2": 50256, "smollm2": 0}
 
@@ -382,14 +383,156 @@ def seedlog_step(masters: list[torch.Tensor], seed: int, c: float, gen: torch.Ge
 
 
 @torch.no_grad()
-def lora_merge(w: torch.Tensor, a: torch.Tensor, b: torch.Tensor, scale: float) -> torch.Tensor:
-    """θ's weight plus scale · B @ A, in fp32 on the weight's device without TF32, cast to the weight's dtype."""
+def lora_merge(w: torch.Tensor, a: torch.Tensor, b: torch.Tensor, scale: float,
+               magnitude: torch.Tensor | None = None) -> torch.Tensor:
+    """θ's weight plus scale · B @ A, in fp32 on the weight's device without TF32, cast to the weight's dtype. With a
+    magnitude m (DoRA, CWLORA2), each output row i of that sum is first rescaled in fp32 to norm m_i; a row of norm 0 is
+    refused."""
     tf32 = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = False
     try:
-        return (w.float() + scale * (b.float() @ a.float())).to(w.dtype)
+        v = w.float() + scale * (b.float() @ a.float())
+        if magnitude is not None:
+            n = torch.linalg.vector_norm(v, dim=1)
+            if not bool((n > 0).all()):
+                raise ValueError("E (lora2): a row of norm 0 under its magnitude")
+            v = v * (magnitude.float() / n)[:, None]
+        return v.to(w.dtype)
     finally:
         torch.backends.cuda.matmul.allow_tf32 = tf32
+
+
+LORA2_BITS = (4, 8)
+
+
+def _quantize_rows(x: torch.Tensor, bits: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Each row of x as integers in ±(2^(bits−1) − 1), rounded to nearest, times its f16 scale max|row| / (2^(bits−1) − 1)."""
+    qmax = 2 ** (bits - 1) - 1
+    x = x.detach().float()
+    s = (x.abs().amax(dim=1) / qmax).to(torch.float16)
+    sf = s.float()[:, None]
+    q = torch.where(sf > 0, torch.round(x / torch.where(sf > 0, sf, 1.0)), 0.0)
+    return q.clamp(-qmax, qmax).to(torch.int8), s
+
+
+def _dequantize(q: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
+    return q.float() * s.float()[:, None]
+
+
+def lora2_factors(a: torch.Tensor, b: torch.Tensor, bits: int = 4) -> tuple[torch.Tensor, torch.Tensor]:
+    """The fp32 factors CWLORA2 stores for A (r x d_in) and B (d_out x r) at `bits`: A's rows and B's columns, the rank
+    components, quantized each with its own f16 scale. `decode` rebuilds exactly these (integer times f16 is exact in fp32),
+    so a program can train through them."""
+    qa, sa = _quantize_rows(a, bits)
+    qb, sb = _quantize_rows(b.t(), bits)
+    return _dequantize(qa, sa), _dequantize(qb, sb).t().contiguous()
+
+
+def _pack_ints(q: torch.Tensor, bits: int) -> bytes:
+    v = q.reshape(-1).cpu().numpy().astype(np.int8)
+    if bits == 8:
+        return v.tobytes()
+    n = v.astype(np.uint8) & 0xF
+    if n.size % 2:
+        n = np.append(n, np.uint8(0))
+    return (n[0::2] | (n[1::2] << 4)).astype(np.uint8).tobytes()
+
+
+def _unpack_ints(b: bytes, count: int, bits: int, name: str) -> np.ndarray:
+    if bits == 8:
+        return np.frombuffer(b, dtype=np.int8).copy()
+    u = np.frombuffer(b, dtype=np.uint8)
+    n = np.empty(2 * u.size, dtype=np.uint8)
+    n[0::2], n[1::2] = u & 0xF, u >> 4
+    if count % 2 and n[-1]:
+        raise ValueError(f"E (lora2): {name}: a padding nibble is not zero")
+    n = n[:count].astype(np.int8)
+    return np.where(n >= 8, n - 16, n).astype(np.int8)
+
+
+def _tensor_bytes(t: torch.Tensor, dt: torch.dtype) -> bytes:
+    return t.detach().to(dt).cpu().contiguous().view(torch.uint8).numpy().tobytes()
+
+
+def encode_lora2(factors: dict[str, tuple[torch.Tensor, torch.Tensor, float]], bits: int | dict[str, int] = 4,
+                 dtype: str = "bf16", magnitudes: dict[str, torch.Tensor] | None = None,
+                 full: dict[str, torch.Tensor] | None = None) -> bytes:
+    """E as quantized rank-r factor pairs: W' = W + scale · B @ A with A and B as `lora2_factors` gives them at `bits` (4 or
+    8, one for every pair or a dict by name). With a magnitude m for a weight (DoRA, d_out entries), each output row i of
+    W' is rescaled to norm m_i (`lora_merge`). Magnitudes and the small tensors carried in full (norm gains) are stored in
+    `dtype`.
+
+    Header `{"dtype", "factors": [[name, r, scale, bits, has magnitude], ...], "full": [name, ...]}`, both lists in
+    strictly increasing name order; payload, per pair: A's r·d_in integers, A's r f16 scales, Bᵀ's r·d_out integers, Bᵀ's
+    r f16 scales, the magnitude if any; then each full tensor. 4-bit integers are two's-complement nibbles, low nibble
+    first, a factor's odd last byte padded with a zero nibble."""
+    dt = DTYPES[dtype]
+    magnitudes, full = magnitudes or {}, full or {}
+    if set(magnitudes) - set(factors) or set(full) & set(factors):
+        raise ValueError("encode_lora2: a magnitude needs its weight's factors, and a tensor carried in full has none")
+    header = {"dtype": dtype, "factors": [], "full": sorted(full)}
+    parts = []
+    for name in sorted(factors):
+        a, b, scale = factors[name]
+        nb = bits[name] if isinstance(bits, dict) else bits
+        if nb not in LORA2_BITS:
+            raise ValueError(f"encode_lora2: bits must be one of {LORA2_BITS}, not {nb!r}")
+        header["factors"].append([name, int(a.shape[0]), float(scale), nb, name in magnitudes])
+        for x in (a, b.t()):
+            q, s = _quantize_rows(x, nb)
+            parts += [_pack_ints(q, nb), _tensor_bytes(s, torch.float16)]
+        if name in magnitudes:
+            parts.append(_tensor_bytes(magnitudes[name], dt))
+    parts += [_tensor_bytes(full[name], dt) for name in header["full"]]
+    return _pack(b"CWLORA2\n", header, b"".join(parts))
+
+
+def _decode_lora2(theta: dict[str, torch.Tensor], header: dict, payload: memoryview, out: dict, device: str) -> dict:
+    try:
+        dt, factors, full = DTYPES[header["dtype"]], list(header["factors"]), list(header["full"])
+    except (KeyError, TypeError) as e:
+        raise ValueError("E (lora2): malformed header") from e
+    if not all(isinstance(f, list) and len(f) == 5 and isinstance(f[0], str) and type(f[1]) is int and f[1] >= 1
+               and type(f[2]) in (int, float) and math.isfinite(f[2]) and f[3] in LORA2_BITS and type(f[4]) is bool
+               for f in factors):
+        raise ValueError("E (lora2): malformed factor entries")
+    names = [f[0] for f in factors]
+    for what, ns in (("factors", names), ("full", full)):
+        if not all(isinstance(n, str) for n in ns) or any(x >= y for x, y in zip(ns, ns[1:])):
+            raise ValueError(f"E (lora2): {what} not in strictly increasing name order")
+    if set(names) & set(full):
+        raise ValueError("E (lora2): a tensor both in factors and in full")
+    for n in names + full:
+        if n not in theta:
+            raise ValueError(f"E (lora2): {n} is not one of θ's tensors")
+    at = 0
+
+    def take(nbytes: int) -> bytes:
+        nonlocal at
+        if at + nbytes > len(payload):
+            raise ValueError("E (lora2): payload too short")
+        at += nbytes
+        return bytes(payload[at - nbytes:at])
+
+    def floats(count: int, dtype: torch.dtype) -> torch.Tensor:
+        return torch.frombuffer(bytearray(take(count * torch.tensor([], dtype=dtype).element_size())), dtype=dtype)
+
+    def rows(r: int, d: int, bits: int, name: str) -> torch.Tensor:
+        q = _unpack_ints(take((r * d * bits + 7) // 8), r * d, bits, name)
+        return _dequantize(torch.from_numpy(q).view(r, d), floats(r, torch.float16))
+
+    for name, r, scale, bits, dora in factors:
+        w = theta[name]
+        if w.ndim != 2:
+            raise ValueError(f"E (lora2): {name} is not a matrix")
+        a, b = rows(r, w.shape[1], bits, name), rows(r, w.shape[0], bits, name).t().contiguous()
+        m = floats(w.shape[0], dt).to(device) if dora else None
+        out[name] = lora_merge(w.to(device), a.to(device), b.to(device), float(scale), m).cpu()
+    for name in full:
+        out[name] = floats(theta[name].numel(), dt).view(theta[name].shape).to(theta[name].dtype)
+    if at != len(payload):
+        raise ValueError("E (lora2): trailing bytes")
+    return out
 
 
 _INT = {1: torch.uint8, 2: torch.int16, 4: torch.int32, 8: torch.int64}
@@ -533,6 +676,8 @@ def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) ->
     fmt, header, payload = _unpack(blob)
     if fmt == "sparse":
         return _decode_sparse(theta, header, payload, out)
+    if fmt == "lora2":
+        return _decode_lora2(theta, header, payload, out, device)
     if fmt == "lora":
         dt = DTYPES[header["dtype"]]
         size = torch.tensor([], dtype=dt).element_size()
@@ -581,6 +726,8 @@ def rebuild_macs(theta: dict[str, torch.Tensor], blob: bytes) -> int:
 
     - full: 0 (replacement tensors);
     - lora: (r + 2)·numel per factor pair (B @ A, the scale, the add); 0 for the tensors it carries in full;
+    - lora2: lora's, plus r·(d_in + d_out) to dequantize the factors and, with a magnitude, 2·numel + 2·d_out (the row
+      norms, their ratios to m, the rescale);
     - seedlog: steps · Σ numel, one fused multiply-add per element per step. Its first t coefficients rebuild the weights
       after step t, at t · Σ numel;
     - sparse: nnz, one add per listed entry.
@@ -591,6 +738,10 @@ def rebuild_macs(theta: dict[str, torch.Tensor], blob: bytes) -> int:
     fmt, header, _ = _unpack(blob)
     if fmt == "lora":
         return sum((int(r) + 2) * theta[name].numel() for name, r, _ in header["factors"])
+    if fmt == "lora2":
+        return sum(r * sum(theta[name].shape) + (r + 2) * theta[name].numel()
+                   + (2 * (theta[name].numel() + theta[name].shape[0]) if dora else 0)
+                   for name, r, _, _, dora in header["factors"])
     if fmt == "seedlog":
         return int(header["steps"]) * sum(theta[k].numel() for k in header["names"])
     return sum(int(t[2]) for t in header["tensors"])

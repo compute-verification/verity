@@ -19,7 +19,8 @@ N_BIG = 1 << 17
 def theta() -> dict[str, torch.Tensor]:
     g = torch.Generator().manual_seed(0)
     return {"w": torch.randn(64, 48, generator=g).to(torch.bfloat16), "g": torch.randn(48, generator=g),
-            "odd": torch.randn(13, generator=g), "big": torch.randn(N_BIG, generator=g).to(torch.float16)}
+            "odd": torch.randn(13, generator=g), "big": torch.randn(N_BIG, generator=g).to(torch.float16),
+            "v": torch.randn(7, 5, generator=g)}
 
 
 def counted(fn) -> int:
@@ -112,12 +113,101 @@ def test_the_sparse_decoder_refuses_malformed_encodings(entries, payload, why):
         prepare.decode(th, _blob(entries, payload), device="cpu")
 
 
+def factors(r: int, d_out: int, d_in: int, seed: int = 1) -> tuple[torch.Tensor, torch.Tensor]:
+    g = torch.Generator().manual_seed(seed)
+    return torch.randn(r, d_in, generator=g), torch.randn(d_out, r, generator=g) * 1e-2
+
+
+@pytest.mark.parametrize("bits", [4, 8])
+def test_lora2_is_lora_on_its_quantized_factors(bits):
+    th = theta()
+    a, b = factors(5, 64, 48)
+    ah, bh = prepare.lora2_factors(a, b, bits)
+    qmax = 2 ** (bits - 1) - 1
+    for x, xh in ((a, ah), (b.t(), bh.t())):
+        s = x.abs().amax(dim=1, keepdim=True) / qmax
+        assert torch.all((x - xh).abs() <= s * (0.5 + qmax * 2.0 ** -10))
+        assert torch.all((xh / s).round().abs() <= qmax)
+    blob = prepare.encode_lora2({"w": (a, b, 0.5)}, bits, "f32", full={"g": th["g"]})
+    assert prepare.format_of(blob) == "lora2"
+    out = prepare.decode(th, blob, device="cpu")
+    lora1 = prepare.decode(th, prepare.encode_lora({"w": (ah, bh, 0.5)}, "f32", full={"g": th["g"]}), device="cpu")
+    assert all(prepare.same_bits(out[k], lora1[k]) for k in th)
+
+
+def test_lora2_magnitude_sets_each_output_rows_norm():
+    th = theta()
+    a, b = factors(3, 64, 48)
+    m = th["w"].float().norm(dim=1) * torch.linspace(0.5, 2.0, 64)
+    out = prepare.decode(th, prepare.encode_lora2({"w": (a, b, 2.0)}, 8, "f32", magnitudes={"w": m}), device="cpu")
+    ah, bh = prepare.lora2_factors(a, b, 8)
+    assert torch.equal(out["w"], prepare.lora_merge(th["w"], ah, bh, 2.0, m))
+    assert torch.allclose(out["w"].float().norm(dim=1), m, rtol=1e-2)
+    assert all(prepare.same_bits(out[k], th[k]) for k in th if k != "w")
+
+
+@pytest.mark.parametrize("bits,ints", [(4, 8 + 11), (8, 15 + 21)])
+def test_lora2_stores_the_integers_and_one_f16_scale_per_rank_component(bits, ints):
+    a, b = factors(3, 7, 5)
+    _, header, payload = prepare._unpack(prepare.encode_lora2({"v": (a, b, 1.0)}, bits))
+    assert header["factors"] == [["v", 3, 1.0, bits, False]] and len(payload) == ints + 2 * 2 * 3
+
+
+def test_lora2_bits_are_per_weight_and_its_encoder_refuses_others():
+    a, b = factors(2, 7, 5)
+    _, header, _ = prepare._unpack(prepare.encode_lora2({"v": (a, b, 1.0), "w": (*factors(2, 64, 48), 1.0)}, {"v": 4, "w": 8}))
+    assert [f[3] for f in header["factors"]] == [4, 8]
+    with pytest.raises(ValueError, match="bits must be"):
+        prepare.encode_lora2({"v": (a, b, 1.0)}, 2)
+    with pytest.raises(ValueError, match="a magnitude needs"):
+        prepare.encode_lora2({"v": (a, b, 1.0)}, magnitudes={"w": torch.ones(64)})
+
+
+def _lora2(entries: list, payload: bytes, full: list = (), dtype: str = "bf16") -> bytes:
+    return prepare._pack(b"CWLORA2\n", {"dtype": dtype, "factors": entries, "full": list(full)}, payload)
+
+
+H1 = b"\x00\x3c"  # 1.0 in f16
+V8, V4 = bytes(5) + H1 + bytes(7) + H1, bytes(3) + H1 + bytes(4) + H1
+G = bytes(2 * 48)
+REFUSED_LORA2 = [
+    (prepare._pack(b"CWLORA2\n", {"dtype": "bf16", "factors": []}, b""), "malformed header"),
+    (_lora2([["v", 1, 1.0, 8, False]], V8, dtype="f8"), "malformed header"),
+    (_lora2([["v", 1, 1.0, 8]], V8), "malformed factor entries"),
+    (_lora2([["v", 0, 1.0, 8, False]], b""), "malformed factor entries"),
+    (_lora2([["v", 1, 1.0, 5, False]], V8), "malformed factor entries"),
+    (_lora2([["v", 1, float("nan"), 8, False]], V8), "malformed factor entries"),
+    (_lora2([["v", 1, 1.0, 8, 0]], V8), "malformed factor entries"),
+    (_lora2([["w", 1, 1.0, 8, False], ["v", 1, 1.0, 8, False]], V8 + V8), "strictly increasing"),
+    (_lora2([["v", 1, 1.0, 8, False], ["v", 1, 1.0, 8, False]], V8 + V8), "strictly increasing"),
+    (_lora2([], G + G, full=["g", "g"]), "strictly increasing"),
+    (_lora2([["v", 1, 1.0, 8, False]], V8 + bytes(70), full=["v"]), "both in factors and in full"),
+    (_lora2([["nope", 1, 1.0, 8, False]], V8), "not one of θ's"),
+    (_lora2([["g", 1, 1.0, 8, False]], V8), "not a matrix"),
+    (_lora2([["v", 1, 1.0, 8, False]], V8[:-1]), "too short"),
+    (_lora2([["v", 1, 1.0, 8, False]], V8 + b"\x00"), "trailing bytes"),
+    (_lora2([["v", 1, 1.0, 4, False]], bytes([0, 0, 0x10]) + V4[3:]), "padding nibble"),
+    (_lora2([["z", 1, 1.0, 8, True]], bytes(4) + H1 + bytes(3) + H1 + bytes(6)), "norm 0"),
+]
+
+
+@pytest.mark.parametrize("blob,why", REFUSED_LORA2)
+def test_the_lora2_decoder_refuses_malformed_encodings(blob, why):
+    th = theta() | {"z": torch.zeros(3, 4)}
+    assert prepare.same_bits(prepare.decode(th, _lora2([["v", 1, 1.0, 4, False]], V4), device="cpu")["v"], th["v"])
+    with pytest.raises(ValueError, match=why):
+        prepare.decode(th, blob, device="cpu")
+
+
 def test_rebuild_macs_per_format_bound_what_the_counter_sees():
     th = theta()
     meta = {k: torch.empty(v.shape, dtype=v.dtype, device="meta") for k, v in th.items()}
     a, b = torch.randn(4, 48), torch.randn(64, 4)
+    m = th["w"].float().norm(dim=1)
     blobs = {
         "lora": (prepare.encode_lora({"w": (a, b, 0.5)}, full={"g": th["g"]}), (4 + 2) * 64 * 48),
+        "lora2": (prepare.encode_lora2({"w": (a, b, 0.5)}, 4, magnitudes={"w": m}, full={"g": th["g"]}),
+                  4 * (64 + 48) + (4 + 2) * 64 * 48 + 2 * (64 * 48 + 64)),
         "seedlog": (prepare.encode_seedlog(["w", "g"], 1, [0.1, 0.2, 0.3], "f32"), 3 * (64 * 48 + 48)),
         "sparse": (prepare.encode_sparse(th, {"big": (torch.arange(0, N_BIG, 5), torch.ones(N_BIG // 5 + 1))}), N_BIG // 5 + 1),
     }
