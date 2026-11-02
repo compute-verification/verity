@@ -19,6 +19,8 @@ from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.query.required import request_manifest
 
+pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
+
 
 def _commit_args(tmp_path: Path) -> types.SimpleNamespace:
     """The inputs of a B=1 Commit: its workload, the manifest the query path built from the synthetic Program, its Program dir."""
