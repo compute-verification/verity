@@ -150,6 +150,8 @@ WALKS = {
     "t/tests/test_m.py": ('import tomllib\nfrom pathlib import Path\n\nROOT = Path(__file__).parents[2]\n\n\ndef test_m():\n'
                           '    for m in tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]["members"]:\n'
                           '        assert (ROOT / m / "pyproject.toml").is_file()\n'),
+    "t/tests/build.py": "from torch.utils.cpp_extension import load_inline\n",
+    "t/tests/test_native.py": "import build\n\n\ndef test_native():\n    pass\n",
     "t/tests/test_walk.py": ('from pathlib import Path\n\n\ndef test_walk():\n'
                              '    assert sorted(Path(__file__).parents[2].glob("lib/**/*.txt"))\n'),
 }
@@ -170,6 +172,8 @@ def test_what_a_test_file_reads_that_its_source_does_not_name(tmp_path):
     t = {t["id"]: t for t in family.tasks(root, graph.tracked(root))}
     assert t["test-file:t/tests/test_m.py"]["vars"] == {"suite": "t", "untraced": "suite"}
     assert t["test-file:t/tests/deep/test_e.py"]["vars"] == {"suite": "t"} and "lib/assets/a.txt" not in e
+    assert t["test-file:t/tests/test_native.py"]["vars"] == {"suite": "t", "untraced": "compilers"}, \
+        "a file whose closure builds native code may start a compiler"
     plain = toy_tree(tmp_path / "plain", SPEC, {**WALKS, "t/pyproject.toml": WALKS["t/pyproject.toml"].partition("\n[[")[0]})
     walked = {"lib/assets/a.txt", "lib/toy_lib/plugins/table.json"}
     assert not walked & next(set(t["inputs"]) for t in family.tasks(plain, graph.tracked(plain))
@@ -206,6 +210,9 @@ RUNS = {
                          '[tool.verity.tests]\nuntraced = ["tests/test_git_keyed.py"]\n'),
     "s/notes.txt": "n\n",
     "s/tests/test_git.py": "import subprocess\n\n\ndef test_git():\n    subprocess.run(['git', '--version'], check=True)\n",
+    "s/tests/test_cc.py": ("import shutil\nimport subprocess\n\nimport pytest\n\n\n"
+                           "@pytest.mark.skipif(not shutil.which('cc'), reason='no C compiler')\ndef test_cc():\n"
+                           "    subprocess.run(['cc', '--version'], check=True)\n    subprocess.run(['git', '--version'], check=True)\n"),
     "s/tests/test_git_keyed.py": "import subprocess\n\n\ndef test_git():\n    subprocess.run(['git', '--version'], check=True)\n",
     "s/tests/test_ok.py": ('from pathlib import Path\n\n\ndef test_reads_its_env_s_spec():\n'
                            '    assert (Path(__file__).parents[2] / "uv.lock").read_text()\n'),
@@ -266,6 +273,11 @@ def test_a_program_the_guard_cannot_trace_is_an_error_unless_the_task_is_keyed_o
     assert r["status"] == "error" and r["detail"]["untraced"] == ["git"] and "[tool.verity.tests] untraced" in r["detail"]["error"]
     r = results["test_git_keyed.py"]
     assert r["status"] == "pass" and r["detail"]["untraced"] == ["git"]
+    r = results["test_cc.py"]
+    assert r["status"] == "error" and "(cc, git)" in r["detail"]["error"], \
+        "a task whose closure builds native code may start a compiler, and nothing else untraced"
+    assert runner.allowed({"vars": {"untraced": "compilers"}}, {"/usr/bin/g++", "nvcc"})
+    assert not runner.allowed({"vars": {"untraced": "compilers"}}, {"g++", "git"}) and not runner.allowed({"vars": {}}, {"g++"})
 
 
 def test_a_pytest_killed_is_an_error(results):

@@ -43,7 +43,9 @@ the commit's files alone:
   starts reads. An entry that names no test file or a path that matches no file is refused;
 - for a test file its suite's `[tool.verity.tests] untraced` names (fnmatch patterns from the suite's directory), one that
   starts a program the guard can't trace (git, lake, a compiler, a shell, a Python run with `-I`), what `suites.py` keys the
-  suite on (`whole`), with `vars` `untraced` = `suite`; the runner makes such a program an error in any other task;
+  suite on (`whole`), with `vars` `untraced` = `suite`; a task whose closure holds a module that builds native code (`_NATIVE`)
+  has `untraced` = `compilers`, since a compiler reads the sources beside it; the runner makes any other untraced program an
+  error;
 - each `pyproject.toml` from the test file's directory up to the root;
 - the read guard the runner loads into pytest (`GUARD`); the core adds the runner itself.
 
@@ -119,6 +121,9 @@ _SLASHED = re.compile(r"""["']([\w.-]+(?:/[\w.-]+)+)/?["']""")
 _METADATA = re.compile(r"""["']\*/pyproject\.toml["']""")
 _MEMBERS = re.compile(r"""["']members["']""")
 _PYPROJECT = re.compile(r"""["']pyproject\.toml["']""")
+#: a module that builds native code: it runs a compiler the guard can't trace whenever its build cache misses, on the sources
+#: beside it (`Tree.beside`), so a task whose closure holds one lets its runs start a compiler (`vars` `untraced` = `compilers`)
+_NATIVE = re.compile(r"""cpp_extension|load_inline|["'](?:g\+\+|gcc|c\+\+|cc|clang\+?\+?|nvcc)["']""")
 
 
 def _parent(path: str) -> str:
@@ -541,6 +546,7 @@ class Imports:
         self._closed: dict[str, frozenset[str]] = {}            # file -> what its `fixed` edges reach, itself included
         self._paths: dict[str, list[str]] = {}                  # file -> the files under the paths it names (`named`)
         self.metadata: set[str] = set()                         # the files read so far that list every pyproject.toml
+        self.native: set[str] = set()                           # those that build native code (`_NATIVE`)
         self._by_top: dict[str, set[str]] = {}                  # top-level name -> the files importing it absolutely
         self.fallbacks = 0              # files whose statements the regular expressions couldn't read, parsed whole
 
@@ -723,6 +729,8 @@ class Imports:
                                       tuple(sorted(c for c in code if c[0].partition(".")[0] not in STDLIB)))
         if got.metadata:
             self.metadata.add(path)
+        if _NATIVE.search(text):
+            self.native.add(path)
         for top in local:
             self._by_top.setdefault(top, set()).add(path)
         return got
@@ -1020,6 +1028,8 @@ def task(tree: Tree, imports: Imports, suite: Suite, path: str, data: list[str],
     paths = {f for s in {path, *conftests, *helpers} for f in imports.named(s) if md or not f.endswith(".md")}
     inputs = {*code, *beside, *paths, *seeds, *data, *pyprojects, *walked, *GUARD}
     out = {"id": f"{KIND}:{path}", "vars": {"suite": suite.path}, "inputs": sorted(inputs)}
+    if not imports.native.isdisjoint(code):
+        out["vars"]["untraced"] = "compilers"
     if suite.mem_gb:
         out["resources"] = {"mem_gb": suite.mem_gb}
     if suite.timeout_s:
