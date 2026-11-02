@@ -739,6 +739,10 @@ TRAIN = {"kfac": train_kfac, "scale": train_scale, "cached": train_cached}
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except SystemExit as e:
+        if e.code is not None and not isinstance(e.code, int):
+            print(f"wildcard: exit: {e.code}", flush=True)
+        raise
     except Exception:
         traceback.print_exc()
         raise
