@@ -13,8 +13,9 @@ te-core/submission/v1 ledger records (te_core.ledger's), written since `$TE_SCOR
 A record is scored only if its witness and run.json are the node's (`custody_problems`: launch.py uploads records from an
 agent's VM, the node's runner publishes the run's out/) and its commit's fixed side is the harness's (`fixed_side`). A
 record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by the harness's count: `collect` ingests
-the node's run.json with te_core at its branch head (`te_current`), one submission per checkpoint carrying |C|, U, D, φ
-and ρ; the te_core records agents publish themselves are listed, never scored. A witness v1 record carries the witness
+the node's run.json with the newest official te_core (`te_current`), one submission per checkpoint carrying |C|, U, D, φ
+and ρ; the te_core records agents publish themselves are listed, never scored. Only paired-slice records (`PAIRED`)
+make the frontier, the promotions (decided by the sealed set, `sealed_bits`) and the final table. A witness v1 record carries the witness
 (training FLOPs, φ over forward weight-matmul FLOPs, |E|, search bpb, the FLOPs-to-target curve), not te_core's count. Its
 annotation here is analytic, from the record's declared trainable set and step-log tokens over the start's tensors: U is
 every forward multiplication whose weight operand is trained (a full tensor's matmul or norm gain, an adapter's two
