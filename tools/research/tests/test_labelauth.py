@@ -224,7 +224,7 @@ def test_with_a_verifier_only_authenticated_marks_count_and_an_ejection_holds_un
     assert not labels.ready(7, HEAD) and labels.ready_by(7, HEAD) is None
     assert labels.refusals(7, HEAD, vocab.READY) == ["ready = True by ci at 2026-11-02T02:59:00Z: unsigned"]
     assert StoreLabels(store, log=lambda s: None).ready(7, HEAD)                 # with the flag off, as written
-    L.Signer(store, _mint(HOLDER), now=lambda: TS).write(TARGET, vocab.READY, True, "ci")
+    L.Signer(store, _mint(HOLDER), now=lambda: TS).add_label(TARGET, vocab.READY, True, "ci")
     assert labels.ready(7, HEAD) and labels.ready_by(7, HEAD) == "ci" and labels.marked_at(7, HEAD) == TS
     store.add_label(TARGET, vocab.READY, False, "merge-queue", ref="broke next", ts="2026-11-02T03:01:00Z")
     assert not labels.ready(7, HEAD) and labels.marked_by(7, HEAD) == "merge-queue"
@@ -237,7 +237,7 @@ def test_with_a_verifier_only_authenticated_land_verdicts_count_and_any_hold_hol
     store.add_label(TARGET, vocab.REVIEWED, "land", "ci", ts="2026-11-02T02:59:00Z")
     assert unreviewed(labels.reviews(7, HEAD), owners) == "no land verdict"
     assert unreviewed(StoreLabels(store, log=lambda s: None).reviews(7, HEAD), owners) is None
-    L.Signer(store, _mint(HOLDER), now=lambda: TS).write(TARGET, vocab.REVIEWED, "land", "ci", ref="read it")
+    L.Signer(store, _mint(HOLDER), now=lambda: TS).add_label(TARGET, vocab.REVIEWED, "land", "ci", ref="read it")
     assert unreviewed(labels.reviews(7, HEAD), owners) is None
     store.add_label(TARGET, vocab.REVIEWED, "hold", "proofs", ref="wait", ts="2026-11-02T03:01:00Z")
     store.add_label(TARGET, vocab.REVIEWED, "land", "proofs", ts="2026-11-02T03:02:00Z")  # not proofs' holder's
@@ -249,15 +249,15 @@ def test_the_signer_signs_landing_labels_only_and_refuses_what_it_cant_sign_once
         raise L.AuthError("the Cursor identity socket is unavailable")
 
     said: list[str] = []
-    L.Signer(store, down, now=lambda: TS, log=said.append).write(TARGET, vocab.REVIEWED, "hold", "ci", ref="wait")
+    L.Signer(store, down, now=lambda: TS, log=said.append).add_label(TARGET, vocab.REVIEWED, "hold", "ci", ref="wait")
     assert said == [] and [lab.key for lab in store.labels(TARGET)] == [vocab.REVIEWED]
-    L.Signer(store, down, now=lambda: TS, log=said.append).write(TARGET, vocab.READY, True, "ci")
+    L.Signer(store, down, now=lambda: TS, log=said.append).add_label(TARGET, vocab.READY, True, "ci")
     assert "is written unsigned (the Cursor identity socket is unavailable)" in said[0]
     assert [lab.key for lab in store.labels(TARGET)] == [vocab.REVIEWED, vocab.READY]
     with pytest.raises(L.AuthError, match="unavailable"):
-        L.Signer(store, down, required=True, now=lambda: TS).write(TARGET, vocab.REVIEWED, "land", "ci")
+        L.Signer(store, down, required=True, now=lambda: TS).add_label(TARGET, vocab.REVIEWED, "land", "ci")
     with pytest.raises(L.AuthError, match=f"`research queue delegate {WORKER} --by ci`"):
-        L.Signer(store, _mint(WORKER), required=True, holders=HOLDERS, now=lambda: TS).write(TARGET, vocab.REVIEWED, "land", "ci")
+        L.Signer(store, _mint(WORKER), required=True, holders=HOLDERS, now=lambda: TS).add_label(TARGET, vocab.REVIEWED, "land", "ci")
     assert len(store.labels(TARGET)) == 2
 
 
@@ -271,7 +271,7 @@ def test_a_delegated_worker_signs_with_its_delegation_which_only_the_holder_can_
     assert store.labels(L.delegation_target(WORKER)) == []
     assert Q.delegate(store, WORKER, "ci", 7, HOLDERS, mint=_mint(HOLDER, iat=T - 3600), now=lambda: T - 3600) == 0
     assert f"{WORKER} signs as ci until 2026-11-09T02:00:00Z" in capsys.readouterr().out
-    L.Signer(store, _mint(WORKER), required=True, holders=HOLDERS, now=lambda: TS).write(TARGET, vocab.READY, True, "ci")
+    L.Signer(store, _mint(WORKER), required=True, holders=HOLDERS, now=lambda: TS).add_label(TARGET, vocab.READY, True, "ci")
     (auth,) = store.labels(TARGET, key=vocab.LABEL_AUTH)
     assert auth.value["delegation"]["agent"] == WORKER
     assert StoreLabels(store, log=lambda s: None, verify=_verifier()).ready(7, HEAD)
@@ -282,11 +282,11 @@ def test_a_mark_or_verdict_the_signer_refuses_is_not_written(store, capsys):
         raise L.AuthError("the Cursor identity socket is unavailable")
 
     pr = PR(7, HEAD, body="Lane vllm")
-    assert Q._mark(store, pr, "ci", None, "ready", L.Signer(store, down, required=True, now=lambda: TS)) == 1
+    assert Q._mark(L.Signer(store, down, required=True, now=lambda: TS), pr, "ci", None, "ready") == 1
     assert "can't be signed: the Cursor identity socket is unavailable" in capsys.readouterr().err
     assert store.labels(TARGET) == []
-    assert Q._mark(store, pr, "ci", None, "ready", L.Signer(store, _mint(HOLDER), required=True, holders=HOLDERS,
-                                                           now=lambda: TS)) == 0
+    signer = L.Signer(store, _mint(HOLDER), required=True, holders=HOLDERS, now=lambda: TS)
+    assert Q._mark(signer, pr, "ci", None, "ready") == 0
     assert StoreLabels(store, log=lambda s: None, verify=_verifier()).ready(7, HEAD)
     assert Q._mark(store, PR(8, HEAD, body="Lane vllm"), "ci", None, "ready") == 0          # no signer: as before
     assert [lab.key for lab in store.labels(label_target(8, HEAD))] == [vocab.READY]
@@ -335,15 +335,27 @@ def test_the_issuers_keys_are_fetched_and_the_last_set_covers_an_outage(tmp_path
         L.issuer_keys(tmp_path / "none.json", get=lambda url: b'{"keys": []}')
 
 
-def test_drives_verifier_refuses_the_tick_when_it_cant_read_the_issuers_keys(tmp_path, monkeypatch):
+def test_drives_verifier_refuses_the_tick_when_it_cant_read_the_issuers_keys_or_the_registry(tmp_path, monkeypatch):
     """Judging every mark absent would take every PR off `next`: drive does nothing instead, saying why."""
+    def commit() -> None:
+        subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty",
+                        "-m", "x"], check=True)
+
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty",
-                    "-m", "x"], check=True)
+    commit()
 
     def down(cache, log=print):
         raise L.AuthError(f"{L.JWKS_URL}: connection refused, and none are kept at {cache}")
 
     monkeypatch.setattr(L, "issuer_keys", down)
     with pytest.raises(QueueError, match="no ready mark or land verdict can be authenticated .*connection refused"):
+        Q.label_verifier(tmp_path, "HEAD", tmp_path / "keys.json")
+    (tmp_path / Q.REGISTRY).parent.mkdir(parents=True)
+    (tmp_path / Q.REGISTRY).write_text('{"handles": [{"handle": "ci", "holder": "' + HOLDER + '"}]}')
+    commit()
+    assert Q.holders_at(tmp_path, "HEAD") == {HOLDER: "ci"}
+    (tmp_path / Q.REGISTRY).write_text("{")
+    commit()
+    with pytest.raises(QueueError, match="registry.json at HEAD can't be parsed"):
         Q.label_verifier(tmp_path, "HEAD", tmp_path / "keys.json")

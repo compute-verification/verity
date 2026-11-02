@@ -563,8 +563,13 @@ def test_with_signed_verdicts_drive_lands_only_on_an_authenticated_land_verdict(
     h.review(1, by="proofs")
     out = h.tick()
     assert "no land verdict" in out and not out.startswith("landed #1"), out
-    labelauth.Signer(world.store, _mint(OTHER), now=lambda: TS).write(label_target(1, world.gh.prs[1].head), vocab.REVIEWED,
-                                                                       "land", "proofs")
+
+    def down(nonce: str) -> str:
+        raise labelauth.AuthError("the Cursor identity socket is unavailable")
+
+    with pytest.raises(QueueError, match="isn't written: drive.toml's `signed_verdicts` is on at `main`, and it can't be signed"):
+        Q.review(h.q, labelauth.Signer(world.store, down, required=True, now=lambda: TS), labels, 1, "land", None, "proofs")
+    assert Q.review(h.q, labelauth.Signer(world.store, _mint(OTHER), now=lambda: TS), labels, 1, "land", None, "proofs") == 0
     assert h.tick().startswith("landed #1"), world.logs
 
 

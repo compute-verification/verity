@@ -221,31 +221,35 @@ class Verifier:
 
 
 class Signer:
-    """Writes labels as this agent: each landing label (`landing`) with its `label_auth` companion, ``mint`` (a nonce to a token)
-    signing it, and this agent's delegation for the label's handle when the store has one.  ``required`` (drive.toml's
-    `signed_verdicts` on at `main`): a landing label it can't sign is refused, AuthError and nothing written, as is one by a
-    handle whose holder (``holders``, {agent id: handle}, when given) isn't this agent and that delegated nothing to it;
-    otherwise the label is written unsigned, with a note to ``log``."""
+    """``store`` writing labels as this agent: `add_label` writes each landing label (`landing`) with its `label_auth` companion,
+    ``mint`` (a nonce to a token) signing it, and this agent's delegation for the label's handle when the store has one; every
+    other attribute is ``store``'s.  ``required`` (drive.toml's `signed_verdicts` on at `main`): a landing label it can't sign
+    is refused, AuthError and nothing written, as is one by a handle whose holder (``holders``, {agent id: handle}, when given)
+    isn't this agent and that delegated nothing to it; otherwise the label is written unsigned, with a note to ``log``."""
 
     def __init__(self, store, mint: Callable[[str], str], required: bool = False, holders: dict[str, str] | None = None,
                  now: Callable[[], str] = utc_now, log: Callable[[str], None] = print):
         self.store, self.mint, self.required, self.now, self.log = store, mint, required, now, log
         self.holders = None if holders is None else {a: _who(h) for a, h in holders.items()}
 
-    def write(self, target: str, key: str, value: object, by: str, ref: str | None = None) -> None:
-        label = Label(target=target, key=key, value=value, by=by, ts=self.now(), ref=ref)
+    def __getattr__(self, name: str):
+        return getattr(self.store, name)
+
+    def add_label(self, target: str, key: str, value: object, by: str, ref: str | None = None, ts: str | None = None) -> Path:
+        label = Label(target=target, key=key, value=value, by=by, ts=ts or self.now(), ref=ref)
         auth = None
         if landing(label):
             try:
                 auth = self.sign(label)
             except AuthError as e:
                 if self.required:
-                    raise
+                    raise AuthError(f"drive.toml's `signed_verdicts` is on at `main`, and it can't be signed: {e}") from None
                 self.log(f"{key} = {value} on {target} is written unsigned ({e}); drive counts it while drive.toml's "
                          "`signed_verdicts` is off")
-        self.store.add_label(target, key, value, by, ref=ref, ts=label.ts)
+        path = self.store.add_label(target, key, value, by, ref=ref, ts=label.ts)
         if auth is not None:
             self.store.add_label(target, vocab.LABEL_AUTH, auth, by, ts=label.ts)
+        return path
 
     def sign(self, label: Label) -> dict:
         want = label_nonce(label)
