@@ -25,7 +25,7 @@ o = attn.pv(p, v, lens, path="ref")              # the same words through the re
   for all of its head groups. `attn.LAUNCH` picks the tiling and launch shape for each op, and `attn.serves` says where
   each applies. The `_ref` kernels are the reference path: a CTA takes 8 columns of one KV head and sequence, its warps
   take the (16 query heads, query) pairs in turn, and every operand word is gathered on its own.
-- `attn.py`: the kernels as torch functions (the skeleton's interface), `qk(q, k, lens=None, *, out, fill, warps,
+- `attn.py`: the kernels as torch functions (the H200 example's interface), `qk(q, k, lens=None, *, out, fill, warps,
   check_lens, path)` and `pv(p, v, lens=None, *, out, kpv, warps, check_lens, path)`: S past `lens` is `fill` (-inf),
   PV's K is `kpv` = 32 for every KV length 1..32 (the H200 circuit's `GemmCoordinatePad_v1{T, K=32}`), and `path` is
   `"fast"` or `"ref"`. Without `lens` each call is one launch on torch's current stream, from the shipped cubin.

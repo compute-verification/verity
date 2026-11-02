@@ -25,6 +25,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from verity.ml.commitments import domains
+
 
 @dataclass(frozen=True)
 class HashFormat:
@@ -41,7 +43,7 @@ class HashFormat:
 
 HASH_FORMATS: dict[str, HashFormat] = {
     "h0": HashFormat("h0", "sha256", "unit-root"),
-    "h3": HashFormat("h3", "hm96-sha512", "row", row_cap=True, row_digest="sha512/row-seg/v1"),
+    "h3": HashFormat("h3", "hm96-sha512", "row", row_cap=True, row_digest=domains.SHA512_ROW_SEG_DIGEST),
 }
 
 #: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``
@@ -141,10 +143,10 @@ class Schedule:
 
 
 SERIAL = Schedule("serial")
-#: the measured deferred schedule (panel attempt 57, `prefill_fused.py`'s and `decode_chain.py`'s chains): the main lane at the
-#: greatest priority, each call's tile hashing beside it at the least.  The screen stayed on the main lane there, as in #564
+#: the measured deferred schedule (`prefill_fused.py`'s and `decode_chain.py`'s chains): the main lane at the
+#: greatest priority, each call's tile hashing beside it at the least.  The screen stays on the main lane there
 DEFERRED = Schedule("deferred", frozenset({"tile_hash"}), ring=2, main_priority="greatest")
-#: the same placement with the caller's stream left at its own priority (#564's first cut), kept to time against DEFERRED
+#: the same placement with the caller's stream left at its own priority (the first placement), kept to time against DEFERRED
 DEFERRED_CALLER = Schedule("deferred-caller", frozenset({"tile_hash"}), ring=2)
 #: DEFERRED with A's tree beside the tile hashing: the main lane keeps only the per-row keying (`row_seeds`), about a fifth
 #: of a call's hashing.  Runs only where the format seeds forming per row (h3)
@@ -176,10 +178,10 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
     return out
 
 
-MANIFEST_SCHEMA = "verity/pouw/pass-manifest/v1"
+MANIFEST_SCHEMA = domains.POUW_PASS_MANIFEST
 #: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocols.pouw.pearl_c`), v1 (salted
 #: from a beacon, before epoch coins) only as a replay of a recorded pass
-MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, "verity-vllm/pouw-pearl-c-run/v2", "verity-vllm/pouw-pearl-c-run/v1")
+MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, domains.VLLM_PEARL_C_RUN, domains.VLLM_PEARL_C_RUN_V1)
 
 
 @dataclass(frozen=True)

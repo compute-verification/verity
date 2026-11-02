@@ -1,4 +1,4 @@
-"""Pinned outputs (META ``pinned_outputs``, CMP-149's form B): the last output ports of a statement of bit rows have no row,
+"""Pinned outputs (META ``pinned_outputs``, form B): the last output ports of a statement of bit rows have no row,
 and Δ copies the unit's forced-zero row onto each of their bits, so a proof holds only where they are zero. A writer that
 reads a shared row ``S`` and pins ``d = S[j] XOR y`` commits no output row. The Rust prover's parse and Δ are its own
 tests (`circuit::tests::pinned_outputs_are_copies_of_the_forced_zero_row`); these hold the composer to the same form, for

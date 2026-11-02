@@ -1,11 +1,11 @@
 # PoUW's receipt folds, the one reference: receipt_folds.py and receipt_folds.cuh, their published vectors (vectors.json)
 # and the conformance checks every implementation of a fold calls (receipt_conform.py). Not a package: the tests run here as
-# a suite (`uv run tools/verity/check/suites.py benchmarks/pouw/receipts`). Stdlib only, but for numpy in P2-FF's twin.
+# a suite (`uv run tools/verity/check/suites.py benchmarks/pouw/receipts`). Stdlib only, but for numpy in the r9 twin.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Nothing outside this directory: the reference is stdlib only, P2-FF's twin is vendored under tests/fixtures (pinned by its
-# sha256), and the header tests build conform_host.cpp with the system's g++ (and nvcc where it is installed).
+# Nothing outside this directory: the reference is stdlib only, the r9 twin is vendored under tests/fixtures (pinned by
+# its sha256), and the header tests build conform_host.cpp with the system's g++ (and nvcc where it is installed).
 inputs = []

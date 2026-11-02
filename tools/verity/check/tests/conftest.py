@@ -1,5 +1,5 @@
 """Every test here starts from an environment without credentials, a recording run's variables, or what `check` sets for its
-steps: inside a recorded check its own tests inherit all three (`check.env()`, #420).  And with a step cache of its own
+steps: inside a recorded check its own tests inherit all three (`check.env()`).  And with a step cache of its own
 (`CHECK_CACHE`): a fake step's pass stored under a real key (`check.STEP_KEYS`, which key the commit's tree) would be
 reused by a later test, and by this machine's next real check."""
 from __future__ import annotations
