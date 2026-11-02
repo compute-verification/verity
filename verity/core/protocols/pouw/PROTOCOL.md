@@ -572,7 +572,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   forming step; `ncp-v1` stays at β = 128.
 - **γ is conditional on TTNCP_U(0.5%).** A2, as first written, required the model program to
   reproduce every output, not only the checked words. Restricted to the checked words, A2 makes the Theorem D chain
-  equivalent to TT_NCP rather than a reduction to milder assumptions (`Pouw.SecurityProofs.Dimension.A2WordsIff`). So
+  equivalent to TT_NCP rather than a reduction to milder assumptions, and Lean no longer states it. So
   TTNCP_U, TT_NCP over the route-U checked values, stays the named conjecture, and every γ here holds only under it.
 
 - **P.** `ncp-v1` uses the word-granular production P v1.1: a SHAKE256 Fisher-Yates over the k/4 aligned words from
