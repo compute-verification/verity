@@ -10,7 +10,9 @@ passes. Between steps the optimizer keeps `--opt`'s state:
 
 - `adamw`: m and v in fp32, 64 bits an entry (the trainable set's reference);
 - `adafactor`: β1 = 0, the second moment factored per matrix (an fp32 row and column vector), RMS-clipped steps;
-- `muon`: the reduced gradient orthogonalized by Newton–Schulz, with a Nesterov momentum at `--mom-bits` (0: none);
+- `muon`: the reduced gradient orthogonalized by Newton–Schulz, with a Nesterov momentum at `--mom-bits` (0: none),
+  or with `--mom-rank R` that momentum in a rank-R subspace of the gradient (GaLore's projection, re-drawn every
+  `--proj-every` steps; the basis is state too, in bf16);
 - `sign`: signSGD on the reduced gradient, or on its momentum at `--mom-bits` (signum).
 
 The update Δ_t = θ_t − θ lives in `--store`: `qN` (N-bit codes into a uniform f16 codebook, an f16 scale per group,
@@ -245,12 +247,19 @@ class Support:
 # ---- optimizers on the reduced gradient -------------------------------------------------------------------------------
 
 class Opt:
-    """`mom_bits` (muon, sign): a momentum buffer in N-bit codes (`Code`, `group`), 32 fp32, 0 none."""
+    """`mom_bits` (muon, sign): a momentum buffer in N-bit codes (`Code`, `group`), 32 fp32, 0 none.
 
-    def __init__(self, kind: str, shapes: dict, b1: float, b2: float, mom_bits: int, group: int, gen: torch.Generator):
+    `mom_rank` R (muon): the momentum lives in a rank-R subspace of each matrix's short side (GaLore's projection): every
+    `proj_every` steps P, the top R left singular vectors of the reduced gradient h (the matrix, transposed if tall), is
+    re-drawn and kept in bf16, M (R × the long side) is rotated into it, M ← b1 M + Pᵀ h at `mom_bits`, and the step is
+    NS(h + b1 P M)."""
+
+    def __init__(self, kind: str, shapes: dict, b1: float, b2: float, mom_bits: int, group: int, gen: torch.Generator,
+                 mom_rank: int = 0, proj_every: int = 100):
         self.kind, self.b1, self.b2, self.t = kind, b1, b2, 0
-        self.m, self.v, self.r, self.c = {}, {}, {}, {}
+        self.m, self.v, self.r, self.c, self.p = {}, {}, {}, {}, {}
         self.mom_bits, self.group, self.n = mom_bits, group, sum(math.prod(s) for s in shapes.values())
+        self.mom_rank, self.proj_every, self.shapes = mom_rank, proj_every, dict(shapes)
         self.mom_code = Code(mom_bits, group, gen) if 0 < mom_bits < 32 else None
         for n, sh in shapes.items():
             if kind == "adamw":
@@ -260,12 +269,15 @@ class Opt:
                 self.r[n] = torch.zeros(sh[0], device=DEV)
                 self.c[n] = torch.zeros(sh[1], device=DEV)
             elif mom_bits:
-                self.m[n] = torch.zeros(sh, device=DEV)
+                self.m[n] = torch.zeros((mom_rank, max(sh)) if mom_rank else sh, device=DEV)
 
     def state_bits(self) -> int:
         if self.kind in ("muon", "sign"):
-            return 0 if not self.mom_bits else 32 * self.n if self.mom_bits >= 32 else \
-                self.n * self.mom_bits + 16 * (self.n // self.group)
+            if not self.mom_bits:
+                return 0
+            n_m = sum(t.numel() for t in self.m.values())
+            basis = sum(16 * min(sh) * self.mom_rank for sh in self.shapes.values())
+            return basis + (32 * n_m if self.mom_bits >= 32 else n_m * self.mom_bits + 16 * (n_m // self.group))
         return 32 * sum(t.numel() for d in (self.m, self.v, self.r, self.c) for t in d.values())
 
     def tick(self) -> None:
@@ -290,6 +302,19 @@ class Opt:
             r, c = self.r[n] / (1 - b2 ** t), self.c[n] / (1 - b2 ** t)
             u = g / torch.outer(r / r.mean(), c).sqrt()
             return lr * u / max(1.0, float(u.pow(2).mean().sqrt()))
+        if self.kind == "muon" and self.mom_rank:
+            tall = g.shape[0] > g.shape[1]
+            h = g.T if tall else g
+            if (t - 1) % self.proj_every == 0:
+                p = torch.linalg.svd(h.float(), full_matrices=False)[0][:, :self.mom_rank]
+                if n in self.p:
+                    m = (p.T @ self.p[n].float()) @ self.m[n]
+                    self.m[n] = self.mom_code(m) if self.mom_code else m
+                self.p[n] = p.bfloat16()
+            p = self.p[n].float()
+            m = self._momentum(n, p.T @ h, 1.0)
+            u = h + b1 * (p @ m)
+            return lr * max(1.0, g.shape[0] / g.shape[1]) ** 0.5 * newton_schulz(u.T if tall else u)
         if self.kind == "muon":
             u = g + b1 * self._momentum(n, g, 1.0) if self.mom_bits else g
             return lr * max(1.0, g.shape[0] / g.shape[1]) ** 0.5 * newton_schulz(u)
@@ -298,6 +323,10 @@ class Opt:
     def flops(self, shapes: dict) -> int:
         n = sum(math.prod(s) for s in shapes.values())
         mom = (2 + (CODE_FLOPS if self.mom_code else 0)) * n if self.mom_bits else 0
+        if self.kind == "muon" and self.mom_rank:
+            r, nm = self.mom_rank, sum(t.numel() for t in self.m.values())
+            proj = sum(4 * r * math.prod(s) + 2 * min(s) * max(s) ** 2 // self.proj_every for s in shapes.values())
+            return sum(ns_flops(s) for s in shapes.values()) + 2 * n + proj + (3 + CODE_FLOPS) * nm
         if self.kind == "muon":
             return sum(ns_flops(s) for s in shapes.values()) + 2 * n + mom
         return {"adamw": 12, "adafactor": 14, "sign": 2}[self.kind] * n + mom
@@ -339,6 +368,8 @@ def main() -> int:
     ap.add_argument("--vote", action="store_true", help="1-bit messages as a majority vote (`Vote`), no scales")
     ap.add_argument("--tree", choices=("heap", "leaves"), default="heap")
     ap.add_argument("--mom-bits", type=int, default=0, help="muon and sign: the momentum's bits (0 none, 32 fp32)")
+    ap.add_argument("--mom-rank", type=int, default=0, help="muon: the momentum in a rank-R gradient subspace (`Opt`)")
+    ap.add_argument("--proj-every", type=int, default=100, help="--mom-rank: steps between the subspace's re-draws")
     ap.add_argument("--store", default="q8", help="qN (1 <= N <= 8) or bf16")
     ap.add_argument("--store-scale", choices=("tight", "sticky"), default="tight",
                     help="a qN store's f16 scales: re-fit to each group's absmax after every step, or sticky (`Store`)")
@@ -375,6 +406,9 @@ def main() -> int:
     sparse = a.support < 1
     if sparse and (a.opt == "muon" and a.mom_bits or not 1 <= a.e_bits <= 8):
         raise SystemExit("delta_grad: a sparse --support takes no muon momentum, and codes E at 1 <= --e-bits <= 8")
+    if a.mom_rank and (a.opt != "muon" or not a.mom_bits or sparse or a.lora or a.proj_every < 1):
+        raise SystemExit("delta_grad: --mom-rank is a dense muon's momentum (--mom-bits > 0, no --support, no --lora), "
+                         "with --proj-every >= 1")
     lora = a.lora > 0
     if lora and (sparse or a.e_bits not in prepare.LORA2_BITS):
         raise SystemExit(f"delta_grad: --lora takes no --support, and codes E as CWLORA2 at --e-bits in "
@@ -410,7 +444,11 @@ def main() -> int:
         stores[n + "#A"].add_(torch.randn(trained[n + "#A"], generator=gen, device=DEV) / math.sqrt(shapes[n][1]))
     e_code = Code(a.e_bits, a.group, gen) if sparse else None
     msg = Vote(gen) if a.vote else Code(a.msg_bits, a.group, gen) if a.msg_bits < 32 else None
-    opt = Opt(a.opt, opt_shapes, a.b1, a.b2, a.mom_bits, a.group, gen)
+    opt = Opt(a.opt, opt_shapes, a.b1, a.b2, a.mom_bits, a.group, gen, a.mom_rank, a.proj_every)
+    if a.mom_rank and any(a.mom_rank > min(s) for s in opt_shapes.values()):
+        raise SystemExit("delta_grad: --mom-rank exceeds a target's short side")
+    if a.mom_rank and a.mom_bits < 32 and any(a.mom_rank * max(s) % a.group for s in opt_shapes.values()):
+        raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every projected momentum's entries")
     for n in targets + norms:
         params[n].requires_grad_(True)
     nopt = torch.optim.AdamW([params[n] for n in norms], lr=a.norm_lr, betas=(0.9, 0.95), weight_decay=0.0) \
@@ -443,7 +481,8 @@ def main() -> int:
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fwd = torch.compile(net) if a.compile else net
     print(json.dumps({"mech": "dgrad", "opt": a.opt, "msg_bits": a.msg_bits, "store": a.store,
-                      "store_scale": a.store_scale, "lora": a.lora, "lr": a.lr,
+                      "store_scale": a.store_scale, "lora": a.lora, "mom_bits": a.mom_bits, "mom_rank": a.mom_rank,
+                      "lr": a.lr,
                       "steps": n_steps, "leaves": leaves, "targets": len(targets), "norms": len(norms),
                       "flops_per_step": per_step + extra, **{k: v for k, v in acct.items() if k != "fit"},
                       "fit": acct["fit"]}), flush=True)
