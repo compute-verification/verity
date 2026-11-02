@@ -113,7 +113,8 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
 - **Pinned version** (`pin.py`, `pinned.json` on `cursor/covert-witness-4207`): the one commit whose fixed side measures
   every candidate. launch.py ships it (a clean worktree of it under `~/.research/cw-pinned/`) whatever the candidate's
   checkout holds, and the witness and ledger records name it (`measurement_commit`); te_core's frontier leaves out a
-  record of any other commit (`other-version`) and one whose E an earlier record submitted (`duplicate-e`).
+  record of any other commit (`other-version`) and one whose E an earlier record at the pin, or another agent's at any
+  commit, submitted (`duplicate-e`).
 - **Nodes** (`nodes.txt`, `prep.sh`): a node is listed (`NODE pool=GPU_POOL cpu=CPU_POOL`) once `prep.sh`, run there
   in its CPU pool, has installed the starts, built the held-out sets (checked against `prepare.SET_SHA256`, left
   read-only) and registered the sealed start; on a prepared node it only checks. vy-nebius-1, -2 and -3 are listed.
