@@ -71,7 +71,7 @@ EOF
 session honest "" ""
 dev=$("$PY" -c "import json, sys; print(json.loads(open(sys.argv[1]).readline()).get('device_rounds', 0))" "$O/controls.jsonl")
 log "$tag: the honest session's device rounds: $dev"
-for c in ${FC_CONTROLS:-root witness label opening opening-frame algebra algebra-proof shape cut-rc cut-rc240 cut-panic cut-silent cut-decode cut-tree inner}; do
+for c in ${FC_CONTROLS:-root witness label opening opening-frame algebra steer algebra-proof shape cut-rc cut-rc240 cut-panic cut-silent cut-decode cut-tree inner}; do
   case $c in
     inner) for j in 0 1 2 3; do session "$c@$j" "$c" "$j"; done ;;
     cut-tree) for at in 0 $((dev / 2)); do session "$c@$at" "$c" "$at"; done ;;
@@ -87,7 +87,8 @@ import json, sys
 FW, DEV, FRAME = "FIREWALL-REFUSED: ", "FIREWALL-REFUSED: the device failed: ", "PROVER-STOPPED: the Lean frame stopped table 0 rep "
 EXPECT = {"root": (FW + "level-0 root: the device committed ", True), "witness": (FW + "level-0 root: the device committed ", True),
           "label": (FW + "the proof's exposed value ", True), "opening": ("", True), "opening-frame": ("", True),
-          "algebra": (FW + "circuit: the constraints ", False), "algebra-proof": (FW + "the proof's exposed value ", False),
+          "algebra": (FW + "circuit: the constraints ", False), "steer": (FW + "circuit: the constraints ", False),
+          "algebra-proof": (FW + "the proof's exposed value ", False),
           "shape": (FW + "the proof's shape ", False), "cut-rc": (DEV + "CUDA circuit prover returned error ", None),
           "cut-rc240": (DEV + "PROVER-STOPPED: degenerate coins: ", None), "cut-panic": (DEV + "panicked: ", None),
           "cut-silent": (DEV + "silent past the firewall's deadline", None), "cut-decode": (DEV + "the device's output does not decode", None),

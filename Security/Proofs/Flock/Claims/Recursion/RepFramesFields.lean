@@ -135,7 +135,7 @@ theorem repFrames_fields {st : Setup} {sch : Flock.Schedule} {nExtra : ℕ} {p p
 /-- **Two reps accepted on one stream agree before Ligerito**: two proof files that `verifyRep` accepts as rep `r` of
 table `i` of one session, where the rep's stream retained every round's bytes, decode at one shape to proofs with the
 same cap, zerocheck but for `finalC`, lincheck and ring switches, and the same Ligerito frames. -/
-theorem rep_bind_fields (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem rep_bind_fields (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) (hk : st.fold.kLog = st.kLog)
     (h : verifyRep spec st sch sess i r bytes = .ok cap) (h' : verifyRep spec st sch sess i r bytes' = .ok cap')

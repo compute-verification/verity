@@ -47,7 +47,7 @@ theorem zk_ligeritoWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Has
     challengeWith_sim S hh, oodIntroWith_sim S hh, queryLevelWith_sim S hh, zk_queryLevel0With_sim S hh]
 
 theorem zk_verifyRepWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
-    (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+    (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     S.R (Zk.verifyRepWith hs spec st sch tPad sess i r bytes) (Zk.verifyRepWith hs' spec st sch tPad sess i r bytes) := by
   unfold Zk.verifyRepWith
   sim_walk [zk_replayWith_sim S hh, ringSwitchWith_sim S hh, zk_ligeritoWith_sim S hh, zk_verifyInnerWith_sim S hh]
