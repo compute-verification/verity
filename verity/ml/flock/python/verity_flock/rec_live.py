@@ -24,7 +24,7 @@ fresh 192-byte salt), so the coin server holds one ``b || c`` a node and V*'s op
 registered value the verifier builds from them (`verity_flock.rec_outer`). The nodes and salts are the prover's
 (``private.json``). Level 0's cap reaches the ZK server three times (``Commit``, the rep's binding round, Ligerito's first
 absorb): it is committed once, at ``Commit``, and the ZK server refuses a binding round whose cap is not ``root_B``; a later
-copy is counted (``level0``), never committed again. A table with no root in the schedule's ``Commit`` (candidate 3's
+copy is counted (``level0``), never committed again. A table with no root in the schedule's ``Commit`` (the
 stacked table R) has its level-0 top committed as a salted top of its stream's binding round instead, and its later copies
 counted the same way. That top is registered with the private circuit at staging (`register_top`,
 `verity_flock.rec_session.stage_stacked`): its nodes are registered rows under salts sampled once, and the staged statement's
@@ -152,9 +152,9 @@ MASK64 = (1 << 64) - 1
 #: a flock-circuit statement's session (`schedule_for`): its one table, fast100's reps, the link's points (one ``y``
 #: element each, a table) and each point's free in-block coordinates (``circuit.rs`` ``PT_LOCAL``; ``nbl`` block ones follow)
 TABLE, REPS, LINK_POINTS, PT_LOCAL = "circuit", 2, 2, 24
-#: candidate 3's stacked table R (`stacked_rounds`)
+#: the stacked table R (`stacked_rounds`)
 STACKED = "stacked"
-#: candidate 3's sparse phase, a stream a rep (`sparse_rounds`), each its rep's child at the rep's end
+#: the sparse phase, a stream a rep (`sparse_rounds`), each its rep's child at the rep's end
 SPARSE = "sparse"
 #: the inner session's coin tree (`RecVStar.innerCoinSpec`): the session's stream, every stream a schedule may open
 #: (`schedule_for`), at ``flock-circuit``'s rounds and block; the prover names it with ``FC_COINS=tree`` and
@@ -489,7 +489,7 @@ def holo_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], i
 
 
 def stacked_rounds(m: int) -> list[tuple[int, list[int], int, int]]:
-    """The stream of the stacked table R (``2^m`` cells) that candidate 3's opening-only prover runs (``flock-circuit
+    """The stream of the stacked table R (``2^m`` cells) that the opening-only prover runs (``flock-circuit
     stacked``, its one rep): the binding round, which commits R's level-0 top (R has no root at ``Commit``; the top is the
     registered one, `register_top`) and also absorbs
     the first claim's s_hat_v and squeezes its ring switch's coins, then `rep_rounds`' second ring switch, the gammas and

@@ -263,8 +263,7 @@ What is changed:
    | 28–31 | 2^17–2^18 | 219 | 438 | ≥ 100 | 219 |
    | ≥ 32 | ≥ 2^19 | 218 | 436 | ≥ 100 | 218 |
 
-   At `m = 25..27` the counts are the ones the soundness lane and the red team agreed (computed with 64 more padding
-   symbols); elsewhere the least count. `--zk` refuses `m ≤ 24`, where no count reaches 100 bits at rate 1/2, and any
+   At `m = 25..27` the counts are computed with 64 more padding symbols; elsewhere they are the least count. `--zk` refuses `m ≤ 24`, where no count reaches 100 bits at rate 1/2, and any
    count below 100 bits (`zk_queries0`).
 
 **Zero knowledge for the session.** Fix every coin of the session (both reps' streams and the link points). The view is:
@@ -391,8 +390,8 @@ serialized), never from a proof.
 
 ## 9. M2: the verifier's coin commitment and the single-rewind simulator
 
-The design for malicious-verifier zero knowledge for one batched session, in the soundness lane's model (ASSUMPTIONS.md
-§2 and §6, DESIGN.md §11.1): the verifier commits to every coin before the prover's first message, then opens them round
+The design for malicious-verifier zero knowledge for one batched session, in the model of ASSUMPTIONS.md §2 and §6 and
+DESIGN.md §11.1: the verifier commits to every coin before the prover's first message, then opens them round
 by round, and a Goldreich–Kahan simulator rewinds once, to just after that commitment. The prover refuses the
 degenerate coins as they open (the Claim above).
 
