@@ -177,7 +177,7 @@ tests = ["tests/test_cache_redteam.py", "tests/test_cache_redteam_1176.py"]
 paths = ["tools/verity/circuit_check/src/circuit_check"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_metadata_files.py"]
+tests = ["tests/test_attention_split.py", "tests/test_metadata_files.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "tools/verity/circuit_check/src/circuit_check",
