@@ -1,6 +1,6 @@
 # covert_witness: the least compute that lowers a start's loss to a target, at every policy (c, k)
 
-The training formalism v1 (Daniel, 2 Nov; note:training-20261102T1817Z-report-training-formalism-v1) prices a training
+The training formalism v2 (Daniel, 2 Nov; note:training-20261102T2215Z-report-training-formalism-v2) prices a training
 computation C at a policy (c, k) by its slowdown ρ, so that |C|ρ is what the computation costs under that policy. This
 speedrun measures, per start (θ, ℓ0) and target ℓ*, the least |C|ρ of a valid candidate's checkpoint that reaches ℓ*
 (W*), against the least |C| of any valid candidate's checkpoint that reaches it (honest H), and S = W*/H ≥ 1. The inputs are
@@ -45,23 +45,27 @@ scores by the formalism. `pinned.json` names v2.3's commit until v3 is pinned.
   start's server block (c = C0, k = its training state beyond θ, 80 bits a parameter), with the reference policy of the
   experiments draft (c = 4096 w, one 4,096-token session per block, and k = 10 kB) between them. m100: c 1e11 to 1e21
   gates, k 1e4 to 1e10 bits, 77 cells; s100: c 1e10 to 1e20. `python -m te_core.policy` prints each start's.
-- **Per record** (`te_core.formalism`, written at ingest): per step structure, its gates, token blocks and dependent
-  gates (φ), and Δ_grad; τ, a, Δ (the whole update, Fit's), u(1) (the per-token update, Slowdown's; equal to Δ only
-  when every token's path reads the whole update) and the update profile u(x). At (c, k): w, s = c/w, x₀, Fit
-  (Δ + sτ ≤ k, and 2Δ_grad + sτ ≤ k for training: ρ = 1), else Slowdown's ρ = φ(1 − x₀)·s·a / max_x x(k − u(x)), a
-  target until Lean proves it. u(x), u(1), the frozen tail's share t and a are the best-known values from witnesses,
-  labelled upper bounds; a quantity te_core doesn't measure yet is a stub; the record's `labels` name each. Slowdown's
-  frozen-tail case has two readings, and Daniel decides which the theorem means: `literal-x0` (x₀ on the whole profile,
-  so x₀ ≥ t and the tail's work is exempt) and `tail-charged` (x₀ from the token's start, so the tail's work is
-  charged through a). They agree when t = 0, and every score carries both (`--reading`).
-- **Score** (`python -m te_core.frontier --formalism`): per start, target (`TARGETS`, drops below the start's bpb),
-  reading and cell, W* = the least |C|ρ over every checkpoint of every valid record that reaches ℓ*, H = the least |C|
-  over the same checkpoints (the coordinator's 19:50Z rule), and Security's S = W*/H, with no headline S. **Plots**
-  (`python -m te_core.plots --out DIR`): P1-P4 of the experiments draft and the A2 curve (the least compute to each
-  target against Δ, per start; Δ's bins, never caps), as the console's five panels, each `<name>.json` with a `reading`
-  column and a PNG made from it. **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`): the same score
-  and panels over the pin's valid records, each with the formalism block built from `analysis/rescore_v1.py`'s
-  per-record quantities (from the scorer's directory), or the stubs with `--stubs`.
+- **Per record** (`te_core.formalism`, written at ingest): per step structure, its gates, the gates in token blocks
+  (σ, their share of |C|), the affected gates A and Δ_grad; τ, a, Δ (the whole update, Fit's), d (the decoder's gates),
+  u(1) (the per-token update; equal to Δ only when every token's path reads the whole update) and the update profiles
+  u(x) and u_in(x) (a block computing the token from its inputs, in dependency order), both counting update bits only.
+  At (c, k): w, s = c/w, then Fit, checked per kind of block (compute Δ + sτ ≤ k, reduction 2Δ_grad ≤ k, update
+  application Δ + Δ_grad ≤ k), where ρ = c/(c − d), and elsewhere Slowdown's token form ρ ≥ σ(1 − x₀)·s/s\* (with the
+  largest per-token affected count where token blocks vary), a target until Lean proves it. The claim takes the
+  assumptions' upper bounds, s\* ≤ max_x x(k − u(x))/a (A1) and x₀ ≤ max{x : u_in(x) ≤ k} (A1'); a frozen tail of
+  share t is always charged (u is 0 up to t, u_in jumps to the changed update at once). The attack side's best-known x₀
+  and s\* are reported beside them (`x0_known`, `s_star_known`: tightness, never the claim). u and u_in are labelled
+  assumptions, a and Δ upper bounds from witnesses, a quantity te_core doesn't measure yet a stub; the record's
+  `labels` name each.
+- **Score** (`python -m te_core.frontier --formalism`): per start, target (`TARGETS`, drops below the start's bpb) and
+  cell, W* = the least |C|ρ over every checkpoint of every valid record that reaches ℓ*, H = the least |C| over the same
+  checkpoints (the coordinator's 19:50Z rule), and Security's S = W*/H. **Plots** (`python -m te_core.plots --out
+  DIR`): P1-P4 of the experiments draft and the A2 curve (the least compute to each target against Δ, per start; Δ's
+  bins, never caps), as the console's five panels, each `<name>.json` and a PNG made from it; `python -m te_core.console
+  DIR [--publish]` cuts each to the panels route's limits and PUTs it. **Re-scoring v2.3's records** (`python -m
+  te_core.rescore --out DIR [--publish]`): the same score and panels over the pin's valid records, each with the
+  formalism block built from `analysis/rescore_v1.py`'s per-record quantities (from the scorer's directory), or the
+  stubs with `--stubs`.
 
 **Budget**: 2x the MACs the harness counts ≤ 9e16 x 1.1 (`TRAIN_FLOP_BUDGET`, about 10 GPU-minutes of m's dense AdamW at
 its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and optimizer work the analytic meter leaves
@@ -171,9 +175,9 @@ FILE (default `train.py`), and nothing else of the checkout is used.
 `starts.py --size s|m` built the starts once (one GPU); `prep.sh` prepares a node (`data.py`,
 `prepare.register_pythia()`, the starts from the store); `evaluate.py --start NAME --out F` scores a start on the whole
 search pool. `CW_DEVICE=cpu CW_LEASE=none` runs candidate.sh on a CPU for a smoke test.
-`analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v1
-(note:training-20261102T1817Z-report-training-formalism-v1), analytically: gates, token blocks, φ, Δ, Δ_grad, the frozen
-tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore` scores them. Its docstring
+`analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2
+(note:training-20261102T2215Z-report-training-formalism-v2), analytically: gates, token blocks' gates, σ, the affected
+gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore` scores them. Its docstring
 lists the approximations.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in
