@@ -360,8 +360,8 @@ def train(a) -> int:
     ck = a.work / "ckpt.pt"
     if ck.is_file():
         st = torch.load(ck, map_location=dev, weights_only=False)
-        if st["plan"] != pl or st["size"] != a.size:
-            raise SystemExit(f"ladder: {ck} is another run's (plan or size differ)")
+        if st["plan"] != pl or st["size"] != a.size or st.get("optimizer") != opt_card(a):
+            raise SystemExit(f"ladder: {ck} is another run's (plan, size or optimizer differ)")
         model.load_state_dict(st["model"])
         for o, s in zip(opts, st["opts"]):
             o.load_state_dict(s)
@@ -371,7 +371,7 @@ def train(a) -> int:
     def save(at: int) -> None:
         if rank == 0:
             tmp = ck.with_suffix(".tmp")
-            torch.save({"plan": pl, "size": a.size, "step": at, "done": sorted(done), "evals": evals,
+            torch.save({"plan": pl, "size": a.size, "optimizer": opt_card(a), "step": at, "done": sorted(done), "evals": evals,
                         "model": model.state_dict(), "opts": [o.state_dict() for o in opts]}, tmp)
             os.replace(tmp, ck)
         if world > 1:
@@ -439,7 +439,7 @@ def train(a) -> int:
                     "c0": {"macs": macs_step * b["steps"] if macs_step else None, "macs_per_step": macs_step,
                            "counter": "te_core.flops.Counter (ladder.py count)"},
                     "search_pool": official, "run": os.environ.get("RESEARCH_RUN_ID", ""),
-                    "commit": os.environ.get("LADDER_COMMIT", "")}
+                    "commit": os.environ.get("LADDER_COMMIT") or os.environ.get("RESEARCH_SOURCE_SHA", "")}
             reg = prepare.register_start(name, theta, size.config(), "gpt2", prov, root=a.work / "starts")
             log(registered=name, digest=reg["digest"], bpb=official["bpb"])
         if world > 1:
