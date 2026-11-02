@@ -11,7 +11,9 @@ The score is te_core's alone (coordinator 20:15Z: one codebase, `te_core.rescore
    v2.3 record, rescore_v1.py's quantities (Delta, u(1), Delta_grad, phi, the frozen tail's share t), Fit (running and
    training) and the Slowdown theorem's rho (a target) on te_core.policy's (c, k) grid under both readings of its
    frozen-tail case (literal-x0 and tail-charged, no headline S), H and W* over every checkpoint of every valid record
-   (19:50Z), S = W*/H; frontier.md/json, formalism.jsonl and the console's five panels with their PNGs.
+   (19:50Z), S = W*/H; frontier.md/json, formalism.jsonl and the console's five panels with their PNGs. Then
+   v1runs.py gives A2 and P4 one row per valid run and target from te_core's same rows (coordinator 20:52Z), which
+   replace te_core's staircase and per-algorithm rows in those two panels (kept beside them as te_core-<plot>.json).
 3. Publishes the tables and each panel (its JSON and PNG) to the evidence store, writes each panel's console cut (the
    route's body and note limits, `console`) to /opt/cursor/artifacts/te-panels/, PUTs them, and posts one DIGEST line
    with the art ids. `--reput OUT` re-cuts a finished refresh's panels and PUTs them, with nothing re-scored.
@@ -44,9 +46,11 @@ NIGHT2 = "2026-11-02T19:15:00Z"
 BINS = (("<=10kB", 8e4), ("<=100kB", 8e5), ("<=1MB", 8e6))
 BODY_MAX = 65536
 NOTE_MAX = 500
-COMMON = ("reading: literal-x0 and tail-charged, Slowdown's two frozen-tail readings (Daniel decides; no headline S). "
-          "basis: fit = rho 1 by Fit for the training; target = Slowdown's bound, unproved. Delta, u(1), t, a: upper "
-          "bounds from witnesses; tau a stub. One seed. Full panel: evidence store.")
+COMMON = ("reading: literal-x0, tail-charged (Slowdown's frozen-tail case; Daniel decides; no headline S). basis: fit = "
+          "rho 1 by Fit for the training; target = Slowdown's bound, unproved. Delta, u(1), t, a: witness upper bounds; "
+          "tau a stub. One seed. Full panels: evidence store.")
+PER_RUN = ("Per valid v2.3 run, target and reading, its least-compute checkpoint reaching the target (every checkpoint, "
+           "19:50Z); variant: its launch note's label.")
 SHORT = {
     "p1-loss-vs-compute": "Loss (val bpb) against compute after theta, every checkpoint of every valid v2.3 record: "
                           "honest |C| (gates), covert |C| rho at c=4096w k=10kB, covert-policy at other (c, k).",
@@ -54,12 +58,14 @@ SHORT = {
                            "valid v2.3 record, so S >= 1. g null until the ladder's F.",
     "p3-policy-plane": "S = W*/H over te_core.policy's (c, k) grid and each start's marked shapes, k in bits; H and W* "
                        "over every checkpoint of every valid v2.3 record.",
-    "p4-decomposition": "Per valid v2.3 record reaching the target, at c=4096w k=10kB: p = |C|/H, s = rho, S = p s.",
-    "a2-efficiency-floor": "Least compute (gates) to each target against Delta, per start, every checkpoint of every "
-                           "valid v2.3 record; fit_*_k_bits: least k where Fit holds at c=4096w. No rho: readings agree.",
+    "p4-decomposition": f"{PER_RUN} At c=4096w k=10kB: p = |C|/H, s = rho, S = p s.",
+    "a2-efficiency-floor": f"{PER_RUN} The floor is their frontier; fit_*_k_bits: least k where Fit holds at c=4096w.",
 }
 BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
 LEAN = ("start_id", "checkpoint", "method", "family")
+RUNS_LEAN = ("start_id", "record", "checkpoint", "size", "saturation", "compute_frac", "g", "seeds")
+PER_RUN_PANELS = ("a2-efficiency-floor", "p4-decomposition")
+VARIANT_LABEL = 40
 
 
 def fmt(x) -> str:
@@ -97,12 +103,16 @@ def rescore(out: Path, gates: Path) -> str:
     ledger = os.environ.get("TE_LEDGER", str(Path.home() / ".research" / "te-ledger"))
     cmd = [sys.executable, "-m", "te_core.rescore", "--out", str(out), "--root", ledger, "--scorer", str(S.STATE)]
     cmd += [x for p in PINS for x in ("--pin", p)]
-    r = subprocess.run(cmd, cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True,
-                       check=False)
-    (out / "rescore.log").write_text(r.stdout + r.stderr)
-    if r.returncode:
-        raise SystemExit(f"v1cycle: te_core.rescore failed (rc {r.returncode}):\n{r.stderr[-2000:]}")
-    return r.stdout.strip().splitlines()[-1]
+    runs = [sys.executable, str(HERE / "v1runs.py"), *cmd[3:]]
+    logs = []
+    for c in (cmd, runs):
+        r = subprocess.run(c, cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True,
+                           check=False)
+        logs.append(r.stdout + r.stderr)
+        (out / "rescore.log").write_text("\n".join(logs))
+        if r.returncode:
+            raise SystemExit(f"v1cycle: {' '.join(c[1:3])} failed (rc {r.returncode}):\n{r.stderr[-2000:]}")
+    return logs[0].strip().splitlines()[-1]
 
 
 def body(p: dict) -> bytes:
@@ -114,10 +124,10 @@ def frame(p: dict) -> list[dict]:
     return [{c: r[i] for c, i in ix.items()} for r in p["rows"]]
 
 
-def compact(p: dict, keep=lambda r: True, drop: tuple = ()) -> dict:
-    """`p` with the rows `keep` takes, without the columns `drop`, booleans as yes/no and numbers to 4 significant
-    digits (losses 6)."""
-    ix = {c: i for i, c in enumerate(p["columns"])}
+def compact(p: dict, keep=lambda r: True, drop: tuple = (), fix=None) -> dict:
+    """`p` with the rows `keep` takes (each through `fix`), without the columns `drop`, booleans as yes/no and numbers
+    to 4 significant digits (losses 6)."""
+    cols = [c for c in p["columns"] if c not in drop]
 
     def val(c, v):
         if isinstance(v, bool):
@@ -125,9 +135,19 @@ def compact(p: dict, keep=lambda r: True, drop: tuple = ()) -> dict:
         if isinstance(v, float):
             return round(v, 6) if c in ("loss", "loss_lo", "loss_hi", "l0") else float(f"{v:.4g}")
         return v
-    rows = [[val(c, r[i]) for c, i in ix.items() if c not in drop] for r in p["rows"]
-            if keep({c: r[i] for c, i in ix.items()})]
-    return p | {"columns": [c for c in p["columns"] if c not in drop], "rows": rows}
+    rows = []
+    for d in frame(p):
+        if keep(d):
+            d = fix(d) if fix else d
+            rows.append([val(c, d[c]) for c in cols])
+    return p | {"columns": cols, "rows": rows}
+
+
+def variant_label(d: dict) -> dict:
+    """The row with its variant cut to the launch note's label (the text before its first colon), at most
+    VARIANT_LABEL characters."""
+    v = d.get("variant")
+    return d | {"variant": v.split(":")[0][:VARIANT_LABEL]} if v else d
 
 
 def thin(p: dict) -> dict:
@@ -149,27 +169,45 @@ def thin(p: dict) -> dict:
 
 
 def console(P: dict) -> dict:
-    """Each of te_core's panels cut to the route's limits (a body of BODY_MAX bytes, a note of NOTE_MAX characters):
-    the short note, and the first of its cuts that fits, which the note names. Every cut keeps both readings."""
+    """Each panel cut to the route's limits (a body of BODY_MAX bytes, a note of NOTE_MAX characters): the short note,
+    and the first of its cuts that fits, which the note names. Every cut keeps both readings, except A2's second and
+    third, whose rows agree under both (A2 reads no rho) and so are one row each, `reading` both."""
     def ref(r):
         return r["target_pct"] == REF_TARGET
+
+    def one(r):
+        return r["reading"] == READINGS[0]
+
+    def both(d):
+        return variant_label(d) | {"reading": "both"}
     out = {}
     for pid, p in P.items():
-        tries = [("", lambda r: True, LEAN)]
+        tries = [("", lambda r: True, LEAN, None)]
         if pid == "p1-loss-vs-compute":
             p = thin(p)
             tries += [(f" The band here: {', '.join(BAND_FEW)}.",
-                       lambda r: r["curve"] != "covert-policy" or r["policy"] in BAND_FEW, LEAN),
+                       lambda r: r["curve"] != "covert-policy" or r["policy"] in BAND_FEW, LEAN, None),
                       (f" The band here: {BAND_FEW[1]}.",
-                       lambda r: r["curve"] != "covert-policy" or r["policy"] == BAND_FEW[1], LEAN),
-                      (" No band here.", lambda r: r["curve"] != "covert-policy", LEAN)]
-        elif pid in ("p3-policy-plane", "p4-decomposition"):
-            tries += [(" Here -1% only.", ref, LEAN),
-                      (" Here -1% only, no record column.", ref, (*LEAN, "record")),
+                       lambda r: r["curve"] != "covert-policy" or r["policy"] == BAND_FEW[1], LEAN, None),
+                      (" No band here.", lambda r: r["curve"] != "covert-policy", LEAN, None)]
+        elif pid == "p3-policy-plane":
+            tries += [(" Here -1% only.", ref, LEAN, None),
+                      (" Here -1% only, no record column.", ref, (*LEAN, "record"), None),
                       (" Here -1% only, no record, g, k_bytes or p (= S/rho).", ref,
-                       (*LEAN, "record", "g", "k_bytes", "p"))]
-        for why, keep, drop in tries:
-            q = compact(p, keep, drop)
+                       (*LEAN, "record", "g", "k_bytes", "p"), None)]
+        elif pid == "a2-efficiency-floor":
+            tries = [("", lambda r: True, RUNS_LEAN, variant_label),
+                     (" Rows: reading both (A2 reads no rho).", one, RUNS_LEAN, both),
+                     (" Rows: reading both (A2 reads no rho); here -1% only.", lambda r: one(r) and ref(r), RUNS_LEAN,
+                      both)]
+        elif pid == "p4-decomposition":
+            tries = [("", lambda r: True, RUNS_LEAN, variant_label),
+                     (" No fit_*_k_bits here (A2 has them).", lambda r: True,
+                      (*RUNS_LEAN, "fit_run_k_bits", "fit_train_k_bits"), variant_label),
+                     (" Here -1% only.", ref, RUNS_LEAN, variant_label),
+                     (" Here -1% only, no variant.", ref, (*RUNS_LEAN, "variant"), None)]
+        for why, keep, drop, fix in tries:
+            q = compact(p, keep, drop, fix)
             note = f"{SHORT[pid]}{why} {COMMON}"
             q["note"] = note if len(note) <= NOTE_MAX else note[:NOTE_MAX - 1] + "…"
             if len(body(q)) <= BODY_MAX:
@@ -250,10 +288,13 @@ def main() -> int:
               f"{len(scored)} valid v2.3 checkpoints)")
     P = {}
     for pid in PLOT_OF.values():
-        P[pid] = json.loads((rs / f"{pid}.json").read_text()) | {"source": source}
+        own = rs / (f"runs-{pid}.json" if pid in PER_RUN_PANELS else f"{pid}.json")
+        P[pid] = json.loads(own.read_text()) | {"source": source}
     C = console(P)
     PANELS_DIR.mkdir(parents=True, exist_ok=True)
     for key, pid in PLOT_OF.items():
+        if pid in PER_RUN_PANELS:
+            (trees[key] / f"te_core-{pid}.json").write_bytes((rs / f"{pid}.json").read_bytes())
         (trees[key] / f"{pid}.json").write_text(json.dumps(P[pid]) + "\n")
         (trees[key] / f"{pid}.console.json").write_bytes(body(C[pid]) + b"\n")
         (trees[key] / f"{pid}.png").write_bytes((rs / f"{pid}.png").read_bytes())
