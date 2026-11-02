@@ -33,9 +33,12 @@ At (c, k), per part: w = |C_j| / tokens, s = c / w, φ = dep_gates / |C_j|, and
     it), so the tail's work is charged through a (a block doing only the tail must be handed each token's state after
     the update, A1's a·m term): ρ ≈ φ(1 − k/u(1))·s·a / (t·k).
 
-The part's ρ is 1 when training fits, else max(1, Slowdown's); a part where both fit and Slowdown's bound exceeds 1 is
-flagged (`fit-over-slowdown`: the fitting partition would refute A1, or the measurement is wrong). The record's ρ is the
-parts' |C_j|-weighted mean, so |C|ρ is the sum of their blocks' gates.
+  Where Δ counts, u(x) is at most Δ (`capped`): a block can read the whole update code instead, a witness the record
+  exhibits (the checkpoint's, for every step of its prefix). So wherever Fit holds, u ≤ Δ ≤ k, x₀ = 1 and Slowdown's
+  bound is 0: the two theorems never disagree.
+
+The part's ρ is 1 when training fits, else max(1, Slowdown's). The record's ρ is the parts' |C_j|-weighted mean, so
+|C|ρ is the sum of their blocks' gates.
 
 Where the quantities come from (`measure`): a row's `formalism` block, which ingest writes from the run record
 (`of_record`) or a re-score attaches (te_core.rescore), else the stubs below from a v2.3 row's own fields. te_core
@@ -54,7 +57,6 @@ from dataclasses import asdict, dataclass, field
 from .gates import of_log, per_mac
 
 ACT_BITS = 16
-FIT_OVER_SLOWDOWN = "fit-over-slowdown"
 LITERAL, TAIL_CHARGED = "literal-x0", "tail-charged"
 READINGS = (LITERAL, TAIL_CHARGED)
 
@@ -120,6 +122,16 @@ def even(u1: float) -> tuple[tuple[float, float], ...]:
     return ((0.0, 0.0), (1.0, float(u1)))
 
 
+def capped(u, cap: float) -> tuple[tuple[float, float], ...]:
+    """min(u(x), cap) at every x, as points: a segment crossing `cap` gets its crossing point."""
+    out = [(u[0][0], min(u[0][1], cap))]
+    for (x0, b0), (x1, b1) in zip(u, u[1:]):
+        if x1 > x0 and (b0 - cap) * (b1 - cap) < 0:
+            out.append((x0 + (x1 - x0) * (cap - b0) / (b1 - b0), cap))
+        out.append((x1, min(b1, cap)))
+    return tuple(out)
+
+
 def with_tail(u, t: float) -> tuple[tuple[float, float], ...]:
     """The whole profile: the least of the from-start profile `u` and a frozen tail's, whose block does only the tail's
     share t of a token's dependent work (the frozen layers above the highest update) and reads no update bits, so 0 up
@@ -169,9 +181,10 @@ def at(m: Measured, c: float, k: float, reading: str) -> dict:
     if reading not in READINGS:
         raise ValueError(f"reading {reading!r}: one of {', '.join(READINGS)}")
     delta = m.delta_bits if m.decoder_gates is None or m.decoder_gates <= c else None
-    whole = with_tail(m.u, m.tail_share)
-    x0, r = bottom_share(whole if reading == LITERAL else m.u, k), room(whole, k)
-    parts, blocks, flags = [], 0.0, []
+    u = m.u if delta is None else capped(m.u, delta)
+    whole = with_tail(u, m.tail_share)
+    x0, r = bottom_share(whole if reading == LITERAL else u, k), room(whole, k)
+    parts, blocks = [], 0.0
     for p in m.parts:
         w = p.gates / p.tokens if p.tokens else math.inf
         s = c / w
@@ -180,13 +193,11 @@ def at(m: Measured, c: float, k: float, reading: str) -> dict:
         fit_train = fit_inf and p.delta_grad_bits is not None and 2 * p.delta_grad_bits + s * m.tau_bits <= k
         bound = phi * (1 - x0) * s * m.a_bits / r if r > 0 else (0.0 if phi * (1 - x0) == 0 else math.inf)
         rho = 1.0 if fit_train else max(1.0, bound)
-        if fit_train and bound > 1:
-            flags.append(FIT_OVER_SLOWDOWN)
         parts.append({"w": w, "s": s, "phi": phi, "fit": fit_inf, "fit_training": fit_train, "slowdown": bound,
                       "rho": rho})
         blocks += p.gates * rho
     return {"c": c, "k": k, "reading": reading, "x0": x0, "room": r, "delta_counted": delta is not None, "parts": parts,
-            "rho": blocks / m.gates if m.gates else 1.0, "flags": sorted(set(flags))}
+            "rho": blocks / m.gates if m.gates else 1.0}
 
 
 def rhos(m: Measured, cells: dict[str, tuple[float, float]],

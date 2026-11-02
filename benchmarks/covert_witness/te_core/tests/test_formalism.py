@@ -60,15 +60,32 @@ def test_the_frozen_tail_profile_is_zero_up_to_t_then_the_from_start_profile():
     assert F.with_tail(F.even(u1), 0.0) == F.even(u1)
 
 
-def test_fit_makes_rho_one_and_flags_a_slowdown_bound_above_it():
+def test_fit_makes_rho_one_and_slowdown_agrees_through_the_delta_cap():
+    """Where Fit holds, Δ ≤ k bounds u (`capped`), so x₀ = 1 and Slowdown's bound is 0 under both readings."""
     k = 1e9
     fits = measured(u1=1e6, dgrad=1e6)
     assert at(fits, 1e13, k)["rho"] == 1.0
     assert at(fits, 1e13, k)["parts"][0]["fit_training"]
     no_grad = measured(u1=1e6)
     assert at(no_grad, 1e13, k)["parts"][0]["fit"] and not at(no_grad, 1e13, k)["parts"][0]["fit_training"]
-    wide = at(measured(u1=1e8, delta=1e3, dgrad=1e3), 1e13, 1e6)
-    assert wide["rho"] == 1.0 and wide["flags"] == [F.FIT_OVER_SLOWDOWN]
+    for reading in F.READINGS:
+        wide = F.at(measured(u1=1e8, delta=1e3, dgrad=1e3, tail=0.5), 1e13, 1e6, reading)
+        assert wide["rho"] == 1.0 and wide["x0"] == 1.0 and wide["parts"][0]["slowdown"] == 0.0
+
+
+def test_u_is_at_most_delta_where_delta_counts():
+    """A traced profile above Δ is cut at Δ (a block reads the update code instead), at the crossing point of each
+    segment; a decoder wider than c leaves it as traced."""
+    u = ((0.0, 0.0), (0.5, 10.0), (0.75, 40.0), (1.0, 40.0))
+    cut = F.capped(u, 20.0)
+    assert [x for x, _ in cut] == pytest.approx([0.0, 0.5, 0.5 + 0.25 / 3, 0.75, 1.0])
+    assert [b for _, b in cut] == [0.0, 10.0, 20.0, 20.0, 20.0]
+    assert F.capped(u, 50.0) == u and F.capped(u, 10.0)[1:] == ((0.5, 10.0), (0.75, 10.0), (1.0, 10.0))
+    k, c = 30.0, 1e13
+    m = measured(u=u, delta=20.0)
+    assert at(m, c, k)["x0"] == 1.0 and at(m, c, k)["room"] == pytest.approx(k - 20.0)
+    wide = measured(u=u, delta=20.0, decoder=1e14)
+    assert at(wide, c, k)["x0"] == pytest.approx(0.5 + 0.25 * 2 / 3)
 
 
 def test_fit_k_is_the_least_k_at_which_fit_holds():
@@ -84,17 +101,22 @@ def test_fit_k_is_the_least_k_at_which_fit_holds():
 
 
 def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
-    """A small total update (Fit's Δ) with a large per-token update (Slowdown's u(1)) fits for running, while the
-    Slowdown bound reads u(1); the record says which value each came from."""
-    row = {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": {}}}
+    """A total update (Fit's Δ) larger than the per-token update (Slowdown's u(1)), as for an update each token's path
+    reads only part of: Fit fails on Δ while the Slowdown bound reads u(1). With a small Δ the record fits for running
+    and Δ bounds u too. The record says which value each came from."""
+    row = {"output": {"e_bytes": 10**9}, "macs_log": {"by": {}, "ops": {}}}
     part = {"gates": 1e12, "tokens": 1e3, "dep_gates": 5e11, "steps": 1, "delta_grad_bits": None}
-    m = F.complete({"parts": [part], "u1_bits": 1e9, "labels": {"u1_bits": "upper bound (witness): a test"}}, row, SHAPE)
-    assert (m.delta_bits, m.u1_bits, m.u, m.tail_share) == (80, 1e9, F.even(1e9), 0.0)
+    f = {"parts": [part], "u1_bits": 1e9, "labels": {"u1_bits": "upper bound (witness): a test"}}
+    m = F.complete(f, row, SHAPE)
+    assert (m.delta_bits, m.u1_bits, m.u, m.tail_share) == (8e9, 1e9, F.even(1e9), 0.0)
     assert m.labels["u1_bits"] == "upper bound (witness): a test" and m.labels["u"] == F.STUBS["u"]
     k = 1e6
     r = at(m, 1e13, k)
-    assert r["parts"][0]["fit"] and not r["parts"][0]["fit_training"] and r["x0"] == pytest.approx(k / 1e9)
+    assert not r["parts"][0]["fit"] and r["x0"] == pytest.approx(k / 1e9)
     assert r["rho"] == pytest.approx(4 * 0.5 * 1e4 * 512 * 16 * 1e9 / k ** 2, rel=2e-3)
+    small = at(F.complete(f, row | {"output": {"e_bytes": 10}}, SHAPE), 1e13, k)
+    assert small["parts"][0]["fit"] and not small["parts"][0]["fit_training"]
+    assert small["x0"] == 1.0 and small["rho"] == 1.0
     with pytest.raises(ValueError):
         F.complete({"parts": [part], "u": [[0, 0], [1, 5.0]], "u1_bits": 6.0}, row, SHAPE)
 

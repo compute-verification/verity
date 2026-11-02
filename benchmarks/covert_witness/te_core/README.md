@@ -37,7 +37,8 @@ GEMM MAC being `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 = 1,480.1), every o
 - **a**: the bits that hand a block one token's state mid-path: the narrowest cut across the forward's dependent path,
   per consumed token.
 - **u(x)** (v2's u_in): the update bits a block reads to do the first share x of one token's dependent work, in
-  program order; u(1) its per-token update. **t**: the share of that work in ops that read no θ' value at all.
+  program order; u(1) its per-token update. Where Δ counts, u(x) is at most Δ (a block can read the update code
+  instead). **t**: the share of that work in ops that read no θ' value at all.
 - **Δ**: the bits that describe θ' given θ, 8 |E| for the submitted E (its decoder assumed to fit in c, a label).
 - **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut at
   32 bits or more an element, plus the carried state the token ops don't read.
