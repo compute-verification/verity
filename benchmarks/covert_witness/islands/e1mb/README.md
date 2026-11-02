@@ -10,7 +10,7 @@ Anything that fits the bytes is fair: which tensors, rank per tensor, bf16 or f1
 
 ## Your loop
 
-1. Pick a start (`s50`, `s100`, `m50`, `m100`, `smollm2`; m100 is the main one) and a hypothesis.
+1. Pick a start (`s50`, `s100`, `m50`, `m100`; m100 is the main one) and a hypothesis.
 2. Edit `islands/e1mb/train.py` only. Commit it (the run ships HEAD and its record names the commit).
 3. Run the candidate: `python benchmarks/covert_witness/launch.py e1mb START --note "HYPOTHESIS" -- TRAIN_ARGS`. It runs on
    vy-nebius-2 (one GPU, the `gpu` slot pool), waits for it, puts the run's `out/` in the evidence store
