@@ -42,7 +42,7 @@ nins past the window; an append to a full table.
 L max_model_len. Widths: EW = bitlen(N) (an entry or ROOT), KU = ⌈L / U⌉, HW = bitlen(KU), LW = bitlen(L). Every field
 is little-endian.
 
-**Composition** (PROTOCOL.md, "Advice v1"): the calls follow `ReplayStep_v1`'s scheduling order, the running rows first.
+**Composition**: the calls follow `ReplayStep_v1`'s scheduling order, the running rows first.
 An admitting candidate's call (nins = 0) derives the longest cached prefix. The hit `ReplayStep_v1` reads is that
 prefix less the candidate's shortfall (0 while the bound holds, advice v1's sent one past it). A second call, from
 the hit's trail entry, computes the units the row completes. r is the row's I1 request number. The replay's state chain
@@ -57,7 +57,7 @@ masked write to every entry. A call costs KU units plus its range checks: 5,856 
 (8, 4, 8, 4, 32) (5,701 lowered), 18,658 at (8, 16, 17, 10, 64), 5.42M at the difftest's (128, 16, 17, 7, 1168), and
 at smallkv's (511, 16, 17, 10, 2048) 300,049 a unit and 38.4M a call. A linear table is the size class of a slice. The
 full session scales by offline memory checking: it sorts the session's unit operations by key and time, as
-`advice_check` sorts its events, at O(log² E) a unit for E operations in all. PROTOCOL.md has the estimate.
+`advice_check` sorts its events, at O(log² E) a unit for E operations in all.
 """
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """An AEAD built from SHA-512 alone, with its whole 64-byte output: counter mode over a keyed SHA-512, then HMAC-SHA512
 over the nonce and the ciphertext (encrypt-then-MAC). It seals the frames between two of the auditor's network
-certifiers (`verity.core.protocols.certifier.active.Pair`, the certifier's `PROTOCOL.md`, "Sealed pair links").
+certifiers (`verity.core.protocols.certifier.active.Pair`).
 
 H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104) and [x] is u16be len(x) ‖ x.
 
@@ -19,7 +19,9 @@ rest on, and every input has one length, so length extension doesn't arise. Coun
 nonce repeats under a key (Bellare, Desai, Jokipii, Rogaway 1997); HMAC-SHA512 is a PRF under the same assumption
 (Bellare 2006), so a strongly unforgeable MAC; encrypt-then-MAC with the nonce under the tag is IND-CCA and INT-CTXT
 (Bellare, Namprempre 2000; scheme N2 of Namprempre, Rogaway, Shrimpton 2014). The caller never seals two frames at one
-nonce under one key, and gives every frame of one key the same length, so N ‖ C needs no length field.
+nonce under one key. N has one length, so N ‖ C needs no length field and frames of different lengths may share a key;
+the certifier gives every frame of one key the same length, which hides lengths, and `transport` pads each frame to its
+declared size.
 
 Standard library only.
 """

@@ -148,7 +148,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "M1", "M2" (elsewhere in the code also unrelated things) | Flock ZK |
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
-| "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
+| "network transparency"; the `network-transparency/` paths the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
 | "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
@@ -158,8 +158,8 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "GPU workers" | workers |
 | "netlist"; C-Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` | spec |
-| "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`HorizonSampling`, `RateHorizon`, `ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until they are renamed | monitoring period (`horizon` is its pooled reading) |
-| "block" for a part of the device graph; `datacenter.physical.Block`, `block_of`, `network_sim`'s `--blocks` flag | zone |
+| "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until renamed | monitoring period (`horizon` is its pooled reading) |
+| "block" for a part of the device graph; `Datacenter.blocks`, `block_of`, `network_sim`'s `--blocks` flag | zone |
 | "block", "thread block" for CUDA's unit of a launch; CUDA's `blockIdx`, `blockDim` | CTA |
 | "block" for a kernel's tile of a tensor; the Definitions `AttnBlock_v*`, `AttnBlockSoftcap_v*`, `AttnBlockFA3_v1`, `SparseMlaBlock_v1`, `TritonBlockRMSNorm_v1`, `MoeAlignBlocks_v1`, Triton's `BLOCK_*` | tile |
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until renamed; BLAKE3's own terms | chunk (a compression's 1024 bits) |
@@ -183,6 +183,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |
+| "timestep" (for `every` buckets) | slot stride: `every` buckets (`every` stays until a format version) |
 | "Commit window", for the steps one Commit covers | Commit period |
 | "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the ZK server's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |

@@ -1,4 +1,4 @@
-"""Advice v0: what serving decided, as one canonical bit string per certifier session (PROTOCOL.md, "Advice v0").
+"""Advice v0: what serving decided, as one canonical bit string per certifier session.
 
 The precommitted AOT compiler turns the advice into each executed engine step's circuit; the certifier certifies the
 I/O; sampled proofs hold the committed values to the compiled circuits and to the certified I/O. v0 is the committed

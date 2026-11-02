@@ -1,4 +1,4 @@
-"""Advice v0 (`advice`, PROTOCOL.md "Advice v0"): the round trip, the bit layout rebuilt field by field from the
+"""Advice v0 (`advice`): the round trip, the bit layout rebuilt field by field from the
 documented one and pinned on a fixture, the split by window summing to the total, and the refusals of malformed advice
 and of every byte string that isn't a canonical encoding.
 

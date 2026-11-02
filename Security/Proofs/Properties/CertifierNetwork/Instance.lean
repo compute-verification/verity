@@ -1,4 +1,5 @@
 import Proofs.Properties.CertifierNetwork.Accepted
+import Properties.CertifierNetwork.Runs
 
 /-!
 # The completeness statements' honest cases, instantiated
@@ -6,9 +7,9 @@ import Proofs.Properties.CertifierNetwork.Accepted
 Each completeness statement (`Proofs.Lms.LmsSigns`, `Proofs.Lms.LmsCorrect`, `Proofs.Issuer.IssuerSigns`,
 `CertifierNetwork.DeviceOutputAccepted`) has one instance here whose hypotheses all hold: a toy LMS key (`N = 8`,
 `W = 8`, `H = 1`, two leaves) from a 16-byte identifier and an 8-byte seed, a one-bucket record under it and a 64-byte
-salt, and a one-window configuration with a declared sync whose run ticks each grid once and hands nothing, its every
-salt that one. The run's hypotheses are `step` evaluated by the kernel (`decide +kernel`);
-the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
+salt, and a one-window configuration with a declared sync (`config`, with its `grid`, stated in
+`Properties.CertifierNetwork.Runs`) whose run ticks each grid once and hands nothing, its every salt that one. The
+run's hypotheses are `step` evaluated by the kernel (`decide +kernel`); the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
 
 `Digested` is the one hypothesis left as one: `parameters` reads `Flock.canonUtf8`, well-founded recursion the kernel does
 not evaluate, so no proof evaluates it on a configuration (`DeviceOutputAccepted`'s module docstring).
@@ -63,8 +64,6 @@ theorem lmsCorrect_instance : ∃ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I
 
 /-! ## A record the issuer certifies -/
 
-def grid : Params := ⟨1, 1, 9, 1, 1⟩
-
 /-- A certifier session id of 32 zero bytes. -/
 def session : ByteArray := ⟨Array.replicate 32 0⟩
 
@@ -95,14 +94,6 @@ theorem issuerSigns_instance : ∃ prepared, ValidKey issuer.key ∧ 0 < 2 ^ iss
   exact ⟨(head, dg, m), toyKey_valid, Nat.two_pow_pos _, rfl, hprep⟩
 
 /-! ## A run of the device -/
-
-def syncSet : NetworkCertifier.SyncSet := ⟨[0], [1], by simp, by simp, by simp, by simp, by simp⟩
-
-def sync : NetworkCertifier.ClockSync := ⟨0, 1, by decide⟩
-
-/-- One window of one bucket on each grid, its sync declared. -/
-def config : Config :=
-  { egress := grid, ingress := grid, syncSet, syncs := #[sync], windows := 1, origin := 0, slack := 0 }
 
 /-- Each grid ticks once, on time, the link's backlog empty. -/
 def trace : List Event := [.tick .egress 0 0, .tick .ingress 0 0]

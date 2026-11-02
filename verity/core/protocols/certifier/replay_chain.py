@@ -1,5 +1,5 @@
 """The replay's state chain: vLLM's scheduler state handed from one step proof block to the next under hiding
-commitments (PROTOCOL.md, "The replay's state chain").
+commitments.
 
 The compile slice's proof block replays the scheduler from advice v1 and the certified record, one step proof block per
 engine step, each `replay_step.ReplayStep_v1` (the replay's step): the committed queue state, the next A certified
@@ -18,9 +18,9 @@ followed by the window's own (`queue`, at most Q) and the window's decoded decis
 proof block reads it at the same public position. The state row carries the two cursors as private heads (`qh`, `dh`),
 and `ReplayAdvance` checks that the step's A arrivals and A decision bits are the window row's at the heads, with a log
 shifter that computes only the A entries it returns. Once a window `ReplayLoad` writes the window row: the last
-window row past its heads, then the window's certified arrivals (K slots, the warden's) and its decoded decisions,
-which it reads at public positions. So every read in the chain is at a public position, and no gate hashes a row: the
-Lean verifier checks each read's path (`registered.verify_read`).
+window row past its heads, then the window's certified arrivals (K slots, the network certifier's) and its decoded
+decisions, which it reads at public positions. So every read in the chain is at a public position, and no gate hashes a
+row: the Lean verifier checks each read's path (`registered.verify_read`).
 
 **The rows**, each field's elements in turn and each element least significant bit first, then zero bits to a whole
 16-bit word. A state row (`row_fields`, `Shape.width` bits) and a window row (`window_fields`, `Shape.window_width`):
@@ -78,10 +78,10 @@ the proof block's rows are dropped (`ReplayAdvance`'s `active` = 0).
 about 2·width for the idle select and the equality), three reads and one state row. Per window: P steps, one
 `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3 path of depth ⌈log2(P + 2)⌉ or 1.
 Per session one `ReplayClose` and its two reads.
-On the trace corpus's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md, before
-the carry). AS and EW widen the rows by the step's own fields, and the parts with them: at the served vLLM run's engine
+On the trace corpus's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8, before the
+carry. AS and EW widen the rows by the step's own fields, and the parts with them: at the served vLLM run's engine
 class (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, `ReplayAdvance` is 1,761 ANDs sync, 1,814 at AS = 1 and 2,102 with
-17-bit walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (protocol/served-shape.md).
+17-bit walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144.
 """
 
 from __future__ import annotations
@@ -122,8 +122,8 @@ def _bitlen(v: int) -> int:
 class Shape:
     """The public size class: ReplayStep_v1's R running slots, W waiting slots and A arrivals a step, the engine's
     max_model_len L and num_gpu_blocks NB, a request id's width IW; the chain's Q pending arrivals, D decisions and P
-    steps a window, and the warden's K arrival slots a window; ReplayStep_v1's async_scheduling AS (0 or 1) and its
-    walk entries' width EW (0 for none)."""
+    steps a window, and the network certifier's K arrival slots a window; ReplayStep_v1's async_scheduling AS (0 or 1)
+    and its walk entries' width EW (0 for none)."""
 
     R: int
     W: int

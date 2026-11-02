@@ -119,7 +119,7 @@ it signs) and the deployment record's custody (the keys and the run id it gives 
 `reveal(p, registration)` and `committed(p, registration)` are the in-process calls the tests and replays make, and
 hold only on the auditor's side.
 
-**Sealed pair links** (`Proxy(pair=…)`, off by default; PROTOCOL.md, "Sealed pair links"): when the link's peer is
+**Sealed pair links** (`Proxy(pair=…)`, off by default): when the link's peer is
 another of the auditor's certifiers, the frames between them are sealed under `verity.ml.crypto.aead`, keys of the
 pair's session secret per direction (`Pair.of`). The egress tick seals each of its bucket's r slots, frames and padding
 alike, after the egress certifier records it (`Sealer`, slot j of bucket t at nonce (t // T, t mod T, j)), and the
@@ -549,8 +549,8 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
     eight (six decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`.
     No field straddles a frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next.
     At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
-    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the warden's cells
-    (`warden.cells`, which carry the bytes alone)."""
+    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the network certifier's
+    cells (`warden.cells`, which carry the bytes alone)."""
     if offset not in (0, LENGTH.size):
         raise ValueError(f"an id request starts its first frame's payload at 0 or {LENGTH.size}, not {offset!r}")
     if not prompt or isinstance(prompt, (str, bytes)):
