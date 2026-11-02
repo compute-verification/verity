@@ -18,7 +18,7 @@ def test_known_answer_plonky3_width_24() -> None:
 
 
 def test_constants_pinned_by_digest() -> None:
-    """The round constants, diagonal and M4 as fetched from Plonky3 (2026-09-23); a change here changes every digest."""
+    """The round constants, diagonal and M4 as fetched from Plonky3; a change here changes every digest."""
     assert h2.CONSTANTS_SHA256 == "0b81af1cdcd7e5b1" + h2.CONSTANTS_SHA256[16:] and len(h2.CONSTANTS_SHA256) == 64
     assert len(h2.RC_EXTERNAL_INITIAL) == len(h2.RC_EXTERNAL_FINAL) == h2.HALF_FULL_ROUNDS
     assert len(h2.RC_INTERNAL) == h2.PARTIAL_ROUNDS and len(h2.DIAG) == h2.WIDTH

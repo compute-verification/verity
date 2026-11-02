@@ -284,8 +284,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     no leaf map or cut) and check (`check_facts_typed`).
   - **A template unit's parts** (`Types/Parts.lean`): `deriveChecked` also checks the unit's parts as its template
     statement reads them (`partsChecked`), giving the row facts a template's block rows rest on (`part_region`,
-    `part_rows`, `delta_entry`, `part_reads`, `callee_prod` and the rest: the list is
-    note:proofs/20261025T0738Z-report-flock-readme-parts).
+    `part_rows`, `delta_entry`, `part_reads`, `callee_prod` and the rest).
   - **A template's block rows, placed** (`ExecTemplatePlace.lean`, T3). Given two facts structures,
     `TemplateLayout.blockFacts` proves `BlockFacts` at every VU `g`, at `Typed.col c tb g`, and
     `TemplateLayout.placement` gives a table class's `placed g`.

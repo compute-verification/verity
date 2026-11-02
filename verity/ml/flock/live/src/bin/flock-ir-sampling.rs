@@ -1,7 +1,7 @@
 //! flock-ir-sampling: `GumbelTopPTokenSelect_v1{V}`'s lanes bound to their frame-v3 rows (`flock_live::ir_sampling`,
 //! `verity/flock-ir-sampling/v1`), proved by the CPU prover or by Flock-CUDA's host-witness mode (`--gpu`, feature `gpu`) in a
-//! flock-128-r2 live session. Lane flock-ir-sampling; this is `bin/flock-ir-frame.rs` at c53d9148 with the sampling statement's
-//! changes (the session protocol is flock-gpu-link's flock-pure-gpu). It refuses any file but a `flock-ir-sampling/v1` one.
+//! flock-128-r2 live session. This is `bin/flock-ir-frame.rs` with the sampling statement's
+//! changes (the session protocol is `bin/flock-pure-gpu.rs`'s). It refuses any file but a `flock-ir-sampling/v1` one.
 //!
 //!   flock-ir-sampling serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 --native-checked SHA256
 //!                              [--tables DIR] [--sessions N] [--operator LANE]

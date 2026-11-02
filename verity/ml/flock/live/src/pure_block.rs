@@ -1,5 +1,5 @@
 //! `verity/flock-pure-block/v1`: the Flock backend's committed relation as ONE block R1CS, so Flock-CUDA can prove it
-//! (no union prover, no wiring argument). Lane flock-gpu-link; the backend and the CPU union statement are flock-backend's.
+//! (no union prover, no wiring argument). The backend and the CPU union statement are flock-backend's.
 //!
 //! Block `b = 3 v + c` is chunk `c` of VU `v` (a 16-bit row is 3 BLAKE3 chunks, each read by 32 units). `k_log` 20:
 //! - slots 0..16 (2^14 bits each): the x row's chunk `c`, 16 compressions (Flock's circuit);

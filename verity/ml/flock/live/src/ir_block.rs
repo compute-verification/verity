@@ -1,4 +1,4 @@
-//! `verity/flock-ir-block/v1`: identical units of an IR subcircuit template (lane flock-ir-lowering's `flock-ir-unit/v1`
+//! `verity/flock-ir-block/v1`: identical units of an IR subcircuit template (the `flock-ir-unit/v1`
 //! netlists, `verity_flock.ir_lower`) as ONE block R1CS, so the CPU prover and Flock-CUDA's host-witness mode prove it.
 //!
 //! Block `b` holds units `U b .. U b + U - 1` (instance-major over the instance file), unit `u` at the 2^unit_log-bit slot

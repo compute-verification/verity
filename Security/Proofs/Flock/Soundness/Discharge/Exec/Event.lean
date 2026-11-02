@@ -87,8 +87,8 @@ def auditLive (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → Game T
 /-- flock-verify accepts the live audit's transcript. -/
 def LiveAccepts (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop := Accepts I o.2.2
 
-/-- **R11 at one strategy pair**: the event `acc` of the live game `G` played by `τ` is no likelier than the audit `Gm`
-as Lean defines it, played by `σ`, accepts, up to the live event `bad`. -/
+/-- **The refinement at one strategy pair**: the event `acc` of the live game `G` played by `τ` is no likelier than the
+audit `Gm` as Lean defines it, played by `σ`, accepts, up to the live event `bad`. -/
 def ExecRefines {β : Type} (G : Game β) (τ : Strategy G) (acc bad : β → Prop) (Gm : Game (Bool × Finset (Fin n)))
     (σ : Strategy Gm) : Prop :=
   prob acc G τ ≤ prob (fun o => o.1 = true) Gm σ + prob bad G τ

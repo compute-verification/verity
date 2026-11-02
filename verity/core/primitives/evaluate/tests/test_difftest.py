@@ -791,7 +791,7 @@ def test_float_words_out_of_range_are_refused(server):
 
 
 FIXTURES = Path(__file__).resolve().parents[4] / "ml/circuits/ops/tests/fixtures"
-#: the GPU probe's instructions (`fixtures/gpu-nan-2026-09-28/fp32_ops.json`) by the `_v2` primitive each is
+#: the GPU NaN probe's instructions (its `fp32_ops.json`) by the `_v2` primitive each is
 GPU_OPS = {"add.rn.f32": FP.F32AddV2, "add.rn.ftz.f32": FP.F32AddFtzV2, "sub.rn.f32": VP.F32SubV2, "sub.rn.ftz.f32": FP.F32SubFtzV2,
            "mul.rn.f32": FP.F32MulV2, "mul.rn.ftz.f32": FP.F32MulFtzV2, "div.rn.f32": FP.F32DivV2, "fma.rn.f32": FP.F32FmaV2,
            "fma.rn.ftz.f32": FP.F32FmaFtzV2}
@@ -1094,7 +1094,7 @@ MMA_SPECIAL = sorted(FIXTURES.glob("tc-total-2026-09-07/*/mma_special.reduced.js
 @pytest.mark.slow
 @pytest.mark.skipif(not MMA_SPECIAL, reason="the A100 / RTX 4090 special-value campaign is a fetched fixture")
 def test_the_a100_and_rtx4090_special_value_captures(server):
-    """The A100 and RTX 4090 special-value campaign (`tc-total-2026-09-07`): 31,290 cases and 906 positional cases per
+    """The A100 and RTX 4090 special-value campaign: 31,290 cases and 906 positional cases per
     device, every NaN, infinity, signed zero and saturation rule of `AmpereBF16TcDot16_v2`."""
     total = 0
     for path in MMA_SPECIAL:
@@ -1111,8 +1111,8 @@ H100_WGMMA = FIXTURES / "tc-hopper-wgmma-bf16-2026-09-26/records.json.gz"
 @pytest.mark.slow
 @pytest.mark.skipif(not (H100.exists() and H100_WGMMA.exists()), reason="the H100 captures are fetched fixtures")
 def test_the_h100_captures(server):
-    """The H100 `HGMMA.64x128x16.F32.BF16` record (`tc-hopper-2026-09-07`: 44,046 records in 14 families) and lane
-    wgmma-bf16's `wgmma m64n8k16` sample (20,880 one-step records and 840 four-step chains on one accumulator), through
+    """The H100 `HGMMA.64x128x16.F32.BF16` record (`H100`: 44,046 records in 14 families) and the
+    `wgmma m64n8k16` sample (`H100_WGMMA`: 20,880 one-step records and 840 four-step chains on one accumulator), through
     `HopperBF16WgmmaDot16_v1`."""
     with gzip.open(H100, "rt") as f:
         doc = json.load(f)
@@ -1145,9 +1145,9 @@ def _tiles(z, *scales: str) -> tuple[list[tuple], list[int]]:
 
 @pytest.mark.slow
 def test_the_sm120_captures(server):
-    """The RTX PRO 6000's E5M2 specials and signed-zero tiles (`tc-sm120-e5m2-2026-09-30`: 38,912 words, NaN and infinite
+    """The RTX PRO 6000's E5M2 specials and signed-zero tiles (38,912 words, NaN and infinite
     operands and accumulators included) through `BlackwellE5m2QmmaDot32_v1`, and its four MXFP4 edge families
-    (`tc-sm120-mxf4-2026-10-01`: 73,728 words, a 0xFF scale byte, overflowing and cancelling blocks, ±inf and NaN
+    (73,728 words, a 0xFF scale byte, overflowing and cancelling blocks, ±inf and NaN
     accumulators) through `BlackwellMxf4OmmaDot64_v1`."""
     import numpy as np
 

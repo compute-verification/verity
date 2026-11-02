@@ -61,7 +61,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-witness"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 STATEMENT = "verity/flock-circuit"
-#: the statement rec-coins' level-3 session was proved as: `verity/flock-circuit` before #1677 put the OS's masks in its
+#: the statement rec-coins' level-3 session was proved as: `verity/flock-circuit` before the OS's masks joined its
 #: identity
 PROVED = "verity/flock-circuit@cec3e347"
 #: `CoinTree.checkHello`'s refusal of a session whose Hello is not the verifier's own
@@ -389,7 +389,7 @@ def test_f1_the_session_meets(f1, part):
 @pytest.mark.parametrize("part", F1_PARTS)
 def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
     """`AcceptsZKR`, and so `AcceptsZKV`, accepts every gate session as `verity/flock-circuit`, the verifier of record's
-    `--zk` identity with #1677's OS masks, which the gate's prover had."""
+    `--zk` identity with the OS masks, which the gate's prover had."""
     w = f1[part, STATEMENT]
     for check in ("accepts_zkr", "accepts_zkv"):
         assert w[check]["ok"], (check, w[check].get("why"))

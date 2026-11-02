@@ -1,4 +1,4 @@
-//! `verity/flock-ir-sampling/v1` (lane flock-ir-sampling; `verity_flock.ir_sampling` stages the `flock-ir-sampling/v1` file):
+//! `verity/flock-ir-sampling/v1` (`verity_flock.ir_sampling` stages the `flock-ir-sampling/v1` file):
 //! `GumbelTopPTokenSelect_v1{V}`'s lanes bound to their frame-v3 rows. This module is `ir_frame.rs` at c53d9148
 //! (`verity/flock-ir-frame/v2`, red-team-flock-2 granted) with the sampling statement's changes, kept apart so that the two
 //! statements evolve and are reviewed separately: `diff` it against that file for the delta. The binary is

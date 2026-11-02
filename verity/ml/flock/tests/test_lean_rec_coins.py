@@ -4,11 +4,11 @@ smallest level of a recorded recursive session (`r20261009-111638-6720`, class (
 statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
 recorded `pub.bin` and `registered.json`, and its recorded outer session. The level and its outer session were proved
 again at the current leaf scheme (`r20261010-040650-84a9`: the inner statement's leaves are unsalted, so the rest of the
-session is 6720's), before #1677's OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
-as `verity/flock-circuit`, so the recorded outer session is refused at the record's first check (S2/R7) once every V*
-check has passed at setup. The recorded level's verifier-registered values are under `verity/rec-inner/v1`'s SHAKE256
-salts, so it is refused at check 5; the honest level is it restaged under SHA-512's (`rec_residuals.salt_of`), and passes
-setup at the honest inner session and the coin server's transcript of
+session is 6720's), before the OS masks joined its identity, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s
+statements up only as `verity/flock-circuit`, so the recorded outer session is refused at the record's first check
+(S2/R7) once every V* check has passed at setup. The recorded level's verifier-registered values are under
+`verity/rec-inner/v1`'s SHAKE256 salts, so it is refused at check 5; the honest level is it restaged under SHA-512's
+(`rec_residuals.salt_of`), and passes setup at the honest inner session and the coin server's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
 the ones it climbs to and the record's (`RecVStar.checkTopRows`, `RecVStar.innerLink`) or not in the coin server's
 format (`RecSetup.checkReads`), and where V* registered its

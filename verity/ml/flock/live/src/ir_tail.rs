@@ -1,4 +1,4 @@
-//! The native tail of a cut IR template (lane flock-ir-lowering): the verifier's own evaluation of the gates that read no
+//! The native tail of a cut IR template: the verifier's own evaluation of the gates that read no
 //! input word (RMSNorm's warp-aggregate sum and row scalar), from the program `verity_flock.ir_lower.tail_program` emits.
 //!
 //! A program is ops `[out slot, primitive id, operand slots...]` (constants `[slot, "Const", value]`) over slots
