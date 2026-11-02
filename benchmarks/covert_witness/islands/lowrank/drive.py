@@ -32,9 +32,11 @@ def parse(line: str) -> tuple[str, str, str, list[str]] | None:
     line = line.strip()
     if not line or line.startswith("#"):
         return None
-    head, note, args = (x.strip() for x in line.split(";", 2))
+    # a note may hold `;`: the class and start end at the first, the train args start after the last
+    head, rest = line.split(";", 1)
+    note, args = rest.rsplit(";", 1)
     klass, start = head.split()
-    return klass, start, note, shlex.split(args)
+    return klass, start, note.strip(), shlex.split(args)
 
 
 def utc() -> dt.datetime:
@@ -82,8 +84,12 @@ def main() -> int:
                                    text=True, cwd=REPO).stdout.strip()
         lines = a.queue.read_text().splitlines() if a.queue.exists() else []
         for line in lines:
-            p = parse(line)
             key = line.strip()
+            try:
+                p = parse(line)
+            except ValueError as e:
+                print(f"{utc():%H:%M}Z skipped, unparsable ({e}): {key}", flush=True)
+                continue
             if p is None or key in seen or utc().time() >= STOP or not clean:
                 continue
             klass, start, note, args = p
