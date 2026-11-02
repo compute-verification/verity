@@ -11,8 +11,9 @@ Mechanisms (`--mech`):
 - `stack`: the same K pieces kept as adapters on θ, never merged, so every base W x stays θ's (`--basis lora`: ReLoRA's
   function; `--basis galore`: GaLore in adapter form, each piece's frozen factor the top-r singular basis of the
   gradient at its first step).
-- `galore`: every target matrix is trained in full through a rank-r projected Adam (GaLore). The projector is the top-r
-  singular basis of the gradient, refreshed K times, so each period's update is exactly P_j @ N_j, one rank-r piece.
+- `galore`: every target matrix is trained in full through a rank-r projected Adam (GaLore; `--opt muon`: Muon's
+  orthogonalized momentum step on the projected gradient instead). The projector is the top-r singular basis of the
+  gradient, refreshed K times, so each period's update is exactly P_j @ N_j, one rank-r piece.
   After every step each W is rebuilt from θ with the pieces so far as E stores them (N's and the norm gains' fp32
   masters kept apart), so the next step reads decode(θ, E_t) bit for bit and declares E_t (`prepare.declare_step`):
   merged steps the harness credits as a counterexample family.
@@ -550,6 +551,7 @@ class GaloreState:
     def __init__(self, w: torch.Tensor, r: int):
         self.left = w.shape[0] <= w.shape[1]
         self.r = r
+        self.scale = max(1.0, w.shape[0] / w.shape[1]) ** 0.5
         self.P = None
         self.m = self.v = self.N = None
         self.t = 0
@@ -568,8 +570,13 @@ class GaloreState:
         return dense(self.P.T.to(CODE["dtype"])), dense(self.N.to(CODE["dtype"]))
 
     @torch.no_grad()
-    def step(self, grad: torch.Tensor, lr: float, b1=0.9, b2=0.95, eps=1e-8) -> None:
+    def step(self, grad: torch.Tensor, lr: float, b1=0.9, b2=0.95, eps=1e-8, muon: bool = False) -> None:
         R = self.P.T @ grad if self.left else grad @ self.P
+        if muon:
+            # P has orthonormal columns, so P @ dN has dN's spectral norm: a full-matrix Muon step's size at the same lr
+            self.m.mul_(0.95).add_(R)
+            self.N.add_(newton_schulz(R.add(self.m, alpha=0.95)), alpha=-lr * self.scale)
+            return
         self.t += 1
         self.m.mul_(b1).add_(R, alpha=1 - b1)
         self.v.mul_(b2).addcmul_(R, R, value=1 - b2)
@@ -590,12 +597,15 @@ def run_galore(run: Run) -> None:
     proj = sum(4 * r * params[n].shape[0] * params[n].shape[1] for n in targets)
     svd = sum(svd_flops(tuple(params[n].shape)) for n in targets)
     rebuild = sum(2 * K * r * params[n].shape[0] * params[n].shape[1] for n in targets)
+    muon = a.opt == "muon"
+    ns = sum(ns_flops((r, max(params[n].shape))) for n in targets) if muon else 0
+    proj += ns
     n_steps = run.n_steps(per_step + proj + rebuild, (K + 1) * svd)
     run.plan(n_steps)
     bounds = [round(n_steps * j / K) for j in range(K + 1)]
     pieces = {n: [] for n in targets}
     fwd = torch.compile(run.net) if a.compile else run.net
-    print(json.dumps({"mech": "galore", "arm": len(run.results), "lr": a.lr, "steps": n_steps, "rank": r, "pieces": K,
+    print(json.dumps({"mech": "galore", "opt": a.opt, "arm": len(run.results), "lr": a.lr, "steps": n_steps, "rank": r, "pieces": K,
                       "targets": len(targets), "norms": len(run.norms), "flops_per_step": per_step + proj + rebuild}),
           flush=True)
     piece, base = 0, b""
@@ -611,7 +621,7 @@ def run_galore(run: Run) -> None:
                 st[n].refresh(params[n].grad, a.keep_moments)
             run.steps.append({"op": "extra", "flops": svd, "what": f"projector SVDs, piece {piece}"})
         for n in targets:
-            st[n].step(params[n].grad, a.lr * frac)
+            st[n].step(params[n].grad, a.lr * frac, muon=muon)
             params[n].grad = None
         with torch.no_grad():
             if nopt:
