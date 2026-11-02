@@ -22,7 +22,8 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   ⌈log2 V⌉ by the caller), and `tau_other_bits`: any other input a token op reads, and 64 bits (a seed) per random op
   one reads, over the consumed tokens.
 - a: the narrowest cut across the forward's dependent path (its dependent token-indexed values), from where the token's
-  data first meets θ' to the values the loss reduces, in bits per consumed token: an upper bound (a witness).
+  data first meets θ' to the values the loss reduces, in bits per consumed token: an upper bound (a witness). `a_x`:
+  the shares of one token's work done where the cut's values are made (its first and last).
 - u (v2's u_in): the update bits a block reads to do the first share x of one token's dependent work, in program order
   (the forward, then the backward): at each op, the narrowest cut between the carried values and every update value
   (dependent and free of the step's tokens: θ' as the step reads it, cast, merged or perturbed) the token's ops read so
@@ -53,18 +54,6 @@ FORWARD, BACKWARD, OTHER = 0, 1, 2
 COMPUTED, TOKEN_INPUT, OTHER_INPUT, CARRIED, RANDOM, ATTR = range(6)
 SEED_BITS = 64
 ACCUMULATOR_BITS = 32
-LABELS = {
-    "phi": "measured (trace): token ops depending on theta', forward, backward and optimizer, over the step's gates",
-    "tokens": "measured (trace): the union of the positions the step's token-index ops read, per storage",
-    "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, "
-                "and its other inputs",
-    "a_bits": "upper bound (witness, trace): the narrowest cut across the forward's dependent path, per consumed token",
-    "u": "upper bound (witness, trace): the cut from the carried values to the update values one token's ops read so "
-         "far, in program order",
-    "tail_share": "measured (trace): the share of a token's dependent work in ops that read no update value",
-    "delta_grad_bits": "upper bound (witness, trace): the gradient's narrowest cut at 32 bits or more an element, plus "
-                       "the carried state the token ops don't read",
-}
 
 
 @dataclass
@@ -315,7 +304,7 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
     entries = {v for v in dvals if not any(D[p] for p in preds[v])}
     both = entries & ends
     cap = {v: (None if v in ends else int(c.bits[v])) for v in dvals if v not in both}
-    a_cut, _ = vertex_cut(preds, cap, entries - both, ends - both)
+    a_cut, a_set = vertex_cut(preds, cap, entries - both, ends - both)
 
     # one token: the first token-index read's batch, and the ops its token-indexed values reach
     group = []
@@ -342,10 +331,11 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
         targets_of.setdefault(int(node[v]), set()).update(p for p in preds[v] if p in U)
     order = np.nonzero(op_group)[0].tolist()
     g_total = float(op_gates[op_group].sum())
-    x_before, acc, seen, events = {}, 0.0, set(), []
+    x_before, x_after, acc, seen, events = {}, {}, 0.0, set(), []
     for o in order:
         x_before[o] = acc / g_total if g_total else 0.0
         acc += op_gates[o]
+        x_after[o] = acc / g_total if g_total else 0.0
         new = targets_of.get(o, set()) - seen
         if new:
             seen |= new
@@ -366,6 +356,7 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
     hi = next((o for o in order if op_phase[o] == BACKWARD and (op_reads_upd[o] or op_reads_early[o])), ops)
     tail = [o for o in order if lo < o < hi]
     frozen = float(op_gates[tail].sum()) / g_total if g_total and fwd_reads else 0.0
+    a_x = sorted(x_after[node_l[v]] for v in a_set if node_l[v] in x_after)
 
     # the whole step's update read, the gradient's cut and the carried state
     all_targets = set()
@@ -396,6 +387,7 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
             "token_factor": consumed / c.step_tokens if c.step_tokens and consumed else 1.0,
             "tau_ids": ids / per, "tau_other_bits": (other_bits + SEED_BITS * seeds) / per,
             "a_bits": None if a_cut is None else a_cut / per, "a_cut_bits": a_cut,
+            "a_x": [a_x[0], a_x[-1]] if a_x else None,
             "u": u, "u1_bits": u[-1][1], "u_cuts": len(cuts), "tail_share": t, "frozen_tail_share": frozen,
             "group_gates": g_total, "update_cut_bits": update_cut, "grad_cut_bits": grad_cut, "state_bits": state,
             "delta_grad_bits": None if grad_cut is None else grad_cut + state}

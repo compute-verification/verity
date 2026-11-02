@@ -39,10 +39,12 @@ parts' |C_j|-weighted mean, so |C|ρ is the sum of their blocks' gates.
 
 Where the quantities come from (`measure`): a row's `formalism` block, which ingest writes from the run record
 (`of_record`) or a re-score attaches (te_core.rescore), else the stubs below from a v2.3 row's own fields. te_core
-4.0's capture gives `cut_bits` per step structure, read as Δ_grad; the rest of what the formalism measures (Dep with
-backward gates, τ, a and u from the traced circuit, Δ's decoder) a run record gives as its own `formalism` block,
-{"parts": [...], "tau_bits", "a_bits", "u", "u1_bits", "tail_share", "delta_bits", "decoder_gates", "labels"}, which
-`of_record` passes through field by field.
+4.0 measures them on the record's traced step (te_core.capture.circuit, `TRACED` its labels): each traced structure's
+φ, token factor and Δ_grad, and the record's τ (`tau_ids` token positions read per consumed token at ⌈log2 V⌉ bits,
+plus `tau_other_bits`), a, u and t (`of_trace`, with every measured field under `trace`). Δ stays 8 |E|, the
+submitted code: the trace's own encoding of θ' (`trace.update_cut_bits`) is the carried state, θ' in full. A run
+record may also give its own block, {"parts": [...], "tau_bits", "a_bits", "u", "u1_bits", "tail_share",
+"delta_bits", "decoder_gates", "labels"}, which `of_record` passes through field by field.
 """
 from __future__ import annotations
 
@@ -224,6 +226,34 @@ STUBS = {
     "delta_bits": "upper bound (witness): 8 |E|, the submitted update code",
     "delta_grad_bits": "unmeasured: training Fit unchecked",
 }
+TRACED = {
+    "tokens": "measured (trace): the steps' token counts times the traced step's consumed tokens over its count (the "
+              "union of the positions its token-index ops read, per storage)",
+    "dep_gates": "measured (trace): phi |C_j|, phi the traced step's token ops depending on theta' (forward, backward "
+                 "and optimizer) over its gates; 0 for a step before the first update",
+    "delta_grad_bits": "upper bound (witness, trace): the gradient's narrowest cut at 32 bits or more an element, plus "
+                       "the carried state the token ops don't read",
+    "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, "
+                "and its other inputs",
+    "a_bits": "upper bound (witness, trace): the narrowest cut across the forward's dependent path, per consumed token",
+    "u": "upper bound (witness, trace): the cut from the carried values to the update values one token's ops read so "
+         "far, in program order",
+    "tail_share": "measured (trace): the share of a token's dependent work in ops that read no update value",
+}
+TRACED_STRUCTURE = ("phi", "token_factor", "delta_grad_bits")
+
+
+def of_trace(f: dict) -> dict:
+    """The record-level `formalism` fields of a traced step's quantities (te_core.capture.circuit.measure), with every
+    measured field under `trace`. t is 0 where no token op reads an update value (u is 0 then)."""
+    out = {k: f[k] for k in ("tau_ids", "tau_other_bits", "u", "u1_bits")}
+    out["tail_share"] = f["tail_share"] if f["tail_share"] < 1 else 0.0
+    labels = {k: TRACED[k] for k in ("tau_bits", "u", "tail_share")} | {"u1_bits": TRACED["u"]}
+    if f.get("a_bits") is not None:
+        out["a_bits"], labels["a_bits"] = f["a_bits"], TRACED["a_bits"]
+    return out | {"labels": labels, "trace": f}
+
+
 V23 = {
     "gates": "v2.3 macs_log in gates (te_core.gates; no dtypes, so its assumptions)",
     "tokens": "stub: forward MACs over the start's forward MACs per token (a v2.3 row has no token count)",
@@ -255,6 +285,8 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
         parts = (_v23_part(row, shape),)
         labels |= {k: v for k, v in V23.items() if k not in labels}
     out = {}
+    if "tau_bits" not in f and "tau_ids" in f:
+        f = f | {"tau_bits": f["tau_ids"] * math.ceil(math.log2(shape["vocab"])) + f.get("tau_other_bits", 0.0)}
     e = (row.get("output") or {}).get("e_bytes")
     defaults = {"tau_bits": math.ceil(math.log2(shape["vocab"])), "a_bits": shape["d_model"] * ACT_BITS,
                 "delta_bits": 8 * e if e is not None else None, "decoder_gates": None}
@@ -296,11 +328,12 @@ def measure(row: dict, shape: dict) -> Measured:
 def of_record(record: dict, through: int | None = None) -> dict:
     """The `formalism` block ingest writes for a run record's prefix through step `through`: one part per step
     structure (its steps' gates by te_core.gates, their tokens, its dependent gates and Δ_grad), and the record's own
-    `formalism` fields over these. A structure's dependent gates are the record's when it gives them (`dep_gates`), else
-    its updated forward nodes' MACs (te_core 4.0's capture: every forward MAC with an update-dependent operand; the
-    backward's are not counted yet), at the bf16 GEMM price; its Δ_grad is its `delta_grad_bits`, else 4.0's
-    `cut_bits` (the narrowest cut between the step's gradient side and the new values it carries). The setup, and the
-    tail of a whole run, are parts of their own, so |C| is the prefix's whole count, as `ledger._macs_log`'s."""
+    `formalism` fields over these. A structure traced with the formalism's quantities (`annotate.with_structures`,
+    `TRACED_STRUCTURE`) has φ |C_j| dependent gates, its steps' tokens times its token factor and its traced Δ_grad; in
+    a record with one, every other step structure is a step before the first update (φ = 0). Otherwise a structure's
+    dependent gates are the record's when it gives them (`dep_gates`), else its updated forward nodes' MACs at the bf16
+    GEMM price, and its Δ_grad its `delta_grad_bits`, else 4.0's `cut_bits`. The setup, and the tail of a whole run, are
+    parts of their own, so |C| is the prefix's whole count, as `ledger._macs_log`'s."""
     own = dict(record.get("formalism") or {})
     labels = dict(own.get("labels", {}))
     steps = [s for s in record["steps"] if through is None or s["step"] <= through]
@@ -310,6 +343,9 @@ def of_record(record: dict, through: int | None = None) -> dict:
             groups[name] = [record[name]]
     for s in steps:
         groups.setdefault(("step", s["struct"]), []).append(s)
+    traced = any("phi" in (st or {}) for st in record["structures"].values())
+    if traced:
+        labels |= {k: TRACED[k] for k in ("tokens", "dep_gates", "delta_grad_bits")}
     parts = []
     for gid, ss in groups.items():
         st = record["structures"].get(gid[1] if isinstance(gid, tuple) else ss[0].get("struct")) or {}
@@ -321,16 +357,21 @@ def of_record(record: dict, through: int | None = None) -> dict:
         for row in st.get("log", []):
             key = " ".join(str(x) for x in row[:4])
             log["ops"][key] = [row[4] * n, row[5] * n]
-        if "dep_gates" in st:
-            dep = st["dep_gates"] * n
+        gates, tokens = of_log(log)["gates"], sum(s.get("tokens", 0) for s in ss)
+        if traced:
+            dep, dg = st.get("phi", 0.0) * gates, st.get("delta_grad_bits")
+            tokens *= st.get("token_factor", 1.0)
         else:
-            dep = sum(u[2] for u in st.get("updated", [])) * n * per_mac("gemm/bf16")
-            labels.setdefault("dep_gates", "stub: forward MACs with an update-dependent operand (no backward), bf16 GEMM")
-        dg = st.get("delta_grad_bits", st.get("cut_bits"))
-        if "delta_grad_bits" not in st and dg is not None:
-            labels.setdefault("delta_grad_bits", "measured: te_core 4.0's cut (gradient side to the new values)")
-        parts.append({"gates": of_log(log)["gates"], "tokens": sum(s.get("tokens", 0) for s in ss), "dep_gates": dep,
-                      "steps": n, "delta_grad_bits": dg})
+            if "dep_gates" in st:
+                dep = st["dep_gates"] * n
+            else:
+                dep = sum(u[2] for u in st.get("updated", [])) * n * per_mac("gemm/bf16")
+                labels.setdefault("dep_gates",
+                                  "stub: forward MACs with an update-dependent operand (no backward), bf16 GEMM")
+            dg = st.get("delta_grad_bits", st.get("cut_bits"))
+            if "delta_grad_bits" not in st and dg is not None:
+                labels.setdefault("delta_grad_bits", "measured: te_core 4.0's cut (gradient side to the new values)")
+        parts.append({"gates": gates, "tokens": tokens, "dep_gates": dep, "steps": n, "delta_grad_bits": dg})
     labels.setdefault("gates", "counted MACs in gates (te_core.gates)")
     labels.setdefault("tokens", "measured: the steps' token counts")
     return own | {"parts": own.get("parts") or parts, "labels": labels}

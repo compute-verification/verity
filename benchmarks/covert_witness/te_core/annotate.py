@@ -8,16 +8,16 @@ circuit (te_core.capture, `with_structures`), never from the program.
   that persists across steps (the slow weights, optimizer state, any buffer carried from one step to the next that
   isn't θ or token data). A gather of a dependent table makes its rows dependent with no MAC; a cache computed only
   from θ and token data is not dependent. So the merged (W + BA)x and unmerged Wx + BAx forms of one update have the
-  same U up to the adapter products. Backward products are left out: counting them would halve β per MAC and double φ,
-  leaving φβ unchanged and D ≥ k/β harder to meet.
+  same U up to the adapter products. Backward products are left out of U; the training formalism's Dep, which counts
+  them and the optimizer's, is measured on the step's circuit (te_core.capture.circuit, through `with_structures`).
 
 Per step t it gives the updated MACs, the updated MACs per token block (the smaller of the per-row sum over updated nodes
 and the step's updated MACs over its tokens, so neither hiding tokens from the count nor routing tokens to some weights
 only lowers it), the depth D_t (the updated MACs per token upstream of the step's deepest updated node, on its
 dependence paths within its token's forward pass), the depth profile from which φ is read (φ(D_min) is the share of |C|
-in updated MACs with at least D_min updated MACs upstream) and β_t's cut witness: the traced circuit's narrowest cut, in
-bits, between the step's gradient-side computation and its new persistent values, per updated MAC per token block (None
-for a structure the capture didn't trace).
+in updated MACs with at least D_min updated MACs upstream) and the traced circuit's narrowest cut, in bits, between the
+step's gradient-side computation and its new persistent values, per updated MAC per token block (`beta`, recorded; the
+formula that read it is retired; None for a structure the capture didn't trace).
 
 A record the runtime counter wrote holds the counter's own U (the MACs whose weight operand differs from θ, te_core
 before 4.0) and no cut; its MAC count stays |C|.
@@ -27,6 +27,8 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
+
+from .formalism import TRACED_STRUCTURE, of_trace
 
 
 @dataclass(frozen=True)
@@ -94,13 +96,15 @@ def _step(rec: dict, struct: dict) -> StepAnnotation:
 
 
 def with_structures(record: dict, traced: dict[str, dict]) -> dict:
-    """A record counted by the runtime counter with its U and cut from the traced step circuit: `traced` maps a
-    structure id of the record to a traced structure (te_core.capture's `StepGraph.structure()`, or a recorded script's,
-    `te_core.capture.script`), whose per-token rows are scaled to each step's tokens. Only steps whose own structure has
-    updated MACs take it (a step before the run's first update reads θ only), and |C| stays the runtime count. Each
-    family's β_t is read again over the traced updated MACs per token block (bits(E_t) are the run's)."""
-    before = {s.step: s.updated_per_token for s in annotate(record).steps}
+    """A record counted by the runtime counter with its U, cut and training-formalism quantities from the traced step
+    circuit: `traced` maps a structure id of the record to a traced structure (te_core.capture's
+    `StepGraph.structure()`, or a recorded script's, `te_core.capture.script`), whose per-token rows are scaled to each
+    step's tokens. Only steps whose own structure has updated MACs take it (a step before the run's first update reads
+    θ only), and |C| stays the runtime count. A traced structure's `formalism` (te_core.capture.circuit.measure) gives
+    its steps' φ, token factor and Δ_grad (te_core.formalism's `TRACED_STRUCTURE`), and the record's `formalism` block
+    the per-token quantities of the traced structure its steps spend the most MACs in (`formalism.of_trace`)."""
     out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
+    weight: dict[str, int] = {}
     for s in out["steps"]:
         sid, struct = s.get("struct"), record["structures"].get(s.get("struct"))
         if sid not in traced or not struct or not struct["updated"] or not s.get("tokens"):
@@ -108,18 +112,16 @@ def with_structures(record: dict, traced: dict[str, dict]) -> dict:
         t, n = traced[sid], s["tokens"]
         rows = [[r[0], r[1], round(r[0] * n), n, r[4]] for r in t["updated"]]
         new = f"{sid}+traced{n}"
-        out["structures"][new] = dict(struct, updated=rows, beta=t.get("beta"), cut_bits=t.get("cut_bits"))
+        f = t.get("formalism")
+        measured = {k: f[k] for k in TRACED_STRUCTURE} if f else {}
+        out["structures"][new] = dict(struct, updated=rows, beta=t.get("beta"), cut_bits=t.get("cut_bits"), **measured)
         s["struct"] = new
-    after = {s.step: s.updated_per_token for s in annotate(out).steps}
-    fams = []
-    for f in record.get("families", []):
-        beta = {}
-        for t, b in f.get("beta", {}).items():
-            old, new = before.get(int(t), 0), after.get(int(t), 0)
-            if old > 0 and new > 0:
-                beta[t] = b * old / new
-        fams.append(dict(f, beta=beta))
-    out["families"] = fams
+        if f:
+            weight[sid] = weight.get(sid, 0) + s.get("macs", 0)
+    if weight:
+        f = of_trace(traced[max(weight, key=weight.get)]["formalism"])
+        own = dict(record.get("formalism") or {})
+        out["formalism"] = own | f | {"labels": own.get("labels", {}) | f["labels"]}
     return out
 
 

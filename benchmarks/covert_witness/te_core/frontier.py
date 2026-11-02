@@ -8,13 +8,11 @@ measuring the same version (`same_version`; covert_witness's `pin.py`; `--pin`, 
 out, each marked with its reason (`status`): an invalid record, one whose read-outs `cw.readout_leaks` lists
 (`read-out-leak`, invalid: the coordinator's 14:22Z rule), an unscored one, one measured by any other commit
 (`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the first to submit
-an E is the one its compute is counted for), one ingested by a te_core before 4.0 (`re-ingest`: 4.0 measures the
-formalism's quantities from the step's traced circuit; `python -m te_core.ledger --agent AGENT ingest RUN_DIR ...
---run-id RUN --structures TRACED.json` measures it again), one with updated steps whose circuit wasn't traced
-(`untraced`: its Dep, τ, a, u, t and Δ_grad would be stubs), and one a later ingest of its run supersedes
-(`re-ingested`). A row ingested before 3.13 carries no read-outs; `--facts` gives them by run id (`with_facts`). Under
-4.0 an update of the tied embedding alone is deep (its lookup's rows are update-dependent and reach every later layer),
-so the scorer's tied-lookup rule (coordinator 13:32Z) is retired.
+an E is the one its compute is counted for), and one a later ingest of its run supersedes (`re-ingested`). A row
+ingested before 3.13 carries no read-outs; `--facts` gives them by run id (`with_facts`). Under 4.0 an update of the
+tied embedding alone is deep (its lookup's rows are update-dependent and reach every later layer), so the scorer's
+tied-lookup rule (coordinator 13:32Z) is retired. `measured(r)` says whether a row's quantities were measured on its
+record's traced step (te_core.rescore scores only those by default); any other row's are stubs, labelled.
 
 Each valid submission is scored by the formalism (`formalism_rows`): |C| in Boolean gates, ρ at every (c, k) of its
 start's policy grid and at its reference shapes (te_core.policy's `cells`; 1 where Fit holds for the training,
@@ -50,9 +48,8 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
     return sum(x >= e for e in edges)
 
 
-#: the first te_core whose ingest measures the formalism's quantities from the traced step circuit (a row's
-#: `te_core`): an earlier row's are stubs, so it counts once its run is ingested again with its traced structures
-PRICED_FROM = (4, 0)
+#: the first te_core whose ingest measures the formalism's quantities from the traced step circuit (a row's `te_core`)
+MEASURED_FROM = (4, 0)
 
 
 def _run_key(r: dict):
@@ -79,10 +76,10 @@ def commits(pin: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
 
 
 def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
-    """Each left-out record's reason: re-ingested, invalid, read-out-leak, unscored, other-version, duplicate-e,
-    re-ingest, untraced. `pin` is a commit or the commits of one version. A later ingest of the same run's checkpoint
-    (its run id; a row without one is
-    never superseded) supersedes an earlier one (`re-ingested`), which then seeds no duplicate. An E repeats an earlier
+    """Each left-out record's reason: re-ingested, invalid, read-out-leak, unscored, other-version, duplicate-e.
+    `pin` is a commit or the commits of one version. A later ingest of the same run's checkpoint (its run id; a row
+    without one is never superseded) supersedes an earlier one (`re-ingested`), which then seeds no duplicate. An E
+    repeats an earlier
     record's when that record was measured at the pin or is another agent's: an agent's own relaunch at a new pin of an
     E it had at an old one counts."""
     pins = set(commits(pin))
@@ -105,13 +102,19 @@ def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
             out[r["id"]] = "unscored"
         elif r.get("measurement_commit") not in pins:
             out[r["id"]] = "other-version"
-        elif version(r.get("te_core")) < PRICED_FROM:
-            out[r["id"]] = "re-ingest"
-        elif (r.get("annotation") or {}).get("untraced"):
-            out[r["id"]] = "untraced"
         if e and out.get(r["id"]) != "duplicate-e":
             first.setdefault(e, set()).add((r.get("measurement_commit") in pins, r.get("agent")))
     return out
+
+
+def measured(r: dict) -> bool:
+    """Whether a row's formalism quantities were measured on its record's traced step: ingested by te_core 4.0 or
+    later with the step's traced structure (`ledger ingest --structures TRACED.json`, `annotate.with_structures`),
+    every updated step traced (none `untraced`), its block carrying the trace. Any other row's φ, τ, a, u, t and Δ_grad
+    are stubs; `python -m te_core.ledger --agent AGENT ingest RUN_DIR ... --run-id RUN --structures TRACED.json`
+    measures it."""
+    return (version(r.get("te_core")) >= MEASURED_FROM and not (r.get("annotation") or {}).get("untraced")
+            and "trace" in (r.get("formalism") or {}))
 
 
 def valid(rows: list[dict], pin: str | tuple[str, ...] | None = None) -> list[dict]:

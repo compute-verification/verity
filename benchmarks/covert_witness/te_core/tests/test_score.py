@@ -29,10 +29,9 @@ def test_checkpoints_are_prefixes():
     assert a4.depth() == 300
 
 
-def test_with_structures_scales_the_traced_rows_and_reprices_the_families():
+def test_with_structures_scales_the_traced_rows():
     """The runtime counter's rows (4 nodes of 100 MACs per token, no cut) give way to a traced structure of 2 nodes of 50
-    per token, scaled to each step's tokens; step 0 updates nothing and keeps its own; a family's β_t is bits(E_t) over
-    the traced updated MACs per token block (4x its old value here), and |C| is the runtime count."""
+    per token, scaled to each step's tokens; step 0 updates nothing and keeps its own, and |C| is the runtime count."""
     rec = record(3)
     rec["structures"] = {"s": {"updated": [[100, i * 100, 800, 8, 16] for i in range(4)], "log": [["x"]]},
                          "z": {"updated": [], "log": []}}
@@ -45,6 +44,37 @@ def test_with_structures_scales_the_traced_rows_and_reprices_the_families():
     assert ann.macs == annotate(rec).macs
     assert [s.updated_macs for s in ann.steps] == [0, 100 * 8, 100 * 4]
     assert [s.beta for s in ann.steps] == [None, 3.0, 3.0] and ann.depth() == 50 and ann.bits() == 16
-    assert out["families"][0]["beta"] == {"1": 4.0, "2": 8.0}
+    assert out["families"] == rec["families"] and "formalism" not in out
     assert out["structures"][out["steps"][1]["struct"]]["log"] == [["x"]]
-    assert rec["structures"].keys() == {"s", "z"} and rec["families"][0]["beta"] == {"1": 1.0, "2": 2.0}
+    assert rec["structures"].keys() == {"s", "z"}
+
+
+TRACE = {"phi": 0.75, "token_factor": 2.0, "delta_grad_bits": 640, "tau_ids": 1.125, "tau_other_bits": 0.0,
+         "a_bits": 256.0, "u": [[0.0, 0.0], [0.0, 512.0], [0.5, 1024.0], [1.0, 1024.0]], "u1_bits": 1024.0,
+         "tail_share": 1 / 3, "frozen_tail_share": 0.0, "update_cut_bits": 1024}
+
+
+def test_with_structures_carries_the_traced_formalism():
+    """A traced structure's φ, token factor and Δ_grad go to its steps' structure, and its per-token quantities to the
+    record's `formalism` block (`trace` every measured field); te_core.formalism.of_record reads them: φ |C_j|
+    dependent gates, the steps' tokens times the factor, the step before the first update φ = 0, and τ at ⌈log2 V⌉."""
+    from te_core import formalism
+
+    rec = record(3)
+    rec["structures"]["z"] = {"updated": [], "log": []}
+    rec["steps"][0]["struct"] = "z"
+    for s in rec["steps"]:
+        s["by"] = {"fwd/x": 1000}
+    out = with_structures(rec, {"s": {"updated": [[50, 0, 800, 16, 16]], "cut_bits": 640, "formalism": TRACE}})
+    sid = out["steps"][1]["struct"]
+    assert {k: out["structures"][sid][k] for k in formalism.TRACED_STRUCTURE} == {
+        "phi": 0.75, "token_factor": 2.0, "delta_grad_bits": 640}
+    f = out["formalism"]
+    assert f["a_bits"] == 256.0 and f["u1_bits"] == 1024.0 and f["tail_share"] == 1 / 3 and f["trace"] == TRACE
+    block = formalism.of_record(out)
+    z, s = block["parts"][0], block["parts"][1]
+    assert z["dep_gates"] == 0 and z["tokens"] == 8 and z["delta_grad_bits"] is None
+    assert s["dep_gates"] == 0.75 * s["gates"] and s["tokens"] == 2 * 16 and s["delta_grad_bits"] == 640
+    m = formalism.measure({"formalism": block, "output": {"e_bytes": 100}}, {"vocab": 16, "d_model": 8})
+    assert m.tau_bits == 1.125 * 4 and m.a_bits == 256.0 and m.tail_share == 1 / 3 and m.u[-1][1] == 1024.0
+    assert m.labels["tau_bits"] == formalism.TRACED["tau_bits"] and m.labels["dep_gates"] == formalism.TRACED["dep_gates"]

@@ -185,15 +185,16 @@ def test_the_commits_of_one_version_are_one_pin(tmp_path, monkeypatch):
     assert frontier.pinned() == (PIN, "b" * 40)
 
 
-def test_a_row_counts_once_its_run_is_measured_from_its_traced_circuit():
-    """Every row before 4.0 holds stubs for what the formalism measures; a 4.0 row with an updated step the capture
-    didn't trace is `untraced`."""
+def test_a_row_is_measured_once_its_run_is_ingested_with_its_traced_circuit():
+    """Every row before 4.0 holds stubs for what the formalism measures, as does a 4.0 row with an updated step the
+    capture didn't trace or with no trace in its block; all stay valid (scored on their labelled stubs)."""
     rows = [{"id": name, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": ingest,
-             "annotation": {"untraced": untraced}}
-            for name, ingest, untraced in [("old", "3.13", 0), ("older", "2.3", 0), ("traced", "4.0", 0),
-                                           ("later", "4.10", 0), ("untraced", "4.0", 3)]]
-    assert frontier.status(rows, PIN) == {"old": "re-ingest", "older": "re-ingest", "untraced": "untraced"}
-    assert [r["id"] for r in frontier.valid(rows, PIN)] == ["traced", "later"]
+             "annotation": {"untraced": untraced}, "formalism": {"trace": {}} if trace else {}}
+            for name, ingest, untraced, trace in [("old", "3.13", 0, True), ("older", "2.3", 0, False),
+                                                  ("traced", "4.0", 0, True), ("later", "4.10", 0, True),
+                                                  ("untraced", "4.0", 3, True), ("stubs", "4.0", 0, False)]]
+    assert frontier.status(rows, PIN) == {}
+    assert [r["id"] for r in rows if frontier.measured(r)] == ["traced", "later"]
 
 
 def at_one_percent(rows):
