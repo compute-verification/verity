@@ -2942,6 +2942,33 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
 
 
+def test_traffic_counts_a_repeated_machine_alert_once_as_an_alert_to_its_addressees_not_an_unanswered_ask(
+        fake, registry, routes_dirs, capsys):
+    """vy-monitors mirrors each alert into the front door, and a repeat with new numbers links a new #agent-alerts post."""
+    def alert(text: str, link: str, ts: str, **kw) -> dict:
+        return fake.add(COORD, text=f"{text} (alert: <https://x.slack.com/archives/CALERTS/{link}>)\n\n_alert_",
+                        username="vy-monitors", bot_id=BOT, ts=ts, **kw)
+    late = "<!subteam^SINFRA> @top main has gone {} h without a passing post-landing check: its last verified commit is 41be424eb069"
+    alert(late.format(28), "p1", "1600000000.000001")
+    alert(late.format(28), "p1", "1600000100.000001")                                          # the same link again
+    last = alert(late.format(29), "p2", "1600003600.000001")                                   # a new link, the same alert
+    disk = alert("@infra vy-nebius-cpu-1: /workspace at 91%", "p3", "1600000050.000001", reactions=[{"name": "eyes"}])
+    ask = fake.add(COORD, text="@proofs a real ask", username="infra", bot_id=BOT, ts="1600000000.000009")
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
+    rep = json.loads(out)
+    assert rc == 0 and [s["ts"] for s in rep["unanswered"]] == [ask["ts"]] and rep["answered"] == []
+    assert rep["alerts"] == [
+        {"to": ["infra"], "posts": 1, "links": 1, "latest": disk["ts"], "picked_up": True, "title": "vy-nebius-cpu-1: /workspace at 91%",
+         "link": "https://x.slack.com/archives/CALERTS/p3"},
+        {"to": ["infra", "top"], "posts": 3, "links": 2, "latest": last["ts"], "picked_up": False,
+         "title": late.format(29).split("> @top ")[1], "link": "https://x.slack.com/archives/CALERTS/p2"}]
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000")
+    assert out.count("UNANSWERED") == 1 and f"UNANSWERED {ask['ts']} by @infra to @proofs" in out
+    assert [ln for ln in out.splitlines() if "ALERT" in ln][1] == (
+        "  ALERT to @infra @top: main has gone 29 h without a passing post-landing check: its last verified commit is 41be424eb069 "
+        f"(3 post(s), the latest {slack.both(last['ts'])}, not picked up): https://x.slack.com/archives/CALERTS/p2")
+
+
 @pytest.mark.parametrize("bad", [["circuits"], ["router"], ["two words"], "Codex", [7]])
 def test_external_posters_are_usernames_no_handle_or_router_has(registry, bad):
     reg = json.loads(registry.read_text())

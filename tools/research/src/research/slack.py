@@ -2891,14 +2891,38 @@ def render_volume(rep: dict, hours: float) -> str:
     return "\n".join(lines)
 
 
+ALERT_LINK_RE = re.compile(r"\s*\(alert: ([^)\s]+)\)")             # a mirrored machine alert's pointer to #agent-alerts
+ALERT_NUMBER_RE = re.compile(r"(?<![\w.-])[+-]?\d+(?:\.\d+)?(?![\w-])")   # a count or measure, which a repeat updates
+
+
+def alert_post(alerts: dict, m: dict, reg: dict) -> None:
+    """Count a mirrored machine alert (kind `alert`) into `alerts`: one entry per alert, which a repeat joins by its link or
+    by its addressees and text up to the numbers in it (each repeat links a new #agent-alerts post).  An entry is
+    {to, title, posts, links, latest, link, picked_up}; picked up is 👀, ✅, ❌ or a reply on any of its posts."""
+    text = plain(m.get("text") or "", reg)
+    to = lead_names(m.get("text") or "", reg)
+    lead = LEAD_RE.match(text)
+    link = (found := ALERT_LINK_RE.search(text)) and found[1]
+    title = ALERT_LINK_RE.sub("", text[lead.end():] if lead else text).strip()
+    keys = [("link", link)] * bool(link) + [("text", tuple(to), ALERT_NUMBER_RE.sub("#", title))]
+    a = next((alerts[k] for k in keys if k in alerts), None) or {"to": to, "posts": 0, "links": 0, "latest": "0", "picked_up": False}
+    a["posts"] += 1
+    a["links"] += bool(link) and ("link", link) not in alerts
+    a["picked_up"] = a["picked_up"] or bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
+    if float(m["ts"]) >= float(a["latest"]):
+        a.update(title=title, latest=m["ts"], link=link)
+    alerts.update(dict.fromkeys(keys, a))
+
+
 def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and each ask with the record
     that says whether it was answered, over the last --hours: a handle's ask linked to a Linear issue by the issue
     (`issue_state`), Daniel's #ask-daniel card by its page's Status (`page_state`), and only an ask with neither by Slack (a
     reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state; one whose record can't
     be read (no Linear or Notion credentials) is listed apart as unchecked, so a missing key is one finding, not a false alert
-    per ask.  With --latency, how fast each lane first answered its asks instead (`ask_latency`); with --volume, how
-    much each poster wrote (`volume`)."""
+    per ask.  A mirrored machine alert (a post of kind `alert`) is no ask: it is listed once per alert, however often it
+    repeats (`alert_post`), as an alert to the names it addresses.  With --latency, how fast each lane first answered its
+    asks instead (`ask_latency`); with --volume, how much each poster wrote (`volume`)."""
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
@@ -2924,7 +2948,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                      "paused": sum(_from(m.get("text") or "", "router") for m in bells)})
     posts = api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}")
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    dropped, asks, groups = [], [], {g for h in reg["handles"] for g in group_ids(h)}
+    dropped, asks, groups, alerts = [], [], {g for h in reg["handles"] for g in group_ids(h)}, {}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
     for m in posts:
@@ -2938,6 +2962,9 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                     fresh = origin_groups(registry_path(ns.registry))   # this checkout's registry may predate the group
                 if gid not in fresh:                                 # a group no handle has: `lead_names` can't route it
                     dropped.append({"name": f"subteam^{gid}", "ts": m["ts"], "by": poster(m, reg)})
+        if kind_of(m) == "alert":
+            alert_post(alerts, m, reg)
+            continue
         if not (m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and is_ask(m)):   # older clients tagged an fyi without (quiet)
             continue
         x = {"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)}
@@ -2959,8 +2986,10 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     old_enough = [(x, ok) for x, ok in asks if now - float(x["ts"]) > ns.stale_h * 3600]
     stale = [x for x, ok in old_enough if ok is False]
     unchecked = [x for x, ok in old_enough if ok is None]
+    alerted = sorted({id(a): a for a in alerts.values()}.values(), key=lambda a: a["latest"])
     if ns.json:
-        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale, "unchecked": unchecked}, indent=2))
+        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale, "unchecked": unchecked,
+                          "alerts": alerted}, indent=2))
         return 0
     print(f"traffic over the last {ns.hours:g} h (to {both(now)})")
     for x in rows:
@@ -2972,6 +3001,9 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         n = {r: sum(x["record"] == r for x in answered_by) for r in ("linear", "notion", "slack")}
         print(f"  answered: {len(answered_by)} ask(s), by their record: {n['linear']} on Linear, {n['notion']} on Notion, "
               f"{n['slack']} on Slack (no record)")
+    for a in alerted:
+        print(f"  ALERT to {' '.join('@' + t for t in a['to']) or 'no one it can ring'}: {a['title']} ({a['posts']} post(s), the "
+              f"latest {both(a['latest'])}, {'picked up' if a['picked_up'] else 'not picked up'}): {a['link'] or 'no link'}")
     for s in stale:
         print(f"  UNANSWERED {s['ts']} by @{s['by']} to {' '.join('@' + t for t in s['to']) or 'no one it can ring'} ({both(s['ts'])}): "
               + {"linear": f"Linear {s['ref']} {s['state']}", "notion": f"Notion page {s['ref']} {s['state']}",
