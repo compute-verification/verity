@@ -12,7 +12,9 @@ passes. Between steps the optimizer keeps `--opt`'s state:
 - `adafactor`: β1 = 0, the second moment factored per matrix (an fp32 row and column vector), RMS-clipped steps;
 - `muon`: the reduced gradient orthogonalized by Newton–Schulz, with a Nesterov momentum at `--mom-bits` (0: none),
   or with `--mom-rank R` that momentum in a rank-R subspace of the gradient (GaLore's projection, re-drawn every
-  `--proj-every` steps; the basis is state too, in bf16);
+  `--proj-every` steps; the basis is state too, in bf16); with `--msg-proj` too, a block sends only its gradient's
+  projection Pᵀ G (R × the long side), and at a re-draw G Ω (the short side × R, Ω Gaussian from the seed and the step)
+  as well, whose sum's QR is the next basis, so the messages grow with R and not with the matrices;
 - `sign`: signSGD on the reduced gradient, or on its momentum at `--mom-bits` (signum).
 
 The update Δ_t = θ_t − θ lives in `--store`: `qN` (N-bit codes into a uniform f16 codebook, an f16 scale per group,
@@ -252,14 +254,15 @@ class Opt:
     `mom_rank` R (muon): the momentum lives in a rank-R subspace of each matrix's short side (GaLore's projection): every
     `proj_every` steps P, the top R left singular vectors of the reduced gradient h (the matrix, transposed if tall), is
     re-drawn and kept in bf16, M (R × the long side) is rotated into it, M ← b1 M + Pᵀ h at `mom_bits`, and the step is
-    NS(h + b1 P M)."""
+    NS(h + b1 P M). With `msg_proj` the optimizer sees only what the blocks send (`step_proj`): Pᵀ h, and at a re-draw
+    h Ω for a seeded Gaussian Ω (long side × R), whose QR gives the next P; the step is P NS(Pᵀ h + b1 M)."""
 
     def __init__(self, kind: str, shapes: dict, b1: float, b2: float, mom_bits: int, group: int, gen: torch.Generator,
-                 mom_rank: int = 0, proj_every: int = 100):
+                 mom_rank: int = 0, proj_every: int = 100, msg_proj: bool = False):
         self.kind, self.b1, self.b2, self.t = kind, b1, b2, 0
         self.m, self.v, self.r, self.c, self.p = {}, {}, {}, {}, {}
         self.mom_bits, self.group, self.n = mom_bits, group, sum(math.prod(s) for s in shapes.values())
-        self.mom_rank, self.proj_every, self.shapes = mom_rank, proj_every, dict(shapes)
+        self.mom_rank, self.proj_every, self.shapes, self.msg_proj = mom_rank, proj_every, dict(shapes), msg_proj
         self.mom_code = Code(mom_bits, group, gen) if 0 < mom_bits < 32 else None
         for n, sh in shapes.items():
             if kind == "adamw":
@@ -320,9 +323,29 @@ class Opt:
             return lr * max(1.0, g.shape[0] / g.shape[1]) ** 0.5 * newton_schulz(u)
         return lr * (self._momentum(n, g, 1 - b1) if self.mom_bits else g).sign()
 
+    def step_proj(self, n: str, ph: torch.Tensor | None, y: torch.Tensor | None, lr: float) -> torch.Tensor | None:
+        """`msg_proj`: ph = Pᵀ h (None before the first basis, so no step), y = h Ω at a re-draw (else None)."""
+        sh, out = self.shapes[n], None
+        if ph is not None:
+            x = ph + self.b1 * self._momentum(n, ph, 1.0)
+            u = self.p[n].float() @ newton_schulz(x)
+            out = lr * max(1.0, sh[0] / sh[1]) ** 0.5 * (u.T if sh[0] > sh[1] else u)
+        if y is not None:
+            p = torch.linalg.qr(y.float())[0]
+            if n in self.p:
+                m = (p.T @ self.p[n].float()) @ self.m[n]
+                self.m[n] = self.mom_code(m) if self.mom_code else m
+            self.p[n] = p.bfloat16()
+        return out
+
     def flops(self, shapes: dict) -> int:
         n = sum(math.prod(s) for s in shapes.values())
         mom = (2 + (CODE_FLOPS if self.mom_code else 0)) * n if self.mom_bits else 0
+        if self.kind == "muon" and self.msg_proj:
+            r, nm, k = self.mom_rank, sum(t.numel() for t in self.m.values()), self.proj_every
+            lift = sum(2 * r * math.prod(s) + ns_flops((r, max(s))) for s in shapes.values())
+            redraw = sum(4 * min(s) * r * r + 2 * r * r * max(s) for s in shapes.values()) // k
+            return lift + redraw + (3 + CODE_FLOPS) * nm
         if self.kind == "muon" and self.mom_rank:
             r, nm = self.mom_rank, sum(t.numel() for t in self.m.values())
             proj = sum(4 * r * math.prod(s) + 2 * min(s) * max(s) ** 2 // self.proj_every for s in shapes.values())
@@ -337,7 +360,8 @@ class Opt:
 def accounting(a, shapes: dict, n_norm: int, opt: Opt) -> dict:
     """Formalism v1's training quantities for this run's configuration, in bits."""
     n = sum(math.prod(s) for s in shapes.values())
-    msg = 32 * n if a.msg_bits >= 32 else n if a.vote else n * a.msg_bits + 16 * (n // a.group)
+    nm = sum(a.mom_rank * (max(s) + min(s)) for s in shapes.values()) if a.msg_proj else n
+    msg = 32 * nm if a.msg_bits >= 32 else nm if a.vote else nm * a.msg_bits + 16 * (nm // a.group)
     msg += 32 * n_norm
     state = opt.state_bits() + 64 * n_norm
     store = 16 * n if a.store == "bf16" else n * int(a.store[1:]) + 16 * (n // a.group)
@@ -346,7 +370,7 @@ def accounting(a, shapes: dict, n_norm: int, opt: Opt) -> dict:
     s_tau = a.leaf * prepare.EVAL_CTX * TOKEN_BITS
     fit = {k: {"training": 2 * dgrad + s_tau <= kb, "update": store + s_tau <= kb,
                "joint": store + 2 * dgrad + s_tau <= kb} for k, kb in KS.items()}
-    return {"n_matrix_entries": n, "n_norm_entries": n_norm, "message_bits": msg, "state_bits": state,
+    return {"n_matrix_entries": n, "n_message_entries": nm, "n_norm_entries": n_norm, "message_bits": msg, "state_bits": state,
             "delta_grad_bits": dgrad, "delta_t_bits": store, "s_tau_bits": s_tau, "leaf_tokens": a.leaf * prepare.EVAL_CTX,
             "tree": a.tree, "fit": fit, "fit_note": "training: 2 Delta_grad + s tau <= k (formalism v1); update: Delta_t + "
             "s tau <= k; joint: one block holding Delta_t, two messages and its tokens"}
@@ -370,6 +394,8 @@ def main() -> int:
     ap.add_argument("--mom-bits", type=int, default=0, help="muon and sign: the momentum's bits (0 none, 32 fp32)")
     ap.add_argument("--mom-rank", type=int, default=0, help="muon: the momentum in a rank-R gradient subspace (`Opt`)")
     ap.add_argument("--proj-every", type=int, default=100, help="--mom-rank: steps between the subspace's re-draws")
+    ap.add_argument("--msg-proj", action="store_true",
+                    help="--mom-rank: a block sends Pᵀ G, and h Ω at a re-draw, instead of G (`Opt.step_proj`)")
     ap.add_argument("--store", default="q8", help="qN (1 <= N <= 8) or bf16")
     ap.add_argument("--store-scale", choices=("tight", "sticky"), default="tight",
                     help="a qN store's f16 scales: re-fit to each group's absmax after every step, or sticky (`Store`)")
@@ -409,6 +435,8 @@ def main() -> int:
     if a.mom_rank and (a.opt != "muon" or not a.mom_bits or sparse or a.lora or a.proj_every < 1):
         raise SystemExit("delta_grad: --mom-rank is a dense muon's momentum (--mom-bits > 0, no --support, no --lora), "
                          "with --proj-every >= 1")
+    if a.msg_proj and (not a.mom_rank or a.vote):
+        raise SystemExit("delta_grad: --msg-proj projects onto --mom-rank's basis, and takes no --vote")
     lora = a.lora > 0
     if lora and (sparse or a.e_bits not in prepare.LORA2_BITS):
         raise SystemExit(f"delta_grad: --lora takes no --support, and codes E as CWLORA2 at --e-bits in "
@@ -444,11 +472,13 @@ def main() -> int:
         stores[n + "#A"].add_(torch.randn(trained[n + "#A"], generator=gen, device=DEV) / math.sqrt(shapes[n][1]))
     e_code = Code(a.e_bits, a.group, gen) if sparse else None
     msg = Vote(gen) if a.vote else Code(a.msg_bits, a.group, gen) if a.msg_bits < 32 else None
-    opt = Opt(a.opt, opt_shapes, a.b1, a.b2, a.mom_bits, a.group, gen, a.mom_rank, a.proj_every)
+    opt = Opt(a.opt, opt_shapes, a.b1, a.b2, a.mom_bits, a.group, gen, a.mom_rank, a.proj_every, a.msg_proj)
     if a.mom_rank and any(a.mom_rank > min(s) for s in opt_shapes.values()):
         raise SystemExit("delta_grad: --mom-rank exceeds a target's short side")
     if a.mom_rank and a.mom_bits < 32 and any(a.mom_rank * max(s) % a.group for s in opt_shapes.values()):
         raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every projected momentum's entries")
+    if a.msg_proj and a.msg_bits < 32 and any(a.mom_rank * min(s) % a.group for s in opt_shapes.values()):
+        raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every range message's entries (R × short side)")
     for n in targets + norms:
         params[n].requires_grad_(True)
     nopt = torch.optim.AdamW([params[n] for n in norms], lr=a.norm_lr, betas=(0.9, 0.95), weight_decay=0.0) \
@@ -471,18 +501,20 @@ def main() -> int:
     leaves = a.batch // a.leaf
     trainable = {"full": sorted(targets + norms)}
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
-    n_entries = acct["n_matrix_entries"]
+    n_entries = acct["n_message_entries"]
     codings = 0 if msg is None else (leaves - 1 + (leaves if a.vote else 0)) if a.tree == "heap" else 2 * leaves - 1
     extra = CODE_FLOPS * n_entries * (codings + 1) + opt.flops(opt_shapes)
     if lora:
         extra += sum(2 * a.lora * math.prod(shapes[n]) for n in targets) * (2 * leaves + 1)
+    if a.msg_proj:
+        extra += sum(2 * a.mom_rank * math.prod(shapes[n]) for n in targets) * leaves * (a.proj_every + 1) // a.proj_every
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (per_step + extra))
     hooks.plan(n_steps)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fwd = torch.compile(net) if a.compile else net
     print(json.dumps({"mech": "dgrad", "opt": a.opt, "msg_bits": a.msg_bits, "store": a.store,
                       "store_scale": a.store_scale, "lora": a.lora, "mom_bits": a.mom_bits, "mom_rank": a.mom_rank,
-                      "lr": a.lr,
+                      "msg_proj": a.msg_proj, "lr": a.lr,
                       "steps": n_steps, "leaves": leaves, "targets": len(targets), "norms": len(norms),
                       "flops_per_step": per_step + extra, **{k: v for k, v in acct.items() if k != "fit"},
                       "fit": acct["fit"]}), flush=True)
@@ -496,6 +528,16 @@ def main() -> int:
         return prepare.encode_quant(e, theta)
 
     def messages() -> dict:
+        if a.msg_proj:
+            out = {}
+            for n in targets:
+                gw = params[n].grad.float()
+                h = gw.T if gw.shape[0] > gw.shape[1] else gw
+                if n in basis:
+                    out[n] = basis[n].T @ h
+                if n in omega:
+                    out[n + "#Y"] = h @ omega[n]
+            return out
         if not lora:
             return {n: sup[n].gather(params[n].grad) if sparse else params[n].grad for n in targets}
         out = {}
@@ -515,6 +557,12 @@ def main() -> int:
         rows = data.next(a.batch)
         tree, total = Tree(msg, a.tree, leaves), torch.zeros((), device=DEV)
         fac = {k: st.value() for k, st in stores.items()} if lora else {}
+        basis, omega = {}, {}
+        if a.msg_proj:
+            basis = {n: opt.p[n].float() for n in targets if n in opt.p}
+            if step % a.proj_every == 0:
+                og = torch.Generator(device=DEV).manual_seed(a.seed * 1_000_003 + step)
+                omega = {n: torch.randn((max(shapes[n]), a.mom_rank), generator=og, device=DEV) for n in targets}
         for i in range(0, a.batch, a.leaf):
             x = rows[i: i + a.leaf]
             with torch.autocast(DEV.split(":")[0], dtype=torch.bfloat16):
@@ -538,6 +586,11 @@ def main() -> int:
                     params[n].grad.mul_(f)
             opt.tick()
             for k in trained:
+                if a.msg_proj:
+                    s = opt.step_proj(k, g.get(k), g.get(k + "#Y"), a.lr * frac)
+                    if s is not None:
+                        stores[k].add_(-s)
+                    continue
                 if sparse and dense_opt:
                     s = sup[k].gather(opt.step(k, sup[k].scatter(g[k]), a.lr * frac))
                 else:
