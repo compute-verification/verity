@@ -838,16 +838,13 @@ def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], o
 
 def coins(live: list[dict]) -> str | None:
     """The coins M0's sessions ran on, as their LIVE records name them: ``os-seed-prf`` when the verdict opens the step-0 seed (the
-    binary's default), ``live-os`` when the identity names per-round OS coins (``FC_COINS=os``), ``coin-tree`` for a plain
-    session that does neither (``FC_COINS=tree``: the keyed coin tree, the challenger's under `serve --tree-from`, whose identity
-    is the default's); None for anything else (a ``--zk`` session's committed coin tree, a record without an identity) and for
-    sessions that differ."""
+    binary's default), ``coin-tree`` for a plain session that doesn't (``FC_COINS=tree``: the keyed coin tree, the challenger's
+    under `serve --tree-from`, whose identity is the default's); None for anything else (a ``--zk`` session's committed coin
+    tree, a record without an identity) and for sessions that differ."""
     def mode(x: dict) -> str | None:
         ident = x.get("identity") or {}
         if (x.get("verdict") or {}).get("coin_seed"):
             return "os-seed-prf"
-        if str(ident.get("coins", "")).startswith("live-os"):
-            return "live-os"
         return "coin-tree" if ident and (ident.get("hooks") or {}).get("zk") is not True else None
 
     modes = {mode(x) for x in live}

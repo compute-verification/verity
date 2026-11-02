@@ -67,7 +67,7 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]
-            assert live["coins"] == {"os": "live-os", "tree": "coin-tree"}.get(os.environ.get("FC_COINS", ""), "os-seed-prf")
+            assert live["coins"] == ("coin-tree" if os.environ.get("FC_COINS") == "tree" else "os-seed-prf")
 
 
 def _gemm_fp():
@@ -711,7 +711,7 @@ def test_a_live_statement_is_accepted_only_if_every_session_is_and_prove_exits_0
 
 def test_a_live_statement_records_the_coins_its_sessions_ran_on(monkeypatch, tmp_path: Path):
     (tmp_path / "circuit.txt").write_text("circuit")
-    seed, os_ = {"verdict": {"coin_seed": {"commitment": "ab"}}}, {"identity": {"coins": "live-os (every round's coins ...)"}}
+    seed = {"verdict": {"coin_seed": {"commitment": "ab"}}}
     tree, zk = {"identity": {"hooks": {"tables": "os"}}}, {"identity": {"hooks": {"zk": True}}}
     st: dict = {}
 
@@ -731,8 +731,8 @@ def test_a_live_statement_records_the_coins_its_sessions_ran_on(monkeypatch, tmp
     monkeypatch.delenv("FC_VERIFIERS", raising=False)
     monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"], []))
     monkeypatch.setattr(CS.subprocess, "Popen", Prove)
-    for live, coins in (([seed] * 2, "os-seed-prf"), ([os_] * 2, "live-os"), ([tree] * 2, "coin-tree"), ([zk] * 2, None),
-                        ([{}] * 2, None), ([seed, os_], None), ([tree, zk], None)):
+    for live, coins in (([seed] * 2, "os-seed-prf"), ([tree] * 2, "coin-tree"), ([zk] * 2, None), ([{}] * 2, None),
+                        ([seed, tree], None), ([tree, zk], None)):
         st["live"] = live
         assert CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=1)["coins"] == coins, live
 

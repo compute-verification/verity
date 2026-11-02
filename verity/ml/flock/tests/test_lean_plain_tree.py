@@ -1,16 +1,15 @@
-"""A plain hidden-output session on the keyed coin tree, end to end (PROTOCOL.md §16.15, `plain_hidden.py`, `--coins
+"""A plain hidden-output session on the keyed coin tree, end to end (`Flock.ProvedScope`, `plain_hidden.py`, `--coins
 tree`, `Flock.CoinTree`): a RoPE d64 statement with hidden outputs whose 32 units read their own rows (no shared rows, no
 registered value), proved by Flock in one loopback session without `--zk` under a subset sample of 16
-(`pod/91-plain-hidden.sh COINS=tree`), its coins committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree that the auditor's
+(`pod/91-plain-hidden.sh`), its coins committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree that the auditor's
 challenger sampled and opened (`flock-circuit serve --tree-from`, the prover checking each opening).
 
 The session's coins are the ones the challenger's release log shows it sampled and opened. The compiled Lean verifier
 accepts it with the verifier's own program and partition, the form `flock_verify_sound`'s plain hidden-output branch
-covers at the subset law (`FailClosed.SoundExecH` at its subset sample design), and refuses it on any other coins at
-S2/R7, a second time in one run for its reused session key, with a byte of a proof changed, or with its record's sample a
-bernoulli sample of the same units (no claim draws by that law). It and `test_lean_plain_hidden.py` (a session on OS
-coins) are the tests of a plain session at the subset law on the verifier of record; the `#guard`s of
-`Flock/Test/PlainHidden.lean` hold the rule itself.
+covers at the subset law (`FailClosed.SoundExecH` at its subset sample design), and refuses it on seed coins at S2/R7
+(`--coins` names no other source), a second time in one run for its reused session key, with a byte of a proof changed, or with its record's sample a
+bernoulli sample of the same units (no claim draws by that law). It is the test of a plain session at the subset law on
+the verifier of record; the `#guard`s of `Flock/Test/PlainHidden.lean` hold the rule itself.
 
 It is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a missing fixture
 fails these tests rather than skipping them. Each verify sets up an m = 22 table, so the module is slow. It catches a
@@ -45,10 +44,10 @@ def fx():
     return FIXTURE
 
 
-def _verify(fx: Path, coins: str, *sessions: Path) -> tuple[int, list[dict]]:
+def _verify(fx: Path, coins: str | None, *sessions: Path) -> tuple[int, list[dict]]:
     st = fx / "stage"
-    p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit", "--coins", coins, "--circuit",
-                        str(st / "circuit.txt"), "--public", str(st / "pub-32.bin"), "--partition", str(st / "partition.json"),
+    p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit", *(("--coins", coins) if coins else ()),
+                        "--circuit", str(st / "circuit.txt"), "--public", str(st / "pub-32.bin"), "--partition", str(st / "partition.json"),
                         "--program", str(st / "program.json"), "--session", *map(str, sessions or [fx / "session"])],
                        capture_output=True, text=True, check=False)
     return p.returncode, [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
@@ -84,9 +83,8 @@ def test_the_plain_session_on_the_tree_at_a_subset_draw_is_accepted(fx):
     assert v["program_sha512"] == json.loads((fx / "stage" / "partition.json").read_text())["program"]
 
 
-@pytest.mark.parametrize("coins", ["os", "seed"])
-def test_other_coins_refuse_it_at_hello(fx, coins):
-    rc, [v] = _verify(fx, coins)
+def test_seed_coins_refuse_it_at_hello(fx):
+    rc, [v] = _verify(fx, None)
     assert (rc, v["accepted"], v["why"]) == (1, False, "S2/R7: the session parameters are not the verifier's"), v
 
 
@@ -114,6 +112,7 @@ def test_a_changed_proof_or_an_uncovered_law_is_refused(fx, tmp_path):
     assert bad == {**bad, "accepted": False, "why": "refused: a bernoulli draw: no soundness claim draws by this law"}, bad
 
 
-def test_coins_it_does_not_know_are_a_usage_error(fx):
-    rc, verdicts = _verify(fx, "urandom")
+@pytest.mark.parametrize("coins", ["os", "seed", "urandom"])
+def test_coins_other_than_the_tree_are_a_usage_error(fx, coins):
+    rc, verdicts = _verify(fx, coins)
     assert (rc, verdicts) == (2, [])
