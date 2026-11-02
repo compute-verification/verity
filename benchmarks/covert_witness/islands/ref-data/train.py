@@ -1,10 +1,11 @@
-"""Island `ref-data` (class `reference`, no cap on the update): ref-optim's train.py (cursor/te-ref-optim-4207 at eb8365f3162:
+"""Island `ref-data` (class `reference`, no cap on the update): ref-optim's train.py (cursor/te-ref-optim-4207 at 0788f9d17e6:
 every optimizer knob a flag, the seed's shape by default) with the data it trains on and their order as the variable. Every
 FLOP spent choosing data is in the step log. The launcher runs `islands/reference/train.py`, a symlink to this file.
 
 Optimizer (ref-optim's): Muon or AdamW on the block matrices, AdamW on the embedding and norms, `--sched linear|wsd|cosine|const`
 with warmup and `--final-frac`, EMA (`--ema-frac`) chosen against raw weights on held-back training-stream windows (priced
-forwards), snapshots at `--snap-at`.
+forwards), snapshots at `--snap-at`, and `--forks` cooldown branches (`--fork-len` of the steps before each, the rate linearly
+toward 0 on windows after the plan, snapshotted, then rolled back; their passes stay in the step log).
 
 Data (all off by default: TrainData's stream permuted by `--data-seed`, the seed's):
 
@@ -163,6 +164,8 @@ def main() -> int:
     ap.add_argument("--ema-frac", type=float, default=0.0)
     ap.add_argument("--val-rows", type=int, default=64, help="held-back training-stream windows per validation")
     ap.add_argument("--snap-at", default="0.25,0.5,0.75", help="fractions of the steps (comma-separated; empty: none)")
+    ap.add_argument("--forks", default="", help="fractions of the steps where a cooldown branch forks (comma-separated)")
+    ap.add_argument("--fork-len", type=float, default=0.15, help="a branch's steps, as a fraction of the steps before it")
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     ap.add_argument("--no-compile", action="store_true")
     ap.add_argument("--windows", choices=("random", "fresh", "seen"), default="random")
@@ -181,6 +184,8 @@ def main() -> int:
         raise SystemExit("train: --order needs --score-len (θ's scores)")
     if a.fresh and a.windows != "random":
         raise SystemExit("train: --fresh is ref-optim's fresh windows; give it or --windows, not both")
+    if a.forks and a.score_len:
+        raise SystemExit("train: a fork's windows are not scored; give --forks or --score-len, not both")
     torch.backends.cuda.matmul.allow_tf32 = True
     dev = prepare.DEVICE.split(":")[0]
     net, rec, theta = prepare.load_start(a.start)
@@ -218,12 +223,22 @@ def main() -> int:
     step_short = flops("train", a.short_ctx, tokens) + extra
     per_step = a.short_frac * step_short + (1 - a.short_frac) * step_long
     snap_at = [float(x) for x in a.snap_at.split(",") if x.strip()]
+    fork_at = [float(x) for x in a.forks.split(",") if x.strip()]
     val_tokens = a.val_rows * CTX
-    n_val = (len(snap_at) + 1) * (2 if a.ema_frac else 1) if a.val_rows else 0
+    n_val = ((len(snap_at) + 1) * (2 if a.ema_frac else 1) + len(fork_at)) if a.val_rows else 0
     val_flops = n_val * flops("forward", CTX, val_tokens)
     score_per_window = flops("forward", a.score_len, a.score_len) if a.score_len else 0
     pool_per_step = a.batch / a.keep if a.score_len else 0
-    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - val_flops) // (per_step + pool_per_step * score_per_window))
+    room = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - val_flops
+    main_step = per_step + pool_per_step * score_per_window
+
+    def fork_lens(n: int) -> dict[int, int]:
+        return {max(1, round(n * f)): max(1, round(a.fork_len * n * f)) for f in fork_at if 0 < f < 1}
+
+    n_steps = int(room // (main_step + step_long * a.fork_len * sum(fork_at)))
+    while n_steps > 1 and n_steps * main_step + sum(fork_lens(n_steps).values()) * step_long > room:
+        n_steps -= 1
+    forks = fork_lens(n_steps)
     n_short = round(a.short_frac * n_steps)
 
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
@@ -324,27 +339,29 @@ def main() -> int:
                  "score_seconds": round(time.perf_counter() - t0, 1)}
     else:
         plan = win.take(n_steps * a.batch)
+    fork_plan = win.take(sum(forks.values()) * a.batch)
     info["plan_seen_share"] = float(np.isin(plan, seen).mean()) if len(seen) else 0.0
     info["plan_repeats"] = int(len(plan) - len(np.unique(plan)))
+    info["forks"] = forks
 
     marks = {max(1, round(n_steps * f)) for f in snap_at if 0 < f < 1}
     out = Path(a.out)
     snap_log = []
     print(json.dumps(info), flush=True)
     trained_params = [params[n] for n in trained]
-    for step in range(n_steps):
-        m = lr_mult(step, n_steps, a)
+
+    def train_step(m: float, ids: np.ndarray, ctx: int) -> float:
         for o in opts:
             for g in o.param_groups:
                 g["lr"] = g["base_lr"] * m
-        ctx = a.short_ctx if step < n_short else CTX
-        rows = win.rows(plan[step * a.batch: (step + 1) * a.batch], ctx)
+        rows = win.rows(ids, ctx)
         micro = a.micro * (CTX // ctx)
         chunks = [rows[i: i + micro] for i in range(0, len(rows), micro)]
         n_kept = sum(len(x) - int(a.trunc * len(x)) for x in chunks)
+        total = 0.0
         for x in chunks:
-            raw = seqf(x)
-            seq = raw
+            seq = seqf(x)
+            total += float(seq.detach().sum())
             n_drop = int(a.trunc * len(x))
             if n_drop:
                 keep = torch.ones_like(seq)
@@ -360,22 +377,56 @@ def main() -> int:
         steps.append({"op": "train", "tokens": tokens, "ctx": ctx})
         if extra:
             steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+        return total / len(rows)
+
+    def snapshot(model: dict, entry: dict) -> None:
+        d = out / "snap" / f"{len(snap_log):03d}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "E.bin").write_bytes(prepare.encode_full(model))
+        (d / "meta.json").write_text(json.dumps({"steps_prefix": len(steps)}) + "\n")
+        snap_log.append(entry)
+        print(json.dumps({"snapshot": len(snap_log) - 1, **entry}), flush=True)
+
+    fork_at_ids = iter(range(0, len(fork_plan), a.batch))
+
+    @torch.no_grad()
+    def fork(step: int, k: int) -> None:
+        """ref-optim's cooldown branch: k steps from the current rate linearly toward 0 (at 1024, on windows after the plan),
+        snapshot, then back to the weights and optimizer state it forked from."""
+        saved = [p.detach().clone() for p in trained_params]
+        states = [{p: {n: (v.clone() if torch.is_tensor(v) else v) for n, v in st.items()} for p, st in o.state.items()}
+                  for o in opts]
+        m0 = lr_mult(step - 1, n_steps, a)
+        with torch.enable_grad():
+            for j in range(k):
+                i = next(fork_at_ids)
+                train_step(m0 * (k - j) / k, fork_plan[i: i + a.batch], CTX)
+        entry = {"step": step, "fork_steps": k, "weights": "fork"}
+        if a.val_rows:
+            entry["val_raw"] = validate()
+        snapshot(model_of(params, theta, trained), entry)
+        for p, s in zip(trained_params, saved):
+            p.copy_(s)
+        for o, st in zip(opts, states):
+            o.state.clear()
+            o.state.update(st)
+
+    for step in range(n_steps):
+        m = lr_mult(step, n_steps, a)
+        ctx = a.short_ctx if step < n_short else CTX
+        loss = train_step(m, plan[step * a.batch: (step + 1) * a.batch], ctx)
         if ema is not None:
             beta = 1 - 1 / max(1.0, a.ema_frac * (step + 1))
             torch._foreach_lerp_(ema, [p.detach() for p in plist], 1 - beta)
         if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "ctx": ctx, "loss": float(raw.detach().mean()), "lr_mult": round(m, 4),
+            print(json.dumps({"step": step + 1, "ctx": ctx, "loss": loss, "lr_mult": round(m, 4),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
             which, vinfo = choose()
             model = vinfo.pop("model", None) or model_of(params, theta, trained)
-            i = len(snap_log)
-            d = out / "snap" / f"{i:03d}"
-            d.mkdir(parents=True, exist_ok=True)
-            (d / "E.bin").write_bytes(prepare.encode_full(model))
-            (d / "meta.json").write_text(json.dumps({"steps_prefix": len(steps)}) + "\n")
-            snap_log.append({"step": step + 1, "weights": which, **vinfo})
-            print(json.dumps({"snapshot": i, **snap_log[-1]}), flush=True)
+            snapshot(model, {"step": step + 1, "weights": which, **vinfo})
+        if step + 1 in forks:
+            fork(step + 1, forks[step + 1])
     which, vinfo = choose()
     model = vinfo.pop("model", None) or model_of(params, theta, trained)
     final = {"step": n_steps, "weights": which, **vinfo}
