@@ -534,8 +534,8 @@ class TP2CaptureWorkerExtension:
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank.  ``commit_scheme``
-        (unset = rows-sha512) is the committer's (`NativeCollectCommitter`): tp-commit passes its ``--commit-scheme`` (rows-sha512 by default,
-        whose 64-byte roots the SHA-512 TP run root combines, `tp.run_root`)."""
+        (unset = rows-sha512) is the committer's (`NativeCollectCommitter`): tp-commit passes its ``--commit-scheme`` (rows-sha512, the only one
+        it takes, whose 64-byte roots the SHA-512 TP run root combines, `tp.run_root`)."""
         from types import SimpleNamespace
         from verity_vllm.pipeline.commit import baseline_state, make_committer
 
@@ -1118,7 +1118,7 @@ class TP2CaptureWorkerExtension:
 
     def tp2_commit_open_population(self, *, k: int, salt: str, combined_root_hex: str, source_hex: str,
                                    claimed_root_hex: str | None = None) -> dict[str, Any]:
-        """Openings drawn from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
+        """Openings sampled from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
         this rank's map digest + salt, from the pair's identities coin `source_hex`, drawn after that root: `pipeline.commit_coins`;
         forced late step + one per family), opened against the rank's retained tree and verified
         with the production core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
@@ -1133,7 +1133,7 @@ class TP2CaptureWorkerExtension:
         if rc is None or not pop or not bmap:
             return {"rank": st["rank"], "n": 0, "verified": 0, "error": "no population / binding map on this rank"}
         rcv = self._claimed(rc, claimed_root_hex)
-        draws = bd.challenge_identities(pop, bmap, bytes.fromhex(combined_root_hex), int(k), salt=salt.encode(), legacy=False,
+        draws = bd.challenge_identities(pop, bmap, bytes.fromhex(combined_root_hex), int(k), salt=salt.encode(),
                                         source=bytes.fromhex(source_hex))
         unbound = [bd.identity_dict(i) for i, e, _l in draws if e is None]
         positions = [(int(i[2]), int(leaf)) for i, e, leaf in draws if e is not None]

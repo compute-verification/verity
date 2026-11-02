@@ -9,7 +9,7 @@ import PousCheck.Prim.PyJson
 /-!
 # `p2-audit-wire/v4`: a setup and one timed audit, verified to its `FINAL` frame
 
-`p2/PROTOCOL.md` §4 ("Audit protocol and wire formats") and §5, as the reference verifier (`benchmarks/pous/p2_v1/wire.py`,
+P2 v4's wire format and audit, as the reference verifier (`benchmarks/pous/p2_v1/wire.py`,
 `verify_audit`) reads them. A frame is `"P2AU" ‖ 0x04 ‖ type ‖ u32be(len body) ‖ body`, and a session is
 SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK*, SETUP_ROOT, AUDIT_OPEN, then CHALLENGE and RESPONSE alternating. `verifyAudit`
 returns the `FINAL` frame the verifier sends, byte for byte, with its verdict, failure code, the transcript's hash and one
@@ -59,7 +59,7 @@ def RESPONSE : Nat := 0x12
 def FINAL : Nat := 0x13
 def TYPES : List Nat := [SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK, SETUP_ROOT, AUDIT_OPEN, CHALLENGE, RESPONSE, FINAL]
 
-/-! Failure codes (§4): the `FINAL`'s second status byte. -/
+/-! Failure codes: the `FINAL`'s second status byte. -/
 def SUCCESS : Nat := 0
 def MALFORMED : Nat := 1
 /-- Identity, round, index, replay or domain. -/
@@ -145,8 +145,8 @@ def payloadBits (profile : String) (width : Nat) : W Nat := do
 
 def FIELDS : Array String := #["blocks_per_segment", "c0", "profile", "scheme", "segments", "w"]
 
-/-- The store a SETUP_COMMIT's manifest names (`_canonical_json`, `_params`): UTF-8 JSON that is its own canonical form
-(sorted keys, no whitespace, integers only; a float is read as Python reads it, `Prim.PyJson.scan`), an object of exactly `FIELDS` with `scheme = "p2"`, the four numbers
+/-- The store a SETUP_COMMIT's manifest names (`_canonical_json`, `_params`): UTF-8 JSON that is its own identity form
+(`Flock.canonUtf8`: sorted keys, no whitespace, integers only; a float is read as Python reads it, `Prim.PyJson.scan`), an object of exactly `FIELDS` with `scheme = "p2"`, the four numbers
 integers in range, a known payload profile, `p = 2^w − c0 ≡ 3 mod 4` with `w` a multiple of 32, and every payload below
 `p` (`reference.Params`). Every refusal is malformed. -/
 def manifestParams (data : ByteArray) : W Params := do
@@ -156,7 +156,7 @@ def manifestParams (data : ByteArray) : W Params := do
   let .ok j := Json.parse text | bad "manifest is not canonical UTF-8 JSON"
   let .ok kvs := j.getObj? | bad "manifest is not an object"
   if unwritable then bad "manifest holds a value canonical JSON cannot"
-  match Flock.canon j with
+  match Flock.canonUtf8 j with
   | .ok c => if c.toUTF8 != data then bad "manifest is not canonical JSON"
   | .error _ => bad "manifest is not canonical JSON"
   let keys := (kvs.toArray.map (·.1)).qsort (· < ·)
@@ -250,14 +250,14 @@ def parseSetup (frames : Array ByteArray) : W (Setup × Nat) := do
   if let some m := mismatch then throw m
   pure (⟨manifest, commitment, salt, q, blocks, root, epochId manifest commitment salt q.blocks root⟩, cursor)
 
-/-- `W` from its payloads (`pack_payloads`, §4): `bits` bits each, packed continuously, the first payload and its most
+/-- `W` from its payloads (`pack_payloads`): `bits` bits each, packed continuously, the first payload and its most
 significant bit first, zero-padded to whole bytes. -/
 def packPayloads (payloads : Array Nat) (bits : Nat) : ByteArray :=
   let total := payloads.size * bits
   let pad := (8 - total % 8) % 8
   be (payloads.foldl (fun acc m => (acc <<< bits) ||| m) 0 <<< pad) ((total + pad) / 8)
 
-/-- The commitment to `W` (`w_commitment`, §4): `tagged_sha512("verity-pous/w-commitment/v2", u64be(len manifest) ‖
+/-- The commitment to `W` (`w_commitment`): `tagged_sha512("verity-pous/w-commitment/v2", u64be(len manifest) ‖
 manifest ‖ W)`, the manifest canonical JSON of the reference's six fields (no `expander`, unlike `Commit.manifest`),
 which a setup's manifest is (`manifestParams` admits no other bytes). A payload too long for the tag's u64 length has
 no commitment, and matches none. -/

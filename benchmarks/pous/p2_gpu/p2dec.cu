@@ -3,7 +3,7 @@
 // kernel). Added for benchmarks/pous: -DP2_DERIVE expands fresh per-block keys on the
 // device (M1's key schedule, verity.core.protocols.pous.schemes.p2 v2): per segment s a 32-byte seed, per block j of the segment a ChaCha8
 // stream with nonce j, read as big-endian W/8-byte words: K_j the first and t_j the second. The spec rejection-samples t_j
-// below p; a second word >= p (probability C0/2^W) makes the run exit 3 instead of drawing the third. Only the seeds cross
+// below p; a second word >= p (probability C0/2^W) makes the run exit 3 instead of sampling the third. Only the seeds cross
 // from the host, so nothing key-sized is stored. The shared K and t_j = t0 + j*step (M2) stay the default build. C may be
 // read from a file (argv[6]) instead of filled on the device; on the device it is little-endian 32-bit limbs.
 // Per block j, with p = 2^W - C0 (p = 3 mod 4), public mask K, tweak t_j = t0 + j*step mod p:

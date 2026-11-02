@@ -1,7 +1,6 @@
-"""The ids and dates the Definitions' conformance texts, the row kernels' provenance records and the lifted Programs' labels
-and refusals cite (evidence-store runs, records and art ids, capture dates, who ran a quarantine's difftests, the rulings and
-findings the lifted Programs follow, the ask that fixed the window slots), read from `evidence.json`, keyed by the capture,
-probe or rule they identify."""
+"""The evidence the Definitions' conformance texts and the row kernels' provenance records cite, read from `evidence.json` and
+keyed by the capture or probe they identify: evidence-store art ids under the role each plays (``run_record``, the record a
+run published; ``art``, its output), record digests, the harness commits that ran them and capture dates."""
 from __future__ import annotations
 
 import json

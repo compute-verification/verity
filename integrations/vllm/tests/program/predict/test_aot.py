@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.types import Record
+from verity.ml.circuits.types import RecordType
 from verity_vllm.config import UsageError
 from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE, correspondence_digest
 from verity_vllm.program.predict import aot as A
@@ -23,8 +23,8 @@ from tests.program.predict.test_predict import TINY, _phi
 AOT = {"comparison": "r20261018-001500-aaaa", "trace": "art:" + "5" * 64}
 
 
-def _weights(program) -> tuple[str, Record]:
-    return next((n, t) for n, t in program.fn.body.params if isinstance(t, Record))
+def _weights(program) -> tuple[str, RecordType]:
+    return next((n, t) for n, t in program.fn.body.params if isinstance(t, RecordType))
 
 
 def _trace(d: Path) -> Path:
@@ -60,7 +60,7 @@ def test_emit_writes_the_predicted_program_under_the_traces_annotations_and_name
     assert (doc["digest"], doc["correspondence_digest"]) == (res["program"]["digest"], res["program"]["correspondence_digest"])
     assert [r["name"] for r in doc["rows"]] == [f"m{k}/fx_{k}" for k in range(len(doc["rows"]))]
     name, rec = _weights(build_program(_phi(TINY), "step", M=1, pos0=8).program)
-    assert dict(doc["params"])[name] == str(Record(*((f"inner.{n}", t) for n, t in rec.fields)))
+    assert dict(doc["params"])[name] == str(RecordType(*((f"inner.{n}", t) for n, t in rec.fields)))
 
 
 def test_emit_refuses_weight_leaves_that_are_not_the_programs(tmp_path):

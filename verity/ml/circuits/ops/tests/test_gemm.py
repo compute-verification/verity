@@ -340,7 +340,7 @@ def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_ever
 def test_the_pv_row_is_the_padded_coordinate_on_each_of_v_s_columns() -> None:
     """`PvRow_v1{T, K=32, D=64}`'s dim d is `GemmCoordinatePad_v1{T, K=32}` of p and (v0[d], ..., v{T-1}[d]), at T = 1, 8 and
     32, on the reference; the registered kernel gives the same words. Each key row is one 1,024-bit (128-byte) port, over the
-    111 bytes C-Flock needs of some row of a unit, and the output is one 1,024-bit row."""
+    111 bytes Flock needs of some row of a unit, and the output is one 1,024-bit row."""
     import numpy as np
 
     from verity.ml.circuits import evaluation as E

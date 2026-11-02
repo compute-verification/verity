@@ -15,7 +15,7 @@ input.
 statement program, row i instance i's, under public salts (`rec_residuals.verifier_value`): their roots are functions of the
 inner session's public record, and the prover's rows and salts are the same registration's.
 
-**The tops** (`TopValue`). Neither side sees a tree's top in the clear: the firewall committed each node as a registered row
+**The tops** (`TopValue`). Neither side sees a tree's top in the clear: the ZK server committed each node as a registered row
 (`verity_flock.rec_live.top_rows`) under a fresh salt of its own, and the coin server recorded only the nodes' ``b || c``
 (`verity_flock.rec_vstar.tops`). The prover registers the tops a level's openings climb to (level 0's ``root_B``, both reps'
 one tree, else rep 0's top then rep 1's) as the value ``rec-top-L<level>`` under the V* session's program and those very salts;
@@ -23,7 +23,7 @@ the verifier builds its own entry of that value from the recorded ``b || c`` alo
 reads file puts instance ``i``'s output at the row of the top node its position names (rep ``r``'s first row plus
 ``pos >> H``; PROTOCOL.md §16.13 "Registered reads", `verity.core.protocols.sampled_proofs.one_stage.registered`). An
 instance is satisfiable only if its private rows climb, by the verifier's ``dirs``, to that registered row, whose ``b || c``
-the firewall committed: the statement holds only if every opening climbs to the committed top node its coin names.
+the ZK server committed: the statement holds only if every opening climbs to the committed top node its coin names.
 
 **The running sums** (`Chain`). The openings of both reps, rep-major, then by level and query (`chain_order`), are positions
 ``0 .. N - 1`` of one chain; the prover registers its ``N + 1`` rows as the value ``rec-acc`` (`ACC_VALUE`) under the V*
@@ -34,7 +34,7 @@ consistency terms, and V*'s algebra (`verity_flock.rec_residuals`) reads a rep's
 the verifier's (`coefficients`: the final check's κ at the rep's coins times the level's eq(α)[j],
 `verity_flock.rec_algebra.verifier_rows`).
 
-**The claims** (`note:proofs/20261010T1820Z-draft-c3-claim-layout`). Beside ``rec-acc``, under the same program string and its
+**The claims.** Beside ``rec-acc``, under the same program string and its
 own salts, the prover registers each rep's `rec_sparse.RecSparse` claim as the value ``rec-claim`` (`CLAIM_VALUE`), row r rep
 r's (one element, 64 words): RecSparse's instance r reads row r, and the registered opening (`rec_residuals.stage_opening`)
 reads row 0 as ``claim0`` and row 1 as ``claim1``, so the two statements open one root's cells.
@@ -142,7 +142,7 @@ def top_value_name(level: int) -> str:
 @dataclass
 class TopValue:
     """A level's tops as one registered value (`top_value_name`): the prover's registration (``reg``, the top rows under the
-    firewall's salts), the verifier's own entry from the coin server's ``b || c`` alone (``own``), and each rep's first row."""
+    ZK server's salts), the verifier's own entry from the coin server's ``b || c`` alone (``own``), and each rep's first row."""
 
     reg: object
     own: dict

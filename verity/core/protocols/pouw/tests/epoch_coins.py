@@ -1,4 +1,4 @@
-"""A deterministic challenger for the tests (`verity.core.protocols.pouw.coins`): `challenger(seed)` draws its
+"""A deterministic challenger for the tests (`verity.core.protocols.pouw.coins`): `challenger(seed)` flips its
 coins and hm96 salts from a counter-mode stream of the seed, so every challenger on one seed holds the same coins and
 commitment, and a test that audits one epoch several times asks a fresh one each time (a challenger opens a coin once)."""
 

@@ -1,7 +1,7 @@
 """Each stratum's circuit file of the declared window Program, built with the auditor's lowering, is what the period's
 open commits (`pouw_h1_circuits.build`, `pouw_h1_rehearsal.period_open_argv`): ``--circuit-files`` carries the SHA-512
 of each K's file, as infra's gate parses it (`auditor.circuit_files_of`), its ledger's open records it and core's credit
-reads it (`credit.committed_files`). The real lowering (C-Flock's `UnitStager`) is the rehearsal's long CPU step, so
+reads it (`credit.committed_files`). The real lowering (Flock's `UnitStager`) is the rehearsal's long CPU step, so
 here a stand-in writes each file, over the served tests' stand-in unit."""
 from __future__ import annotations
 
