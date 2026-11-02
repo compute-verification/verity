@@ -2177,6 +2177,10 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Verity.Recursive.LiveCoins": {
+   "owner": "@proofs",
+   "digest": "8546e06c806d9823031c662a2c463f83113cfaf39894ef4f03cf02912d4933ba"
   }
  },
  "meaning": [
@@ -65912,7 +65916,7 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
   "Proofs.Properties.Verity.Recursive": {
-   "digest": "2e16c8d664794ab9ae43d4da7cee33f031c97b9775368fbab52f3ff52ef82aa0",
+   "digest": "ed832aaf49ce7f14fc4c0e06e7da0029177d1afe705aca7f3e54bcd9624dd2a1",
    "definitions": {
     "Verity.Recursive.Dep": "c3514fcc465eb6f95c65f836d9e46823a4f839810af5713e98d5f58c51f99fb0",
     "Verity.Recursive.Dep.Bd": "a8b0b26fffefc7fa2b053b6a4374ddc83b96ca0f3c7b84ab631cd759e28ea88d",
@@ -65942,7 +65946,6 @@
     "Verity.Recursive.Dep.w": "ff7f6bebc7110f5e60d65b7afa42fb6dfcf067ac374d4e1e813e5f3749bcc171",
     "Verity.Recursive.Dep.wE": "1e1bb307b678875ec9186e7e02b2df9448e8bb72754c4a6a5a129942f42a0703",
     "Verity.Recursive.Dep.weight": "0f83859bcbf9cc65be9405d1b31363f5608a67321464cd2a5a2fe00503bc3ff2",
-    "Verity.Recursive.LiveCoins": "ef82d2d353759b184c4302fe1fdb6e7a80126077ee11595f0c07b4310d245dc6",
     "Verity.Recursive.RecVerdict": "0334ae23480875b5ec1ec66bae21c3ce55566f406c99022ecb545a7f8306e8be",
     "Verity.Recursive.RowsShow": "ed190e290ad4c9c59fa89f34627b804a49f166afe81a36ad7fd166eb16ea1d14",
     "Verity.Recursive.SampledCase": "be8a734bbefa7331838f683f7847bc4bbb5ab96c1467840d4d904a8c5eb29110",
@@ -65962,6 +65965,13 @@
     "Verity.Recursive.repName": "9957214667e05491254289f472ef643793c38ab6cefad6dc1979c2876128292f",
     "Verity.Recursive.runCalls": "498b226028b84690fbe4a7ff825c4bc78c8550ffe1964ad7f9390f315c7fbd70",
     "Verity.Recursive.stageAt": "a4e4cce0bc7d15d95a4bbb777fcbc76c0457412453ba04822c36bb0c26ef7c1a"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
+  },
+  "Proofs.Properties.Verity.Recursive.Assumptions": {
+   "digest": "bf1f24b9f1a729052ffd46c4880b72831514d42fae90895c90219728a0a09dd3",
+   "definitions": {
+    "Verity.Recursive.LiveCoins": "8546e06c806d9823031c662a2c463f83113cfaf39894ef4f03cf02912d4933ba"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
