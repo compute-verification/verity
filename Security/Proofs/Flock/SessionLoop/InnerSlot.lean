@@ -1,6 +1,7 @@
 import Proofs.Flock.SessionLoop.TakenVals
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.ExePlan
+import Proofs.Flock.Claims.ZK.FrameRankFault
 
 /-!
 # Where the inner proof's rounds sit in the session
@@ -14,9 +15,11 @@ schedule is the whole of the rep's algebraic phase and opening, so the history's
   of the opening's (`schedSoFar_size`, whose coin count it supplies).
 * `Loop.locate_inv`: `CoinLayer.locate` within the rounds' sum places a round at its stream's start plus its index, below
   the stream's length.
+* `Loop.getD_append_at`: past two lists of `N` entries, entry `N + e` is the third list's `e`-th.
 * **`Loop.innerAt_slot`**: at a `Live` statement the loop serves, a history below `refK x` at `InnerAt` on tables `real`
   answers as the loop's own (`Count.RealTabs`) is table `k / 2`'s rep `k % 2`'s inner round `i - sched.size < 4`, at
-  `repSlot (2j + r) (innerOff (i - sched.size))`, within the rep's rounds.
+  `repSlot (2j + r) (innerOff (i - sched.size))`, within the rep's rounds, where the loop asks the inner proof's rounds
+  for `1`, `INNER_CONS`, `1` and `Q` coins.
 -/
 
 namespace Claims.ZKServer
@@ -119,13 +122,23 @@ theorem locate_inv : ∀ (rs : List ℕ) (k q : ℕ), q < rs.sum →
       rw [hd, List.take_succ_cons, List.sum_cons, List.getD_cons_succ]
       omega
 
+/-- **Past two lists of `N` entries, entry `N + e` is the third list's `e`-th.** -/
+theorem getD_append_at {A B C : List ℕ} {N e : ℕ} (h : A.length + B.length = N) :
+    (A ++ B ++ C)[N + e]?.getD 0 = C.getD e 0 := by
+  have hl : (A ++ B).length ≤ N + e := by
+    rw [List.length_append]
+    omega
+  rw [List.getElem?_append_right hl, List.length_append, show N + e - (A.length + B.length) = e by omega,
+    List.getD_eq_getElem?_getD]
+
 /-- **The inner proof's rounds sit past the rep's whole schedule**: at a `Live` statement the loop serves, a history of
 `q + 1 < refK x` decoded coins at the inner proof's rounds (`InnerAt`'s components: rep stream `k`'s round `i`, at or
 past the end of its schedule so far `rsched` on the table `real` answers as the loop's own) is table `k / 2`'s rep
 `k % 2`'s inner round `i - rsched.size`, below `4`, and the session's round there is
-`repSlot (2j + r) (innerOff (i - rsched.size))`, within the rep's rounds (`repBase`). The schedule so far is complete
-(`Count.schedSoFar_full`), the rep's
-algebraic phase and opening (`Count.repPlan_list`), so it ends at the rep's `piopRoundsZk + k₀ + 7 + 11(R − 1)`. -/
+`repSlot (2j + r) (innerOff (i - rsched.size))`, within the rep's rounds (`repBase`), and at most `q`. The schedule so
+far is complete (`Count.schedSoFar_full`), the rep's algebraic phase and opening (`Count.repPlan_list`), so it ends at
+the rep's `piopRoundsZk + k₀ + 7 + 11(R − 1)`, past which the rep's plan, and so the loop (`loopNr_rep`), asks the inner
+proof's rounds for `1`, `INNER_CONS`, `1` and `Q` coins. -/
 theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx : Masked.Live x) (hSv : Serves x)
     {cs : List FlockDeploy.Coin} {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} {q k i : ℕ}
     {tr : Tab} {hr : Array ByteArray} {rsched : Array (ByteArray × ℕ)}
@@ -139,7 +152,9 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     (hle : rsched.size ≤ i) :
     ∃ (j : Fin (Masked.jOf x)) (r : Fin 2), k = 2 * j.val + r.val ∧ i - rsched.size < 4 ∧
       q + 1 = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff (i - rsched.size)) ∧
-      Masked.repBase x (2 * j.val + r.val) ≤ q + 1 ∧ q + 1 < Masked.repBase x (2 * j.val + r.val + 1) := by
+      Masked.repBase x (2 * j.val + r.val) ≤ q + 1 ∧ q + 1 < Masked.repBase x (2 * j.val + r.val + 1) ∧
+      0 < i ∧ i ≤ q ∧ ∀ e < 4, loopNr x (Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff e)) =
+        [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].getD e 0 := by
   have hsts : Masked.stsOf x = sts := by
     unfold Masked.stsOf
     rw [hs]
@@ -268,7 +283,8 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
       Option.getD_some] at e
     exact e
   rw [hrq] at hil
-  refine ⟨⟨k / 2, hj'⟩, ⟨k % 2, Nat.mod_lt _ (by norm_num)⟩, (Nat.div_add_mod k 2).symm, by omega, ?_, ?_, ?_⟩
+  refine ⟨⟨k / 2, hj'⟩, ⟨k % 2, Nat.mod_lt _ (by norm_num)⟩, (Nat.div_add_mod k 2).symm, by omega, ?_, ?_, ?_,
+    by omega, by omega, ?_⟩
   · show q + 1 = Masked.repSlot x (2 * (k / 2) + k % 2) (Masked.innerOff (i - rsched.size))
     rw [Nat.div_add_mod k 2, Masked.repSlot_eq hs hz, repStartZk_eq spec _ hk.le]
     unfold Masked.innerOff
@@ -280,6 +296,21 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     rw [Nat.div_add_mod k 2, Masked.repBase_eq hs, FlockComplete.ZkTables.repStart_succ, hrR,
       repStartZk_eq spec _ hk.le]
     omega
+  · intro e he
+    show loopNr x (Masked.repSlot x (2 * (k / 2) + k % 2) (Masked.innerOff e)) = _
+    have hf4 : [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0) =
+        [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q] := by
+      decide
+    have hNe : FlockComplete.piopRoundsZk spec (Masked.stsOf x)[k / 2]! + Masked.innerOff e y.sch = N + e := by
+      rw [hN]
+      unfold Masked.innerOff
+      omega
+    have hie : N + e < (roundsOf spec (Masked.stsOf x)).getD k 0 := by
+      rw [hrq]
+      omega
+    rw [Nat.div_add_mod k 2, Masked.repSlot_eq hs hz, Nat.add_assoc, hNe, loopNr_rep hs hk hie,
+      Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, Count.repPlan_list (spec := spec) hz', hf4]
+    exact getD_append_at (by rw [← hA]; exact hFO)
 
 end Loop
 

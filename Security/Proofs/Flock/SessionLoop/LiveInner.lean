@@ -540,14 +540,15 @@ theorem check_innerAt {c : Cfg} {m s' s : Masker} {w t : ByteArray} (hw : w.size
   refine ⟨hv.trans e.symm, ?_⟩
   rw [ho, maskFrames_own c s w t hk0, hX]
 
-/-- **The frame's own inner rounds pass only as themselves**: where the frame's check passes the device round against
-the inner proof's round `k` as the frame schedules it (`Frame.innerSched`), at a state outside a masked phase and a row
-of pads within a `u64`'s count past round 0, the release is that round as it came. -/
+/-- **The frame's own inner rounds pass only as themselves**: where the frame's check passes the device round `v`
+against the inner proof's round `k` as the frame schedules it (`Frame.innerSched`), at a state outside a masked phase
+and a row of pads within a `u64`'s count past round 0, `v` is that round and the release is that round as it came. -/
 theorem check_innerSched {c : Cfg} {m s' s : Masker} {fin : Array ByteArray} {n k : ℕ} {v out : ByteArray}
     (hk : k < INNER_ROUNDS)
     (h : check c m v (_root_.Flock.Firewall.Frame.innerSched c s fin n k) n = .ok (out, s', none))
     (hst : 0 < k → m.on = false ∧ c.rowH.size < 2 ^ 64) :
-    out.data.toList = (_root_.Flock.Firewall.Frame.innerSched c s fin n k).data.toList := by
+    v = _root_.Flock.Firewall.Frame.innerSched c s fin n k ∧
+      out.data.toList = (_root_.Flock.Firewall.Frame.innerSched c s fin n k).data.toList := by
   have hw : (wordBytes (words (fin.getD 0 .empty) ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16)
       1)).size = 16 := by
     simp only [wordBytes_size, Loop.words_size]
@@ -559,13 +560,13 @@ theorem check_innerSched {c : Cfg} {m s' s : Masker} {fin : Array ByteArray} {n 
           wordBytes (words (fin.getD 0 .empty) ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1) ++
           header 4 1 1 := rfl
     rw [e] at h ⊢
-    exact (check_inner0 hw h).2
+    exact check_inner0 hw h
   · have e : _root_.Flock.Firewall.Frame.innerSched c s fin n k = ownRound c s
         (wordBytes (words (fin.getD 0 .empty) ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1))
         (wordBytes (words (fin.getD 2 .empty) 16 4)) n k := rfl
     obtain ⟨hon, hrow⟩ := hst hk0
     rw [e] at h ⊢
-    exact (check_innerAt hw ht hk0 hk hon hrow h).2
+    exact check_innerAt hw ht hk0 hk hon hrow h
 
 /-- `InnerOff` at some configuration. -/
 def InnerOffAny (s : Masker) : Prop := ∃ c, InnerOff c s
@@ -780,9 +781,9 @@ open Loop in
 /-- **At the inner proof's rounds `withInner`'s session loop releases its own round as it came**: where a live run's
 worker sends the device round `v` after a history at the inner proof's rounds (`Loop.InnerAt`), on the rep's own tables
 where `real` answers the loop's (`hR`) at a statement the loop serves, the round in the device round's place is the
-inner proof's round `Loop.innerOf` schedules, and the release is that round. Its round 0 passes at any state
-(`check_inner0`), its rounds 1 to 3 outside every masked phase (`ofLoop_answered_on`, past the inner proof's label,
-which the rep's state counts: `ofLoop_answered_inner`); at its round 4 the frame refuses the round
+inner proof's round `Loop.innerOf` schedules, and the device round and the release are that round. Its round 0 passes
+at any state (`check_inner0`), its rounds 1 to 3 outside every masked phase (`ofLoop_answered_on`, past the inner
+proof's label, which the rep's state counts: `ofLoop_answered_inner`); at its round 4 the frame refuses the round
 (`check_inner_done`), and past it the coins before it. -/
 theorem release_innerAt
     (L₁ : LeanRelease Flock.Wit
@@ -811,7 +812,7 @@ theorem release_innerAt
     ∃ r, Loop.innerOf (real x w (ν, t)) ((withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops))
         (fin x w (ν, t) ((m₀, ρ₀) :: ops)) x (ops.map fun p => CoinLayer.rd p.2) = some r ∧
       (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
-        0 :: r.data.toList := by
+        0 :: r.data.toList ∧ v = r.data.toList := by
   have hk : 0 < refK x := by omega
   have hc : 0 < (ops.map fun p => CoinLayer.rd p.2).length := by rw [List.length_map]; exact h0
   have hsch := (schedOf_eq_none_iff (real := real x w (ν, t)) hk hc).mpr hI
@@ -850,7 +851,8 @@ theorem release_innerAt
         x (ν, t) (m₀, ρ₀) ops ha (by simp [hin']), ?_⟩
       rw [← hcfg]
       exact hrow
-    rw [hrel, check_innerSched h4 hc' hst]
+    have hcs := check_innerSched h4 hc' hst
+    exact ⟨by rw [hrel, hcs.2], congrArg (fun b : ByteArray => b.data.toList) hcs.1⟩
   · exfalso
     obtain ⟨m, out, s', ha, hc'⟩ := check_of_live (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) wk x w
       (ν, t) κ ((m₀, ρ₀) :: ops) v hl hkd hv

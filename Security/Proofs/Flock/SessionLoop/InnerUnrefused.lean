@@ -164,7 +164,7 @@ theorem innerAt_unrefused
   have hsch := (schedOf_eq_none_iff (real := real x w (ν, t)) hk hc0).mpr hI
   obtain ⟨s0, spec, sts, q, k, i, tr, hr', rsched, hxs, hq, hloc, hreal, hrs, hle⟩ := hI
   have hq1 : ops.length = q + 1 := by rw [← hq, List.length_map]
-  obtain ⟨jf, rf, -, -, hslot, hb0, hb1⟩ := Loop.innerAt_slot hx hSv hxs hq (by rw [List.length_map]; exact hlt)
+  obtain ⟨jf, rf, -, -, hslot, hb0, hb1, -, -, -⟩ := Loop.innerAt_slot hx hSv hxs hq (by rw [List.length_map]; exact hlt)
     hloc (hR (ν, t) s0 spec sts hxs) hreal hrs hle
   have hj : jf.val < (Masked.stsOf x).size := Masked.lt_of_jOf jf
   have hr2 : rf.val < 2 := rf.isLt
