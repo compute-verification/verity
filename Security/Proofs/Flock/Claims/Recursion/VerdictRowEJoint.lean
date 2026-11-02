@@ -87,7 +87,7 @@ and witnesses `ws` whose recorded calls are true and free of collisions among th
 verifier's own evaluations at `xs`, and at whose messages every part's `chk` holds at its statement and witness, some
 chain carries row D's running sums at the messages the last message opens and the coins. -/
 def RowEJoint : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit), OpenLower.JointV H D L chk x c xs ws →
       ∀ os last, Bd.final ((L.msgs x ws).getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
         os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
@@ -96,7 +96,7 @@ def RowEJoint : Prop :=
 
 /-- **Every part's share of `accPiece`** at the joint witnesses, from `RowEJoint`. -/
 theorem piecesComputes_accPiece (h : RowEJoint rd key H D Bd L shape chk) (ownQ : Msg → OpenPiece → Option ℕ) :
-    ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit), OpenLower.JointV H D L chk x c xs ws →
         ∀ s, PiecesComputes Bd D (rowDPieces key) (accPiece rd key) ownQ s x c (L.msgs x ws) := by
   intro x st hx hf c xs ws hJ s q hq _ os last hfin hlen

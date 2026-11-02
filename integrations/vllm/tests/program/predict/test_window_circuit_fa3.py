@@ -5,8 +5,8 @@ end `AttnHeadEnd_v1` at FA3's dot and reciprocal, and past one key block (TINY's
 projection's slices, a key a row, so past 126 keys a block holds more than a unit's 256 rows and is refused by name. An
 attention version with no cut (`Attention_v2`, which `fa3_construction = "guard-every-block"` binds) is a unit a head of its
 own head Definition, reading the same rows, refused by name past the grain's rows. With ``VERITY_VLLM_FA3_LLAMA_1B=1``,
-int8 Llama-3.2-1B on sm_90 at 4,32,4 is refused for the readers it waits on alone. Pinned on `test_window_circuit`'s TINY
-class, windows and grain.
+int8 Llama-3.2-1B on sm_90 at 4,32,4 lowers with every reader wired and every unit a proof block C-Flock's composer takes.
+Pinned on `test_window_circuit`'s TINY class, windows and grain.
 """
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (CLASS, GRAIN, OTHER, WINDOW, _blocks, _bytes, _label, _labels,
                                                        _source, held)
 from verity_vllm.program.model import INT8_EXACT_QUANT
-from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit, window_circuit
 
@@ -121,47 +120,42 @@ def test_an_attention_with_no_cut_is_its_heads_each_reading_a_key_and_a_value_ro
 
 def test_a_head_with_no_cut_past_the_grains_rows_is_refused_by_name():
     """A head of a version with no cut is one unit of its keys' and values' rows besides its query and output: at 10 rows a
-    unit, position 4's T of 5 (12 rows) is refused by name, with the norm of 12."""
+    unit, position 4's T of 5 (12 rows) is refused by name. The norm of 12 rows is cut at its residual add instead, one part
+    of 10 rows and a tail of 4, and a token select of 128 logits a unit is 8 rows a combine."""
     with pytest.raises(Unexpressible, match=re.escape(
-            f"2 {REFUSED}RMSNormFusedCuda_v2{{N=64,EPS=1e-05}}: 12 rows in and out, past a unit's 10; "
-            f"AttentionHead_v2{{T=5,D=16,BN=128,{DOT},{INV}}}: 12 rows in and out, past a unit's 10")):
-        class_circuit(_registered(GUARDED), CLASS, None, Grain(gemm_words=1024, rows=10, select=64))
-
-
-def _refusals(message: str) -> Counter:
-    """A refusal's templates by (family, port), ``rows`` where a unit is past the grain's rows."""
-    count, why = re.fullmatch(rf"(\d+) {re.escape(REFUSED)}(.*)", message).groups()
-    kinds = Counter()
-    for w in why.split("; "):
-        family, port = re.match(r"(\w+)\{.*\}(?: (\w+) (?:\(|read as)|: \d+ rows in and out)", w).groups()
-        kinds[family, port or "rows"] += 1
-    assert sum(kinds.values()) == int(count)
-    return kinds
+            f"1 {REFUSED}AttentionHead_v2{{T=5,D=16,BN=128,{DOT},{INV}}}: 12 rows in and out, past a unit's 10")):
+        class_circuit(_registered(GUARDED), CLASS, None, Grain(gemm_words=1024, rows=10, select=128))
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_FA3_LLAMA_1B"),
                     reason="int8 Llama-3.2-1B on sm_90 at 4,32,4, minutes on a pod; set VERITY_VLLM_FA3_LLAMA_1B=1")
-def test_int8_llama_3_2_1b_on_sm_90_waits_on_its_readers_alone():
+def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at the default
-    grain and 4,32,4 is refused for two readers alone: each first block's ``v``, read a slice at a time of the value
-    projection, and the norm's ``x``, which o_proj's and down_proj's slices write as other row counts (the token select's
-    group units and combine are within 256 rows). Its unwired lowering's heads are `Attention_v20`'s Calls (no whole
-    `AttentionHead_v4`, no guarded full block). Its numbers (the refusals by kind, the unwired units, templates and
-    registered reads, the heads' census, peak RSS) are printed as a JSON line."""
+    grain and 4,32,4 lowers with every unit within 256 rows: each first block reads its values a slice a row of the value
+    projection (`AttnBlockFirst_v2{VS=32}`), and the norm after down_proj, whose x down_proj's slices write as 512 rows where
+    o_proj's write 128, is cut at its residual add (8 parts of 256 and the tail). Every unit is a proof block C-Flock's
+    composer takes (`interface.check_proof_block`, which the lowering runs): at 4 outputs a collector's rows and an entry's
+    are under 112 bytes, so each is its position's combine's (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads
+    its group units' bests and indices as rows of 334 and 668 bytes. Its heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full
+    block). Its numbers (units, templates, registered reads, the heads' census, the most rows and k_log of a proof block,
+    peak RSS) are printed as a JSON line."""
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     reg, cls = _registered({**H200, "int8_exact": "linears"}, config), WindowClass(4, 32, 4)
-    with pytest.raises(Unexpressible) as refused:
-        class_circuit(reg, cls)
-    kinds = _refusals(str(refused.value))
-    circuit = WC.lower(reg, cls, wired=False).circuit
-    heads = Counter()
+    circuit = class_circuit(reg, cls)
+    heads, n = Counter(), {_label(fn): k for fn, k in circuit.templates}
     for fn, k in circuit.templates:
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):
             heads[fn.id.split("{")[0] + ("" if fn.base_id != "AttnBlock_v4" else f"{{CHECK={str(fn.bindings['CHECK']).lower()}}}")] += k
+    cuts = [circuit.cuts.get(IF.descriptor_id(fn)) for fn, _ in circuit.templates]
+    rows = max(sum(map(len, IF.unit_rows(fn, c))) for (fn, _), c in zip(circuit.templates, cuts))
+    k_log = max(IF.check_proof_block(fn, c) for (fn, _), c in zip(circuit.templates, cuts))
     print(json.dumps({"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "positions": cls.positions,
-                      "refused": {f"{f} {p}": k for (f, p), k in sorted(kinds.items())},
-                      "units": sum(circuit.units.values()), "templates": len(circuit.templates),
-                      "reads": len(circuit.registered.reads), "heads": dict(heads),
+                      "units": sum(n.values()), "templates": len(n), "reads": len(circuit.registered.reads),
+                      "heads": dict(heads), "rows": rows, "k_log": k_log,
                       "max_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}, sort_keys=True), flush=True)
-    assert set(kinds) == {("AttnBlockFirst_v1", "v"), ("RMSNormFusedCuda_v2", "x")}
-    assert set(heads) <= {"AttnBlockFirst_v1", "AttnBlock_v4{CHECK=false}", "AttnHeadEnd_v1"}
+    assert rows <= IF.MAX_ROWS and k_log <= IF.K_MAX
+    assert {lab.split("{")[0] for lab in n} >= {"SelectCollect_v1", "SelectEntry_v1"}
+    assert not {lab.split("{")[0] for lab in n} & {"TokenSelectCombine_v2", "OutCollect_v1", "SlotEntry_v1"}
+    assert set(heads) <= {"AttnBlockFirst_v2", "AttnBlock_v4{CHECK=false}", "AttnHeadEnd_v1"}
+    tail = n["RMSNormFusedCudaTail_v1{N=2048}"]
+    assert tail and [n[f"RMSNormFusedCudaAdd_v1{{N=2048,C=256,AT={at}}}"] for at in range(8)] == [tail] * 8

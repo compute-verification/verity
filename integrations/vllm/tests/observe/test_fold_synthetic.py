@@ -23,7 +23,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Affine, Explicit, concat
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import value_inputs as VI
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 # ---------------------------------------------------------------------------------------------------------
 # toy configuration
@@ -490,7 +490,7 @@ def test_registered_values_are_inputs_of_the_program(memory):
     assert r.report.unsupported == 0 and not r.errors and r.digest != legacy.digest
     assert [n for n, _ in r.params] == ["prompt", "run", "values", "weights"]
     eps, scale = int(P.bits_of(np.float32(C["EPS"]))), b1.scale_log2_bits(C["D"])
-    assert r.params[2][1] == Record(("eps", Value(32)), ("scale_log2_d8", Value(32))) and r.params[1][1] == Record()
+    assert r.params[2][1] == RecordType(("eps", Value(32)), ("scale_log2_d8", Value(32))) and r.params[1][1] == RecordType()
     assert r.supplied == {"registration": {"param": 2, "name": "values", "fields": [
                               {"name": "eps", "width": 32, "bits": f"0x{eps:08x}", "offset": 0},
                               {"name": "scale_log2_d8", "width": 32, "bits": f"0x{scale:08x}", "offset": 1}]},

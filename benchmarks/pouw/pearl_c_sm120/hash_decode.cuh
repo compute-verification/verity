@@ -74,7 +74,7 @@ constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAI
 #define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979)
 #endif
 // A build that defines PD_SM90 (pearl_c_sm90.cu; the host tests build both) takes the forms cut for the H200's pd_commit,
-// which on sm_120 made pd_commit about 2.5% slower (kernels-pcsrv, r20261025-131827-fe67): rs_round's sums off e's chain;
+// which on sm_120 made pd_commit about 2.5% slower (kernels-pcsrv): rs_round's sums off e's chain;
 // in mode 1 with PD_LATE and PD_ROUNDS, the fold's round inputs on warp 2 (pd_fold_sched); and the row's seed chain from
 // shared copies of the labels and the unit block, with PD_LOOP its line hash at pd_seed's paired site, and on a whole warp
 // its line codes a lane a byte (pd_line_codes_warp).  The bytes are the same either way

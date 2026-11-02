@@ -8,10 +8,10 @@
 // slot u and layer l are the store-order/v0 block u layers + l, whose words are K of every head then V of every head.
 // Thus a token-layer is exactly one registered 4 KiB block and all three paths agree on its codec indices. A token-layer
 // written after the codec seed is encoded under its bound key: each path takes the layer's offsets bj, [physical
-// slot][NL] (null: the seed's key), slot u's the remote audit's b_j (`codec.binding` of the token-layer's digest d_j and
+// slot][NL] (null: the seed's key), slot u's b_j under PoUB (`codec.binding` of the token-layer's digest d_j and
 // its store index j), plus tau (j TLW - store_base - (u layers + l) TLW) mod p when j is not the slot's own block.
 //
-// A token-layer the remote audit appends is written plaintext and encoded in place once its append coin c_a arrives
+// A token-layer that PoUB appends is written plaintext and encoded in place once its append coin c_a arrives
 // (deferred residency, remote_bandwidth's PROTOCOL.md §4), so an encoded cache may hold plaintext slots: each path takes
 // the layer's flags plain, [physical slot] bytes (null: none), nonzero for a slot whose token-layer is still plaintext,
 // which it reads as it is and gives no receipt (no record holds it yet). pg_append records in plain how it wrote each

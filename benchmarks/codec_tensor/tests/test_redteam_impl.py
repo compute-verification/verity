@@ -1,4 +1,4 @@
-"""The red team's attacks on the device side of the remote bandwidth audit: the fused weight GEMM's
+"""The red team's attacks on the device side of PoUB: the fused weight GEMM's
 receipt blocks (`sketch_receipt.gemm_vectors`, wt.cu's sketch warps) and attention's KV receipts (`kv_vectors`,
 `kv_fragment_sketch`: kv.cu's form 13), each against what the driver (`remote_bandwidth.receipts`, `audit.Session`)
 credits and opens.  Each test asserts the property the driver's ledger needs and was marked xfail with its finding id
