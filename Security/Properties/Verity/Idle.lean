@@ -8,8 +8,8 @@ descriptor, not a parsed file. The device has no on-chip state, no memory, no op
 circuit file is read as empty files under the netlist tags (`fileRead`); there are no device rounds, no releases, no
 commitment openings and no gates computed; the world charges nothing over an empty window (`world`); the schedule is one
 empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
-on its one coin. The circuit file's digest in the parameters is the parameters' own SHA-512, so the committed files pass
-the commit phase's check exactly when one of them is the parameters.
+on its one coin. The circuit file's and the public file's digests in the parameters are both the parameters' own
+SHA-512, so the committed files pass the commit phase's check exactly when one of them is the parameters.
 
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
 term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
@@ -26,7 +26,7 @@ noncomputable section
 /-- **The device**: no on-chip state, no memory, no ops, no bandwidth, and one side channel that carries nothing. -/
 def device : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
 
-/-- **The circuit file as v2 reads it**: empty files under the netlist tags. -/
+/-- **The committed files as v2 reads them**: empty files under the netlist tags. -/
 def fileRead : FileRead := ⟨Flock.Tags.netlistV1, .empty, [], .empty⟩
 
 /-- The step that charges nothing. -/
@@ -81,10 +81,11 @@ def forger : Hash.Assumptions.LmsForger where
 
 /-- **The idle deployment's names**, publishing the error `δ` for every subprotocol and the work certificate `W`. -/
 noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
-  read _ := fileRead
+  read _ _ := fileRead
   place _ _ _ _ := none
   programDigest θ := some (sha512 θ.data.toList)
-  registered θ := θ
+  publicDigest θ := some (sha512 θ.data.toList)
+  registered θ := #[θ]
   rounds _ := []
   coinsRead _ _ := []
   extract _ _ _ _ _ := 0
@@ -107,9 +108,9 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   theta_input _ _ _ h := absurd h (Finset.notMem_empty _)
   gates _ := 0
   fresh _ := 0
-  spans _ := 1
-  schedule _ := blocks
-  boundary _ := 0
+  spans _ _ := 1
+  schedule _ _ := blocks
+  boundary _ _ := 0
   Seed := Unit
   Spots := Unit
   wipe _ _ := wipe
