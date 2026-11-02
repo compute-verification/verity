@@ -20,7 +20,8 @@ elan toolchain install "$toolchain"
 lake --version
 root=$(cd "$here/../../.." && pwd)
 if [ ! -e .lake/packages ] && [ -f "$root/tools/verity/lean/lean_audit.py" ] && command -v uv >/dev/null 2>&1; then
-  (cd "$root" && uv run --quiet python tools/verity/lean/lean_audit.py --restore "$(realpath --relative-to="$root" .)") \
+  rel=$(realpath --relative-to="$root" .)
+  (cd "$root" && uv run --quiet python tools/verity/lean/lean_audit.py --restore "$rel") \
     || echo "setup.sh: the pinned dependency bundle didn't restore; lake fetches the dependencies"
 fi
 lake env true
