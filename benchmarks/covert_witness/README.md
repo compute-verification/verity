@@ -82,8 +82,8 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   (`train.bin`; its `val.bin`, the first 2M tokens of v2.0's search set, is not in the training job's view), and shard
   000 in Pythia's tokens.
 - **Search scores** (`prepare.Scorer`): every search evaluation, the evaluation job's, hashes the weights and then
-  draws a slice of the pool (`prepare.draw_slice`: a coin of 16 bytes from the OS, and 1,024 of the pool's 8,192
-  evaluation windows, 2^20 tokens, drawn by a generator seeded with sha256(coin ‖ digest)). The score is the start's bpb
+  samples a slice of the pool (`prepare.draw_slice`: a coin of 16 bytes from the OS, and 1,024 of the pool's 8,192
+  evaluation windows, 2^20 tokens, sampled by a generator seeded with sha256(coin ‖ digest)). The score is the start's bpb
   on the whole pool plus the candidate's minus the start's on the same windows, so a slice's difficulty cancels; the
   start's windows are scored once per process. The record names the coin and the digest, which reproduce the slice.
 - **The sealed side** (`sealed.py`; `CW_SEALED`, `/workspace/research/te/sealed` on the node): the promotion and final

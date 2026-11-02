@@ -66,13 +66,13 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
   (`flops.KeyedDigest`, keyed from the OS when the run starts, the key in `run.json`).
 - **β_t**: a step's counterexample β, bits(E_t) over the step's updated MACs per token block.
 - **Coverage**: a family covers the sampled steps that rebuild bit for bit (5 sampled steps at search time, 20 at
-  final, drawn from a live coin). A uniform family also covers every step it declares, if every sampled step verified.
+  final, sampled with a live coin). A uniform family also covers every step it declares, if every sampled step verified.
 - **U_τ (threshold annotation)**: for τ in {p/r} and the covered steps' β_t below p/r, the uncovered steps' U and the
   covered steps' with β_t ≥ τ, with β = min(p/r, τ) and φ recomputed on it over the same |C|. A cheap covered step
   leaves U_τ for every τ above its β_t, so it costs only its own share of φ.
 - **ρ (slowdown)**: max(1, φcβ / (k(k + β))) if D ≥ k/β, else 1, for each U_τ, then the largest, at each (k, r).
 - **bpb**: the held-out bits per byte of the output model from the integrator's fixed evaluator: `val` during the search
-  (for covert_witness, a paired score on a fresh slice of its search pool, drawn after the output's digest, by its
+  (for covert_witness, a paired score on a fresh slice of its search pool, sampled after the output's digest, by its
   evaluation job after the training job ended), `test` when finally scored. An evaluator returns None for a sealed
   split, and the record then holds no test bpb.
 - **l\***: a target bits per byte, the start's bpb less 0.5%, 1%, 2% or 5%.

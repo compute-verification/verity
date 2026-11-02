@@ -74,7 +74,7 @@ done no work the harness didn't count (`tree_counted`). `valid` is every check p
   and never run `evaluate.py` yourself. train.py runs in a sandbox with your island, the starts, `train.bin`, the
   Python and its output directory only, read-only but the output: no held-out set, sealed side, `val.bin` or network.
   Never read `prepare.UNREADABLE`, and start no process: its CPU seconds count against the run (`tree_counted`). Each score you see
-  is on a fresh slice of the search pool drawn after your weights are hashed; promotions are decided on a sealed set, and
+  is on a fresh slice of the search pool sampled after your weights are hashed; promotions are decided on a sealed set, and
   the final set is never scored for the search.
 - Train only on `prepare.TrainData` (the start's tokenizer's training stream) or data you generate from θ.
 - train.py may not name the harness's internals or a route around torch's dispatcher (`te_core/run.py`'s `FORBIDDEN`:

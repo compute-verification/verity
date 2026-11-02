@@ -6,7 +6,7 @@ search brief says what the search is for; this file says how a candidate runs an
 **Nothing is capped** but the fixed training-FLOP budget and GPU-second cap (below): any update, any size or format of E,
 any layers. te_core scores what the run did by the training formalism v1.
 
-**Seed** (`train.py` as committed): MeZO (zeroth-order SGD): per step two forward passes at θ ± εz, z drawn from the step's seed, the step's coefficient c = lr · (L₊ − L₋)/2ε stored as f32; E is the coefficients.
+**Seed** (`train.py` as committed): MeZO (zeroth-order SGD): per step two forward passes at θ ± εz, z sampled from the step's seed, the step's coefficient c = lr · (L₊ − L₋)/2ε stored as f32; E is the coefficients.
 
 The seed log is sized to 100,000 bytes by default (`--e-bytes` sets another; nothing caps it). The decoder replays z from `seed + i` for every step in `names` order; the update must go through `prepare.seedlog_step`, or the model won't be bit-equal to its replay. 4 bytes a step: 100,000 bytes is about 25,000 steps; f16 coefficients (2 bytes) double that but round small coefficients badly.
 
@@ -74,7 +74,7 @@ done no work the harness didn't count (`tree_counted`). `valid` is every check p
   and never run `evaluate.py` yourself. train.py runs in a sandbox with your island, the starts, `train.bin`, the
   Python and its output directory only, read-only but the output: no held-out set, sealed side, `val.bin` or network.
   Never read `prepare.UNREADABLE`, and start no process: its CPU seconds count against the run (`tree_counted`). Each score you see
-  is on a fresh slice of the search pool drawn after your weights are hashed; promotions are decided on a sealed set, and
+  is on a fresh slice of the search pool sampled after your weights are hashed; promotions are decided on a sealed set, and
   the final set is never scored for the search.
 - Train only on `prepare.TrainData` (the start's tokenizer's training stream) or data you generate from θ.
 - train.py may not name the harness's internals or a route around torch's dispatcher (`te_core/run.py`'s `FORBIDDEN`:

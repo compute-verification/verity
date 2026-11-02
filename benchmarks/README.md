@@ -30,7 +30,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `load_time/` | the time from spawn to engine-ready for a large model under vLLM at TP 8, by page-cache, compile-cache and loader state | frozen |
 | `rho/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
 | `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
-| `covert_witness/` | the lowest held-out bpb a training computation reaches from a registered start at a fixed FLOP budget, per class of its witnessed structure (update size, deep share, depth) | maintained |
+| `covert_witness/` | the lowest held-out bpb a training computation reaches from a registered start at a fixed FLOP budget, with the structure the training formalism prices (its total update, dependent share and accumulated state) | maintained |
 
 ## Kernels
 
