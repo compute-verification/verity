@@ -17,8 +17,11 @@ The replay checks every declaration of the module's own parts, private ones and 
 of its imports as their parts there have them (each import's own task replayed it) and of the env's modules (the
 toolchain's and the fetched packages') at the private level. A declaration's axiom set takes an imported declaration's
 from its module's record where the task read one, and otherwise walks its body as the parts have it: a theorem whose proof
-only an absent private part holds counts as an axiom, so the task fails rather than miss one. A declaration that uses an
-axiom outside `STANDARD` fails the task.
+only an absent private part holds counts as an axiom, so the task fails rather than miss one. An env module's declarations
+take theirs from the env's record, which every task reads at `families.lean_env.AXIOMS` (`runners/lean_env.py` writes
+it): a record of another env than the package's (`env_key`), or one that lacks an env module the replay imported or
+names other bytes for it than this worker's (`env_digests`), is an error. A declaration that uses an axiom outside
+`STANDARD` fails the task.
 
 The `lean` env on a worker: the toolchain of the package's `lean-toolchain` (elan's), and for a package that fetches
 packages (Mathlib, ArkLib and the rest) its `.lake/packages` at its manifest and toolchain (`lean_audit.deps_key`), made once
@@ -41,7 +44,8 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from .. import ROOT
+from .. import ROOT, contract
+from ..families.lean_env import AXIOMS as ENV_RECORD
 from ..families.lean_module import la
 from ..graph import LOG
 from . import Timeout, call
@@ -161,6 +165,101 @@ def program(name: str, tc: Path, work: Path) -> Path:
     return exe
 
 
+#: the schema of the lean env's record (`runners/lean_env.py`)
+ENV_SCHEMA = "verity-lean-env-axioms/v1"
+
+
+def env_key(pkg: Path) -> str:
+    """The env ``pkg`` compiles in, as `families/lean_env.py` groups packages: its `lean_audit.deps_key`, or its
+    toolchain's line when it fetches no package."""
+    return la.deps_key(pkg) or (pkg / "lean-toolchain").read_text().strip()
+
+
+def env_libs(pkg: Path, tc: Path, deps: Path | None) -> list[Path]:
+    """The directories the env's modules are in, in the order `lean` searches them: each fetched package's build in the
+    manifest's order (`LEAN_PATH`), then the toolchain's."""
+    return [*(deps / n / ".lake" / "build" / "lib" / "lean" for n in (fetched(pkg) if deps else ())), tc / "lib" / "lean"]
+
+
+def resolve(libs: list[Path], mod: str) -> Path | None:
+    """The `.olean` `lean` loads for ``mod`` with ``libs`` as its search path, if there is one: its root is looked up in the
+    first directory holding a directory or an `.olean` of that name (`findWithExt`)."""
+    r = mod.split(".")[0]
+    lib = next((d for d in libs if (d / r).is_dir() or (d / f"{r}.olean").exists()), None)
+    return o if lib is not None and (o := lib / f"{mod.replace('.', '/')}.olean").is_file() else None
+
+
+def env_modules(libs: list[Path]) -> dict[str, Path]:
+    """{module: the `.olean` `lean` loads for it} for every `.olean` under ``libs`` that `resolve` finds."""
+    out: dict[str, Path] = {}
+    for lib in libs:
+        for o in sorted(lib.rglob("*.olean")) if lib.is_dir() else ():
+            m = ".".join(o.relative_to(lib).with_suffix("").parts)
+            if m not in out and resolve(libs, m) == o:
+                out[m] = o
+    return out
+
+
+def _olean_parts(olean: Path) -> list[tuple[str, Path]]:
+    return [(s, p) for s in ("", ".server", ".private") if (p := Path(f"{olean}{s}")).is_file()]
+
+
+def module_digest(olean: Path) -> str:
+    """The digest of the parts of a module the replay reads: its `.olean`, and its `.olean.server` and `.olean.private`
+    where it has them."""
+    h = hashlib.sha512()
+    for s, p in _olean_parts(olean):
+        h.update(f"olean{s} {contract.file_digest(p)}\n".encode())
+    return f"sha512:{h.hexdigest()}"
+
+
+def env_digests(key: str, libs: list[Path], mods: list[str]) -> dict[str, str | None]:
+    """{module: its `module_digest` on this worker, None where ``libs`` hold no `.olean` for it} for each of ``mods``,
+    hashed once per worker and kept under `lean-env/digests/` with each part's size, mtime and inode, and hashed again
+    where those changed."""
+    f = env_dir() / "digests" / f"{hashlib.sha256(chr(0).join([key, *map(str, libs)]).encode()).hexdigest()[:32]}.json"
+    try:
+        kept = json.loads(f.read_text())
+    except (OSError, ValueError):
+        kept = {}
+    out: dict[str, str | None] = {}
+    new = {}
+    for m in mods:
+        if (o := resolve(libs, m)) is None:
+            out[m] = None
+            continue
+        st = [[s, (x := p.stat()).st_size, x.st_mtime_ns, x.st_ino] for s, p in _olean_parts(o)]
+        if (k := kept.get(m)) and k["path"] == str(o) and k["stat"] == st:
+            out[m] = k["digest"]
+        else:
+            out[m] = module_digest(o)
+            new[m] = {"path": str(o), "stat": st, "digest": out[m]}
+    if new:
+        with _locked(f.with_suffix(".lock")):
+            try:
+                kept = json.loads(f.read_text())
+            except (OSError, ValueError):
+                kept = {}
+            tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(kept | new, sort_keys=True))
+            os.replace(tmp, f)
+    return out
+
+
+def env_header(path: Path) -> dict:
+    """The fields of the lean env's record at ``path`` that come before its axioms (`runners/lean_env.py` writes one a
+    line), read without the axioms."""
+    fields = []
+    with open(path) as f:
+        if f.readline() != "{\n":
+            raise EnvError(f"{path} isn't a lean env record: its first line isn't `{{`")
+        for line in f:
+            if line.startswith('"axioms":{'):
+                return json.loads("{" + ",".join(fields) + "}")
+            fields.append(line.rstrip("\n").removesuffix(","))
+    raise EnvError(f"{path} isn't a lean env record: no line `\"axioms\":{{`")
+
+
 _SANDBOX: list[bool] = []
 
 
@@ -245,9 +344,18 @@ def run(task: dict, work: Path) -> dict:
         tc = toolchain(pkg, work)
         deps = packages(pkg, work)
         replay = program("Replay", tc, work)
+        key, record = env_key(pkg), work / ENV_RECORD
+        head = env_header(record)
     except (EnvError, Timeout) as e:
         return {"status": "error", "detail": {"error": f"the lean env: {type(e).__name__}: {e}"}}
-    dep_libs = [str(deps / n / ".lake" / "build" / "lib" / "lean") for n in fetched(pkg)] if deps else []
+    except (OSError, ValueError) as e:
+        return {"status": "error", "detail": {"error": f"the lean env's record ({ENV_RECORD}): {type(e).__name__}: {e}"}}
+    if head.get("schema") != ENV_SCHEMA or head.get("env") != key:
+        return {"status": "error", "detail": {"error": f"the lean env's record is of env {head.get('env')!r} "
+                                                       f"({head.get('schema')}), and {v['package']} compiles in {key!r} "
+                                                       f"({ENV_SCHEMA})"}}
+    libs = env_libs(pkg, tc, deps)
+    dep_libs = [str(d) for d in libs[:-1]]
     steps["env"] = round(time.monotonic() - t, 3)
     threads = str(task.get("resources", {}).get("cores", 1))
 
@@ -280,15 +388,26 @@ def run(task: dict, work: Path) -> dict:
            "LEAN_NUM_THREADS": threads}
     imports = sorted(setup["importArts"])
     t = time.monotonic()
-    rc = call([str(replay), str(work / "replay.json"), "--records", str(records), mod,
+    rc = call([str(replay), str(work / "replay.json"), "--records", str(records), "--env", str(record), mod,
                *(["--closure-reused", *imports] if imports else [])], work, work, env)
     steps["replay"] = round(time.monotonic() - t, 3)
     got = json.loads((work / "replay.json").read_text()) if (work / "replay.json").is_file() else {}
     if rc == 1 and got.get("rejected"):
         return {"status": "fail", "detail": detail | {"error": "the kernel rejected declarations", "rejected": got["rejected"]}}
-    if rc or not isinstance(got.get("declarations"), dict):
+    if rc or not isinstance(got.get("declarations"), dict) or not isinstance(got.get("env_modules"), list):
         return {"status": "error", "detail": detail | {"error": f"the replay exited {rc} without a verdict"}}
-    detail |= {"replayed": got["replayed"], "replay_seconds": got.get("seconds")}
+    # The sets the replay took from the record hold for the env's modules as the env's task replayed them: the env this
+    # replay imported must be those bytes.
+    files = head.get("files") or {}
+    if unrecorded := [m for m in got["env_modules"] if m not in files]:
+        return {"status": "error", "detail": detail | {"unrecorded": unrecorded[:20], "error": (
+            f"the lean env's record lacks {len(unrecorded)} of the env modules the replay imported")}}
+    mine = env_digests(key, libs, got["env_modules"])
+    if differ := [m for m in got["env_modules"] if mine[m] != files[m]]:
+        return {"status": "error", "detail": detail | {"differ": differ[:20], "error": (
+            f"this worker's env holds other bytes than the lean env's task replayed for {len(differ)} of the modules the "
+            "replay imported")}}
+    detail |= {"replayed": got["replayed"], "replay_seconds": got.get("seconds"), "env_modules": len(got["env_modules"])}
     sets = got["declarations"]
     axioms.write_text(json.dumps({"module": mod, "axioms": sets}, indent=1, sort_keys=True) + "\n")
     outside: dict[str, list[str]] = {}
