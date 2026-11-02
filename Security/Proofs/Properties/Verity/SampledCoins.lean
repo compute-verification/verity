@@ -7,11 +7,11 @@ import Properties.Challenger
 
 In the causal game (`Verity.releases`) the challenger releases each coin as `8 * B` uniform bits (`B` is
 `Challenger.COIN_BYTES`), and a draw reads the concatenation of the coins it was released as bytes, bit `t` of a coin's
-bits being bit `t mod 8` of its byte `⌊t/8⌋` (`Properties.Challenger.bitsOf`). So over the game's bits for `k` coins,
-`Ω = Fin k → Fin (8 * B) → Bool`, the draw's byte source is `coinBytes k B`: one stream of `k * B` bytes, coin `c`'s byte
-`q` at `c * B + q`. It is a bijection (`coinBytesEquiv`), so it carries the uniform law on the bits to the uniform law on
-the bytes, which is `Assumptions.UniformRandomBytes` at it (`uniformRandomBytes_coinBytes`): A3 holds there as a theorem,
-with no premise on the operating system.
+bits being bit `t mod 8` of its byte `⌊t/8⌋` (`Properties.Challenger.bitsOf`). So over the game's bits for `k`
+coins, `Ω = Fin k → Fin (8 * B) → Bool`, the draw's byte source is `coinBytes k B`: one stream of `k * B` bytes, coin
+`c`'s byte `q` at `c * B + q`. It is a bijection (`coinBytesEquiv`), so it carries the uniform law on the bits to the
+uniform law on the bytes, which is `Assumptions.UniformRandomBytes` at it (`uniformRandomBytes_coinBytes`): A3 holds
+there as a theorem, with no premise on the operating system.
 
 `bitsAt_coinBytes` and `testBit_coinBytes` say what the bytes are; `bitsOf_streamOf_coinBytes` that their bits, as
 `bitsOf` reads them, are the coins' bits in order; and `streamOf_coinBytes_of_bitsOf` that they are the only bytes with
@@ -109,11 +109,11 @@ def byteBits (x : UInt8) : List Bool := (List.range 8).map fun i => x.toNat.test
 /-- The byte with bits `l`, least significant first. -/
 def ofBits (l : List Bool) : ℕ := l.foldr (fun b n => (if b then 1 else 0) + 2 * n) 0
 
-theorem ofBits_bits : ∀ n < 256, ofBits ((List.range 8).map fun i => n.testBit i) = n := by decide
+theorem ofBits_bits : ∀ n < 256, ofBits ((List.range 8).map fun i => n.testBit i) = n := by decide +kernel
 
 theorem byteBits_inj {x y : UInt8} (h : byteBits x = byteBits y) : x = y := by
-  have hx := ofBits_bits x.toNat x.toNat_lt
-  have hy := ofBits_bits y.toNat y.toNat_lt
+  have hx := ofBits_bits x.toNat (lt_of_lt_of_le x.toNat_lt (by norm_num))
+  have hy := ofBits_bits y.toNat (lt_of_lt_of_le y.toNat_lt (by norm_num))
   change ofBits (byteBits x) = x.toNat at hx
   change ofBits (byteBits y) = y.toNat at hy
   rw [h] at hx
