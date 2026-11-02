@@ -11,7 +11,7 @@
     circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
     circuit-check --all --catalog-units --cache DIR --binding NAME  only catalog binding NAME's targets, from the records
     circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
-    circuit-check --all --catalog-units --cache DIR --update-reads  every catalog binding's read set into reads/ (`READS`)
+    circuit-check --all --catalog-units --cache DIR --update-reads  what every catalog binding read, added to reads/ (`READS`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
     circuit-check --batch                                           batch invariance of the v0 registration's templates
@@ -27,7 +27,7 @@ under ``unchecked`` by check, with counts, and the last line counts them.  A sha
 (whether a known entry no longer fails, and a by-calls root's callees' verdicts, only ``--combine`` sees), and ``--combine``
 exits 2 when it refuses the shards it was given (`shard.read`).  ``--binding`` fails as a shard does, and exits 2 when the
 bindings' records give no task list or the catalog has no binding of that name; its report holds the binding's read set and
-what it read beyond what `READS` declares (``reads``, ``undeclared``: `run`), which ``--update-reads`` writes there.
+what it read beyond what `READS` declares (``reads``, ``undeclared``: `run`), which ``--update-reads`` adds there.
 
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
@@ -55,8 +55,8 @@ from . import targets as TG
 from . import units as UN
 
 REPO = Path(__file__).resolve().parents[5]
-#: each catalog binding's read set as a task keyed on declared inputs declares it (`run`'s ``reads``, which ``--update-reads``
-#: writes here), its ``files``, ``listed`` and ``probes`` (`cache.declared`) beyond ``registries``' (`cache.registry_inputs`)
+#: each catalog binding's read set as a task keyed on declared inputs declares it (what its runs' ``reads`` held, each way it
+#: ran, which ``--update-reads`` adds here: `update_reads`), its ``files``, ``listed`` and ``probes`` (`cache.declared`) beyond ``registries``' (`cache.registry_inputs`)
 #: when its ``registry`` is true, which then are its inputs too, and beyond ``loaded``, the probes every binding's are
 #: (`_read_sets`).  ``registries.json`` holds ``registries``; ``loaded.json``, ``loaded``; ``bindings.json``
 #: holds each path once, in the one of its ``groups`` that exactly the bindings whose sets hold it share, and ``bindings``, by
@@ -900,7 +900,7 @@ def _read_sets(cache: Path, names: dict[str, list[int]], ids: list[tuple[str, st
     for name, d in sets.items():
         was = _whole(have["bindings"].get(name), have["registries"])
         u = CC.undeclared(_whole(d, group), was)
-        if beyond := sorted(loaded[name] - set(have["loaded"]) - set((was or {}).get("files", ()))):
+        if beyond := sorted(loaded[name] - set(have["loaded"]) - {p for k in CC.DECLARED for p in (was or {}).get(k, ())}):
             u["loaded"] = beyond
         if name in missing:
             u["unrecorded"] = missing[name]
@@ -988,22 +988,32 @@ def expanded(got: dict) -> dict:
                          for n, d in got.get("bindings", {}).items()}}
 
 
+def _joined(a: dict | None, b: dict) -> dict:
+    """Read sets ``a`` and ``b`` as one: each kind's paths of either, ``registry`` where either reads the registries."""
+    if a is None:
+        return b
+    out = {**a, **b, **{k: sorted({*a.get(k, ()), *b.get(k, ())}) for k in CC.DECLARED},
+           "registry": bool(a.get("registry") or b.get("registry"))}
+    if libs := sorted({*a.get("untracked", ()), *b.get("untracked", ())}):
+        out["untracked"] = libs
+    return out
+
+
 def update_reads(rep: dict, every: bool) -> list[str]:
-    """`READS` with the read set of each catalog binding ``rep`` (`run`'s, with ``reads``) has an entry of every target for; the
-    others' as they were.  With ``every`` (a run of every binding) the bindings it checked alone, and, when each was complete,
-    its ``registries`` and ``loaded``; else each as declared and as now, both.  The bindings left as they were
-    (``incomplete``)."""
+    """`READS` with what each catalog binding ``rep`` (`run`'s, with ``reads``) has an entry of every target for read, added to
+    what it declares, and ``registries`` and ``loaded`` as declared and as now, both: what a binding's run reads depends on
+    how it runs (``--binding`` makes only its own binding's roots, so a target reads what making another binding's roots
+    reads where it makes them), so a declaration holds every way it ran.  With ``every`` (a run of every binding) a binding
+    the catalog no longer has is dropped.  Remove `READS` to start over.  The bindings left as they were (``incomplete``)."""
     new, have = rep["reads"], _reads_file()
     incomplete = sorted(new.get("incomplete", {}))
-    done = {n: d for n, d in new["bindings"].items() if n not in incomplete}
+    done = {n: _joined(have["bindings"].get(n), d) for n, d in new["bindings"].items() if n not in incomplete}
     if every:
         bindings = {n: d for n in new["bindings"] if (d := done.get(n, have["bindings"].get(n))) is not None}
     else:
         bindings = {**have["bindings"], **done}
-    whole = every and not incomplete
-    regs = new["registries"] if whole else \
-        {k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED}
-    loaded = new["loaded"] if whole else sorted({*have["loaded"], *new["loaded"]})
+    regs = {k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED}
+    loaded = sorted({*have["loaded"], *new["loaded"]})
     READS.mkdir(parents=True, exist_ok=True)
     for part, got in (("registries.json", {"registries": regs}), ("loaded.json", {"loaded": loaded}),
                       ("bindings.json", grouped(bindings))):
@@ -1477,9 +1487,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --all --cache DIR: every catalog binding's name with the targets --binding checks under it, "
                          "from the bindings' records, and no target checked (`bindings`)")
     ap.add_argument("--update-reads", action="store_true",
-                    help=f"with --all --catalog-units --cache DIR: write the read set of each catalog binding checked (with "
-                         f"--binding, NAME's; else every one's) to {os.path.relpath(READS, REPO)} (review the diff); exit 1 when a "
-                         "target has no entry to take its reads from")
+                    help=f"with --all --catalog-units --cache DIR: add what each catalog binding checked read (with --binding, "
+                         f"NAME's; else every one's) to its read set in {os.path.relpath(READS, REPO)} (review the diff; remove it "
+                         "to start over); exit 1 when a target has no entry to take its reads from")
     ap.add_argument("--combine", type=Path, nargs="+", metavar="DIR",
                     help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
                          "of one run; refused (exit 2) unless they ran exactly the whole list's targets, each once")

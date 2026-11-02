@@ -424,6 +424,8 @@ def test_what_a_read_set_holds_beyond_its_declaration_is_undeclared():
     assert CC.undeclared({**now, "registry": False}, None) == {"files": ["a.py", "b.py"], "listed": ["d"],
                                                                "probes": ["p/__init__.py"]}
     assert CC.undeclared({**now, "untracked": ["build/x.so"]}, now) == {"untracked": ["build/x.so"]}   # no task declares one
+    # a path declared by its bytes or its listing is declared by its kind too
+    assert CC.undeclared({**now, "probes": ["a.py", "d", "e"]}, now) == {"probes": ["e"]}
 
 
 #: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based

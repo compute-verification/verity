@@ -297,6 +297,28 @@ def test_reads_holds_each_path_once_and_gives_each_binding_its_whole_read_set_ba
     assert cli._ranges([0, 1, 2, 3, 7, 9, 10]) == "0-3,7,9-10" and cli._places("0-3,7,9-10") == [0, 1, 2, 3, 7, 9, 10]
 
 
+def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, monkeypatch):
+    """`cli.update_reads` adds what a run read to each binding's declared set, and to ``registries`` and ``loaded``: a
+    binding's runs read otherwise by how they ran (``--binding`` makes only its own binding's roots), so its declaration holds
+    each way.  A run of every binding drops a binding the catalog no longer has."""
+    monkeypatch.setattr(cli, "READS", tmp_path / "reads")
+
+    def rep(bindings: dict, loaded: list[str], files: tuple[str, ...] = ("r.py",)) -> dict:
+        return {"reads": {"registries": {"files": list(files), "listed": [], "probes": []}, "loaded": loaded,
+                          "bindings": bindings}}
+
+    a1 = {"files": ["x.py"], "listed": [], "probes": ["p"], "registry": False}
+    a2 = {"files": ["y.py"], "listed": ["d"], "probes": [], "registry": True}
+    b = {"files": ["z.py"], "listed": [], "probes": [], "registry": False}
+    assert cli.update_reads(rep({"a": a1, "b": b}, ["m"]), every=True) == []
+    cli.update_reads(rep({"a": a2}, ["n"], ("r.py", "s.py")), every=False)
+    got = cli._reads_file()
+    assert got["bindings"] == {"a": {"files": ["x.py", "y.py"], "listed": ["d"], "probes": ["p"], "registry": True}, "b": b}
+    assert got["loaded"] == ["m", "n"] and got["registries"]["files"] == ["r.py", "s.py"]
+    cli.update_reads(rep({"a": a1}, []), every=True)
+    assert set(cli._reads_file()["bindings"]) == {"a"}
+
+
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
     m = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#"
     assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
