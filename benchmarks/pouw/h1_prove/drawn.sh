@@ -15,6 +15,9 @@
 #      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  H1_DRAWN_MEM_GB (the
 #      job's budget, default 90% of the host's memory)  H1_ZK_SERVER_GB (a session's ZK server cap, default 88)
 #      PY (served_verdicts.sh's venv python, default .venv's)  H1_DRAWN_ONLY=1: write and check the statements, no verdict
+#      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
+#      H1_DRAWN_WORK (a private directory on the node: the scratch directory goes in it and is kept, so the proof files
+#      statements.json names outlive drawn.sh for that caller; it holds the staged witness)
 # Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's ZK server and prover then run side by side, each under
 # an address-space cap (job.sh's vlimit): the server gets H1_ZK_SERVER_GB and the prover the rest of H1_DRAWN_MEM_GB. The
 # default is sized to a K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223 ANDs), which peaked
@@ -27,19 +30,21 @@
 # verdict lines and both sides' wall seconds and peak RSS, kept whether the session passed or failed; the server is the
 # verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
 # and each statement's witness files and session) and job.sh's other logs, the prover's stderr among them, go to a
-# `mktemp -d` scratch directory removed on exit: PIECE_DIR is under the run's $OUT, and a staged witness never goes there.
+# `mktemp -d` scratch directory removed on exit (kept with H1_DRAWN_WORK): PIECE_DIR is under the run's $OUT, and a staged
+# witness never goes there.
 set -uo pipefail
 SD=${1:?SERVE_DIR} WIN=${2:?WINDOW} P=${3:?PIECE_DIR}
 cd "$(dirname "$0")/../../.." || exit 1
 VPY=${PY:-$(pwd)/.venv/bin/python}
 mkdir -p "$P/drawn"
 P=$(cd "$P" && pwd)
-mkdir -p "${TMPDIR:-/tmp}" && SCR=$(mktemp -d "${TMPDIR:-/tmp}/h1-drawn.XXXXXX") || exit 1
+TOP=${H1_DRAWN_WORK:-${TMPDIR:-/tmp}}
+(umask 077; mkdir -p "$TOP") && SCR=$(mktemp -d "$TOP/h1-drawn.XXXXXX") || exit 1
 export RESEARCH_RUN_DIR=$SCR HZ_CONFIGS=drawn HZ_RUNS=1 HZ_WARM=0 HZ_PYTHON=$VPY
 export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048576)}' /proc/meminfo)}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
-trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W" "$SCR"' EXIT
+trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W"; [ -n "${H1_DRAWN_WORK:-}" ] || rm -rf "$SCR"' EXIT
 SERVE_GB=${H1_ZK_SERVER_GB:-88}
 PROVE_GB=$(( MEM_GB - SERVE_GB ))
 [ "$PROVE_GB" -ge 62 ] || { log "drawn: the prover's share, $MEM_GB - $SERVE_GB (H1_ZK_SERVER_GB) = $PROVE_GB GB, is below a K 2048" \
@@ -77,8 +82,10 @@ for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print("
 done
 "$PY" "$J/../h1_prove/drawn.py" statements --work "$WK" --out "$ST" 2>&1 | tee -a "$OUT/job.log"
 [ "${PIPESTATUS[0]}" = 0 ] || exit 1
-"$PY" "$J/../h1_prove/drawn.py" check "$SD" "$WIN" "${args[@]}" --statements "$ST" --lean "$LEAN" 2>&1 | tee -a "$OUT/job.log"
-[ "${PIPESTATUS[0]}" = 0 ] || { log "drawn: credit refuses the statements"; exit 1; }
+if [ "${H1_DRAWN_CHECK:-1}" != 0 ]; then
+  "$PY" "$J/../h1_prove/drawn.py" check "$SD" "$WIN" "${args[@]}" --statements "$ST" --lean "$LEAN" 2>&1 | tee -a "$OUT/job.log"
+  [ "${PIPESTATUS[0]}" = 0 ] || { log "drawn: credit refuses the statements"; exit 1; }
+fi
 [ "${H1_DRAWN_ONLY:-0}" = 1 ] && exit 0
 "$VPY" benchmarks/one_stage/served_verdicts.py pouw "$SD" "$WIN" "$P" --statements "$ST" \
   ${H1_LIVE_EVIDENCE:+--live-evidence "$H1_LIVE_EVIDENCE"}
