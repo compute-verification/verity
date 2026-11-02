@@ -4060,6 +4060,13 @@ int v31_sync(void* h) {
   CK(cudaStreamSynchronize(f.s1));
   return 0;
 }
+// The compute (which 0) or commit (1) stream every context shares, for the caller's timing events: each call's compute
+// runs on the first, and its commit and v31_levels_async's copies on the second, after it. Null from a foreign thread
+void* v31_stream(void* h, int which) {
+  if (foreign()) return nullptr;
+  const Fill& f = ctx_of(h)->f;
+  return which ? f.s1 : f.s0;
+}
 
 void v31_destroy(void* h) {
   LibCtx* c = ctx_of(h);

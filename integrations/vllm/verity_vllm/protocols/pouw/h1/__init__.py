@@ -34,7 +34,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
   which compute accounting commits. This module commits neither.
 * **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and A table of
-  each K are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
+  each K are the Commit's values, its record bound into `calls_root` before `draw_root` and held to them by core's
   credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a proof block, its exact z (`Call.z`'s cells) then y = dq(z). With none,
@@ -45,7 +45,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   (`pouw_h1_records.reason`, else ``credit: z-records: ...``). An arm serving ``scaled_mm``'s y with z an ``_int_mm``
   beside it is refused (``credit: served-output-not-credited-kernel: ...``), as is a call recorded outside ``apply`` (`UNTRACED`).
   The verdict is the serving process's own, so it is only the call's credit bit (`H1Run.credit_bits`, ``credit`` in its
-  manifest row under calls_root, before the draw root): credit is the verifier's (core's `credit`).
+  manifest row under calls_root, before `draw_root`): credit is the verifier's (core's `credit`).
 * **Requests and rounds** (`pouw_h1_requests`, `Accounting.Served`): round s is step s. `admitting` hands each
   step's admitted requests and batch order to `H1Run.admit` before its forward, so each request's entry is a hiding leaf
   under the root of the round that admits it, and each served row's slot names its request, before that round's coin; a
@@ -53,7 +53,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   ``admission`` is ``per-round`` (`pouw_h1_requests.ADMISSIONS`).
 * **Round values.** Each call's A table (its slots' s8 rows and f32 scales) and z table (a leaf a proof block, its record) are
   hiding tables of the call (``tables`` in its manifest row), so round s's root commits them, z at its cut, before round s's
-  coin (``details.requests.a_roots``: `pouw_h1_requests.tables_reason` at `close`); round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's draw coin
+  coin (``details.requests.a_roots``: `pouw_h1_requests.tables_reason` at `close`); round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's sampling coin
   (``draw``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
 * **Coins.** Credit needs the window's coins from the auditor host's challenger (``coin_source`` ``challenger``,
   `pouw_h1_challenger`); a window whose coins were held in the serving process credits nothing (`IN_PROCESS`).
@@ -77,9 +77,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import commit_rows, weight_binding
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
+from verity.core.protocols.pouw.circuit import compile as C, h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.sampled_proofs.challenger import CoinError
@@ -91,12 +90,9 @@ from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.ml.circuits.types import Array
 
 from verity_vllm.protocols.pouw import credit_gate as CG
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records as ZR, requests as RQ,
+                                             tables_device as TD)
 from verity_vllm.protocols.pouw.h1.commit import calls_root
-from verity_vllm.protocols.pouw.h1 import prover as PV
-from verity_vllm.protocols.pouw.h1 import records as ZR
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
 from verity_vllm.protocols.pouw.h1.static import FILL, Static, bind_all, graph_pad, utilization
 
@@ -106,6 +102,9 @@ TILE = (32, 32)
 I8_BITS, BF16_BITS = 8, 16
 RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
+#: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
+#: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
+PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
 SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
 #: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
@@ -201,11 +200,20 @@ def units(k: int, n: int, m: int) -> int:
     return (mp // TILE[0]) * (np_ // TILE[1])
 
 
-def weight_root(w: int, rows: np.ndarray) -> bytes:
-    """The epoch's commitment to weight `w` (its int8 rows [n, k] in a SHA-512 row tree), which the salt coin is opened after
-    (`audit.weights_root`); not root(B), which is compute accounting's."""
+#: this process's 32-byte key for its weight trees' leaf salts (`weight_root`): from the OS's CSPRNG when the module is first
+#: imported (a forked child keeps its parent's) and held only in memory, never written to a record, a manifest or the store;
+#: a tensor-parallel rank draws its own, since each commits only the weights it holds
+WEIGHT_KEY = os.urandom(32)
+
+
+def weight_root(w: int, rows: np.ndarray, key: bytes | None = None) -> bytes:
+    """The epoch's commitment to weight `w`, which the salt coin is opened after (`audit.weights_root`): its int8 rows [n, k]
+    in a hiding tree, ``audit.commit_rows(weight_binding(w), -2, rows, HM96, key, HM96_WEIGHTS + w)`` (`requests.hiding_rows`,
+    the same tree), so the root says nothing of the rows to anyone without ``key`` (`WEIGHT_KEY` when None). Not root(B),
+    which is compute accounting's."""
+    key = WEIGHT_KEY if key is None else key
     rows = np.ascontiguousarray(rows, dtype=np.int8)
-    return commit_rows(weight_binding(w), -2, [r.tobytes() for r in rows], hash="sha512").commitment.root
+    return RQ.hiding_rows(weight_binding(w), -2, [r.tobytes() for r in rows], key, HM96_WEIGHTS + w).commitment.root
 
 
 def layout(shapes: Sequence[tuple[int, int]], rows: int) -> tuple[list[int], int]:
@@ -280,7 +288,7 @@ class Call:
 #: and s_a [m], m = 0 for an empty step; `slots` makes the call's T-slot table); it returns None or what it bound for the
 #: call, as JSON (its roots and receipt root, hex)
 Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
-#: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins and draw
+#: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins and sampling coin
 #: coins (`LiveRecord`s) and what its commitment records of the opening (`H1Run.open_window`)
 Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
 
@@ -303,10 +311,10 @@ class H1Run:
     over the step's calls, its request table and its slot table, and with ``served`` the step's A table of each K
     ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
-    `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's draw family) after the window's `draw_root`.
+    `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's ``draw`` family) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
     given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
-    served call's A rows, scales and z/y records, so a drawn proof block opens after the close (DRAWN1); without it their leaves
+    served call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
     (`pouw_h1_served.Served`) each call's z/y table, its step's A table of K, and the weights' B, are also registered values
@@ -550,7 +558,7 @@ class H1Run:
 
     def receipt(self, index: int, root: bytes) -> None:
         """Call `index`'s receipt root, computed after its round's coin: it goes under the next round's root (the last
-        round's in the draw's root), so it is refused before that coin, once the next round has closed, or twice."""
+        round's under `draw_root`), so it is refused before that coin, once the next round has closed, or twice."""
         call = self.call(index)
         if len(self.round_log) <= call.step:
             raise RuntimeError(f"{self.entry}: call {index}'s receipt before round {call.step}'s coin")
@@ -692,7 +700,7 @@ class H1Run:
         return out
 
     def credit_bits(self) -> dict[int, bool]:
-        """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before the draw root): its
+        """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before `draw_root`): its
         `gated` verdict, true only for a served call with a z table."""
         gated = self.gated()
         return {c.index: c.index in gated and gated[c.index]["credit"] and (self.tables.get(c.index) or {}).get("z") is not None
@@ -749,12 +757,11 @@ class H1Run:
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
         ``served`` its registered trees' entries and the Commit's record (`calls_root`)."""
-        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(),
-                          CT.record_of(self))
+        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(), CT.record_of(self))
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
-        manifest, the last round's receipts and every round's root and coin, so the draw follows all of them."""
+        manifest, the last round's receipts and every round's root and coin, so sampling follows all of them."""
         self.close()
         if not self.commit or self._unopened is not None:
             return
@@ -785,7 +792,7 @@ class H1Run:
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
-__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
+__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM", "PROGRAM_META", "RECORD", "SALT_TAG",
            "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
            "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
-           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES"]
+           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES", "WEIGHT_KEY"]

@@ -390,6 +390,46 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     assert body["profile"]["scheme"] == "p2-128/v4" and not body["profile"]["certified"]
 
 
+def test_a_joint_runs_store_is_set_up_under_the_bandwidth_salt_of_its_device(tmp_path, monkeypatch):
+    """`--bandwidth-salt GPU` sets `C` up under `bandwidth.audit.draw_salt` for the GPU's id as the challenger reads it, and
+    P2's audit runs over that `C`, so the bandwidth verifier accepts the store P2 audits; a plain run's salt is PoUS's own
+    (the test above), and the switch refuses the frozen spec's framing."""
+    from verity.core.protocols.bandwidth import audit
+    from verity.core.protocols.pous import protocol, schemes
+    from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
+
+    _, harness, _ = _p2()
+    device = bytes(range(16))
+    asked: list[str] = []
+    monkeypatch.setattr(audit, "read_device", lambda gpu: asked.append(gpu) or device)
+    gpu = "GPU-00010203-0405-0607-0809-0a0b0c0d0e0f"
+    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED, bandwidth_salt=gpu), WS, tmp_path, backend=_backend(),
+                                  params=_small(), research=True)
+    assert asked == [gpu] and body["gates"]["timed_audit"]["passed"] and body["gates"]["codec"]["passed"]
+    params = schemes.P2Params(128, 173, 64, 3)
+    w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
+    commitment = protocol.commit(schemes.P2(params), w)
+    salt = audit.draw_salt(harness.SETUP_SOURCE, commitment, device)
+    setup = body["setup"]
+    assert (setup["salt"], setup["salt_from"], setup["device"]) == (salt.hex(), "bandwidth", device.hex())
+    assert salt != protocol.draw_salt(harness.SETUP_SOURCE, commitment)
+    encoded = protocol.encode(schemes.P2(params), w, salt)
+    leaves = [leaf_hash(params, salt, s * 64 + j, b) for s, seg in enumerate(encoded) for j, b in enumerate(seg)]
+    assert (tmp_path / "leaves-p2.bin").read_bytes() == b"".join(leaves)
+    vk = VerifierKey.from_leaves(params, salt, leaves)
+    (tmp_path / "state").mkdir()
+    audit.ChallengerState.create(tmp_path / "state", vk)
+    with audit.ChallengerState(tmp_path / "state", vk) as state:
+        audit.Verifier(vk, audit.Params("ro-blake3/v1", audit.SAMPLES, 1_200_000), b"secret", state, device=device,
+                       commitment=commitment, salt_source=harness.SETUP_SOURCE)
+        with pytest.raises(ValueError, match="not draw_salt's for this device"):
+            audit.Verifier(vk, audit.Params("ro-blake3/v1", audit.SAMPLES, 1_200_000), b"secret", state,
+                           device=bytes(16), commitment=commitment, salt_source=harness.SETUP_SOURCE)
+    with pytest.raises(SystemExit, match="registered P2 store"):
+        _bench().P2V1Gpu().run(_args(tmp_path / "v1", bandwidth_salt=gpu), WS, tmp_path / "v1", backend=_backend(),
+                               params=_small())
+
+
 def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fails(tmp_path):
     body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED), WS, tmp_path, backend=_backend(), params=_small())
     gates, honest = body["gates"], body["metrics"]["audit"]

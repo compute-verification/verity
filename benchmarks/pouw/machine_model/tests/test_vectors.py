@@ -109,7 +109,7 @@ def test_margin_is_the_adopted_designs_cheapest():
                                 if a.design == r.model.adopted and a.family.startswith("(iv)"))
 
 
-# What each claim of data/floors.csv finds below its floor, by vector: (π₃₂) and PRICES-32's load half
+# What each claim of data/floors.csv finds below its floor, by vector: (π₃₂) and its load half
 CLAIMED = {
     "VF3j": ([], ["LDS128 8.00 a word < 16", "LDG128 8.00 a word < 16", "LDC64 0.00 a word < 16"]),
     "VF3j-16": ([], []),
