@@ -373,3 +373,18 @@ def test_the_config_names_the_registry_channel_and_every_loop_post_start_starts(
     watched = " ".join(loop["started_by"] for loop in REAL["loop"])
     unwatched = [s for s in started if s not in watched and s != "/data/infra/cloud_watch.sh"]   # it can't watch itself
     assert unwatched == [] and "research pods guard" in watched, f"add a [[loop]] to cloud_watch.toml for {unwatched}"
+
+
+def test_the_agent_watchs_stall_names_the_top_group_and_pages_a_person_an_hour_later(tmp_path):
+    """A watch that failed every sweep for hours (HTTP 429) told only the infra group."""
+    cfg = tomllib.loads((CONTROL / "cloud_watch.toml").read_text())
+    (loop,) = [x for x in cfg["loop"] if x["name"] == "Agent watch"]
+    loop = {**loop, "file": str(tmp_path / "status.json")}
+    late = 2 * loop["period_s"]
+    for gone, pages in ((late + 60, False), (late + loop["page_after_s"] + 60, True)):
+        (tmp_path / "status.json").write_text(json.dumps({"t": W.iso(T0 - gone)}))
+        rep = W.Report()
+        W.check_loops(ctx(config(tmp_path, loop=[loop]), {}, T0), rep)
+        assert rep.findings[0].text.startswith("<!subteam^S0C977GL9R7> *Agent watch*")
+        assert [f.key for f in rep.findings][1:] == (["loop|Agent watch|page"] if pages else [])
+    assert rep.findings[1].text.startswith(f"<@{loop['page_user']}> *Agent watch* has not succeeded for")

@@ -56,10 +56,6 @@ theorem exists_band_of_not_start {k : ℕ} {S : Finset (Fin n)} {v : Fin n} (hv 
   push Not at hne
   exact hns (Finset.mem_filter.2 ⟨hv, fun u hu h => hne u hu h⟩)
 
-theorem band_isChain_nodup {k : ℕ} {p : List (Fin n)} (hp : p.IsChain (Band k)) : p.Nodup := by
-  have h2 : p.IsChain (· < ·) := hp.imp fun a b h => Fin.lt_def.2 h.1
-  exact (List.isChain_iff_pairwise.1 h2).imp ne_of_lt
-
 /-- A chain whose nodes carry strictly increasing ranks in `[1, r]` has at most `r` nodes. -/
 theorem chain_length_le_of_rank {α : Type} {R : α → α → Prop} (A : α → Prop) (f : α → ℕ) (r : ℕ)
     (hf : ∀ a b, R a b → A a → A b → f a < f b) (hrange : ∀ a, A a → 1 ≤ f a ∧ f a ≤ r) :
@@ -234,59 +230,12 @@ theorem band_card_le (k : ℕ) (S : Finset (Fin n)) (ℓ : ℕ)
     _ = ℓ * ((starts k S).card * k) := by ring
     _ ≤ ℓ * (n - S.card + k) := Nat.mul_le_mul_left _ hB
 
-/-- **Long paths in the band graph.** Every `S` contains a path of `p` nodes with `k·|S| ≤ p·(n − |S| + k)`. -/
-theorem band_long_path (k : ℕ) (S : Finset (Fin n)) :
-    ∃ p : List (Fin n), p.IsChain (Band k) ∧ p.Nodup ∧ (∀ x ∈ p, x ∈ S) ∧
-      k * S.card ≤ p.length * (n - S.card + k) := by
-  classical
-  let P : ℕ → Prop := fun ℓ => ∀ p : List (Fin n), p.IsChain (Band k) → (∀ x ∈ p, x ∈ S) → p.length ≤ ℓ
-  have hex : ∃ ℓ, P ℓ := by
-    refine ⟨S.card, fun p hp hpS => ?_⟩
-    rw [← List.toFinset_card_of_nodup (band_isChain_nodup hp)]
-    exact Finset.card_le_card fun x hx => hpS x (List.mem_toFinset.1 hx)
-  set ℓ := Nat.find hex with hℓ
-  have hP : P ℓ := Nat.find_spec hex
-  have hbound := band_card_le k S ℓ hP
-  -- a chain attains `ℓ`
-  obtain ⟨p, hp, hpS, hlen⟩ : ∃ p : List (Fin n), p.IsChain (Band k) ∧ (∀ x ∈ p, x ∈ S) ∧ ℓ ≤ p.length := by
-    rcases Nat.eq_zero_or_pos ℓ with h0 | hpos
-    · exact ⟨[], List.isChain_nil, by simp, by simp [h0]⟩
-    · have hnot : ¬ P (ℓ - 1) := Nat.find_min hex (by omega)
-      simp only [P, not_forall, not_le] at hnot
-      obtain ⟨p, hp, hpS, hlt⟩ := hnot
-      exact ⟨p, hp, hpS, by omega⟩
-  exact ⟨p, hp, band_isChain_nodup hp, hpS, hbound.trans (Nat.mul_le_mul_right _ hlen)⟩
-
 /-! ### The band graph -/
 
 theorem mem_par_band {n k : ℕ} (hk : 1 ≤ k) (u v : Fin n) : u ∈ (bandGraph n k).par v ↔ Band k u v := by
   simp only [bandGraph, basePath, bandExtra, Finset.mem_union, Finset.mem_filter, Finset.mem_univ, true_and]
   unfold Band
   omega
-
-/-- **Depth robustness.** The band graph is `(1/2, k/(n + 2k))`-depth-robust. -/
-theorem band_depthRobust (n k : ℕ) (hk : 1 ≤ k) :
-    DRG.DepthRobust n (fun a b => a ∈ (bandGraph n k).par b) (1 / 2) ((k : ℝ) / (n + 2 * k)) := by
-  intro S hS
-  obtain ⟨p, hp, hnd, hpS, hlen⟩ := band_long_path k S
-  refine ⟨p, hp.imp fun a b h => (mem_par_band hk a b).2 h, hnd, hpS, ?_⟩
-  have hSn : S.card ≤ n := by
-    have := Finset.card_le_univ S
-    rwa [Fintype.card_fin] at this
-  have hlenR : (k : ℝ) * S.card ≤ p.length * ((n : ℝ) - S.card + k) := by
-    have : ((k * S.card : ℕ) : ℝ) ≤ ((p.length * (n - S.card + k) : ℕ) : ℝ) := by exact_mod_cast hlen
-    push_cast [Nat.cast_sub hSn] at this
-    linarith
-  have hk' : (1 : ℝ) ≤ k := by exact_mod_cast hk
-  have hSn' : (S.card : ℝ) ≤ n := by exact_mod_cast hSn
-  have hpos : (0 : ℝ) < n + 2 * k := by positivity
-  rw [div_mul_eq_mul_div, div_le_iff₀ hpos]
-  by_contra hlt
-  push Not at hlt
-  have hgap : (0 : ℝ) < (n : ℝ) - S.card + k := by linarith
-  have hlen0 : (0 : ℝ) ≤ p.length := Nat.cast_nonneg _
-  nlinarith [mul_lt_mul_of_pos_right hlt hgap, mul_le_mul_of_nonneg_right hlenR hpos.le,
-    mul_nonneg (by linarith : (0 : ℝ) ≤ 2 * S.card - n) (by linarith : (0 : ℝ) ≤ n + k)]
 
 /-- The nodes of `U` with no node of `U` among their `k` successors. -/
 def ends (k : ℕ) (U : Finset (Fin n)) : Finset (Fin n) := U.filter fun a => ∀ b ∈ U, ¬ Band k a b

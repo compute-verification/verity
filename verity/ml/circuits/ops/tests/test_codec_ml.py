@@ -7,7 +7,7 @@ import json
 import pytest
 
 from verity.ml.circuits.codec import _lookup_primitive, decode_program, encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, Registry, bind
+from verity.ml.circuits.defs import REGISTRY, DefinitionTable, bind
 from verity.ml.circuits.evaluation import evaluate_region
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.ops import gemm as G
@@ -44,7 +44,7 @@ def test_the_two_architectures_are_two_programs() -> None:
 def test_const_family_is_materialised_from_the_id_by_a_fresh_registry() -> None:
     """Decoding in a process that never built the program: the `Const32[0x..]_v1` gate is not in the registry it is
     handed, and is materialised by the family hook `verity.ml.circuits.ops.prims` registered."""
-    fresh = Registry()
+    fresh = DefinitionTable()
     for d in (P.Bf16ToF32, P.F32ToBf16Rn, P.F2fpBf16, P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16):
         fresh.add(d)
     assert "Const32[0x00000000]_v1" not in fresh

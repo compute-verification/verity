@@ -118,6 +118,11 @@ def _ok(lib, f: str, *args) -> None:
         raise RuntimeError(f"{f}: {r} {s.value.decode() if s.value else ''}")
 
 
+def cubin_path(arch: str = "sm_90a") -> str:
+    """The cubin launches on an ``arch`` card load: ATTN_BF16_CUBIN, else build.sh's one beside this file."""
+    return os.environ.get("ATTN_BF16_CUBIN") or os.path.join(HERE, f"attn_bf16.{arch}.cubin")
+
+
 def _module(index: int) -> tuple:
     """(driver, the device's primary context, {kernel name: function}) for CUDA device ``index``, loaded once."""
     import torch
@@ -126,8 +131,7 @@ def _module(index: int) -> tuple:
         cc = torch.cuda.get_device_capability(index)
         if cc not in ARCH:
             raise RuntimeError(f"attn_bf16: no cubin for compute capability {cc} (have {sorted(ARCH)})")
-        path = os.environ.get("ATTN_BF16_CUBIN") or os.path.join(HERE, f"attn_bf16.{ARCH[cc]}.cubin")
-        with open(path, "rb") as f:
+        with open(cubin_path(ARCH[cc]), "rb") as f:
             cubin = f.read()
         torch.cuda.init()
         lib, dev, ctx, mod = _lib(), C.c_int(), C.c_void_p(), C.c_void_p()

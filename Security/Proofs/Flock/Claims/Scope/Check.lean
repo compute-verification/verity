@@ -49,9 +49,9 @@ theorem wiresFeed_of_scopeOk {c : Circuit} (h : ProvedScope.scopeOk c = true) : 
 /-- What the check requires of the circuit's form: a templated circuit (`Circuit.tmpl`) in the form
 `ProvedScope.scopeOkT` covers, on its description; any other with the wire condition and `scopeOk` (`scopeOkI` with
 hidden outputs). -/
-def FormOk (t : Tags) (zk reg : Bool) (count : Nat) (c : Circuit) : Prop :=
+def FormOk (t : Tags) (zk : Bool) (count : Nat) (c : Circuit) : Prop :=
   match c.tmpl with
-  | some tu => ProvedScope.scopeOkT t.hiddenOutputs zk reg count c tu = true
+  | some tu => ProvedScope.scopeOkT t.hiddenOutputs zk count c tu = true
   | none => (ProvedScope.wiresFeed c = true → ProvedScope.wiresAcyclic c = true) ∧
       (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true
 
@@ -62,7 +62,7 @@ theorem check_ok_iff (t : Tags) (zk : Bool) (cf pf : ByteArray) (tables : List (
     ProvedScope.check t zk cf pf tables count pi reg = .ok () ↔
       Rules t zk count pi ∧ ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧
         ProvedScope.publicOf t c pf = .ok pub ∧
-        (pub.tables.isSome = true → ProvedScope.sharedRowsOk t zk reg = true) ∧ FormOk t zk reg count c := by
+        (pub.tables.isSome = true → ProvedScope.sharedRowsOk t zk reg = true) ∧ FormOk t zk count c := by
   rw [← firstFailure_none_iff]
   unfold ProvedScope.check ProvedScope.circuitRules
   constructor
@@ -87,7 +87,7 @@ theorem check_ok_iff (t : Tags) (zk : Bool) (cf pf : ByteArray) (tables : List (
     | some tu =>
       simp only [FormOk, hct] at h ⊢
       revert h
-      generalize ProvedScope.scopeOkT t.hiddenOutputs zk reg count c tu = b
+      generalize ProvedScope.scopeOkT t.hiddenOutputs zk count c tu = b
       cases b <;> simp
     | none =>
       simp only [FormOk, hct] at h ⊢

@@ -15,16 +15,11 @@ import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
 import Proofs.Pouw.Dimension.ForestProofs
 import Proofs.Pouw.Dimension.Fp8MmaProofs
-import Proofs.Pouw.Dimension.H100CiteProofs
-import Proofs.Pouw.Dimension.H100DenseProofs
 import Proofs.Pouw.Dimension.H100FloorProofs
-import Proofs.Pouw.Dimension.H100FragProofs
-import Proofs.Pouw.Dimension.H100LoopFreeProofs
 import Proofs.Pouw.Dimension.H100MeasuredProofs
 import Proofs.Pouw.Dimension.H100PeakTcProofs
 import Proofs.Pouw.Dimension.H100Proofs
 import Proofs.Pouw.Dimension.H100WProofs
-import Proofs.Pouw.Dimension.LiftProofs
 import Proofs.Pouw.Dimension.Lifting
 import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
@@ -56,11 +51,13 @@ import Proofs.Pouw.Fp8Atom.Proofs
 import Proofs.Pouw.FpG1
 import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
-import Proofs.Pouw.HiddenCredit
+import SampledProofs.HiddenDraw
 import Proofs.Pouw.H1Zy
+import Proofs.Pouw.Lead
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract
+import Proofs.Pouw.Salt
 import Proofs.Pouw.OnsiteFreed
 import Proofs.Pouw.ShaRealize
 import Proofs.Pouw.ShaRealizeWitness
@@ -83,10 +80,10 @@ import Proofs.Pouw.PeriodJ10RStrata
 import Proofs.Pouw.PeriodJ10RStrata.Honest
 import Proofs.Pouw.PeriodJ10R
 import Proofs.Pouw.PeriodJ10R.Honest
-import Proofs.Pouw.PeriodJ10R.Nontrivial
-import Proofs.Pouw.PeriodJ10R.Stratum
 import Proofs.Pouw.ServedValues
 import Proofs.Pouw.ServedValues.Honest
+import Proofs.Pouw.PeriodJ10R.Nontrivial
+import Proofs.Pouw.PeriodJ10R.Stratum
 import Proofs.Pouw.PearlC
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.AtomErr
@@ -107,7 +104,6 @@ import Proofs.Pouw.PearlC.DeviceSm120CapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceSm120Gamma
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
-import Proofs.Pouw.PearlC.DeviceSm120v2LoopEquiv
 import Proofs.Pouw.PearlC.EncChecks
 import Proofs.Pouw.PearlC.FlockTile
 import Proofs.Pouw.PearlC.Forming
@@ -139,7 +135,6 @@ import Proofs.Pouw.PearlC.Row4Words
 import Proofs.Pouw.PearlC.RowPrimChecks
 import Proofs.Pouw.PearlC.RowCapAtGamma
 import Proofs.Pouw.PearlC.RowSeedCode
-import Proofs.Pouw.PearlC.RowSeedFragment
 import Proofs.Pouw.PearlC.RowSeedGamma
 import Proofs.Pouw.PearlC.RowSeedKGamma
 import Proofs.Pouw.PearlC.RowSeedSkip
@@ -147,15 +142,11 @@ import Proofs.Pouw.PearlC.ServedFadd8Rev1Gamma
 import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 import Proofs.Pouw.PearlC.ServedRev1Gamma
 import Proofs.Pouw.PearlC.Sm120Checks
-import Proofs.Pouw.PearlC.TTOutW1RowSeed
 import Proofs.Pouw.PearlC.Tile4Circuit
 import Proofs.Pouw.PearlC.TileCapRev1Gamma
-import Proofs.Pouw.PearlC.TileCheck
 import Proofs.Pouw.PearlC.TileCircuit
-import Proofs.Pouw.PearlC.TileProtocol
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
-import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
 import Proofs.Pouw.PearlC.W1BudgetAbort
@@ -180,6 +171,7 @@ import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Pouw.RelativeSecurityFork
 import Proofs.Pouw.RelativeSecurityGuarantees
 import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.SakLb
@@ -193,17 +185,19 @@ import Proofs.Pouw.SteinerRigidity
 import Proofs.Pouw.Theorem1
 import Proofs.Pouw.TileBound.AlignedExact
 import Proofs.Pouw.TileBound.Fp8
-import Proofs.Pouw.TileBound.Fp8Depth
 import Proofs.Pouw.TileBound.Proofs
-import Proofs.Pouw.TileBound.WinogradStrassen
 import Proofs.Pouw.TileBound.Witness
 import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
+import Proofs.Pouw.Writes
 
 /-!
 # PoUW's proofs
 
+`Writes` holds the proofs of what writing distinct words costs, one a guarantee under the guarantee's own name.
+
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
-`Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
+`Game`, `NCP`, `PearlC`, `Receipt`), and the keyed leaf's as `Pouw.Salt.keyed_leaf_hides` and `Pouw.Salt.keyed_leaf_binds`
+(`Salt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
 -/

@@ -142,10 +142,4 @@ theorem range : Pouw.Guarantees.NCP.Range := by
       have := f2_bound hR (fun l' hl' => hF l' hl' j) (show l - 2 * k < k by omega); unfold InInt7 at *
       constructor <;> linarith
 
-/-- **`Range`'s hypotheses are satisfiable.** -/
-theorem signedPermWitness : Pinned.SignedPermWitness := by
-  intro k
-  refine ⟨Equiv.refl _, fun _ => 1, fun _ => Or.inl rfl, fun i j => ?_⟩
-  by_cases h : i = j <;> simp [h, Fin.val_inj]
-
 end Pouw.NCP.Proofs

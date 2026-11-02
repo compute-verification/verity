@@ -105,7 +105,7 @@ WINDOW_EXPECT = {
     "not-window": ("layout", Cr.NOT_WINDOW), "template": ("layout", "is not h1window's"),
     "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
-    "alt-layout": ("layout", Cr.BODY), "tile-k": ("tile-k", TILE_K),
+    "alt-layout": ("layout", Cr.BODY), "reinterpret": ("layout", Cr.DESCRIPTOR_FORM), "tile-k": ("tile-k", TILE_K),
     "credit-changed": ("coin", NO_DRAW_SESSION), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the draw's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
@@ -244,6 +244,22 @@ def test_each_pinned_model_is_its_files_digest():
         assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest(), role
     assert Cr.PINNED_MODELS == {r: e["checkpoint_sha512"] for r, e in doc.items()}
     assert Cr.MODELS.read_text() == json.dumps(doc, indent=1, sort_keys=True) + "\n"
+
+
+def test_llama32_1b_int8_and_its_k2048_role_pin_one_checkpoint():
+    """LLAMA32_1B_INT8 is vllm's int8 checkpoint of unsloth/Llama-3.2-1B (`verity-int8-channel127/v1`, snapshot 15b0976d):
+    the 6 files its `checkpoints-int8.json` entry lists by size and sha256, each by SHA-512, and its checkpoint_sha512
+    their canonical JSON's digest. LLAMA32_1B_INT8_K2048 is the same checkpoint under the role whose manifest entry
+    declares its K = 2048 linears (a J10-R period's at one K), so both pin one digest."""
+    doc = json.loads(Cr.MODELS.read_text())
+    e = doc["LLAMA32_1B_INT8"]
+    assert (e["repo"], e["revision"], e["recipe"]) == (
+        "verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800", "verity-int8-channel127/v1")
+    assert set(e["files"]) == {"config.json", "generation_config.json", "model.safetensors", "special_tokens_map.json",
+                               "tokenizer.json", "tokenizer_config.json"}
+    assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest()
+    assert doc["LLAMA32_1B_INT8_K2048"] == e
+    assert Cr.PINNED_MODELS["LLAMA32_1B_INT8_K2048"] == e["checkpoint_sha512"]
 
 
 def test_glm53_int8_pins_the_v3_checkpoint():
@@ -557,6 +573,18 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
             assert got is None and refused == ("registration", f"call {call}'s statement reads {vals[1]}, which the "
                                                "window registers not: register each of a call's tables and its "
                                                "weights once")
+
+
+def test_a_word_read_at_another_width_refuses():
+    """A descriptor whose template's A or B row of bits reads the root's 16-bit input words is one C-Flock's decoder
+    refuses (``E_REINTERPRET``), so `credit.layout_of` refuses it as no descriptor (`credit.DESCRIPTOR_FORM`), and
+    accepts the same window wired at each leaf's own width; the difftest's ``reinterpret`` cases hold the Lean to it."""
+    for seed in SEEDS:
+        rng = random.Random(f"reinterpret/{seed}")
+        lay = cases.layout(rng)
+        assert Cr.layout_of(bytes.fromhex(cases.descriptor(rng, lay)))[1] is None
+        assert Cr.layout_of(bytes.fromhex(cases._break_desc(rng, lay, "reinterpret"))) == (
+            None, ("layout", Cr.DESCRIPTOR_FORM))
 
 
 def test_an_alternative_layout_with_the_same_descriptor_refuses():
@@ -1185,7 +1213,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_period_open_with_no_k_refuses(seed):
-    """K is the proof service's selection, committed in the period-open before any draw: a period whose open commits
+    """K is the proof system's selection, committed in the period-open before any draw: a period whose open commits
     none, or a malformed one, earns nothing."""
     for name in ("no-k", "k-form"):
         got, refused = _period(name, seed)

@@ -19,16 +19,16 @@ open Accounting.CoinFlow Accounting.HMu Pouw.RelativeSecurity Finset
 
 variable {m : ℕ} {C V : Type}
 
-theorem admits_spec [DecidableEq C] {P : Program m C V} (h : P.admits = true) :
+theorem admits_spec [DecidableEq C] {P : FlowGraph m C V} (h : P.admits = true) :
     P.Topological ∧ P.CoinFlowRule ∧ P.OneUse ∧ P.SinkConfined :=
   of_decide_eq_true h
 
-theorem eval_eq [Inhabited V] (P : Program m C V) (σ : C → Bool) (n : Fin m) :
+theorem eval_eq [Inhabited V] (P : FlowGraph m C V) (σ : C → Bool) (n : Fin m) :
     P.eval σ n = P.op n (fun k => if _h : k.1 < n then P.eval σ k.1 else default) (fun c => σ c.1) := by
-  rw [Program.eval]
+  rw [FlowGraph.eval]
 
 /-- Two draws give node `g` one value when they agree on its coins and give its earlier reads one value. -/
-theorem eval_congr [Inhabited V] (P : Program m C V) {σ σ' : C → Bool} {g : Fin m}
+theorem eval_congr [Inhabited V] (P : FlowGraph m C V) {σ σ' : C → Bool} {g : Fin m}
     (hc : ∀ c ∈ P.coins g, σ c = σ' c) (hr : ∀ k ∈ P.reads g, k < g → P.eval σ k = P.eval σ' k) :
     P.eval σ g = P.eval σ' g := by
   rw [eval_eq, eval_eq]
@@ -49,9 +49,9 @@ theorem fin_strong {Q : Fin m → Prop} (h : ∀ g, (∀ k, k < g → Q k) → Q
     intro g hg
     exact h g fun k hk => ih k.val (hg ▸ hk) k rfl
 
-theorem mem_noiseCoins {P : Program m C V} {k : Fin m} {c : C} :
+theorem mem_noiseCoins {P : FlowGraph m C V} {k : Fin m} {c : C} :
     c ∈ P.noiseCoins k ↔ P.noise k = true ∧ c ∈ P.coins k := by
-  unfold Program.noiseCoins
+  unfold FlowGraph.noiseCoins
   by_cases hk : P.noise k = true
   · simp [hk]
   · simp [hk]

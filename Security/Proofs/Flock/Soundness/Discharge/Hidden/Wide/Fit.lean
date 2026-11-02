@@ -52,10 +52,6 @@ theorem bound {j k t : ℕ} (hj : j < c.outPorts.size) (hk : k < (c.ports.getD (
 
 end OutRowsF
 
-/-- `OutRowsW`'s rows fit. -/
-theorem OutRowsW.outRowsF {c : Circuit} (h : OutRowsW c) (hfit : ∀ p ∈ c.ports.toList, FitRow p) : OutRowsF c :=
-  ⟨hfit, h.1.2.1, fun j hj => (h.1.2.2 j hj).1⟩
-
 /-- **A row's constant bits past its bits**: at a data byte `b < 2 · words` of a row of `16 · words` bits, block
 `b / 128`'s message column of byte `b`'s bit `t` holds no constant. -/
 theorem constBit_msg {p : Port} {tl : ByteArray} {b t : ℕ} (hbits : p.bits = 16 * p.words) (hb : b < 2 * p.words)

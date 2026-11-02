@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S, term as T
 from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity_numerical.bench import contract
 from verity_numerical.bench import instances as I
@@ -242,7 +242,7 @@ def test_bf16_subnormal_operands_are_exact_in_silicon() -> None:
     the -132 alignment floor."""
 
     tiny = G.bf16(0, 0, 1)  # 2^-133
-    t = S.bf16_product(tiny, G.bf16(0, 127, 0))  # x 1.0
+    t = T.bf16_product(tiny, G.bf16(0, 127, 0))  # x 1.0
     assert (t.negative, t.exponent, t.magnitude) == (False, -126, 1 << 16)
     assert t.magnitude * 2 ** (t.exponent - 23) == 2**-133
     assert S.tc_dot(G.PIPELINE, 0, [tiny] + [0] * 15, [G.bf16(0, 127, 0)] + [0] * 15) == 0x00010000  # 2^-133 = 0x10000 x 2^-149

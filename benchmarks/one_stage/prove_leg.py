@@ -19,7 +19,8 @@ it.
   members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
 * **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier of record (R1-R7) and against each statement's header before the sample.
-* **The sample** (``coins``): ``"lean"``, the verifier's Lean on its own OS coins (`flock-verify draw --stratified K`, A3);
+* **The sample** (``coins``): ``"lean"``, the verifier's Lean (`flock-verify draw --stratified K`) on a development
+  challenger's coins opened after the registration (`a0.challenger_draw`);
   a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
   callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
 * **Proving.** Each drawn member's units are one `serve --zk --draw-file` / `prove --zk` session, behind the ZK server
@@ -43,7 +44,7 @@ template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`
 and the window circuit's units (`window_circuit`): an attention head's per-key-block Calls on the RTX PRO 6000 and the H200
 (``CUT_TARGETS``) and the embedding's registered read. A unit's MUFU table reads are laid out as its template's own
 (`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes C-Flock's block
-(`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
+(`m1_families.block`) is reported refused, not lowered.
 
 Known limits: units flat or untyped staged; C-Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
 need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
@@ -224,10 +225,11 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
-    """The verifier's sample as one sample object over global units: Lean's own (``coins == "lean"``), or the caller's."""
+    """The verifier's sample as one sample object over global units: its Lean's on a development challenger's coins opened
+    after the registration (``coins == "lean"``, `a0.challenger_draw`), or the caller's."""
     if coins == "lean":
-        p = a0.run([lean, "draw", "--program", str(program_file), "--partition", str(partition_file), "--stratified", str(k)],
-                   out / "draw.log")
+        p = a0.challenger_draw(lean, ["--program", str(program_file), "--partition", str(partition_file), "--stratified", str(k)],
+                               rec["law"], rec["population"], R.digest(rec), out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
             raise RuntimeError(f"flock-verify draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
@@ -560,11 +562,28 @@ def standin(n: int, ks: Sequence[int] = (128, 256), seed: int = 20261024) -> lis
     return out
 
 
+def out_words(fn, *args: np.ndarray) -> np.ndarray:
+    """Each instance's output row ``o0`` (``(n, words)`` u16): ``fn``'s return leaves on ``args`` (each parameter's leaves
+    per instance, `evaluation.evaluate_batch`), concatenated little-endian and zero-padded to whole u16 words, as
+    `class_statement.unit_lowering`'s output port holds them."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    ret = fn.signature()[1]
+    leaves = np.asarray(evaluate_batch(fn, *args), dtype=np.uint64).reshape(len(args[0]), ret.leaves)
+    bits = np.concatenate([(leaves[:, [i]] >> np.arange(w, dtype=np.uint64)) & np.uint64(1)
+                           for i, w in enumerate(ret.leaf_widths())], axis=1).astype(np.uint8)
+    bits = np.pad(bits, ((0, 0), (0, -bits.shape[1] % 16)))
+    return np.packbits(bits, axis=1, bitorder="little").view("<u2").astype(np.uint16)
+
+
 def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int = 20261024):
     """The stand-in with registered weights: a Program whose ``weights`` parameter (``table_rows`` bf16 rows of K, a
     registered value committed once, `registered.Registered.commit`) unit i reads row ``positions[i]`` of as its ``w``,
-    ``x`` the unit's own and held by the verifier. Returns ``(member, program, query, registered file)``: the verifier's
-    own ``--registered`` file (`registered.reads_file`, at the value's root) written under ``out``."""
+    and whose ``x`` (unit i's row i, the input the verifier holds) and output rows ``o0`` (unit i's row i) are registered
+    values too, so every port of the statement is a port of the verifier's registered reads, which the Lean verifier opens
+    (`Flock.Registered.checkComplete`). Returns ``(member, program, query, registered file)``: the verifier's own
+    ``--registered`` file (`registered.reads_file` at the values' roots, and the output rows' port) written under
+    ``out``."""
     from circuit_check import targets as TG
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
     from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -588,16 +607,25 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     program = Program(bind(CompositeDefinition("ProveLegRegisteredDot", 0, (), sig, body, register=False)))
     query = P.template_instance_query(fn)
     x, weights = bf16(rng.normal(0, 1, (n, K))), bf16(rng.normal(0, 0.02, (table_rows, K)))
-    reg = G.Registered.commit(P.program_digest(program), "weights", weights.tolist(), None, G.WORD_BITS, V2)
-    own = G.reads_file(program, query, {"weights": K}, {"weights": reg.root.hex()}, schemas={"weights": V2})
+    prog = P.program_digest(program)
+    reg = G.Registered.commit(prog, "weights", weights.tolist(), None, G.WORD_BITS, V2)
+    reg_x = G.Registered.commit(prog, xn, x.tolist(), None, G.WORD_BITS, V2)
+    reg_o = G.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, G.WORD_BITS, V2)
+    own = G.reads_file(program, query, {xn: K, "weights": K}, {xn: reg_x.root.hex(), "weights": reg.root.hex()},
+                       schemas={xn: V2, "weights": V2})
+    own["ports"]["o0"] = {**reg_o.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
     out.mkdir(parents=True, exist_ok=True)
     (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
     table, refs = G.table(positions)
     rows, salts, entry = reg.statement(table)
+    _, x_salts, x_entry = reg_x.statement(range(n))
+    _, o_salts, o_entry = reg_o.statement(range(n))
     member = Member(f"dot{K}-registered", fn, [(xn, V2, 16 * K, [xn]), (wn, V2, 16 * K, [wn])], [(V2, (0,))],
-                    {xn: x, wn: weights[positions]}, held={xn: x},
+                    {xn: x, wn: weights[positions]},
                     stage_kw={"tables": {xn: x, wn: np.asarray(rows, dtype=np.uint16)},
-                              "refs": {xn: list(range(n)), wn: refs}, "registered": {wn: entry}, "salts": {wn: salts}})
+                              "refs": {xn: list(range(n)), wn: refs},
+                              "registered": {xn: x_entry, wn: entry, "o0": o_entry},
+                              "salts": {xn: x_salts, wn: salts, "o0": o_salts}})
     return member, program, query, out / "registered.json"
 
 
@@ -635,11 +663,6 @@ STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l":
 #: the window circuit's units that no serving row commits (`serving_rows.template` refuses their one-bit leaves): their
 #: Definition is the window's own (`interface.resolve`), and they read no pinned table
 WINDOW_ONLY = ("EmbeddingRead_v1",)
-#: the units `defs` sizes but never stages, and why: the stager lowers a unit whole through `ir_lower`, and these whole
-#: pass any node's memory
-UNSTAGED = {"EmbeddingRead_v1": "lowered whole, its SHA-512 parts take about 150 GB each through ir_lower, and staging "
-                                "embedding-read:1b reached 430 GB before its out-of-memory kill: it needs cutting into Calls "
-                                "first"}
 
 
 def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
@@ -896,7 +919,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit sampled by Lean, its member staged at
     `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
     draw. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
-    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
+    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}
@@ -908,9 +931,6 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
             rec["descriptor_id"] = descriptor_id(fn)
             rec["census"] = c = sized(fn)
             log(f"{shape}: census {c}")
-            if fn.base_id in UNSTAGED:
-                rec["blocker"] = f"not staged: {UNSTAGED[fn.base_id]}"
-                continue
             if c["refused_block"]:
                 rec["blocker"] = (f"refused by C-Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
                                   f"for their in-circuit hashing alone, past 2^{c['k_max']}")

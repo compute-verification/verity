@@ -32,7 +32,7 @@ from collections import Counter
 from multiprocessing import Pool
 from pathlib import Path
 
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S, term as T
 from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity_numerical.reference import hawkeye_close as H
 from wp1_cases import (
@@ -119,8 +119,8 @@ def adapter_shard(spec: tuple[int, int, int]) -> tuple[int, int]:
         for sign in (False, True):
             g = H.Gfloat(sign, exponent, m)
             word = H.gfloat_to_float_bits(g)
-            ok = H.fp32_to_gfloat(word) == g and H.group_sum([g]) == g and canon_term(S.fp32_term(word)) == canon(g)
-            ok = ok and S.pack_fp32(term_of(g)) == word
+            ok = H.fp32_to_gfloat(word) == g and H.group_sum([g]) == g and canon_term(T.fp32_term(word)) == canon(g)
+            ok = ok and T.pack_fp32(term_of(g)) == word
             compared += 1
             if not ok:
                 mismatches += 1
@@ -136,12 +136,12 @@ def step_a() -> dict:
         if H.is_finite_bf16(word):
             finite += 1
             for other in (0x3F80, 0x0080, 0x0001):
-                if canon(H.multiply_bfloat16_to_gfloat(word, other)) != canon_term(S.bf16_product(word, other)):
+                if canon(H.multiply_bfloat16_to_gfloat(word, other)) != canon_term(T.bf16_product(word, other)):
                     mismatches += 1
         else:
             nonfinite += 1
             try:
-                S.bf16_product(word, 0x3F80)
+                T.bf16_product(word, 0x3F80)
                 mismatches += 1
             except InvalidArtifact:
                 pass
@@ -162,7 +162,7 @@ def step_b() -> dict:
             for sign in (0, 0x8000):
                 got = H.multiply_bfloat16_to_gfloat(a ^ sign, b)
                 compared += 1
-                if canon(got) != canon_term(S.bf16_product(a ^ sign, b)) or (got.significand and got.significand != (sa * sb) << 9):
+                if canon(got) != canon_term(T.bf16_product(a ^ sign, b)) or (got.significand and got.significand != (sa * sb) << 9):
                     mismatches += 1
     return {"compared": compared, "mismatches": mismatches}
 
@@ -398,8 +398,8 @@ def adapter_normal_shard(exponent: int) -> tuple[int, int]:
             for sign in (False, True):
                 g = H.Gfloat(sign, exponent, m)
                 word = H.gfloat_to_float_bits(g)
-                ok = H.fp32_to_gfloat(word) == g and H.group_sum([g]) == g and canon_term(S.fp32_term(word)) == canon(g)
-                ok = ok and S.pack_fp32(term_of(g)) == word
+                ok = H.fp32_to_gfloat(word) == g and H.group_sum([g]) == g and canon_term(T.fp32_term(word)) == canon(g)
+                ok = ok and T.pack_fp32(term_of(g)) == word
                 compared += 1
                 if not ok:
                     mismatches += 1

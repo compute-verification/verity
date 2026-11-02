@@ -46,8 +46,8 @@ from verity.ml.circuits.silicon import cast
 from verity.ml.circuits.silicon import models as _tc_models
 from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_U8S8_M16N8K32
-from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+from verity.ml.circuits.silicon.models import (AMPERE_BF16_M16N8K16, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32,
+                                               BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4)
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from verity.ml.circuits.silicon.total_fp8 import (HOPPER_E4M3_MMAV2_K32, HOPPER_E4M3_WGMMA_K32, MMAV2_E4M3_K_ORDER, in_mmav2_e4m3_k_order,
                                                   tc_dot_total_e4m3, tc_dot_total_e5m2)

@@ -75,9 +75,10 @@ python3 verity/ml/flock/tests/served_registered.py --out $D --schema ${SCHEMA:-v
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement "${ZF[@]}" --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
 if [ "${ZK:-1}" = 0 ]; then
-  # the plain claims draw by the stratified law: the verifier's own draw, served from its file
+  # the plain claims draw by the stratified law: Lean's draw on the challenger's bytes, served from its file
+  [ -s "${COINS:-}" ] || { echo "ZK=0 draws on the challenger's coins: give COINS=FILE (the verifier has none of its own)" >&2; exit 2; }
   wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-  $LEAN_BIN draw --program $D/program.json --partition $D/partition.json --stratified $K > $O/draw.log 2>&1 || { cat $O/draw.log; exit 1; }
+  $LEAN_BIN draw --program $D/program.json --partition $D/partition.json --stratified $K --stream-file $COINS > $O/draw.log 2>&1 || { cat $O/draw.log; exit 1; }
   grep -h '^DRAW ' $O/draw.log | head -1 | cut -d' ' -f2- > $D/draw.json
   DRAW=(--draw-file $D/draw.json); VFLAGS=(--stratified $K --coins os)
 else
@@ -115,7 +116,8 @@ done
 
 # the fixture: the verifier's files, the served tree and the session (no prover file: it holds the values)
 X=$S/fixture; mkdir -p $X/stage $X/session
-cp $D/circuit.txt $D/pub-$N.bin $D/program.json $D/partition.json $D/served.json $D/registered.json $X/stage/ && cp -r $D/tables $X/stage/
+cp $D/circuit.txt $D/pub-$N.bin $D/program.json $D/partition.json $D/served.json $D/served-x.json $D/out-port.json \
+  $D/registered.json $X/stage/ && cp -r $D/tables $X/stage/ || exit 1
 cp -r $SESS/. $X/session/
 cp $O/live.json $X/live.json
 if [ "${ZK:-1}" = 0 ]; then

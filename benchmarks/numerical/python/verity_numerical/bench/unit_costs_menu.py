@@ -100,7 +100,7 @@ def inner(N: int, K: int, b: Mapping[str, Any], B: int, rho: Mapping[str, float]
 def excluded(o: Mapping[str, Any], gib: float = U.NODE_GIB) -> str | None:
     """Why option ``o`` (``inner``'s, with its outer row's ``outer_rss_gib`` when there is one) cannot run, or None."""
     if not o["in_range"]:
-        return f"k_log {o['k_log']} > {U.K_LOG_MAX}"
+        return f"k_log {o['k_log']} > {U.K_MAX}"
     if o["peak_gib"] > gib:
         return f"inner {o['peak_gib']:.0f} GiB > {gib:.0f}"
     if o["inner_m"] > D_FIT_LOG:
@@ -276,7 +276,7 @@ def inner_algebra(entries: Sequence[dict[str, Any]], blocks: Mapping[int, tuple[
             continue
         products, why = algebra(e["inner_m"], e["k_log"], e["claims"])
         rows = REPS * products * ROWS_PER_PRODUCT
-        k = max(22, math.ceil(math.log2(rows + 1)) + 2)
+        k = max(U.PACK_LOG, math.ceil(math.log2(rows + 1)) + 2)
         if k not in blocks:
             raise ValueError(f"the outer input has no one-block statement at k_log {k} to price {rows:.3g} rows by")
         s, gib = blocks[k]
@@ -334,7 +334,7 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
         tot["refused_entries"] = sum(bool(e["outer_refused"]) and e["sessions_public"] > 0 for e in entries)
         models.append({"workload": W["workload"], "N": W["N"], "cap": W["cap"], "entries": entries, "totals": tot})
     return {"format": "verity/f6-menu/v1", "K": K, "b_menu": list(B_MENU), "node_gib": U.NODE_GIB,
-            "k_log_max": U.K_LOG_MAX, "d_fit_log": D_FIT_LOG,
+            "k_log_max": U.K_MAX, "d_fit_log": D_FIT_LOG,
             "chosen_on": ("public inner + outer hours (outer per (bucket, B) from the input)" if outer is not None else
                           "public inner hours alone: no outer input, so the outer proof's cost and memory are not counted"),
             "outer_sha512": outer_sha512, "openings_batched": False,

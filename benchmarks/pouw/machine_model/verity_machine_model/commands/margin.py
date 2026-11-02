@@ -1,6 +1,6 @@
 """machine-model margin [DESIGN ...] [--device sm_NN] [--m M] [--least [--mix FFMA]] [--q Q] [--operands O] [--credit C]
                      [--vector V]
-                                          decision 76's margin (redteam.margin_audit): each design's core as built,
+                                          the margin (redteam.margin_audit): each design's core as built,
                                           its worst core with every near measured facet's lane coefficient moved M
                                           in the cheater's favour at once (default 2%), the single facet that drives
                                           it, and each near facet's own move; with --least, the cheapest filler a
@@ -20,7 +20,7 @@ def add(sub) -> None:
     mg.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
     mg.add_argument("--device", default=argparse.SUPPRESS, help=device_help())
     mg.add_argument("--m", type=float, default=0.02, help="the margin each near facet moves in the cheater's favour "
-                    "(default %(default)s: decision 76's 2%%)")
+                    "(default %(default)s, 2%%)")
     mg.add_argument("--least", action="store_true", help="also find the cheapest filler a word that holds the margin")
     mg.add_argument("--mix", help="with --least: the filler's class mix, comma-separated (default: the design's)")
     mg.add_argument("--q", type=float, default=1.22, help="q*, lane instructions a fresh word (default %(default)s)")

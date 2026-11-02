@@ -1,6 +1,5 @@
 import Proofs.Pouw.PearlC.TileCheck4
 import Proofs.Pouw.PearlC.Block4Sem
-import Proofs.Pouw.PearlC.TileProtocol
 import Proofs.Pouw.PearlC.TileGamma
 
 /-!

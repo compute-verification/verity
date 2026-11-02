@@ -826,3 +826,30 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
     assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (0, 1)  # without it, old-work archived
     assert _heads(repo) == {"main", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}
     assert "refs/archive/heads/old-work" in _git(repo, "ls-remote", "origin", "refs/archive/*")
+
+
+def test_the_branch_sweep_into_checked_deletes_a_branch_on_checked_but_not_main(tmp_path):
+    """Drive sweeps against its landing branch, `checked`, which `main` lags: a branch on `checked` is deleted, and one with a
+    commit beyond `checked` is kept."""
+    now = 1_800_000_000
+    repo, gh, _tips, _merge = _world(tmp_path)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    when = f"@{now - 2 * 86400} +0000"
+    for name, base in (("on-checked", "main"), ("beyond", "on-checked")):
+        _git(repo, "checkout", "-q", "-b", name, base)
+        (repo / f"{name}.txt").write_text(name)
+        _git(repo, "add", "-A")
+        subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", name], cwd=repo, check=True,
+                       env={**env, "GIT_COMMITTER_DATE": when, "GIT_AUTHOR_DATE": when})
+        _git(repo, "push", "-q", "origin", name)
+    _git(repo, "checkout", "-q", "-b", "checked", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "land on-checked", "on-checked")
+    _git(repo, "push", "-q", "origin", "checked")
+    del gh.open[1], gh.open[2]
+    for name in ("A", "B"):
+        _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
+    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (0, 0), "neither is on main"
+    log = []
+    assert M.sweep_branches(repo, into="checked", now=now, gh=gh, log=log.append) == (1, 0)
+    assert "research merge: delete: on-checked" in log, log
+    assert {"main", "checked", "beyond"} <= _heads(repo) and "on-checked" not in _heads(repo)

@@ -131,8 +131,6 @@ theorem acceptsSessions_deploy (H : Msg → Msg) (haccept : AcceptsFramed c H) :
   exact haccept x (Reference.refP FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w) ω r hx
     (fun hist m h => refP_say H FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w h ω) hsess
 
-theorem nPU_deploy (x : Msg) : nPU (deploy rel c) x = units c x := rfl
-
 /-- **At one session per unit, the proof units' count bounds the slots**: the draw checks at most them (`DrawSlots`). -/
 theorem sessionSlots_units (H : Msg → Msg) (hslots : DrawSlots (deploy rel c)) (hn : ∀ x, units c x ≤ c.sessions x) :
     SessionSlots c H := by

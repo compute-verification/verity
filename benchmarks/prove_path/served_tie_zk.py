@@ -271,7 +271,7 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.zk_server_env(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True

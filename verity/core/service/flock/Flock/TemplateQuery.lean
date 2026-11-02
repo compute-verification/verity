@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
+`Flock.HmRow`: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
 verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`) as far as they need:
 the callees, each definition's form and nodes (form, callee, members), and the root body.
 
@@ -11,6 +11,7 @@ import Lean.Data.Json
 import Flock.Canon
 import Flock.Hash
 import Flock.Program
+import Flock.JsonParse
 
 namespace Flock.TemplateQuery
 
@@ -45,7 +46,7 @@ def isInput (id : String) : Bool := Program.isInputId id
 def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
     (bytes : ByteArray) : M Desc := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
-  let j ← match Json.parse text with
+  let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"program: not JSON: {e}"
   if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v1" then

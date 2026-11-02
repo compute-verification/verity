@@ -6,7 +6,7 @@ and its predicate names are one way to write the relation and are NOT canonical 
 backend must preserve is the set of accepted (x, y) pairs (section 1) and, if it embeds the relation in a prime
 field, the additional bounds of section 3.
 
-The executable semantics it must agree with on the finite domain is ``verity.ml.circuits.silicon.silicon`` (``tc_dot`` =
+The executable semantics it must agree with on the finite domain is ``verity.ml.circuits.silicon.models`` (``tc_dot`` =
 two ``group_sum`` steps of the Ampere BF16 m16n8k16 model), then ``verity.ml.circuits.silicon.cast.f32_to_bf16`` for the VU.
 Nothing here is derived from that module; ``reference.py`` re-states the same arithmetic parametrically so the
 reduced-width searches have a reference, and the differential tests compare the checker to ``silicon`` itself.

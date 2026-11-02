@@ -12,13 +12,14 @@ public values. This file shows that nothing smaller works.
   wiring that does contains every slot a unit reads in some assignment holding the public values, apart from the
   public slots and the unit's own writes (`closureReads_sub_of_expresses`). The unit function that witnesses it
   compares the slot it may read with its value in one assignment, so a wiring without that slot cannot tell a correct
-  unit from a wrong one. `DynPopulation.addressMap_closureReads`: for a program, the closure is `padOver`'s read sets.
+  unit from an incorrect one. `DynPopulation.addressMap_closureReads`: for a program, the closure is `padOver`'s read
+  sets.
 * `vm_not_addressedBy_inputs`: the pointer machine's read sets depend on more than all its inputs, since the pointer is
   a unit's write.
 * `vm_pad_pub_secret_up`: in its padding over the assignments holding the public zero region, every secret word is
   upstream of the egress, so `card_egress_le_pad` says nothing about the secrets.
 * `vm_honest_wiring_fails`, **the honest wiring is not enough**: in every honest run no secret is upstream of the
-  egress, yet with the one-bit pointer step wrong the egress takes `2 ^ N` values, more than the `|V| ^ |writes B| = 2`
+  egress, yet with the one-bit pointer step incorrect the egress takes `2 ^ N` values, more than the `|V| ^ |writes B| = 2`
   the capacity theorem would give were the honest run's upstream the public one.
 -/
 
@@ -179,7 +180,7 @@ theorem vm_pad_pub_secret_up (N : ℕ) (i : Fin N) :
   · show Slot.out i ∈ (vm N).writes (some i)
     simp [vm]
 
-/-- **The honest wiring is not enough**: no honest run has a secret upstream of the egress, yet one wrong one-bit unit
+/-- **The honest wiring is not enough**: no honest run has a secret upstream of the egress, yet one incorrect one-bit unit
 gives `2 ^ N` egress values over the secrets, more than the `|V| ^ |writes B|` the capacity theorem gives a static
 population whose secrets lie outside the egress's upstream cone. -/
 theorem vm_honest_wiring_fails (N : ℕ) (hN : 2 ≤ N) :

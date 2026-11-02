@@ -350,8 +350,6 @@ variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [Deci
 def spanX (c : Fin D → ι → F) (Xs : Finset (Fin D)) : AddSubgroup (ι → F) :=
   AddSubgroup.closure (Set.range fun x : Fin D → Bool => ∏ t ∈ Xs, if x t then c t else 1 + c t)
 
-theorem spanX_univ (c : Fin D → ι → F) : spanX c univ = span c := rfl
-
 theorem spanX_congr {c c' : Fin D → ι → F} {Xs : Finset (Fin D)} (h : ∀ t ∈ Xs, c t = c' t) :
     spanX c Xs = spanX c' Xs := by
   unfold spanX

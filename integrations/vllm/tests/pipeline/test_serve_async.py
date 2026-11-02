@@ -1,7 +1,7 @@
 """serve-openai's loop under async scheduling on CPU: for a fixed load its Commit windows see the same steps, rows and values,
 and H1 gets the same rounds and admissions, as synchronously. The committer is a stand-in (`Committer`), not the native
-collector, whose staging isn't held to async scheduling yet, so serve-openai refuses ``--async-scheduling`` with the
-Commit on (`serve_row.commit_refusal`).
+collector; ``serve_async_commit_gpu.py`` holds the native collector's rows-sha512 roots under the two schedulers equal on an
+H200, and `test_the_gpu_comparison_holds_every_async_window_committed_with_syncs_roots` its comparison here.
 
 The engine stands in for vLLM's in-process engine core at d9105ea80: a schedule runs on the runner at once (its
 ``execute_model``, an empty schedule's too, then ``sample``), and under async scheduling ``step`` is
@@ -230,3 +230,50 @@ def test_async_scheduling_commits_and_admits_what_sync_scheduling_does(tmp_path,
     assert asyn.rounds == sync.rounds and len(sync.rounds) == sync.engine.forwards
     for w in sync.windows:
         assert [s for v, s, _, _ in sync.rounds if v == w["window"]] == list(range(w["steps"])) == list(range(w["pouw_h1"]["rounds"]))
+
+
+def test_a_window_that_holds_no_step_serves_the_next_burst_rather_than_closing_empty_at_the_request_cap(tmp_path):
+    """Under async scheduling the call that only returns a burst's last outputs runs no forward, so when the window's bound
+    fell on the burst's last forward that call opens a window that holds no step, live with the finished burst's requests.
+    The next burst serves in it: a window that holds no step counts no request against ``--window-requests``, so no
+    window closes empty between bursts, and async scheduling leaves at most one, at the stop."""
+    com = SimpleNamespace(_step_index=0, install=lambda: None)
+    com.reset = lambda: setattr(com, "_step_index", 0)
+    w = sc.CommitWindows(com, tmp_path, run_id="t", window_steps=2, request_cap=2)
+    closed: list[tuple[int, int, list[str]]] = []
+
+    def close() -> None:
+        closed.append((w.window, com._step_index, sorted(w.in_window)))
+        w.is_open = False
+
+    w.close = close
+    for live, forward in ((["a", "b"], 1), (["a", "b"], 1), (["a", "b"], 0)):    # two forwards, then the outputs only
+        w.before_step(live)
+        com._step_index += forward
+    w.idle()
+    assert closed == [(0, 2, ["a", "b"])] and w.is_open and com._step_index == 0, "the window the last call opened is empty"
+    for live in (["c", "d"], ["c", "d"]):
+        w.before_step(live)
+        com._step_index += 1
+    w.idle()
+    assert closed == [(0, 2, ["a", "b"]), (1, 2, ["c", "d"])], "each burst's window holds its 2 steps, none is empty"
+
+
+def test_the_gpu_comparison_holds_every_async_window_committed_with_syncs_roots():
+    """`serve_async_commit_gpu.compare`, the H200 A/B's verdict over the two arms' windows: PASS only when every window of
+    each arm passed and committed bytes and the two committed the same steps under equal roots, in order; a window that
+    held no step (async scheduling's empty one at the stop) is left out."""
+    from tests.pipeline import serve_async_commit_gpu as AB
+
+    def win(i: int, roots: list[str], passed: bool = True) -> dict:
+        return {"window": i, "steps": len(roots), "step_roots": roots, "passed": passed, "committed_bytes": 9 if passed else 0}
+
+    sync = [win(0, ["a"]), win(1, ["b", "c"])]
+    got = AB.compare(sync, [*sync, {"window": 2, "steps": 0}])
+    assert got["passed"] and got["roots_equal"] == 3 and got["windows"] == [2, 2]
+    assert AB.compare(sync, [win(0, ["a"]), win(1, ["b", "x"])])["differ"] == [2]
+    assert AB.compare(sync, [win(0, ["a"]), win(1, ["", ""], passed=False)])["async_failed"] == [1]
+    assert AB.compare([win(0, ["a"], passed=False), sync[1]], sync)["sync_failed"] == [0]
+    for asy in ([win(0, ["a"])], [win(0, ["a"]), win(1, ["", ""], passed=False)], []):
+        assert not AB.compare(sync, asy)["passed"]
+    assert not AB.compare([], [])["passed"]

@@ -2,15 +2,18 @@
 ``frame_v3/vectors_sha512.json``'s ``row_seg_leaves`` (the whole at the short lengths, its segment part on every vector
 segment and its outer part on every vector's segment digests) and `rowleaf.sha512_row_seg_digest` on random 262,144-bit
 rows, a 64 x 64 Pearl-C tile's ``-h3`` digest; a flipped data bit, two segments swapped and a wrong length each change it;
-it refuses malformed bindings and rows; and its parts cost the gates pinned here."""
+it refuses malformed bindings and rows; its parts cost the gates pinned here, and C-Flock lowers a part by the builder its
+trace was taken from."""
 from __future__ import annotations
 
 import random
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import compile as compile_bits
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -113,6 +116,17 @@ def test_malformed_bindings_and_rows_are_refused() -> None:
         G.digest_bits(bytes(32))
     with pytest.raises(ValueError, match="512 bits"):
         G.digest_bytes([0] * 256)
+
+
+@pytest.mark.parametrize("name", ["Sha512RowSegSegment", "Sha512RowSegOuter"])
+def test_a_part_lowers_by_the_builder_its_trace_was_taken_from(name) -> None:
+    """C-Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`, ``build(C, S, *e)``), and a part
+    without one gate by gate, where one compression passes 1 GB; called so, the builder traces to the part's own gates."""
+    d = getattr(G, name)
+    S = SimpleNamespace(**dict(zip(d.statics, (13,))))
+    params, ret = d.signature(S)
+    got, want = TR.trace(lambda C, *e: d.build(C, S, *e), [t for _, t in params], ret), d.traced(13)
+    assert (got.gates, got.outputs) == (want.gates, want.outputs)
 
 
 @pytest.mark.slow

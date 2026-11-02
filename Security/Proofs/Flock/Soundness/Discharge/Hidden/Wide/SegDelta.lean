@@ -72,13 +72,6 @@ def rowPairsAnyAll (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
 def flatPairsAny (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
   constPairs c pin ++ rowPairsAnyAll c pin ++ Flat.leafPairs c ++ Flat.cutPairs c ++ Flat.wirePairs c
 
-theorem rowPairsAnyAll_unseg {c : Circuit} (pin : ℕ) (hs : ∀ p ∈ c.ports.toList, p.segs = none) :
-    rowPairsAnyAll c pin = rowPairsAll c pin := by
-  unfold rowPairsAnyAll rowPairsAll
-  refine flatMap_congr' fun g _ => flatMap_congr' fun p hp => ?_
-  have hS : (HmRow.rowSlots c.ports).2.size = c.ports.size := rowSlots_size' c.ports
-  rw [rowPairsAny, show c.ports[p]!.segs = none from hs _ (getElem_mem_toList' (hS ▸ List.mem_range.1 hp))]
-
 /-- **Δ without a typed template, pair by pair, for rows of every kind.** -/
 theorem delta_flat_any (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
     (HmRow.delta c pin).1.toList = flatPairsAny c pin := by

@@ -10,13 +10,15 @@ It carries no policy parameter: it surfaces the ε at δ its sample established.
 
 ## PoUW in the remote protocol
 
-The remote protocol, for an auditor with no devices at the datacenter, composes two subprotocols: sampled proofs'
-one-stage audit and PoUW's execution-phase check (`Core.Remote.components` in
-`verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only when both subprotocols accept
-their own cases and its commitment binds both subprotocols' commitments; either one's rejection rejects it
-(`Core.Composition.product`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
+The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
+one-stage audit, PoUW's period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
+inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
+`verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
+subprotocols' commitments, the policy and the one-stage audit committed to one record, and every window of the period
+names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
+(`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
 (`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
-credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case. The remote
+credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).
 
@@ -24,8 +26,9 @@ protocol's front door is
 
 The verifier is Lean, the source of truth for what PoUW checks: three Lake packages under `lean/`.
 
-- `lean/check` (`pouw_check`): `PouwCheck.protocol`, the `Core.Protocol` with id `verity/pouw/v1` that the remote
-  protocol composes. `PouwCheck.check` decides one execution phase from its registration (the commitment) and the proof
+- `lean/check` (`pouw_check`): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
+  onsite and the remote protocol compose, and `PouwCheck.protocol` (`verity/pouw/v1`), one execution phase's check,
+  which neither composes. `PouwCheck.check` decides one execution phase from its registration (the commitment) and the proof
   system's answer to it (the evidence); `PouwCheck.Credit` decides what a served execution phase, and a credit period
   (below), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
 - `lean/window` (`pouw_window`): what an execution phase registers and makes public: its grid level, its sample size K′, its
@@ -75,9 +78,33 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
   block-scaled FP4, NVFP4 only.
 - **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
-- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
+- **Dither**, a no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`. It rests
+  on SAK and is no longer the bar or the plan (below).
 
 Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
+
+## The bar and the next scheme
+
+PoUW's bar holds on the H200, under an assumption milder than SAK. It supersedes Dither and SAK
+(`SAKMatmul`, `SAKHigh`) as the bar.
+
+- **T1**: the gap between honest and adversary is at most 1% of stock, additive, in priced work. The honest program is
+  the best possible, hashing is credited, and every matmul takes fresh noise on every call.
+- **T2**: honest overhead is at most 100×.
+- **T3**: perplexity rises at most 5%.
+
+The next scheme is **the lead**, protocol id `verity/pouw/v2`: NCP-family served
+sparse noise with row tags and three certifier-streamed coin lanes, every k32 word committed. Its defaults:
+
+- ShaWrites (rank 4a) counts as milder than SAK, with "honest is best" for hashing's credit;
+- the copy model is tile grain;
+- hiding is the keyed leaf, d = SHA-512(ks_w ‖ salt_w ‖ M_top);
+- the certifier is the coin source, on a trusted host;
+- the network term and whole-step coverage are reported beside T1;
+- the fold is exact on |A·Bᵀ| ≤ 2^22;
+- stock's decode price is reported both ways.
+
+v1 (H1, `verity/pouw/v1`) stays until v2 credits a served window.
 
 ## Security assumptions and guarantees
 

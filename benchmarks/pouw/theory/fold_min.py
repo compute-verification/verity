@@ -1,7 +1,7 @@
-"""FOLD-MIN: the cheapest bit-exact receipt fold at each device's certificate, sm_120 (fx1), the H200 (li) and the B200
-(li heavy), and whether FOLD-OPT's stated cost holds there.
+"""The cheapest bit-exact receipt fold at each device's certificate, sm_120 (fx1), the H200 (li) and the B200
+(li heavy), and whether `FoldOpt`'s stated cost holds there.
 
-`fold_routes.py` takes the six candidate routes one and two instructions deep. What decides FOLD-OPT is how a
+`fold_routes.py` takes the six candidate routes one and two instructions deep. What decides `FoldOpt` is how a
 certificate prices the pipes. Every certificate but one prices an ALU, an IMAD, an FFMA and a SHFL instruction alike on
 its binding rows: DS-120 and DS-90 on DS_issue, VF3r-16 on JI3s_0, DC-90-ri on JI90_0 and JI90_1, DC-100-ri on issue.
 There a cheaper fold needs fewer instructions, and none has them (`fold_routes.py`'s superoptimizer, `fold_opt_fx.py`).
@@ -21,7 +21,7 @@ That is 1 + 2|B| IMAD-pipe instructions and no ALU one: 25 to 41 at li's keys (L
 coefficient in a register (the key-oblivious form). The XORs of two words (li's own, the checkpoint's) have no such
 program that pays: the bit-serial one is 6 instructions a bit.
 
-At π* the IMAD-pipe round costs 25 × 0.0246 = 0.61 against the LOP3 round's 2.0, so FOLD-OPT as instantiated (the
+At π* the IMAD-pipe round costs 25 × 0.0246 = 0.61 against the LOP3 round's 2.0, so `FoldOpt` as instantiated (the
 design's single `[fold]` mix) is false at the B200 sheet's certificate. The cheater LP, re-solved with that route open
 (`eps.fastest` with the fold blended at the best fraction x of keyed rounds and the uniform route kept on the honest
 fold), moves well under 1% of the rounds, since issue binds again beside the ALU at once. The headline's rise depends
@@ -263,7 +263,7 @@ def main() -> int:
     ck.check("the rise is small, under 0.03 pp at LK's cheapest key: issue binds beside the ALU at once",
              0 < m25 - e0.machine_eps < 3e-4 and rows["LK's cheapest key (k 25)"][3].binding == ("DS_issue", "DS_alu"),
              f"+{(m25 - e0.machine_eps) * 100:.4f} pp")
-    ck.check("pricing IMAD.HI at 4 on DS_imad (DC r4 measured 4.19 SMSP-cycles) leaves it unchanged: DS_imad has slack",
+    ck.check("pricing IMAD.HI at 4 on DS_imad (measured at 4.19 SMSP-cycles) leaves it unchanged: DS_imad has slack",
              abs((1 - T4 / T_base) - m25) < 1e-9, f"x {X4:.5f}, ε_machine {1 - T4 / T_base:.4%}")
     ck.check("the credited floor program ♭ is the honest fold's (the baseline binds DS_issue alone), so the bound moves "
              "only through the cheater", s100.baseline.pi == {"DS_issue": 1.0}, s100.baseline.pi)

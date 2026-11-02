@@ -33,7 +33,7 @@ import time
 from pathlib import Path
 
 from verity_vllm.config import RowEngine
-from verity_vllm.pipeline import research_tools
+from verity_vllm.pipeline.source_identity import TREE, core_dirs
 
 SPEC_SCHEMA = "verity-gen/spec/v1"
 EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
@@ -95,7 +95,7 @@ def code_version(repo: Path) -> dict:
                     "untracked": d.get("untracked"), "fallback": d.get("fallback")}
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=10).stdout.strip()
-        code = [f":/{d}" for d in research_tools.CODE_DIRS]
+        code = [f":/{d}" for d in core_dirs(TREE)]
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *code], cwd=repo,
                                capture_output=True, text=True, timeout=20).stdout.strip()
         return {"source": "git", "commit": sha or None, "dirty": bool(dirty)}

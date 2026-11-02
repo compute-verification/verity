@@ -1,5 +1,5 @@
 """PoUW's epoch coins: the challenger's live coins for one epoch, committed before the epoch and each opened once, live,
-against that commitment (``PROTOCOL.md``, "Epoch coins").
+against that commitment (Lean `PouwCommit.Coins`; a live epoch's, `PouwWindow.Rounds`).
 
 The challenger is the auditor's service that issues coins.  Before epoch e it samples one 32-byte coin per label of `LABELS`
 from its entropy (a served one's: the Lean verifier of record's, `verifier.coins`) and publishes a coin commitment:

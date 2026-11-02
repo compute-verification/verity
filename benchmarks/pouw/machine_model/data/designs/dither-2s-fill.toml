@@ -10,7 +10,7 @@ summary = "Two-sided dither, duo at L = 32, and 4.5 lane instructions a word of 
 per_word = 4.5
 mix = { ALU = 1, IMAD = 1 }
 route = "lanes"
-source = "CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate); FILL-OPT (μ_x = 0) is its named assumption"
+source = "a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate); FILL-OPT (μ_x = 0) is its named assumption"
 p = 0.0
 luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit: every input of a lane chain is a public function of the round's coins and its tile (lfill: K = dseed(c0, c1, tile), the keys and words from smix(K ^ ...)), and the check recomputes the drawn tile's receipt (lf_ref) and compares it with the committed one, so a wrong receipt fails whenever its tile is drawn and nothing is left to guess; what a right receipt cost is FILL-OPT's"
 
@@ -20,4 +20,4 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [skip.served]
 eps = 0.00165
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 34.000 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.165%: its tail 0.118%, the sums DG, S and X(0) 0.0395%, the served epilogue 0.00748%. With P·V's served output checked it is 0.128% (8B) / 0.0563% (70B) there. Skip terms: the peel's tail at apv's issue model, 1.57 mainloop MACs a strip product, its sums by vfold and served epilogue at one an issue cycle"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 34.000 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.165%: its tail 0.118%, the sums DG, S and X(0) 0.0395%, the served epilogue 0.00748%. With P·V's served output checked it is 0.128% (8B) / 0.0563% (70B) there. Skip terms: the peel's tail at apv's issue model, 1.57 mainloop MACs a strip product, its sums by vfold and served epilogue at one an issue cycle"

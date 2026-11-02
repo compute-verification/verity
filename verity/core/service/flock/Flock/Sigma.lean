@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7, the partition of record of a Boolean Program: the word Program's partition lifted by σ, the map from each
+`Flock.Partition`, the partition of record of a Boolean Program: the word Program's partition lifted by σ, the map from each
 word Definition to its Boolean version. This module checks the lift's structure on the two descriptors (`Program.decode` of
 each), as `verity_vllm.program.boolean.sigma_check` checks it on Python objects, which stays the mirror (the
 `verity/core/service/sigma` difftest holds the two together).
@@ -45,6 +45,7 @@ import Lean.Data.Json
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Flock.Program
+import Flock.JsonParse
 
 namespace Flock.Sigma
 
@@ -578,7 +579,7 @@ def checkBytes (word bits : ByteArray) : Except Refusal Report := do
     | .ok p => pure p
     | .error e => throw { code := "decode", why := s!"Boolean descriptor: {e}" }
   let link := match String.fromUTF8? bits with
-    | some t => match Json.parse t with
+    | some t => match JsonParse.parse t with
       | .ok j => (j.getObjVal? "word").toOption.getD Json.null
       | .error _ => Json.null
     | none => Json.null

@@ -14,10 +14,10 @@ P1, P2) and the period's dual price:
 * `CertifiedImport`: the network certifier's count. Its check accepts a period that exchanged more than `K` bits but
   with probability `δ` (`Definitions.Pouw.Assumptions.Dither.ImportWithinCertifier` at `δ = 0`).
 
-**Non-vacuity rests on the fixed model.** 𝓜 as `Definitions.Core.Accel` writes it makes `SAKMatmul` and
-`SAKResidual` false (free register reductions run the four Russians' method below the public best's cost), so
-`RemoteWorkFloor`, which rests on them, is false there at any useful `F`. A guarantee that takes it says something only
-on a model that charges those reductions.
+**Non-vacuity is open.** `RemoteWorkFloor` rests on `SAKMatmul` and `SAKResidual`. 𝓜 as `Definitions.Core.Accel`
+writes it prices register reductions, so the four Russians' method pays at least an `alu` lane a MAC, but `SAKMatmul`
+as written still fails at a dual price that leaves those pipes cheap, and `SAKResidual` is not adopted. Whether
+`RemoteWorkFloor` holds on 𝓜 at a useful `F` is open.
 -/
 
 namespace Pouw.Assumptions

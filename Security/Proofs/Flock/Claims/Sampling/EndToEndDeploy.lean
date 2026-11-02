@@ -159,7 +159,7 @@ theorem slotDesign_rules {rule : _root_.SampledProofs.Select.Rule} {p : _root_.S
     exact ⟨_, rfl, (fun h => by cases h), fun _ => ⟨_, rfl⟩⟩
 
 /-- `Slots.layout`'s classes: the population, then the input class, empty or one stratum. -/
-theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _root_.SampledProofs.Slots.Layout}
+theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _root_.SampledProofs.Slots.SlotOrder}
     (h : _root_.SampledProofs.Slots.layout p q = .ok l) :
     ∃ pop ins, l.classes = #[pop, ins] ∧ (ins = #[] ∨ ∃ st, ins = #[st]) := by
   unfold _root_.SampledProofs.Slots.layout at h
@@ -173,7 +173,7 @@ theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _
   · exact Or.inl rfl
   · exact Or.inr ⟨_, rfl⟩
 
-theorem slotPartition_classes {l : _root_.SampledProofs.Slots.Layout}
+theorem slotPartition_classes {l : _root_.SampledProofs.Slots.SlotOrder}
     {pop ins : Array (Array _root_.SampledProofs.Slots.ProofBlock)}
     (h : l.classes = #[pop, ins]) (hins : ins = #[] ∨ ∃ st, ins = #[st]) :
     ∃ c ic, (_root_.Properties.SampledProofs.slotPartition l).classes = [c, ic] ∧ (ic = [] ∨ ∃ st, ic = [st]) := by

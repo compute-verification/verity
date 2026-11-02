@@ -48,9 +48,9 @@ def commit():
 def committers():
     pytest.importorskip("torch")
     from tests.commit import test_staging_defaults
-    from verity_vllm.commit.committer import leafhash, native_host
+    from verity_vllm.commit.committer import native_host
 
-    return test_staging_defaults, leafhash, native_host
+    return test_staging_defaults, native_host
 
 
 def test_the_hot_key_takes_the_environment_as_before(env: pytest.MonkeyPatch) -> None:
@@ -93,22 +93,22 @@ def test_the_commit_names_its_cold_reasons_and_stages_as_before(commit, env: pyt
     assert _digest([reasons, {k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"}]) == digest
 
 
-@pytest.mark.parametrize(("retain", "scheme", "values", "digest"), [
-    ("none", None, {}, "ff0b0f64489f1687c56406d80f95c9b3"),
-    ("host", None, {"VERITY_STAGING_BOUNDED": " yes ", "VERITY_HI_PRIO": "", "VERITY_RETAIN_PINNED": "false", "VERITY_INLINE_D2H": "1",
-                    "VERITY_PIN": "true", "VERITY_FAULT": " skip_copy:3", "VERITY_WINDOW_MB": " 16 ", "VERITY_WINDOW_SLOTS": "3",
-                    "NATIVE_GATHER_BLOCKS": "64", "NATIVE_GATHER_AUTO_BYTES": "4096", "VERITY_CONSUMER_DELAY_MS": "2.5",
-                    "VERITY_LEARN_HOST_BUDGET_MB": "1024", "VERITY_RETAIN_EXCLUDE": "fa3_hidden_m1", "VERITY_SKIP": "a,,b",
-                    "VERITY_WEIGHTS_HASH": "device"}, "1eb12e9bd19c559e217418921c4074b6"),
-    ("none", None, {"VERITY_STAGING_BOUNDED": "on", "VERITY_FAULT": "skip_copy:2", "VERITY_HI_PRIO": "1", "VERITY_RETAIN_PINNED": " no",
-                    "VERITY_INLINE_D2H": "true"}, "cbc856bbf4739c6b70ec3bed50df6bbd"),
-    ("none", "vllm-v1", {"VERITY_STAGING_BOUNDED": "  ", "VERITY_WINDOW_MB": "0", "VERITY_FAULT": "",
-                         "VERITY_WEIGHTS_HASH": "device-checked"}, "b1a4cae3c13e13d6dce3be0e97c0c589"),
+@pytest.mark.parametrize(("retain", "values", "digest"), [
+    ("none", {}, "ff0b0f64489f1687c56406d80f95c9b3"),
+    ("host", {"VERITY_STAGING_BOUNDED": " yes ", "VERITY_HI_PRIO": "", "VERITY_RETAIN_PINNED": "false", "VERITY_INLINE_D2H": "1",
+              "VERITY_PIN": "true", "VERITY_FAULT": " skip_copy:3", "VERITY_WINDOW_MB": " 16 ", "VERITY_WINDOW_SLOTS": "3",
+              "NATIVE_GATHER_BLOCKS": "64", "NATIVE_GATHER_AUTO_BYTES": "4096", "VERITY_CONSUMER_DELAY_MS": "2.5",
+              "VERITY_LEARN_HOST_BUDGET_MB": "1024", "VERITY_RETAIN_EXCLUDE": "fa3_hidden_m1", "VERITY_SKIP": "a,,b",
+              "VERITY_WEIGHTS_HASH": "device"}, "1eb12e9bd19c559e217418921c4074b6"),
+    ("none", {"VERITY_STAGING_BOUNDED": "on", "VERITY_FAULT": "skip_copy:2", "VERITY_HI_PRIO": "1", "VERITY_RETAIN_PINNED": " no",
+              "VERITY_INLINE_D2H": "true"}, "cbc856bbf4739c6b70ec3bed50df6bbd"),
 ])
-def test_a_committer_takes_its_configuration_as_before(committers, env: pytest.MonkeyPatch, retain: str, scheme: str | None,
-                                                       values: dict[str, str], digest: str) -> None:
-    staging, leafhash, native_host = committers
-    com = staging.committer(env, retain, commit_scheme=scheme, **values)
+def test_a_committer_takes_its_configuration_as_before(committers, env: pytest.MonkeyPatch, retain: str, values: dict[str, str],
+                                                       digest: str) -> None:
+    from verity_vllm import settings
+
+    staging, native_host = committers
+    com = staging.committer(env, retain, **values)
     keys = ("win_bytes", "win_slots_req", "bounded", "learn_budget_bytes", "hi_prio", "consumer_delay_s", "fault", "retain", "retain_pinned",
             "inline_d2h", "pin", "name", "windowed")
     nc = com._nc
@@ -116,7 +116,7 @@ def test_a_committer_takes_its_configuration_as_before(committers, env: pytest.M
         "retain_exclude": sorted(com.retain_exclude), "footprint": com.footprint is not None,
         "blocks_per_desc": getattr(nc, "blocks_per_desc", None), "auto_bytes_per_block": getattr(nc, "auto_bytes_per_block", None),
         "fault_skip_copy_at": getattr(nc, "fault_skip_copy_at", None), "skip": sorted(native_host.skip_classes_of_env()),
-        "weights_hash": leafhash.mode_from_env()}
+        "weights_hash": settings.VERITY_WEIGHTS_HASH}
     assert _digest(doc) == digest
 
 

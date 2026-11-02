@@ -36,9 +36,9 @@ def test_the_registry_imports_the_standard_library_alone() -> None:
 def test_declaring_a_setting_twice_or_with_an_unknown_role_fails() -> None:
     s = S.Setting("VERITY_ML_TEST_X", S.flag, False, S.WHERE, "a test's")
     with pytest.raises(ValueError, match="declared twice"):
-        S.Registry(S.__file__, ("VERITY_ML_",), s, s, schema=S.RECORD_SCHEMA)
+        S.EnvSettings(S.__file__, ("VERITY_ML_",), s, s, schema=S.RECORD_SCHEMA)
     with pytest.raises(ValueError, match="role 'telemetry'"):
-        S.Registry(S.__file__, ("VERITY_ML_",), S.Setting("VERITY_ML_TEST_X", S.flag, False, "telemetry", "a test's"),
+        S.EnvSettings(S.__file__, ("VERITY_ML_",), S.Setting("VERITY_ML_TEST_X", S.flag, False, "telemetry", "a test's"),
                    schema=S.RECORD_SCHEMA)
 
 
@@ -85,7 +85,7 @@ def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.Mon
 
 def _synthetic(monkeypatch: pytest.MonkeyPatch) -> None:
     """A registry with one setting of each role, and two credentials: today's declares a ``where`` setting alone."""
-    monkeypatch.setattr(S, "REGISTRY", S.Registry(
+    monkeypatch.setattr(S, "REGISTRY", S.EnvSettings(
         S.__file__, ("VERITY_ML_",),
         S.Setting("VERITY_ML_TEST_WIDTH", int, 32, S.VALUE, "a test's value"),
         S.Setting("VERITY_ML_TEST_SEED", str, "", S.VALUE, "a test's credential, by declaration", secret=True),

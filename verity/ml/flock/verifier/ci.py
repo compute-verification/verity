@@ -1,4 +1,4 @@
-"""The CI agreement job (PROTOCOL.md §17.1): every replayable set of `vectors.json` through both verifiers.
+"""The CI agreement job (`verity/ml/flock/verifier/README.md`): every replayable set of `vectors.json` through both verifiers.
 
     python ci.py --lean BIN --upstream PR83_COMMIT=BIN [--upstream ...] --work DIR [--inputs DIR] [--jobs J] [--session-jobs K]
         [--seed S] [--fuzz N] [--sets I,J] [--out DIR]

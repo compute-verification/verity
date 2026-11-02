@@ -131,7 +131,7 @@ def pool_width(S) -> int:
 def encode_pool(S, p: Pool) -> list[int]:
     """A pool row: CacheStep_v2's pool fields (an invalid entry and a dead copy zero), then ``fl``."""
     Y = pool_statics(S)
-    bits = [b for f in C2.arguments(Y, p.pool, C2.Op())[:10] for b in f]
+    bits = [b for f in C2.arguments(Y, p.pool, C2.CallInputs())[:10] for b in f]
     return bits + ([int(x) for x in p.fl] if S.AS else [])
 
 
@@ -344,7 +344,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
               "returns of a slot that is neither a victim nor leaving")
         _need(not any(tau[p] for p in range(R) if t.post[p] is None), "a stamp of a slot with no row")
     overstate, made_up = overstate or {}, made_up or {}
-    calls: list[tuple[str, C2.Op]] = []
+    calls: list[tuple[str, C2.CallInputs]] = []
     looked: list[int] = []
     lim = 1 << Z.HW
 
@@ -352,7 +352,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
         _need(rid in tokens, f"request {rid}'s tokens aren't in cert")
         return CST.units_of(S, tokens[rid])
 
-    def call(kind: str, op: C2.Op) -> None:
+    def call(kind: str, op: C2.CallInputs) -> None:
         nonlocal cur
         got = C2.reference(Y, cur, op)
         _need(got.ok, f"CacheStep_v2 refuses the {kind} {op}")
@@ -368,7 +368,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
         _need(hit[c] < KL and ev[c] < lim, f"candidate {c}'s hit {hit[c]} past KL = {KL} units, or its count past HW")
         K = min(x["ntok"], (1 << Z.LW) - 1)
         looked.append(c)
-        call("take" if take else "lookup", C2.Op(slot=slot, r=x["id"], units=us[:KL], admit=True, take=take, K=K,
+        call("take" if take else "lookup", C2.CallInputs(slot=slot, r=x["id"], units=us[:KL], admit=True, take=take, K=K,
                                                  wh=hit[c], ev=ev[c]))
 
     def compute(slot: int, rid: int, new: int, target: int, window: int, kind: str = "compute") -> None:
@@ -385,7 +385,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
         elif kind == "compute" and derive:
             stamp = tau[slot] = _threshold(cur, new)
         window_units = (us + ((0,) * B,) * window)[lvl:lvl + window]
-        call(kind, C2.Op(slot=slot, r=rid, units=window_units, nins=nins, new=new, tau=stamp))
+        call(kind, C2.CallInputs(slot=slot, r=rid, units=window_units, nins=nins, new=new, tau=stamp))
 
     def free(slot: int, p: int, rid: int, held: int, kind: str = "free") -> None:
         held += overstate.get(rid, 0)
@@ -395,7 +395,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
             ret[p] = sum(c.mask == bit for c in has) + held - len(has)
             seen.append(("p", p))
         _need(held < lim and ret[p] < lim, f"slot {slot}'s free: {held} held, {ret[p]} returned past HW")
-        call(kind, C2.Op(slot=slot, free=True, held=held, ret=ret[p]))
+        call(kind, C2.CallInputs(slot=slot, free=True, held=held, ret=ret[p]))
 
     def run() -> None:
         events = positions(S, t)

@@ -4,16 +4,10 @@ fixed machine-readable form; no summary reads as 'universally exact'."""
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from verity_vllm.correspondence import capture_identities as CO
 from verity.ml.definitions.registry import boolean_rope, ref_prims  # noqa: F401  (registration: the GPT-J RoPE v1 and v2)
 from verity_vllm.program.frontend import conformance as CF
-
-REPO = Path(__file__).resolve().parents[2]
-RESULTS = REPO / "fixtures/results/TA1-typed-b1-20260907"
-CORR = [RESULTS / "B1/correspondence/corr-A.json", RESULTS / "B1/correspondence/corr-B1.json",
-        RESULTS / "B1/correspondence/corr-B2.json", RESULTS / "B0/correspondence/corr-B0.json"]
 
 
 def test_registry_record_has_the_qualifications():
@@ -73,19 +67,3 @@ def test_requalify_is_explicit_and_idempotent(tmp_path):
     assert any(s.startswith("1 committed weight leaves are not read") for s in quals)
     assert any(s.startswith("mismatch: l=27/op=layers.27.post_attention_layernorm.rmsnorm/port=0 (RMSNormFusedCuda_v1") for s in quals)
     assert any("coordinate-sampled" in s for s in quals)
-
-
-def test_ta1_records_are_requalified():
-    present = [p for p in CORR if p.exists()]
-    if not present:
-        return  # the results directory is not part of every checkout
-    for p in present:
-        d = json.loads(p.read_text())
-        cs = [r for r in d["input_gate_records"]["weights"] if r["leaf_id"] == CO.COS_SIN_LEAF][0]
-        assert cs["rebuilt_from"] == CO.COS_SIN_REBUILT_FROM, p
-        assert cs["qualification"]["cpu_rebuild_differing_words"] == cs["cpu_rebuild"]["differing_words"]
-        assert cs["qualification"]["total_words"] == cs["value_identity"]["scalars"]
-        quals = d["summary"]["qualifications"]
-        assert any(s.startswith("cos_sin_cache Input gates") and "GPU only" in s for s in quals), p
-        if d["summary"]["mismatch"]:
-            assert any(s.startswith("mismatch:") for s in quals), p

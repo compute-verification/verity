@@ -95,7 +95,7 @@ handing rule, then the certifier's row, with the window's record at its last buc
 its `h` (late: ready after it, behind a late frame, or read after its tick) faults the window
 `coverage-never-established` before it is enqueued. A window closing faulted with frames still queued faults the next
 one with the same reason. A declaration the prover refuses faults the window `monitor-unavailable`. -/
-def tick (s : Shaper) : Shaper × Slots × Option Record := Id.run do
+def tick (s : Shaper) : Shaper × Slots × Option BlockGrid := Id.run do
   let T := s.certifier.params.buckets
   let mut s := s
   if let some p := s.prover then
@@ -119,7 +119,7 @@ def tick (s : Shaper) : Shaper × Slots × Option Record := Id.run do
   let (c, row) := s.certifier.tick
   s := { s with certifier := c, queued := s.queued - min s.queued c.params.allocation, t := s.t + 1 }
   if s.t % T ≠ 0 then return (s, row, none)
-  let (c, record) := s.certifier.closeWindow
+  let (c, record) := s.certifier.closeSamplingBlock
   s := { s with certifier := c }
   if s.queued > 0 then
     if let some r := Status.reason? record.status then s := s.fault r
@@ -189,14 +189,14 @@ def follow (b : Bucketer) (row : Slots) : Bucketer :=
   | some w, some (some _) => { b with own := #[(0, w)], ownNow := none }
   | _, _ => { b with own := #[], ownNow := none }
 
-def tick (b : Bucketer) : Bucketer × Slots × Option Record := Id.run do
+def tick (b : Bucketer) : Bucketer × Slots × Option BlockGrid := Id.run do
   let b := b.takeOwn.enter
   let (c, row) := b.certifier.tick
   let n := rowCount row
   let b := { b with certifier := c, counts := if b.served.isSome then b.counts.push n else b.counts }
   let b := { b.follow row with t := b.t + 1 }
   if b.t % c.params.buckets ≠ 0 then return (b, row, none)
-  let (c, record) := c.closeWindow
+  let (c, record) := c.closeSamplingBlock
   return ({ b with certifier := c }, row, some record)
 
 end Bucketer

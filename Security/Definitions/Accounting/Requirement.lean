@@ -1,5 +1,6 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Definitions.Accounting.Device
+import Definitions.Core.Requirement
 
 /-!
 # A declared circuit's requirement (trusted)
@@ -39,9 +40,9 @@ never a device tick. The ticks a step spans on each device are the placement's (
   `s`'s gates, less each gather's unselected words, so `reads s ⊆ live s`. A value produced and used within one step
   is neither: it is the step's working state, not memory the step reads or holds. A run input is used at the step it
   arrives, so it is neither either: it comes over a side channel (the property's `R_in`).
-* **Blocks.** A layout places each value at a bit offset in a block of the store, by its store index `j`: registered
-  (`j < N`, the weights) or appended by the memory map (`j ≥ N`, KV). Static and dynamic blocks are counted alike: a
-  block is in `liveBlocks s` while it holds a live value, whatever wrote it.
+* **Blocks.** A store placement (`Store.Placement`) puts each value at a bit offset in a block of the store, by its
+  store index `j`: registered (`j < N`, the weights) or appended by the memory map (`j ≥ N`, KV). Static and dynamic
+  blocks are counted alike: a block is in `liveBlocks s` while it holds a live value, whatever wrote it.
 * **Store.** The registered store with the memory map beside it (I3, `memory-map/v1` of
   `verity/core/protocols/remote_bandwidth/memory_map.py`): `N` registered blocks, the fresh indices each serving step
   wrote and those it freed, and each block's payload. A block is written once, complete and encoded, so its payload is
@@ -49,18 +50,21 @@ never a device tick. The ticks a step spans on each device are the placement's (
   the step before its first encoded read (deferred residency: the step that completes it when its append's coin is back
   before the next step's reads, a later one when not), readable from the step after, and freed in the record of a step
   no earlier than its values' last structural reader.
-* **Credited.** A block is complete when step `s` begins once every value the layout places in it was produced before
-  `s` and the device has encoded it under its append's coin, `s` being at or after its first encoded read
-  (`Layout.encoded`, `incomplete`); a block of registered values is complete from the start. An incomplete block is in
-  no record, so a live value in one (a sequence's KV page that later steps fill, or a filled page whose coin is still
-  out) is in no resident block, and the audit credits only the live values in complete blocks (`credited`). A block's
-  values are credited from its first encoded read to their last structural reader (`live`), so a block whose values'
-  last structural reader comes before its first encoded read is credited at no step, and memory-map/v1 withdraws it.
-  The link is one-sided: every block holding a credited value is resident (`StoreMatches`), and every complete block a
-  step reads is in its pass's plan (`PlanMatches`), but other blocks may be resident or planned too (filler, dead or
-  another workload's), and they hold none of `W`'s credited values. The share left out is a block per sequence, layer
-  and plane when the layout fills each one's pages in turn, and one more while the page it completed last waits for its
-  coin (`OneBlockEach`, the page's parity in the group).
+* **Credited.** A block is complete when step `s` begins once every value the store placement puts in it was produced
+  before `s` and the device has encoded it under its append's coin, `s` being at or after its first encoded read
+  (`Store.Placement.encoded`, `incomplete`); a block of registered values is complete from the start. An incomplete
+  block is in no record, so a live value in one (a sequence's KV page that later steps fill, or a filled page whose coin
+  is still out) is in no resident block, and the audit credits only the live values in complete blocks (`credited`). A
+  block's values are credited from its first encoded read to their last structural reader (`live`), so a block whose
+  values' last structural reader comes before its first encoded read is credited at no step, and memory-map/v1
+  withdraws it. The link is one-sided: every block holding a credited value is resident (`StoreMatches`), and every
+  complete block a step reads is in its pass's plan (`PlanMatches`), but other blocks may be resident or planned too
+  (filler, dead or another workload's), and they hold none of `W`'s credited values. The share left out is a block per
+  sequence, layer and plane when the store placement fills each one's pages in turn, and one more while the page it
+  completed last waits for its coin (`OneBlockEach`, the page's parity in the group).
+
+The execution, its placement and the store (`Execution`, `Placement`, `Store`) are Core's
+(`Definitions/Core/Requirement.lean`), stated there as the bullets above describe them.
 
 Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `b = 32768` bits
 (4,096 bytes).
@@ -89,30 +93,6 @@ structure Wiring (G : Type) where
   /-- the operands gate `g` uses when the circuit's values are `x`: `ops g`, except a gather's index and the word it
   selects -/
   uses : (G → ℕ) → G → Finset G
-
-/-- A scheduled execution of a circuit over values `G`. -/
-structure Execution (G : Type) where
-  /-- the values it produces, the registered ones among them -/
-  ran : Finset G
-  /-- the engine step at which it produces each value (an engine step, never a device tick) -/
-  step : G → ℕ
-  /-- each value, as its bits -/
-  value : G → ℕ
-
-/-- A scheduled execution placed on devices `L`: the device of each value, and the tick at which each device begins each
-engine step. -/
-structure Placement (L G : Type) extends Execution G where
-  /-- the device at which each value is produced or, an input, stored: a leaf of the actual circuit's tree of locations
-  (`Accounting.Placed.x`), the device, never an SM, an SMSP or a unit -/
-  leaf : G → L
-  /-- the tick at which device `x` begins engine step `s` -/
-  ticks : L → ℕ → ℕ
-
-/-- The tick at which a value is placed: the one at which its device begins its engine step (`Accounting.Placed.t`). -/
-def Placement.tick {L G : Type} (p : Placement L G) (v : G) : ℕ := p.ticks (p.leaf v) (p.step v)
-
-/-- Each device of `X` begins its engine steps at strictly increasing ticks. -/
-def Placement.Paced {L G : Type} (p : Placement L G) (X : Finset L) : Prop := ∀ x ∈ X, StrictMono (p.ticks x)
 
 /-- **`W`'s wiring is topological**: a gate's operands come before it (the IR's canonical order, §6). -/
 def Wiring.Topological {G : Type} [LT G] (W : Wiring G) : Prop := ∀ g, ∀ v ∈ W.ops g, v < g
@@ -189,9 +169,9 @@ def work (π : G → ℕ) (R : Finset G) : ℕ := ∑ g ∈ R, π g
 
 end Placed
 
-/-- A layout of values in the store: each value's block, a store index, its bit offset in the block, and each block's
+/-- A placement of values in the store: each value's block, a store index, its bit offset in the block, and each block's
 first encoded read. -/
-structure Layout (G : Type) where
+structure Store.Placement (G : Type) where
   /-- the store index of the value's block -/
   block : G → ℕ
   /-- the value's first bit in its block -/
@@ -205,7 +185,7 @@ structure Layout (G : Type) where
 
 section Blocks
 
-variable (W : Wiring G) (e : Execution G) (ℓ : Layout G)
+variable (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G)
 
 /-- The blocks that hold values of `S`. -/
 def blocks (S : Finset G) : Finset ℕ := S.image ℓ.block
@@ -249,13 +229,13 @@ end Blocks
 
 section Credited
 
-variable (W : Wiring G) (e : Execution G) (ℓ : Layout G)
+variable (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G)
 
-/-- **The blocks incomplete when step `s` begins**: those the layout places a value in that the execution produces at
-step `s` or later, or a value it produces and whose first encoded read (`Layout.encoded`) is after `s`. A block is
-complete once every value in it is produced and the device has encoded it under its append's coin, so a block of
-registered values is complete from the start, and memory-map/v1 writes a block in the record of the step before its
-first encoded read (deferred residency): until then it is in no record, like a block still being filled. -/
+/-- **The blocks incomplete when step `s` begins**: those the store placement puts a value in that the execution
+produces at step `s` or later, or a value it produces and whose first encoded read (`Store.Placement.encoded`) is after
+`s`. A block is complete once every value in it is produced and the device has encoded it under its append's coin, so a
+block of registered values is complete from the start, and memory-map/v1 writes a block in the record of the step
+before its first encoded read (deferred residency): until then it is in no record, like a block still being filled. -/
 def incomplete (s : ℕ) : Finset ℕ :=
   (e.ran.filter fun v => v ∉ W.registered ∧ (s ≤ e.step v ∨ s < ℓ.encoded (ℓ.block v))).image ℓ.block
 
@@ -275,44 +255,27 @@ def creditedReadBits (s : ℕ) : ℕ := bits W (creditedReads W e ℓ s)
 
 end Credited
 
-/-- The audit's store: the registered store and the memory map beside it (I3). -/
-structure Store where
-  /-- the registered store's blocks `N`, store indices `0 … N - 1` -/
-  registered : ℕ
-  /-- the fresh store indices the record of engine step `s` wrote (memory-map/v1's `written`) -/
-  written : ℕ → Finset ℕ
-  /-- the store indices the record of engine step `s` freed (memory-map/v1's `freed`, by the indices their slots held,
-  and the blocks its writes overwrote) -/
-  freed : ℕ → Finset ℕ
-  /-- each block's payload, as its bits -/
-  payload : ℕ → ℕ
-
-/-- **The blocks resident when step `s` begins**: the registered ones and those written in the records of steps before
-`s`, less those freed in them. -/
-def Store.resident (σ : Store) (s : ℕ) : Finset ℕ :=
-  (Finset.range σ.registered ∪ (Finset.range s).biUnion σ.written) \ (Finset.range s).biUnion σ.freed
-
 section Link
 
-variable (W : Wiring G) (e : Execution G) (ℓ : Layout G)
+variable (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G)
 
 /-- Each value of `S` is in its block's payload: the payload's bits from the value's offset are the value. -/
 def Carries (σ : Store) (S : Finset G) : Prop :=
   ∀ v ∈ S, σ.payload (ℓ.block v) / 2 ^ ℓ.offset v % 2 ^ W.width v = e.value v
 
 /-- **The store holds `W`'s credited values when step `s` begins**: every block holding a live value the audit credits
-is resident, the layout packs the live values into blocks of `b` bits, and each credited value is in its block's
-payload. Other blocks may be resident too, and hold none of `W`'s credited values: the registered store's filler (a KV
-pool's pages, resident until a write first reaches them), a block whose values are all dead, or another workload's. A
-live value in an incomplete block is in no record, so no audit credits it. Liveness is structural (`ops`), so a block
-holding a credited value stays resident through its values' last structural reader, a later gather that may select it
-included, and a free at their last use before that breaks the link. -/
+is resident, the store placement packs the live values into blocks of `b` bits, and each credited value is in its
+block's payload. Other blocks may be resident too, and hold none of `W`'s credited values: the registered store's filler
+(a KV pool's pages, resident until a write first reaches them), a block whose values are all dead, or another
+workload's. A live value in an incomplete block is in no record, so no audit credits it. Liveness is structural (`ops`),
+so a block holding a credited value stays resident through its values' last structural reader, a later gather that may
+select it included, and a free at their last use before that breaks the link. -/
 def StoreMatches (σ : Store) (b s : ℕ) : Prop :=
   blocks ℓ (credited W e ℓ s) ⊆ σ.resident s ∧ Packs W ℓ b (live W e s) ∧ Carries W e ℓ σ (credited W e ℓ s)
 
 /-- **Step `s`'s plan covers `W`'s reads**: the blocks the audit's pass bound to step `s` reads include every complete
-block `W` reads at step `s`, and the layout packs the values read into blocks of `b` bits. The plan may hold other blocks
-too (a deployed plan is topped up with filler reads), and those hold none of `W`'s reads. -/
+block `W` reads at step `s`, and the store placement packs the values read into blocks of `b` bits. The plan may hold
+other blocks too (a deployed plan is topped up with filler reads), and those hold none of `W`'s reads. -/
 def PlanMatches (plan : Finset ℕ) (b s : ℕ) : Prop :=
   blocks ℓ (creditedReads W e ℓ s) ⊆ plan ∧ Packs W ℓ b (reads W e s)
 

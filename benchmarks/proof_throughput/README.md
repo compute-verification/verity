@@ -43,7 +43,7 @@ stratified law the Lean verifier's soundness covers:
 
 **Counted sessions.** A session counts toward throughput only if the Lean verifier accepts it. A sweep that proves the
 whole staged set with no sample passes every check, and the verifier refuses it under D12
-(`verity/ml/flock/verifier/PROTOCOL.md` §16.15). Such runs are labelled "checks pass, refused under D12 (no sample)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
+(`Flock.ProvedScope`). Such runs are labelled "checks pass, refused under D12 (no sample)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
 and `table` and `baseline` read none of them.
 
 ## The result contract

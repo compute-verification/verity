@@ -7,11 +7,11 @@
     scale.py audit --out DIR --p2-lib LIB --build-dir BUILD --log2 19,25 --verifier-cpu V --responder-cpu R \
         [--workers N] [--fit-python PY --fit-model ID --fit-cpus LIST]
 
-- `cpu`: one label's encode, `E(m) = ρ(σ_K(ρ(m + t)))`, on one core: `reference.encode` with gmpy2's `powmod` (two
-  exponentiations by `(p + 1) / 4`), and the special-form chain (`w − 2` squarings with two folds each, times the inverse
-  of `y^((c0 − 1)/4)`) on gmpy2; one root by Python's own `pow` and by `schemes.p2`'s pure-Python field. Then the chain's
-  aggregate rate with one process per listed core, and per listed SMT sibling too. Every label decodes back by
-  `reference.decode`.
+- `cpu`: one label's encode, `E(m) = ρ(σ_K(ρ(m + t)))`, on one core: by gmpy2's `powmod` (`Powmod`: two
+  exponentiations by `(p + 1) / 4`), and by the special-form chain (`Chain`: `w − 2` squarings with two folds each, times
+  the inverse of `y^((c0 − 1)/4)`) on gmpy2, the chain held to `reference.encode`; one root by Python's own `pow` and by
+  `schemes.p2`'s pure-Python field. Then the chain's aggregate rate with one process per listed core, and per listed SMT
+  sibling too. Every label decodes back by `reference.decode`.
 - `setup-check`: a store of `--blocks` labels (one segment) under `schemes.p2`'s framing, encoded on the CPU, then the
   public-encoder check two ways: Python's `setup.verifier_key_from_encoding` and the Lean `pous-setup check`.
 - `gpu`: the device's encode throughput (`p2v1_encode`, two roots a label) at growing batches, each batch decoded back to
@@ -101,6 +101,13 @@ class Chain:
         return self.rho(R.sigma(P, self.rho((m + t) % P.p), k))
 
 
+class Powmod(Chain):
+    """`y^((p+1)/4)` by one gmpy2 `powmod`."""
+
+    def root(self, y: int) -> int:
+        return int(self.g.powmod(self.g.mpz(y), (self.p + 1) // 4, self.p))
+
+
 def _block_inputs(seed: int, i: int) -> tuple[Any, int, int, int]:
     import hashlib
 
@@ -118,12 +125,12 @@ def _cpu_worker(job: tuple[int, str, int, int]) -> dict[str, Any]:
     from p2_v1 import reference as R
 
     os.sched_setaffinity(0, {cpu})
-    chain = Chain()
+    roots = Chain() if mode == "gmp-chain" else Powmod()
     times, ok = [], []
     for i in range(blocks):
         P, m, k, t = _block_inputs(seed, i)
         t0 = time.perf_counter()
-        c = chain.encode(P, m, k, t) if mode == "gmp-chain" else R.encode(P, m, k, t)
+        c = roots.encode(P, m, k, t)
         times.append(time.perf_counter() - t0)
         ok.append(R.decode(P, c, k, t) == m)
     return {"cpu": cpu, "mode": mode, "block_s": times, "round_trip": all(ok)}

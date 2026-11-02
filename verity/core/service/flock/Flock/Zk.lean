@@ -6,6 +6,7 @@ constraint at once (`verifyInner`). The session around the reps is `Flock.verify
 -/
 import Flock.Verify
 import Flock.ZkLigerito
+import Flock.JsonParse
 
 namespace Flock.Zk
 
@@ -127,7 +128,7 @@ structure Replayed where
   cons : Array (String × Lin)
   deriving Inhabited
 
-/-- Live PROTOCOL.md §1 and §4: §9.1's binding, then §9.2 and §10 on the masked proof, absorbing exactly what they absorb and
+/-- Live PROTOCOL.md §1 and §4: `Flock.Piop`'s binding, zerocheck and lincheck on the masked proof, absorbing exactly what they absorb and
 drawing exactly their coins, with the pads' root absorbed after the zerocheck's label and every message-dependent check a
 constraint. -/
 def replay (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) : TM Replayed := do
@@ -203,7 +204,7 @@ def replay (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) : TM Re
   let lcOut : LcOut := { w := 0, rPrime, rIn := ts.reverse }
   return { claims := abcClaims m kLog zcOut lcOut, abValue := w, cValue := fc, cons }
 
-/-- §12.2's claim check `⟨w, s_hat_v⟩` on claim `c`'s point (its value is masked, so it is a constraint, §4). -/
+/-- `Flock.Opening`'s claim check `⟨w, s_hat_v⟩` on claim `c`'s point (its value is masked, so it is a constraint, live PROTOCOL.md §4). -/
 def claimCheck (c : Claim) (sv : Array F128) : F128 :=
   let x0 := c.x[0]!
   dot ((Array.range 128).map fun v => c.skip[v % 64]! * (if v / 64 == 1 then x0 else 1 + x0)) sv
@@ -281,7 +282,7 @@ def verifyInner (lay : PadLayout) (pr : InnerProof) (finalC : F128) (cons : Arra
 
 /-- Table `i`'s rep `r` (`Flock.verifyRep` for a `--zk` proof): the masked replay, the opening with the masked claims'
 checks as constraints, level 0's hiding, the inner proof; returns the proof's flattened cap. -/
-def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     V ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
@@ -372,7 +373,7 @@ def maskLogOf (circuit : ByteArray) : Nat :=
     match String.fromUTF8? (circuit.extract (e1 + 1) e2) with
     | none => 14
     | some line =>
-      match Json.parse (line.drop 5).toString with
+      match JsonParse.parse (line.drop 5).toString with
       | .ok j => (j.getObjValAs? Nat "mask_log").toOption.getD 14
       | .error _ => 14
 

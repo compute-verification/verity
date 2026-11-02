@@ -41,25 +41,27 @@ control pass (`../opcode_probe/README.md`).
 ## Running
 
 ~~~text
-research run --on vy-dc-h200 --project verity --source /workspace --cwd source --custody-ttl 12h \
+research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
   --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
-research run --on vy-dc-b200 ... -- bash benchmarks/pouw/dc/run.sh sm100
-research run --on vy-dc-b200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
+research run --on B200 ... -- bash benchmarks/pouw/dc/run.sh sm100
+research run --on B200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
 python3 benchmarks/pouw/dc/analyze.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM100_RUN_OUT...
 python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/pouw/machine_model/data/devices/sm_90
-research run --on vy-dc-b200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
-research run --on vy-dc-b200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
-research run --on vy-dc-b200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
-research run --on vy-dc-b200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
-research run --on vy-dc-b200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
+research run --on B200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
+research run --on B200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
+research run --on B200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
+research run --on B200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
+research run --on B200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
 python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
-research run --on vy-dc-h200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
-research run --on vy-dc-h200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on vy-dc-b200: the integer step
-research run --on vy-nebius-cpu-1 ... -- bash benchmarks/pouw/dc/s8_mma.sh build sm90   # CUDA 13.0 there (through slot.py); then on the card (--send):
-research run --on vy-dc-h200 ... --send BIN --send BIN.nvcc --env S8_MMA_BIN=inputs/s8_mma_90a -- bash benchmarks/pouw/dc/s8_mma.sh sm90 wg64 wg128 wg256
+research run --on H200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
+research run --on H200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on a B200: the integer step
+research run --on CPU_NODE ... -- bash benchmarks/pouw/dc/s8_mma.sh build sm90   # CUDA 13.0 there (through slot.py); then on the card (--send):
+research run --on H200 ... --send BIN --send BIN.nvcc --env S8_MMA_BIN=inputs/s8_mma_90a -- bash benchmarks/pouw/dc/s8_mma.sh sm90 wg64 wg128 wg256
 ~~~
+
+H200 and B200 name a node with that card, and CPU_NODE a CPU node.
 
 The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it
 touches the GPU (103 gates on sm_90a, 68 on sm_100a), then under one lease: the GEMM gate at three shapes (each dump
@@ -212,13 +214,13 @@ sm_103 has no tcgen05 kind::i8: ptxas refuses it (`Feature '.kind::i8' not suppo
 13.0), so `dg100` and the i8 probes don't build there (`scalar.cu` does). The honest kernel needs an exact route through
 an FP kind, which the protocol states as its own T1 table (an FP design or kind::ti16, sm_107f only):
 
-- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba (`../emu8/`): balanced
+- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba: balanced
   base-16 limbs, xy = 240hh′ + 16mm′ − 15ll′; three MMAs a k32 step into two accumulators started at binade constants
   (C1 ulp 1, C2 ulp 1/8), and the word grows by 15·bits(acc1) + 2·bits(acc2), two IMADs. k4 (four MMAs, one C0) is the
   fallback. Both are exact only if the tcgen05 FP32 adder keeps C + T exact in that binade. **On the B200 it does**:
   k3 and k4 on all five adversarial classes, 0 bad accumulators and 0 bad k32 words in two runs, so the E4M3 route
   holds for a k32 step.
-- **NVFP4** (kind::mxf4nvf4, K 64, twice the FP8 rate): emu8's `accounting.py` `fp4_route` writes U as two E2M1 terms
+- **NVFP4** (kind::mxf4nvf4, K 64, twice the FP8 rate): emu8's FP4 route writes U as two E2M1 terms
   under per-block scales; its adder matches the existing silicon model (SIL BLACKWELL_SM100_NVF4/MXF4).
 
 Cost against B200's kind::i8 kernel, at the rates the tensor table gives every 32-deep kind (256 slots a SM a clock):
@@ -238,7 +240,7 @@ for sm_103a (its guard and device check name sm_100a today) and extended from on
 then sm100_tcgen05.cu's f8f6f4, f16 and tcgen05.ld probes (its i8 forms removed) and `scalar.cu`: about 2 GPU-hours on
 a 1× B300.
 
-`../lowbit_dc/` has since run both routes end to end on the B200 in dgemm's kernel and receipts, bit-exact: k4s, k4 with
+Both routes have since run end to end on the B200 in dgemm's kernel and receipts, bit-exact: k4s, k4 with
 the accumulator restored to its binade by tcgen05.st after each word leaves, costs one IADD3 a word (no IMAD) and is
-1.24–1.45× native int8 in the same pipelined shape, while k3 from +0 (2 FFMA + IADD3) is 1.9–2.2×. Its `fpx` (every
-tcgen05 FP8 and FP4 kind to K = 2^17, and the adder's window) builds for sm_103a, and is the B300 exactness run.
+1.24–1.45× native int8 in the same pipelined shape, while k3 from +0 (2 FFMA + IADD3) is 1.9–2.2×. The probe that ran them
+(`fpx`: every tcgen05 FP8 and FP4 kind to K = 2^17, and the adder's window) also built for sm_103a.

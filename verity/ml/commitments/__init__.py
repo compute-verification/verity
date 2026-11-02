@@ -1,7 +1,7 @@
 """Application-level commitments: binding Verity values and authenticating their openings.
 
-Two commitment schemes, both wire-pinned by the SP1 kernel: transparent SHA-256 Merkle trees over
-verifier-derived position domains, one word per leaf (``merkle``; ``verity.ml.commitments.multiproof`` opens many
+Two commitment schemes, both wire-pinned by the SP1 kernel: transparent frame-v3 Merkle trees (SHA-512 by default, SHA-256
+where a recorded format carries it) over verifier-derived position domains, one word per leaf (``merkle``; ``verity.ml.commitments.multiproof`` opens many
 leaves of one tree at once), and trees over whole runtime tensor leaves under the ``verity-vllm/leaf/v1`` framing (``leaves``),
 the scheme the packed-word obligations of the serving path authenticate against.  ``indexed`` holds the domains,
 ``identity`` the canonical-manifest digests every identity here is built from, ``limits`` the verifier's limits, and
@@ -12,13 +12,12 @@ and conformance vectors beside it: ``frame_v3`` (word leaves and the ``sha256/ro
 leaves of ``rowleaf``) and ``vllm_v1``, the framing vLLM's serving Commit path emits (id, position and ``fa2h``
 leaves, node/lift trees, raw-SHA root bindings).  ``CommitmentScheme.leaf_layout`` is what a backend proves: every
 leaf digest is ``H(prefix || value || suffix)`` with H SHA-256 or BLAKE3 (``blake3`` is a plain-Python reference);
-verifiers check the trees natively.  Both schemes have an opt-in SHA-512 variant, ``frame-v3-sha512`` and ``vllm-v1-sha512``
-(the same framing through SHA-512: a ``hash="sha512"`` domain; each spec's last section).  A ``hash="blake3"`` domain is
-``frame-b3``, a tree mode for latency whose leaves and nodes are BLAKE3 keyed by the domain id (``merkle``'s docstring); the
-SP1 kernel does not mirror it.  ``hm96`` is the hiding leaf rule over
+verifiers check the trees natively.  Both schemes have a SHA-512 variant, ``frame-v3-sha512`` and ``vllm-v1-sha512``
+(the same framing through SHA-512: a ``hash="sha512"`` domain, ``CommitmentDomain``'s default; each spec's last section).
+``hm96`` is the hiding leaf rule over
 a SHA-256 or SHA-512 leaf digest (``hm96-sha256/v1``, ``hm96-sha512/v1``: Halevi–Micali, a stored salt per leaf;
 statistically hiding given uniform salts, with the pinned key except for a 2^-64 fraction of keys; binding under the hash's
-collision resistance), configured over ``vllm_v1`` by ``hm96.Hm96Sha256`` and ``hm96.Hm96Sha512``.
+collision resistance); frame-v3 names it in a tree leaf's schema (``hm96-sha512/row/v2``).
 
 These establish that the values supplied to a check are the values previously bound.  They say nothing about the
 relation between those values; that is a verification obligation (``verity_sp1.proofs``) a backend establishes.

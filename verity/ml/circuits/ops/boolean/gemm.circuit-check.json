@@ -84,6 +84,10 @@
    "and": 15511,
    "type": "2ac7fc4ab89fe849ede248df5a259c93fe3ab0e7c5632e30094020071b730a94ac11960b6acd3f3446d42df26bbdc04662e4b1951357b0f1db87b227bc74cde9"
   },
+  "GemmCoordinate_v3{K=32,DOT=HopperBF16WgmmaDot16_v3}": {
+   "and": 13598,
+   "type": "03b64a03fa477e74edde39ca48ce6b097fb178014d0175f91203c24b3b00e04551ba5e4831f02092ddff5c89c591426fdac4a13d9ddda620670a660cab4c2ce6"
+  },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32814,
    "type": "8e2b96ff723aa59b3692c7313ea388088aa0881588fa45ec7e8fdcd3e00f5d64bb820f1159d647a8e252ca92fe3cdd2f26080d0bea773ebe63a655aee98304fe"
@@ -91,6 +95,10 @@
   "GemmCoordinate_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 31255,
    "type": "9cd11b2af2996467117c82b41ea4c53d69edcef0aa4614e702e0d6c3991bd0cf48a631c73acf5d8f1cf5f8fcf7a88927c7bde7e23aa5c987ea6bd19d31e60d8e"
+  },
+  "GemmCoordinate_v3{K=64,DOT=HopperBF16WgmmaDot16_v3}": {
+   "and": 27372,
+   "type": "326fbced6f124dd3bee8a6adbd143447ff54007be668d0f75dc3c38cba50628791be21a5f2ccc713c8e9c94e85577f2877e77a2d50610bfbf62fb3ad56b3824d"
   },
   "Gemm_v3{K=32,N=3,DOT=AmpereBF16TcDot16_v3}": {
    "and": 48882,
@@ -100,9 +108,17 @@
    "and": 46533,
    "type": "e1b893d258f8232fdf08640f0b3c19838a99d80e17cf2082835c303294ae707d3c527a256602b8c97321d8f88f680f10b32d9e7a8ac82fc129366305a07cc2e3"
   },
+  "Gemm_v3{K=32,N=3,DOT=HopperBF16WgmmaDot16_v3}": {
+   "and": 40794,
+   "type": "40e78d83c2bb28fe7e4f2179e9b4999abe5fac9477a1ee9edf2e728bf7e6ddafe6bb0b631f079e02309279ced7055acf77ef69f4261488504725a5f942b60da4"
+  },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872,
    "type": "98bf7a881fbb16fc9be7370641cd41f01503664642f80f4a457d7ccb2ca5de984ed3e86180d5d6124d410a18b3a02d37c55d0ca55584f1b3c510f28faaa400ce"
+  },
+  "HopperBF16WgmmaDot16_v3": {
+   "and": 6887,
+   "type": "32d1bedc3ed1222d40ad1d9cef6891b174cffa5a1a2bbc2b13dc0645311bed7659b1dcc47ef3a54239233372bc794e59ab490c56e201d36076e344532bb5ddb5"
   },
   "HopperE4m3MmaV2Dot32_v2": {
    "and": 9710,

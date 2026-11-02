@@ -9,8 +9,8 @@ bits `W`'s execution keeps live and the bits it reads (`Definitions/Accounting/R
 one into the other, at each engine step, once the store and the plan hold `W`'s credited blocks (`StoreMatches`,
 `PlanMatches`). Other blocks may be resident or planned too (filler, dead or another workload's): they earn `W`
 nothing. The audit credits the live values in complete blocks (`credited`): a KV block later steps fill, or one whose
-append's coin is still out (deferred residency, `Layout.encoded`), is in no record yet. The first four bound what it
-credits, and the last two bound what it leaves out. Their proofs are in
+append's coin is still out (deferred residency, `Store.Placement.encoded`), is in no record yet. The first four bound
+what it credits, and the last two bound what it leaves out. Their proofs are in
 `Security/Proofs/Accounting/Requirement.lean`.
 
 * `RequirementHeld`: a device holding resident blocks `H` holds all of `W`'s credited live bits but at most a block's
@@ -50,7 +50,7 @@ and the values packed in one block total at most `b` bits.
 
 Frozen (no-function): a counting bound over a wiring, its execution and a store, about no function of the code. -/
 def RequirementHeld : Prop :=
-  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Layout G) (σ : Store) (b s : ℕ)
+  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G) (σ : Store) (b s : ℕ)
     (H : Finset ℕ), StoreMatches W e ℓ σ b s →
     creditedBits W e ℓ s ≤ bitsAt W ℓ (credited W e ℓ s) H + (σ.resident s \ H).card * b
 
@@ -72,7 +72,7 @@ those outside `H` by their block, each a resident block outside `H`.
 
 Frozen (no-function): a counting identity over a wiring, its execution and a store, about no function of the code. -/
 def RequirementHeldLive : Prop :=
-  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Layout G) (σ : Store) (b s : ℕ)
+  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G) (σ : Store) (b s : ℕ)
     (H : Finset ℕ), StoreMatches W e ℓ σ b s →
     creditedBits W e ℓ s = bitsAt W ℓ (credited W e ℓ s) H + ∑ j ∈ σ.resident s \ H, bitsIn W ℓ (credited W e ℓ s) j
 
@@ -91,7 +91,7 @@ bits.
 
 Frozen (no-function): a counting bound over a wiring, its execution and a store, about no function of the code. -/
 def RequirementDense : Prop :=
-  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Layout G) (σ : Store) (b s D : ℕ),
+  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G) (σ : Store) (b s D : ℕ),
     StoreMatches W e ℓ σ b s → (∀ j ∈ σ.resident s, D ≤ bitsIn W ℓ (credited W e ℓ s) j) →
     (σ.resident s).card * D ≤ creditedBits W e ℓ s
 
@@ -110,8 +110,8 @@ Proof: `Accounting.SecurityProofs.RequirementMoved`, as `RequirementHeld` with t
 
 Frozen (no-function): a counting bound over a wiring, its execution and a plan, about no function of the code. -/
 def RequirementMoved : Prop :=
-  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Layout G) (plan : Finset ℕ) (b s : ℕ)
-    (M : Finset ℕ), PlanMatches W e ℓ plan b s →
+  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G) (plan : Finset ℕ)
+    (b s : ℕ) (M : Finset ℕ), PlanMatches W e ℓ plan b s →
     creditedReadBits W e ℓ s ≤ bitsAt W ℓ (creditedReads W e ℓ s) M + (plan \ M).card * b
 
 /-- **What the audit doesn't credit is a block per group.** If the store holds `W`'s credited blocks when step `s`
@@ -130,10 +130,12 @@ A block of registered values is complete from the start, so the weights add noth
 Proof: `Accounting.SecurityProofs.RequirementUncredited`: the live values outside `credited` split by group, and the
 values of a group lie in one block, packed into its `b` bits.
 
-Frozen (no-function): a counting bound over a wiring, its execution and a layout, about no function of the code. -/
+Frozen (no-function): a counting bound over a wiring, its execution and a store placement, about no function of the
+code. -/
 def RequirementUncredited : Prop :=
-  ∀ {G : Type} [DecidableEq G] {K : Type} [DecidableEq K] (W : Wiring G) (e : Execution G) (ℓ : Layout G) (σ : Store)
-    (b s : ℕ) (g : G → K), StoreMatches W e ℓ σ b s → OneBlockEach ℓ g (live W e s \ credited W e ℓ s) →
+  ∀ {G : Type} [DecidableEq G] {K : Type} [DecidableEq K] (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G)
+    (σ : Store) (b s : ℕ) (g : G → K), StoreMatches W e ℓ σ b s →
+    OneBlockEach ℓ g (live W e s \ credited W e ℓ s) →
     liveBits W e s ≤ creditedBits W e ℓ s + ((live W e s \ credited W e ℓ s).image g).card * b
 
 /-- **What no plan holds is a block per group.** If the plan of the pass bound to step `s` covers `W`'s reads and the
@@ -149,9 +151,10 @@ is back before the next step's reads.
 Proof: `Accounting.SecurityProofs.RequirementUnplanned`, as `RequirementUncredited` with the values read in place of
 the live ones.
 
-Frozen (no-function): a counting bound over a wiring, its execution and a layout, about no function of the code. -/
+Frozen (no-function): a counting bound over a wiring, its execution and a store placement, about no function of the
+code. -/
 def RequirementUnplanned : Prop :=
-  ∀ {G : Type} [DecidableEq G] {K : Type} [DecidableEq K] (W : Wiring G) (e : Execution G) (ℓ : Layout G)
+  ∀ {G : Type} [DecidableEq G] {K : Type} [DecidableEq K] (W : Wiring G) (e : Execution G) (ℓ : Store.Placement G)
     (plan : Finset ℕ) (b s : ℕ) (g : G → K), PlanMatches W e ℓ plan b s →
     OneBlockEach ℓ g (reads W e s \ creditedReads W e ℓ s) →
     readBits W e s ≤ creditedReadBits W e ℓ s + ((reads W e s \ creditedReads W e ℓ s).image g).card * b

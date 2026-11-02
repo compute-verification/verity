@@ -23,7 +23,7 @@ from typing import Any, Callable, Mapping
 
 from verity_vllm.engine import hooks as engine_hooks
 from verity_vllm.observe.runtime_tree import RUNNER_PATH
-from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, Site, hooks_of_doc
+from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite, hooks_of_doc
 
 Sink = Callable[[tuple[str, str, str], Any], None]
 
@@ -32,13 +32,13 @@ class IncompletePlan(RuntimeError):
     """The plan names UNSUPPORTED Values: nothing is installed."""
 
 
-def _sites_of(plan: AcquisitionPlan | Mapping[str, Any]) -> tuple[list[Site], list[Site], list[dict[str, Any]]]:
+def _sites_of(plan: AcquisitionPlan | Mapping[str, Any]) -> tuple[list[AcquisitionSite], list[AcquisitionSite], list[dict[str, Any]]]:
     """(hook sites, deferred sites, unsupported) of a plan object or its serialised document."""
     if isinstance(plan, AcquisitionPlan):
         chosen = plan.chosen_sites()
         unsupported = [{"value": v.value_id, "why": v.why} for v in plan.unsupported]
     else:
-        chosen = [Site(s["kind"], s["module"], s["slot"], s.get("lifetime", "n/a"), s.get("derived_from", "")) for s in (plan.get("sites") or [])]
+        chosen = [AcquisitionSite(s["kind"], s["module"], s["slot"], s.get("lifetime", "n/a"), s.get("derived_from", "")) for s in (plan.get("sites") or [])]
         unsupported = list(plan.get("unsupported") or [])
         assert [s.key() for s in chosen if s.kind in HOOK_KINDS] == hooks_of_doc(plan)
     return [s for s in chosen if s.kind in HOOK_KINDS], [s for s in chosen if s.kind not in HOOK_KINDS], unsupported
@@ -62,9 +62,9 @@ def _slot_of_args(args: tuple, slot: str) -> Any:
 
 @dataclass
 class Installation:
-    installed: list[Site] = field(default_factory=list)
-    deferred: list[Site] = field(default_factory=list)
-    missing: list[Site] = field(default_factory=list)        # hook sites whose module is not in the built tree (fail: the plan was made for another runtime)
+    installed: list[AcquisitionSite] = field(default_factory=list)
+    deferred: list[AcquisitionSite] = field(default_factory=list)
+    missing: list[AcquisitionSite] = field(default_factory=list)  # hook sites whose module is not in the built tree (fail: the plan was made for another runtime)
     handles: list = field(default_factory=list)
     _runner: Any = None
     _sample_patch: Any = None
@@ -196,7 +196,7 @@ def plan_selection(plan: AcquisitionPlan | Mapping[str, Any], model: Any) -> tup
     return sorted(out_mods, key=lambda n: order[n]), sorted(in_mods)
 
 
-def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: Site) -> list[str]:
+def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: AcquisitionSite) -> list[str]:
     if isinstance(plan, AcquisitionPlan):
         return plan.values_at(site)
     return next((list(h.get("values") or []) for h in (plan.get("hooks") or []) if (h["module"], h["kind"], h["slot"]) == site.key()), [])

@@ -158,13 +158,26 @@ def test_serving_streams_commit_is_its_4_kib_rows_and_F_leaves_out_its_fa3_inter
         assert r["all"]["seal_s"] - r["F"]["seal_s"] == pytest.approx(r["hidden_bytes"] / W.SEAL_BYTES_S)
 
 
+def test_a_compression_is_priced_at_its_circuit_check_pin():
+    """The commit's ANDs are its compressions at `Sha512Compress_v1`'s pinned AND rows, not the ripple-carry model's count."""
+    from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS, pinned_ands
+
+    sizing = json.loads(SIZING.read_text())["sizing"]
+    pin = pinned_ands("Sha512Compress_v1")
+    assert W.SHA512_ROWS == pin > SHA512_ANDS
+    for r in W.stream(sizing, {"slots": 4, "prompt": 40, "outputs": 3}, "h200", 1e12, 1.0, lanes=2, every=2).values():
+        for key in ("all", "F"):
+            assert r[key]["ands"] == r[key]["compressions"] * pin
+            assert r[key]["ratio_ands"] == pytest.approx(r[key]["compressions"] * pin / 1e12)
+
+
 def test_at_4_32_4_F_leaves_out_37_percent_of_serving_s_stream():
     """The saving the manifest's dropping the M1 stream buys on the 4,32,4 window (Llama-3.2-1B, FA3 on the H200), either schedule."""
     sizing = json.loads(SIZING.read_text())["sizing"]
     for r in W.stream(sizing, {"slots": 4, "prompt": 32, "outputs": 4}, "h200", 1e12, 1.0).values():
         assert (r["bytes"], r["hidden_bytes"]) == (316_342_832, 117_473_280)
         assert (r["all"]["compressions"], r["F"]["compressions"]) == (3_398_252, 2_136_332)
-        assert r["all"]["ands"] - r["F"]["ands"] == 1_261_920 * W.SHA512_ANDS == 73_342_790_400
+        assert r["all"]["ands"] - r["F"]["ands"] == 1_261_920 * W.SHA512_ROWS == 102_722_811_840
 
 
 def _ands(t) -> int:

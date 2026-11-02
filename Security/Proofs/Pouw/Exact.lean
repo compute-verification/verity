@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Pinned
+import Definitions.Pouw.Assumptions.GameStatements
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
@@ -50,7 +50,7 @@ theorem decode_ring (k r : ℕ) (X B EL ER FL FR : ℕ → ℕ → A) :
 end Ring
 
 /-- **(e1) Usefulness over the integers.** -/
-theorem usefulness : Pinned.Usefulness := fun k r A B EL ER FL FR => decode_ring k r A B EL ER FL FR
+theorem usefulness : GameStatements.Usefulness := fun k r A B EL ER FL FR => decode_ring k r A B EL ER FL FR
 
 /-! ## int32 -/
 
@@ -160,19 +160,19 @@ theorem int7_sum_mem (k : ℕ) (a b : ℕ → ℤ) (hk : k ≤ 2 ^ 19 - 1) (ha :
   constructor <;> nlinarith [this.1, this.2]
 
 /-- **(e2)** int32 exactness of the noised transcript for `k ≤ 133144`. -/
-theorem int32Transcript : Pinned.Int32Transcript := by
+theorem int32Transcript : GameStatements.Int32Transcript := by
   intro k A B i j hk hA hB
   have hmem : InInt32 (mm k A B i j) := noised_sum_mem k (fun l => A i l) (fun l => B l j) hk hA hB
   exact ⟨mmW_eq_of_mem hmem, hmem⟩
 
 /-- **(e3)** The exact `k` bound for noised operands. -/
-theorem noisedKBound : Pinned.NoisedKBound := by
+theorem noisedKBound : GameStatements.NoisedKBound := by
   refine ⟨fun k a b hk ha hb => noised_sum_mem k a b hk ha hb, ?_⟩
   simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul, InInt32]
   norm_num
 
 /-- **(e3′)** The problem statement's int8 bound. -/
-theorem int8KBound : Pinned.Int8KBound := by
+theorem int8KBound : GameStatements.Int8KBound := by
   refine ⟨fun k a b hk ha hb => ?_, ?_⟩
   · have := sum_bounds k (fun l => a l * b l) (-16256) 16384 fun l hl => mul_bounds_int8 (ha l hl) (hb l hl)
     unfold InInt32
@@ -182,7 +182,7 @@ theorem int8KBound : Pinned.Int8KBound := by
     norm_num
 
 /-- **(e4)** `H_ref`'s int32 decode is exact for int7 operands and `k ≤ 2^19 − 1`, whatever the factors. -/
-theorem int32Decode : Pinned.Int32Decode := by
+theorem int32Decode : GameStatements.Int32Decode := by
   intro k r A B EL ER FL FR i j hk hA hB
   refine eq_of_cast_eq (wrap32_mem _) (int7_sum_mem k (fun l => A i l) (fun l => B l j) hk hA hB) ?_
   have key := congrFun (congrFun (decode_ring k r (castM A) (castM B) (castM EL) (castM ER) (castM FL)
@@ -226,7 +226,7 @@ theorem refWt_eq (hN : P.NoiseRange) {H : Q → R} {s : S} {U : Workload} {u : �
   refine ⟨h.trans rfl, ?_, ?_⟩ <;> rw [h] <;> omega
 
 /-- **(e5)** D1's `H_ref` is complete on the default domain when noise is in `[−63, 63]`. -/
-theorem d1Complete : Pinned.D1Complete := by
+theorem d1Complete : GameStatements.D1Complete := by
   intro Q R S P hN U hU u hu H s A hA
   have hD := hU.2.1 u hu
   have hB := hU.2.2 u hu

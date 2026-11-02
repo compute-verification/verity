@@ -12,7 +12,7 @@ the `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.
   refused by the query instead).
 - `--qword-vectors`: every evaluation, the order refusals, the verify refusals (the query's, and the cuts'), and
   every descriptor's cuts at several (X, W) against core's `verify`.
-- `--widths` (PROTOCOL.md §17.1 D22): descriptors whose references name leaves of other widths than their types
+- `--widths` (the README's D22): descriptors whose references name leaves of other widths than their types
   give them, and their neighbours, each with the codec's refusal: the Lean decoder refuses each `E_REINTERPRET` the codec
   does, word for word, and no other.
 - `--program` (a real descriptor, e.g. a served Build's): per Call its units; per Definition a Call names, its units, the

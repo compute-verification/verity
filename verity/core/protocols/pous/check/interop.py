@@ -73,14 +73,9 @@ def transcript(gen, wire, inst: dict) -> dict:
     return {"audit": audit, "setup": setup}
 
 
-def _params(reference, w: int, c0: int):
-    deployment = (w, c0) == (reference.DEPLOYMENT.w, reference.DEPLOYMENT.c0)
-    return reference.Params(w, c0, reference.DEPLOYMENT.payload_bytes if deployment else w // 8 - 1)
-
-
 def vector(reference, pins: dict[int, str], v: dict) -> dict:
     """`reference.py`'s outputs on a `vectors.json` vector, in the form of `PousCheck.SetupDifftest.vector`'s."""
-    q = _params(reference, v["w"], v["c0"])
+    q = reference.vector_params(v["w"], v["c0"])
     n = q.width_bytes
     entry = hashlib.sha512(canonical({k: x for k, x in v.items() if k != "sha512"}).encode()).hexdigest()
     k, t, attempt = reference.keys(bytes.fromhex(v["setup_salt"]), q, bytes.fromhex(v["model_commitment"]), v["segment"],
@@ -94,7 +89,7 @@ def vector(reference, pins: dict[int, str], v: dict) -> dict:
 
 def sigma(reference, v: dict) -> dict:
     """`reference.py`'s outputs on a `vectors.json` σ rejection case, in the form of `PousCheck.SetupDifftest.sigma`'s."""
-    q = _params(reference, v["w"], v["c0"])
+    q = reference.vector_params(v["w"], v["c0"])
     n, r, k = q.width_bytes, int(v["r"], 16), int(v["K"], 16)
     return {"p": q.p.to_bytes(n, "big").hex(), "r_xor_K": (r ^ k).to_bytes(n, "big").hex(), "rejects": r ^ k >= q.p,
             "sigma": reference.sigma(q, r, k).to_bytes(n, "big").hex()}

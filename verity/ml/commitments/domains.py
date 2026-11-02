@@ -70,7 +70,7 @@ POUW_H1_ROUND_A = "verity/pouw/h1/round-a/v1"
 POUW_H1_COMMIT = "verity/pouw/h1/commit/v1"
 POUW_H1_REQUEST_IDS = "verity/pouw/h1/requests/ids/v1"
 POUW_H1_WEIGHTS = "verity/pouw/h1/weights/v1"
-POUW_H1_OK_ROW_SALT = "verity/pouw/h1-prove/ok-row-salt/v0"
+POUW_H1_OK_ROW_SALT = "verity/pouw/h1-prove/ok-row-salt/v1"
 
 # PoUW: noise, seeds and receipts
 POUW_SEED = "verity/pouw/seed/v2"
@@ -217,8 +217,6 @@ LMS_I = "verity/lms/v0/I"
 # Not yet read from here: sampled proofs and the proof service's challenger
 CHALLENGER_KEY = "challenger-key/v1"
 COIN_TREE_HM96_SHA512 = "coin-tree/hm96-sha512/v2"
-IR_OBLIGATION = "verity-ir/obligation/v0"
-SAMPLED_PROOFS_VERIFICATION_PLAN = "verity-sampled-proofs/verification-plan/v3"
 CHALLENGER_AUDITOR_RECORD = "verity/challenger-auditor-record/v1"
 CHALLENGER_AUDITOR_ENTRY_V1 = "verity/challenger-auditor/entry/v1"
 CHALLENGER_AUDITOR_ENTRY_V2 = "verity/challenger-auditor/entry/v2"
@@ -232,7 +230,7 @@ CHALLENGER_RELEASE_LOG = "verity/challenger/release-log/v1"
 INTEGRITY_PROFILE = "verity/integrity-profile/v1"
 ONE_STAGE_AUDIT = "verity/one-stage/audit/v0"
 ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
-ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
+ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
 ONE_STAGE_PERIOD_SALT = "verity/one-stage/window-salt/v1"
 PROOF_SERVICE_OUTCOME = "verity/proof-service/outcome/v0"
 PROOF_SERVICE_STREAM = "verity/proof-service/stream/v0"
@@ -390,9 +388,8 @@ NETWORK_CERTIFICATE = "verity/network-certificate/v4"
 NETWORK_RECORDS = "verity/network-records/v3"
 PERIOD_CIRCUIT = "verity/window-circuit/v1"
 
-# Not yet read from here: composition (onsite, remote, product)
+# Not yet read from here: composition (onsite, remote)
 ONSITE_PROTOCOL = "verity/onsite/v0"
-PRODUCT_PROTOCOL = "verity/product/v0"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
 # Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)

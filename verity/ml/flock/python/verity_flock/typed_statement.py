@@ -367,7 +367,7 @@ def _compose_tail(low: IL.Lowering, sub, vus_per_block: int | None = None, **kw)
 
     if vus_per_block is None:
         G, k1 = 1, fits(1)[1]
-        while 2 * G * max(n for _, n in parts.values()) <= 4096 and fits(2 * G)[1] <= max(k1, 22):
+        while 2 * G * max(n for _, n in parts.values()) <= 4096 and fits(2 * G)[1] <= max(k1, C.PACK_LOG):
             G *= 2
     else:
         G = vus_per_block

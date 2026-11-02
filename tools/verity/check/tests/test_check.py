@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -775,7 +776,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
-    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
+    assert CHECK._env_key({"PYTHONPATH": f"{ROOT}/x", "VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"PYTHONPATH": "<tree>/x"}
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -786,7 +787,7 @@ def test_the_agreement_is_not_required_for_docs_alone():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/ml/flock/verifier/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
+    docs = ["verity/ml/flock/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
     assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/"]
     assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/"]      # only the two names are left out
@@ -863,6 +864,22 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
     assert "needs glibc 99.1" in CHECK.agreement_preflight({"upstream": {"glibc": "99.1"}}, [ok])
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 16)
     assert "may use 16 GB; the agreement needs 24" in CHECK.agreement_preflight({"upstream": {}}, [ok])
+
+
+def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
+    """r20261027-131150-7678: set 16's honest session, which Lean refuses for completeness and upstream accepts
+    (`upstream_accepted`), failed the preflight because it was held to Lean's verdict. A case without the key expects its one
+    verdict of both."""
+    v = tmp_path / "verifier"
+    v.mkdir()
+    (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
+    sets = [{"pr83": c, "lean_statement": "s", "statement": {"circuit": f"art:{c}/c", "public": f"art:{c}/p"},
+             "sessions": [{"dir": f"art:{c}/honest", "expect": expect}]}
+            for c, expect in (("aa", {"accepted": False, "why": "setup: registered reads (complete): ", "upstream_accepted": True}),
+                              ("bb", {"accepted": True, "why": ""}))]
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    assert {c: e for c, _, e in CHECK.upstream_smoke(tmp_path)} == {"aa": {"accepted": True}, "bb": {"accepted": True}}
 
 
 def _fake_run(monkeypatch, groups, pre=()):
@@ -1898,7 +1915,8 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     e = {"PATH": "/usr/bin"}
     one = CHECK.lints_key(e)
-    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) == one
+    assert CHECK.lints_key({**e, "VERITY_SLOW": "1"}) != one
     (tmp_path / "b.md").write_text("b\n")
     assert CHECK.lints_key(e) is None
     git("add", "-A")

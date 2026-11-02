@@ -1,5 +1,5 @@
 /-
-§16.10–§16.13's setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
+`Flock.HmRow`, `HmOut`'s setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
 digest of what the session brings taken from the oracle, in a verdict monad `M`. Run in `V` with `Hashes.ofSha512 Sha512.hash`
 it is `Stmt.setupTables` (`Flock.With.SetupEq`). The copies keep the originals' text; what hashes nothing is the compiled
 verifier's own, lifted.
@@ -21,6 +21,7 @@ a registered scheme through the oracle, `MerkleScheme.opsWith`). No digest of th
 -/
 import Flock.With.Hashes
 import Flock.HmRow
+import Flock.JsonParse
 
 namespace Flock
 
@@ -62,10 +63,10 @@ def CircuitType.digestWith (hs : Hashes M) (t : CircuitType) : M String := do
   let s ← canon t.toJson
   return hexOf (← hs.sha512 (CircuitType.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
-/-- `Layout.digest` through the oracle. -/
-def Layout.digestWith (hs : Hashes M) (l : Layout) : M String := do
+/-- `BlockLayout.digest` through the oracle. -/
+def BlockLayout.digestWith (hs : Hashes M) (l : BlockLayout) : M String := do
   let s ← canon l.record
-  return hexOf (← hs.sha512 (Layout.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
+  return hexOf (← hs.sha512 (BlockLayout.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
 namespace Typed
 
@@ -83,7 +84,7 @@ def holdWith (types : Array (String × CircuitType)) (tables : List (String × B
       if bytes.size != 4 * 2 ^ lt.indexBits || Pinned.tableSha bytes != sha then
         throw s!"table {lt.name}: its words are not the table its SHA-512 names"
       let words := (Array.range (bytes.size / 4)).map fun i => rd32 bytes (4 * i)
-      out := out.push ⟨sha, bytes, words, Layout.tableInfo words⟩
+      out := out.push ⟨sha, bytes, words, BlockLayout.tableInfo words⟩
   return out
 
 /-- `classOf` through the oracle. -/
@@ -100,11 +101,11 @@ def classOfWith (hs : Hashes M) (mj : Json) (tables : List (String × ByteArray)
     if let .error e := CircuitType.check (typeIn types) t then throw s!"META: type {d.take 16}… breaks the rule '{e}'"
   let held ← holdWith types tables
   let ls ← (← J.arr mj "layouts" ctx).mapM fun r => do
-    let l ← Layout.ofJson r
+    let l ← BlockLayout.ofJson r
     if (← J.str r "sha512" ctx) != (← l.digestWith hs) then throw s!"{ctx}: a layout's sha512 is not its record's digest"
     pure l
   let unit ← J.nat mj "unit_layout" ctx
-  if let .error e := Layout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
+  if let .error e := BlockLayout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
   let some ul := ls[unit]? | throw "META: unit_layout names no layout"
   let some ut := ul.type | throw "META: the unit's layout names no type"
   if (← J.str mj "unit_type" ctx) != ut then throw "META: unit_type is not the unit's layout's type"
@@ -118,7 +119,7 @@ def classOfWith (hs : Hashes M) (mj : Json) (tables : List (String × ByteArray)
   | .error e => throw s!"META: the unit's rows: {e}"
 
 /-- `templateOf` through the oracle. -/
-def templateOfWith (hs : Hashes M) (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat)
+def templateOfWith (hs : Hashes M) (name : String) (done : Array DeriveAll.D) (ls : Array BlockLayout) (unit : Nat)
     (t : CircuitType) (held : Array Held) : M Template := do
   let u := done.getD unit default
   if u.reads.any (·.prod0 < u.size) then
@@ -312,7 +313,7 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
@@ -460,7 +461,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray
   let text ← match String.fromUTF8? (file.extract 0 nl) with
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
-  let header ← match Json.parse text with
+  let header ← match JsonParse.parse text with
     | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
@@ -555,7 +556,7 @@ def workLawWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k : Nat) (ta
 
 /-- `checkPublic` through the oracle. -/
 def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are §16.13's)"
+  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != Pinned.rowKey then

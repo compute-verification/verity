@@ -14,6 +14,10 @@ definitions they read are in `Partitioning.Model`; `Λ` below is `ln(1/δ)`.
 * `GranularityOptimum` (headline): with `n` units of work `s` each, the cheapest law costs
   `c(s) · (ns/C) · Λ` up to the factor `1 − s/C − C/(ns) − sΛ/(2C)`, with `c(s) = f + o·s`. The total work `ns` and so
   `(ns/C) · Λ` don't depend on `s`. `GranularityChoice`: so the best granularity minimizes `c(s)`, up to that factor.
+* `ServedGranularityOptimum`: when serving commits every unit, drawn or not, `β` bytes each at `h` a byte with weight `w`,
+  the same bounds hold with the commitment `w·n·β·h` added to both: it is the partition's, not the law's.
+* `ServedGranularityChoice`: so over granularities of the same work `F`, the leading served cost
+  `c(s) · (F/C) · Λ + w · (F/s) · β · h` (`servedCost`) is least at `s* = √(wβhC/(oΛ))`, not at the finest `s`.
 * `HeavyUnit`: a unit doing work at least `C` is drawn with probability at least `1 − δ`.
 * `UnequalDraws`, `UnequalCost`: with unequal units of work in `[a, A]` and `A · Λ ≤ C`, every law meeting the target
   draws at least `1/ρ` of `Achievability`'s `F/C · Λ` (`F` the total work), and pays at least `1/ρ²` of its cost, less
@@ -80,6 +84,27 @@ def GranularityChoice : Prop :=
       unitCost f o s' * ((1 - s' / C - C / (n' * s') - s' * Real.log δ⁻¹ / (2 * C)) *
           cost L fun _ => unitCost f o s) ≤
         unitCost f o s * cost L' (fun _ => unitCost f o s') + ε
+
+/-- **The granularity optimum with serving's commitment.** Serving commits every one of the `n` units, drawn or not,
+`β` bytes each at `h` a byte, weighted `w` against proving. Every law meeting the free-compute target costs at least
+`c(s) · (ns/C) · Λ · (1 − s/C − C/(ns) − sΛ/(2C)) + w·n·β·h` in proving and commitment, and some law costs at most
+`c(s) · (ns/C) · Λ + w·n·β·h + ε`. -/
+def ServedGranularityOptimum : Prop :=
+  ∀ (n : ℕ) (s C f o δ w β h : ℝ), 0 < s → 0 < C → 0 ≤ f → 0 ≤ o → 0 < δ → δ ≤ 1 →
+    (∀ L : Law n, MeetsTarget L (fun _ => s) C δ →
+      unitCost f o s * (n * s / C * Real.log δ⁻¹) * (1 - s / C - C / (n * s) - s * Real.log δ⁻¹ / (2 * C)) +
+          w * (n * β * h) ≤
+        cost L (fun _ => unitCost f o s) + w * (n * β * h)) ∧
+    ∀ ε > 0, ∃ L : Law n, MeetsTarget L (fun _ => s) C δ ∧
+      cost L (fun _ => unitCost f o s) + w * (n * β * h) ≤
+        unitCost f o s * (n * s / C * Real.log δ⁻¹) + w * (n * β * h) + ε
+
+/-- **The served granularity choice: the root law.** Cut work `F` into units of work `s`, each committing `β` bytes at
+`h` a byte with weight `w`, with `c(s) = f + o·s`, `o > 0` and `δ < 1`. The leading served cost `servedCost` (proving
+`c(s) · (F/C) · Λ` plus commitment `w · (F/s) · β · h`) is least at `s* = √(wβhC/(oΛ))`: no granularity costs less. -/
+def ServedGranularityChoice : Prop :=
+  ∀ (F C f o δ w β h : ℝ), 0 < F → 0 < C → 0 < o → 0 < δ → δ < 1 → 0 ≤ w → 0 ≤ β → 0 ≤ h → ∀ s, 0 < s →
+    servedCost F C f o δ w β h (Real.sqrt (w * β * h * C / (o * Real.log δ⁻¹))) ≤ servedCost F C f o δ w β h s
 
 /-- **A heavy unit is drawn almost surely**: under a law meeting the free-compute target, a unit doing work at least
 `C` is drawn with probability at least `1 − δ`. -/

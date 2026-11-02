@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.1, §16.2, §16.5: the circuit statement, set up from its `Tags`, its row leaf (`RowLeaf`), the pinned
+The circuit statement (its file: `Flock.Circuit`), set up from its `Tags`, its row leaf (`RowLeaf`), the pinned
 circuit file and the public file: Δ, the regions and their claims, the lincheck fold, the statement digest, Σ and `Hello`.
 Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
 hashes of pinned padding constants.
@@ -28,7 +28,7 @@ def pin (c : Circuit) (leaf : RowLeaf) : V Nat := do
   if p ≥ 2 ^ c.kLog then throw "the pinned constant column is outside the block"
   return p
 
-/-- Δ (§16.1), `(row, col)` pairs XORed into A and into B, in the order the statement digest binds: per range and slot,
+/-- Δ, `(row, col)` pairs XORed into A and into B, in the order the statement digest binds: per range and slot,
 the slot's constant wired to the pin, then the row leaf's own entries for its slots; then every unit's leaf bits copied from
 the message bits that hash them (a zero leaf from a forced-zero row); then every META wire. -/
 def delta (c : Circuit) (leaf : RowLeaf) (pin : Nat) : V (Array (Nat × Nat) × Array (Nat × Nat)) := do
@@ -167,7 +167,7 @@ theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
     simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq, false_iff]
     exact fun h' => h (hall.2 h')
 
-/-- The coin source named in `Hello` (§7). -/
+/-- The coin source named in `Hello` (`Flock.Draw`). -/
 inductive Coins where
   | os
   | seed
@@ -227,7 +227,7 @@ def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tabl
   let base := if tags.hm96Rows then base ++ [("digests", Json.str "sha512")] else base
   canon (Json.mkObj (if tags.retainRounds then base ++ [("rounds", Json.str "bytes retained")] else base))
 
-/-- `setup` (§3 step 1): parse and check everything, then derive the statement. -/
+/-- `setup` (`Flock.Verify` step 1): parse and check everything, then derive the statement. -/
 def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray) := []) : V Stmt := do
   let c ← Circuit.parse tags circuitFile tables
@@ -380,7 +380,7 @@ def foldRanges (st : Stmt) (alpha : F128) (lw rho : Array F128) :
 def addDelta (w : Nat → F128) (pairs : List (Nat × Nat)) (out : Array F128) : Array F128 :=
   pairs.foldl (fun o ic => o.modify ic.2 (· + w ic.1)) out
 
-/-- The lincheck fold (§10, §16.1): `α·A_0ᵀe + B_0ᵀe` for `e = lw ⊗ eq(ρ)`. A slot of `2^sl` bits at position `q` sees
+/-- The lincheck fold (`Flock.Piop`): `α·A_0ᵀe + B_0ᵀe` for `e = lw ⊗ eq(ρ)`. A slot of `2^sl` bits at position `q` sees
 `e[(q << sl) | c] = e_lo[c] · eq(ρ[sl−6 ..], q)` with `e_lo = lw ⊗ eq(ρ[.. sl−6])`, so each slot type is folded once on
 `e_lo` and scaled per slot; Δ's entries are added on `e`. -/
 def fold (st : Stmt) (alpha : F128) (lw : Array F128) (rho : Array F128) : V (Array F128) := do
@@ -489,7 +489,7 @@ def folded (st : Stmt) (alpha beta : F128) (lw rho ts : Array F128) : V (Array F
 
 def circuitFold (st : Stmt) : CircuitFold := { kLog := st.c.kLog, pin := st.pin, fold := st.fold, folded := st.folded }
 
-/-- The region's point in `F^m` for a link point `r ∈ F^{m_pts}` (§16.2). -/
+/-- The region's point in `F^m` for a link point `r ∈ F^{m_pts}`. -/
 def regionPoint (st : Stmt) (reg : Region) (r : Array F128) : Array F128 := Id.run do
   let kl := st.c.kLog
   let mut p : Array F128 := (Array.range st.m).map fun j =>
@@ -515,7 +515,7 @@ def regionValue (st : Stmt) (reg : Region) (r : Array F128) : V F128 := do
     acc := acc + eb[b]! * s
   return acc
 
-/-- The extra claims (§16.2): region-major, then point 0 before point 1. -/
+/-- The extra claims: region-major, then point 0 before point 1. -/
 def extraClaims (st : Stmt) (pts : Array (Array F128)) : V (Array Claim) := do
   let mut out := #[]
   for reg in st.regions do

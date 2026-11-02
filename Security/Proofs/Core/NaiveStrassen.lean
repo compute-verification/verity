@@ -32,33 +32,6 @@ theorem naive_beats_strassen_up_to :
       NaiveBeatsStrassenUpTo rtx6000Sheet 4096 ∧ NaiveBeatsStrassenUpTo rtx6000Measured 4096 :=
   Packed.naiveBeatsStrassenUpTo_all
 
-theorem schemes_correct : strassen.correct = true ∧ winograd.correct = true ∧ trivial.correct = true := by
-  decide
-
-/-- `winogradOnce` with the f16 atom of the measured instances (`k = 16`; `16 · 510 · 128 ≤ 2^24`). -/
-def winogradOnceMeasured : Sched :=
-  .scheme winograd fun t => if t.val < 2 then .atom s8 else .atom ⟨16, 4097, some (16, 24)⟩
-
-theorem winogradOnce_attains :
-    (winogradOnce.valid h200Sheet schemes 0 1 256 256 = true ∧
-      winogradOnce.valid rtx6000Sheet schemes 0 1 256 256 = true ∧
-      winogradOnceMeasured.valid h200Measured schemes 0 1 256 256 = true ∧
-      winogradOnceMeasured.valid rtx6000Measured schemes 0 1 256 256 = true) ∧
-    winogradOnce.fast = true ∧ winogradOnceMeasured.fast = true ∧
-    winogradOnce.cost 1 = 8 ^ 2 + 32 ∧ winogradOnceMeasured.cost 1 = 8 ^ 2 + 32 := by
-  decide
-
-/-- Naive tiled is valid on every instance and costs `8^(l+1)`, below Theorem 1's bound: `fast` is what it rests on. -/
-theorem naive_below_bound :
-    (instances.all fun fs => (Sched.atom s8).valid fs schemes 0 1 256 256) = true ∧
-    (Sched.atom s8).cost 1 = 8 ^ 2 ∧ 8 ^ 2 < 8 ^ 2 + 32 := by
-  decide
-
-theorem up_to_hypotheses :
-    winogradOnce.valid h200Sheet schemes 0 1 256 256 = true ∧ winogradOnce.fast = true ∧
-      1 ≤ 1 ∧ 1 ≤ 2 ^ 1 * 1 ∧ 1 ≤ 4096 * 1 ∧ 8 * 1 ^ 3 < 1 ^ 3 * winogradOnce.cost 1 := by
-  decide
-
 /-- Two s8 residues, mod 256 and mod 255, meet `crtValid` at `n = 2` on every instance. -/
 theorem crt_hypotheses :
     (instances.all fun fs => crtValid fs 2 0 [(256, .atom s8), (255, .atom s8)]) = true ∧

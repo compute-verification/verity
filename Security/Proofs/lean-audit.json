@@ -32,6 +32,7 @@
   "Proofs.Properties.CertifierNetwork.Runs",
   "Proofs.Properties.Identity",
   "Proofs.Properties.Evaluate",
+  "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.NetworkScan",
@@ -58,6 +59,7 @@
   "Proofs.Properties.RemoteAudit.Schedule",
   "Proofs.Properties.RemoteAudit.Live",
   "Proofs.Properties.RemoteAudit.Component",
+  "Proofs.Properties.RemoteAudit.ComponentWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
@@ -65,15 +67,23 @@
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
   "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger"
+  "Proofs.Properties.Challenger",
+  "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Subprotocols",
+  "Proofs.Properties.Verity.Wipe",
+  "Proofs.Properties.Remote",
+  "Proofs.Properties.Remote.Honest"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
-  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (art:5542740a), run by hand (`lake env lean --run`): a probe, not a proof"
+  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof",
+  "Proofs.Flock.Claims.Recursion.IrDepSession": "IrDep at a deployed inner session (art:886efa1d), the Lean side of test_irdep_difftest.py, run by hand (`lake env lean --run`, or `lean_changed.py --try` with VERITY_IRDEP_ARGS): a probe, not a proof"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
-   "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (29 Sep 01:10Z, granted by R1)",
+   "why": "every generated FP8 step and FP32 add, with the red team's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (granted by the red team)",
    "args": ["{conformance/steps.txt}", "176549", "{conformance/adds.txt}", "5000"],
    "data": {
     "conformance/adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b",
@@ -107,7 +117,11 @@
   },
   "Proofs.Flock.Claims.Recursion.CallsTop": {
    "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
-   "digest": "b79afd58b999bf109956c0ce64b53f15e9ca536e0072ebb8218438d6c4b303f0"
+   "digest": "134361c6a8301fa0818f80a036c7ad0c25cbbf0347b4db16929b115c758e5c88"
+  },
+  "Proofs.Flock.Claims.Recursion.IrDepSession": {
+   "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads.",
+   "digest": "c932f5745f1dfbfd12723073acb5b0b9b1c3a287ed642623a84c6610deef2e6c"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",

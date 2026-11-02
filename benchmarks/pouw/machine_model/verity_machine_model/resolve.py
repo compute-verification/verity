@@ -39,6 +39,10 @@ class Resolved:
 
 def resolve(name: str, data: Path = DATA) -> Resolved:
     m, v = model(data), vector(name, data)
+    if not m.adopted:
+        raise SystemExit(f"{data.name}: no price vector is solved on this device (its model.toml leaves out the price "
+                         f"LP's [lp] and adopted; README \"Devices\"), so `solve` and `attacks` have nothing to "
+                         f"re-solve; `eps --vector {name}` prices its designs")
     c, a = census(m, v.epoch, data), attacks(m, v.epoch, data)
     status = {r.name: r.status for r in rows(data).values()}
     sol = lp.solve(m, c, status, a, list(v.rows), list(v.credits), rho=m.rho, x_min=m.x_min, tie=m.tie)

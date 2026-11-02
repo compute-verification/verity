@@ -100,10 +100,6 @@ theorem levelAt_ne_nil : ∀ (k : Nat) {L : List ByteArray}, L ≠ [] → levelA
   | 0, _, h => h
   | k + 1, _, h => pairs_ne_nil k (levelAt_ne_nil k h)
 
-theorem levelAt_nil : ∀ k : Nat, levelAt k [] = []
-  | 0 => rfl
-  | k + 1 => by simp only [levelAt, levelAt_nil k]; rfl
-
 theorem levelAt_length_le : ∀ (k : Nat) (L : List ByteArray) (m : Nat), L.length ≤ 2 ^ k * m →
     (levelAt k L).length ≤ m
   | 0, L, m, h => by simpa [levelAt] using h

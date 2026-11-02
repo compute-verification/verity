@@ -26,7 +26,8 @@ declares (`engine.served`, from the Commit's summary.json).
 Outcome PASS: the Build passed, the word check passed (a config run) or the Match passed (a row of record), the Commit verdict passed
 (`check.verdict.commit_verdict`, which includes the replay), the replay evaluated k units, all equal, and the served switches passed (a
 Commit that read none back is not run).  Anything else is FAIL with the first reason; a failure is a finding of the sweep, not a stop.
-Served switches that failed come before the Commit: the Commit fails closed on them before it runs.
+Served switches that failed come before the Commit: the Commit fails closed on them before it runs.  The replay and the openings are
+the prover's pre-flight checks on clear values (`pipeline.cpu_replay`), not a verifier's.
 """
 from __future__ import annotations
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import struct
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,6 +29,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
+from verity_flock import rec_link as LK
 from verity_flock import rec_live as RL
 from verity_flock import rec_open as R
 from verity_flock import rec_outer as O
@@ -254,6 +256,56 @@ def _file(text: str) -> dict:
 def rec_open_unit(v) -> dict:
     o = _obj(v, ("LANES", "H"))
     return _lowering(O.lowering(_nat(o["LANES"]), _nat(o["H"])))
+
+
+def link_unit(v) -> dict:
+    o = _obj(v, ("UB", "PB"))
+    return _lowering(LK.lowering(_nat(o["UB"]), _nat(o["PB"])))
+
+
+def link_tree(v) -> dict:
+    """`rec_link.Tree` at depth ``UB + PB`` over ``rows`` (``[unit, row, b ‖ c hex]``, in increasing order, each in range):
+    its root and the opening of ``pos``."""
+    o = _obj(v, ("UB", "PB", "rows", "pos"))
+    UB, PB = _nat(o["UB"]), _nat(o["PB"])
+    LK._check(UB, PB)
+    def at(x) -> int:
+        if not isinstance(x, list) or len(x) < 2:
+            raise D.Reject("[unit, row, ..]")
+        u, r = _nat(x[0]), _nat(x[1])
+        if u >> UB:
+            raise D.Reject(f"unit {u} does not fit {UB} bits")
+        return LK.index(u, r, PB)
+    if not isinstance(o["rows"], list):
+        raise D.Reject("rows: a list")
+    leaves: dict[int, bytes] = {}
+    for x in o["rows"]:
+        if not isinstance(x, list) or len(x) != 3 or not isinstance(x[2], str):
+            raise D.Reject("row: [unit, row, bc]")
+        i = at(x)
+        if leaves and i <= max(leaves):
+            raise D.Reject("rows in increasing order, each once")
+        if any(c not in HEX for c in x[2]):
+            raise D.Reject("bc: lowercase hex")
+        leaves[i] = LK.leaf(bytes.fromhex(x[2]))
+    if not isinstance(o["pos"], list) or len(o["pos"]) != 2:
+        raise D.Reject("pos: [unit, row]")
+    t = LK.Tree(leaves, LK.depth(UB, PB))
+    if t.root == bytes(64):
+        raise D.Reject("a root of 64 zero bytes")
+    return {"root": t.root.hex(), "path": [s.hex() for s in t.path(at(o["pos"]))]}
+
+
+def link_ref(v) -> dict:
+    o = _obj(v, ("UB", "PB", "ports"))
+    if not isinstance(o["ports"], list) or len(o["ports"]) != 7 or not all(isinstance(p, list) for p in o["ports"]):
+        raise D.Reject("ports: seven lists")
+    ports = [[_nat(w) for w in p] for p in o["ports"]]
+    UB, PB = _nat(o["UB"]), _nat(o["PB"])
+    if any(w >> 16 for p in ports for w in p):
+        raise D.Reject("u16 words")
+    rin, rout = LK.link_ref(UB, PB, *ports)
+    return {"rin": rin, "rout": rout}
 
 
 def _rec_open_text(o: dict) -> str:
@@ -528,7 +580,7 @@ def test_statements_agree(server):
 @pytest.mark.slow
 def test_the_verifiers_part_nets_are_vstars_units(server):
     """The Lean verifier refuses a `rec-residuals/…` unit unless it is the verifier's own net for that part
-    (`Flock.RecResiduals`, PROTOCOL.md §16.10), which it computes from the shape alone; V*'s units must be those nets, or
+    (`Flock.RecResiduals`, `Flock.HmRow`), which it computes from the shape alone; V*'s units must be those nets, or
     the verifier refuses honest recursive sessions. At a shape of one part and one of two (about two minutes: each unit's
     net, built twice, is a few million rows); no cheaper test builds the real parts' nets on both sides."""
     p = port("verifier_parts", verifier_parts, st.nothing())
@@ -810,3 +862,82 @@ def test_stage_is_byte_equal(tmp_path, shape):
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / f"stage-{'-'.join(map(str, shape))}.json").write_text(json.dumps(record, indent=1))
     assert all(r["equal"] for r in record), [r["dir"] for r in record if not r["equal"]]
+
+
+# --- the link table's unit and trees -----------------------------------------------------------------------------------------
+
+@st.composite
+def _link_trees(draw):
+    UB, PB = draw(st.integers(0, 3)), draw(st.integers(0, 2))
+    keys = sorted(draw(st.sets(st.tuples(st.integers(0, 2 ** UB - 1), st.integers(0, 2 ** PB - 1)), max_size=6)))
+    rows = [[u, r, draw(st.binary(min_size=128, max_size=128)).hex()] for u, r in keys]
+    return {"UB": UB, "PB": PB, "rows": rows, "pos": [draw(st.integers(0, 2 ** UB)), draw(st.integers(0, 2 ** PB))]}
+
+
+LINK_TREE = _link_trees() | st.fixed_dictionaries({"UB": _near(0, 30), "PB": _near(0, 16), "rows": st.just([]),
+                                                   "pos": st.just([0, 0])}) | JSON
+
+
+def test_link_tree_agrees(server):
+    """The verifier's rows trees (`Flock.RecLinkTree`) against `rec_link.Tree`: drawn rows, positions in and just past
+    range, and shapes either refuses; replayed on rows out of order and twice, and at the deepest tree, D = 32."""
+    p = port("link_tree", link_tree, LINK_TREE)
+    row = [0, 1, "00" * 128]
+    assert D.replay(p, {"UB": 1, "PB": 1, "rows": [[1, 0, "11" * 128], row], "pos": [0, 0]}, server)[0] == "reject"
+    assert D.replay(p, {"UB": 1, "PB": 1, "rows": [row, row], "pos": [0, 0]}, server)[0] == "reject"
+    assert D.replay(p, {"UB": 16, "PB": 16, "rows": [[65535, 3, "ab" * 128]], "pos": [65535, 3]}, server)[0] == "output"
+    stats = D.run(p, examples=60, seed=SEED, server=server)
+    assert stats.outputs >= 20 and stats.rejects >= 10, stats
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("ub_pb", [(0, 0), (2, 1), (1, 2)])
+def test_link_unit_agrees(server, ub_pb):
+    """V*'s link unit (`VStar.linkUnit`) against `rec_link.lowering`, at a tree of no levels and at two of three levels the
+    unit and the port bits split differently; and both refuse the shapes `rec_link._check` does. Python lowers each in
+    under a minute (two hm96 leaves, the climbs); no cheaper test compares the two builders gate for gate."""
+    p = port("link_unit", link_unit, st.nothing())
+    UB, PB = ub_pb
+    assert D.replay(p, {"UB": UB, "PB": PB}, server)[0] == "output"
+    if ub_pb == (0, 0):
+        for bad in ({"UB": 31, "PB": 0}, {"UB": 0, "PB": 17}, {"UB": 16, "PB": 17}, {"UB": True, "PB": 0}, {"UB": 1}):
+            assert D.replay(p, bad, server)[0] == "reject", bad
+
+
+@st.composite
+def _link_refs(draw):
+    """A table row of each kind (fields in range and just past it, a filler's zero, a tail byte set), the reader's digest
+    the writer's or another, and random salts and siblings."""
+    UB, PB = draw(st.integers(0, 2)), draw(st.integers(0, 2))
+    a = LK.aux_words(UB + PB)
+    def words(n):
+        return draw(st.lists(st.integers(0, 65535), min_size=n, max_size=n))
+    kind = draw(st.sampled_from([0, 1, 1, 1, 2]))
+    fields = [kind] + [draw(st.integers(0, 2 ** b)) for b in (UB, PB, UB, PB)]
+    if kind == 0 and draw(st.booleans()):
+        fields = [0] * 5
+    row = struct.pack("<5I", *fields) + bytes(108)
+    if draw(st.integers(0, 9)) == 0:
+        row = row[:-1] + b"\1"
+    xr = words(32)
+    xw = xr if draw(st.booleans()) else words(32)
+    return {"UB": UB, "PB": PB, "ports": [_words_le(row), xr, words(96), words(a), xw, words(96), words(a)]}
+
+
+def _words_le(b: bytes) -> list[int]:
+    return [b[i] | b[i + 1] << 8 for i in range(0, len(b), 2)]
+
+
+LINK_REF = _link_refs() | st.fixed_dictionaries({"UB": _near(0, 30), "PB": _near(0, 16), "ports": st.just([[]] * 7)}) | JSON
+
+
+def test_link_ref_agrees(server):
+    """The link unit's Lean reference (`Flock.RecLinkRef.linkRef`, whose outputs' meaning `linkOut_meaning` and `okRef_link`
+    state) against `rec_link.link_ref`, on drawn rows that pass and that don't."""
+    p = port("link_ref", link_ref, LINK_REF)
+    a = LK.aux_words(2)
+    row = _words_le(struct.pack("<5I", 1, 1, 0, 0, 1) + bytes(108))
+    good = {"UB": 1, "PB": 1, "ports": [row, [7] * 32, [0] * 96, [0] * a, [7] * 32, [1] * 96, [0] * a]}
+    assert D.replay(p, good, server)[0] == "output" and any(link_ref(good)["rin"])
+    stats = D.run(p, examples=60, seed=SEED, server=server)
+    assert stats.outputs >= 15 and stats.rejects >= 5, stats

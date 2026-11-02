@@ -80,12 +80,12 @@ def _compose(workload: Path, derived: Path, out: Path, eos: int) -> dict:
 
 
 def _decode_cold(descriptor: Path) -> int:
-    """The gates of `descriptor` decoded in a fresh interpreter through the Match's registry (`instance_sequence._registry`, its own
-    module list), as the Build's next phase reads the workload Program."""
+    """The gates of `descriptor` decoded in a fresh interpreter through the registry the Match reads (`catalog.load`), as the Build's
+    next phase reads the workload Program."""
     code = ("import gzip, json, sys\n"
             "from verity.ml.circuits.codec import decode_program\n"
-            "from verity_vllm.check.match.instance_sequence import _registry\n"
-            "print(decode_program(json.load(gzip.open(sys.argv[1])), _registry()).gates)\n")
+            "from verity.ml.definitions.registry.catalog import load\n"
+            "print(decode_program(json.load(gzip.open(sys.argv[1])), load()[0]).gates)\n")
     p = subprocess.run([sys.executable, "-c", code, str(descriptor)], cwd=VLLM_DIR, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     return int(p.stdout.strip().splitlines()[-1])
@@ -182,14 +182,13 @@ def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
 
 
 def test_every_consumers_registry_holds_every_registered_definition():
-    """GP-01, the Match, the query views and the descriptor equivalence each look Definitions up through their own entry point: in a
-    fresh interpreter each one's registry holds every Definition and primitive the registry package registers."""
+    """The global Program (`pipeline.global_program`) and the word Definitions look Definitions up through entry points of their own,
+    beside the `catalog.load` the Match, the query views and the descriptor equivalence read: in a fresh interpreter each one's
+    registry holds every Definition and primitive the registry package registers."""
     want = _run("from verity.ml.definitions.registry.catalog import load\nprint(len(load()[0].defs))")
     assert want.returncode == 0, want.stderr[-2000:]
     n = int(want.stdout.split()[-1])
     for setup in ("import verity_vllm.pipeline.global_program as m; from verity.ml.circuits.defs import REGISTRY as R",
-                  "from verity_vllm.check.match.instance_sequence import _registry; R = _registry()",
-                  "from verity_vllm.query.program_view import _registry; R = _registry()[0]",
                   "from verity.ml.definitions import word as W; W.specialization('GumbelTopPTokenSelect_v2', {'V': 16, 'S': 4}); "
                   "from verity.ml.circuits.defs import REGISTRY as R"):
         p = _run(setup + "\nfor k in ('GumbelTopPTokenSelect_v2', 'TopPMask_v2', 'TopPKeepWord_v1', 'NvLogf_v1', 'TopPNumkeep_v1'):\n"

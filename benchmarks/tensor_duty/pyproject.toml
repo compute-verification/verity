@@ -1,0 +1,8 @@
+# The H200 tensor-duty sweep, the falsification test of the H200 card's clock.tensor. Not a package: duty.cu and run.sh
+# run on an H200 under gpu-lease, and the suite holds summarize.py's verdict to the card's tensor rate on made-up points.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# summarize.py reads the bound from the card (`verity.hardware`, which imports `verity.errors` alone).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware"]

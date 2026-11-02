@@ -4,7 +4,7 @@ import Proofs.Flock.VBridge.Algebra.Ligerito
 /-!
 # The verifier's Ligerito steps on the model's rounds
 
-PROTOCOL.md §13–§14 from the verifier's side. The verifier's Ligerito (`ligeritoWith`) reads every value the prover sends
+`Flock.Ligerito`, `Flock.Merkle` from the verifier's side. The verifier's Ligerito (`ligeritoWith`) reads every value the prover sends
 from the proof `p` and every coin from the rounds. The model runs it over `p` and the coins `cf k` of the squeeze at
 transcript position `k`: its state, and a transcript whose rounds are what the prover records at each squeeze
 (`afterSq`), so that the verifier, on rounds carrying those, reads back each squeeze's coins.

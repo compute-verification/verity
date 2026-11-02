@@ -23,7 +23,7 @@ held whole, `msgAt`). There `piecesOf` is empty too, so hp is vacuous, and `hpEa
 * **The absorbed row's segment** is its holder's port's slot, which reads the round's last row (`fit_rowPiece`).
 
 `rowsFit_tops` holds at every history holding both reps' stream rounds (`hH`), with every part staged and accepted by
-the stager (`hS`, `hok`), which the honest run has (`honest_half`'s `hH`, `stagedPart_run`, `hok_honest`).
+the stager (`hS`, `hok`), which the honest run has (`honest_half_tops`' `hH`, `stagedPart_run`, `hok_honest`).
 -/
 
 namespace RecDeploy.VStarBuild

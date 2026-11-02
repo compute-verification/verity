@@ -41,8 +41,6 @@ open VStar.Algebra
 
 theorem msgNames_size (n : Nat) : (msgNames n).size = 4 := rfl
 
-theorem oodMsg_size (o n : Nat) : (#[Name.ood o] ++ msgNames n).size = 5 := rfl
-
 theorem fp_sizes (g : Nat → Array Name) : ∀ (l : List Nat) (init : Array (Array Name)),
     (l.foldl (fun b a => b.push (g a)) init).toList.map Array.size =
       init.toList.map Array.size ++ l.map fun a => (g a).size
@@ -58,14 +56,6 @@ theorem f1_fst : ∀ (l : List Nat) (init : Array (Array Name) × Nat),
   | a :: l, init => by
     rw [List.foldl_cons, f1_fst l]
     simp [msgNames_size, List.replicate_succ]
-
-theorem f1_snd : ∀ (l : List Nat) (init : Array (Array Name) × Nat),
-    (l.foldl (fun b _ => (b.fst.push (msgNames b.snd), b.snd + 1)) init).snd = init.snd + l.length
-  | [], init => by simp
-  | a :: l, init => by
-    rw [List.foldl_cons, f1_snd l]
-    simp
-    omega
 
 theorem f2_fst : ∀ (l : List Nat) (init : Array (Array Name) × Nat × Nat),
     (l.foldl (fun b _ => (b.fst.push (#[Name.ood b.snd.snd] ++ msgNames b.snd.fst), b.snd.fst + 1, b.snd.snd + 1))
@@ -896,10 +886,12 @@ theorem inner_of_ownPorts {sh : RecVStar.Inner} {vs : Array _root_.VStar.Stmt}
     ∃ sch sp ps p jj name, (⟨sh.m, sh.kLog, sh.claims⟩ : _root_.VStar.Algebra.Shape).sched = .ok sch ∧
       _root_.VStar.Algebra.spec ⟨sh.m, sh.kLog, sh.claims⟩ = .ok sp ∧ _root_.VStar.parts sp = .ok ps ∧ p ∈ ps ∧
       sv = .inner jj name p := by
-  obtain ⟨A, K, n, hA, hK, rfl⟩ := OpenLower.statements_dense hvs hsp
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n, hK, -, hLk, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
   rw [hh] at hA
   obtain ⟨sch, sp, ps, hsch, hspec, hps, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hspec' : _root_.VStar.Algebra.spec ⟨sh.m, sh.kLog, sh.claims⟩ = .ok sp := hspec
+  rw [Array.append_empty] at hsv
   rcases Array.mem_append.1 hsv with hsv | hsv
   · rcases Array.mem_append.1 hsv with hsv | hsv
     · obtain ⟨l, -, rfl⟩ := List.mem_map.1 (List.mem_toArray.1 hsv)
@@ -908,8 +900,8 @@ theorem inner_of_ownPorts {sh : RecVStar.Inner} {vs : Array _root_.VStar.Stmt}
       refine ⟨sch, sp, ps, ps[j]!, j, _, hsch, hspec', hps, ?_, rfl⟩
       rw [getElem!_pos ps j (List.mem_range.1 hj)]
       exact Array.getElem_mem _
-  · obtain ⟨l, N, rfl⟩ := FlockC3.VStarList.caps_cap hK n sv hsv
-    simp [RecVStar.ownPorts] at hq
+  · rcases FlockC3.VStarList.tail_cases hK hLk n sv hsv with ⟨l, N, rfl⟩ | ⟨UB, PB, N, rfl⟩ <;>
+      simp [RecVStar.ownPorts] at hq
 
 /-- **A held row's slot opens `2 · portWordsOf` of its round's V\* size bytes**: its port is `m{kk}`, the `kk`-th
 committing round's, of `rounds`' `kk`-th size. -/

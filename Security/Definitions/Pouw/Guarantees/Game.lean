@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Pinned
+import Definitions.Pouw.Assumptions.GameStatements
 import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
@@ -9,13 +9,13 @@ import Definitions.Pouw.Assumptions.Game
 
 Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.G : Pouw.Guarantees.G`. (b), (c) and (d)
-of `Pouw.Assumptions.Pinned`: Theorem 1, work-weighted sampling, and TT's resource exhaustion end to end. Each keeps the
+of `Definitions.Pouw.Assumptions.GameStatements`: Theorem 1, work-weighted sampling, and TT's resource exhaustion end to end. Each keeps the
 text, the docstring and the `open`s of the statement it was in its source module.
 -/
 
 namespace Pouw.Guarantees
 
-open Pouw.Pinned Finset
+open Pouw.GameStatements Finset
 
 /-- **(b) Theorem 1** (§3.5). If `G_γ` holds with error `η` and, for an adversary within `(T, q)`, the audit (any
 coins `C` drawn independently of `H` and `s`, any acceptance predicate) satisfies
@@ -66,6 +66,6 @@ open Finset
 
 /-- **(a)** `G_γ` from TT, with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε_TT(q)`. -/
 def _root_.Pouw.Guarantees.GammaFromTT : Prop :=
-  Pinned.GammaFromTT
+  GameStatements.GammaFromTT
 
 end Pouw.Proofs

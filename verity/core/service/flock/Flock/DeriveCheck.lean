@@ -163,10 +163,10 @@ def outRows (k : Chk) (rec : ReadRec) (ws : Array Nat) (kk nh : Nat) : Nat → N
 
 /-- An inline read's rows after its decoders (`table/v2`): its record, whose low minterms are the columns
 `loTop + l`; its `kk · nh` product rows; its output bits. `kk` is the product bit count the table gives
-(`Layout.kOf`). Returns the output wires. -/
+(`BlockLayout.kOf`). Returns the output wires. -/
 def readOk (k : Chk) (ws : Array Nat) (sha : String) (n lo vb : Nat) (loM hiM : Array CF) (refs : List Ref) :
     Option (Array CF × List Ref) :=
-  let kk := Layout.kOf sha vb (Layout.tableInfo ws)
+  let kk := BlockLayout.kOf sha vb (BlockLayout.tableInfo ws)
   let nh := 2 ^ (n - lo)
   if kk = 0 then outRows k default ws 0 nh vb 0 refs #[]
   else
@@ -198,7 +198,7 @@ constant copies itself. -/
 def genOk (words : String → Option (Array Nat)) (k : Chk) (sha : String) (n vb lo : Nat) : Bool :=
   let d := k.d
   let ws := (words sha).getD #[]
-  let kk := Layout.kOf sha vb (Layout.tableInfo ws)
+  let kk := BlockLayout.kOf sha vb (BlockLayout.tableInfo ws)
   let nh := 2 ^ (n - lo)
   d.inCols == Array.range n && d.outCols.size == vb && k.oneAt d.const && ws.size == 2 ^ n && 2 ≤ lo && lo < n &&
     (List.range n).all (fun i => k.rowIs i ([i], [i])) &&
@@ -227,8 +227,8 @@ set_option maxRecDepth 4096 in
 `refs`, from the wires `wire`. `jl` is the layout whose items these are; an inlined callee's layout is listed before it,
 which bounds the walk. `top` marks the layout's own items, the only place a placed call sits. `words` holds the tables'
 words by SHA-512. Returns the wires and the refs left. -/
-def walk (types : String → Option CircuitType) (words : String → Option (Array Nat)) (ls : Array Layout)
-    (done : Array D) (unit j : Nat) (k : Chk) (jl : Nat) (top : Bool) (t : CircuitType) (l : Layout)
+def walk (types : String → Option CircuitType) (words : String → Option (Array Nat)) (ls : Array BlockLayout)
+    (done : Array D) (unit j : Nat) (k : Chk) (jl : Nat) (top : Bool) (t : CircuitType) (l : BlockLayout)
     (items : List Item) (c r : Nat) (wire : Array CF) (refs : List Ref) : Option (Array CF × List Ref) :=
   match items with
   | [] => some (wire, refs)
@@ -308,7 +308,7 @@ decreasing_by
     | exact Prod.Lex.left _ _ _h
 
 /-- **Layout `j`'s rows pass the check.** -/
-def checkLayout (types : String → Option CircuitType) (words : String → Option (Array Nat)) (ls : Array Layout)
+def checkLayout (types : String → Option CircuitType) (words : String → Option (Array Nat)) (ls : Array BlockLayout)
     (done : Array D) (unit j : Nat) : Bool :=
   let l := ls.getD j default
   let d := done.getD j default
@@ -427,7 +427,7 @@ def partsChecked (done : Array D) (unit : Nat) : Bool :=
 
 /-- **The rows the verifier uses**: `deriveAll`'s, once every layout's pass the check, the unit's are in logical order, and
 its parts are as its template reads them. -/
-def deriveChecked (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo)
+def deriveChecked (types : String → Option CircuitType) (ls : Array BlockLayout) (info : String → Option TableInfo)
     (words : String → Option (Array Nat)) (unit : Nat) : Except String (Array D) := do
   let done ← deriveAll types ls info words unit
   match (List.range ls.size).find? fun j => !checkLayout types words ls done unit j with

@@ -319,7 +319,7 @@ def LaysOut (p : String × Array (ℕ × ℕ)) (s : Array Slots.ProofBlock) : Pr
   s.toList.map (·.unit) = (expand p.2.toList).map some
 
 /-- **`Slots.layout`'s classes**: the strata of the evaluated query, each laid out unit by unit, then the input class. -/
-theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
+theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.SlotOrder)
     (h : Slots.layout d query = .ok l) :
     ∃ rs, Partition.evaluate d query = .ok rs ∧ ∃ pop : Array (Array Slots.ProofBlock),
       l = { classes := #[pop, inputClass d] } ∧
@@ -353,7 +353,7 @@ theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
 
 /-- **The slots `checked` lists**: `v` is one when slot `v` holds a proof block whose unit is proved (or none, an
 input). -/
-theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v : ℕ) :
+theorem mem_checked (l : Slots.SlotOrder) (proved : Array ℕ) (v : ℕ) :
     v ∈ Slots.checked l proved ↔ ∃ h : v < l.blocks.size, l.blocks[v].unit.all proved.contains = true := by
   unfold Slots.checked
   simp only [Array.mem_map, Array.mem_filter]

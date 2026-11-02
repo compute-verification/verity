@@ -12,7 +12,7 @@ The converse, that `check` accepts whatever `checkRef` accepts, is `check_comple
 
 namespace SampledProofs.Wires
 
-theorem firstWire_eq_none {c : Circuit} {f : Wire → Option Code} :
+theorem firstWire_eq_none {c : Wiring} {f : Wire → Option Code} :
     firstWire c f = none ↔ ∀ w ∈ c.wires, f w = none := by
   unfold firstWire
   constructor
@@ -34,7 +34,7 @@ theorem firstWire_eq_none {c : Circuit} {f : Wire → Option Code} :
       simp [h w hw]
     rw [this]; rfl
 
-theorem shape_cut {c : Circuit} {w : Wire} {rt wt : Template} (h : shape c w = .ok (rt, wt)) :
+theorem shape_cut {c : Wiring} {w : Wire} {rt wt : Template} (h : shape c w = .ok (rt, wt)) :
     1 ≤ w.cuts ∧ w.units % w.cuts = 0 := by
   unfold shape at h
   split at h
@@ -65,7 +65,7 @@ theorem boundsRef_of {w : Wire} {rt wt : Template} (hc : 1 ≤ w.cuts) (hd : w.u
   have hs := w.writerAt_mem_span i hi
   omega
 
-theorem wireCodeRef_of {c : Circuit} {w : Wire} (h : wireCode c w = none) :
+theorem wireCodeRef_of {c : Wiring} {w : Wire} (h : wireCode c w = none) :
     1 ≤ w.cuts ∧ w.units % w.cuts = 0 ∧ wireCodeRef c w = none := by
   unfold wireCode at h
   unfold wireCodeRef
@@ -132,7 +132,7 @@ theorem distinctRows_of {ws : List Wire} (hw : ∀ w ∈ ws, 1 ≤ w.cuts ∧ w.
   exact entries_disjoint (hw a ha).1 (hw a ha).2 (hw b hb).1 (hw b hb).2 hab
 
 /-- Every wire `check` accepts is cut into whole reader units. -/
-theorem check_wires {c : Circuit} {S : Summary} (h : check c = .ok S) :
+theorem check_wires {c : Wiring} {S : Summary} (h : check c = .ok S) :
     ∀ w ∈ c.wires, 1 ≤ w.cuts ∧ w.units % w.cuts = 0 := by
   unfold check at h
   split at h
@@ -146,7 +146,7 @@ theorem check_wires {c : Circuit} {S : Summary} (h : check c = .ok S) :
 
 /-- **`check` is sound against the unrolled reference**: what it accepts, `checkRef` accepts, its entries those of the
 summary's wires, which are the circuit's. -/
-theorem check_sound {c : Circuit} {S : Summary} (h : check c = .ok S) :
+theorem check_sound {c : Wiring} {S : Summary} (h : check c = .ok S) :
     S.wires = c.wires ∧ checkRef c = .ok (c.wires.flatMap Wire.entries) := by
   unfold check at h
   split at h
@@ -273,7 +273,7 @@ theorem entries_find? {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0)
 
 /-- **The summary's lookup is the reference's**: the writer `writerOf` gives a reader row, by the wires alone, is the one
 the expanded entries give it. -/
-theorem writerOf_eq {c : Circuit} {S : Summary} (h : check c = .ok S) (t : String) (u : Nat) (p : String) (r : Nat) :
+theorem writerOf_eq {c : Wiring} {S : Summary} (h : check c = .ok S) (t : String) (u : Nat) (p : String) (r : Nat) :
     S.writerOf t u p r = ((c.wires.flatMap Wire.entries).find? (·.1 == (t, u, p, r))).map (·.2) := by
   have ⟨hS, _⟩ := check_sound h
   have hw := check_wires h
@@ -282,7 +282,7 @@ theorem writerOf_eq {c : Circuit} {S : Summary} (h : check c = .ok S) (t : Strin
 
 /-! ## The counts multiplied through -/
 
-theorem check_summary {c : Circuit} {S : Summary} (h : check c = .ok S) : S = ⟨c.wires, c.wires.map (rowWords c)⟩ := by
+theorem check_summary {c : Wiring} {S : Summary} (h : check c = .ok S) : S = ⟨c.wires, c.wires.map (rowWords c)⟩ := by
   unfold check at h
   split at h
   · cases h
@@ -295,7 +295,7 @@ theorem check_summary {c : Circuit} {S : Summary} (h : check c = .ok S) : S = �
 theorem entries_length (w : Wire) : w.entries.length = w.units := by simp [Wire.entries]
 
 /-- **The wired rows, multiplied through, are the reference's count.** -/
-theorem wiredRows_eq {c : Circuit} {S : Summary} (h : check c = .ok S) :
+theorem wiredRows_eq {c : Wiring} {S : Summary} (h : check c = .ok S) :
     S.wiredRows = (c.wires.flatMap Wire.entries).length := by
   rw [check_summary h, Summary.wiredRows, List.length_flatMap]
   simp [entries_length]
@@ -309,7 +309,7 @@ theorem wiredBits_list (g : Wire → Nat) : ∀ l : List Wire,
       List.sum_replicate_nat, entries_length]
 
 /-- **The wired bits, multiplied through, are the reference's count**: each covered reader row's words, 16 bits a word. -/
-theorem wiredBits_eq {c : Circuit} {S : Summary} (h : check c = .ok S) :
+theorem wiredBits_eq {c : Wiring} {S : Summary} (h : check c = .ok S) :
     S.wiredBits = (c.wires.map fun w => (w.entries.map fun _ => 16 * rowWords c w).sum).sum := by
   rw [check_summary h, Summary.wiredBits]
   exact wiredBits_list (rowWords c) c.wires

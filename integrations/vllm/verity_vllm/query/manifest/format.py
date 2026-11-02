@@ -598,16 +598,21 @@ def canonical_identity(r: dict[str, Any]) -> list:
 
 
 def components_fold_digest(component_digests: Iterable[str]) -> str:
-    """The B>1 manifest's `program_digest` when the Build has not (yet) produced gprog's Workload_v1 digest: a sha256 fold of the sorted
+    """The B>1 manifest's `program_digest` when the Build has not (yet) produced gprog's Workload_v1 digest: a SHA-512 fold of the sorted
     request-Program digests -- one string (the identity key needs a string), labelled `program_digest_kind: components-fold` beside it,
     replaced by the workload digest (`--workload-digest`, kind `workload`) once the Build carries it."""
-    return hashlib.sha256(("workload-components/" + ",".join(sorted(str(d) for d in component_digests))).encode()).hexdigest()
+    return hashlib.sha512(("workload-components/" + ",".join(sorted(str(d) for d in component_digests))).encode()).hexdigest()
+
+
+def query_id_digest(text: str) -> str:
+    """A manifest query's `query_id_digest`: SHA-512 of its `query_text`."""
+    return hashlib.sha512(text.encode()).hexdigest()
 
 
 def tp_ranks_fold_digest(rank_digests: Iterable[str]) -> str:
     """A merged TP manifest's header `program_digest`: the labelled fold of the per-rank Program digests
-    (`program_digest_kind: tp-ranks-fold`) -- one string for the manifest's loader; every identity row keeps its own rank's digest."""
-    return hashlib.sha256(("tp-ranks/" + ",".join(sorted(str(d) for d in rank_digests))).encode()).hexdigest()
+    (`program_digest_kind: tp-ranks-fold`), SHA-512 -- one string for the manifest's loader; every identity row keeps its own rank's digest."""
+    return hashlib.sha512(("tp-ranks/" + ",".join(sorted(str(d) for d in rank_digests))).encode()).hexdigest()
 
 
 TP_PEER_BINDING_RULE = ("a rank Program's collective row (AllReduce2 / AllGather2) consumes the rank's OWN partial and the RECEIVED peer partial "
@@ -675,8 +680,8 @@ def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str]
 
 
 def manifest_digest(identities: list[dict[str, Any]]) -> str:
-    """sha256 of the canonical JSON of the sorted identity tuples (+ family), independent of the annotations."""
-    h = hashlib.sha256()
+    """SHA-512 of the canonical JSON of the sorted identity tuples (+ family), independent of the annotations."""
+    h = hashlib.sha512()
     for r in sorted(identities, key=row_key):
         h.update(json.dumps([r["family"]] + canonical_identity(r), separators=(",", ":"), sort_keys=True).encode())
         h.update(b"\n")

@@ -34,7 +34,7 @@ Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. 
 M0 and upstream Flock.
 
 ~~~text
-bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (68-lane level-0 tree)
+bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (level 0's tree, 68 lanes)
 zerocheck           label flock-zerocheck-v0
   M1                label verity-flock-zk-pads-v0 · bytes pads root (64)
                     squeeze r_skip (6) · squeeze r_outer (m-13)
@@ -397,7 +397,7 @@ by round, and a Goldreich–Kahan simulator rewinds once, to just after that com
 degenerate coins as they open (the Claim above).
 
 **The coin commitment** (`src/coin_tree.rs`, the keyed coin tree `coin-tree/hm96-sha512/v2`,
-`SessionConfig::coin_tree`; the verifier's side is `verity/ml/flock/verifier/PROTOCOL.md` §7.4).
+`SessionConfig::coin_tree`; the verifier's side is `Flock.CoinTree`).
 - The schedule is pinned in `Hello` (`coins: {block, nonce, rounds_log, scheme, streams}`): streams `session`,
   `circuit/rep0`, `circuit/rep1`; `2^9` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most
   277 coins in one (level 0's queries); the session stream's round 0 is the two link points.
@@ -761,12 +761,12 @@ table `TABLE`'s level 0 (`Session.level0`, §10.2) for the live session named `S
 the first four words of its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and
 the `N` bytes of the extra lanes, the paddings and the salts the loop sampled, then its `R`-byte root, or `err WHY`. A
 session the loop isn't serving is refused, and so is a table the session lacks or a second request for a table: the loop
-draws each table's level 0 once (`Level0.Registry.draw`), so the prover can't draw again until a root suits it. The
+draws each table's level 0 once (`Level0.Slots.draw`), so the prover can't draw again until a root suits it. The
 session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop drew for that
 session's table `i` at its statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would pad too few positions).
-Every `Level0` drawn for a session, committed or not, is freed when it ends (`Level0.Registry.close`).
+Every `Level0` drawn for a session, committed or not, is freed when it ends (`Level0.Slots.close`).
 The proofs leave just before `Finish`, the loop's finish's file of each table's rep 0 and rep 1 on the level 0 the
-`Commit` bound (`Session.ownProofs`, kept once a rep, `Frames.Registry.file`), every rep's or none, and only once every
+`Commit` bound (`Session.ownProofs`, kept once a rep, `Frames.Sessions.file`), every rep's or none, and only once every
 rep's frame ended not stopped; where one stopped, `Finish`
 leaves without them once the schedule's last opening has, and the prover's `Finish` is refused (`PROVER-STOPPED: the Lean
 frame stopped table I rep R`). The analysis's release is this loop

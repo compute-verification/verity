@@ -157,11 +157,11 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
 
 def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random) -> dict[str, Any]:
     """What `ChargeCount_v1` is held to: the book (`Book.to_json()`); each window's decisions alone
-    (`window_charge.Window(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions
+    (`window_charge.Advice(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions
     (then that charge is v1's); and the run's decisions cut again into `code_v1` windows of at most N, each placed in
     N slots in order with disabled slots between (`en`, a disabled slot's bit random), with `code_v1`'s charge for
     each. The cut's sizes are 0, N and random, so its windows reach every bin."""
-    alone = [CV.Window(arrived=w.arrived) for w in wins]
+    alone = [CV.Advice(arrived=w.arrived) for w in wins]
     flat = [b for w in wins for b in w.arrived]
     sizes, at = [], 0
     while at < len(flat):
@@ -169,7 +169,7 @@ def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random)
         at += sizes[-1]
     cut, at = [], 0
     for n in sizes:
-        cut.append(CV.Window(arrived=tuple(flat[at:at + n])))
+        cut.append(CV.Advice(arrived=tuple(flat[at:at + n])))
         at += n
     rows = []
     for w, length in zip(cut, CV.encode(cut, book).lens, strict=True):
@@ -261,7 +261,7 @@ def window_charges(wins: Sequence[Any], book: Any, cut: tuple[int, int, int], rn
     while any(a < len(f) for a, f in zip(at, flat)):
         n = [min(rng.choice([0, S, rng.randrange(S + 1), rng.randrange(S + 1)]), len(f) - a)
              for S, f, a in zip(cut, flat, at)]
-        cutwins.append(CV.Window(arrived=tuple(flat[0][at[0]:at[0] + n[0]]), hits=tuple(flat[1][at[1]:at[1] + n[1]]),
+        cutwins.append(CV.Advice(arrived=tuple(flat[0][at[0]:at[0] + n[0]]), hits=tuple(flat[1][at[1]:at[1] + n[1]]),
                                  order=tuple(flat[2][at[2]:at[2] + n[2]])))
         at = [a + k for a, k in zip(at, n)]
 
@@ -329,7 +329,7 @@ def fields(trace: dict, per: int = 64) -> dict[str, Any] | None:
     n = max(-(-len(c) // per) for c in cols)
     if not n:
         return None
-    wins = [CV.Window(hits=cols[0][j * per:(j + 1) * per], resumes=cols[1][j * per:(j + 1) * per],
+    wins = [CV.Advice(hits=cols[0][j * per:(j + 1) * per], resumes=cols[1][j * per:(j + 1) * per],
                       order=cols[2][j * per:(j + 1) * per], lag=cols[3][j * per:(j + 1) * per]) for j in range(n)]
     return _stream(wins, CV.fit_book([wins]))
 

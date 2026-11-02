@@ -5,7 +5,7 @@ import Proofs.Flock.VBridge.Family.Encode
 /-!
 # The honest prover's session: the reps, the proof files and the record
 
-PROTOCOL.md §4–§8 and §16 from the prover's side, for the plain verifier (`verifyWithM`).
+`Flock.Tags`, `Flock.Record`, `Flock.Transcript`, `Flock.Draw`, `Flock.Proof`, `Flock.Statement` from the prover's side, for the plain verifier (`verifyWithM`).
 
 * **A rep** (`repP`): zerocheck, lincheck, the ring switch on `abcClaims ++ extras`, then Ligerito on the table's
   level-0 commitment for the batched claim `T`, from the rep's own transcript (`Transcript.init #[] domain`). The proof
@@ -63,7 +63,7 @@ def helloOf (spec : SessionSpec) : V (String × List (String × Json)) :=
   match spec.coinTree with
   | none => pure (spec.hello, [])
   | some ct => do
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (Flock.JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let nonce := zeros 64
     let coins := (own.getObjVal? "coins").toOption.getD Json.null
     let h ← canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))

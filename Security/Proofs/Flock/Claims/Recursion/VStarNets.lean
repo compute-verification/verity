@@ -156,6 +156,16 @@ theorem unit_name {s : VStar.Stmt} {u : VStar.UnitC} (h : s.unit = .ok u) : u.na
   cases s with
   | recOpen _ L H _ => exact recOpenUnit_name h
   | inner _ nm pt => exact innerUnit_name h
+  | link UB PB _ =>
+    simp only [VStar.Stmt.unit] at h
+    unfold VStar.linkUnit at h
+    generalize VStar.linkSteps UB PB = S at h
+    cases hc : _root_.Flock.RecLinkTree.checkShape UB PB with
+    | error e => simp [hc, bind, Except.bind] at h
+    | ok _ =>
+      simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      rfl
   | _ =>
     simp only [VStar.Stmt.unit, VStar.sparseUnit] at h
     simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h

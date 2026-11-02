@@ -1,11 +1,11 @@
 """The audit's coins from the proof system's challenger as a service (`sampled_proofs.remote`), served on a thread over a
 socket pair: a session whose coins that service released is accepted, and what it signed holds them
-(`Session.released_reason`). Under the auditor's ledger (`Session.trusted_reason`) a session's coins are those of the one
-challenger session the ledger opens for the session's own window R inside its period, run from a tree the host's pins
-log records on main's first-parent line (`challenger.pinned_session`), so coins from a second challenger session over
-the same registration are refused, as is a ledger that opens a second session for R, and a session with no pins log,
-an unsealed open, an unlogged pin, a pin off main's first-parent line or no copy of main; a coin opened before its
-window's root is refused; a coin asked for ahead (`Coins.ahead`) goes in one round trip with the coin before it, the
+(`AuditRun.released_reason`). Under the auditor's ledger (`AuditRun.trusted_reason`) a session's coins are those of the
+one challenger session the ledger opens for the session's own window R inside its period, run from a tree the host's
+pins log records on main's first-parent line (`challenger.pinned_session`), so coins from a second challenger session
+over the same registration are refused, as is a ledger that opens a second session for R, and a session with no pins
+log, an unsealed open, an unlogged pin, a pin off main's first-parent line or no copy of main; a coin opened before its
+window's root is refused; a coin asked for ahead (`SessionCoins.ahead`) goes in one round trip with the coin before it, the
 challenger's log as if each had gone alone; and a session that appends nothing reserves no append family, so its
 challenger releases every coin it committed to."""
 from __future__ import annotations
@@ -82,8 +82,8 @@ class Service:
         with sock:
             self.reason = R.serve(sock, self.session, itertools.count().__next__)
 
-    def coins(self, store, session: int, windows: int, per_coin: int = 1) -> coins.Coins:
-        return coins.Coins(self.client, store.registration.digest, session, windows, per_coin=per_coin,
+    def coins(self, store, session: int, windows: int, per_coin: int = 1) -> coins.SessionCoins:
+        return coins.SessionCoins(self.client, store.registration.digest, session, windows, per_coin=per_coin,
                            clock=itertools.count().__next__)
 
     def close(self) -> str | None:
@@ -228,7 +228,7 @@ def test_the_session_the_ledger_opens_for_its_window_is_trusted(store, tmp_path,
 OFF_MAIN = ("session s-r ran commit {}, which the host's pins log records but which is not on main's first-parent line "
             "in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main is in "
             "main's history but no tree main's check ran on; repin the challenger host to a commit on main's "
-            "first-parent line (vy-challenger-pin) and rerun the window there")
+            "first-parent line (with its pin command) and rerun the window there")
 
 
 @pytest.mark.parametrize("case", ["no-pins", "unsealed", "unlogged", "branch", "no-main", "stale-main"])
@@ -267,7 +267,7 @@ def test_a_session_is_trusted_only_from_a_logged_pin_on_mains_first_parent_line(
                         "window on a host whose gate seals its pins log in each open"),
            "unlogged": (f"session s-r ran commit {MAIN[1]}, which the host's pins log doesn't record as a commit of "
                         "main's history: repin the challenger host to a commit origin/main contains "
-                        "(vy-challenger-pin) and rerun the window there"),
+                        "(with its pin command) and rerun the window there"),
            "branch": OFF_MAIN.format(BRANCH), "stale-main": OFF_MAIN.format(PIN)}[case]
     for period in (None, "p-1"):
         assert s.trusted_reason(service.directory, [ledger.path], key(), pins, main, verify, period) == (
@@ -307,7 +307,7 @@ def test_an_openings_coin_opened_before_its_windows_root_is_refused(store, tmp_p
 
 
 def test_a_coin_asked_for_ahead_goes_in_one_round_trip_with_the_coin_before_it(store, tmp_path, sign):
-    """`Coins.ahead`: window 0's openings coin and σ_1 after its root go in one `open_many`, the openings coin first,
+    """`SessionCoins.ahead`: window 0's openings coin and σ_1 after its root go in one `open_many`, the openings coin first,
     and σ_1 is then taken from the batch with no frame sent: the same coins, the same roots recorded for each family
     and the challenger's release log byte for byte as asking them one after the other. σ_1 asked for after another
     root, or a coin asked for ahead that is not its family's next, is refused, the latter before any frame is sent."""

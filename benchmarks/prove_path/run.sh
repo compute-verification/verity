@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prove path (prove_path.py) on a CPU machine: a TP Commit's ranks committed over the stand-in compiler's Programs for the run's
 # advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
-# commitment, drawn through a5's per-rank service.Stream on the verifier's own coins, proved by M0 --zk behind the Lean ZK server
+# commitment, drawn through a5's per-rank service.Stream on a challenger's coins, proved by M0 --zk behind the Lean ZK server
 # and verified by Lean, the advice's root then held to the registration the sample followed; then one forged run, a unit whose
 # committed value is changed (committed consistently, the prover's self-check skipped), which Lean must refuse. M0's
 # flock-circuit and Lean's flock-verify are built from this tree, in scratch.
@@ -31,6 +31,15 @@
 #   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
 #     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
+#   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights registration at TINY (verity_vllm.program.predict.weights_tie;
+#     its inputs tests/program/predict/weights_tie_fixture): the committer registers checkpoint X's weights and records
+#     its tie window, one SHA-512 chain a shard over the registered rows (the embedding table's row-seg rows a chain of
+#     their own), ending at the verifier's own digest; the verifier makes its tie of X from X's public bytes (the circuit's
+#     SHA-512, the run root, the registered entries and its supplied values, every unit as the output class), audits the
+#     window against it under PP_LAW (default work:1) in
+#     members of PP_TIE_CAP units (default 16), and pins the roots only on an accepting audit. Two refused arms: a
+#     committer serving checkpoint Y's words as X's (its last units' digest reads open no root), and the same with those
+#     digests forged to X's (those units aren't their Definition's); each must be refused, and pin nothing.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
@@ -46,11 +55,12 @@
 #   160 RoPE heads at step 1 as the stand-in transfer gates: PP_PARTITION=benchmarks/prove_path/llama32_1b_tg_l0_step1.json
 #   PP_TRANSFER_GATES='RoPEHead_v1{D=64}' PP_SETS=rope-head/d64/bf16, its forged run PP_FORGED_PARTITION=benchmarks/prove_path/
 #   llama32_1b_tg_l0_step24.json PP_FORGE=0:0 (a RoPE head, drawn because every one is).
-#   PP_CHALLENGER=local: each window drawn on a local challenger session's coins (--challenger local, a5_coins), not the
-#   verifier's own, pinned on main's first-parent history fetched from the clone's origin. PP_CHALLENGER=gate:USER@HOST:
+#   PP_CHALLENGER=local (the default): each window drawn on a local challenger session's coins (--challenger local, a5_coins),
+#   pinned on main's first-parent history fetched from the clone's origin; the verifier draws no coins of its own. PP_CHALLENGER=gate:USER@HOST:
 #   the auditor host's, through its SSH gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
 #   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
-#   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY).
+#   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY). PP_MAIN (a
+#   file, `git rev-list --first-parent` of the gate's pin) is that history instead, for a gate pinned on `next`.
 # From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out):
 #   PP_LLAMA=DIR bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
@@ -82,6 +92,7 @@ wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
+PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
 
 for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic input set per template (its values are never read)
   case $I in */*) SUB=$I SET=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 SET=i$I;; esac
@@ -89,11 +100,16 @@ for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic
 done
 TG=(); for t in ${PP_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); done
 CH=()
-if [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
+if [ -n "${PP_CHALLENGER:-}" ] && [ -n "${PP_MAIN:-}" ]; then   # the run's first-parent list, which holds the gate's pin
+  [ -s "$PP_MAIN" ] || { echo "PP_MAIN $PP_MAIN is missing or empty"; exit 4; }
+  [ "$PP_MAIN" -ef $O/main.txt ] || cp "$PP_MAIN" $O/main.txt
+elif [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
   UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
   git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
     && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
+fi
+if [ -n "${PP_CHALLENGER:-}" ]; then
   CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
   case $PP_CHALLENGER in gate:*)
     [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
@@ -145,7 +161,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
     return $rc
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
-    ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
+    ${ranks:+--ranks $ranks} ${PP_JOBS:+--jobs $PP_JOBS} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
     ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
@@ -208,6 +224,47 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
   fi
+elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
+  TLAW=${PP_LAW:-work:1} TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
+  (cd integrations/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
+    || { tail -20 $O/tie-fixture.err; exit 8; }
+  WT="$PY -m verity_vllm.pipeline.cli weights-tie"
+  tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
+           # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
+           # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 commit=() c run rc pinned; shift
+    for x in "$@"; do
+      case $x in
+        --served) forged=--forged; commit+=(--served-dir $F/y/snap --served-manifest $F/y/checkpoints.json);;
+        --forge-digest) commit+=(--forge-digest);;
+      esac
+    done
+    local common=(--phi $F/phi.json --checkpoint-dir $F/x/snap --manifest $F/x/checkpoints.json
+                  --grain $($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["grain"])' $O/tie-fixture.json)
+                  --law $TLAW --cap $TCAP --run-id $id)
+    mkdir -p $O/$name
+    $WT commit "${common[@]}" --key-file $W/$name-key --registration-out $O/$name/registration.json --out $W/$name-window \
+      "${commit[@]}" | tee $O/$name/commit.json || return 1
+    $WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier | tee $O/$name/verify.json || return 1
+    c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["circuit"])' $O/$name/verifier/tie.json) || return 1
+    run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
+    mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
+    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW --circuit $c --run $run \
+      --registered $O/$name/verifier/registered.json --outputs $O/$name/verifier/outputs.json \
+      ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    rc=$?
+    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+    keep $name
+    $WT pins "${common[@]}" --registration $O/$name/registration.json --summary $W/$name/summary.json --out $O/$name/pins.json \
+      | tee $O/$name/pins-verdict.json
+    pinned=$?
+    if [ -n "$forged" ]; then [ $pinned != 0 ] && [ ! -e $O/$name/pins.json ] || rc=1; else [ $pinned = 0 ] || rc=1; fi
+    return $rc
+  }
+  tie weights-tie || rc=1
+  [ "${PP_ONLY:-}" = honest ] || tie weights-tie-other --served || rc=1
+  [ "${PP_ONLY:-}" = honest ] || tie weights-tie-forged --served --forge-digest || rc=1
 else
   S=$W/served
   (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \

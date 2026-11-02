@@ -341,7 +341,7 @@ def srv_leaves(S, record: dict, i: int) -> list[tuple[str, int]]:
     return [(r, SR.leaf(S, record, i, j)) for j, r in enumerate(CS.srv_names(S))]
 
 
-def advice_leaf_ok(reg: ADV.Registration, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
+def advice_leaf_ok(reg: ADV.Committed, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
     """The verifier's check of unit i's ``adv`` row: its leaf from the proof's b‖c, walked to the registered root."""
     d = ADV.domain(binding, n)
     kind = BitRowLeaf(n_bits)
@@ -402,7 +402,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.zk_server_env(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
@@ -614,7 +614,7 @@ def prove(a) -> int:
     port_ = {p.name: p for p in sg.st.ports}
     honest = units[0].words
     n_bits = 16 * len(honest["adv"])
-    reg = ADV.register([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
+    reg = ADV.commit([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
     served = SR.register(x.S, [u.registered for u in units], binding, G=CS.block(x.S), salts=srv_salts)
     binds = {"advice": reg, "binding": binding, "n_bits": n_bits, "served": served, "run_root": binding,
              "certified": certified(M, port_["cert"], honest["cert"], cert_salt), "chain": ch, "program": program}

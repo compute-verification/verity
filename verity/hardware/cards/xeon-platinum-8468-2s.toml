@@ -1,0 +1,43 @@
+# Two Intel Xeon Platinum 8468 sockets, the H200 nodes' host: the one source of its numbers (verity/hardware/README.md).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host and firmware exceeds it, what
+# the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
+# (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
+
+kind = "host"
+sku = "xeon-platinum-8468-2s"
+name = "Two Intel Xeon Platinum 8468 (Sapphire Rapids) sockets"
+processor = "Intel Xeon Platinum 8468"
+arch = "Sapphire Rapids (Golden Cove cores), family 6 model 143 stepping 8"
+nodes = "two H200 nodes, each VM carrying one h200-sxm-141gb card and seeing 1 x 8 cores of the server's (lscpu on one of them, art:2b19fdd166a7)"
+
+[cpu]
+sockets = { value = 2, unit = "socket", mark = "ceiling", source = "the 8468 is a 2S part (Intel ARK 231735, Scalability 2S), and HGX H200 hosts are dual-socket; the VMs can't see the server's socket count" }
+cores = { value = 48, unit = "core/socket", mark = "ceiling", source = "Intel ARK 231735 (Xeon Platinum 8468: 48 cores)" }
+priority_cores = { value = 0, unit = "core/socket", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo" }
+
+[clock]
+turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Intel ARK 231735: max turbo 3.8 GHz (all-core turbo 3.1); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
+priority_turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo: as clock.turbo" }
+
+[rate]
+amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput on Sapphire Rapids); not run on these nodes" }
+ops = { value = 7.471104e14, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x rate.amx x cpu.sockets x (cpu.priority_cores x clock.priority_turbo + (cpu.cores - cpu.priority_cores) x clock.turbo), 7.471e14" }
+
+# The host's DRAM.
+[memory]
+channels = { value = 8, unit = "channel/socket", mark = "ceiling", source = "Intel ARK 231735: 8 memory channels" }
+speed = { value = 4800, unit = "MT/s", mark = "ceiling", source = "Intel ARK 231735: 'Up to DDR5 4800 MT/s 1DPC, Up to DDR5 4400 MT/s 2DPC'; the part takes no faster memory, so this holds whatever DIMMs the server has" }
+bus = { value = 64, unit = "bit/channel", mark = "ceiling", source = "a DDR5 channel's data width: two 32-bit subchannels (JEDEC JESD79-5), ECC bits apart" }
+bandwidth = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "cpu.sockets x memory.channels x memory.speed x memory.bus / 8 (307.2e9 a socket)" }
+read = { value = 6.144e11, unit = "B/s", mark = "placeholder", source = "no read measured on the H200 nodes: memory.bandwidth until a measured read (the RTX node's mix of pinned H2D and CPU readers) replaces it" }
+write = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "memory.bandwidth: the channels' rate bounds writes as it does reads; no write measured on the H200 nodes" }
+
+# The host's on-chip storage at most, for the whole server whatever share of it a VM gets.
+[store]
+l3 = { value = 110100480, unit = "B/socket", mark = "ceiling", source = "105 MiB: the guest's CPUID, lscpu 'L3 cache: 105 MiB (1 instance)' (art:2b19fdd166a7); Intel ARK 231735 'Cache 105 MB'" }
+uncore = { value = 2097152, unit = "B/socket", mark = "placeholder", source = "the 6776P host's allowance for the memory controllers', UPI's and PCIe's queues (red team, note:20261024T0330Z-report-redteam-night (f)4), not argued for Sapphire Rapids' four tiles" }
+l2 = { value = 2097152, unit = "B/core", mark = "ceiling", source = "2 MiB: lscpu 'L2 cache: 16 MiB (8 instances)' (art:2b19fdd166a7)" }
+l1d = { value = 49152, unit = "B/core", mark = "ceiling", source = "48 KiB: lscpu 'L1d cache: 384 KiB (8 instances)' (art:2b19fdd166a7)" }
+l1i = { value = 32768, unit = "B/core", mark = "ceiling", source = "32 KiB: lscpu 'L1i cache: 256 KiB (8 instances)' (art:2b19fdd166a7)" }
+core = { value = 65536, unit = "B/core", mark = "placeholder", source = "the 6776P host's allowance for two threads' architectural state with AMX tiles, the physical register files and the load, store and fill buffers (red team, note:20261024T0330Z-report-redteam-night (f)4), not argued for Golden Cove" }
+chip = { value = 439877632, unit = "B", mark = "placeholder", source = "cpu.sockets x (store.l3 + store.uncore) + cpu.sockets x cpu.cores x (store.l2 + store.l1d + store.l1i + store.core); a placeholder while store.uncore and store.core are" }

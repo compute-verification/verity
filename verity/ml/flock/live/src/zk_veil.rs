@@ -1,4 +1,4 @@
-//! Zero knowledge for `verity/flock-circuit` (lane flock-zk, M1): VEIL's compiler (Dalal–Hemo–Rabinovich–Rothblum, ePrint
+//! Zero knowledge for `verity/flock-circuit` (M1): VEIL's compiler (Dalal–Hemo–Rabinovich–Rothblum, ePrint
 //! 2026/683, §4.1 and Remark 4.4) applied to Flock's algebraic phase, over GF(2^128).
 //!
 //! **Exposed messages.** Every value the zerocheck and the lincheck send (round-1 skip evaluations, the multilinear rounds, the

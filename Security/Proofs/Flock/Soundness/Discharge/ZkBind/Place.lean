@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Placed
-import Proofs.Flock.Soundness.Discharge.ZkExec
 import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 
 /-!
 # `--zk` unit placements: each drawn unit's `UnitPlace` from setupH's accept

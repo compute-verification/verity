@@ -1,4 +1,4 @@
-"""`verity.ml.circuits.boundary` against the explicit oracle `GateSelection.out` / `GateSelection.in_` on the expanded circuit.
+"""`verity.ml.circuits.boundary` against the explicit oracle `query_ast.oracle_out` / `oracle_in` on the expanded circuit.
 
 Every exact answer must equal the oracle; every bound must be >= the exact `w_out`; every `Unsupported` must be on a
 case named here (produced by tightening the module caps).  The Programs use test-local primitives: a GEMM (a batch of
@@ -11,7 +11,8 @@ import pytest
 
 from verity.ml.circuits import boundary as B
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.layout import FunctionCall, Scope, GateSelection
+from verity.ml.circuits.layout import FunctionCall, Scope
+from verity.ml.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
 from verity.ml.circuits.liveness import Liveness
 from verity.ml.circuits.parts import Limits, Part, Unsupported, n_members
 from verity.ml.circuits.program import Program
@@ -81,9 +82,9 @@ Block = CompositeDefinition("TBlock", 1, ("FIRST",), lambda S: ((("state", V32),
 
 
 class Oracle:
-    """`GateSelection.in_` / `.out` computed from the expanded circuit's operands, cached once per program.  The formula is
-    the oracle's (`layout.py`): out = gates of S consumed by a gate outside S or protected; in = operands of S outside S.
-    `explicit()` re-checks a part against `GateSelection` itself."""
+    """`query_ast.oracle_in` / `oracle_out` computed from the expanded circuit's operands, cached once per program.  The
+    formula is the oracle's: out = gates of S consumed by a gate outside S or protected; in = operands of S outside S.
+    `explicit()` re-checks a part against `oracle_in` / `oracle_out` themselves."""
 
     def __init__(self, program: Program) -> None:
         C = program.circuit
@@ -108,9 +109,9 @@ class Oracle:
         return frozenset(o for g in gates for o in self.ops[g] if o not in gates)
 
     def explicit(self, gates: frozenset[int]) -> None:
-        sub = GateSelection(self.C, sorted(gates))
-        assert frozenset(sub.out) == self.out(gates)
-        assert frozenset(sub.in_) == self.in_(gates)
+        sub = oracle_gateset(self.C, gates)
+        assert frozenset(oracle_out(self.C, sub)) == self.out(gates)
+        assert frozenset(oracle_in(self.C, sub)) == self.in_(gates)
 
 
 def part_gates(part: Part) -> frozenset[int]:

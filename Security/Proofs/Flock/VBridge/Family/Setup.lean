@@ -527,7 +527,7 @@ variable (spec : SessionSpec)
 `ShapeIs`, `FoldsOk` and `CoinsAgree` follow from `ShapeAt`, and `HOpenName` and `HUnitName` from the circuit files'
 emit/parse round trip (`hOpenName_of`, `hUnitName_of`). Without a history and registration
 (`¬ Nonempty (Reg × L.Ω × Reg₂)`), `VBridgeRead`'s first two conjuncts quantify over none and its last two are the
-lanes' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
+parts' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
 theorem vbridgeRead_model
     (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HVCoins dg N k Rw)

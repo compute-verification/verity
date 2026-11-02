@@ -17,7 +17,7 @@ pv = "peel"
 
 [operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
 floor = { LDSM_X4 = 0.097222 }
-source = "SPEC §3.4's count for m16n8k16 (CALC): two-sided noise is fresh on both operands, so >= (2a + b)/(4ab) with 4ab + 2a + b <= 240, least 7/72 at (a, b) = (6, 9)"
+source = "the count for m16n8k16: two-sided noise is fresh on both operands, so >= (2a + b)/(4ab) with 4ab + 2a + b <= 240, least 7/72 at (a, b) = (6, 9)"
 
 [fold]
 name = "duo"
@@ -27,7 +27,7 @@ IMAD = 1
 [skip.served]
 eps = 0.00147
 at = { "DS-80" = 0.001463 }
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 31.856 SMSP-cycles a 4096-MAC MMA on AMPERE-80; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.147%: its tail 0.0964%, the sums DG, S and X(0) 0.0422%, the served epilogue 0.00798%. With P·V's served output checked it is 0.114% (8B) / 0.0485% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π. On DS-80 (`at`), ♭ 32.0: 0.146% (Round 11)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 31.856 SMSP-cycles a 4096-MAC MMA on AMPERE-80; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.147%: its tail 0.0964%, the sums DG, S and X(0) 0.0422%, the served epilogue 0.00798%. With P·V's served output checked it is 0.114% (8B) / 0.0485% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π. On DS-80 (`at`), ♭ 32.0: 0.146% (Round 11)"
 
 [mand.fold]
 eps = 0.0
@@ -35,13 +35,13 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.021277
-source = "EPS1 AMPERE r2 (40 s holds a kernel): f_max = 1410 MHz (NVML's max SM clock, which every light probe ran at, clocks never set), egemm80 e16 (EG80_NST=3) at L = 16 1380 MHz at steady state in both runs, 1 − 1380/1410"
+source = "f_max = 1410 MHz (NVML's max SM clock, which every light probe ran at, clocks never set; @a100-fmax), egemm80 e16 (EG80_NST=3) at L = 16 1380 MHz at steady state over 40 s holds (@a100-egemm80), 1 − 1380/1410"
 
 [luck]
 delta = 4.547473508864641e-13
 p = 0.75
 checks = 48000
-source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
+source = "Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
 [baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"

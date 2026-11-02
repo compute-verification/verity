@@ -1,10 +1,19 @@
-# The notes many lines cite, each cited in a census or rows.csv line's `runs` as @NAME, in this directory and every
-# device directory's.
+# The notes and run records many lines cite, each cited as @NAME in a census or rows.csv line's `runs`, or in a TOML
+# string's prose (a design's, honest profile's or θ's `source`), in this directory and every device directory's. A run
+# record is the `art:` id `research data show RUN` gives as its outputs' run_record.
 
+a100-egemm80 = "art:38b59a86bc7207e884da6b3d9c0d6a095be792c089869b21f8ba0758b66027ab"
+a100-fmax = "art:24afdb20495c10675fa60186416714958a10bc88d1016e45f13ebe7d8773dd9e"
 axioms = "note:20261017T1818Z-draft-axioms"
+b200-fmax = "art:e239849bcf7d7080a06c1bf618202ddc4c281730b552bfcbc5d959df0b7348b9"
+b200-tcliu = "art:ac9969bc3f69a462c49fb3d3a782ab29b5b6281353d6a8dff3703844f96ba63e"
 census-sm120 = "note:20261015T0608Z-draft-census-sm120"
 fold-proof = "note:20261019T2200Z-draft-fold-proof"
+h200-fmax = "art:83dbd28b545b76f9a48ddbf1e390dc610f0a2b8bb04bc71c2fb5d42f0451429a"
+h200-wgli = "art:8900d67e4ca182bc7af7e820e68914cb0c2eb641d5215cc0653d73699f182000"
 issue-ceiling = "note:20261016T0150Z-draft-issue-ceiling"
+l40s-clock = "art:5df624a6e6f510e2fd521c886370048684c56ab9a3d54160b1b2348b96dc99cf"
+l40s-honest = "art:7d6b27c5e51f7ab3691e6f964b57fc4b8a4b0f301a2507e71ef8ce0c0d2eb339"
 mm-sheets = "note:20261019T0511Z-draft-mm-sheets"
 rt-b200-emp = "note:20261019T0520Z-draft-rt-b200-emp"
 rt-h200-emp = "note:20261019T0533Z-draft-rt-h200-emp"

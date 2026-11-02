@@ -61,7 +61,17 @@ the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120
 
 **The domain** (TT_OUT's `pearlCDomain` and `OperandOK`): 128 ∣ k (whole promotion groups), and on every row of both
 operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
-exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².
+exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².  Columns come in
+whole 64-wide tiles (a narrower edge tile's words can be guessed whole), and rows in whole 16 x 16 ticket subtiles, so
+the last row tile may be partial (decode's 32 x 64 tile): `PearlC.check`.
+
+**Why -h3 seeds each row of A.**  A seed that doesn't read A's rows (h0's seed_A, over the unit's roots and index) tells
+the prover each row's noise before it chooses the row, so it can form every row onto a few shared A′ rows, compute their
+C̃ once per weight and copy it, while every row passes every rule.  Keyed on its own digest, each candidate row costs an
+oracle query again, and forming waits on that row's digest alone.  -h3 also caps each credited row's debit at ρ times
+its cells' credit (4ρ at a census k, `row_cap_at`) beside the tile's: that is (C2), under which
+`Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut` reduces the row-seeded TT_OUT to the per-unit one, and an aggregate cap
+doesn't transfer.  The registered -h3 schemes are ``pearl-c-sm120-v1-h3`` (the served default) and ``pearl-c-h100-v1-h3``.
 
 **The device** (`pearl_c_device.Device`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
 the record's, and the H100 names in this docstring are `pearl_c_device.H100`'s.  ``pearl-c-sm120-v1`` is v1 on

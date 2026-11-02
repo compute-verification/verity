@@ -1,4 +1,5 @@
 import Definitions.Pouw.RelativeSecurity
+import Definitions.Pouw.RelativeSecurityFork
 import Definitions.Pouw.Assumptions.RelativeSecurity
 
 /-!
@@ -22,9 +23,12 @@ The four floors rest on `ServiceSoundStaged` and `ServiceSoundOverlap`, which ar
 adversary that hard-codes a collision breaks binding in every round). Each has a restatement per prover beside it,
 proved (`StagedFloorKPerProver`, `StagedFloorKOneSidedPerProver`, `OverlapFloorKPerProver`,
 `OverlapFloorKOneSidedPerProver`): the same floor and the same luck, on the premises per prover, with each adversary's
-error its own (`breakBound`), `ecr/sha-512` at that adversary's collision finders within budgets computed from its
-time, `⊤` where they fail it, and each value of its coins capped at 1
-(note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover; CMP-33).
+error its own (`breakPr`), read at the fork finders built from that adversary (`forkFinders`), and each value of its
+coins capped at 1. `ecr/sha-512` applies to
+those finders outside the floors. Each floor per prover has an honest lemma (its premises hold together, with an honest
+answer accepted and a wrong one refused: `StagedFloorPerProverHonest`, `OverlapFloorPerProverHonest`,
+`StagedFloorJ10RPerProverHonest`, `OverlapFloorJ10RPerProverHonest`) and a nontrivial one (its conclusion fails at a
+verifier that accepts everything: `FloorPerProverNontrivial`).
 -/
 
 namespace Pouw.Guarantees.RelativeSecurity
@@ -121,77 +125,125 @@ def OverlapFloorKOneSided : Prop :=
 
 Each restates one floor above on the service premise per prover (`ServiceSoundStagedPerProver`,
 `ServiceSoundOverlapPerProver`) and concludes it adversary by adversary (`ServiceFloorPerProver`): the same floor `F`
-and luck `2^{−40}`, and each adversary's error `breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`: at each
-value `r` of its coins, `2^{−40} + R (δb + δz)` plus `βb` and `βz` times its binding and zero-knowledge finder terms at
-`r`, each finder read through `ecr/sha-512` at a budget computed from the adversary's time (`Claims.ecrBound`:
-`cb · time M + db` SHA-512 calls over `2^256` for a binding finder that meets the assumption within them, the same at
-`cz`, `dz` for a zero-knowledge one, `⊤` otherwise), capped at 1 and averaged over `r`. The budget constants are
-stated with the floor, and the error reads them, not the finders' declared costs. At `βb = βz = 0` the error is the
-old floor's, capped at 1, for every adversary. -/
+and luck `2^{−40}`, every adversary in one class, with no budget on its time. The premise is read at one finder built
+from the adversary, the fork (`forkFinders`, one adversary class): at `k = 1` for binding breaks, two runs
+of the adversary from its commitment forked at the round, and at `kz` continuations for zero-knowledge breaks, the
+form of C-Flock's link finder. The service is a `HashedService`, so the finder reads the verifier's SHA-512 inputs in
+those runs and outputs their first collision. Each adversary's error is
+`breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`: at each value `r` of its
+coins, `2^{−40} + R (δb + δz)` plus `βb` and `βz` times its fork finders' collision probabilities summed over the
+rounds, capped at 1 and averaged over `r`. Nothing here assumes anything of SHA-512: `ecr/sha-512`
+(`Claims.ExpectedCR`) applies to the fork finders outside the floors, at their cost (the verifier's calls and the
+adversary's runs at its time), and turns each probability into a number, or `⊤` at an adversary whose finder fails
+it (`breakBound`, `Pouw.RelativeSecurity.breakPr_le_breakBound`). A machine that hard-codes a collision gets about 1:
+its forks open a committed leaf two ways, and the verifier hashes both openings. At `βb = βz = 0` the error is the old
+floor's, capped at 1, for every adversary. -/
 
 /-- `StagedFloorK` per prover: the staged window's service floor for affine operands, at each adversary's own error.
 In every machine `Mc` and for every service `S` whose seed is `R` rounds of `St` stage draws on the re-encoded design
-(7 planes at `wRe`, integers mod `2^32`), under `ServiceSoundStagedPerProver` at the analysis's finders `fb` and `fz`
-and `StagedFloorK`'s other two premises, every adversary `M` that commits first has its accepted runs charged below
-`(R − 160 ln 2) · St · κ L n n' B − Vmax` with probability at most
-`breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
+(7 planes at `wRe`, integers mod `2^32`), under `ServiceSoundStagedPerProver` at the fork finders (`forkFinders`, `1`
+and `kz` continuations) and `StagedFloorK`'s other two premises, every adversary `M` that commits first has its accepted
+runs charged below `(R − 160 ln 2) · St · κ L n n' B − Vmax` with probability at most
+`breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
-    (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
-    (cb db cz dz δb βb δz βz κ Vmax : ℝ),
+  ∀ (Mc : Machine) (S : HashedService) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
+    (run : RunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
-    ServiceSoundStagedPerProver Mc S run e sha fb fz δb βb δz βz → KScopeAffine Mc S run wRe →
-      ChargeVF3j16 Mc S run e κ Vmax →
-    ServiceFloorPerProver Mc S ((R - 160 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
-      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+    ServiceSoundStagedPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+      δb βb δz βz → KScopeAffine Mc S.toService run wRe →
+      ChargeVF3j16 Mc S.toService run e κ Vmax →
+    ServiceFloorPerProver Mc S.toService ((R - 160 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
+      (breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
 
 /-- `StagedFloorKOneSided` per prover, the staged floor of record at each adversary's own error. In every machine
 `Mc` and for every service `S` whose seed is `R` rounds of `St` stage draws on the re-encoded design (7 planes at
 `wRe`, integers mod `2^32` read mod 2 by `toF2`, plane 0 at an odd weight), under `ServiceSoundStagedPerProver` at the
-analysis's finders `fb` and `fz` and `StagedFloorKOneSided`'s other two premises, every adversary `M` that commits
-first has its accepted runs charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most
-`breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
+fork finders (`1` and `kz` continuations) and `StagedFloorKOneSided`'s other two premises, every adversary `M` that
+commits first has its accepted runs charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most
+`breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKOneSidedPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
-    (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
-    (cb db cz dz δb βb δz βz κ Vmax : ℝ),
+  ∀ (Mc : Machine) (S : HashedService) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
+    (run : RunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
-    ServiceSoundStagedPerProver Mc S run e sha fb fz δb βb δz βz → KScopeOneSided Mc S run wRe toF2 0 →
-      ChargeVF3j16 Mc S run e κ Vmax →
-    ServiceFloorPerProver Mc S ((R - 274 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
-      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+    ServiceSoundStagedPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+      δb βb δz βz → KScopeOneSided Mc S.toService run wRe toF2 0 →
+      ChargeVF3j16 Mc S.toService run e κ Vmax →
+    ServiceFloorPerProver Mc S.toService ((R - 274 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
+      (breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
 
 /-- `OverlapFloorK` per prover: the overlapped window's service floor for operands affine per draw, at each
 adversary's own error. In every machine `Mc` and for every service `S` whose seed is `R` rounds of `St` stage draws
-of any shapes overlapping at any depth (as `OverlapFloorK`), under `ServiceSoundOverlapPerProver` at the analysis's
-finders `fb` and `fz` and `OverlapFloorK`'s other two premises, every adversary `M` that commits first has its
-accepted runs charged below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
-`breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
+of any shapes overlapping at any depth (as `OverlapFloorK`), under `ServiceSoundOverlapPerProver` at the fork
+finders (`1` and `kz` continuations) and `OverlapFloorK`'s other two premises, every adversary `M` that commits first
+has its accepted runs charged below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
+`breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def OverlapFloorKPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
-    (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
-    (cb db cz dz δb βb δz βz κ Vmax : ℝ),
+  ∀ (Mc : Machine) (S : HashedService) (R St L : ℕ) (n B n' : Fin St → ℕ)
+    (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
+    (run : ORunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
-    ServiceSoundOverlapPerProver Mc S run e sha fb fz δb βb δz βz → KScopeOverlapAffine Mc S run wRe →
-      ChargeVF3j16Overlap Mc S run e κ Vmax →
-    ServiceFloorPerProver Mc S ((R - 160 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
-      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+    ServiceSoundOverlapPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+      δb βb δz βz → KScopeOverlapAffine Mc S.toService run wRe →
+      ChargeVF3j16Overlap Mc S.toService run e κ Vmax →
+    ServiceFloorPerProver Mc S.toService
+      ((R - 160 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
+      (breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
 
 /-- `OverlapFloorKOneSided` per prover, the overlapped floor of record at each adversary's own error. In every
 machine `Mc` and for every service `S` whose seed is `R` rounds of `St` stage draws of any shapes overlapping at any
-depth (as `OverlapFloorKOneSided`), under `ServiceSoundOverlapPerProver` at the analysis's finders `fb` and `fz` and
-`OverlapFloorKOneSided`'s other two premises, every adversary `M` that commits first has its accepted runs charged
+depth (as `OverlapFloorKOneSided`), under `ServiceSoundOverlapPerProver` at the fork finders (`1` and `kz`
+continuations) and `OverlapFloorKOneSided`'s other two premises, every adversary `M` that commits first has its accepted runs charged
 below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
-`breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
+`breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def OverlapFloorKOneSidedPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
-    (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
-    (cb db cz dz δb βb δz βz κ Vmax : ℝ),
+  ∀ (Mc : Machine) (S : HashedService) (R St L : ℕ) (n B n' : Fin St → ℕ)
+    (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
+    (run : ORunMap Mc S.toService R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
-    ServiceSoundOverlapPerProver Mc S run e sha fb fz δb βb δz βz → KScopeOverlapOneSided Mc S run wRe toF2 0 →
-      ChargeVF3j16Overlap Mc S run e κ Vmax →
-    ServiceFloorPerProver Mc S ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
-      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+    ServiceSoundOverlapPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+      δb βb δz βz → KScopeOverlapOneSided Mc S.toService run wRe toF2 0 →
+      ChargeVF3j16Overlap Mc S.toService run e κ Vmax →
+    ServiceFloorPerProver Mc S.toService
+      ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
+      (breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+
+/-- **The honest lemma of `StagedFloorKPerProver` and `StagedFloorKOneSidedPerProver`: their premises hold together.**
+At every `sha` and `kz`, on one round of one stage over one cell-block (`n = L = B = n' = 1`, 7 planes at `wRe`), in
+the machine of functions at no cost (`funMachine`), some service with its verifier's SHA-512 inputs, coin map and run
+map meet `ServiceSoundStagedPerProver` at the fork finders with `δb = βb = δz = βz = 0`, both scopes
+(`KScopeAffine`, `KScopeOneSided`) and `ChargeVF3j16` at `κ = 1`, while its verifier accepts one answer to a commitment at every seed
+(the honest prover's) and refuses another at some seed. That machine charges nothing, so the noise reads carry the
+products and the floor there is negative: this shows the premises consistent at zero break terms, not the floor met. -/
+def StagedFloorPerProverHonest : Prop :=
+  ∀ (sha : Claims.Msg → Claims.Msg) (kz : ℕ), ∃ (S : HashedService)
+    (e : S.Seed ≃ Paths (DStage 1 1 1 7 1 1) 1)
+    (run : RunMap funMachine S.toService 1 1 1 1 7 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
+    ServiceSoundStagedPerProver funMachine S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+      0 0 0 0 ∧
+    KScopeAffine funMachine S.toService run wRe ∧ KScopeOneSided funMachine S.toService run wRe toF2 0 ∧
+    ChargeVF3j16 funMachine S.toService run e 1 1 ∧ (∀ σ, S.verify c σ a = true) ∧
+    ∃ σ, S.verify c σ a' = false
+
+/-- **The honest lemma of `OverlapFloorKPerProver` and `OverlapFloorKOneSidedPerProver`: their premises hold
+together.** As `StagedFloorPerProverHonest`, on one round of one draw over one cell-block: some service, coin map and
+run map meet `ServiceSoundOverlapPerProver` at the fork finders with zero break terms, both scopes across draws
+(`KScopeOverlapAffine`, `KScopeOverlapOneSided`) and `ChargeVF3j16Overlap` at `κ = 1` in `funMachine`, while the
+verifier accepts the honest answer at every seed and refuses another at some seed. -/
+def OverlapFloorPerProverHonest : Prop :=
+  ∀ (sha : Claims.Msg → Claims.Msg) (kz : ℕ), ∃ (S : HashedService)
+    (e : S.Seed ≃ Paths (OSpot 1 (fun _ => 1) 1 7 (fun _ => 1) fun _ => 1) 1)
+    (run : ORunMap funMachine S.toService 1 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
+    (c : S.Com) (a a' : S.Ans),
+    ServiceSoundOverlapPerProver funMachine S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+      0 0 0 0 ∧
+    KScopeOverlapAffine funMachine S.toService run wRe ∧
+    KScopeOverlapOneSided funMachine S.toService run wRe toF2 0 ∧
+    ChargeVF3j16Overlap funMachine S.toService run e 1 1 ∧ (∀ σ, S.verify c σ a = true) ∧
+    ∃ σ, S.verify c σ a' = false
 
 /-! ### The floors at call scope under J10-R
 
@@ -234,31 +286,76 @@ def OverlapFloorKOneSidedJ10R : Prop :=
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
 
 /-- `StagedFloorKOneSidedPerProver` at call scope under J10-R: `StagedFloorKOneSidedJ10R` on
-`ServiceSoundStagedJ10RPerProver` at the analysis's finders `fb` and `fz`, every adversary `M` that commits first having
-its accepted runs charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most
-`breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
+`ServiceSoundStagedJ10RPerProver` at the fork finders (`1` and `kz` continuations), every adversary `M` that commits
+first having its accepted runs charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most
+`breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKOneSidedJ10RPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
-    (run : JRunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
-    (cb db cz dz δb βb δz βz κ Vmax : ℝ),
+  ∀ (Mc : Machine) (S : HashedService) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
+    (run : JRunMap Mc S.toService R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
-    ServiceSoundStagedJ10RPerProver Mc S run e sha fb fz δb βb δz βz → KScopeOneSidedJ10R Mc S run →
-      ChargeVF3j16J10R Mc S run e κ Vmax →
-    ServiceFloorPerProver Mc S ((R - 274 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
-      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+    ServiceSoundStagedJ10RPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+      δb βb δz βz → KScopeOneSidedJ10R Mc S.toService run →
+      ChargeVF3j16J10R Mc S.toService run e κ Vmax →
+    ServiceFloorPerProver Mc S.toService ((R - 274 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
+      (breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
 
 /-- `OverlapFloorKOneSidedPerProver` at call scope under J10-R: `OverlapFloorKOneSidedJ10R` on
-`ServiceSoundOverlapJ10RPerProver` at the analysis's finders `fb` and `fz`, every adversary `M` that commits first having
-its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
-`breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
+`ServiceSoundOverlapJ10RPerProver` at the fork finders (`1` and `kz` continuations), every adversary `M` that commits
+first having its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
+`breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`. -/
 def OverlapFloorKOneSidedJ10RPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
-    (run : JORunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
-    (cb db cz dz δb βb δz βz κ Vmax : ℝ),
+  ∀ (Mc : Machine) (S : HashedService) (R St L : ℕ) (n B n' : Fin St → ℕ)
+    (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
+    (run : JORunMap Mc S.toService R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (kz : ℕ)
+    (δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
-    ServiceSoundOverlapJ10RPerProver Mc S run e sha fb fz δb βb δz βz → KScopeOverlapOneSidedJ10R Mc S run →
-      ChargeVF3j16OverlapJ10R Mc S run e κ Vmax →
-    ServiceFloorPerProver Mc S ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
-      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+    ServiceSoundOverlapJ10RPerProver Mc S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+      δb βb δz βz → KScopeOverlapOneSidedJ10R Mc S.toService run →
+      ChargeVF3j16OverlapJ10R Mc S.toService run e κ Vmax →
+    ServiceFloorPerProver Mc S.toService
+      ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
+      (breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
+
+/-- **The honest lemma of `StagedFloorKOneSidedJ10RPerProver`: its premises hold together.** As
+`StagedFloorPerProverHonest`, on one round of one call over one cell-block of J10-R's call design
+(`n = L = B = n' = 1`): some service, coin map and run map meet `ServiceSoundStagedJ10RPerProver` at the fork finders
+with zero break terms, `KScopeOneSidedJ10R` and `ChargeVF3j16J10R` at `κ = 1` in `funMachine`, while the verifier
+accepts the honest answer at every seed and refuses another at some seed. -/
+def StagedFloorJ10RPerProverHonest : Prop :=
+  ∀ (sha : Claims.Msg → Claims.Msg) (kz : ℕ), ∃ (S : HashedService) (e : S.Seed ≃ Paths (JStage 1 1 1 1 1) 1)
+    (run : JRunMap funMachine S.toService 1 1 1 1 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
+    ServiceSoundStagedJ10RPerProver funMachine S.toService run e sha (forkFinders S e sha 1)
+      (forkFinders S e sha kz) 0 0 0 0 ∧
+    KScopeOneSidedJ10R funMachine S.toService run ∧ ChargeVF3j16J10R funMachine S.toService run e 1 1 ∧
+    (∀ σ, S.verify c σ a = true) ∧ ∃ σ, S.verify c σ a' = false
+
+/-- **The honest lemma of `OverlapFloorKOneSidedJ10RPerProver`: its premises hold together.** As
+`StagedFloorJ10RPerProverHonest`, on one round of one call draw over one cell-block: some service, coin map and run map
+meet `ServiceSoundOverlapJ10RPerProver` at the fork finders with zero break terms, `KScopeOverlapOneSidedJ10R` and
+`ChargeVF3j16OverlapJ10R` at `κ = 1` in `funMachine`, while the verifier accepts the honest answer at every seed and
+refuses another at some seed. -/
+def OverlapFloorJ10RPerProverHonest : Prop :=
+  ∀ (sha : Claims.Msg → Claims.Msg) (kz : ℕ), ∃ (S : HashedService)
+    (e : S.Seed ≃ Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) fun _ => 1) 1)
+    (run : JORunMap funMachine S.toService 1 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
+    (c : S.Com) (a a' : S.Ans),
+    ServiceSoundOverlapJ10RPerProver funMachine S.toService run e sha (forkFinders S e sha 1)
+      (forkFinders S e sha kz) 0 0 0 0 ∧
+    KScopeOverlapOneSidedJ10R funMachine S.toService run ∧
+    ChargeVF3j16OverlapJ10R funMachine S.toService run e 1 1 ∧
+    (∀ σ, S.verify c σ a = true) ∧ ∃ σ, S.verify c σ a' = false
+
+/-- **The nontrivial lemma of the six floors per prover: their conclusion fails at a verifier that accepts
+everything.** For every service with its verifier's SHA-512 inputs whose verifier accepts every commitment, seed and
+answer, every coin map onto `R` rounds, every `sha` and `kz`, and every positive floor `F`, the conclusion
+`ServiceFloorPerProver` at `breakPr` with the floors' luck `2^{−40}` and zero break terms fails in the machine of
+functions at no cost: a constant adversary is accepted at every seed and charged nothing, below `F`, while its error is
+`2^{−40}`. Each floor per prover concludes `ServiceFloorPerProver` at that `breakPr`, at its own `F`. -/
+def FloorPerProverNontrivial : Prop :=
+  ∀ (S : HashedService) [Nonempty S.Com] [Nonempty S.Ans] (Ω : Type) (R : ℕ) (e : S.Seed ≃ Paths Ω R)
+    (sha : Claims.Msg → Claims.Msg) (kz : ℕ) (F : ℝ), (∀ c σ a, S.verify c σ a = true) → 0 < F →
+    ¬ ServiceFloorPerProver funMachine S.toService F
+      (breakPr sha (forkFinders (Mc := funMachine) S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ 0 0 0 0)
 
 end Pouw.Guarantees.RelativeSecurity

@@ -1,8 +1,8 @@
-"""The warden's cells as registered rows (`warden_rows`): an execution phase is a row a bucket whatever the load, each
-row is its bucket's cells in slot order, the wiring places each connection's cells where its client got them, each row
-opens the signed root at its position and only there, the registration reads back under the warden's key and session and
-the schedule, and refuses any field, key, session or certificate but its own, and the port reads only what the warden's
-wiring places."""
+"""The network certifier's cells as registered rows (`warden_rows`): an execution phase is a row a bucket whatever the
+load, each row is its bucket's cells in slot order, the wiring places each connection's cells where its client got them,
+each row opens the signed root at its position and only there, the registration reads back under the network certifier's
+key and session and the schedule, and refuses any field, key, session or certificate but its own, and the port reads
+only what the network certifier's wiring places."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from verity.ml.crypto import lms
 from verity.core.protocols.certifier import warden_rows as W
 from verity.core.protocols.certifier.active import DATA
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey
-from verity.core.protocols.certifier.grid import Reason, Record, Status
+from verity.core.protocols.certifier.grid import Reason, BlockGrid, Status
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import (B, EOF, P, PARAMS, cells, records,
                                                                                  request, run)
 from verity.core.protocols.certifier.warden import cell
@@ -60,9 +60,9 @@ def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
 
 def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traffic):
     """Connection q's cell k of the execution phase is at its row's slot `place` gives: the cells its client got that
-    window, in order. Ordinals count connections from 1 in the order they reached the warden (the wire's ingress
-    ordinal: the active certifier's `Requests` and the I/O tie's map number them so). A bucket's cells are sorted by
-    stream."""
+    window, in order. Ordinals count connections from 1 in the order they reached the network certifier (the wire's
+    ingress ordinal: the active certifier's `Requests` and the I/O tie's map number them so). A bucket's cells are
+    sorted by stream."""
     warden, clients = traffic
     seen, ordinals, shared = 0, set(), 0
     for record in records(warden)[1]:
@@ -323,6 +323,6 @@ def test_a_faulted_window_still_has_its_rows_and_its_wiring():
     cells before the fault, still the schedule's."""
     live = tuple(cell(DATA, q, bytes(P), B) for q in (0, 1) for _ in range(R))
     grid = (live,) * 3 + ((None,) * S,) * (T - 3)
-    record = Record("responses", 0, grid, Status(Reason.MONITOR_UNAVAILABLE))
+    record = BlockGrid("responses", 0, grid, Status(Reason.MONITOR_UNAVAILABLE))
     assert W.wiring(record, PARAMS).connections == ((0, 0, 3 * R), (1, 0, 3 * R))
     assert len(W.window_rows(record, PARAMS)) == T

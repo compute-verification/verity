@@ -54,11 +54,6 @@ PARTS = ((1, "a last IADD.64", ("ctl_add64_pre", "ctl_add64_live", "ctl_mnmx_fir
          (6, "IADD.64 and IMNMX.64 before the last instruction", ("ctl_add64_first", "ctl_mnmx_first")))
 
 
-def rotl(x: int, r: int) -> int:
-    r %= W
-    return ((x << r) | (x >> (W - r))) & MASK if r else x
-
-
 def points(seed: int):
     g = fx.lcg(seed)
     return [[next(g) for _ in range(NPT)] for _ in range(3)]

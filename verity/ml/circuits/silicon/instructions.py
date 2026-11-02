@@ -144,7 +144,7 @@ _H100_FP8 = (
     "veritor's `dataset` (H100 80GB HBM3, driver 580.126.09, triton 3.7.1): "
     "wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / SASS QGMMA.64x64x32.F32.E4M3.E4M3, 16 families, "
     "35,289 tiles x3 reps, 144,543,744 words, 0 mismatches against HOPPER_E4M3_K32; fit grid leaves groups=(32,) "
-    "and width=14 unique, floor only bounded to [-152, -126] -- replica verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json"
+    "and width=14 unique, floor only bounded to [-152, -126] -- replica verity/ml/circuits/silicon/captures/veritor-tc-fp8.json"
 )
 _H100_BF16 = (
     "veritor's `dataset` (H100, driver 580.178.04): wgmma.mma_async.sync.aligned.m64n128k16."

@@ -120,7 +120,7 @@ def rI (n : ℕ) : Interaction 1 1 2 (Fin n → Fin 3) (Fin 3) WAct (Obs 1 1 2) 
   snd z k _ := ⟨if h : k < n then z ⟨k, h⟩ else 0, 0, false⟩
 
 /-- A = 0: no timing advice, and the step's count is the ingress, which the operator sets from the last count. -/
-def zP (n : ℕ) : Program 1 2 (Fin 3) (Unit × ((β : Fin n) → Fin 1)) where
+def zP (n : ℕ) : EgressPrediction 1 2 (Fin 3) (Unit × ((β : Fin n) → Fin 1)) where
   rows t ins _ _ s := if t < n then (if (s : ℕ) < ((ins.getD t 0 : Fin 3) : ℕ) then some [true] else none) else none
 
 instance instDecidableAcceptedFinOfNatNatProdUnitForallZP (n k : ℕ) (op : ℕ → List (Obs 1 1 2) → Fin 3) (o : List (Obs 1 1 2)) (a : Unit × ((β : Fin n) → Fin 1)) :

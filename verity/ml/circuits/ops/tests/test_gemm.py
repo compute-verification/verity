@@ -23,7 +23,7 @@ from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.silicon.cast import f32_to_bf16_hw_word
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16
 
 GEMM_FIX = Path(__file__).parent / "fixtures" / "gemm-B1-b3eba618b1b5-20260907T1731Z"
 

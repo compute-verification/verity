@@ -19,8 +19,8 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampl
 def popBlocks (pop : Array (Array Slots.ProofBlock)) : List Slots.ProofBlock := pop.toList.flatMap (·.toList)
 
 theorem blocks_toList (pop ic : Array (Array Slots.ProofBlock)) :
-    (({ classes := #[pop, ic] } : Slots.Layout).blocks).toList = popBlocks pop ++ popBlocks ic := by
-  simp [Slots.Layout.blocks, popBlocks, List.flatten_append]
+    (({ classes := #[pop, ic] } : Slots.SlotOrder).blocks).toList = popBlocks pop ++ popBlocks ic := by
+  simp [Slots.SlotOrder.blocks, popBlocks, List.flatten_append]
   rfl
 
 /-- The population's units, slot by slot. -/
@@ -68,9 +68,9 @@ theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array
   · refine Finset.eq_empty_of_forall_notMem fun j hj => ?_
     have hjl : j < (popBlocks ic).length := Finset.mem_range.1 (window_subset _ _ _ hj)
     refine h _ ((mem_window hjl).1 hj) ((mem_checked _ _ _).2 ?_)
-    have hv : (popUnits S).length + j < ({ classes := #[pop, ic] } : Slots.Layout).blocks.size := by
+    have hv : (popUnits S).length + j < ({ classes := #[pop, ic] } : Slots.SlotOrder).blocks.size := by
       rw [← Array.length_toList, hbl, List.length_append]; omega
-    have hr : ({ classes := #[pop, ic] } : Slots.Layout).blocks[(popUnits S).length + j] = (popBlocks ic)[j] := by
+    have hr : ({ classes := #[pop, ic] } : Slots.SlotOrder).blocks[(popUnits S).length + j] = (popBlocks ic)[j] := by
       rw [← Array.getElem_toList, List.getElem_of_eq hbl, List.getElem_append_right (by omega)]
       congr 1; omega
     refine ⟨hv, ?_⟩
@@ -79,9 +79,9 @@ theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array
     have hvl : v < (popUnits S).length := Finset.mem_range.1 (window_subset _ _ _ hv)
     rw [mem_window hvl, zero_add] at hv
     refine h v hv ((mem_checked _ _ _).2 ?_)
-    have hvr : v < ({ classes := #[pop, ic] } : Slots.Layout).blocks.size := by
+    have hvr : v < ({ classes := #[pop, ic] } : Slots.SlotOrder).blocks.size := by
       rw [← Array.length_toList, hbl, List.length_append]; omega
-    have hr : ({ classes := #[pop, ic] } : Slots.Layout).blocks[v] = (popBlocks pop)[v] := by
+    have hr : ({ classes := #[pop, ic] } : Slots.SlotOrder).blocks[v] = (popBlocks pop)[v] := by
       rw [← Array.getElem_toList, List.getElem_of_eq hbl, List.getElem_append_left]
     have hunit : (popBlocks pop)[v].unit = some ((popUnits S).getD v 0) := by
       have := List.getElem_of_eq hu (by rw [List.length_map]; omega : v < ((popBlocks pop).map (·.unit)).length)

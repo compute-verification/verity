@@ -14,7 +14,7 @@ workload, the timing and its serving-alone controls, the gates and the arithmeti
   declares its operands (`NOISE`); filler-scorer/v3 reads it, with the facts of its own build, to pick the filler's
   certified-fraction entry (`scoring.filler_entry`). ``Filler.fold`` optionally declares its receipt's fold (`FOLDS`),
   which filler-scorer/v5 reads (`scoring.fold_reading`). Neither is part of the variant's run-time config (`config`).
-- ``placement(phase, B, L)``: where the filler runs beside serving at a suite point, a `Placement`. ``phase`` is
+- ``placement(phase, B, L)``: where the filler runs beside serving at a suite point, a `Colocation`. ``phase`` is
   ``"decode"`` (the decode step at batch B, context L) or ``"prefill"`` (the 32 layers of linears at M = B rows, L = 0).
   It is a pure function of the point: the same placement on every call, chosen before the run (desideratum 5's fixed work
   per round), never from the run's own measurements.
@@ -73,7 +73,7 @@ def config(filler: Filler | None) -> dict[str, str]:
 
 
 @dataclass(frozen=True)
-class Placement:
+class Colocation:
     place: str = "none"
     fill_sms: int = 0
 
@@ -86,7 +86,7 @@ class Placement:
             raise ArmError(f"only a split names filler SMs ({self.place} with {self.fill_sms})")
 
 
-NONE = Placement()
+NONE = Colocation()
 
 
 def _record_rules():
@@ -175,10 +175,10 @@ def check_arm(arm, *, record: bool = False) -> list[str]:
     return bad
 
 
-def placed(arm, phase: str, b: int, l: int) -> Placement:
+def placed(arm, phase: str, b: int, l: int) -> Colocation:
     p = arm.placement(phase, b, l)
-    if not isinstance(p, Placement):
-        raise ArmError(f"{arm.name}.placement({phase}, {b}, {l}) returned {p!r}, not a Placement")
+    if not isinstance(p, Colocation):
+        raise ArmError(f"{arm.name}.placement({phase}, {b}, {l}) returned {p!r}, not a Colocation")
     if p.place != "none" and arm.filler is None:
         raise ArmError(f"{arm.name} places a filler at {phase} {b}/{l} but has none")
     return p
@@ -238,7 +238,7 @@ class FillV1:
     def placement(self, phase, b, l):
         if phase == "prefill":
             return NONE
-        return Placement("split", point_lookup(FILL_V1_SPLIT, b, l))
+        return Colocation("split", point_lookup(FILL_V1_SPLIT, b, l))
 
 
 ARMS = {"idle": Idle, "fill-v1": FillV1}

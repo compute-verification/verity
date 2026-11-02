@@ -73,8 +73,8 @@ On each link:
 
 - **Constant rate, with a cap, left-packed (W4).**
   - Every bucket emits exactly r frames: `n_t = min(queue, r)` real frames in slots 0 … n_t − 1, in queue order, then
-    padding. The I/O tie reads the active warden's grid instead, each live connection's r slots of a bucket by
-    ordinal ("The I/O tie", (c)).
+    padding. The I/O tie reads the active network certifier's grid instead, each live connection's r slots of a bucket
+    by ordinal ("The I/O tie", (c)).
   - The **occupancy** is (n_0, …, n_{T−1}), the number of real frames per bucket.
   - A colluding receiver can tell padding from a real frame, so occupancy is the timing channel.
 - **FIFO, with the queue carried across windows.** The release count is Lean's `released`, and the grid Lean's `fill`.
@@ -285,7 +285,7 @@ frames' consistency with the served computation.
 ## A network certifier link (`service.WardenProfile`)
 
 Stated in Lean: `NetworkCheck.LinkWindow`'s network certifier form (`Kind.warden`), the plain proof block under the
-active warden's records, both ends at the network certifier's grid and parameters digest, with no sync read;
+active network certifier's records, both ends at the network certifier's grid and parameters digest, with no sync read;
 `service.WardenProfile` is the Python reference.
 
 ## A period, as onsite's communication component (`verity/certifier/v0`)
@@ -454,7 +454,7 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   it is closed.
 - **The target** reads a committed map inside the proof, bound to the advice's hiding root. The map is registered with
   the advice before the draw, as rows of `verity.ml.commitments.advice` (fixed-width bit rows under
-  `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Registration`), here 4 KiB rows: a window's 8N
+  `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: a window's 8N
   bytes of records and 4S a bucket of steps, at a window-aligned place in a link-day's map. The compile unit holds the
   map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The window reads its rows
   by a range read (each row's digest, hm96 leaf and `FrameV3Leaf`, the subtree's nodes once and the path above it): 12
@@ -500,8 +500,8 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   change in vLLM) makes it the identity and the charge zero.
 - **The order within a bucket.** W4 releases a bucket's frames in queue order, a channel of up to log2 n_t! bits a
   bucket that neither advice v0 nor the timing term charges. The active
-  warden (`warden`) instead gives each live connection r slots of every bucket, ranked by ordinal, its cells in
-  order, and a `PAD` on its stream where it has none. The map pins every slot, its stream, its kind and a data cell's
+  network certifier (`warden`) instead gives each live connection r slots of every bucket, ranked by ordinal, its cells
+  in order, and a `PAD` on its stream where it has none. The map pins every slot, its stream, its kind and a data cell's
   entry: of every order of a bucket's cells the tie accepts the network certifier's, so the order is a function of the
   admissions and the release buckets, which the advice already says and charges. The only orders the map leaves
   free swap byte-identical cells (a connection's pads, one request's repeated id in a bucket, the zero cells of
@@ -837,8 +837,9 @@ halt, and later windows are still checked.
 **One clock per spatial unit.** Every egress link of the unit reads the same sync in a window. The audit keeps each
 window's sync (`Audit.syncs`), set by the first egress link checked for that window. A link that declares a different
 sync for the window is an `advice` violation in that window, even if its sync is in Σ_sync. The reason is the bound:
-the accepted-runs bound charges one sync per window for all links. The advice of `SecurityProofs.EncardAccSeqsLeSync`
-is `Ac × (Fin W → Sync)`, so its 7 bits per window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
+the accepted-runs bound charges one sync per window for all links. The check's count of accepted runs
+(`Properties.NetworkCertifier.EncardAcceptedObservationsLe`) takes the advice `Ac × (Fin W → Σ_sync)`, so its 7 bits per
+window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
 would be advice of `#Σ_sync^(L·W)` over L egress links, L times the bits, and an audit that took each link's syncs on
 their own would accept it.
 
@@ -846,9 +847,12 @@ A declared sync outside Σ_sync, or other than the unit's, is an `advice` violat
 Program's grids are computed from each link's syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives
 a schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and
 earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
-carries forward (`SecurityProofs.ExpectedRowCausal`, for any clock-sync values, in the set or not). So a window before
-the violating one gets the same verdict whatever that window declared, and a later one is checked against the grid the
-declared advice gives it.
+carries forward, for any clock-sync values, in the set or not (`expected_grids`, held to it by
+`test_network_certifier_capacity.py`). So a window before the violating one gets the same verdict whatever sync that window
+gave, and a later one is checked against the grid its advice gives it. Lean states it of the check's grid
+(`Properties.NetworkCertifier.ExpectedGridCausal`): the grid `expectedGrid` gives a link's window `w` is the same under
+any two lists of syncs that agree on windows `0 … w`, whatever either declares after them, and the rest of the window's
+verdict reads only that window's records and syncs.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
@@ -877,12 +881,14 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Exactly M released | at most `binom(T + M − 1, M)` | `SecurityProofs.CardCountsEqLe` |
 | At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per sampling block | Proposition 2 |
-| Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRate` |
-| The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
-| The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
+| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | `Properties.NetworkCertifier.EncardAcceptedObservationsLe`, the reference's constant-rate Program as one execution block of the W windows |
+| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `Properties.NetworkCertifier.EncardProgramRunsLeWindows`, at the Program an accepted run is a run of (`Properties.NetworkCertifier.AcceptedRunsAreProgramRuns`); for the check's accepted runs, `Proofs.NetworkCertifier.encard_acceptedObservations_take_le` |
+| The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRate` |
+| The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
+| The reference schedule, per execution block | `k + g·T·log2 D` bits per execution block over any m whole execution blocks from block e₀ ((e₀ + m)·g·T ≤ E·g·T), given everything the run showed before block e₀: k bits under J | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
 | The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and a faulty set is one `RAcc δ` allows (in `M_δ`, no unit drawn `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
 | The network certifier (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network certifier's rows | for a decoder of the client's view, under `trusted-host`, `Claims.Sampling.KS` and `Commitment.Binds`, `SecurityProofs.PeriodLeakAccepted` |
-| A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
+| No advice, under J (D = 1) | 0 bits: one accepted sequence for the ingress | `SecurityProofs.EncardAccSeqsLeConstantRate` at k = 0 and D = 1 |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
 | Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
@@ -936,22 +942,37 @@ plus what survived that wipe. `capacity.k_share` expresses bits as a share of K,
 calibration report records the K it used.
 
 Every statement in the table's Lean column is a guarantee in `Security/lean-audit.json`, frozen as no-function: each is
-stated over the model, not the network check's code (`Security/Proofs/NetworkCertifier/README.md`, "The records"). Four
+stated over the model, not the network check's code (`Security/Proofs/NetworkCertifier/README.md`, "The records"). Three
 are the bounds `calibration.calibrate` reports: egress over a monitoring period
-(`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
-(`clock_sync.bits_per_window`, `SecurityProofs.EncardDecodableLeConstantRatePerWindow`), and ingress over a monitoring period (the
-K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and
-per sampling block (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`, whose interaction
-is any link's). The steps of their proofs are lemmas (`Security/Proofs/NetworkCertifier/Lemmas.lean`): proved and
-audited, with no record.
+(`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`), and ingress over a
+monitoring period (the K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`,
+`SecurityProofs.EncardIngressObsDecodableLe`) and per sampling block (`envelope_bits_per_window`,
+`SecurityProofs.EncardIngressObsDecodableLePerWindow`, whose interaction is any link's). Its egress per window
+(`clock_sync.bits_per_window`, `log2 #Σ_sync`, held by `test_network_certifier_calibration.py`) is the check's charge
+for each window opened, counted from the run's first window
+(`Properties.NetworkCertifier.EncardProgramRunsLeWindows`, a guarantee in `Security/Properties/lean-audit.json` stated
+over the network check's code, as the table's two rows of the check's accepted runs are). The steps of their proofs are lemmas
+(`Security/Proofs/NetworkCertifier/Lemmas.lean`): proved and audited, with no record.
 
-The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
-dataflow hypothesis: for every frame function, sync set and operator, over a monitoring period within the W windows with advice
-(n ≤ W·T), since those are the windows the audit checks. The clock-sync bound is 7 bits per window at 16 × 8 sync
-values, summed from the run's start (`SecurityProofs.EncardAccSeqsLeConstantRate`). Under J with one sync
-value it is 0 bits of timing (`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A monitoring period within the first m
-windows is charged only those m windows (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`), and a decoder of the
-wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`).
+The egress bounds are proved in Lean for `constantRate`, the reference Program of `schedule`: E
+execution blocks of g·T buckets, each block's frames sent at the ticks its own k advice bits and the ingress give, and
+the FIFO restarting empty at each block's start. They hold with no dataflow hypothesis, for every frame function and
+operator, over a monitoring period within the E execution blocks with advice (n ≤ E·g·T), since those are the blocks
+the audit checks. The bound is k bits per execution block, summed from the run's start
+(`SecurityProofs.EncardAccSeqsLeConstantRate`). A monitoring period within the first m execution blocks is charged only
+those m (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`), and a decoder of the wire recovers no more
+(`SecurityProofs.EncardDecodableLeConstantRate`). The check, which reads one clock sync per window, is that Program as
+one execution block of its W windows, with the send ticks the program computes from the syncs: its accepted runs
+number at most `#Ac · #Σ_sync^W · D^(W·T)` (`Properties.NetworkCertifier.EncardAcceptedObservationsLe`), 7 bits per
+window at 16 × 8 sync values. At one execution block the reference's forms over the first m blocks and per block give
+nothing finer, so the check's bound over its first m windows comes from the program instead: a window's sync moves no
+hand tick before the window's start (`Properties.NetworkCertifier.ExpectedGridCausal`), so the first m windows' rows
+read only the content advice and those windows' syncs, and the Program's sequences over them number at most
+`#Ac · #Σ_sync^min(W, m) · D^(m·T)` (`Properties.NetworkCertifier.EncardProgramRunsLeWindows`); the check's accepted
+runs' first m ≤ W windows are among them (`Proofs.NetworkCertifier.encard_acceptedObservations_take_le`). The per-block
+form, a window's bits given everything the run showed before it, has no Lean statement for the check and need not hold
+of it: the queue and the hand ticks carry from one window into the next, so the run shown before a window need not fix
+the rows the window's sync gives.
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
@@ -1101,8 +1122,8 @@ Each assumption, and what breaks without it:
     re-encodes a round.
   - Each window's part is self-delimiting, and the windows' charges sum to the whole encoding.
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
-    windows' charges bound the first m windows, which the per-window form needs, as `ExpectedRowCausal` gives it for
-    the syncs. A prefill step that releases nothing is still charged.
+    windows' charges bound the first m windows, which the per-window form needs, as `expected_grids` gives it for the
+    syncs (`Properties.NetworkCertifier.ExpectedGridCausal`). A prefill step that releases nothing is still charged.
 - **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (D = 1
   is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
@@ -1154,8 +1175,8 @@ ReplayStep_v1's state input and next-state output, bit for bit, at the shape's A
 with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It adds
 the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at most
 Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
-Q×1` after `q_O`, as the step's `arr_cap` and the warden slots' `a_cap`. In every row the valid elements of each
-group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
+Q×1` after `q_O`, as the step's `arr_cap` and the network certifier slots' `a_cap`. In every row the valid elements of
+each group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
 
 **A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
 window's and its own. Proof block 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Proof block u ≥ 1 is
@@ -1286,7 +1307,7 @@ the order is the topological one that:
 - takes the earliest in release order where the rows leave a choice, so an order the schedule never shows costs
   nothing.
 
-**Sent**, as v1's windows (`window_charge.Window`), and nothing else:
+**Sent**, as v1's windows (`window_charge.Advice`), and nothing else:
 - *The decisions*, one per open step: whether the next request had arrived.
 - *The order.* The engine admits in the API server's body-read order, which comes after the release and overtakes it
   under load: requests overtake each other by length, and the HTTP layer reorders on top. v1 sends the permutation
@@ -1833,7 +1854,8 @@ sealed under an AEAD built from SHA-512 alone.
 - **Keys.** There is one secret S per certifier pair per session: 64 bytes of one certifier host's own randomness
   (`fresh_pair_secret`), sampled again for each new session σ.
   - SHA-512 alone gives no key agreement, so S reaches the pair's other certifier host the way the certifier's keys and
-    run id reach their consumers: through the auditor's deployment channel.
+    run id reach their consumers: through the auditor's deployment channel. ML-KEM-1024, the transport exception to
+    the one-hash rule, never runs on pair links.
   - S and its keys live only in the two certifier processes and on their hosts, never in a record, a log or the
     prover's configuration.
   - They are protocol keys, which seal frames, not access keys.
@@ -1881,11 +1903,12 @@ side is `expected_grids`, `check_link`'s verdicts with the first differing bucke
 prefix's acceptance. `lean/scripts/difftest_vectors.py` writes the instances and this package's results, and the Lean
 audit runs `lean/NetworkCertifier/DifftestMain.lean` on them (`runs` in `lean/lean-audit.json`).
 `test_network_certifier_lean_difftest.py` checks that the data the record pins is still this package's. The program's
-definitions are List forms of `NetTiming`'s `Finset` ones, and four guarantees prove them equal on everything the
-difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow`, `CodeAcceptedConstantRate`,
-`CodeStatusComplete` and `CodeSyncSet`.
+definitions are List forms of `NetTiming`'s `Finset` ones, and three theorems prove them equal on everything the
+difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow` (the reference's row of the program's frames,
+sent at the program's hand ticks), `CodeAcceptedConstantRate` (the program's `Accepted` is the reference's, one
+execution block of the W windows, whose advice names each sync's δ and ρ) and `CodeStatusComplete`.
 
-## The active warden (`warden`)
+## The active network certifier (`warden`)
 
 The wire is client ↔ network certifier ↔ server, with the network certifier responsible only for limiting network steganography and
 certifying exactly the bits it sees. So the network certifier knows bytes only: nothing in it belongs to vLLM
@@ -2010,10 +2033,10 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   wiring refused; (4) the consuming proof blocks read V′, the wiring is no longer opened, and this gap closes. The I/O
   tie, which reads every row of the window in order, needs no wiring.
 - A record's certificate signs certificate v2's SHA-512 frame leaves, one per cell. The same cells are also committed
-  as v3's hm96 rows, a row a bucket (8·B transfer gates a cell), under a root the network certifier signs ("The warden's cells as
-  rows").
+  as v3's hm96 rows, a row a bucket (8·B transfer gates a cell), under a root the network certifier signs ("The network
+  certifier's cells as rows").
 
-## The warden's cells as rows (`warden_rows`)
+## The network certifier's cells as rows (`warden_rows`)
 
 Design v3 makes the transfer gates the cells' bits: the sender's proof block opens a cell's row as an output and the
 receiver's opens the same row as an input, under a root the network certifier signs, through the Lean verifier's registered

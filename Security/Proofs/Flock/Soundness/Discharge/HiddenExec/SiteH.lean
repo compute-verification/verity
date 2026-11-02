@@ -19,11 +19,11 @@ set_option Elab.async false
 * `copy_siteH`: a stacked unit input whose Δ key is message bit `bit` of byte `byte` of row `q` holds the witness's bit
   at that message column (`copyPos_blockH`, `Aliased.copyPos_key` at the flat twin);
 * `out_copyH`: copy `u'`'s output `j`, bit `t` holds the witness's bit at output row `nIn + jo`'s message column for its
-  bit `16 k + t`, where the copy's output word is word `k` of output port `jo` (`Hidden.Any.msg_copyF`, `outCol_leaf`);
+  bit `16 k + t`, where the copy's output word is word `k` of output port `jo`, an output port with a row (`Hidden.Any.msg_copyP`, `outCol_leaf`);
 * `bc_site_colH`, `bc_site_commitH`: the `b ‖ c` at row `p`'s `hm96` output is the commit string of the bytes the row
   hashes (`Hidden.Any.rowMsg`: its own prefix and the bytes at its message columns, or `RowSeg.enc` of them), under the
-  salt at `saltCol` (`Hidden.Any.sat_flatF`, `Hidden.Any.row_bc_tgtS`), at rows each fit or `sha512/row-seg/v1`
-  (`Hidden.Any.RowsFitS`).
+  salt at `saltCol` (`Hidden.Any.sat_flatP`, `Hidden.Any.row_bc_tgtS`), at rows each fit or `sha512/row-seg/v1`
+  (`Hidden.Any.RowsFitP`).
 -/
 
 namespace FlockSoundness.Discharge.HiddenExec
@@ -62,8 +62,8 @@ theorem outNetU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (ho : c.ou
   obtain ⟨nets, rfl⟩ := a.stmt_eq hce
   exact ho
 
-theorem rowsFitU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (hrf : Hidden.Any.RowsFitS c) :
-    Hidden.Any.RowsFitS a.st.c := by
+theorem rowsFitU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (hrf : Hidden.Any.RowsFitP c) :
+    Hidden.Any.RowsFitP a.st.c := by
   obtain ⟨nets, rfl⟩ := a.stmt_eq hce
   exact hrf
 
@@ -196,9 +196,10 @@ statement whose statement circuit (`HmOut.unrolled` of its committed one) is `c`
 whose rows are covered (`hrf`), at block `o` and template instance `g`, copy `u'`'s logical computed column
 `outCol j t` of `c` (its output `j`, bit `t`) holds the witness's bit at output row `nIn + jo`'s message column for bit
 `16 k + t` (`Typed.msgCol`, byte `(16 k + t) / 8`, bit `(16 k + t) % 8`), where the copy's output word `lo[j]` is word
-`k` of output port `jo`. The committed column is `upos` of the logical one (`Hidden.outCol_commit16`). -/
+`k` of output port `jo`, an output port with a row (`hjr`). The committed column is `upos` of the logical one
+(`Hidden.outCol_commit16`). -/
 theorem out_copyH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c)
-    (ho : c.outNet = c.unitNet) (hrf : Hidden.Any.RowsFitS c)
+    (ho : c.outNet = c.unitNet) (hrf : Hidden.Any.RowsFitP c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
     {u' j t : ℕ} (hu' : u' < c.upv) (hj : j < (c.leavesOut.getD u' #[]).size) (ht : t < 16)
     (h1 : (unitRows a.st a.L.unit_built).nIn ≤ Layout.outCol c j t)
@@ -206,7 +207,7 @@ theorem out_copyH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.
     (hx : x.val = c.upv * (unitRows a.st a.L.unit_built).nIn +
       (u' * ((unitRows a.st a.L.unit_built).nComp + 1) + (1 + (Layout.outCol c j t -
         (unitRows a.st a.L.unit_built).nIn))))
-    {jo k : ℕ} (hjo : jo < c.outPorts.size) (hk : k < (c.outPorts.getD jo default).2)
+    {jo k : ℕ} (hjo : jo < c.outPorts.size) (hjr : jo < c.outRowPorts.size) (hk : k < (c.outPorts.getD jo default).2)
     (hw : Hidden.outAt c jo + k = (c.leavesOut.getD u' #[])[j]) :
     T.block z o (a.col hg x) =
       z (siteAddrH a o (Typed.msgCol a.st.c g (HmOut.nIn c + jo) ((16 * k + t) / 8) ((16 * k + t) % 8))) := by
@@ -216,8 +217,9 @@ theorem out_copyH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.
   have hu0 : u' < a.st.c.upv := hu'
   have hj0 : j < (a.st.c.leavesOut.getD u' #[]).size := hj
   have ho0 : a.st.c.outNet = a.st.c.unitNet := ho
-  have hrf0 : Hidden.Any.RowsFitS a.st.c := hrf
+  have hrf0 : Hidden.Any.RowsFitP a.st.c := hrf
   have hjo0 : jo < a.st.c.outPorts.size := hjo
+  have hjr0 : jo < a.st.c.outRowPorts.size := hjr
   have hk0 : k < (a.st.c.outPorts.getD jo default).2 := hk
   have hw0 : Hidden.outAt a.st.c jo + k = (a.st.c.leavesOut.getD u' #[])[j]'hj0 := hw
   have hnIn : HmOut.nIn { a.st.c with nets := nets, tmpl := none } = HmOut.nIn a.st.c := rfl
@@ -232,15 +234,15 @@ theorem out_copyH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.
   rw [he] at hoc
   have hcol := col_val_compH a hg x hu0 h1 h2 hx
   rw [← hoc] at hcol
-  have hin := Hidden.Committed.msgCol_lt a.ht a.committed hg (hrf0.1.2 jo hjo0).1 (2 * k + t / 8) (t % 8)
+  have hin := Hidden.Committed.msgCol_lt a.ht a.committed hg (hrf0.1.2 jo hjr0).1 (2 * k + t / 8) (t % 8)
     (Nat.mod_lt _ (by norm_num))
   have hs := a.h.self
   have L0 := a.flatLayout
   have F0 := a.unitFacts
-  clear hw hk hjo hrf ho hj hu' hx h2 h1 hoc hce
+  clear hw hk hjo hjr hrf ho hj hu' hx h2 h1 hoc hce
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht', h, L, hR, regs, hT⟩ := a
   subst hT
-  dsimp only at hg x hu0 hj0 ho0 hrf0 hjo0 hk0 hw0 hcol hty hls hcr h16 hlo hget hin hs L0 F0 ⊢
+  dsimp only at hg x hu0 hj0 ho0 hrf0 hjo0 hjr0 hk0 hw0 hcol hty hls hcr h16 hlo hget hin hs L0 F0 ⊢
   have C := check_facts hty hls
   have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hrows := hrf0.1
@@ -250,16 +252,16 @@ theorem out_copyH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.
     (fun u hu o' ho' => by rw [hget u hu] at ho'; exact (hlo u hu).2 o' ho')
     h16 (fun u hu => by rw [hget u hu]; exact (hlo u hu).1) hpv g hu0 hj0
   have hkw : k < (st.c.ports.getD (HmOut.nIn st.c + jo) default).words :=
-    lt_of_lt_of_le hk0 (checkRows_words hcr hrows.1 hrf0.bits16 hjo0)
+    lt_of_lt_of_le hk0 (checkRows_wordsN hcr hrows.1 hrf0.bits16 hjr0 hjo0)
   have hsrc : Hidden.outSrc st.c g jo k t = st.c.unitRange.slot (g * st.c.upv + u') + Layout.outCol st.c j t := by
     unfold Hidden.outSrc
-    rw [Hidden.outGroup_single hrows.1 hjo0]
+    rw [Hidden.outGroup_singleN hrows.1 hjr0 hjo0]
     dsimp only
     simp only [hk0, ↓reduceIte]
     rw [hw0, hleaf]
     unfold Layout.outCol
     omega
-  have hmc := Hidden.Any.msg_copyF L L0 F0 hda hrows hz o hg hjo0 hkw ht
+  have hmc := Hidden.Any.msg_copyP L L0 F0 hda hrows hz o hg hjr0 hkw ht
   have hb : (16 * k + t) / 8 = 2 * k + t / 8 := by omega
   have hb8 : (16 * k + t) % 8 = t % 8 := by omega
   refine bit_inj _ _ ?_
@@ -268,9 +270,9 @@ theorem out_copyH (a : AcceptedH T) {c : Flock.Circuit} (hce : HmOut.unrolled a.
 
 /-! ## The rows' `b ‖ c` at a site -/
 
-/-- `Hidden.Any.row_bc_tgtS` in an accepted statement `T`, through its flat twin (`Hidden.Any.sat_flatF`). -/
+/-- `Hidden.Any.row_bc_tgtS` in an accepted statement `T`, through its flat twin (`Hidden.Any.sat_flatP`). -/
 theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
-    (hrf : Hidden.Any.RowsFitS a.st.c)
+    (hrf : Hidden.Any.RowsFitP a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     bytesOf (blockBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
@@ -283,7 +285,7 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
   have L0 := h.flatLayout ht
   have F0 := h.unitFacts ht
   have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
-  have hz0 := Hidden.Any.sat_flatF L L0 F0 hda hrf.1 hz
+  have hz0 := Hidden.Any.sat_flatP L L0 F0 hda hrf.1 hz
   exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv (hz0.ex _) o hg hp (hrf.kind hp)
 
 /-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement with a unit per VU
@@ -291,7 +293,7 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
 128 bytes at the `hm96` slot's output (`bcCol`) are the commit string of the bytes the row hashes for the `2 · words`
 bytes at its message columns (`Typed.msgCol`, `Hidden.Any.rowMsg`), under the 192 bytes at `saltCol`. -/
 theorem bc_site_colH (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
-    (hrf : Hidden.Any.RowsFitS a.st.c)
+    (hrf : Hidden.Any.RowsFitP a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (bcCol a.st.c g p j.val t.val)) =
@@ -308,7 +310,7 @@ theorem bc_site_colH (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
 
 /-- `bc_site_colH` at the address the regions pin (`Layout.bcAddr`). -/
 theorem bc_site_commitH (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
-    (hrf : Hidden.Any.RowsFitS a.st.c)
+    (hrf : Hidden.Any.RowsFitP a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (Layout.bcAddr a.st.c g p j.val t.val)) =

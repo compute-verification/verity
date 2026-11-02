@@ -7,6 +7,7 @@
                  (--verifier CMD | --connect HOST:PORT | --party CMD --party-host HOST)
                  [--windows 2] [--passes 2] [--samples 1024] [--window-s 1] [--deadline-s 1]
                  [--skip-layer L | --cache] [--expect accept|reject] [--device cuda] [--ref-decode]
+                 [--case-dir DIR [--case-exe EXE]]
 
 **The plan.** A pass reads the units of the registration's plan (`p2_party.plan_of`), which the verifier holds and sends
 with it: `tensor_plan`, the units holding a tensor's block, so not the store's padding past the last tensor (it is
@@ -15,7 +16,7 @@ PoUS's, and the decode never reads it). `registration --layout` writes it into t
 **The step.** Each pass of the session is one engine step's weight reads: every tensor of the store, in block order, from
 its segment files onto the device (`full.Segments`, kernels' reader) and through kernels' staging decode
 (`stage.decode_matrix`) into a staging buffer, as a forward step reads them. The decode reads each chunk's rows from
-`stage.Store.decode_rows`, whose attached sketch (`store.sketch`, `Sketch.read`) sketches those same device rows under
+`stage.EncodedRows.decode_rows`, whose attached sketch (`store.sketch`, `Sketch.read`) sketches those same device rows under
 the pass's seed just before they go to the decode kernel (`Sketch.add`: π of each block by an exact int8 matmul against its four offsets' signs, summed into
 its unit's σ), so the receipts are of the bytes the decode read. Blocks of no tensor up to the plan's last unit (the
 head's last unit's tail) are read and sketched alone, so every unit of the plan is covered. Then y = SHA512(prefix ‖
@@ -35,6 +36,13 @@ the line `BW VERDICT ...`. `--skip-layer L` is a cheat: it neither reads nor dec
 receipts of the units they hold are from what was read, so a draw that lands there is rejected (`receipt`). `--cache`
 is another: every pass after the session's first reads nothing of the store and replays the first pass's σ from its
 cache under the pass's seed, so a draw of a later pass is rejected (`receipt`).
+
+**The case.** The verifier sends the session's core case before its answer (`p2_party`'s `{"case": ...}`, `p2_case`):
+`--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
+answer `RemoteAudit.P2Protocol`'s with `--case-exe` (`remote-audit-p2-protocol`), else `p2_case.answer`'s. The case
+holds the store's opened blocks and the verifier's coins, so DIR is private and never under OUT: `session.json` says
+only where it went, its commitment's digest, its store and its verdict. A session the verifier refused, or one that
+ended in the prover's error, writes none.
 
 `--ref-decode` swaps the library for P2's reference decode on the CPU (`RefDecode`), for the toy.
 """
@@ -69,7 +77,7 @@ sys.path.insert(0, str(STAGE))
 from verity.core.protocols.pous import verifier as V
 from verity.core.protocols.pous.labels import salt_value, tag
 from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
+from verity.core.protocols.remote_bandwidth import coins, p2, p2_case, p2_party, receipts
 from verity.ml.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
@@ -201,7 +209,7 @@ def receipts_of(torch: Any, seed: bytes, sigma: Any, first: int = 0, chunk: int 
 class Sketch:
     """One pass's σ of every unit, `units` of them, on `device`: `add(rows, j0)` sketches the device rows of blocks
     `j0 ..` ([n, 2056] uint8, as stored) into their units' σ, each block's π against its offset's sign columns, and
-    `read` is `stage.Store.decode_rows`'s hook to it; `seen` counts each unit's blocks sketched, four when the pass
+    `read` is `stage.EncodedRows.decode_rows`'s hook to it; `seen` counts each unit's blocks sketched, four when the pass
     covered it."""
 
     def __init__(self, torch: Any, seed: bytes, rows: int, units: int, device: Any) -> None:
@@ -507,7 +515,7 @@ class Engine:
                         sk.add(rows[j0 - p.blocks.start:j0 - p.blocks.start + self.chunk], j0)
                 else:
                     t = p.tensor
-                    store = S.Store(self.lay, rows, t.first_block, self.lib, chunk=self.chunk)
+                    store = S.EncodedRows(self.lay, rows, t.first_block, self.lib, chunk=self.chunk)
                     store.sketch = sk
                     w = torch.empty(t.n, t.k, dtype=torch.int8, device=self.device)
                     S.decode_matrix(store, t.layer, t.name, w)
@@ -540,6 +548,10 @@ class Prover:
         self.steps: list[dict] = []
         self.opened: list[dict] = []
         self.received: dict[int, coins.Released] = {}
+        self.kept: dict | None = None
+
+    def case(self, doc: dict) -> None:
+        self.kept = doc
 
     def hold(self, registration: dict) -> None:
         if p2_party.registration_of(registration) != self.registration:
@@ -779,6 +791,14 @@ def session(a: argparse.Namespace) -> int:
             log(json.dumps({"prover_error": traceback.format_exc()}))
             answer = {"verdict": "prover-error", "reason": f"{type(e).__name__}: {e}"}
         wall = time.perf_counter() - t1
+        case = None
+        if a.case_dir is not None and prover.kept is not None and answer.get("verdict") in ("accept", "reject",
+                                                                                           "undecided"):
+            judged = p2_case.judged(prover.kept, answer, a.case_exe)
+            p2_case.write(a.case_dir, prover.kept, judged)
+            case = {"dir": str(a.case_dir), "commitment": judged["commitment"], "store_root": prover.kept["store_root"],
+                    "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "python"}
+            log(json.dumps({"case": case}))
     if pool is not None:
         pool.shutdown()
     if a.party is not None and record is None and answer.get("verdict") != "prover-error":
@@ -789,7 +809,8 @@ def session(a: argparse.Namespace) -> int:
            "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
            "verifier_rc": rc, "verifier": verifier, "verifier_record": record, "prover_host": socket.gethostname(),
-           "skip_layer": a.skip_layer, "cache": a.cache, "store": str(a.store), "device": a.device, "verdict_line": line}
+           "skip_layer": a.skip_layer, "cache": a.cache, "store": str(a.store), "device": a.device, "verdict_line": line,
+           "case": case}
     (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(line, flush=True)
     return 0 if line.endswith("PASS") else 1
@@ -831,7 +852,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--chunk", type=int, default=1 << 16)
     s.add_argument("--readers", type=int, default=6)
     s.add_argument("--workers", type=int, default=max(1, min(12, (os.cpu_count() or 2) - 2)))
+    s.add_argument("--case-dir", type=Path, help="the private directory the session's core case and its answer go to")
+    s.add_argument("--case-exe", help="remote-audit-p2-protocol, which answers the case (else p2_case.answer)")
     a = ap.parse_args(argv)
+    if a.command == "session" and a.case_dir is not None and a.case_dir.resolve().is_relative_to(a.out.resolve()):
+        raise SystemExit("--case-dir is private: it can't be under --out")
     if a.command == "toy":
         reg = toy(a.out)
         print(json.dumps({"registration": reg.digest.hex(), "units": reg.blocks, "out": str(a.out)}))

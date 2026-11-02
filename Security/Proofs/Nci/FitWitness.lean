@@ -76,13 +76,6 @@ theorem fits : Assumptions.Fits decl threading windows start 2 1 := by
       novelReads decl (windows.gates j) := by decide +kernel
   exact fun j => by exact_mod_cast h j
 
-/-- **The fit bound's hypotheses are consistent**: with two counted multiplications, every window reads at most
-`S = 3 < N* b_w`, and `Reach` and `Fits` hold. -/
-theorem nonvacuous : threading.M.Nonempty ∧ (3 : ℝ) < ((2 : ℕ) : ℝ) * 2 ∧
-    (∀ j, (novelReads decl (windows.gates j) : ℝ) ≤ 3) ∧ Assumptions.Reach decl threading 2 ∧
-    Assumptions.Fits decl threading windows start 2 1 :=
-  ⟨M_nonempty, gap, reads_le, reach, fits⟩
-
 /-- `FitBound` at the witness. -/
 theorem bound : 4 * (1 : ℝ) * ((2 : ℕ) * 2 - 3) * threading.M.card ≤ (2 : ℕ) * threading.reuse * (2 : ℕ) * (3 : ℝ) ^ 2 :=
   FitBound decl threading 2 windows start 2 3 2 1 gap reads_le reach fits

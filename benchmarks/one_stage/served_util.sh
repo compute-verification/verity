@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # The whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B prefill mix, one arm a run, measured
 # on the GPU by Nsight Systems' GPU metrics (Tensor Active, 10 kHz) over the engine's steady state; `served_util.py` reads
-# the profile and the server's step trace.  cwd: the source tree's root; the node holds the venv, the B4 row's Build and the
-# taps under UTIL_ROOT.
+# the profile and the server's step trace.  cwd: the source tree's root; the node holds the venv, the B4 row's traced Build
+# (ROW, which names the row, ROW_ID) and the taps under UTIL_ROOT. Every arm but graphs and async serves under the row's Build
+# of record (`serve_row.row_refusal`), which `verity-vllm predict row` writes into PRED (the run's scratch) on the CPU
+# before the lease.
 #
 # The mix: N requests of exactly 1,024 prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py --varied N
 # --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with T/1024 requests a step and a window
@@ -23,9 +25,10 @@
 #           row, as graphs: not the served stack either (the B4 row's Build declares synchronous scheduling), so util.json's
 #           served_stack is false for both
 # ASYNC=1 serves a Commit arm (noseal, seal, h1) with --async-scheduling, in a tree whose serve-openai takes it with the
-# Commit on (its `serve_row` module). No bench row's Build declares async scheduling yet, so serve-openai's row check (`serve_row.of`) takes
-# the row whichever scheduler it declares, as `tests/pipeline/serve_async_commit_gpu.py` does: its records attest the row's
-# LAG 0 Programs, so the arm is <arm>-async and not the served stack. SEQS defaults to 2·T/1024, as for async.
+# Commit on (its `serve_row` module), as <arm>-async; SEQS defaults to 2·T/1024, as for async. With a ROW whose Build
+# declares async scheduling (LAG 1), serve-openai's row check (`serve_row.of`) holds the engine to it and the arm is the
+# served stack. With a row that declares sync (B4's), the check is bypassed, as `tests/pipeline/serve_async_commit_gpu.py`
+# does: its records attest the row's LAG 0 Programs, so the arm is not the served stack.
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
@@ -56,13 +59,13 @@ LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
 VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
-ROW=${ROW:-$(dirname "$(find "$ROOT" -maxdepth 3 -path '*__b4__i256__*' -name manifest.json | sort | tail -1)")}
+ROW=${ROW:-$(dirname "$(find "$ROOT" -maxdepth 3 -path '*__b4__i256__*' -name manifest.json | sort | tail -1)")} ROW_ID=${ROW_ID:-${ROW##*/}}
 HIDDEN_SO=${HIDDEN_SO:-$ROOT/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
-SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve
+SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve; PRED=${PRED:-$SCR/predicted}
 PORT=${PORT:-18190}
-export TREE ARM LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
+export TREE ARM LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NORM_TAP_SO NSYS SCR D PRED PORT OUT
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
@@ -75,6 +78,15 @@ if [ "${1:-}" != leased ]; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
   fi
   mkdir -p "$D"
+  if [ "$ARM" != graphs ] && [ "$ARM" != async ]; then
+    (cd "$TREE/integrations/vllm" && HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
+      PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src \
+      "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
+    prc=$?
+    [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
+      || { say "PREDICT-ROW $ROW_ID refused (exit $prc): $(grep -v '^\[predict\]' "$OUT/predict_row.err" | tail -2 | cut -c1-600)"; exit 3; }
+    say "PREDICT-ROW $ROW_ID into $PRED: $(cut -c1-300 "$OUT/predict_row.json")"
+  fi
   if [ "$ARM" = h1 ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
@@ -120,10 +132,10 @@ nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.gra
 args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
       --admit arrival --window-requests "$SEQS" --max-num-seqs "$SEQS"
       --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
-[ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$ROW/manifest.json")
+[ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$PRED/manifest.json")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
-commit=(--scheme rows-sha512 --gpu-tree --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
+commit=(--scheme rows-sha512 --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
         --window-gb 32 --seal-hold-gb "${SEAL_HOLD_GB:-32}" --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
 serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
 case $ARM in
@@ -149,11 +161,15 @@ if [ "${ASYNC:-0}" = 1 ]; then
   serve=("$PY" -c 'import json, sys
 from pathlib import Path
 from verity_vllm.pipeline import cli, serve_row as RW, serve_seal as SS
+checked = RW.of
 def of(opts):
     if not opts.required_manifest:
         return None
     path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
     got = json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"]
+    if got is True:
+        print(f"UTIL the row declares async_scheduling true: serve_row checks it ({path})", flush=True)
+        return checked(opts)
     print(f"UTIL row scheduler check bypassed (not the served stack): the row declares async_scheduling {got}", flush=True)
     return {"async_scheduling": got, "source": str(path)}
 RW.of = of

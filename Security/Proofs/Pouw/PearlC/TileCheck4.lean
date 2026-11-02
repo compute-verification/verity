@@ -160,13 +160,13 @@ section Whole4
 variable (M K N TM TN : ℕ)
 
 /-- `whole4`'s RowB block. -/
-def blockB4 : Block := ⟨(row4B K).spec ops, rowIn K true, N, portB8 M N K⟩
+def blockB4 : BlockKind := ⟨(row4B K).spec ops, rowIn K true, N, portB8 M N K⟩
 
 /-- `whole4`'s RowA block. -/
-def blockA4 : Block := ⟨(row4A K).spec ops, rowIn K false, M, portA8 M N K⟩
+def blockA4 : BlockKind := ⟨(row4A K).spec ops, rowIn K false, M, portA8 M N K⟩
 
 /-- `whole4`'s tile block. -/
-def blockT4 : Block := ⟨tile4Spec K TM TN, tile4In K TM TN, M / TM * (N / TN), portT4 M N K TM TN⟩
+def blockT4 : BlockKind := ⟨tile4Spec K TM TN, tile4In K TM TN, M / TM * (N / TN), portT4 M N K TM TN⟩
 
 theorem whole4_B : (whole4 ops M K N TM TN).blocks =
     [] ++ blockB4 ops M K N :: [blockA4 ops M K N, blockT4 M K N TM TN] := rfl
@@ -179,22 +179,22 @@ theorem whole4_T : (whole4 ops M K N TM TN).blocks =
 
 theorem rowB4_eq (j a : ℕ) : rowB4 M N K j a = (whole4 ops M K N TM TN).nIn + blocksLen [] +
     j * (blockB4 ops M K N).len + (a - (blockB4 ops M K N).nIn) := by
-  simp only [rowB4, whole4, blocksLen, Block.len, blockB4, Rows.spec, add_zero]
+  simp only [rowB4, whole4, blocksLen, BlockKind.len, blockB4, Rows.spec, add_zero]
 
 theorem rowA4_eq (i a : ℕ) : rowA4 M N K i a = (whole4 ops M K N TM TN).nIn + blocksLen [blockB4 ops M K N] +
     i * (blockA4 ops M K N).len + (a - (blockA4 ops M K N).nIn) := by
-  simp only [rowA4, whole4, blocksLen, Block.len, blockB4, blockA4, Rows.spec, add_zero]
+  simp only [rowA4, whole4, blocksLen, BlockKind.len, blockB4, blockA4, Rows.spec, add_zero]
 
 theorem tile4_eq (e a : ℕ) : tile4 M N K TM TN e a = (whole4 ops M K N TM TN).nIn +
     blocksLen [blockB4 ops M K N, blockA4 ops M K N] + e * (blockT4 M K N TM TN).len +
       (a - (blockT4 M K N TM TN).nIn) := by
-  simp only [tile4, tiles4, blocksLen, Block.len, blockB4, blockA4, blockT4, whole4, add_zero, Nat.add_assoc]
+  simp only [tile4, tiles4, blocksLen, BlockKind.len, blockB4, blockA4, blockT4, whole4, add_zero, Nat.add_assoc]
   rfl
 
 theorem whole4_N : (whole4 ops M K N TM TN).spec.toCircuit.N = in8 M N K + N * ((row4B K).N - rowIn K true) +
     M * ((row4A K).N - rowIn K false) + M / TM * (N / TN) * (tile4N K TM TN - tile4In K TM TN) := by
   show in8 M N K + blocksLen _ = _
-  simp only [blocksLen, Block.len, whole4, add_zero, Nat.add_assoc]
+  simp only [blocksLen, BlockKind.len, whole4, add_zero, Nat.add_assoc]
   rfl
 
 /-! ### Inputs -/

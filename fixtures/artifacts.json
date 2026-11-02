@@ -1,12 +1,12 @@
 {
-  "art:4f8e9ff844325c68da26ead9d9f9f85f2859d8a7470829fa2541ada1d9109801": "verity/ml/circuits/silicon/hawkeye/PIN.json",
+  "art:8c365eeb9f120a3c3febf052ee7cfa2a88e4f1e87e7c4d0444552a77da5754ea": "verity/ml/circuits/silicon/hawkeye/PIN.json",
   "art:cf4699436015c096941a361160b5bcb570d02d469ad014988e99aeab0fb022c8": "verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
   "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": "verity/ml/circuits/ops/tests/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
   "art:592130d2c1e0d166446c59cb43795e090e99695e2f110523715e93a52746010e": "fixtures/bench-instances/v1/manifest.json",
   "art:c94fae7b8f1c37950b8bb13e76221948057b0bfa4d616ca0a7644ca74a39d3df": "fixtures/bench-instances/v1/vu-k1536.index.json",
   "art:9e977c565a9468b46936120b1d09495786ffaf308963409a350f565426cc9169": "fixtures/bench-instances/v1/vu-k1536-neg.index.json",
   "art:19f80a238753239044f5f850e9907259a53938522512eed40a53ea1f5fd7fd53": "fixtures/bench-instances/v1/tu-k16.index.json",
-  "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941": "verity/ml/circuits/silicon/discrepancy_log.json",
+  "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903": "verity/ml/circuits/silicon/discrepancy_log.json",
   "art:ad3eaa3e52972a08384ee2de612b657a52efc4cc8dcc15d37fb94ad78c6cee55": "integrations/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
   "art:712ec77fca7da4c4f72121af05125eb4ac7237ce1a5735eb56b0269565ae0048": "fixtures/lean-vectors",
   "art:cb796395face65cdcb01321729bc5477942b5d33cbe1b65b5f6dab018308a00c": "verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json",
@@ -15,12 +15,6 @@
   "art:aaf83ce7be7b17cec2c91412dea2f4e04d22a221d46247590c0b33f60b4671e5": "integrations/vllm/tests/program/data/topp_split_fixture/fstoch01_rows.npz",
   "art:d40b150e7c8ded0909d86904723159d4881d2c4c94a35dc1d77915f8db5fea2d": "integrations/vllm/tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:a7c7b36effa6ae2097f192856ac68f998d82901b042b54725ef6ac259b427e6a": "integrations/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
-  "art:7ef52142d7982f8a2d7153f4410a5452a435acb508bc061582343d0d49773ff9": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_0/out_row.u16",
-  "art:717e0de012feeca965453526a69e9a7a4755ae8a7c7a2c9ae6b2e5408544cbcf": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_1/out_row.u16",
-  "art:8a1a5738bf0e518d716ba8278bf65cf495e23f7fa6e1f8bcc5e39f92e5f914d2": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_decode_2/out_row.u16",
-  "art:59bbe24a88399ed59e3b9816293761fd58ebc8d66f7009e6a48d08b7cd98627d": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_0/out_row.u16",
-  "art:b791f38357bbd785bc18c3821251a9c6164df054ed9d13aa0d7807e5f176c8b6": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_1/out_row.u16",
-  "art:c1f3cde4dfa1343f00a135265291fea99d3e858734a05f30876aadcce19e8737": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z/lm_head_prefill_2/out_row.u16",
   "art:3fd5fe7385f9a734309bd6db7ad6455b3dd845a2314a12be0a5fc817ced83f75": "verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
   "art:3c5997ae19ec61df22f07babcde89a9eb0018b7b03f98a29dc3a7b82a04a1667": "verity/ml/circuits/ops/tests/fixtures/tc-hopper-wgmma-bf16-2026-09-26/records.json.gz",
   "art:cc1f274f1194184395e6b2cf4db97d42859839008742d35d33f1f50adf79c438": "verity/ml/circuits/ops/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
@@ -44,7 +38,6 @@
   "art:c301c7f124485ef41dda34186ac6846bccf7fcab99ad752bedac997b4d5bc0f4": "integrations/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:4f366f8dc159047d337d29e0069db6af2b428eaba50830cf1fd8b8c8de886be3": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:67f611682f489222d26ee0af3be4eb026fe57860f622f24be20af0667cef1379": "integrations/vllm/tests/protocols/fixtures/challenger_periods",
-  "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25": "verity/ml/flock/tests/fixtures/f1-gate",
   "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": "verity/ml/flock/tests/fixtures/forged-proofs",
   "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2": "verity/ml/flock/tests/fixtures/zk-sessions",
   "art:0278327a962ffc33ccb55d29447bacc30616287a509490caf71215b3e24c63e8": "verity/ml/commitments/tests/fixtures/layouts",
@@ -142,18 +135,50 @@
   "art:5af0506acb63abdf5f70c7edeefaa080d46afd35d75307f04f08d6130afdc5b7": "integrations/vllm/workloads/workload_phi3_mini_32x16_1req.json",
   "art:5467343b0a5b2030b21b6285b73a679823ec6404260a900139b66626094b76ec": "integrations/vllm/workloads/workload_qwen05_32x16_1req.json",
   "art:124a9d7ed54e99b74b05e0f90b7dbf48b7f2e6a59a16b2247ab2420addf04bc9": "integrations/vllm/workloads/workload_qwen15_32x16_1req.json",
+  "art:312ea3d1cf187ff33570c6569c32dfdaa2aed0c21cc615096ff1e15c52231ff7": "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z",
+  "art:5f469df0920b86cf745da873d833a08666bffce8f055f7e817ac755724e9af2c": "verity/ml/circuits/ops/tests/fixtures/tc-sm120-mxf4-2026-10-01",
+  "art:abb6201df38b08720d8251b836f523ed34396391c7977fa2a434f0a84ea86e4c": "benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json",
+  "art:98e17bc4c742c1b6b805dac8db153c0491003057da9373705396dd45f5394c36": "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy",
+  "art:3d22b35a2270253156b8ad3c251d3f3cb61f591ea4f8d0512dc25a6f4e4d325f": "integrations/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.values.npz",
+  "art:95a86888df5f0424dbb5984f2c59180d2564a6e9fe28885f5f70ad84aa87c40c": "integrations/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.jsonl.gz",
+  "art:132eb7d0c8e242f7e4253523152ea88e7de07e26200d9fe3720adbb358b7cd83": "integrations/vllm/tests/program/data/fp8_block_operands.npz",
+  "art:d95990b9916839ac3ca5dafe48ac5920cc106e9a65175f853a412aa1f6beeee5": "integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
+  "art:85fba674558e464a36b5ca3e9110762cb36749e736a0f94c0b2f2e5cc6a18403": "integrations/vllm/tests/properties/fixtures/dsv4_q_norm_commit_20261021.json",
+  "art:b814ce20730fb161ac2e5868cf8c8162d6a875cfd311924d745f0391fddbffd1": "integrations/vllm/tests/check/fixtures/deepseek_v4/inventory-tp8-rank0.json",
+  "art:71dfa3cefbe4e4d42f33f018c9d0cb0650e8ea6d48c35c61cb23b53c797b1066": "integrations/vllm/tests/check/fixtures/glm_moe_dsa/inventory-tp8-rank0.json",
+  "art:dc67eafe48fc2d5ae6e7f15d905d25d827f8110561691fbb073921adc98bdf67": "integrations/vllm/tests/properties/fixtures/dsv4_mhc_capture_20261013.json",
+  "art:5c96af2c8db7684e0e3f34bc3fe9d9b8798681d14c1914db1ee2ba4a48e92933": "integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json",
+  "art:593cc61980fa4b1500031f845e322eb5eb777d4dfabf75767270a09a5a90fda3": "integrations/vllm/tests/program/data/fp8_saved_operands.npz",
+  "art:d1642f5d9fd7c25468cfc1ec7ac29e6f85d7b61bea27713a8ebd527eb29767c7": "integrations/vllm/tests/program/data/fp8_production_row_l0_qkv.npz",
+  "art:4b0658aefe613d08075fe76685f08d2c137b274745157766416f30f44f6983a3": "integrations/vllm/tests/program/data/topp_split_fixture/manifest.json",
+  "art:acac476886419a64794ef2110ca0f2205ac3e02952ab08ab045061c20c4be3fe": "integrations/vllm/tests/program/data/topp_split_fixture/b8_s_schedule_r15_attempt2.json",
+  "art:b5f10dd07477d6e9a433f95920e10ca48a9537b1274da1f63bdc58895f54a7bc": "integrations/vllm/tests/program/data/topp_split_fixture/fstoch01_s16_intermediates.npz",
+  "art:2b00f27ff8e7ad602f26146e8b9911e22f2a523ea932753de02a898e73ed8339": "integrations/vllm/tests/pipeline/fixtures/llama32_1b_bi_eager_served_window_parts.json",
+  "art:fc492e669ac5e1816c61b7fd9814ec71b2486ad4c117bc56d88b3c30d13f8d44": "integrations/vllm/tests/acquire/fixtures/served_llama.tar.gz",
+  "art:d57b33d007a48949616e718fb37fb328a861aba7f61389416c71f2c6bdcff04a": "integrations/vllm/tests/engine/fixtures/glm53_tp8_moe_l3.rank0.jsonl.gz",
+  "art:fff55167ae6b32d24904251104277c0cb008e41da578529b4d01bf7725ed1943": "integrations/vllm/tests/engine/fixtures/qwen3_235b_a22b_tp8_moe_l47.rank0.jsonl.gz",
+  "art:8f21de3d466a6a93b5f21e448a345a570b3fd4f8a56700f37b9c057999ac8ae5": "integrations/vllm/tests/engine/fixtures/qwen3_235b_a22b_tp8_moe_l47.rank7.jsonl.gz",
+  "art:bb19271f95ba0f8c245db040cbff9c984104961e5ed526690291fe6ee937419b": "integrations/vllm/tests/engine/fixtures/qwen3_30b_a3b_tp2_moe_l24.rank0.jsonl.gz",
+  "art:c7388bed645a35c0ea7d7d1468b3c6a87f4aace972ca5a0489188daa032d60f1": "integrations/vllm/tests/engine/collectives/fixtures/tp2/collective_shard.steps03.rank0.json.gz",
+  "art:481f01fbea1b36b53695531ee178e17f82a081731ef5bb3c638a2ef40b70ed39": "integrations/vllm/tests/engine/collectives/fixtures/tp2/collective_shard.steps03.rank1.json.gz",
+  "art:78615011944ccec18b2a9e217d8ec29272e598f0066f9054fb1f944a2ac51609": "integrations/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank0.json",
+  "art:158db783ce5c5a88e19ccbc34a4a7923faecc92a592b3418d3848f3b9ba266c8": "integrations/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank1.json",
+  "art:939f5600f8dbd843d6f1525f5e1d6b40592176ce8894dfe6bb3876475f659401": "integrations/vllm/tests/pipeline/fixtures/advice_run_a/step_trace.jsonl.gz",
+  "art:227b98d6e3c4e20cf50e90fb3b93043753d36c5f576892bafd6ad1b5bfb10338": "integrations/vllm/tests/program/predict/fixtures/naming_traces.json",
+  "art:30385407aad29494f71640c127a59912b9839722000d856fd095b2034174e259": "integrations/vllm/tests/program/data/dsa_h200_logits.npz",
+  "art:c1833dbbafe1d80f86f08e2b657b43607a506430d0b57827d8bc6d6ab4aa1bad": "integrations/vllm/tests/program/data/dsa_glm53_kslots.npz",
+  "art:d794e952dec34ad637dad0526ce839b942849d4ed283a05380b3434fa96d9301": "integrations/vllm/docs/data/ref-prims",
+  "art:6280390312958541295df2bef7381f195768b5ecfe7e82667a4ec3d1b17aeba3": "integrations/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.json",
+  "art:958f39a2b56cc3c0c9df8c21b03f3133b2764cfc789bca09bb7438eca62d6bb5": "integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json",
+  "art:017ac8d962ec2628f98f3a61a69eb5ad3ff8f3ee51caabea88c0825b03ec55fb": "integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json",
+  "art:ca9544e3781926c76b0980b26326112bf86aae29d3481165bad816f05e5f22dd": "integrations/vllm/tests/check/fixtures/glm_moe_dsa/config.json",
+  "art:76398a8149f3e74bd9959f043570e8187a48354f0c259fa85dd9cc23a4fbf11e": "integrations/vllm/tests/records/data",
+  "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "integrations/vllm/tests/commit/serving_row_leaf_vector.json",
+  "art:7a85c5c4238b971371cf46c2153b94548a11988891cc4018b196535c3cb92bbb": "verity/ml/flock/tests/fixtures/f1-gate",
+  "art:ff28796246bdf4ea6df75289ccd8d1fddee94ecd17d21ef7b3c009f35bbcc863": "verity/ml/flock/tests/fixtures/rec-links",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
-    ],
-    "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941": [
-      "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
-      "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
-      "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
-      "art:cba3df59a2100c154fcdcf532b86a97adef04e4dbe3690cb751ad39f61f5813d",
-      "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238",
-      "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364",
-      "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887"
     ],
     "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3": [
       "art:97537edaf796edb3ec098d64a39283d2c74040bd06be85375304a5263e6bedc9"
@@ -186,13 +211,25 @@
       "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75",
       "art:3fb2a43cd8bdd9e9fb7b99b5442730cf24cf35fa384ac85a0b561da554640555"
     ],
-    "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25": [
+    "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": [
+      "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
+    ],
+    "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903": [
+      "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
+      "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
+      "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
+      "art:cba3df59a2100c154fcdcf532b86a97adef04e4dbe3690cb751ad39f61f5813d",
+      "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238",
+      "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364",
+      "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887",
+      "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941",
+      "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58"
+    ],
+    "art:7a85c5c4238b971371cf46c2153b94548a11988891cc4018b196535c3cb92bbb": [
+      "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25",
       "art:c85c00f43f3a827974a253d6998b4ebc76db6edfce4c9b0ed07bce4e98fcbfea",
       "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee",
       "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073"
-    ],
-    "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": [
-      "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
     ]
   }
 }

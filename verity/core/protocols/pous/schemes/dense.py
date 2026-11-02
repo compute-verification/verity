@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from .. import dense as dense_codec
 from ..primitives import Primitives
-from ..protocol import Certificate, Scheme
+from ..protocol import CapacityBound, Scheme
 from .band import POINT, chain_certificate
 
 
@@ -28,7 +28,7 @@ class Dense(Scheme):
         super().__init__(params, prims)
 
     @property
-    def certificate(self) -> Certificate | None:
+    def certificate(self) -> CapacityBound | None:
         if (self.params.blocks_per_segment, self.params.m) != POINT:
             return None
         return chain_certificate("Pous.SecurityProofs.ChainDenseMeets64", None, 1)

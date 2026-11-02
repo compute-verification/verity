@@ -71,6 +71,8 @@
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
                                                  # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
                                                  # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
+  research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
+                                                 # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -1776,6 +1778,11 @@ def hand_to_ops(cmd: str, rest: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A test's `python -m research` runs its tree's code, and doesn't read at_main.py, which suites don't declare.
+    if argv is None and not os.environ.get("PYTEST_CURRENT_TEST"):
+        from .at_main import reexec
+
+        reexec(sys.argv[1:])
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
@@ -1887,6 +1894,10 @@ def main(argv: list[str] | None = None) -> int:
         return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
+    if cmd == "lean-times":
+        from .lean_times import main as lean_times_main
+
+        return lean_times_main(rest)
     if cmd == "agents":
         from .agents import main as agents_main
 

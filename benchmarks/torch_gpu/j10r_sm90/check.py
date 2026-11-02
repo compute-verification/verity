@@ -13,7 +13,9 @@ same way, none against another:
   sampled proof block's 32 rows of each held to the digests fixtures.json pins; the served z, `torch._int_mm(A, B^T)`, on every
   sampled proof block's 32 x 32 cells; then each h1u build over the whole call, run under 0xA5 and then 0x5A (receipts, row
   workspace, seeds): no word left unwritten (holding each poison after its run) or differing between the two runs in any
-  proof block, every sampled proof block's receipt word for word and its seed_c and sigma_R; with --sm the same call
+  proof block, every sampled proof block's receipt word for word and its seed_c and sigma_R, and its faults (`faults`:
+  the no-write control, a row-workspace bit and a seed bit, each moving exactly the proof blocks that read it, and
+  nothing written past the workspace); with --sm the same call
   by kh_units_multi_j10r_sm, every word equal to kh_units_multi_j10r's; and the fallback (--ref) on the sampled proof blocks:
   receipts, z and seeds.
 
@@ -74,7 +76,51 @@ def run_build(lib, a, b, salt, roots, base, picks) -> dict:
     sd = c.seeds[pk].cpu().numpy()
     return {"receipts": c.out[pk].cpu().numpy().view(np.uint32), "seed_c": [UN.digest(r[:8]) for r in sd],
             "sigma": [UN.digest(r[8:]) for r in sd], "poison_left": tw["unwritten"], "unstable": tw["unstable"],
-            "units_run": c.units, "_all": c.out}
+            "units_run": c.units, **({} if lib.sm else {"faults": faults(c)}), "_all": c.out}
+
+
+def faults(c: UN.H1uCall) -> dict:
+    """kh_units_multi_j10r's rows and units launches alone on a call `twice` ran, each under 0xA5 over the receipts and
+    the workspace, against the call's own receipts: the no-write control (zero units) refused; one bit of the row
+    workspace (kh_j10r_row_fault_word's) moving exactly row tile 0's proof blocks; one bit of proof block 0's seed_c
+    moving it alone (under H1U_JW its sigma_R, and one bit of its seed_c, the call's, moving every proof block); no
+    launch writing the sentinel tail past the workspace, and under H1U_JW its last 4 KiB written. ``c.out`` is left as
+    it was."""
+    (m, k), n = c.a.shape, c.b.shape[0]
+    c.poison()
+    c.run()
+    r: dict = {"ws_bytes": int(c.rws.numel()), "ws_end_written": c.end_written()}
+    keep = c.out.clone()
+
+    def moved(t: torch.Tensor | None = None, i: int = 0, units: int | None = None) -> list[int]:
+        """The proof blocks whose receipt differs from ``keep``: after a run of `units`, or after the rows alone, bit 0
+        of ``t[i]`` flipped, then the units alone."""
+        c.out.fill_(UN.POISON)
+        c.rws.fill_(UN.POISON & 0xFF)
+        if t is None:
+            c.run(units=units)
+        else:
+            c.run(mode=1)
+            t[i] ^= 1
+            c.run(mode=2)
+            t[i] ^= 1
+        torch.cuda.synchronize()
+        return (c.out != keep).any(dim=1).nonzero().flatten().tolist()
+
+    r["control_refused"] = len(moved(units=0)) == c.units
+    rw = int(c.lib.h.kh_j10r_row_fault_word(m, n, k, 0))
+    r["fault_rows_conforming"] = moved(c.rws.view(torch.int32), rw) == list(range(n // S.T))
+    seeds = c.seeds.view(torch.int32)[0]
+    r["fault_seed"] = "sigma_R" if c.lib.jw else "seed_c"
+    r["fault_seed_conforming"] = moved(seeds, 16 if c.lib.jw else 0) == [0]
+    if c.lib.jw:
+        r["fault_call_seed_conforming"] = len(moved(seeds, 0)) == c.units
+    r["ws_tail_written"] = c.tail_written()
+    c.out.copy_(keep)
+    r["ok"] = (r["control_refused"] and r["fault_rows_conforming"] and r["fault_seed_conforming"]
+               and r.get("fault_call_seed_conforming", True) and r["ws_tail_written"] == 0
+               and (not c.lib.jw or r["ws_end_written"] > 0))
+    return r
 
 
 def compare(got: dict, want_rec: np.ndarray, want_seedc: bytes, want_sigma: list[bytes], want_z: np.ndarray | None) -> dict:
@@ -86,8 +132,10 @@ def compare(got: dict, want_rec: np.ndarray, want_seedc: bytes, want_sigma: list
          "unstable": got["unstable"], "units_run": got["units_run"]}
     if want_z is not None and "z" in got:
         r["z_bad_words"] = int((got["z"] != want_z).sum())
+    if "faults" in got:
+        r["faults"] = got["faults"]
     r["ok"] = (r["bad_words"] == 0 and r["seed_c_bad"] == 0 and r["sigma_bad"] == 0 and r["poison_left"] == 0
-               and r["unstable"] == 0 and r.get("z_bad_words", 0) == 0)
+               and r["unstable"] == 0 and r.get("z_bad_words", 0) == 0 and r.get("faults", {}).get("ok", True))
     return r
 
 

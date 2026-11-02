@@ -24,7 +24,7 @@ The cost model `CM` is a parameter fixed before the protocol and the workload: t
 the model, and the model, not the adversary, says what it costs. M_4090 is one instance; every theorem holds for
 every cost model.
 
-Simplifications (each listed in `STATEMENTS.md` with its bridge or as a gap):
+Simplifications:
 * ideal commitments: the online phase outputs the committed values themselves (`Transcript`);
 * a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
 * deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).

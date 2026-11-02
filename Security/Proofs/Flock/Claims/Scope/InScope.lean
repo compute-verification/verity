@@ -83,18 +83,18 @@ theorem bitRows_unrolled (c : Circuit) : ProvedScope.bitRows (HmOut.unrolled c) 
 
 /-- **The check's form is the statement circuit's** (`HmOut.unrolled`, ASK-112 option A): on a flat circuit the wire
 condition and `scopeOk` (`scopeOkI` with hidden outputs), as `scope_iff_rows` reads them; on a templated one `scopeOkT`,
-which is the unrolled unit's form, its rows' and the templated statement's own: `--zk`, hidden outputs, no registered
-reads of the verifier's own, at most one table, and a unit reading one input group and returning the outputs. -/
-theorem formOk_iff {t : Tags} {zk reg : Bool} {count : Nat} {cf : ByteArray} {tables : List (String × ByteArray)}
+which is the unrolled unit's form, its rows' and the templated statement's own: `--zk`, hidden outputs, at most one
+table, and a unit reading one input group and returning the outputs. -/
+theorem formOk_iff {t : Tags} {zk : Bool} {count : Nat} {cf : ByteArray} {tables : List (String × ByteArray)}
     {c : Circuit} (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c) :
-    FormOk t zk reg count c ↔
+    FormOk t zk count c ↔
       (((HmOut.unrolled c).unit.inGroups.size = 1 ∧
             ¬ ((HmOut.unrolled c).outNet != (HmOut.unrolled c).unitNet) = true) ∨
           (t.hiddenOutputs = true ∧ ProvedScope.wiresAcyclic (HmOut.unrolled c) = true)) ∧
         (HmOut.unrolled c).unit.unitLog ≤ 32 ∧ ProvedScope.portReadsB (HmOut.unrolled c).unit = true ∧
         (if t.hiddenOutputs then ProvedScope.v1Ports (HmOut.unrolled c) || ProvedScope.bitRows (HmOut.unrolled c)
           else ProvedScope.v1Ports (HmOut.unrolled c)) = true ∧
-        (c.tmpl.isSome = true → zk = true ∧ t.hiddenOutputs = true ∧ ¬ reg = true ∧ count ≤ 1 ∧
+        (c.tmpl.isSome = true → zk = true ∧ t.hiddenOutputs = true ∧ count ≤ 1 ∧
           (HmOut.unrolled c).unit.inGroups.size = 1 ∧
           ¬ ((HmOut.unrolled c).outNet != (HmOut.unrolled c).unitNet) = true) := by
   cases ht : c.tmpl with
@@ -113,10 +113,10 @@ theorem formOk_iff {t : Tags} {zk reg : Bool} {count : Nat} {cf : ByteArray} {ta
     simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq, ↓reduceIte, bne_iff_ne, ne_eq,
       not_not, true_and, Bool.true_and, Bool.not_eq_true]
     constructor
-    · rintro ⟨⟨⟨⟨⟨⟨hz, hr⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
-      exact ⟨Or.inl ⟨hig1, hout⟩, hlog, hpr' hlog, hrows, hz, hr, hn, hig1, hout⟩
-    · rintro ⟨-, hlog, -, hrows, hz, hr, hn, hig1, hout⟩
-      exact ⟨⟨⟨⟨⟨⟨hz, hr⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
+    · rintro ⟨⟨⟨⟨⟨hz, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
+      exact ⟨Or.inl ⟨hig1, hout⟩, hlog, hpr' hlog, hrows, hz, hn, hig1, hout⟩
+    · rintro ⟨-, hlog, -, hrows, hz, hn, hig1, hout⟩
+      exact ⟨⟨⟨⟨⟨hz, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
 
 /-- **The readable scope is the verifier's scope check, and `22 ≤ m`**, for every statement the verifier parses. -/
 theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
@@ -137,9 +137,9 @@ theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
   have eR : (∃ c pub, ProvedScope.circuitOf p.tags p.I.circuitFile p.I.tables = .ok c ∧
       ProvedScope.publicOf p.tags c p.I.publicFile = .ok pub ∧
       (pub.tables.isSome = true → ProvedScope.sharedRowsOk p.tags p.zk p.registered = true) ∧
-      FormOk p.tags p.zk p.registered p.I.count c) ↔
+      FormOk p.tags p.zk p.I.count c) ↔
       (pop.tables.isSome = true → ProvedScope.sharedRowsOk p.tags p.zk p.registered = true) ∧
-      FormOk p.tags p.zk p.registered p.I.count st.c := by
+      FormOk p.tags p.zk p.I.count st.c := by
     constructor
     · rintro ⟨c, pub, e1, e2, hX, hF⟩
       rw [hc] at e1

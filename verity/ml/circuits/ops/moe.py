@@ -191,7 +191,7 @@ def _sample(gemm: bool, routed: bool):
 def _register() -> None:
     from verity.ml.circuits.codec import register_lazy_family
     from verity.ml.circuits.evaluation import register_kernel
-    from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+    from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16
     from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
     from verity.ml.kernels import tc as KT
 

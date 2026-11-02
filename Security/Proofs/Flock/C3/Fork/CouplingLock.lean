@@ -153,14 +153,6 @@ def holoTableCmpL {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle
         decide (OpensOKL H E Lf cap₀ 0 reps.1.2 os.1 os.2 ∧ OpensOKL H E Lf cap₀ 1 reps.2.2 os.1 os.2 ∧
           OpensOKL H E Lf capReg 2 pendR os.1 os.2), cap₀, (reps.1.2, reps.2.2), pendR, os.1, os.2⟩
 
-theorem holoTableCL_send {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
-    (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
-    (capReg : Cap D) :
-    holoTableCL A H E Lf S sch hm ptLocal mPts sh units τ rsch capReg =
-      Game.send (Cap D) (holoTableCmpL A H E Lf S sch hm ptLocal mPts sh units τ rsch capReg) :=
-  rfl
-
 /-- **The holographic table's leaf relation** below the level-0 cap `cap₀`: `TopRelL`'s, with R's stream a third
 rep whose level 0 is the registered word `w` under the registered cap `capReg`, and its tables `i.2`. -/
 def TopRelH {Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)

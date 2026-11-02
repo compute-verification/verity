@@ -53,7 +53,7 @@ verity_vllm/
   properties/     property harnesses: non-interference, kernel census, golden corpus, tap exactness
   protocols/      the subprotocols' hooks on the engine
   pipeline/       stage drivers (Build, Match, Commit), the CLI, the endpoint, the circuit database; tp/ for TP > 1
-  records/ collectives/ ops/ pins/   typed stage records; TP collective sites; pod bootstrap; per-device pins
+  records/ collectives/ ops/ pins/   typed stage records; TP collective sites; pod bootstrap; each row's served pin per device
 tests/ tools/     tests mirror the package (tests/regression: VERITY_REGRESSION=1); scripts run by path
 workloads/ manifests/   workload digests (SHA256SUMS); checkpoint pins, workloads of record, Definitions, capture maps
 ~~~

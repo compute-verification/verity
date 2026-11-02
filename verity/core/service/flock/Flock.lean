@@ -64,6 +64,9 @@ import Flock.RecSetup
 import Flock.RecBudget
 import Flock.RecCompose
 import Flock.RecLinks
+import Flock.RecLinkTree
+import Flock.RecLinkRef
+import Flock.RecLinkPart
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
@@ -71,8 +74,10 @@ import Flock.DeriveCheck
 import Flock.Rows
 import Flock.Qword
 import Flock.Program
+import Flock.Gate
 import Flock.Sigma
 import Flock.Extract
+import Flock.Evaluated
 import Flock.Qcall
 import Flock.Fuel
 import Flock.Firewall

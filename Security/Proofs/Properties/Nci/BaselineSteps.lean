@@ -256,11 +256,10 @@ theorem provenanceOf_ok (j : Json) (n : Nat) (ps : Array Prov) (h : provenanceOf
       · cases this
   · cases h
 
-theorem entryStep_ok (T : Trusted) (program : String) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat)
-    (p : Prov) (h : entryStep T program own counts k width p = .ok ()) :
+theorem entryStep_ok (T : Trusted) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat)
+    (p : Prov) (h : entryStep T own counts k width p = .ok ()) :
     T.digests.findIdx? (· == p.registration) = some 0 ∧
       (∃ e, lastWith T.log[0]! "registered" "value" p.value = some e ∧ strAt e "root" = some p.root) ∧
-      strAt T.log[T.run]! "program" = some program ∧
       ∃ i, own[k]? = some (some i) ∧
         ∃ e', lastWith T.log[T.run]! "registered" "value" T.params[i]!.1 = some e' ∧ strAt e' "root" = some p.root := by
   unfold entryStep at h
@@ -276,9 +275,6 @@ theorem entryStep_ok (T : Trusted) (program : String) (own : Array (Option Nat))
   by_cases hr : (strAt e "root" != some p.root) = true
   · simp [hr, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hr, Bool.false_eq_true, ite_false] at h
-  by_cases hprog : (strAt T.log[T.run]! "program" != some program) = true
-  · simp [hprog, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-  simp only [hprog, Bool.false_eq_true, ite_false] at h
   rcases hi : own[k]? with _ | _ | i <;> simp only [hi] at h
   · simp [throw, throwThe, MonadExceptOf.throw] at h
   · simp [throw, throwThe, MonadExceptOf.throw] at h
@@ -286,7 +282,7 @@ theorem entryStep_ok (T : Trusted) (program : String) (own : Array (Option Nat))
   · simp [throw, throwThe, MonadExceptOf.throw] at h
   by_cases hr' : (strAt e' "root" != some p.root) = true
   · simp [hr', throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-  exact ⟨by first | exact hd | rfl, ⟨e, by first | exact he | rfl, by simpa using hr⟩, by simpa using hprog, i,
+  exact ⟨by first | exact hd | rfl, ⟨e, by first | exact he | rfl, by simpa using hr⟩, i,
     by first | exact hi | rfl, e', by first | exact he' | rfl, by simpa using hr'⟩
 
 theorem forIn_each {α β ε : Type} (f : α → β → Except ε (ForInStep β))
@@ -305,8 +301,9 @@ theorem forIn_each {α β ε : Type} (f : α → β → Except ε (ForInStep β)
 
 theorem provenance_ok (j tr : Json) (h : Baseline.provenance j tr (fun _ k => k) = .ok ()) :
     ∃ i P ps T, parse j = .ok i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ provenanceOf j i.theta.size = .ok ps ∧
-      trustedOf tr = .ok T ∧ ∀ t < i.theta.size, ∃ n counts width,
-        entryStep T (Flock.hexOf P.sha512) ((ownersOf P T.params).getD (Array.replicate n none)) counts
+      trustedOf tr = .ok T ∧ strAt T.log[T.run]! "program" = some (Flock.hexOf P.sha512) ∧
+      ∀ t < i.theta.size, ∃ n counts width,
+        entryStep T ((ownersOf P T.params).getD (Array.replicate n none)) counts
           ((natOf? i.theta[t]!).getD 0) width ps[t]! = .ok () := by
   unfold Baseline.provenance at h
   rcases h1 : parse j with e | i <;> simp only [h1, bind, Except.bind] at h
@@ -318,8 +315,11 @@ theorem provenance_ok (j tr : Json) (h : Baseline.provenance j tr (fun _ k => k)
   · cases h
   rcases h4 : trustedOf tr with e | T <;> simp only [h4] at h
   · cases h
+  by_cases hprog : (strAt T.log[T.run]! "program" != some (Flock.hexOf P.sha512)) = true
+  · simp [hprog, throw, throwThe, MonadExceptOf.throw] at h
+  simp only [hprog, Bool.false_eq_true, ite_false] at h
   refine ⟨i, P, ps, T, by first | exact h1 | rfl, by first | exact h2 | rfl, by first | exact h3 | rfl,
-    by first | exact h4 | rfl, ?_⟩
+    by first | exact h4 | rfl, by simpa using hprog, ?_⟩
   simp only [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   split at h
   · cases h
@@ -366,20 +366,21 @@ theorem owners_some (o : Option (Array (Option Nat))) (n k p : Nat)
 theorem provenanceHeld_of (j tr out : Json) (h : Baseline.evaluate j tr = .ok out)
     (hθ : ∀ i, parse j = .ok i → ∀ t < i.theta.size, ∃ k, natOf? i.theta[t]! = some k) : ProvenanceHeld j tr := by
   obtain ⟨-, hprov⟩ := evaluate_ok j tr out h
-  obtain ⟨i, P, ps, T, h1, h2, h3, h4, hsteps⟩ := provenance_ok j tr hprov
+  obtain ⟨i, P, ps, T, h1, h2, h3, h4, hprog, hsteps⟩ := provenance_ok j tr hprov
   obtain ⟨hlog, hchain, hsz, hdg, ⟨r, hrun, hfind⟩, hparams⟩ := trustedOf_ok tr T h4
   obtain ⟨prov, hprovj, hpsz, -, hfields⟩ := provenanceOf_ok j _ ps h3
   obtain ⟨hrlt, hr⟩ := findIdx_eq _ _ _ hfind
   refine ⟨i, P, T.log, T.log[T.run]!, T.params, h1, h2,
-    ⟨hlog, hchain, ⟨T.run, by omega, rfl, r, by rw [← hr]; exact hdg _ (by omega), hrun⟩, hparams⟩, fun t ht => ?_⟩
+    ⟨hlog, hchain, ⟨T.run, by omega, rfl, r, by rw [← hr]; exact hdg _ (by omega), hrun⟩, hparams⟩, hprog,
+    fun t ht => ?_⟩
   obtain ⟨n, counts, width, hstep⟩ := hsteps t ht
-  obtain ⟨h0, ⟨e, he, her⟩, hprog, p, hp, e', he', her'⟩ := entryStep_ok _ _ _ _ _ _ _ hstep
+  obtain ⟨h0, ⟨e, he, her⟩, p, hp, e', he', her'⟩ := entryStep_ok _ _ _ _ _ _ hstep
   obtain ⟨k, hk⟩ := hθ i h1 t ht
   rw [hk, Option.getD_some] at hp
   obtain ⟨own, hown, hp⟩ := owners_some _ _ _ _ hp
   obtain ⟨h0lt, h0r⟩ := findIdx_eq _ _ _ h0
   obtain ⟨fk, freg, fval, froot⟩ := hfields t ht
   exact ⟨prov, ps[t]!.registration, ps[t]!.value, ps[t]!.root, hprovj, hpsz, fk, freg, fval, froot, by omega,
-    by rw [← h0r]; exact hdg 0 (by omega), ⟨e, he, her⟩, k, p, own, hk, hown, hp, hprog, e', he', her'⟩
+    by rw [← h0r]; exact hdg 0 (by omega), ⟨e, he, her⟩, k, p, own, hk, hown, hp, e', he', her'⟩
 
 end NciCheck.Properties.SecurityProofs.BaselineSteps

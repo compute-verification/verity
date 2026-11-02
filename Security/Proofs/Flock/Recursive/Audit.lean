@@ -40,17 +40,6 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **V*'s staging reads only the inner statement's shape**: two statements of one shape (`shapeOf`: their regions'
-bytes aside) give V* as many outer statements, over one class with as many regions (`execClassAt_shape`). -/
-theorem outerStatementsAt_shape {st st' : Flock.Stmt} (h : shapeOf st = shapeOf st') :
-    Flock.Guarantees.outerStatementsAt st = Flock.Guarantees.outerStatementsAt st' := by
-  obtain ⟨hc, hl, -⟩ := execClassAt_shape h
-  show Flock.Guarantees.outerParts (execClassAt st).cls.m (execClassAt st).cls.kLog
-      (2 + 2 * (execClassAt st).regs.length) =
-    Flock.Guarantees.outerParts (execClassAt st').cls.m (execClassAt st').cls.kLog
-      (2 + 2 * (execClassAt st').regs.length)
-  rw [hl, hc]
-
 /-- **A statement of the registration's rows reads a list's first `rt.leaves` commit strings only.** -/
 theorem readsBelow_stmtAt {Ω H : Type} (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → Ω → H) :
     ReadsBelow rt.leaves (Flock.Guarantees.stmtAt rt stmt) :=

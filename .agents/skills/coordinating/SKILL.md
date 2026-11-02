@@ -86,7 +86,8 @@ skill).
   planning and starting it answer nothing, and a reply to him names the worker and that date, not the issue. Only he
   parks or cancels it: quote his yes on the issue and add `asker-ok`. When he asks again, comment `asked again: <his
   words>` on the issue, never a new one, and `postmortem:` that day (why it wasn't delivered, and the change that stops
-  that recurring). The audit finds each break (`parked`, `unstaffed`, `slipped`, `repeated`); `research msg linear audit
+  that recurring). Once its date has moved later twice, each move gets a `slip:` comment: what missed the date and what
+  holds the next. The audit finds each break (`parked`, `unstaffed`, `slipped`, `repeated`); `research msg linear audit
   --asks` is the ledger, and a report to Daniel counts delivered, never filed.
 - **Write through the app, not the Linear connector.** The connector acts as Daniel, so its comments and state changes
   show as his. Use these commands:
@@ -133,5 +134,5 @@ skill).
 - **On a launch:** file the sub-issue first, then launch the worker named after it.
 
 top's hourly sweep (`infra/control/top_watch.py`) runs the same audit. It rings a lane with findings once every 12
-hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
+hours, a person's ask off track every hour (and @top) until it holds, and records the counts in `linear-audit.jsonl`.
 top reads the campaign's state from Linear, not from Slack.

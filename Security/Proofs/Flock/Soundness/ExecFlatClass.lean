@@ -58,7 +58,7 @@ theorem read_flat' {tags : Tags} {bytes : ByteArray} {tables : List (String × B
 
 section unit
 
-variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
 /-- **A flat unit's composed rows are its net's rows** (`NetRows`): its order's columns are at most the net's constant; a

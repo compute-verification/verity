@@ -168,6 +168,15 @@ theorem twin_sat_cast {T T' : Model.Statement} (e : T = T') {A B : Matrix (Fin (
   subst e
   exact h
 
+/-- **Column `r` is a pinned output's bit**: it is in `Hidden.pinnedCols` an odd number of times. -/
+def PinBit (c : Flock.Circuit) (r : ℕ) : Prop := ((Hidden.pinnedCols c).count r : ZMod 2) = 1
+
+theorem pin_cast {T T' : Model.Statement} (e : T = T') {c : Flock.Circuit}
+    (h : ∀ z : Model.Witness T.m, T.Satisfies z → ∀ o (r : Fin (2 ^ T.kLog)), PinBit c r.val → T.block z o r = 0) :
+    ∀ z : Model.Witness T'.m, T'.Satisfies z → ∀ o (r : Fin (2 ^ T'.kLog)), PinBit c r.val → T'.block z o r = 0 := by
+  subst e
+  exact h
+
 section Sites
 
 variable {N n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
@@ -175,8 +184,8 @@ variable {N n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg �
 
 /-- **Each drawn unit's site**, as `Placed.Sites`: the hidden-output acceptance whose statement is the statement of the
 table unit `u` is drawn into at other matrices `A`, `B` (`acc`), which every witness satisfying the table satisfies
-(`sat`), and the unit's template instance (`vu`, below `vus_per_block`) and block (`o`) there. A pinned output's Δ
-copies are the table's and not `A`'s or `B`'s. -/
+(`sat`) and is 0 at every pinned output's bit (`pin`), and the unit's template instance (`vu`, below `vus_per_block`)
+and block (`o`) there. A pinned output's Δ copies are the table's and not `A`'s or `B`'s. -/
 structure SitesH where
   A : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S →
     Matrix (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (ZMod 2)
@@ -187,6 +196,10 @@ structure SitesH where
   sat : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (z : Model.Witness (Partition.tabOf plan tab S R u).S.m),
     (Partition.tabOf plan tab S R u).S.Satisfies z →
       (twin (Partition.tabOf plan tab S R u).S (A S R u h) (B S R u h)).Satisfies z
+  pin : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (z : Model.Witness (Partition.tabOf plan tab S R u).S.m),
+    (Partition.tabOf plan tab S R u).S.Satisfies z → ∀ (o : Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl))
+      (r : Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)), PinBit (acc S R u h).st.c r.val →
+        (Partition.tabOf plan tab S R u).S.block z o r = 0
   vu : ∀ (S : Finset (Fin n)) (_ : Reg) (u : Fin n), u ∈ S → ℕ
   hvu : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), vu S R u h < (acc S R u h).st.c.g
   o : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl)

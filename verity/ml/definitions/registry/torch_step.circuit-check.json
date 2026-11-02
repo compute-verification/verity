@@ -1,24 +1,24 @@
 {
  "definitions": {
   "LinearTorchDw_v1{M=64,K=1,N=1,ROUTE={745c0f349a3e}}": {
-   "and": 33277,
-   "type": "ed27fbdf22b6863ced46159926a02427e95ded966d1049d209a4db09cac3148582b6095e8bf44102191ae939007422ce25879ac813ee28d63500d1f571109efb"
+   "and": 29451,
+   "type": "0dcbf87c3b06e1ddecedf9b187454a241078f7b819beb18b9e329fa1b61b1624dc8e8a008d29065197e5ed583de8b8b8399a838fcccf728333c1a6839617296f"
   },
   "LinearTorchDw_v1{M=64,K=1,N=1,ROUTE={a045c83750e4}}": {
-   "and": 31255,
-   "type": "9cd11b2af2996467117c82b41ea4c53d69edcef0aa4614e702e0d6c3991bd0cf48a631c73acf5d8f1cf5f8fcf7a88927c7bde7e23aa5c987ea6bd19d31e60d8e"
+   "and": 27372,
+   "type": "326fbced6f124dd3bee8a6adbd143447ff54007be668d0f75dc3c38cba50628791be21a5f2ccc713c8e9c94e85577f2877e77a2d50610bfbf62fb3ad56b3824d"
   },
   "LinearTorchDx_v1{M=1,K=1,N=64,ROUTE={3278cabce5bf}}": {
-   "and": 32848,
-   "type": "50c4a821a95a62cbe90596bc46e8e72446a727994f1cf1b204f5ab3a5969961f3ce441beb18233f241cc6bc97a114724493ee569eff79523d8abf287e983b9d7"
+   "and": 29136,
+   "type": "89fdee3eaa30eab33910559cb6751acccc0a2e74afb59ed45e7946ad06e3be5b64e5167ba0c21068b7a170eea196109618d3d9640f6538dbaef5618bd3b4afee"
   },
   "LinearTorchDx_v1{M=1,K=1,N=64,ROUTE={a045c83750e4}}": {
-   "and": 31255,
-   "type": "9cd11b2af2996467117c82b41ea4c53d69edcef0aa4614e702e0d6c3991bd0cf48a631c73acf5d8f1cf5f8fcf7a88927c7bde7e23aa5c987ea6bd19d31e60d8e"
+   "and": 27372,
+   "type": "326fbced6f124dd3bee8a6adbd143447ff54007be668d0f75dc3c38cba50628791be21a5f2ccc713c8e9c94e85577f2877e77a2d50610bfbf62fb3ad56b3824d"
   },
   "LinearTorch_v1{M=1,K=64,N=1,ROUTE={a045c83750e4}}": {
-   "and": 31255,
-   "type": "9cd11b2af2996467117c82b41ea4c53d69edcef0aa4614e702e0d6c3991bd0cf48a631c73acf5d8f1cf5f8fcf7a88927c7bde7e23aa5c987ea6bd19d31e60d8e"
+   "and": 27372,
+   "type": "326fbced6f124dd3bee8a6adbd143447ff54007be668d0f75dc3c38cba50628791be21a5f2ccc713c8e9c94e85577f2877e77a2d50610bfbf62fb3ad56b3824d"
   },
   "TrainStepConstants_v1": {
    "and": 0,

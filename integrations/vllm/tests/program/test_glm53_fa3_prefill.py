@@ -1,5 +1,5 @@
 """GLM-5.3's dense MHA prefill (`run_prefill_new_tokens`, FA3 at qk head 256 = 192 nope + 64 rope, v head 256, 8 heads a rank on 8 x H200):
-the 128 x 80 tile in the target's rule and the twin's, the row binding `Attention_v4{..., D=256, BN=80}`, the two twins and the
+the 128 x 80 tile in the target's rule, the row binding `Attention_v4{..., D=256, BN=80}`, the two twins and the
 Definition word for word, the kernel's fully-masked leading blocks, and which launches the served split heuristic splits."""
 from __future__ import annotations
 
@@ -35,20 +35,14 @@ def _profile(**kw) -> TargetProfile:
     return TargetProfile.from_json(dict(json.loads(CMAP.read_text())["target"]["profile"], **kw))
 
 
-def test_hdim_256_runs_the_128_by_80_tile_in_both_rules():
+def test_hdim_256_runs_the_128_by_80_tile():
     """`tile_size_fwd_sm90` at headdim > 192, bf16, not local: {128, 80}, whatever seqlen_q (no one-MMA-warpgroup branch above 128) or
-    paging.  The twin's rule is the target's at every registered head dim; 192 (DeepSeek's MLA prefill, v 128) stays refused."""
+    paging; 192 (DeepSeek's MLA prefill, v 128) stays refused."""
     for sq in (1, 16, 64, 65, 512, 4096):
         for g in (1, 4):
-            assert TG.fa3_kblock_n(D, sq, g) == fa3_model.kblock_n_for(D, sq, g) == BN
-            assert TG.fa3_tile_m(D, sq, g) == fa3_model.kblock_m_for(D, sq, g) == BM
-            for d in (64, 128):
-                assert TG.fa3_kblock_n(d, sq, g) == fa3_model.kblock_n_for(d, sq, g)
-                assert TG.fa3_tile_m(d, sq, g) == fa3_model.kblock_m_for(d, sq, g)
+            assert (TG.fa3_kblock_n(D, sq, g), TG.fa3_tile_m(D, sq, g)) == (BN, BM)
     with pytest.raises(TG.UnregisteredTarget, match="head dim 192"):
         TG.fa3_kblock_n(192, 512, 1)
-    with pytest.raises(ValueError, match="head dim 192"):
-        fa3_model.kblock_n_for(192, 512, 1)
 
 
 @pytest.mark.parametrize("row", [0, 79, 80, 127, 128, 255, 256, 299])

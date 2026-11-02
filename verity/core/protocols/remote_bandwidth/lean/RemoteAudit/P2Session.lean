@@ -13,7 +13,9 @@ it), read from the bytes it holds and the prover sends, and decided here:
 * the auditor's registration file (`heldOf`, `p2_party.registration_json`'s bytes): its fields' registration, its
   digest recomputed from them (a `digest` it states must be theirs), and the plan every pass reads over the store's U
   units;
-* the prover's request line (`paramsOf`), refused unless it is the registration's node's;
+* the prover's request line (`paramsOf`), refused unless it is the registration's node's and restates the auditor's
+  session parameters as they are (`heldTo`): `SESSION`, pinned here, unless the auditor names a toy's
+  (`Verifier`'s `p2_hold`), so the prover chooses none of them;
 * each root's line (`receive`) and each window's openings line (`verify`), every opening checked on PoUS's vk root
   (`checkOpenings`, `P2.checkOpeningWith`);
 * the answer (`answer`, `p2_party.answer`'s): the credited reads under the pooled bound at δ = 2^-40
@@ -96,24 +98,79 @@ def messageOf (line : ByteArray) (key : String) : Option Json := do
   if kvs.toArray.size != 1 then none
   (j.getObjVal? key).toOption
 
-private def positive (j : Json) (k : String) : V Nat := do
-  let n ← J.nat j k "request"
-  if n = 0 then throw s!"request.{k} is a positive integer"
+private def positive (j : Json) (k ctx : String) : V Nat := do
+  let n ← J.nat j k ctx
+  if n = 0 then throw s!"{ctx}.{k} is a positive integer"
   pure n
 
-/-- `p2_party.params_of` on the prover's first line, `{"request": R}`: the session's parameters, refused unless R's
-keys are `REQUEST_KEYS`, its node is the registration's, and the rest are positive integers. -/
-def paramsOf (held : Held) (line : ByteArray) : V Session.Params := do
-  let some r := messageOf line "request" | throw "the prover's first line is {\"request\": R}"
+/-- A session's parameters as the auditor sets them, a request's keys but its node (`p2_party.SESSION`'s). -/
+structure Auditor where
+  deadlineNs : Nat
+  passes : Nat
+  samples : Nat
+  windowNs : Nat
+  windows : Nat
+  deriving BEq, Repr
+
+/-- `p2_party.SESSION`, pinned: the served bandwidth piece's session, six windows of at least 20 s, four passes each,
+1,024 openings a window and an allowance of 1 s. The case's replay (`P2Protocol`) holds every request to it, and the
+verifier's process does unless the auditor names a toy's (`Verifier`'s `p2_hold`). -/
+def SESSION : Auditor := { deadlineNs := 10 ^ 9, passes := 4, samples := 1024, windowNs := 20 * 10 ^ 9, windows := 6 }
+
+/-- `SESSION`'s keys with their fields, in the order a refusal names them (`p2_party.SESSION`'s). -/
+def SESSION_KEYS : List (String × (Auditor → Nat)) :=
+  [("deadline_ns", (·.deadlineNs)), ("passes", (·.passes)), ("samples", (·.samples)), ("window_ns", (·.windowNs)),
+   ("windows", (·.windows))]
+
+def Auditor.json (a : Auditor) : Json := Json.mkObj (SESSION_KEYS.map fun (k, f) => (k, toJson (f a)))
+
+/-- The auditor's session parameters from `j`, an object of `SESSION`'s keys, each a positive integer. -/
+def Auditor.ofJson (j : Json) : V Auditor := do
+  let keys := SESSION_KEYS.map (·.1)
+  let .obj kvs := j | throw s!"a session is {keys}"
+  if kvs.keys != keys then throw s!"a session is {keys}"
+  pure { deadlineNs := ← positive j "deadline_ns" "session", passes := ← positive j "passes" "session",
+         samples := ← positive j "samples" "session", windowNs := ← positive j "window_ns" "session",
+         windows := ← positive j "windows" "session" }
+
+/-- The session's parameters under the auditor's `a`. -/
+def Auditor.params (a : Auditor) : Session.Params :=
+  { deadlineNs := a.deadlineNs, windows := a.windows, samples := a.samples, minPasses := a.passes,
+    windowNs := a.windowNs, lifetime := lifetime a.windowNs }
+
+/-- What the prover's request R asks for, refused unless R's keys are `REQUEST_KEYS`, its node is the registration's,
+and the rest are positive integers. -/
+def askedOf (held : Held) (r : Json) : V Auditor := do
   let .obj kvs := r | throw s!"a request is {REQUEST_KEYS}"
   if !(kvs.toArray.size == REQUEST_KEYS.length && REQUEST_KEYS.all (J.has r ·)) then throw s!"a request is {REQUEST_KEYS}"
   let node ← match unhex (← J.str r "node" "request") with
     | .ok b => pure b
     | .error e => throw s!"request.node: {e}"
   if node != held.reg.node then throw "the request's node is not the registration's"
-  let windowNs ← positive r "window_ns"
-  pure { deadlineNs := ← positive r "deadline_ns", windows := ← positive r "windows", samples := ← positive r "samples",
-         minPasses := ← positive r "passes", windowNs, lifetime := lifetime windowNs }
+  pure { deadlineNs := ← positive r "deadline_ns" "request", passes := ← positive r "passes" "request",
+         samples := ← positive r "samples" "request", windowNs := ← positive r "window_ns" "request",
+         windows := ← positive r "windows" "request" }
+
+/-- What `asked` asks for held to the auditor's `a`: the session's parameters, `a`'s, refused unless every value is
+`a`'s, naming each that isn't, as `p2_party.params_of` refuses it. -/
+def heldTo (a asked : Auditor) : V Session.Params := do
+  let off := SESSION_KEYS.filter fun (_, f) => f asked != f a
+  unless off.isEmpty do
+    throw ("; ".intercalate (off.map fun (k, f) => s!"the request's {k} is not the auditor's ({f asked}, not {f a})"))
+  pure a.params
+
+/-- `p2_party.params_of` on the prover's request R under the auditor's session parameters `a` (`askedOf`, `heldTo`). -/
+def requestOf (held : Held) (a : Auditor) (r : Json) : V Session.Params := do
+  heldTo a (← askedOf held r)
+
+/-- What the prover's first line, `{"request": R}`, asks for (`askedOf`). -/
+def askedOn (held : Held) (line : ByteArray) : V Auditor := do
+  let some r := messageOf line "request" | throw "the prover's first line is {\"request\": R}"
+  askedOf held r
+
+/-- `requestOf` on the prover's first line, `{"request": R}`. -/
+def paramsOf (held : Held) (a : Auditor) (line : ByteArray) : V Session.Params := do
+  heldTo a (← askedOn held line)
 
 /-- The registration `Session` keeps a P2 session's books on: the store's U units as its blocks, which is all of it
 `Session` reads here (the session's digest is the P2 registration's, `init`, and an opening is checked by
@@ -157,7 +214,7 @@ def checkOpeningsChunked (size : Nat) (reg : P2.Registration) (w : WindowRecord)
     Task.spawn (prio := .dedicated) fun _ =>
       checkOpenings reg w (drawn.extract (c * size) ((c + 1) * size)) (openings.extract (c * size) ((c + 1) * size))
   for t in tasks do
-    if let .reject f at? := t.get then return .reject f at?
+    if t.get ≠ .accept then return t.get
   return .accept
 
 /-- A line out of form, or a prover gone: the session rejected `malformed` at the window filling, as `p2_party`
@@ -221,17 +278,37 @@ private def atJ : Option (Nat × Nat) → Json
   | some (i, p) => .arr #[toJson i, toJson p]
   | none => .null
 
-/-- `p2_party.answer` less its `reason`: `accept` with the credited reads, `reject` with the failure, its window and
-the draw it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass reads. The credited
-reads `q_bytes` are the receipts less the wrong ones the pooled bound at δ leaves (`Pooled.pooled`, rounded up; all
-of them where it has none), 8,224 bytes each, over the span from the first challenge's release to the last window's
-deadline. -/
+/-- What an accepted session credits: its receipts, the wrong ones the pooled bound at δ leaves (`Pooled.pooled`,
+rounded up; all of them where it has none) and that bound, each window's draws, the credited reads `q_bytes`, the
+receipts less the wrong ones at 8,224 bytes each, and the span they are over, from the first challenge's release to
+the last window's deadline. -/
+structure Credit where
+  receipts : Nat
+  wrong : Nat
+  bound : Json
+  draws : Array Nat
+  qBytes : Nat
+  spanNs : Nat
+
+def credit (sm : Session.Summary) : Credit :=
+  let ws := sm.windows.map fun w => (w.lengths.toList.sum, w.drawn)
+  let us := (ws.map (·.1)).toList.sum
+  let (wrong, bound) := match Pooled.pooled ws DELTA with
+    | .ok b => ((b.wrong.num.toNat + b.wrong.den - 1) / b.wrong.den,
+        Json.mkObj [("budget", ratJ b.budget), ("floor", ratJ b.floor), ("floors", .arr (b.floors.map ratJ)),
+          ("wrong", ratJ b.wrong)])
+    | .error why => (us, Json.mkObj [("refused", .str why)])
+  { receipts := us, wrong, bound, draws := ws.map (·.2), qBytes := (us - wrong) * P2.UNIT_BYTES,
+    spanNs := ((sm.windows.back?.map (·.deadlineNs)).getD 0) - ((sm.windows[0]?.map (·.releasedNs)).getD 0) }
+
+/-- `p2_party.answer` less its `reason`: `accept` with the credited reads (`credit`), `reject` with the failure, its
+window and the draw it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass reads. -/
 def answer (held : Held) (s : Session.State) : Json :=
   let windows := s.windows.map fun w => Json.mkObj [("passes", toJson w.roots.size),
     ("draws", match w.drawn with | some d => toJson d.size | none => .null),
     ("verdict", match w.verdict with
-      | some .accept => Json.mkObj [("accepted", .bool true), ("at", .null), ("failure", .null)]
-      | some (.reject f at?) => Json.mkObj [("accepted", .bool false), ("at", atJ at?), ("failure", .str f.name)]
+      | some v => Json.mkObj [("accepted", .bool (v == .accept)), ("at", atJ (v.1.bind (·.at?))),
+          ("failure", match v.1 with | some r => .str r.failure.name | none => .null)]
       | none => .null)]
   let base := [("protocol", Json.str PROTOCOL), ("registration", .str (hexOf held.reg.digest)),
     ("unit_bytes", toJson P2.UNIT_BYTES), ("units", toJson held.reg.units), ("plan_units", toJson held.plan.length),
@@ -242,17 +319,10 @@ def answer (held : Held) (s : Session.State) : Json :=
       ("window", toJson f.window)])
   | none, none => Json.mkObj (base ++ [("verdict", .str "undecided")])
   | none, some sm =>
-    let ws := sm.windows.map fun w => (w.lengths.toList.sum, w.drawn)
-    let us := (ws.map (·.1)).toList.sum
-    let (wrong, bound) := match Pooled.pooled ws DELTA with
-      | .ok b => ((b.wrong.num.toNat + b.wrong.den - 1) / b.wrong.den,
-          Json.mkObj [("budget", ratJ b.budget), ("floor", ratJ b.floor), ("floors", .arr (b.floors.map ratJ)),
-            ("wrong", ratJ b.wrong)])
-      | .error why => (us, Json.mkObj [("refused", .str why)])
-    let q := (us - wrong) * P2.UNIT_BYTES
-    let span := ((sm.windows.back?.map (·.deadlineNs)).getD 0) - ((sm.windows[0]?.map (·.releasedNs)).getD 0)
-    Json.mkObj (base ++ [("verdict", .str "accept"), ("receipts", toJson us), ("wrong_at_most", toJson wrong),
-      ("delta", ratJ DELTA), ("bound", bound), ("draws", toJson (ws.map (·.2))), ("q_bytes", toJson q),
-      ("span_ns", toJson span), ("credited_bytes_per_s", if span > 0 then toJson (q * 10 ^ 9 / span) else .null)])
+    let c := credit sm
+    Json.mkObj (base ++ [("verdict", .str "accept"), ("receipts", toJson c.receipts), ("wrong_at_most", toJson c.wrong),
+      ("delta", ratJ DELTA), ("bound", c.bound), ("draws", toJson c.draws), ("q_bytes", toJson c.qBytes),
+      ("span_ns", toJson c.spanNs),
+      ("credited_bytes_per_s", if c.spanNs > 0 then toJson (c.qBytes * 10 ^ 9 / c.spanNs) else .null)])
 
 end RemoteAudit.P2Session

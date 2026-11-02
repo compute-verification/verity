@@ -2,8 +2,7 @@
 contract, and what the harness does with each member, in code, and `check_arm` is what the harness enforces before it runs
 an arm.
 
-An arm is any object with the members of `BenchArm` (v0.6; `Arm`, its old name, is a deprecated alias: the vLLM API's
-`Arm` is a bench mode at the serving level, not a prover under test); the harness loads it by ``module:Class`` (``--arm``),
+An arm is any object with the members of `BenchArm` (v0.6); the harness loads it by ``module:Class`` (``--arm``),
 constructs it with no arguments, and calls `build` once. Device pointers and CUDA streams are Python ints; everything runs in
 the device's primary context, so an arm may use the CUDA runtime, the driver API, or its own shared library.
 
@@ -147,7 +146,7 @@ class Work:
 
 
 @dataclass
-class Gate:
+class GateResult:
     """A gate's verdict at one (shape, flags): `checked` maps each output it compared to ``"all"`` or ``"sampled:<what>"``."""
 
     ok: bool
@@ -199,11 +198,7 @@ class BenchArm(Protocol):
 
     def prepare(self, dev: Any, shape: Shape, flags: frozenset[str], operands: OperandSet) -> Call: ...
 
-    def gate(self, dev: Any, call: Call, shape: Shape, flags: frozenset[str]) -> Gate: ...
-
-
-#: deprecated: BenchArm's v0.4 name
-Arm = BenchArm
+    def gate(self, dev: Any, call: Call, shape: Shape, flags: frozenset[str]) -> GateResult: ...
 
 
 class ArmError(ValueError):
@@ -304,7 +299,7 @@ def fields(template: str) -> set[str]:
         raise ArmError(f"bad placeholder in {template!r}: {ex}") from None
 
 
-def check_gate(gate: Gate, call: Call) -> None:
+def check_gate(gate: GateResult, call: Call) -> None:
     """A gate must name only outputs the call has, and check at least one of them in full."""
     unknown = set(gate.checked) - set(call.outputs)
     if unknown:

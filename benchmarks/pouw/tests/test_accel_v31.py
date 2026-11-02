@@ -1,13 +1,12 @@
-"""Dither v3.1's CPU reference (benchmarks/pouw/accel_v31/v31.py): the binding identity, the row layout, and the stub
-challenger's verdicts on an honest call and on calls that skip a noise tile or forge committed values; and Dither's
-no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table; and both shapes' bound
-on t = min(L, K) / L'. perm_kernel launches within its launch bounds, and with VERITY_POUW_V31_LIB naming a libv31.so built
-for the GPU in hand, the GPU forms W' at L' 1,024 and 2,048 under the permutation perm_kernel writes."""
+"""Dither's no-fold call on the CPU (benchmarks/pouw/accel_v31/v31.py's `Fill`): its coins, its values and tree against
+dither.py's known answers, the verifier's verdicts on honest and cheating calls, the sample check, the bench's tables and
+the kernel timeline, and the bound t = min(L, K) / L' <= 8. perm_kernel launches within its launch bounds, and with
+VERITY_POUW_V31_LIB naming a libv31.so built for the GPU in hand, the GPU forms W' at L' 1,024 and 2,048 under the
+permutation perm_kernel writes."""
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -22,152 +21,26 @@ import v31
 import v31lib
 
 
-def _call(sh: v31.Shape, kind: str = "llm", seed: int = 3):
-    A, B = v31.operands(sh, np.random.default_rng(seed), kind)
+def _coins(f: v31.Fill, seed: int = 3) -> tuple[dict[str, bytes], v31.CallNoise]:
     seeds = {s: bytes([seed, i]) * 32 for i, s in enumerate(v31.STREAMS)}
-    c = v31.Coins.expand(sh, seeds)
-    return A, B, seeds, c, v31.form(sh, A, B, c)
-
-
-@pytest.mark.parametrize("kind", ["llm", "uniform", "zero", "max"])
-@pytest.mark.parametrize("lp,t,k", [(256, 3, 1536), (192, 3, 1536), (256, 3, 1280), (512, 2, 2048)])
-def test_binding_identity_gives_o(kind, lp, t, k):
-    sh = v31.Shape(128, 256, k, lp, t)
-    _, _, _, c, f = _call(sh, kind)
-    v = v31.values(sh, f)
-    assert (v31.binding(sh, f, c, v.T_full) == v.O).all()
-    assert (f.X + 256 * f.wX == f.Ad + v31.v_full(sh, c)).all() and np.abs(f.X).max() <= 128
-
-
-def test_max_operands_pass_256_wraps_in_a_noise_tile():
-    """g-max512's point: wrap3 and wrap4 hold a column's sums in 16-bit lanes, so they flush within a noise tile."""
-    sh = v31.Shape(128, 256, 2048, 512, 2)
-    _, _, _, _, f = _call(sh, "max")
-    per_tile = (f.wW != 0).reshape(sh.n, sh.k // sh.lp, sh.lp).sum(axis=2)
-    assert (per_tile > 256).mean() > 0.25
+    return seeds, v31.CallNoise.expand(f, seeds)
 
 
 def test_coins_have_their_ranges():
-    sh = v31.Shape(128, 128, 768)
-    _, _, _, c, _ = _call(sh)
+    f = v31.Fill(128, 128, 768)
+    _, c = _coins(f)
     assert c.U.min() == -80 and c.U.max() == 80 and c.V.min() == -80 and c.V.max() == 80
     assert set(np.unique(c.dA)) == {0, 1}
-    assert all(sorted(p) == list(range(sh.lp)) for p in c.perm) and len({tuple(p) for p in c.perm}) == len(c.perm)
-
-
-def test_rows_hold_each_cells_words_where_word_leaf_says():
-    sh = v31.Shape(256, 384, 1536, row=2048)
-    _, _, _, _, f = _call(sh)
-    v = v31.values(sh, f)
-    words, obuf = v31.words_buffer(sh, v.T), v31.o_buffer(v.O)
-    assert len(words) == sh.tiles * sh.S * 32768 and len(obuf) == 4 * sh.m * sh.n
-    rng = np.random.default_rng(0)
-    for _ in range(200):
-        i, j, s = int(rng.integers(sh.m)), int(rng.integers(sh.n)), int(rng.integers(1, sh.S + 1))
-        p, o = sh.word_leaf(i, j, s)
-        assert int.from_bytes(v31.row_bytes(sh, words, obuf, p)[o:o + 2], "little") == v.T[s - 1, i, j]
-        p, o = sh.o_leaf(i, j)
-        assert int.from_bytes(v31.row_bytes(sh, words, obuf, p)[o:o + 4], "little") == v.O[i, j]
-    assert all(len(v31.row_bytes(sh, words, obuf, p)) == sh.row for p in range(sh.leaves))
-
-
-@pytest.mark.parametrize("cheat", [None, "skip:4", "forge:1:0.5", "forge:2:0.5", "forgeO:0.5"])
-def test_verdicts(cheat):
-    sh = v31.Shape(256, 256, 1536)
-    A, B, _, _, _ = _call(sh)
-    ch = v31.StubChallenger(b"\x07" * 64)
-    seeds = ch.seeds(0, v31.operand_roots(A, B))
-    prover, _ = v31.prove(sh, A, B, seeds, b"\x09" * 64, 0, cheat)
-    ok, _, line = v31.verdict(sh, ch, 0, prover, 48)
-    assert ok == (cheat is None), line
-    assert line.startswith("ACCEPT" if cheat is None else "REFUSE")
+    assert all(sorted(p) == list(range(f.lp)) for p in c.perm) and len({tuple(p) for p in c.perm}) == len(c.perm)
 
 
 @pytest.mark.parametrize("lp", [256, 192])
 def test_a_tiles_coins_are_the_calls_rows(lp):
-    sh = v31.Shape(384, 256, 1536, lp)
-    seeds = {s: bytes([5, i]) * 32 for i, s in enumerate(v31.STREAMS)}
-    c = v31.Coins.expand(sh, seeds)
-    r = v31.Coins.rows(sh, seeds, range(256, 384), range(128, 256))
+    f = v31.Fill(384, 256, 1536, lp, 3 * lp)
+    seeds, c = _coins(f, 5)
+    r = v31.CallNoise.rows(f, seeds, range(256, 384), range(128, 256))
     assert (r.dA == c.dA[256:]).all() and (r.V == c.V[256:]).all()
     assert (r.dB == c.dB[128:]).all() and (r.U == c.U[128:]).all() and (r.perm == c.perm).all()
-
-
-def _gpu_dir(tmp_path, m=256, n=256, k=1536, cheat=None):
-    """`gpu-prep`'s directory with an exact GPU's outputs (the reference's, in `v31 gate`'s files) and its control."""
-    d = tmp_path / "gate"
-    args = ["v31", "gpu-prep", str(d), str(m), str(n), str(k)] + (["--cheat", cheat] if cheat else [])
-    assert v31.main(args) == 0
-    sh = v31.Shape(m, n, k)
-    A = np.frombuffer((d / "A.bin").read_bytes(), np.int8).reshape(m, k)
-    B = np.frombuffer((d / "B.bin").read_bytes(), np.int8).reshape(n, k)
-    seeds = v31.seeds_from((d / "seeds.bin").read_bytes())
-    ks = (d / "params.bin").read_bytes()[4 + 3 * 128 + 64:4 + 3 * 128 + 128]
-    prover, _ = v31.prove(sh, A, B, seeds, ks, 0, cheat)
-    (d / "words.bin").write_bytes(prover.cm.words)
-    (d / "O.bin").write_bytes(prover.cm.obuf)
-    (d / "levels.bin").write_bytes(v31.levels_bytes(prover.cm.levels))
-    (d / "control").mkdir()
-    for name in ("words", "O", "levels"):
-        (d / "control" / f"{name}.bin").write_bytes(b"\xa5" * len((d / f"{name}.bin").read_bytes()))
-    return d, sh, A, B, seeds, ks, prover
-
-
-def test_gpu_check_passes_an_exact_gpu_and_refuses_a_wrong_word(tmp_path, capsys):
-    d, *_ = _gpu_dir(tmp_path)
-    assert v31.main(["v31", "gpu-check", str(d), "--q", "16"]) == 0
-    assert capsys.readouterr().out.splitlines()[-1].startswith("ACCEPT")
-    w = bytearray((d / "words.bin").read_bytes())
-    w[2 * 1000] ^= 1
-    (d / "words.bin").write_bytes(bytes(w))
-    assert v31.main(["v31", "gpu-check", str(d), "--q", "16"]) == 1
-
-
-def test_gpu_check_wants_a_cheat_refused(tmp_path, capsys):
-    d, *_ = _gpu_dir(tmp_path, cheat="forgeO:1")
-    assert v31.main(["v31", "gpu-check", str(d), "--q", "48"]) == 0
-    assert capsys.readouterr().out.splitlines()[-1].startswith("REFUSE")
-
-
-def test_gpu_sample_rebuilds_a_tile_from_its_rows(tmp_path):
-    """`v31 bench`'s sample files (two tiles of the checked call) from the whole call's reference: the tile alone, from
-    its A and B rows and the coins of those rows, gives the same prefix sums, O and leaves."""
-    _, sh, A, B, seeds, ks, prover = _gpu_dir(tmp_path, 384, 256, 1280)
-    s = tmp_path / "sample"
-    s.mkdir()
-    (s / "seeds.bin").write_bytes(v31.seeds_bytes(seeds))
-    (s / "params.bin").write_bytes(v31.params_file(sh, ks))
-    tiles = [0, 5]
-    (s / "sample.json").write_text(json.dumps({"m": sh.m, "n": sh.n, "k": sh.k, "lp": sh.lp, "t": sh.t, "row": sh.row,
-                                               "tiles": tiles, "root": prover.cm.root.hex()}))
-    O = np.frombuffer(prover.cm.obuf, "<u4").reshape(sh.m, sh.n)
-    for i, tile in enumerate(tiles):
-        tm, tn = divmod(tile, sh.n // v31.TILE)
-        (s / f"t{i}_A.bin").write_bytes(A[tm * 128:(tm + 1) * 128].tobytes())
-        (s / f"t{i}_B.bin").write_bytes(B[tn * 128:(tn + 1) * 128].tobytes())
-        (s / f"t{i}_words.bin").write_bytes(prover.cm.words[tile * sh.S * 32768:(tile + 1) * sh.S * 32768])
-        (s / f"t{i}_O.bin").write_bytes(np.ascontiguousarray(O[tm * 128:(tm + 1) * 128, tn * 128:(tn + 1) * 128]).tobytes())
-        (s / f"t{i}_leaves.bin").write_bytes(b"".join(prover.cm.levels[0][tile * sh.lpt:(tile + 1) * sh.lpt]))
-    assert v31.main(["v31", "gpu-sample", str(s)]) == 0
-    lv = bytearray((s / "t1_leaves.bin").read_bytes())
-    lv[64 * 7] ^= 1
-    (s / "t1_leaves.bin").write_bytes(bytes(lv))
-    assert v31.main(["v31", "gpu-sample", str(s)]) == 1
-
-
-def test_table_sets_gamma_beside_d6(tmp_path, capsys):
-    arms = {a: {"ms": ms, "mhz": 2000} for a, ms in (("lt", 2.0), ("ovl", 3.4), ("call", 4.0), ("gemm", 2.6))}
-    line = {"shape": "8b-qkv", "m": 8192, "n": 6144, "k": 4096, "row": 8192, "cprio": "lo", "carve": 100, "dyn": 1,
-            "arms": arms, "gamma_ovl": 1.7, "gamma_call": 2.0, "gamma_gemm": 1.3, "wrap_rate_A": 0.001, "wrap_rate_B": 0.02}
-    new = dict(line, wrap=4, wcw=256, ccta=1, maxnreg=208, pf=2, arms=dict(arms, cutlass={"ms": 1.7, "mhz": 2000}),
-               gamma_ovl_cutlass=2.0)
-    (tmp_path / "bench.jsonl").write_text("not json\n" + json.dumps(line) + "\n" + json.dumps(new) + "\n")
-    assert v31.main(["v31", "table", str(tmp_path / "bench.jsonl")]) == 0
-    old, row = capsys.readouterr().out.splitlines()[-2:]
-    assert old.startswith("| 8b-qkv | 8B | 8192 x 6144 x 4096 | r8192 lo c100 d1 w1 k0 n208 | 2.000 | - | 3.400 | 1.70 | - |")
-    assert row.startswith("| 8b-qkv | 8B | 8192 x 6144 x 4096 | r8192 lo c100 d1 w4/256 k1 n208 p2 | 2.000 | 1.700 | 3.400 | 1.70 "
-                          "| 2.00 |") and "| 1.70 | 1.00 |" in row
-    assert "| -, -, 2.600, - | -, -, - |" in row
 
 
 def test_timeline_splits_calls_and_measures_the_overlap(tmp_path, capsys):
@@ -180,14 +53,14 @@ def test_timeline_splits_calls_and_measures_the_overlap(tmp_path, capsys):
         (190, 205, "w"), (205, 230, "g"), (230, 270, "l"),
         (235, 245, "w"), (245, 270, "g"), (270, 300, "l"),
     ]
-    names = {"w": "void wrap4_kernel<(int)128>(WrapArgs)", "g": "void gemm_kernel<(bool)1>(GArgs)",
+    names = {"w": "void bits_kernel(Seeds, int, unsigned long, unsigned char *)", "g": "void gemm_kernel<(bool)1>(GArgs)",
              "l": "void leaf_persist<V31Row>(Persist, Domain, V31Row)"}
     rows = ['"Start (ns)","Duration (ns)","Strm","Name"', f'{5 * ms},{ms},7,"[CUDA memset]"']
     rows += [f'{s * ms},{(e - s) * ms},{13 if n == "l" else 14},"{names[n]}"' for s, e, n in spans]
     (tmp_path / "t.csv").write_text("\n".join(rows) + "\n")
     assert v31.main(["v31", "timeline", str(tmp_path / "t.csv")]) == 0
     out = capsys.readouterr().out
-    assert "| wrap4_kernel<128> | ? x ?, ? regs, 0 KB | 1 | 10.000 | 15.000 | 1.50 | 100% |" in out
+    assert "| bits_kernel | ? x ?, ? regs, 0 KB | 1 | 10.000 | 15.000 | 1.50 | 100% |" in out
     assert "| gemm_kernel<true> | ? x ?, ? regs, 0 KB | 1 | 20.000 | 25.000 | 1.25 |" in out
     assert "| leaf_persist<V31Row> | ? x ?, ? regs, 0 KB | 1 | 30.000 | 40.000 | 1.33 | 68% |" in out
     assert "steady period (GEMM end to GEMM end): median 40.000 ms, 40.000, 40.000, 40.000" in out
@@ -221,7 +94,7 @@ def test_timeline_of_fill_once_under_ltw(tmp_path, capsys):
         g, b, r, sm = launch.get(n, (1, 128, 32, 0.0))
         rows.append(f'{s * ms},{(e - s) * ms},{g},{b},{r},0.000,{sm},{13 if n in "sl" else 14},"{names[n]}"')
     (tmp_path / "t.csv").write_text("\n".join(rows) + "\n")
-    assert v31.main(["v31", "timeline", str(tmp_path / "t.csv"), "--gemm", "gemm", "--from", "bits_kernel"]) == 0
+    assert v31.main(["v31", "timeline", str(tmp_path / "t.csv")]) == 0
     out = capsys.readouterr().out
     assert "6 calls (2 serial), steady overlapped calls 3..5" in out
     gemm = "cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16>"
@@ -231,24 +104,11 @@ def test_timeline_of_fill_once_under_ltw(tmp_path, capsys):
     assert "fill_b_kernel" not in out
     assert "serial call: 19.000 ms; steady period (GEMM end to GEMM end): median 14.000 ms, 14.000, 14.000, 14.000" in out
     assert "steady calls 42.000 ms: compute alone 50.0%, commit alone 0.0%, both 50.0%, neither 0.0%" in out
-    assert v31.main(["v31", "timeline", str(tmp_path / "t.csv"), "--gemm", "gemm", "--from", "wrap4_kernel"]) == 2
+    assert v31.main(["v31", "timeline", str(tmp_path / "t.csv"), "--from", "serve_rows_kernel"]) == 2
     capsys.readouterr()
 
 
-def test_challenger_keeps_the_order_and_never_redraws():
-    sh = v31.Shape(128, 128, 768)
-    ch = v31.StubChallenger(os.urandom(64))
-    with pytest.raises(RuntimeError):
-        ch.check(0, b"r" * 64, sh, 4)
-    ch.seeds(0, b"o" * 128)
-    with pytest.raises(RuntimeError):
-        ch.seeds(0, b"o" * 128)
-    ch.check(0, b"r" * 64, sh, 4)
-    with pytest.raises(RuntimeError):
-        ch.check(0, b"r" * 64, sh, 4)
-
-
-# ---------------------------------------------------------------------------------------------------- Dither's no-fold call
+# ------------------------------------------------------------------------------------------------------------ known answers
 # Known answers of verity/core/protocols/pouw/circuit/dither.py (`values_buffer`, `commit` under salts(Ks, 3 leaves),
 # `pad_rows`, `Shape.domain`) on salt bytes 0..63, coin 64..127, operand-root receipt 128..191, Ks 192..255, call 3, and B
 # (and the served A) from default_rng(11)
@@ -283,11 +143,11 @@ def test_fill_is_dithers_no_fold_call(case):
         seeds = v31.served_seeds(bytes(range(64, 128)), bytes(range(128, 192)), 3)
         assert set(seeds) == set(v31.STREAMS)
     else:
-        seeds = v31.fill_seeds(bytes(range(64)), bytes(range(64, 128)))
+        seeds = v31.call_seeds(bytes(range(64)), bytes(range(64, 128)))
         A = v31.pad_rows(seeds, range(m), k)
         assert hashlib.sha512(A.tobytes()).hexdigest() == pad_h
         assert np.array_equal(v31.pad_rows(seeds, range(5, 9), k), A[5:9])
-    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds)))
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds)))
     assert hashlib.sha512(values).hexdigest() == values_h
     assert f.leaves == leaves and f.domain().domain_id.hex() == dom_h
     assert v31.fill_commit(f, values, bytes(range(192, 256)), 3 * leaves).root.hex() == root_h
@@ -297,7 +157,7 @@ def test_fill_is_dithers_no_fold_call(case):
 def _fill_answer(f: v31.Fill, cm, B: np.ndarray, A: np.ndarray | None):
     def answer(i: int, j: int, s: int) -> dict:
         pos = v31.fill_cells_positions(f, i, j, s)
-        return {"rows": {p: (cm.row(p), cm.salt(p), cm.path(p)) for p in pos}, "B": B[j], "A": None if A is None else A[i]}
+        return {"rows": {p: cm.open(p) for p in pos}, "B": B[j], "A": None if A is None else A[i]}
     return answer
 
 
@@ -315,10 +175,10 @@ def test_fill_verdicts(cheat, served, L):
         seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 0)
         A = rng.integers(-128, 128, size=(f.m, f.k)).astype(np.int8)
     else:
-        seeds = v31.fill_seeds(rng.bytes(64), rng.bytes(64))
+        seeds = v31.call_seeds(rng.bytes(64), rng.bytes(64))
         A = None
     Aop = v31.pad_rows(seeds, range(f.m), f.k) if A is None else A
-    co = v31.Coins.expand(f, seeds)
+    co = v31.CallNoise.expand(f, seeds)
     T, O = v31.fill_values(f, Aop, B, co, skip=5 if cheat == "skip" else None)
     if cheat == "forge" and f.W >= 2:
         T[1] ^= 0x0F0F
@@ -342,16 +202,14 @@ def test_fill_verdicts(cheat, served, L):
     assert "don't open the root" in v31.fill_check(f, seeds, cm.root, *picks[0], bad)
 
 
-def test_both_shapes_refuse_t_past_8():
-    """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise period"), in v3.1's Shape and in
-    Fill: L 8,192 at L' 256 is refused at K 16,384 and L 4,096 at L' 512 passes, as do the defaults, L >= K at
-    L' >= K / 8, and every call the GPU's gates (v31lib.GATES and PIPELINE) and fill_dither.py's cases build."""
-    with pytest.raises(ValueError, match="at most 8"):
-        v31.Shape(128, 128, 16384, 256, 32)
+def test_fill_refuses_t_past_8():
+    """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise tile"): L 8,192 at L' 256 is
+    refused at K 16,384 and L 4,096 at L' 512 passes, as do the defaults, L >= K at L' >= K / 8, and every call the GPU's
+    gates (v31lib.GATES and PIPELINE) and fill_dither.py's cases build."""
     with pytest.raises(ValueError, match="at most 8"):
         v31.Fill(128, 128, 16384, 256, 8192)
-    assert v31.Shape(128, 128, 16384, 512, 8).L == v31.Fill(128, 128, 16384, 512, 4096).L == 4096
-    assert v31.Shape(128, 128, 16384).t == 3 and v31.Fill(128, 128, 16384).L == 8 * v31.Fill(128, 128, 16384).lp
+    assert v31.Fill(128, 128, 16384, 512, 4096).L == 4096
+    assert v31.Fill(128, 128, 16384).L == 8 * v31.Fill(128, 128, 16384).lp
     assert v31.Fill(128, 128, 4096, 512, 8192).S == 1
     for line in v31lib.GATES.strip().splitlines():
         _, kind, *dims = line.split()[:8]
@@ -373,10 +231,11 @@ def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys, served):
         seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 5)
         A = rng.integers(-127, 128, size=(f.m, f.k)).astype(np.int8)
     else:
-        seeds = v31.fill_seeds(rng.bytes(64), rng.bytes(64))
+        seeds = v31.call_seeds(rng.bytes(64), rng.bytes(64))
         A = v31.pad_rows(seeds, range(f.m), f.k)
     ks, off = rng.bytes(64), 5 * f.leaves
-    cm = v31.fill_commit(f, v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds))), ks, off)
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds)))
+    cm = v31.fill_commit(f, values, ks, off)
     args = ["--served"] if served else []
     assert v31.main(["v31", "fill-params", str(tmp_path / "p"), "--L", "512", "--row", "2048", "x:256:384:1024", *args]) == 0
     name = v31.fill_params_name(256, 384, 1024, 256, 512, 2048, served)
@@ -393,7 +252,7 @@ def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys, served):
         tm, tn = divmod(tile, f.n // v31.TILE)
         (s / f"t{i}_A.bin").write_bytes(A[tm * 128:(tm + 1) * 128].tobytes())
         (s / f"t{i}_B.bin").write_bytes(B[tn * 128:(tn + 1) * 128].tobytes())
-        (s / f"t{i}_words.bin").write_bytes(cm.values[tile * tb:(tile + 1) * tb])
+        (s / f"t{i}_words.bin").write_bytes(values[tile * tb:(tile + 1) * tb])
         (s / f"t{i}_leaves.bin").write_bytes(b"".join(cm.levels[0][tile * f.lpt:(tile + 1) * f.lpt]))
     assert v31.main(["v31", "fill-sample", str(s)]) == 0
     lv = bytearray((s / "t1_leaves.bin").read_bytes())

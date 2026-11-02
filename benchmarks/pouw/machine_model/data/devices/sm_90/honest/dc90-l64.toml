@@ -3,7 +3,7 @@
 # committed word needs no load.
 name = "dc90-l64"
 status = "provisional"
-source = "CALC from EPS1 DC's census: duo is LOP3 + IMAD + LEA.HI a word on sm_90 (DC), 64 committed words a lane a MMA at L = 64"
+source = "from this device's census: duo is LOP3 + IMAD + LEA.HI a word on sm_90, 64 committed words a lane a MMA at L = 64"
 L = 64
 
 [mma]

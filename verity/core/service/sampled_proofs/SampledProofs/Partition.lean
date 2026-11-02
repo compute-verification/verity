@@ -9,6 +9,9 @@ wider than the widest class is refused (a template instance's bits are its disti
 `Q_call` unit's count the constants its activation holds, `committedBits`, which `Q_call`'s width rule leaves out; a
 `Q_word` unit's are its cut's), and so is a program with a template of no gate. The verifier holds its own copy of the
 program and applies the query itself; it never takes a population or a unit index on the prover's word.
+`unitGates` runs as `unitGatesFast` (`@[csimp]`, `unitGates_eq_unitGatesFast`): a template query's units read their
+gates off one `table`, each root callee's gate count computed once through a memo (`gatesMemo`) and each range's offset
+once, where `TemplateQuery.gates` recomputes both per unit.
 -/
 import Flock.HmRow
 import Flock.TemplateQuery
@@ -17,12 +20,13 @@ import Flock.Extract
 import Flock.Qcall
 import SampledProofs.Json
 import SampledProofs.Program
+import Std.Data.HashMap
 
 namespace SampledProofs.Partition
 
 open Lean (Json)
 open Flock (V)
-open Flock.TemplateQuery (TRange)
+open Flock.TemplateQuery (TRange Desc DDef DNode)
 
 /-- `partition_object.QUERIES`, the queries a partition may name. C-Flock's form check leaves the names open. -/
 def QUERIES : List (String × Nat) :=
@@ -199,8 +203,227 @@ def wordGates (P : Flock.Program.Prog) (k d : Nat) (c : Flock.Qword.DCut) : V (A
     | some s => pure s
     | none => throw s!"query-refused: a unit of {(P.defs[d]!).key} owns no gate"
 
+/-- Each Definition of `d` by its id, the first of an id as `Desc.def?` finds it. -/
+def defMap (d : Desc) : Std.HashMap String DDef := d.defs.foldr (fun p m => m.insert p.1 p.2) {}
+
+theorem defMap_get (d : Desc) (id : String) : (defMap d)[id]? = d.def? id := by
+  unfold defMap Flock.TemplateQuery.Desc.def?
+  rw [← Array.foldr_toList, ← Array.find?_toList]
+  induction d.defs.toList with
+  | nil => simp
+  | cons x l ih =>
+    simp only [List.foldr_cons, List.find?_cons, Std.HashMap.getElem?_insert, ih]
+    by_cases h : x.1 = id
+    · simp [h]
+    · have h' : (x.1 == id) = false := by simpa using h
+      simp [h']
+
+/-- Gate counts by fuel and Definition id. -/
+abbrev Memo := Std.HashMap (Nat × String) Nat
+
+/-- `Desc.gatesIn` through the memo `M`: a composite's count is computed once per fuel and recorded, so a Definition
+reached again at the same depth is a lookup, and the walk is proportional to the descriptor's nodes times its depth. -/
+def gatesMemo (d : Desc) (dm : Std.HashMap String DDef) : Nat → String → Memo → Nat × Memo
+  | 0, _, M => (0, M)
+  | n + 1, id, M =>
+    match M[(n + 1, id)]? with
+    | some v => (v, M)
+    | none =>
+      match dm[id]? with
+      | none => (0, M)
+      | some df =>
+        if df.prim then (1, M) else
+        let r := df.nodes.foldl (fun (r : Nat × Memo) x =>
+          let s := gatesMemo d dm n (d.callees.getD x.fn "") r.2
+          (r.1 + x.members * s.1, s.2)) (0, M)
+        (r.1, r.2.insert (n + 1, id) r.1)
+
+/-- Every count `M` holds is `Desc.gatesIn`'s. -/
+def MemoExact (d : Desc) (M : Memo) : Prop := ∀ n id v, M[(n, id)]? = some v → v = d.gatesIn n id
+
+theorem MemoExact.insert {d : Desc} {M : Memo} (h : MemoExact d M) (n : Nat) (id : String) :
+    MemoExact d (M.insert (n, id) (d.gatesIn n id)) := by
+  intro m id' v hv
+  rw [Std.HashMap.getElem?_insert] at hv
+  split at hv
+  · rename_i he
+    cases eq_of_beq he
+    simp only [Option.some.injEq] at hv
+    exact hv.symm
+  · exact h _ _ _ hv
+
+theorem gatesMemo_spec (d : Desc) (dm : Std.HashMap String DDef) (hdm : ∀ id, dm[id]? = d.def? id) :
+    ∀ n id M, MemoExact d M →
+      (gatesMemo d dm n id M).1 = d.gatesIn n id ∧ MemoExact d (gatesMemo d dm n id M).2 := by
+  intro n
+  induction n with
+  | zero => intro id M hM; exact ⟨by simp [gatesMemo, Flock.TemplateQuery.Desc.gatesIn], hM⟩
+  | succ n ih =>
+    intro id M hM
+    simp only [gatesMemo]
+    split
+    · rename_i v hv
+      exact ⟨hM _ _ _ hv, hM⟩
+    · rw [hdm]
+      simp only [Flock.TemplateQuery.Desc.gatesIn]
+      cases hd : d.def? id with
+      | none => exact ⟨rfl, hM⟩
+      | some df =>
+        simp only
+        split
+        next => exact ⟨rfl, hM⟩
+        next hp =>
+          have key : ∀ (l : List DNode) (acc : Nat) (M : Memo), MemoExact d M →
+              (l.foldl (fun (r : Nat × Memo) x =>
+                let s := gatesMemo d dm n (d.callees.getD x.fn "") r.2
+                (r.1 + x.members * s.1, s.2)) (acc, M)).1 =
+                l.foldl (fun acc x => acc + x.members * d.gatesIn n (d.callees.getD x.fn "")) acc ∧
+              MemoExact d (l.foldl (fun (r : Nat × Memo) x =>
+                let s := gatesMemo d dm n (d.callees.getD x.fn "") r.2
+                (r.1 + x.members * s.1, s.2)) (acc, M)).2 := by
+            intro l
+            induction l with
+            | nil => intro acc M hM; exact ⟨rfl, hM⟩
+            | cons x l ihl =>
+              intro acc M hM
+              obtain ⟨h1, h2⟩ := ih (d.callees.getD x.fn "") M hM
+              simp only [List.foldl_cons]
+              rw [← h1]
+              exact ihl _ _ h2
+          obtain ⟨k1, k2⟩ := key df.nodes.toList 0 M hM
+          rw [Array.foldl_toList, Array.foldl_toList] at k1
+          rw [Array.foldl_toList] at k2
+          refine ⟨k1, ?_⟩
+          have e : df.nodes.foldl (fun acc x => acc + x.members * d.gatesIn n (d.callees.getD x.fn "")) 0 =
+              d.gatesIn (n + 1) id := by
+            simp only [Flock.TemplateQuery.Desc.gatesIn, hd, hp]; rfl
+          rw [k1, e]
+          exact k2.insert (n + 1) id
+
+/-- `Desc.gates` of every callee of `d`'s root nodes, through one memo (`gatesMemo`) shared across them. -/
+def gTable (d : Desc) : Std.HashMap String Nat :=
+  let dm := defMap d
+  match dm[d.root]? with
+  | none => {}
+  | some root => (root.nodes.foldl (fun (r : Std.HashMap String Nat × Memo) x =>
+      let c := d.callees.getD x.fn ""
+      let s := gatesMemo d dm Flock.Steps.FUEL c r.2
+      (r.1.insert c s.1, s.2)) ({}, {})).1
+
+theorem gTable_spec (d : Desc) (c : String) (v : Nat) (h : (gTable d)[c]? = some v) : v = d.gates c := by
+  unfold gTable at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · have key : ∀ (l : List DNode) (r : Std.HashMap String Nat × Memo),
+        (∀ c v, r.1[c]? = some v → v = d.gates c) → MemoExact d r.2 →
+        (∀ c v, (l.foldl (fun (r : Std.HashMap String Nat × Memo) x =>
+          let c := d.callees.getD x.fn ""
+          let s := gatesMemo d (defMap d) Flock.Steps.FUEL c r.2
+          (r.1.insert c s.1, s.2)) r).1[c]? = some v → v = d.gates c) := by
+      intro l
+      induction l with
+      | nil => intro r h1 _; exact h1
+      | cons x l ihl =>
+        intro r h1 h2
+        obtain ⟨s1, s2⟩ :=
+          gatesMemo_spec d (defMap d) (defMap_get d) Flock.Steps.FUEL (d.callees.getD x.fn "") r.2 h2
+        apply ihl _ _ s2
+        intro c' v' hv'
+        simp only [Std.HashMap.getElem?_insert] at hv'
+        split at hv'
+        · rename_i he
+          cases eq_of_beq he
+          simp only [Option.some.injEq] at hv'
+          rw [← hv', s1]; rfl
+        · exact h1 _ _ hv'
+    rw [← Array.foldl_toList] at h
+    exact key _ _ (by simp) (by intro n id v hv; simp at hv) c v h
+
+/-- `Desc.gates` of `c` read off `G`, or computed where `G` has no entry. -/
+def look (d : Desc) (G : Std.HashMap String Nat) (c : String) : Nat :=
+  match G[c]? with
+  | some v => v
+  | none => d.gates c
+
+theorem look_gTable (d : Desc) : look d (gTable d) = d.gates := by
+  funext c
+  unfold look
+  split
+  · rename_i v hv; exact gTable_spec d c v hv
+  · rfl
+
+/-- The gates of `root`'s nodes before node `k`, each callee's count by `g` (`TemplateQuery.gates`' offset at
+`g = d.gates`). -/
+def offWith (d : Desc) (g : String → Nat) (root : DDef) (k : Nat) : Nat :=
+  (root.nodes.extract 0 k).foldl (fun acc x => acc + x.members * g (d.callees.getD x.fn "")) 0
+
+/-- What `TemplateQuery.gates` reads per unit, once per program and ranges: the root, each root callee's gates
+(`gTable`) and the offset of each range's node. -/
+structure GateTable where
+  root : Option DDef
+  G : Std.HashMap String Nat
+  offs : Std.HashMap Nat Nat
+
+def table (d : Desc) (rs : Array TRange) : GateTable :=
+  let G := gTable d
+  let root := d.def? d.root
+  { root, G, offs := match root with
+      | none => {}
+      | some r => rs.foldl (fun o x => o.insert x.node (offWith d (look d G) r x.node)) {} }
+
+/-- `TemplateQuery.gates` off a `GateTable`. -/
+def gatesBy (d : Desc) (tb : GateTable) (rs : Array TRange) (i : Nat) : Option (Nat × Nat) := do
+  let (k, m, t) ← Flock.TemplateQuery.locate rs i
+  let root ← tb.root
+  let off := match tb.offs[k]? with
+    | some o => o
+    | none => offWith d (look d tb.G) root k
+  let g := look d tb.G t
+  return (off + m * g, off + m * g + g)
+
+theorem offs_spec (d : Desc) (g : String → Nat) (r : DDef) (rs : Array TRange) (k o : Nat)
+    (h : (rs.foldl (fun (o : Std.HashMap Nat Nat) (x : TRange) => o.insert x.node (offWith d g r x.node)) {})[k]? =
+      some o) : o = offWith d g r k := by
+  rw [← Array.foldl_toList] at h
+  have key : ∀ (l : List TRange) (O : Std.HashMap Nat Nat), (∀ k o, O[k]? = some o → o = offWith d g r k) →
+      ∀ k o, (l.foldl (fun (o : Std.HashMap Nat Nat) (x : TRange) => o.insert x.node (offWith d g r x.node)) O)[k]? =
+        some o → o = offWith d g r k := by
+    intro l
+    induction l with
+    | nil => intro O h; exact h
+    | cons x l ihl =>
+      intro O hO
+      apply ihl
+      intro k' o' h'
+      simp only [Std.HashMap.getElem?_insert] at h'
+      split at h'
+      · rename_i he
+        cases eq_of_beq he
+        simp only [Option.some.injEq] at h'
+        exact h'.symm
+      · exact hO _ _ h'
+  exact key _ _ (by intro k o h; simp at h) k o h
+
+theorem gatesBy_table (d : Desc) (rs : Array TRange) (i : Nat) :
+    gatesBy d (table d rs) rs i = Flock.TemplateQuery.gates d rs i := by
+  simp only [gatesBy, table, Flock.TemplateQuery.gates, look_gTable]
+  cases Flock.TemplateQuery.locate rs i with
+  | none => rfl
+  | some kmt =>
+    obtain ⟨k, m, t⟩ := kmt
+    cases d.def? d.root with
+    | none => rfl
+    | some r =>
+      simp only [Option.bind_eq_bind, Option.bind_some]
+      split
+      · rename_i o ho
+        rw [offs_spec d d.gates r rs k o ho]
+        rfl
+      · rfl
+
 /-- `partition.unit_gates`: each unit's gates `[lo, hi)` in root gates, by unit: an instance's (`TemplateQuery.gates`),
-a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. -/
+a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. It runs as `unitGatesFast`. -/
 def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
   let rs ← evaluate p query
   let q := getD (build (Flock.hexOf p.sha512) query) "query"
@@ -217,5 +440,29 @@ def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
     return ← (← wordCalls p.prog).foldlM (fun acc (k, d, c) => return acc ++ (← wordGates p.prog k d c)) #[]
   return (← Flock.Qcall.evaluate p.prog X).foldl (fun acc c =>
     acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[]
+
+/-- `unitGates` with a template query's units read off one `table` of the program and ranges (`gatesBy`), rather than
+each unit recomputing its node's offset and its template's gates. -/
+def unitGatesFast (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
+  let rs ← evaluate p query
+  let q := getD (build (Flock.hexOf p.sha512) query) "query"
+  let name := (q.getObjValAs? String "name").toOption.getD ""
+  let version := (nat? (getD q "version")).getD 0
+  let X := (nat? (getD (getD q "params") "X")).getD 0
+  if (Flock.TemplateQuery.templatesOf name version (getD q "params")).isSome then
+    let tb := table p.desc rs
+    return ← (Array.range (Flock.TemplateQuery.population rs)).mapM fun u =>
+      match gatesBy p.desc tb rs u with
+      | some g => pure g
+      | none => throw s!"unit {u} has no instance"
+  let root := (p.prog.defs[p.prog.root]!).body
+  if name == "Q_word" then
+    return ← (← wordCalls p.prog).foldlM (fun acc (k, d, c) => return acc ++ (← wordGates p.prog k d c)) #[]
+  return (← Flock.Qcall.evaluate p.prog X).foldl (fun acc c =>
+    acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[]
+
+@[csimp] theorem unitGates_eq_unitGatesFast : @unitGates = @unitGatesFast := by
+  funext p query
+  simp only [unitGates, unitGatesFast, gatesBy_table]
 
 end SampledProofs.Partition

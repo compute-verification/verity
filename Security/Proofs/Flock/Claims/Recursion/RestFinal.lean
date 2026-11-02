@@ -102,9 +102,6 @@ theorem cutRounds_rest : ∀ (lens : List (List ℕ)) (m : Msg) {os : List (List
 
 /-! ## The openings' bytes and rows -/
 
-theorem pieceLen_append (a b : List (Msg × List HmNets.Lin)) : pieceLen (a ++ b) = pieceLen a + pieceLen b := by
-  simp only [pieceLen, List.map_append, List.sum_append]
-
 theorem pieceLen_salt (c : Circuit) (q n : ℕ) :
     pieceLen [(([] : Msg), hmSalt c q n)] = Hm96.sha512.saltBytes := by
   simp only [pieceLen, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, List.length_nil, hmSalt,

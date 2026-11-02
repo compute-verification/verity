@@ -23,13 +23,6 @@ def erepProg {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemble 
       firstWait k opens assemble check ((List.finRange m).map fun i => (List.finRange K).map (ρ i))
     else .ret none
 
-/-- `E^rep`'s program is `erepProg` at the judged run's coins. -/
-theorem ERep_ext_eq {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] (V : Verifier Coin) (m k K : Msg → ℕ)
-    (opens : Seen → List Op) (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg)
-    (r₀ : Fin (V.k x) → Coin) (ρ : (ERep V m k K opens assemble check).C x) :
-    (ERep V m k K opens assemble check).ext x r₀ ρ = erepProg (m x) (k x) (K x) opens (assemble x) (check x) r₀ ρ :=
-  rfl
-
 /-! ## One wait -/
 
 /-- **A wait's weighted reruns**: `Σ w` over the draws `rs` it reruns at, from `a` accepted so far. -/

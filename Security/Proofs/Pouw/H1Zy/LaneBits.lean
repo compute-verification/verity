@@ -205,8 +205,6 @@ theorem ofBits_bv {n : ℕ} (x : BitVec n) : ofBits (bv x) = x := by
   rw [ofBits, BitVec.getLsbD_cast, BitVec.getLsbD_ofBoolListLE]
   simp [List.getD_eq_getElem?_getD, hi, bv, BitVec.getLsbD_eq_getElem]
 
-theorem bitsOf_eq_bv : bitsOf = bv (n := 32) := rfl
-
 theorem muxBit_eq (s a b : Bool) : muxBit s a b = mux s a b := by cases s <;> cases a <;> cases b <;> rfl
 
 theorem mask32Bits_bv (w : BitVec 32) (live : Bool) : mask32Bits (bv w) live = bv (mask32 w live) := by

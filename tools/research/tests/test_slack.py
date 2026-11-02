@@ -1673,6 +1673,10 @@ class FakeRoute:
             return 200, {"id": "42", "ts": "1790800000.000100", "channel": ASK}
         if method == "POST" and path.endswith("/resolve"):
             return (200, {"status": "decided", "choice": body["choice"], "source": "thread"}) if self.resolve else (404, {"error": "not_found"})
+        if method == "POST" and path.endswith("/extend"):
+            return 200, {"status": "pending", "deadline": body["deadline"], "held": False}
+        if method == "POST" and path.endswith("/withdraw"):
+            return 200, {"status": "withdrawn", "deadline": None, "held": False}
         if method == "GET":
             return 200, self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
         return 404, {"error": "not_found"}
@@ -1913,6 +1917,30 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     route.answer = (403, {"error": "not_your_card"})
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no")
     assert rc == 2 and "only a card's own asker" in err
+
+
+def test_extend_moves_a_cards_deadline_and_withdraw_takes_it_back(route, registry, capsys):
+    rc, out, _ = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z", "--note", "revising the page")
+    assert rc == 0 and out == "pending 2026-09-30T23:00:00Z False\n"
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/extend",
+                                  {"deadline": "2026-09-30T23:00:00Z", "note": "revising the page"})
+    rc, out, _ = run(capsys, "ask-daniel", "withdraw", "42", "--note", "events overtook it")
+    assert rc == 0 and out == "withdrawn - False\n"
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/withdraw", {"note": "events overtook it"})
+    n = len(route.requests)
+    rc, _, err = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z", "--dry-run")
+    assert rc == 0 and len(route.requests) == n and 'dry-run: POST' in err and '/42/extend {"deadline": "2026-09-30T23:00:00Z"}' in err
+    for argv, says in ((["extend", "42"], "ask-daniel extend needs --deadline"),
+                       (["withdraw", "42"], "ask-daniel withdraw needs --note"),
+                       (["extend", "42", "--deadline", "soon"], "--deadline 'soon'")):
+        rc, _, err = run(capsys, "ask-daniel", *argv)
+        assert rc == 2 and says in err, (argv, err)
+    route.answer = (409, {"error": "already_decided"})
+    rc, _, err = run(capsys, "ask-daniel", "withdraw", "42", "--note", "late")
+    assert rc == 2 and "the card is closed (HTTP 409" in err and "ask-daniel status ID" in err
+    route.answer = (404, {"error": "not_found"})
+    rc, _, err = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z")
+    assert rc == 2 and "ask-daniel extend 42: HTTP 404: no card has that ID" in err
 
 
 def test_ask_daniels_dry_run_prints_the_card_and_sends_nothing(route, registry, capsys):
@@ -2954,6 +2982,8 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
     retired = fake.add(COORD, text="<!subteam^SRETIRED> how does Daniel like reports?", username="top", bot_id=BOT,
                        ts="1600000000.000004")                     # a retired name's group, tagged by its id alone
+    alert = fake.add(COORD, text="@ci @top main hasn't moved for 6 h", username="vy-monitors", bot_id=BOT,
+                     ts="1600000000.000005")                       # a machine's alert: no one owes it an answer
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     rep = json.loads(out)
     assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
@@ -2962,7 +2992,7 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000")
     assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out and out.count(": Slack, no record: no reply or reaction") >= 2
     stale = [s["ts"] for s in rep["unanswered"]]
-    assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
+    assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale and alert["ts"] not in stale
 
 
 @pytest.mark.parametrize("bad", [["circuits"], ["router"], ["two words"], "Codex", [7]])

@@ -7,7 +7,8 @@ node    = SHA512(0x01 || left || right)
 ~~~
 
 The tree has the shape of RFC 6962 (Certificate Transparency): over `k` leaves it splits at the largest power of two
-below `k`, and an audit path lists the siblings from the leaf up, verified as in RFC 9162 §2.1.3.2.  Binding is SHA-512's
+below `k`, and an audit path lists the siblings from the leaf up, verified as in RFC 9162 §2.1.3.2.  It is PoUS's one tree
+in Python: the P2 reference's tree over the spec's leaves and its wire verifier's path checks are this one.  Binding is SHA-512's
 collision resistance, a single-stage property.  A leaf wraps the label's `sha512/row/v2` digest, the digest a
 row-digest gadget checks, in one more compression (99 bytes) that binds it to its salt, segment and index.  Lean's audit
 compares each answer with the true label (`Model/Audit.lean`: "no verifier key ... idealizes the per-block tags"); these
@@ -128,6 +129,18 @@ def verify_path(root: bytes, count: int, i: int, leaf: bytes, path: Sequence[byt
         fn >>= 1
         sn >>= 1
     return sn == 0 and r == root
+
+
+def path_length(count: int, i: int) -> int:
+    """The exact sibling count of leaf `i`'s path in the `count`-leaf tree: what `verify_path` consumes."""
+    if not 0 <= i < count:
+        raise ValueError(f"leaf {i} is outside a tree of {count} leaves")
+    length = 0
+    while count > 1:
+        k = _split(count)
+        i, count = (i, k) if i < k else (i - k, count - k)
+        length += 1
+    return length
 
 
 def leaves(encoding: Encoding) -> tuple[bytes, ...]:

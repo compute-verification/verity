@@ -24,17 +24,17 @@ open Flock Transcript
 namespace InZ
 
 /-- The inner proof's coins, each the reply to its send: `ε`, the batching coins, `β` and the query coins. -/
-structure Coins where
+structure Challenges where
   ce : ℕ → F128
   cg : ℕ → F128
   cb : ℕ → F128
   cq : ℕ → F128
 
-def coinsAt (resp : ℕ → Claims.Msg) (L : ℕ) : Coins :=
+def coinsAt (resp : ℕ → Claims.Msg) (L : ℕ) : Challenges :=
   ⟨coinOf (resp L), coinOf (resp (L + 1)), coinOf (resp (L + 2)), coinOf (resp (L + 3))⟩
 
 variable (lay : Zk.PadLayout) (p : PadsZk) (finalC : F128) (cons : Array (String × Zk.Lin)) (h : ByteArray → ByteArray)
-  (ic : InnerCommit) (cs : Coins)
+  (ic : InnerCommit) (cs : Challenges)
 
 def rho : F128 := cs.ce 0 * p.h[lay.fa]! + p.h[lay.tx]!
 
@@ -196,7 +196,7 @@ pads (`ConsHold`), `β ≠ 0` and `h`'s digests are 64 bytes. -/
 theorem verifyInnerWith_of (h : ByteArray → ByteArray) (h64 : ∀ b, (h b).size = 64) (lay : Zk.PadLayout)
     (tape : TapeZk) (i r : ℕ) (salt : ℕ → ByteArray) {ic : InnerCommit}
     (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) (padsOf tape i r lay) salt = .ok ic) (finalC : F128)
-    {cons : Array (String × Zk.Lin)} (hc : ConsHold cons (padsOf tape i r lay).h) (cs : InZ.Coins)
+    {cons : Array (String × Zk.Lin)} (hc : ConsHold cons (padsOf tape i r lay).h) (cs : InZ.Challenges)
     (hb : (cs.cb 0).isZero = false) (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
     (hR : Agrees R (InZ.tEnd lay (padsOf tape i r lay) finalC cons h cs t).rounds t.k) :
     (Zk.verifyInnerWith (Hashes.ofSha512 h : Hashes V) lay (InZ.proof lay (padsOf tape i r lay) cons h ic cs) finalC

@@ -444,7 +444,7 @@ theorem wordValue_zero : wordValue 0 = some 0 := by
 omit [Fintype τ] [Fintype β] [Fintype γ] in
 /-- **The bridge to the gate, at one input.** When exact `sm120Nvf4` firings `gs` realize a tile program at `X`, `Y`, its
 output from them (the gate words decoded exactly and combined linearly) is its slots' bilinear program at `X`, `Y`. -/
-theorem realizes_out_at {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Gate) (X : Fin m × Fin k → ℚ)
+theorem realizes_out_at {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Firing) (X : Fin m × Fin k → ℚ)
     (Y : Fin k × Fin n → ℚ) (hR : P.RealizesAt gs X Y) (o : Fin m × Fin n) :
     P.outAt gs o = P.toBilin.toQuad.eval X Y o := by
   have hw : ∀ g i j, (((gs g).word i j).bind wordValue).getD 0 =
@@ -453,7 +453,7 @@ theorem realizes_out_at {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Gat
     obtain ⟨hex, hacc, hu, hv⟩ := hR g
     rw [hex i j, hacc i j, wordValue_zero]
     simp only [Option.getD_some, zero_add]
-    exact Finset.sum_congr rfl fun l _ => by rw [Gate.slotValue, hu, hv]
+    exact Finset.sum_congr rfl fun l _ => by rw [Firing.slotValue, hu, hv]
   simp only [TileProg.outAt, hw, QuadProg.eval, BilinProg.toQuad, TileProg.toBilin, Pi.zero_apply, zero_mul,
     Finset.sum_const_zero, add_zero, zero_add, Fintype.sum_prod_type]
   refine Finset.sum_congr rfl fun g _ => Finset.sum_congr rfl fun i _ => ?_
@@ -514,7 +514,7 @@ that, for every live X-entry `x` and live Y-entry `y`, exact firings realize it 
 `(0, e_y)`, and output `X·Y` there. Then it costs at least FP4's per-slot price for every live product. -/
 theorem tile_cost_ge_of_gates {G : ℕ} (P : TileProg ℚ m k n G) {liveX : Fin m × Fin k → Prop}
     {liveY : Fin k × Fin n → Prop} (BX : XBlocks m k β) (hr : P.Representable BX)
-    (hg : ∀ x, liveX x → ∀ y, liveY y → ∃ g11 g10 g01 : Fin G → Gate,
+    (hg : ∀ x, liveX x → ∀ y, liveY y → ∃ g11 g10 g01 : Fin G → Firing,
       P.RealizesAt g11 (unitForm x) (unitForm y) ∧ P.RealizesAt g10 (unitForm x) 0 ∧
         P.RealizesAt g01 0 (unitForm y) ∧
       ∀ o, P.outAt g11 o = matMul (unitForm x) (unitForm y) o ∧ P.outAt g10 o = matMul (unitForm x) 0 o ∧
@@ -530,7 +530,7 @@ theorem tile_cost_ge_of_gates {G : ℕ} (P : TileProg ℚ m k n G) {liveX : Fin 
 
 /-- A one-gate witness: code 1.0 (nibble 2) at `P[0, 0]` and at `Q[0, 0]`, every other code 0, every scale byte
 `0x38` (UE4M3 1.0), accumulators `+0`. -/
-def oneGate : Gate where
+def oneGate : Firing where
   p i l := if i.val = 0 ∧ l.val = 0 then 2 else 0
   ps _ _ := 0x38
   q l j := if l.val = 0 ∧ j.val = 0 then 2 else 0
@@ -539,7 +539,7 @@ def oneGate : Gate where
 
 /-- Every output word of the one-gate witness is exact: `sm120Nvf4.step` evaluated by the kernel on all 128 outputs. -/
 theorem oneGate_exact : oneGate.Exact := by
-  unfold Gate.Exact
+  unfold Firing.Exact
   decide +kernel
 
 theorem oneGate_p : ∀ i l, elemValue (oneGate.p i l) (oneGate.ps i (scaleIdx l)) =
@@ -566,7 +566,7 @@ theorem oneGateProg_realizesAt :
 
 /-- **`RealizesAt` is satisfiable with a nonzero output.** An exact firing of `sm120Nvf4` realizes a tile program at the
 unit inputs, and the program's output there is 1. -/
-theorem realizesAt_nonvacuous : ∃ (P : TileProg ℚ 16 64 8 1) (gs : Fin 1 → Gate),
+theorem realizesAt_nonvacuous : ∃ (P : TileProg ℚ 16 64 8 1) (gs : Fin 1 → Firing),
     P.RealizesAt gs (unitForm (0, 0)) (unitForm (0, 0)) ∧ P.outAt gs (0, 0) = 1 := by
   refine ⟨oneGateProg, fun _ => oneGate, oneGateProg_realizesAt, ?_⟩
   rw [realizes_out_at _ _ _ _ oneGateProg_realizesAt]

@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
-import Proofs.Flock.Soundness.Discharge.PlaysCoin
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 
 /-!
 # A rep's run, from its rounds' frames (R11b)

@@ -9,10 +9,11 @@ step waits on; the next step's compute does not wait on it.
 
 The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.segment_salts`),
 its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
-roots (`row_table.step_tree`), with `ncp2.cuh`'s SHA-512.  The host computes the domain ids, the rows' rank order and the tables'
+roots (`row_table.step_tree`): the row's digests with `ncp2.cuh`'s SHA-512, the hm96 leaf and the frame's leaf, pad and node
+the GPU's one row commitment (`verity.ml.kernels.ROW_COMMIT`).  The host computes the domain ids, the rows' rank order and the tables'
 layout (`plan`).  `host_step` runs the same functions on the CPU (`row_table_host.cpp`, built with the system C++ compiler), the
 twin the CPU tests hold to `row_tables.step_roots` on machines without a GPU.  Builds are keyed by what they compile (sources,
-flags and the compiler's version) under ``~/.cache/verity/row_table``; nvcc is the one on the path.
+the shared headers, flags and the compiler's version) under ``~/.cache/verity/row_table``; nvcc is the one on the path.
 """
 from __future__ import annotations
 
@@ -34,15 +35,19 @@ from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
+from verity.ml.kernels import ROW_COMMIT, SHA512
 
 from . import row_tables as RTB
 
-__all__ = ["Device", "Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
+__all__ = ["DeviceLibrary", "Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
            "table_domain_id"]
 
 CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
+#: the headers `row_table.cuh` includes by name from outside CUDA_DIR (the GPU's one SHA-512 and row commitment): every build
+#: reads them from their directory and is keyed by their bytes
+SHARED = (SHA512, ROW_COMMIT)
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
 BUILD_DIR = Path.home() / ".cache" / "verity" / "row_table"
@@ -61,7 +66,7 @@ def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, he
     h = hashlib.sha256()
     for s in sources:
         h.update(s.encode() + b"\0" + (CUDA_DIR / s).read_bytes() + b"\0")
-    for p in headers:
+    for p in (*SHARED, *headers):
         h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
     version = subprocess.run([tool, "--version"], capture_output=True, text=True, check=True).stdout
     h.update(" ".join(flags).encode() + b"\0" + version.encode())
@@ -69,7 +74,8 @@ def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, he
     if not lib.exists():
         lib.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib.with_suffix(f".{os.getpid()}.tmp")
-        subprocess.run([tool, *flags, "-o", str(tmp), str(CUDA_DIR / sources[-1])], check=True)
+        includes = sorted({f"-I{p.parent}" for p in SHARED})
+        subprocess.run([tool, *flags, *includes, "-o", str(tmp), str(CUDA_DIR / sources[-1])], check=True)
         tmp.replace(lib)
     return lib
 
@@ -230,15 +236,15 @@ def host_step(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequ
     return _roots(p, out)
 
 
-# --- the device -----------------------------------------------------------------------------------------------------------
+# --- a device's library ---------------------------------------------------------------------------------------------------
 
-class Device:
+class DeviceLibrary:
     """One CUDA device's build of a kernel library over hm96-sha512 (``lib(arch)``: this module's `device_lib`, or H1's
     `tables_device` and `registered_device`'s), its copies of the byte tables and midstates (the library's ``midstates``
     kernel over `_prefixes`), the side streams its kernels hash on (``stream`` the first, `next_stream` each in turn) and the
     identity rank order its tables share (`ranks`).  `of` builds one per library and device, once a process."""
 
-    _of: dict[tuple[Callable[[str], ctypes.CDLL], int], Device] = {}
+    _of: dict[tuple[Callable[[str], ctypes.CDLL], int], DeviceLibrary] = {}
 
     def __init__(self, torch: Any, device: Any, lib: Callable[[str], ctypes.CDLL], midstates: str, streams: int) -> None:
         major, minor = torch.cuda.get_device_capability(device)
@@ -257,7 +263,7 @@ class Device:
 
     @classmethod
     def of(cls, torch: Any, index: int, lib: Callable[[str], ctypes.CDLL] = device_lib, midstates: str = "rt_midstates",
-           streams: int = 1) -> Device:
+           streams: int = 1) -> DeviceLibrary:
         if (lib, index) not in cls._of:
             cls._of[lib, index] = cls(torch, torch.device("cuda", index), lib, midstates, streams)
         return cls._of[lib, index]
@@ -277,7 +283,7 @@ def side_stream(device: Any = None) -> Any:
     """The side stream steps on ``device`` (default: the current CUDA device) hash on."""
     import torch
 
-    return Device.of(torch, torch.cuda.current_device() if device is None else torch.device(device).index).stream
+    return DeviceLibrary.of(torch, torch.cuda.current_device() if device is None else torch.device(device).index).stream
 
 
 @dataclass
@@ -325,7 +331,7 @@ def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Seq
                 or s.shape != (c.shape[0],) or not c.is_contiguous() or not s.is_contiguous():
             raise ValueError(f"{op}: codes and scales are contiguous (B, K) int8 and (B,) float32 tensors on {dev}")
     p = plan(context, engine_step, {op: (ids, int(c.shape[0]), int(c.shape[1])) for op, (ids, c, _s) in outputs.items()}, key)
-    d = Device.of(torch, dev.index)
+    d = DeviceLibrary.of(torch, dev.index)
     side = stream or d.stream
     for i, op in enumerate(p.order):
         p.tabs[i, 0], p.tabs[i, 1] = outputs[op][1].data_ptr(), outputs[op][2].data_ptr()

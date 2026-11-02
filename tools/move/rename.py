@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""The rename move: rename every word `rename_map.toml` names, in the tree's paths, modules, Lean names and prose.
+"""The rename move: rename every word a word map names, in the tree's paths, modules, Lean names and prose.
 
-    python3 tools/move/rename.py              rename and move, then stage it all; prints what it changed
-    python3 tools/move/rename.py --dry-run    print what it would change, and change nothing
-    python3 tools/move/rename.py --moves      print the declaration renames that the Lean locks' records need ({old: new}),
-                                              the map `tools/lean/audit.py --update --moved` takes; run it on the tree
-                                              you re-record, since a branch's records hold names no other lock has
+    python3 tools/move/rename.py --map MAP              rename and move, then stage it all; prints what it changed
+    python3 tools/move/rename.py --map MAP --dry-run    print what it would change, and change nothing
+    python3 tools/move/rename.py --map MAP --moves      print the declaration renames that the Lean locks' records need
+                                                        ({old: new}), the map `tools/verity/lean/check.py --update --moved`
+                                                        takes; run it on the tree you re-record, since a branch's records
+                                                        hold names no other lock has
 
 What it does, on the tree as it is (so it reruns on a later main, and `restack.py --script tools/move/rename.py` carries a
 branch across it):
@@ -13,7 +14,7 @@ branch across it):
    tag, a format id, an id) and, in the files a [keep_in] glob matches, the words it lists;
 2. moves each tracked file whose path the same words rename, with `layout.py`'s machinery (`layout.Run.move`); a module's
    name is its path's, so the first step has already renamed every import of it;
-3. in a `lean-audit.json`, renames module names and prose but not the records `audit.py --update` writes (`guarantees`,
+3. in a `lean-audit.json`, renames module names and prose but not the records the Lean check's `--update` writes (`guarantees`,
    `reads`, `dependencies`), so that `--update --moved` compares the build with them under their old names;
 4. rewrites a `TRUSTED.sha256` line whose file the move changed, when it held that file's digest before, and likewise a
    Lake manifest's digest in a JSON pin of `tools/verity/check/pins.py`: a move changes a manifest only in where its path
@@ -45,7 +46,7 @@ sys.path.insert(0, str(HERE))
 import layout as L  # noqa: E402
 
 POLICY = "lean-audit.json"
-RECORDS = ("guarantees", "reads", "dependencies")   # what `audit.py --update` writes from the build
+RECORDS = ("guarantees", "reads", "dependencies")   # what the Lean check's `--update` writes from the build
 PINS = "TRUSTED.sha256"
 PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
 PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, some of them JSON (`json_pins`)
@@ -59,7 +60,7 @@ def _match(path: str, glob: str) -> bool:
 
 def _word(w: str, whole: bool = False) -> str:
     """`w` as it stands as a word or as one part of an identifier, or (``whole``) as a whole word, and a namespace (``X.``)
-    only at the start of a name (the rules at the top of `rename_map.toml`)."""
+    only at the start of a name (the rules at the top of `tests/fixtures/rename_map.toml`)."""
     if whole:
         left = (r"(?<![\w.])" if w.endswith(".") else r"(?<!\w)") if re.match(r"\w", w[0]) else ""
         right = r"(?!\w)" if re.match(r"\w", w[-1]) else ""
@@ -81,7 +82,7 @@ class Words:
                                                               for s in data.get("words_in", [])]
         for table in (self.words, *(t for _, t in self.scoped)):
             if bad := [o for o, n in table.items() if not o or not n or o == n]:
-                raise SystemExit(f"rename_map.toml: entries that rename nothing: {bad}")
+                raise SystemExit(f"the word map: entries that rename nothing: {bad}")
         self.exclude = data.get("rewrite", {}).get("exclude", [])
         keep = data.get("keep", {})
         self.keep = [re.compile(p) for p in keep.get("patterns", [])]
@@ -147,7 +148,7 @@ class Words:
 
 
 def record_spans(text: str) -> list[tuple[int, int]]:
-    """The spans of a `lean-audit.json`'s top-level values that `audit.py --update` writes (`RECORDS`)."""
+    """The spans of a `lean-audit.json`'s top-level values that the Lean check's `--update` writes (`RECORDS`)."""
     dec, gap, spans = json.JSONDecoder(), re.compile(r"[\s,]*"), []
     i = gap.match(text, text.index("{") + 1).end()
     while text[i] != "}":
@@ -161,7 +162,7 @@ def record_spans(text: str) -> list[tuple[int, int]]:
 
 
 def renamed(name: str, moved: dict[str, str]) -> str:
-    """`audit.py`'s `renamed`: `name` with its longest moved prefix replaced."""
+    """`tools/verity/lean/check.py`'s `renamed`: `name` with its longest moved prefix replaced."""
     parts = name.split(".")
     for i in range(len(parts), 0, -1):
         if (p := ".".join(parts[:i])) in moved:
@@ -311,10 +312,10 @@ def record(root: Path, moves: list[tuple[str, str]]) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--map", type=Path, default=HERE / "rename_map.toml")
+    ap.add_argument("--map", type=Path, required=True, help="the word map (`tests/fixtures/rename_map.toml` is an example)")
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--moves", action="store_true", help="print the declaration renames this tree's locks need, for `audit.py --update --moved`")
+    ap.add_argument("--moves", action="store_true", help="print the declaration renames this tree's locks need, for the Lean check's `--update --moved`")
     ap.add_argument("--allow-dirty", action="store_true")
     a = ap.parse_args(argv)
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()

@@ -1,4 +1,5 @@
 import Flock.Draw
+import PouwCommit.Bindings
 import PouwCommit.Draws
 import PouwWindow.Rounds
 import PouwCheck.Inputs
@@ -164,12 +165,11 @@ def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteAr
 def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
   (·.1) <$> coinVersionAt c o label after false
 
-/-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
+/-- `PouwCommit.foldRoots` at `tag`, its first `keep` bytes: `core_check.weights_root`
 (`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
 weights' root a live H1 window's open root binds). -/
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
-  let sorted := roots.mergeSort fun a b => a.1 ≤ b.1
-  (tagged tag (sorted.flatMap fun (w, r) => [.int w, .bytes r])).extract 0 keep
+  (PouwCommit.foldRoots tag roots).extract 0 keep
 
 /-- A refusal: its code (`coin` or `manifest`) and why. -/
 abbrev R := Except (String × String)
