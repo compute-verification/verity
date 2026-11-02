@@ -334,8 +334,8 @@ def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[n
 
 def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_salts():
     """Each member's wired port reads, unit by unit, the writer the pattern gives it; the committed rows' public strings are
-    the writers' (a5's wiring check), a wire moved to other writers is refused there (on the drawn units alone, the units
-    it draws), and a reader row that isn't its writer's output doesn't commit."""
+    the writers' (a5's wiring check), a wire moved to other writers is refused there (on the sampled proof blocks alone, the units
+    it samples), and a reader row that isn't its writer's output doesn't commit."""
     win = I.Window(chain(), RUN, LAW, 2)
     assert [(m.base, m.n, m.wired) for m in win.window.members] == [
         (0, 2, ()), (2, 2, (("x", "o0", (4, 5)),)), (4, 2, (("x", "o0", (0, 1)),)), (6, 2, (("x", "o0", (2, 3)),))]
@@ -815,9 +815,9 @@ class Bound(Held):
 
 def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, the files
-    `write` writes byte for byte, and each member's prover body as the files make it (`rows.read_private`), where ``refd``'s
-    leave a registered value's rows and salts out of the member's own file (``value_rows``); both leave a wired port's
-    (``wired_rows``)."""
+    `write` writes under one index salt byte for byte, and each member's prover body as the files make it
+    (`rows.read_private`), where ``refd``'s leave a registered value's rows and salts out of the member's own file
+    (``value_rows``); both leave a wired port's (``wired_rows``)."""
     a, b = full.close(salt_key=bytes(32)), refd.close(salt_key=bytes(32))
     assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
     assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
@@ -827,7 +827,7 @@ def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
     files = []
     for win, c, d in ((full, a, tmp_path / "full"), (refd, b, tmp_path / "refd")):
-        win.write(c, d, {"by": "test"}, registrar=reg)
+        win.write(c, d, {"by": "test"}, registrar=reg, index_salt=bytes(CS.SALT_BYTES))
         doc = json.loads((d / "window.json").read_text())
         got = {f.name: f.read_bytes() for f in d.iterdir() if not re.fullmatch(r"[mv][0-9]+-private\.bin", f.name)}
         got["window.json"] = {k: v for k, v in doc.items() if k not in ("seconds", "value_rows", "members")}

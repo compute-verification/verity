@@ -10,7 +10,7 @@ with the memory challenger a party of its own on the challenger host (`verity.co
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): ``setup.commit(params, W)`` before any
   salt exists, recorded in the composition record's ``weights``.
 * **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt
-  ``setup.draw_salt(source, commitment)``, ``source`` the auditor's coin drawn after the commitment (``salt_source``);
+  ``setup.draw_salt(source, commitment)``, ``source`` the auditor's coin flipped after the commitment (``salt_source``);
   ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which checks its own decode
   of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W`` by the reference decode,
   and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory challenger's table of it
@@ -24,7 +24,7 @@ with the memory challenger a party of its own on the challenger host (`verity.co
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
   point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
-  (`challenger_party.Party.of`) and the Lean answers where the period's tools name it.
+  (`challenger_party.side_of`) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
   only ``C*``.
@@ -237,7 +237,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
 
 
 def _source(entry: str, setting: Any, commitment: bytes, params: Any) -> tuple[bytes, str]:
-    """The auditor's coin for the salt, drawn after ``commitment``, and how it came."""
+    """The auditor's coin for the salt, sampled after ``commitment``, and how it came."""
     if callable(setting):
         return bytes(setting(commitment)), "callable"
     if isinstance(setting, str):
@@ -436,7 +436,7 @@ class PousOption(Option):
     def leg(self, period_dir: str | Path, node: str, out: str | Path, *, schemes: Mapping[str, Any] | None = None,
             protocol: str | None = None) -> dict[str, Any]:
         """One period's PoUS of what this option holds, as `period.leg` runs it for a node's records: the memory
-        challenger at ``period.json``'s ``challenger_host`` (`challenger_party.Party.of`, its side's key and session log
+        challenger at ``period.json``'s ``challenger_host`` (`challenger_party.side_of`, its side's key and session log
         in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
         period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
         Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
@@ -448,7 +448,7 @@ class PousOption(Option):
 
         doc = json.loads((Path(period_dir) / "period.json").read_text())
         tools = doc.get("tools", {})
-        party = CP.Party.of(doc, node, Path(period_dir).parent / "pous-challenger")
+        party = CP.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
         where = CP.placement(node, party.host)
         fresh, answered = self.periods == 0, self.answered
         t = time.monotonic()

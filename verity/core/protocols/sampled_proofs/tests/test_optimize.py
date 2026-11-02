@@ -179,7 +179,7 @@ def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
 
 
 def _uniform_cost(cands, costs, objective, target) -> float:
-    """The cheapest sampling design drawing one fraction q of every subcircuit (each at its cheapest statement size) that certifies
+    """The cheapest sampling design sampling one fraction q of every subcircuit (each at its cheapest statement size) that certifies
     `target`, by bisection on q."""
     def sizes(q: float) -> dict[str, int]:
         return {c.template: min(c.units, max(1, ceil(q * c.units))) for c in cands}
@@ -327,7 +327,7 @@ def test_without_influence_the_form_unit_looks_free():
 
 
 def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
-    """Committing the form costs 4 per row whatever the draw, so the switch moves to k = 8R."""
+    """Committing the form costs 4 per row whatever the sample, so the switch moves to k = 8R."""
     plans = frontier(_noised(commit_bits=400), _noised_costs(commit_per_bit=0.01), Objective(2.0 ** -20), grid=61)
     rec, form = _crossing(plans)
     assert rec <= 8 * R <= form
@@ -381,7 +381,7 @@ def test_overlaps_count_each_scale_and_price_committing_once():
 
 def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
     """512 served units of work 1 and 16 PoUW tiles of 32, a tile's statement three times a proof block's.  At equal weights the
-    density draws every tile, but core's bound (a draw without replacement) certifies the target with 15: the tiles'
+    density draws every tile, but core's bound (a sample without replacement) certifies the target with 15: the tiles'
     weight halves and the plan is cheaper, certified by the same stratified bound and registered by its sizes."""
     cands = [Candidate("lin", "S", 512, 1, 16, kind="served"), Candidate("pouw", "P", 16, 32, 1, kind="pouw-tile")]
     costs = CostModel({"S": TemplateCost(1.0, 0.0, 0.0), "P": TemplateCost(3.0, 0.0, 0.0)})
@@ -396,7 +396,7 @@ def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
 
 
 def test_under_the_density_bound_kinds_keep_equal_weights(batched):
-    """The density bound charges the strata's largest harm per proof block of risk, so a draw in proportion to harm is already
+    """The density bound charges the strata's largest harm per proof block of risk, so a sample in proportion to harm is already
     the cheapest: no weight moves."""
     cands, costs, objective, _ = batched
     for target in (1e6, 5e4):
@@ -428,8 +428,8 @@ def test_miss_holds_its_digits_on_huge_populations():
 
 
 def test_shared_statements_hold_only_the_drawn_units():
-    """Under `shared` a draw of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
-    sparse draw of a huge population touches one statement a drawn proof block."""
+    """Under `shared` a sample of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
+    sparse draw of a huge population touches one statement a sampled proof block."""
     c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
     costs = CostModel(per_and=1e-3, statement_fixed=5.0, statement_per_and=1e-2, staged_per_and=1e-4)
     cost, size, parts = template_cost(c, replace(costs, shared=True), 130)

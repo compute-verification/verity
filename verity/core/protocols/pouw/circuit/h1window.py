@@ -8,7 +8,7 @@ derives the window's units from its own copy of the Program under the `Q_templat
   down_proj's calls, at K the intermediate size, instantiate their own template in the same Program. The tile's
   architecture (`h1_tile`'s ``arch``, sm_120 unless given) is its `h1device` record, which binds its exact accumulator and
   bounds its K; sm_90's binds the same step, so its Program is sm_120's.
-* **The unit** reads its rows and its z/y record and proves the record (`h1zy`, RT4-INT-33): the H1 tile (`h1_tile`) on the
+* **The unit** reads its rows and its z/y record and proves the record (`h1zy`): the H1 tile (`h1_tile`) on the
   rows' codes gives z and the receipt, and the unit returns the receipt and ``ok``, 1 exactly when the record is z and its
   dequant y = RN_bf16(RN32(RN32(RN32(z) s_a) s_w)) at each cell's row scale s_a and column scale s_w, which ride on the
   rows (`h1zy.ROW`: an A row is its K codes then its f32 s_a, a B row its K weight codes then their f32 s_w). The record
@@ -63,15 +63,15 @@ derives the window's units from its own copy of the Program under the `Q_templat
   after their readers' coins. Each call's receipts (`RECEIPTS`, ``receipt@<c>``, one a unit in its tile order), which
   hang on nothing past the salt, its rows and the roots, are committed whole under its round's root too, and a
   statement then reads its units' receipts there as its output row o0 (`RECEIPT_PORT`).
-* **A drawn leaf's statements** (`pouw.leaf_lanes`): a drawn unit is proved as its lanes and their
+* **A drawn leaf's statements** (`pouw.leaf_lanes`): a sampled proof block is proved as its lanes and their
   combine, derived from the window's own template at its K (`leaf_unit`: `h1zy.lane` and `h1zy.combine` over the tile
   of its zy unit), so the window binds nothing more. Each runs under a one-call Program of its wrapper
   (`PouwH1WindowLane`, `PouwH1WindowCombine`; `leaf_program`), one unit, the same all period. Its reads are its leaf-local
   rows past the leaf's `place` in each value (`leaf_reads`, `leaf_reads_file`): the tile's own rows, its call's z table
-  and receipts, and the leaf's partials, produced after the draw. A J10-R window's leaf (over `PouwH1Tile_v5`) is
+  and receipts, and the leaf's partials, produced after the sample. A J10-R window's leaf (over `PouwH1Tile_v5`) is
   `h1zy`'s v2 statements, at a chunked K each lane's `h1zy.lane_chunk`s (`leaf_unit`'s ``ch``), and the combine that
   folds their oks; its chunks read the A and B tables' chunk rows, and its carries and ok rows are produced after the
-  draw like the partials (`leaf_lanes`' J10-R leaf). v1's leaf is staged at whole rows only.
+  sample like the partials (`leaf_lanes`' J10-R leaf). v1's leaf is staged at whole rows only.
 """
 from __future__ import annotations
 
@@ -435,7 +435,7 @@ def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
     return {**out, **{field: (prefix + field, u) for field in OUTPUTS}}
 
 
-#: the tables a call's rows are committed in under its round's root before the round's coin (#3053's ``tables``): ``a``,
+#: the tables a call's rows are committed in under its round's root before the round's coin: ``a``,
 #: its step's A table of its K, and ``zy``, its z table
 TABLES = ("a", "zy")
 #: the table a call's receipts are committed in under its round's root before the round's coin: one receipt a unit of the
@@ -638,7 +638,7 @@ def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int,
 @functools.lru_cache(maxsize=8)
 def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
     """The window's ok rows ``value`` (``<prefix>ok``, `OUTPUTS`) over its ``population`` units, their salts and their
-    registration (h1_prove's `register_ok`, #3124): row u the one word 1 (`core_check.OK_ROW`) under
+    registration (h1_prove's `register_ok`): row u the one word 1 (`core_check.OK_ROW`) under
     `core_check.ok_salt` of the window's open root ``window`` and u, registered under the window Program's digest
     ``prog`` binding ``window``."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
@@ -730,7 +730,7 @@ _LEAVES: "weakref.WeakKeyDictionary[Program, dict[tuple, tuple[Program, dict[str
 def leaf_program(program: Program, k: int, kind: str, ch: int | None = None) -> tuple[Program, dict[str, Any]]:
     """The Program and partition query every drawn leaf's statement ``kind`` (a chunk's ``ch``) at K runs under: the
     one-call Program of `leaf_template` and the instance query of its unit, a population of one unit, so the statement's
-    draw is its whole population. Both are functions of the window's descriptor alone, so a period has one of each a K,
+    sample is its whole population. Both are functions of the window's descriptor alone, so a period has one of each a K,
     kind and chunk."""
     memo = _LEAVES.setdefault(program, {})
     key = (int(k), kind, None if ch is None else int(ch))

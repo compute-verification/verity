@@ -95,7 +95,7 @@ from verity_e2e_demo import block_record
 
 TEMPLATE = Path(__file__).parent / "demo_a.template"
 MEASUREMENTS = "verity/demo-a-measurements/v1"
-DELTA = Fraction(1, 100)
+DELTA = block_record.DELTAS[0]
 #: the share of compute spent on proving in part 3
 BUDGET = Fraction(1, 100)
 #: M3's draw: k units over the whole partition

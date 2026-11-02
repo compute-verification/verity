@@ -17,8 +17,8 @@ states the `rec-residuals` pieces' half.
 * **The `rec-residuals` pieces' share** (`ResPiece`, `ResZero`, `resHolds`, `resPieces_computes`): a piece keyed by its
   group and a copy of its part's residuals table, `(jj, o, g, u)`, holds where its group's residuals vanish at the
   values the opened messages give (`elemAt`) and the verifier's values at the coins (`vvAt`). At an `.inner` part,
-  `partAccepts_resZero` gives it from two hypotheses: check 5's tie at those verifier values (`ResTie`, waiting on the
-  vcalls ask, `note:20261024T2340Z-draft-vcalls-ask`), and the layout fact `hcopy`: each piece `ownQ` gives the part is one of its
+  `partAccepts_resZero` gives it from two hypotheses: check 5's tie at those verifier values (`ResTie`, which is
+  open), and the layout fact `hcopy`: each piece `ownQ` gives the part is one of its
   statement's copies, with that copy's group, and the elements the copy reads are those `elemAt` reads off the opened
   messages. `rowsRead_msgs` gives the second half of `hcopy` at the raw messages wherever a port is a carried row; the
   step to the opened messages reads `final`, the concrete statement's.
@@ -137,10 +137,10 @@ theorem decompB_lastSplitP_shares (ownB : Msg → VerdictR → Option ℕ) (ownQ
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ (lastSplitP H rd pieces pholds hpieces).checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s,
         ownP ownB ownQ x r = some s → s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
             (lastSplitP H rd pieces pholds hpieces).toLast)

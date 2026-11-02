@@ -1,7 +1,7 @@
 # commit_slots: the serve-time commit call, one subtree per sequence slot
 
 The call that commits a serving step's proof-block outputs: every proof block's outputs as
-`hm96-sha512/row/v2` rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a drawn
+`hm96-sha512/row/v2` rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a sampled
 proof block opens by replaying its own request. `slots.py` is the CPU reference and this file's executable form;
 `slots_gpu.py` runs the same call on the GPU (or on its host twin) on the SHA-512 engine
 (`benchmarks/torch_gpu/sha512_rows/`): the engine hashes rows into hm96 leaves and builds frame-v3 levels, and
@@ -37,13 +37,13 @@ plan = G.Plan(context, G.regroup(layout, 4))
 ```
 
 - `context`: 64 bytes naming the run (the model and serving instance); every domain binds it.
-- `layout`: the step's public structure (`S.Layout`): groups (what one `add` commits) of units of rows, each row the
+- `layout`: the step's public structure (`S.CommitShape`): groups (what one `add` commits) of units of rows, each row the
   concatenation of byte ranges (`S.Part(source, offset, nbytes)`) of a slot's row of the group's tensors. Every slot has
   the same layout; a unit holds at most 262,144 bits (its size class). The engine takes at most two parts a row.
   Parts, rows, groups and their checks are `verity.ml.commitments.layout`'s; `S.load(path)` reads a layout file through
   it, in the form `S._layout_json` writes.
   Groups are the prover's plumbing (one launch each): the layout's digest binds only its units' rows.
-  A plan is linear in the layout's units: the layout digest is computed once (`Layout.digest`), every unit's domain id in
+  A plan is linear in the layout's units: the layout digest is computed once (`CommitShape.digest`), every unit's domain id in
   one pass (`S.unit_domain_ids`, two SHA-512s a unit), and a group the layout repeats (its layers) is laid out once, so
   `add` rebinds that group's row table to the step's tensors without a Python step a row.
   A step's memory is its slots' frontiers and one pass's temporaries. It holds no slot's leaves: a slot's tree is its
@@ -96,7 +96,7 @@ and slot pad tails are computed once.
 
 The salt key is the prover's private randomness, from the operating system's generator, never derived from anything
 public or from the transcript: no Fiat–Shamir. The verifier's only coins are live: the step's root goes to the challenger
-before the step's live coin is drawn, and the coin picks which (slot, proof block) pairs open. A slot's salts are a function of
+before the step's live coin is flipped, and the coin picks which (slot, proof block) pairs open. A slot's salts are a function of
 the key and the slot index alone, so replaying a slot's request regenerates its rows and their salts.
 
 ## Opening a proof block

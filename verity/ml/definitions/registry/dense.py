@@ -27,15 +27,12 @@ import numpy as np
 
 from verity.ml.circuits.defs import Coll, bind, composite, primitive
 from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.b1 import ZERO16, ZERO32, DotBf16, _butterfly, _lane, const, f32c
 from verity.ml.definitions.registry.prims import A16
 from verity.ml.circuits.types import Array, Tuple, Value
 
 BF16, F32 = Value(16), Value(32)
-_DENSE = EVIDENCE["dense_quarantine"]["by"]
-_SOFTCAP = EVIDENCE["softcap_attention_difftest"]
 
 #: `SEMANTIC_ID`s of the promoted Definitions (quarantine identity, one per Definition; the quarantine modules keep the same strings)
 SEMANTIC_IDS = {
@@ -57,7 +54,7 @@ SEMANTIC_IDS = {
 #: `aten.pow(x, 2) == x * x` on 2^20 f32 samples).
 
 @composite("SquareBf16", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.pow(x.float(), 2) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.pow(x.float(), 2) on the pod")
 def SquareBf16(B, S, x):
     """`out_j = RN32(f32(x_j) * f32(x_j))` (exact: a bf16 significand squared fits in 24 bits)."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
@@ -71,7 +68,7 @@ def SquareBf16(B, S, x):
 #: `x = x.to(f32) + residual.to(f32)`).  ATen's CUDA `pow_tensor_scalar_kernel` special-cases the exponent 2 as `base * base`.
 
 @composite("SquareF32", 1, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.pow(x, 2) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.pow(x, 2) on the pod")
 def SquareF32(B, S, x):
     """`out_j = RN32(x_j * x_j)` (FMUL)."""
     return B.batch(P.F32Mul, x, x, axes=(0, 0))
@@ -136,7 +133,7 @@ def thread_elements(c0: int, t: int, spt: int = SIZE_PER_THREAD) -> list[int]:
 
 
 @composite("MeanTriton", 1, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(1, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs batch_invariant.mean_dim on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs batch_invariant.mean_dim on the pod")
 def MeanTriton(B, S, x):
     """`mean_kernel` (BLOCK_SIZE=1024, 4 warps) over one row of N f32 values; see the module docstring."""
     N = S.N
@@ -170,7 +167,7 @@ def MeanTriton(B, S, x):
 #: f32(v + f32(1e-6))` on 2^20 samples).
 
 @composite("AddScalarF32", 1, ["N", "C"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.add(x, C) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.add(x, C) on the pod")
 def AddScalarF32(B, S, x, c=None):
     """`out_j = RN32(x_j + f32(C))`; `c`: `AddScalarF32_v3`'s input (the f32 word `f32(C)`)."""
     c = B.call(f32c(float(S.C))) if c is None else c
@@ -185,7 +182,7 @@ def AddScalarF32(B, S, x, c=None):
 #: root; one FADD in f32, RN.
 
 @composite("AddScalarBf16", 1, ["N", "C"], lambda S: ((("w", Array(S.N, BF16)),), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.add(w.float(), C) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.add(w.float(), C) on the pod")
 def AddScalarBf16(B, S, w, c=None):
     """`out_j = RN32(f32(w_j) + f32(C))`; `c`: `AddScalarBf16_v3`'s input (the f32 word `f32(C)`)."""
     wf = B.batch(P.Bf16ToF32, w, axes=(0,))
@@ -202,7 +199,7 @@ def AddScalarBf16(B, S, w, c=None):
 #: sources.
 
 @composite("AddWidenedBf16", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("r", Array(S.N, BF16))), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.add(x.float(), r.float()) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.add(x.float(), r.float()) on the pod")
 def AddWidenedBf16(B, S, x, r):
     """`out_j = RN32(f32(x_j) + f32(r_j))`."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
@@ -220,7 +217,7 @@ def AddWidenedBf16(B, S, x, r):
 #: 1/sqrt: 808,881 of them).
 
 @composite("RsqrtF32", 1, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.rsqrt on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.rsqrt on the pod")
 def RsqrtF32(B, S, x):
     """`out_j = rsqrt.approx.f32(x_j)` (MUFU.RSQ + range scaling; `RsqrtApprox_v1`)."""
     return B.batch(P.RsqrtApprox, x, axes=(0,))
@@ -235,7 +232,7 @@ def RsqrtF32(B, S, x):
 #: reads the bf16 source; `s` is the row's `[1]` cell of the `[M,1]` operand (PerRow).
 
 @composite("ScaleRowBf16", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, F32))), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.mul(x.float(), s[:, None]) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.mul(x.float(), s[:, None]) on the pod")
 def ScaleRowBf16(B, S, x, s):
     """`out_j = RN32(f32(x_j) * s)`."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
@@ -250,7 +247,7 @@ def ScaleRowBf16(B, S, x, s):
 #: broadcast along the row: one FMUL per element, RN; `s` is the row's `[1]` cell of the `[M,1]` operand (PerRow).
 
 @composite("ScaleRowF32", 1, ["N"], lambda S: ((("x", Array(S.N, F32)), ("s", Array(1, F32))), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.mul(x, s[:, None]) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.mul(x, s[:, None]) on the pod")
 def ScaleRowF32(B, S, x, s):
     """`out_j = RN32(x_j * s)`."""
     return B.batch(P.F32Mul, x, s[0], axes=(0, None))
@@ -263,7 +260,7 @@ def ScaleRowF32(B, S, x, s):
 #: the `[N]` operand broadcast over rows).  ATen's CUDA `mul_kernel` on f32: one FMUL per element, RN.
 
 @composite("MulVecF32", 1, ["N"], lambda S: ((("x", Array(S.N, F32)), ("w", Array(S.N, F32))), Array(S.N, F32)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.mul(x, w) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.mul(x, w) on the pod")
 def MulVecF32(B, S, x, w):
     """`out_j = RN32(x_j * w_j)`."""
     return B.batch(P.F32Mul, x, w, axes=(0, 0))
@@ -278,7 +275,7 @@ def MulVecF32(B, S, x, w):
 #: RMSNorm stores use; wave-1's exhaustive tables of two other ATen bf16 kernels show the 0x7FFF NaN word).
 
 @composite("NarrowF32ToBf16", 1, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, BF16)),
-           conformance=f"quarantine ({_DENSE}): difftest vs x.to(torch.bfloat16) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs x.to(torch.bfloat16) on the pod")
 def NarrowF32ToBf16(B, S, x):
     """`out_j = cvt.rn.bf16.f32(x_j)`."""
     return B.batch(P.F2fpBf16, x, axes=(0,))
@@ -301,7 +298,7 @@ def reciprocal_bits(c: float) -> int:
 
 
 @composite("Bf16DivScalar", 1, ["N", "C"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.div(x, C) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.div(x, C) on the pod")
 def Bf16DivScalar(B, S, x, inv=None):
     """`out_j = cvt.rn.bf16.f32(f32(x_j) * RN32(1 / C))`; `inv`: `Bf16DivScalar_v3`'s input (the f32 word `RN32(1 / C)`)."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
@@ -312,12 +309,12 @@ def Bf16DivScalar(B, S, x, inv=None):
 # ========================================================================================================================
 # tanh_f32  (SEMANTIC_ID dense/TanhF32Rn@v1)
 # ========================================================================================================================
-#: `TanhF32Rn` — the lane's stand-in for CUDA `tanhf` (libdevice `__nv_tanhf`, as ATen's `tanh_kernel_cuda` and vLLM's
+#: `TanhF32Rn` — a stand-in for CUDA `tanhf` (libdevice `__nv_tanhf`, as ATen's `tanh_kernel_cuda` and vLLM's
 #: `gelu_tanh_kernel` call it): RN32 of the exact real tanh(x), the same idiom as the registered `_silu_f32_bits` stand-in for
 #: `expf` + division.  Total on encodings: NaN -> canonical NaN, ±inf -> ±1, ±0 -> ±0, |x| >= 10 -> ±1 exactly (tanh is within
 #: 2^-28 of 1 there), subnormal x -> x.
 #: 
-#: Evidence that the stand-in is exact where the lane uses it: both uses take a *bf16-valued* argument (`aten.tanh` on bf16;
+#: Evidence that the stand-in is exact where it is used: both uses take a *bf16-valued* argument (`aten.tanh` on bf16;
 #: `gelu_tanh_kernel`'s `inner` is a function of one bf16 word), so the composed bf16 -> bf16 functions have a finite domain of
 #: 65,536 words, and wave-1's exhaustive GPU tables (`tanh_bf16_table.npy`, `gelu_tanh_bf16_table.npy`) agree with the
 #: stand-in-based bodies on every non-NaN word (65,282 / 65,282 and 65,282 / 65,282; NaN inputs give the kernels' 0x7FFF).  CUDA's
@@ -345,7 +342,7 @@ def tanh_f32_bits(x: int) -> int:
 
 
 @primitive("TanhF32Rn", 1, [("x", F32)], F32,
-           conformance=f"quarantine ({_DENSE}): stand-in for libdevice tanhf; exact through both bf16 uses on all 65,536 words",
+           conformance="quarantine (op-level evidence only): stand-in for libdevice tanhf; exact through both bf16 uses on all 65,536 words",
            tables=(("tanh_rn", "registered"),))
 def TanhF32Rn(x: int) -> int:
     """RN32(tanh(x)) on encodings (float64 tanh, then one rounding to f32)."""
@@ -361,7 +358,7 @@ def TanhF32Rn(x: int) -> int:
 #: 0x7FFF on the 254 NaN words — the finite domain makes the `TanhF32Rn` stand-in exact here.
 
 @composite("Bf16Tanh", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
-           conformance=f"quarantine ({_DENSE}): exhaustive table match (wave-1) + difftest vs aten.tanh on the pod")
+           conformance="quarantine (op-level evidence only): exhaustive table match (wave-1) + difftest vs aten.tanh on the pod")
 def Bf16Tanh(B, S, x):
     """`out_j = cvt.rn.bf16.f32(tanhf(f32(x_j)))`."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
@@ -377,7 +374,7 @@ def Bf16Tanh(B, S, x):
 #: words.
 
 @composite("Bf16MulScalar", 1, ["N", "C"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
-           conformance=f"quarantine ({_DENSE}): difftest vs aten.mul(x, C) on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs aten.mul(x, C) on the pod")
 def Bf16MulScalar(B, S, x, c=None):
     """`out_j = cvt.rn.bf16.f32(f32(x_j) * f32(C))`; `c`: `Bf16MulScalar_v3`'s input (the f32 word `f32(C)`)."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
@@ -401,7 +398,7 @@ def Bf16MulScalar(B, S, x, c=None):
 #: 
 #: The pinned build (vLLM d9105ea80, `_C_stable_libtorch.abi3.so`, sm_89) compiles this as `masked_act_and_mul_kernel<
 #: c10::BFloat16, gelu_tanh_kernel<c10::BFloat16>, true, false, false>(out, in, mask, d, n, float, float, float)` whose SASS is
-#: (cuobjdump on the pod, lane report `gelu_tanh_and_mul.sm89.sass`):
+#: (cuobjdump on the pod, `gelu_tanh_and_mul.sm89.sass`):
 #: 
 #:     PRMT R3, RZ, 0x5410, R0        ; f = (float)x            FMUL R0, R3, R3 ; FMUL R0, R3, R0      ; x_cube = (f*f)*f
 #:     FFMA R0, R0, 0.044714998, R3   ; f + KAPPA*x_cube        FMUL R3, R3, 0.5                       ; 0.5f*f
@@ -416,7 +413,7 @@ def Bf16MulScalar(B, S, x, c=None):
 #: `out == bf16(f32(T[x]) * f32(y))` on 2^20 random pairs): the body above reproduces T on every non-NaN word (65,282/65,282) and
 #: gives the kernel's 0x7FFF for NaN, including x = -inf where `(0.5f * -inf) * 0` is NaN; the alternative association
 #: `0.5f * (f * (1 + t))` is wrong on 129 words (overflow at |f| > 1.7e38), and FFMA vs separate FMUL+FADD for `inner` is not
-#: distinguishable on the domain.  `tanhf` is the lane's `TanhF32Rn` stand-in (see `tanh_f32.py`).
+#: distinguishable on the domain.  `tanhf` is the `TanhF32Rn` stand-in (see `tanh_f32.py`).
 
 BETA_BITS = 0x3F4C422A       # f32(M_SQRT2 * M_2_SQRTPI * 0.5)
 KAPPA_BITS = 0x3D372713      # f32(0.044715)
@@ -439,7 +436,7 @@ ZERO_BITS = 0x00000000
 
 
 @primitive("GeluTanhMulBf16", 1, [("g", BF16), ("u", BF16)], BF16,
-           conformance=f"quarantine ({_DENSE}): T[x] exact on 65,282/65,282 non-NaN bf16 words of wave-1's GPU table; "
+           conformance="quarantine (op-level evidence only): T[x] exact on 65,282/65,282 non-NaN bf16 words of wave-1's GPU table; "
                        "difftest vs torch.ops._C.gelu_tanh_and_mul on the pod (20/20 incl. zeros/max/subnormal/alternating)",
            tables=(("gelu_tanh_bf16", "registered"),))
 def GeluTanhMulBf16(g: int, u: int) -> int:
@@ -457,7 +454,7 @@ def GeluTanhMulBf16(g: int, u: int) -> int:
 #: shape as the registered `SiluMul_v1` with the element `GeluTanhMulBf16` (see `gelu_tanh_mul_bf16.py`).
 
 @composite("GeluTanhMul", 1, ["I"], lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
-           conformance=f"quarantine ({_DENSE}): difftest vs torch.ops._C.gelu_tanh_and_mul on the pod")
+           conformance="quarantine (op-level evidence only): difftest vs torch.ops._C.gelu_tanh_and_mul on the pod")
 def GeluTanhMul(B, S, gu):
     """`out[i] = GeluTanhMulBf16(gu[i], gu[I + i])`."""
     return B.batch(GeluTanhMulBf16, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
@@ -507,7 +504,7 @@ def softcap_scale_log2_bits(CAP: float) -> int:
            lambda S: (((("q", Array(S.D, BF16)), ("k", Array(S.BN, Array(S.D, BF16))), ("v", Array(S.BN, Array(S.D, BF16))),
                         ("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32)))),
                       Tuple(F32, Array(4, F32), Array(S.D, F32))),
-           conformance=f"quarantine ({_SOFTCAP['by']}): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; job {_SOFTCAP['job']}, RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
+           conformance="quarantine (op-level evidence only): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
 def AttnBlockSoftcap(B, S, q, k, v, m_prev, l_prev, o_prev, softcap_mul=None, scale_log2=None):
     """`AttnBlock_v3`'s body with FA2's softcap stage A' in front of the online softmax: `s'[c] = MufuTanh(F32MulFtz(s[c], SOFTCAP_MUL))`,
     exp2 constant `CAP * log2e`.  One BN-key block of one query row; `NVIS` visible columns; `FIRST` = kernel `Is_first`.
@@ -566,7 +563,7 @@ def AttnBlockSoftcap(B, S, q, k, v, m_prev, l_prev, o_prev, softcap_mul=None, sc
 @composite("AttentionHeadSoftcap", 1, ["T", "D", "BN", "CAP"],
            lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
                       Array(S.D, BF16)),
-           conformance=f"quarantine ({_SOFTCAP['by']}): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; job {_SOFTCAP['job']}, RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
+           conformance="quarantine (op-level evidence only): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
 def AttentionHeadSoftcap(B, S, q, k, v, *extra, block=AttnBlockSoftcap):
     """`AttentionHead_v3`'s body over `AttnBlockSoftcap_v1{..., BN, CAP}`: causal attention of one query at position T-1 over keys
     0..T-1, ceil(T / BN) blocks visited last -> first; epilogue `Fa2InvSum` + `bf16(o * inv)` unchanged.  `extra` / `block`:
@@ -607,7 +604,7 @@ def AttentionHeadSoftcap(B, S, q, k, v, *extra, block=AttnBlockSoftcap):
                        ("kc", Array(S.T, Array(S.KVH, Array(S.D, BF16)))),
                        ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
                       Array(S.NH, Array(S.D, BF16))),
-           conformance=f"quarantine ({_SOFTCAP['by']}): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; job {_SOFTCAP['job']}, RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
+           conformance="quarantine (op-level evidence only): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)")
 def AttentionSoftcap(B, S, q, kc, vc, *extra, head=AttentionHeadSoftcap):
     """`Attention_v3`'s body over `AttentionHeadSoftcap_v1{T, D, BN, CAP}` (GQA: head h reads KV head h // (NH/KVH); caches `[T][KVH][D]`).
     Gemma-2-2B: NH = 8, KVH = 4, D = 256, CAP = 50.0, BN = `fa2_kblock_n(256)`; sliding-window layers need nothing more below 4096

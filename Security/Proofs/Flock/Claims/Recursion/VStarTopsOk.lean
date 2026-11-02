@@ -260,7 +260,7 @@ theorem hT_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit
 /-- **The stager accepts every part of a dense statement at the honest run**: `hok_shaped` with its `hT` and `hC`
 discharged (`hT_honest`, `hC_honest`). -/
 theorem hok_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
-    {st : Claims.Recursion.Stmt} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
+    {st : Claims.Recursion.CompiledStatement} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hI : IrShaped Ir x w ρ hist)
     (hN : ∀ (j : ℕ) (nm : String) (p : _root_.VStar.Part) c, partAt x s = some (.inner j nm p, c) → ∀ xr rs,
       readX x = some xr → repSched xr.shape = some rs → ∀ pn ∈ p.S.ports.map Prod.fst,

@@ -6,7 +6,7 @@ the audit's cold build reaches it.
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
     python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]   a lane's records
     python tools/verity/lean/lean_changed.py --try FILE   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
-    python tools/verity/lean/lean_changed.py --build FILE...   the ready mark's preflight's Lean step (`build_files`)
+    python tools/verity/lean/lean_changed.py [--no-wait] --build FILE...   the ready mark's preflight's Lean step (`build_files`)
 
 `--try` elaborates one file (FILE: its path from the repository's root) on the same warm tree as `--records`, under the same
 `build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
@@ -350,7 +350,7 @@ FAST_POOL = "build"
 #: the kind of `--records`' result: an audit without the kernel replay or the tests, which no merge check accepts
 FAST_KIND = "lean-fast/v1"
 #: how long `--records` waits for another run's hold on its tree (a node with no SLOTS shares `local` among every run;
-#: vy-nebius-cpu-2, 19 Oct: three lanes' runs refused in 0 s behind a 53-minute one), and how often it looks
+#: without the wait, runs behind an hour-long one would be refused at once), and how often it looks
 TREE_WAIT_S, TREE_POLL_S = 3 * 3600, 20
 _sleep, _clock = time.sleep, time.monotonic
 
@@ -410,7 +410,7 @@ def damaged(lib: Path) -> list[Path]:
     `.hash` without hashing the output. Every Lake path writes the `.hash` after its output, but two leave an older one: a
     build killed after `lean` wrote its outputs, and a restore from Lake's cache that unpacks a `.ltar` over the outputs.
     A module that imports one then records the old hash for the new bytes, and a later build on the other side of the
-    change replays it beside a module built against the new ones (TOP-90 row 54: `Proofs.Pouw`'s clash on
+    change replays it beside a module built against the new ones (a clash such as `Proofs.Pouw`'s on
     `W1.Instr.exec.eq_10`). So each loses its trace and its `.hash` files (`forget`) for Lake to rebuild it."""
     out = []
     for trace in sorted(lib.rglob("*.trace")) if lib.is_dir() else []:
@@ -659,7 +659,7 @@ def merged(pkg: str, files: list[str]) -> str | None:
     """Why this checkout's records of ``pkg`` need no run although its inputs are new, or None: HEAD merges a commit of `main`
     into a commit whose records passed (`kept`), possibly through further such merges, and each merge takes every Lean input
     of ``pkg`` from one side whole, its locks aside, which are `merge.py`'s merge of the two sides. The lock is then a candidate,
-    never a verdict: the train's Lean check rebuilds every record and regenerates one that differs (CI-64)."""
+    never a verdict: the train's Lean check rebuilds every record and regenerates one that differs."""
     prefixes = sorted({*closure(pkg), LA.LEAN_TOOL.rstrip("/"), *tool_inputs(files)})
     if git("status", "--porcelain", "--untracked-files=no", "--", *prefixes) != "":
         return None
@@ -1019,14 +1019,16 @@ def first_errors(text: str, pkg: str, tracked: set[str]) -> dict[str, str]:
     return out
 
 
-def build_files(files: list[str], deps: Path, tree: Path | None = None, log=print) -> int:
+def build_files(files: list[str], deps: Path, tree: Path | None = None, log=print, wait: bool = True) -> int:
     """`--build`: the ready mark's preflight's Lean step (`research.queue.Preflight`). On the tree of the `build` slot it takes,
     as `--try` does (slot, tree lock, sync, `repair` and dependencies), `lake build +MODULE...` of ``files``' modules (paths
     from the repository's root) in each package owning one, those it requires by path first; a package whose dependencies
     this node doesn't keep is skipped, never fetched cold. Its last line is `BUILD_LINE` and a JSON object: `built` ({package:
     lake's exit status}), `failed` ({file: its first Lean error}, in a tracked `.lean` file; an import clash this tree left is
     healed as `--try` heals it and not counted) and `skipped` ({package, file or `*`: why it wasn't built}). Exit 0 when
-    every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing."""
+    every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing. Without
+    ``wait`` (`--no-wait`) it builds nothing when every `build` slot is taken, rather than wait in line: the preflight then
+    builds on its next node."""
     doc: dict[str, dict] = {"built": {}, "failed": {}, "skipped": {}}
 
     def done(rc: int) -> int:
@@ -1052,7 +1054,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
         return done(2)
     os.environ.pop(LEAN_SLOT.HELD, None)
     try:
-        slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
+        slot = LEAN_SLOT.hold(FAST_POOL, or_any=False, queue=wait)
     except LEAN_SLOT.Refused as e:
         doc["skipped"]["*"] = f"no `{FAST_POOL}` Lean slot here ({e})"
         return done(2)
@@ -1229,12 +1231,14 @@ def main(argv: list[str]) -> int:
                     help=f"lake build the modules of these files (from the repository's root) on the tree of a Lean slot of pool "
                     f"{FAST_POOL}, as --try does, with no dependency fetched cold; its last line is `{BUILD_LINE}` and JSON "
                     "(the ready mark's preflight)")
+    ap.add_argument("--no-wait", action="store_true", help="with --build: build nothing when every slot of its pool is taken, "
+                    "rather than wait in line")
     a = ap.parse_args(argv)
     if a.try_ or a.build:
-        if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build):
-            ap.error("--try and --build take only --deps and --tree, and not each other")
+        if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build) or (a.try_ and a.no_wait):
+            ap.error("--try and --build take only --deps and --tree (--build also --no-wait), and not each other")
         if a.build:
-            return build_files(a.build, a.deps, a.tree, log=lambda s: print(s, flush=True))
+            return build_files(a.build, a.deps, a.tree, log=lambda s: print(s, flush=True), wait=not a.no_wait)
         return try_file(a.try_, a.deps, a.tree, log=lambda s: print(s, flush=True))
     if not a.records:
         if a.update or a.moved or a.out or a.dev_cache or a.rebuild:

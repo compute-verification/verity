@@ -1,0 +1,36 @@
+# The proof system's move: what `tools/move/layout.py --map tools/move/proof_system_map.toml` moves and rewrites. The
+# directory holding Flock's verifier and the ZK server, their difftests and the sampled-proofs audit's Lean is named for what
+# it is, the proof system, not a "service".
+#
+# - The five Lake packages (`firewall`, `flock`, `sampled_proofs`, `sigma`, `vstar`) move whole. Their modules are named
+#   below each package, so no Lean module or declaration is renamed, and no lock record changes.
+# - Nothing under the directory is a Python module (its suites run as files), so no import changes.
+# - Every path into the directory that code reads is written from the checkout's root, which this script rewrites; uv.lock's
+#   two workspace member paths are rewritten by hand (`uv lock` refuses a lock whose member moved, then leaves it unchanged).
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"verity/core/service/" = "verity/core/proof_system/"
+
+[retired]
+paths = ["verity/core/service/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), and files
+# whose bytes a digest pins.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "verity/ml/flock/tests/fixtures/randomness_lean.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`): the directory as a dotted path (no module lives in it)
+"verity.core.service" = "verity.core.proof_system"

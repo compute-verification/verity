@@ -43,9 +43,10 @@ read:
   fit, which in scope are the inner readiness the stop reads (`RecDeploy.ready_inScope_iff`);
 * `ScopeMatches_meets`: the deployed inner Flock's readable scope is its scope check (`FlockDeploy.scopeMatches_plain`),
   which `Flock.RecScope.scopeMatches_deployed` reads;
-* `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of each kind the compiled verifier accepts,
-  dense, holo and sparse (candidate 3's shape: `m = 25`, `k_log = 22`, three regions, RecSparse `(18, 13, 6, 0)` and R
-  at `(23, 2)`), each with a V* session that draws every unit (`inScope_kinds`);
+* `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of the one kind the compiled verifier
+  accepts, the dense form (candidate 3's inner table: `m = 25`, `k_log = 22`, three regions), with a V* session that
+  draws every unit, and none of the holo or sparse ones it refuses (RecSparse `(18, 13, 6, 0)` and R at `(23, 2)`)
+  (`inScope_kinds`);
 * `Complete_meets_deployed`: the compiled verifier's record (`RecDeploy.deployRec`) states an error below `1` on every
   statement it can accept (`RecDeploy.readyRec`) whose inner session is one the numbers are stated at
   (`FlockDeploy.PlainIn`), whose V* statements are of tables at `m ≤ 35`, at most `2^64` of them
@@ -59,16 +60,16 @@ open Claims Claims.Recursion
 /-! ## The readable scope's kinds -/
 
 /-- A V* session's full draw over four units. -/
-def fullDraw4 : Recursion.Draw := ⟨some 4, 4, [0, 1, 2, 3], []⟩
+def fullDraw4 : Recursion.DrawRecord := ⟨some 4, 4, [0, 1, 2, 3], []⟩
 
 /-- A statement at candidate 3's inner table (`m = 25`, `k_log = 22`, three regions, eight claims), its circuits private
 or not (`holo`), with no RecSparse phase and no R, and one V* session that draws every unit. -/
-def denseStmt (holo : Bool) : Recursion.Stmt :=
+def denseStmt (holo : Bool) : Recursion.CompiledStatement :=
   ⟨[], none, none, ⟨25, 22, 3, 8, holo, none, none, false⟩, [some fullDraw4]⟩
 
 /-- Candidate 3's sparse statement: its inner table, the RecSparse phase `(18, 13, 6, 0)`, R at `(23, 2)`, the inner
 statement's dimensions the form's, its unit range inside the block, and one V* session that draws every unit. -/
-def sparseStmt (holo : Bool) : Recursion.Stmt :=
+def sparseStmt (holo : Bool) : Recursion.CompiledStatement :=
   ⟨[], some (25, 22, 3), none, ⟨25, 22, 3, 8, holo, some (18, 13, 6, 0), some (23, 2), true⟩, [some fullDraw4]⟩
 
 theorem draws_full : ∀ d ∈ [some fullDraw4], ∃ e, d = some e ∧ e.Full := by
@@ -76,22 +77,27 @@ theorem draws_full : ∀ d ∈ [some fullDraw4], ∃ e, d = some e ∧ e.Full :=
   rw [List.mem_singleton] at hd
   exact ⟨fullDraw4, hd, rfl, rfl, rfl⟩
 
-theorem denseStmt_inScope (holo : Bool) : InScope (denseStmt holo) :=
-  ⟨rfl, show 22 ≤ 25 by decide, show 25 ≤ 35 by decide, show 6 ≤ 22 by decide, rfl, Or.inl ⟨rfl, rfl⟩, draws_full⟩
+theorem denseStmt_inScope : InScope (denseStmt false) :=
+  ⟨rfl, show 22 ≤ 25 by decide, show 25 ≤ 35 by decide, show 6 ≤ 22 by decide, rfl, ⟨rfl, rfl, rfl⟩, draws_full⟩
 
-theorem sparseStmt_inScope (holo : Bool) : InScope (sparseStmt holo) := by
-  have hp : pLog 13 = 5 := by decide
-  refine ⟨rfl, show 22 ≤ 25 by decide, show 25 ≤ 35 by decide, show 6 ≤ 22 by decide, rfl, Or.inr ⟨18, 13, 6, rfl,
-    show 1 ≤ 18 by decide, show 6 ≤ 13 by decide, show 13 ≤ 22 by decide, rfl, rfl, ?_, ?_⟩, draws_full⟩
-  · simp [sparseStmt, hp]
-  · rw [hp]
-    decide
+/-- The holo form is out of scope: the compiled verifier refuses it (`RecSetup.denseOnly`). -/
+theorem denseStmt_holo_out : ¬ InScope (denseStmt true) := by
+  rintro ⟨-, -, -, -, -, ⟨hh, -, -⟩, -⟩
+  simp [denseStmt] at hh
 
-/-- **The readable scope holds each kind of inner shape the compiled verifier accepts**: dense, holo, and candidate 3's
-sparse phase with public or private circuits, each with a V* session that draws every unit. -/
+/-- The sparse form is out of scope, public or private circuits: the compiled verifier refuses it
+(`RecSetup.denseOnly`). -/
+theorem sparseStmt_out (holo : Bool) : ¬ InScope (sparseStmt holo) := by
+  rintro ⟨-, -, -, -, -, ⟨-, hs, -⟩, -⟩
+  simp [sparseStmt] at hs
+
+/-- **The readable scope holds the dense form, and only it**: a dense statement with a V* session that draws every unit
+is in scope, and the holo form and candidate 3's sparse phase, which the compiled verifier refuses
+(`RecSetup.denseOnly`), are not. -/
 theorem inScope_kinds :
-    InScope (denseStmt false) ∧ InScope (denseStmt true) ∧ InScope (sparseStmt false) ∧ InScope (sparseStmt true) :=
-  ⟨denseStmt_inScope false, denseStmt_inScope true, sparseStmt_inScope false, sparseStmt_inScope true⟩
+    InScope (denseStmt false) ∧ ¬ InScope (denseStmt true) ∧ ¬ InScope (sparseStmt false) ∧
+      ¬ InScope (sparseStmt true) :=
+  ⟨denseStmt_inScope, denseStmt_holo_out, sparseStmt_out false, sparseStmt_out true⟩
 
 /-! ## The witnesses -/
 
@@ -272,9 +278,11 @@ theorem ScopeMatches_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     Claims.Flock.ScopeMatches (FlockDeploy.deployPlain rel) :=
   FlockDeploy.scopeMatches_plain rel
 
-/-- `Complete`'s antecedent: the readable scope holds a statement of each kind the compiled verifier accepts. -/
+/-- `Complete`'s antecedent: the readable scope holds a statement of the one kind the compiled verifier accepts, and
+none of the kinds it refuses. -/
 theorem Complete_meets :
-    InScope (denseStmt false) ∧ InScope (denseStmt true) ∧ InScope (sparseStmt false) ∧ InScope (sparseStmt true) :=
+    InScope (denseStmt false) ∧ ¬ InScope (denseStmt true) ∧ ¬ InScope (sparseStmt false) ∧
+      ¬ InScope (sparseStmt true) :=
   inScope_kinds
 
 /-- **`Complete`'s error is below `1` at the deployed record**: `deployRec`'s error (`RecDeploy.δcRec`, the inner
@@ -292,9 +300,11 @@ theorem Complete_meets_deployed (IV : Verifier FlockDeploy.Coin) (ivScope : Msg 
       (RecDeploy.deployRec IV ivScope b).δc H x < 1 :=
   ⟨RecDeploy.δcRec_le b.st H hin hready hm, RecDeploy.δcRec_lt_one b.st H hin hready hm hn⟩
 
-/-- `Nontrivial`'s antecedent: the readable scope holds a statement of each kind the compiled verifier accepts. -/
+/-- `Nontrivial`'s antecedent: the readable scope holds a statement of the one kind the compiled verifier accepts, and
+none of the kinds it refuses. -/
 theorem Nontrivial_meets :
-    InScope (denseStmt false) ∧ InScope (denseStmt true) ∧ InScope (sparseStmt false) ∧ InScope (sparseStmt true) :=
+    InScope (denseStmt false) ∧ ¬ InScope (denseStmt true) ∧ ¬ InScope (sparseStmt false) ∧
+      ¬ InScope (sparseStmt true) :=
   inScope_kinds
 
 end Claims.Witness.Recursion

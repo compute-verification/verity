@@ -71,7 +71,7 @@ server = D.server_fixture(LIVE_PORT)
 
 def test_live_verified(server):
     """Generated windows' live statements, null and answered, then each mutation over a few seeds, so every refusal
-    before the verifier runs and of its answers is reached whatever the draw."""
+    before the verifier runs and of its answers is reached whatever the sample."""
     VERIFIED.clear()
     stats = D.run(LIVE_PORT, examples=200, server=server)
     swept = Counter(D.replay(LIVE_PORT, cases.live_verified_instance(random.Random(f"{name}/{seed}"), name), server)[0]

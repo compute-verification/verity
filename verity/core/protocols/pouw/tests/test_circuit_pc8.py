@@ -336,8 +336,8 @@ def test_the_port_check_holds_advice_to_unread_parameters():
 
 
 def _row_seg_arguments(row: bytes, n_bits: int) -> list[int]:
-    """`Sha512RowSeg_v1{N_BITS}`'s argument, the row's bits in leaf order: bit i is bit i % 8 of byte i // 8 (#1438's
-    `verity.ml.commitments.gates.rowleaf.arguments`, which is not on main yet)."""
+    """`Sha512RowSeg_v1{N_BITS}`'s argument, the row's bits in leaf order: bit i is bit i % 8 of byte i // 8 (as
+    `verity.ml.commitments.gates.rowleaf.arguments` gives it)."""
     return [(row[i >> 3] >> (i & 7)) & 1 for i in range(n_bits)]
 
 
@@ -353,7 +353,7 @@ def test_the_h3_hiding_tile_returns_the_row_its_leaf_hashes(shape, tile):
     """`Pc8TileHiddenH3` on each of the -h3 scheme's tiles (its A′, P_A, B̃ and P_B) returns that tile's messages: its
     words' bits, as a Boolean lowering carries them, are `Sha512RowSeg_v1`'s argument over ``b"".join(messages)``, whose
     `sha512_row_seg_digest` is the scheme's -h3 leaf.  At 16 x 64 each row is two 32-column chunks, so a word in the wrong
-    chunk or field moves; 64 x 64 is the scheme's tile, 262,144 bits in 32 segments.  `Sha512RowSeg_v1`'s gates over this value are #1438's; the composed test lands with it."""
+    chunk or field moves; 64 x 64 is the scheme's tile, 262,144 bits in 32 segments.  `Sha512RowSeg_v1`'s gates over this value are `verity.ml.commitments.gates.rowleaf`'s."""
     m, k, n = shape
     s, ctx, *_ = _case("pc8-h3-tile", shape, "sm120", tile=tile, hashing="h3")
     noise = s.noise(ctx)

@@ -207,9 +207,9 @@ from coin `k₀` of the rounds `c`. `RecOpening.run`'s and `RecCoins.opening`'s 
 (`ringSwitch_sim`, `ligerito_sim` at `homUnit`). -/
 def runAlpha (sh : Shape) (cl : Array (RecAlgebra.AClaim Unit)) (k₀ : ℕ) (c : Array (Array F128)) (ℓ : ℕ) :
     Array F128 :=
-  match RecAlgebra.ringSwitch (skel sh) cl k₀ (RecAlgebra.Coins.ofRounds c) with
+  match RecAlgebra.ringSwitch (skel sh) cl k₀ (RecAlgebra.CoinSource.ofRounds c) with
   | .ok ((_, rs), k₂) =>
-    match RecAlgebra.ligerito sh.sched (skel sh) () rs.sws k₂ (RecAlgebra.Coins.ofRounds c) with
+    match RecAlgebra.ligerito sh.sched (skel sh) () rs.sws k₂ (RecAlgebra.CoinSource.ofRounds c) with
     | .ok ((_, lg), _) => (lg.conss[ℓ]!).alpha
     | .error _ => #[]
   | .error _ => #[]

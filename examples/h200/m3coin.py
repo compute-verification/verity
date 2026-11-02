@@ -1,5 +1,5 @@
 """M3's live coin: one session of the auditor host's challenger (`benchmarks/live_challenger/auditor.py`) under the lane's own gate key, reserved for this machine, opened at the registration's digest, and one coin
-opened after that root; the drawn units are a `subset:K` of the registered population derived from that coin alone.
+opened after that root; the sampled proof blocks are a `subset:K` of the registered population derived from that coin alone.
 
     python examples/h200/m3coin.py --registration REG.json --gate-key KEY --gate research@HOST --peer NAME --out DIR
 
@@ -11,7 +11,7 @@ before the session is reserved and ``draw.json`` (``{law, k, population, units}`
   `serve.py` releases any coin; the client records that same digest as the coin's `after`.
 * `units = derive(coin, DOMAIN, {"registration": digest}).subset(k, population, "m3")` (`verity.ml.randomness`): the
   prover can't compute it before the coin opens, and the coin opens only after the registration is in the ledger.
-* One draw. Any failure after the open is written to ``coin.json`` as the visible failure, and nothing is retried: a
+* One sample. Any failure after the open is written to ``coin.json`` as the visible failure, and nothing is retried: a
   second session over the same root is refused by the ledger, and this script never asks for another.
 """
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §6's checks
+"""PoUB's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §6's checks
 1-3 and 5, as §8 deploys them) as one Boolean Definition: what a proof runs on a drawn receipt in place of opening it, so the
 block, its payload, its receipt leaf and every salt and path stay the unit's witness and the verifier reads the unit's
 verdict.
@@ -14,7 +14,7 @@ verdict.
         little-endian, a byte string in order (bit t is bit t & 7 of byte t >> 3); ``mid`` is SHA-512's eight words, each
         64 bits LSB first
 
-**Public** (the verifier's own, `opening_public`), each of the four kinds the rules allow: the draw (block j, its position
+**Public** (the verifier's own, `opening_public`), each of the four kinds the rules allow: the sample (block j, its position
 pos in the pass, whose leaf is pos >> 4 and whose receipt is entry pos & 15 of it) and the registration's codec key at j
 (the seed's codec key, `codec.key`: c, tau and mask; t0 = tau W j mod p for the block's W words; the seed itself), the
 append's coin c_a (``bound``, an appended block; zero bytes and unbound for a registered one), the pass's receipt prefix

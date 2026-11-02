@@ -47,6 +47,8 @@ theorem certify_some {i i' : Issuer} {salt : ByteArray} {leaf : Except String Na
   obtain ⟨⟨head, digest, message⟩, hprep, h⟩ := except_bind_ok h
   obtain ⟨-, -, -, -, ⟨R, hR, hdg⟩, -⟩ := prepare_spec hprep
   have hh := prepare_head hprep
+  split at h
+  · simp [pure, Except.pure] at h
   unfold Issuer.finish at h
   cases leaf with
   | error _ => simp [pure, Except.pure] at h

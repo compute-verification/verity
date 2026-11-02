@@ -34,7 +34,6 @@ reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of 
 `rec-cap-zero` (`checkCap`); its rows are held to the coin server's `root_B`, or to both reps' level-`l` tops
 (`checkLink`, `RecVStar.checkTopRows`).
 -/
-import Flock.Keccak
 import Flock.Registered
 import Flock.Firewall
 import Flock.RecOpening
@@ -52,24 +51,28 @@ open Lean (Json)
 def COEF_VALUE : String := "rec-coef"
 def DIRS_VALUE : String := "rec-dirs"
 def V_VALUE : String := "rec-v"
-def VERIFIER_SALT : String := "verity/rec-v0/verifier-salt/v0"
+def VERIFIER_SALT : String := "verity/rec-v1/verifier-salt/v1"
 def SALT_BYTES : Nat := 192
 def DIRS_WORDS : Nat := 64
 
-/-- Row `i`'s salt of a value the verifier registers itself (`rec_residuals.verifier_salts`, rec_residuals.py:385):
-SHAKE256 of the tag, the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them. -/
-def verifierSalt (program value : String) (i : Nat) : ByteArray :=
-  Keccak.shake256 ((((VERIFIER_SALT.toUTF8.push 0 ++ program.toUTF8).push 0 ++ value.toUTF8).push 0) ++ le32 i.toUInt32)
-    SALT_BYTES
+/-- `SALT_BYTES` bytes from `msg` (`rec_residuals.salt_of`): SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
+`c < SALT_BYTES / 64`, each output whole. -/
+def saltOf (msg : ByteArray) : ByteArray :=
+  (List.range (SALT_BYTES / 64)).foldl (fun acc c => acc ++ Sha512.hash (msg ++ be32 c.toUInt32)) ByteArray.empty
 
-def ZERO_SALT : String := "verity/rec-v0/zero-residual-salt/v0"
+/-- Row `i`'s salt of a value the verifier registers itself (`rec_residuals.verifier_salts`): `saltOf` the tag, the
+program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them. -/
+def verifierSalt (program value : String) (i : Nat) : ByteArray :=
+  saltOf ((((VERIFIER_SALT.toUTF8.push 0 ++ program.toUTF8).push 0 ++ value.toUTF8).push 0) ++ le32 i.toUInt32)
+
+def ZERO_SALT : String := "verity/rec-v1/zero-residual-salt/v1"
 def ZERO_VALUE : String := "rec-residuals-zero"
 def OUT_WORDS : Nat := 128
 
-/-- Row `i`'s salt of a value's zero rows, the outputs V* registers itself (`rec_residuals.zero_salts`,
-rec_residuals.py:402): SHAKE256 of the tag, the value's name and `i` (u32 little-endian), NUL only before `i`. -/
+/-- Row `i`'s salt of a value's zero rows, the outputs V* registers itself (`rec_residuals.zero_salts`): `saltOf` the
+tag, the value's name and `i` (u32 little-endian), NUL only before `i`. -/
 def zeroSalt (value : String) (i : Nat) : ByteArray :=
-  Keccak.shake256 ((ZERO_SALT.toUTF8 ++ value.toUTF8).push 0 ++ le32 i.toUInt32) SALT_BYTES
+  saltOf ((ZERO_SALT.toUTF8 ++ value.toUTF8).push 0 ++ le32 i.toUInt32)
 
 /-- `n` rows of `w` zero words. -/
 def zeroRows (n w : Nat) : Array (Array Nat) := Array.replicate n (Array.replicate w 0)
@@ -444,7 +447,7 @@ def checkInnerRange (i : RecVStar.Inner) (st : Stmt) : V Unit := do
 
 /-- R's registered opening as the verifier computes it: its opening-only shape, `v` (the coefficient slots; no comb), each
 Ligerito level's query positions and eq(α), and the final check's κ. -/
-structure Opening where
+structure RegisteredOpening where
   sh : Shape
   v : Array F128
   lg : RecAlgebra.LgPts
@@ -456,7 +459,7 @@ structure Opening where
 `(r_k, ζ_p, ρ_t)` from its sparse coins, zero-padded to R's `m`, its skip weights eq(point[:6], ·) and `x` the rest; a
 claim's value is a row of `rec-claim`, w's, so it is none of v's. Refused unless some part of that S holds each running
 sum (`RecOpening.accHeld`). -/
-def opening (c3 : C3) (unit : String) : V Opening := do
+def opening (c3 : C3) (unit : String) : V RegisteredOpening := do
   let some r := c3.stacked | throw s!"rec-coins: {unit}: the verifier's inner shape names no R (the inner circuit's META's stacked)"
   let some sh := RecOpening.shape? r.m r.claims
     | throw s!"rec-coins: {unit}: R's shape (m {r.m}, claims {r.claims}) has no fast100 schedule"
@@ -476,8 +479,8 @@ def opening (c3 : C3) (unit : String) : V Opening := do
     let tIn := M.tAtom.getD rs.T
     let (lgr, lg) ← RecAlgebra.ligerito sh.sched M tIn rs.sws
     return (rsr ++ lgr ++ #[RecAlgebra.instValLin.add tIn rs.T], lg)
-  let built : Except String Opening := do
-    let (lins, lg) ← (run.run' 0).run (RecAlgebra.Coins.ofRounds rounds)
+  let built : Except String RegisteredOpening := do
+    let (lins, lg) ← (run.run' 0).run (RecAlgebra.CoinSource.ofRounds rounds)
     let kappa := sh.sched.levels.map fun lv => Array.replicate 2 (Array.replicate (2 ^ lv.lanes) (0 : F128))
     let (res, st) ← (RecOpening.buildAll sh lins.toList 0).run { kappa }
     if some (⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ : RecAlgebra.GfS) != (RecOpening.structureOf sh).toOption then
