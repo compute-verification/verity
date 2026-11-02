@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.DeployInputs
-import Flock.RecBudget
 import Flock.RecLinks
+import Flock.RecBudget
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
