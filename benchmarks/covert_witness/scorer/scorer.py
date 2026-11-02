@@ -22,11 +22,12 @@ every forward multiplication whose weight operand is trained (a full tensor's ma
 factors; a frozen base W·x is θ's, except in a run that merges its pieces, whose targets are full), each node's upstream
 is the updated MACs per token of the nodes before it in (layer, stage) order, |C| = training FLOPs / 2, p = 16 (bf16
 autocast) and c = 4096 times the start's forward MACs per token (weight matmuls plus 2·d·ctx attention MACs a layer).
-ρ, W*, honest and the effective slowdown are te_core's (`score.score_grid`, `w_star`, `honest`, `effective_slowdown`) on
-that annotation, with the coverage `credit` reads off a seed-log E.
+ρ is te_core's (`score.score_grid`) on that annotation, with the coverage `credit` reads off a seed-log E.
 
-honest(l*) reads the reference directions (ref-*), W* every other direction's records whatever their class, and the
-measurement auditor's records (direction audit) are in the ledger only.
+honest(l*), W*(l*) and the effective slowdown are te_core.frontier.target's (TE_PIN's te_core 3.5.3; coordinator 14:57Z):
+honest is the least |C| over every valid record's complete schedules, of any class or direction, W* the least |C|ρ over
+the same records, so W*/honest >= 1; the reference directions' honest alone is kept as context. Records cw.readout_leaks
+lists are invalid (15:00Z), and the measurement auditor's records (direction audit) are in the ledger only.
 """
 from __future__ import annotations
 
@@ -52,6 +53,9 @@ SINCE = os.environ.get("TE_SCORER_SINCE", "2026-11-02T06:30:00Z")
 SEARCH_START = "2026-11-02T08:30:00Z"  # the board's opening: earlier records are the integrator's seed smokes
 TE_CORE = Path(os.environ.get("TE_CORE_PATH", Path(__file__).resolve().parents[1]))
 TE_CURRENT = Path(os.environ.get("TE_CURRENT", "/tmp/scorer/te-core"))  # a worktree of this repository, any branch
+#: a worktree at cursor/te-core-313-on-pin-3a8f (te_core 3.5.3, the pin's counter): its frontier.target prices honest and
+#: W* (coordinator 14:57Z) and its cw.readout_leaks judges read-outs (15:00Z), for the hourly scores and the final table
+TE_PIN = Path(os.environ.get("TE_PIN", "/tmp/scorer/te-core-pin"))
 TE_BRANCH = os.environ.get("TE_BRANCH", "cursor/covert-witness-4207")  # the harness's tools (launch.py, promote.py)
 #: te_core 2.2's commit on the harness's branch: from it a checkpoint's val bpb is the paired score on a fresh slice of the
 #: search pool (its record's val_slice), against the start's whole-pool bpb (witness v3's score.start_bpb). Version
@@ -80,10 +84,23 @@ SHORT = 12
 sys.path.insert(0, str(TE_CORE))
 from te_core.annotate import Annotation, StepAnnotation  # noqa: E402
 from te_core.frontier import PHI_EDGES, TARGETS, bin_of  # noqa: E402
-from te_core.score import (C_PER_FORWARD_TOKEN, K_BITS, R, block_c, cell, effective_slowdown, honest,  # noqa: E402
-                           score_grid, w_star)
+from te_core.score import C_PER_FORWARD_TOKEN, K_BITS, R, block_c, cell, score_grid  # noqa: E402
 
 KEYS = [cell(k, r) for k in K_BITS for r in R]
+
+
+def te_pin(name: str):
+    """TE_PIN's te_core module `name` (the package itself for ""), imported as package `te_pin` beside the scorer's own
+    te_core."""
+    import importlib
+    import importlib.util
+
+    if "te_pin" not in sys.modules:
+        d = TE_PIN / "benchmarks" / "covert_witness" / "te_core"
+        spec = importlib.util.spec_from_file_location("te_pin", d / "__init__.py", submodule_search_locations=[str(d)])
+        sys.modules["te_pin"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules["te_pin"])
+    return importlib.import_module(f"te_pin.{name}") if name else sys.modules["te_pin"]
 
 
 def short(art: str) -> str:
@@ -499,14 +516,14 @@ def e_digest(r, files: dict, d: Path, harness: dict | None) -> str | None:
 
 
 def replays(rows: list[dict]) -> None:
-    """A search record whose E is an earlier record's E (by sha256) is unscored: its run didn't make that E (the
-    auditor's 10:24Z replay). As te_core.frontier reads it (4c63ce0cf7f), an E repeats only an earlier record measured
-    at the pin or another direction's, so a direction's own relaunch at the pin of an E it had before counts."""
+    """A search record whose E is another direction's earlier record's E (by sha256) is unscored: its run didn't make
+    that E (the auditor's 10:24Z replay). A direction's own relaunch of an E it had before counts, at any pin
+    (coordinator 14:22Z: an agent's own relaunch counts, another agent's copy of an E doesn't)."""
     first: dict[str, list[dict]] = {}
     for x in sorted((x for x in rows if x["source"] == "launch.py" and x.get("e_sha256") and not x.get("final")),
                     key=lambda x: (x.get("launched") or "", x["id"])):
         e = x["e_sha256"]
-        prior = [y for y in first.get(e, []) if y["regime"] == "current" or y["direction"] != x["direction"]]
+        prior = [y for y in first.get(e, []) if y["direction"] != x["direction"]]
         if prior:
             x["failed_checks"] = [*x["failed_checks"], f"replay: E is {short(prior[0]['id'])}'s"]
             x["valid"] = False
@@ -769,10 +786,10 @@ REF_DIRECTIONS = ("ref-optim", "ref-data")
 
 
 def is_reference(x: dict) -> bool:
-    """honest(l*) reads only runs that update every weight of the start (all of θ changed, E full, no declared family)
-    launched by ref-optim or ref-data, or the harness's and the scorer's own reference smokes (coordinator 13:42Z); every
-    other record, a class-reference one included, is a covert entry, W*'s at its ρ. A record whose witness can't show
-    a full update (before witness v4) is read by its direction alone, as context."""
+    """The reference-only honest (context since the coordinator's 14:57Z ruling) reads only runs that update every weight
+    of the start (all of θ changed, E full, no declared family) launched by ref-optim or ref-data, or the harness's and
+    the scorer's own reference smokes (13:42Z). A record whose witness can't show a full update (before witness v4) is
+    read by its direction alone."""
     own = x["direction"] in REF_DIRECTIONS or (x["direction"] == "reference" and x.get("agent") == TE_BRANCH)
     return own and x.get("full_theta") is not False
 
@@ -784,6 +801,46 @@ def is_audit(x: dict) -> bool:
 
 def run_rows(rows: list[dict]) -> dict[str, dict]:
     return {x["run"]: x for x in rows if x["source"] == "launch.py" and x.get("run")}
+
+
+TORCH_PYTHON = os.environ.get("TE_TORCH_PYTHON", "/tmp/te-venv/bin/python")  # te_core.cw imports torch
+JUDGE = ("import json, sys\nfrom te_core.cw import readout_leaks\n"
+         "print(json.dumps({k: readout_leaks(json.load(open(p)), t) for k, (p, t) in json.load(sys.stdin).items()}))")
+
+
+def readout_leaks(jobs: dict[str, tuple[Path, dict | None]]) -> dict[str, list | None]:
+    """te_core's cw.readout_leaks (TE_PIN's; coordinator 15:00Z) on each job's run.json against its start's tensors:
+    the steps whose read-outs came from index reads no counted work consumed (any makes the record invalid), None where
+    the run.json or the start's tensors are missing (the record is unjudged)."""
+    out = {k: None for k, (p, t) in jobs.items() if not p.exists() or not t}
+    todo = {k: [str(p), t] for k, (p, t) in jobs.items() if k not in out}
+    if todo:
+        p = subprocess.run([TORCH_PYTHON, "-c", JUDGE], input=json.dumps(todo), cwd=TE_PIN / "benchmarks" / "covert_witness",
+                           capture_output=True, text=True, check=False)
+        if p.returncode:
+            raise SystemExit(f"scorer: cw.readout_leaks rc {p.returncode}: {p.stderr.strip()[-300:]}")
+        out |= json.loads(p.stdout)
+    return out
+
+
+def judge_readouts(rows: list[dict], starts: dict) -> dict[str, list | None]:
+    """`readout_leaks` on every pin record of the launcher's (cached in STATE/readouts.json by record id), each record it
+    lists marked invalid; the verdicts by record id."""
+    path = STATE / "readouts.json"
+    seen = json.loads(path.read_text()) if path.exists() else {}
+    pin = [x for x in rows if x["source"] == "launch.py" and x.get("regime") == "current" and not is_audit(x)]
+    seen |= readout_leaks({x["id"]: (STATE / "records" / x["id"].removeprefix("art:") / "run" / "run.json",
+                                     (starts.get(x.get("start")) or {}).get("tensors"))
+                           for x in pin if seen.get(x["id"]) is None})
+    out = {}
+    for x in pin:
+        out[x["id"]] = seen[x["id"]]
+        if out[x["id"]]:
+            x["valid"] = False
+            x["failed_checks"] = [*x["failed_checks"], "read-out leak: steps " + ", ".join(
+                str(s["step"]) for s in out[x["id"]])]
+    path.write_text(json.dumps(seen, indent=1) + "\n")
+    return out
 
 
 def submissions(rows: list[dict], starts: dict) -> list[dict]:
@@ -808,7 +865,8 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
                             "depth": x["D"], "reference": is_reference(rec or x), "direction": x["direction"], "counted": True,
                             "E_bytes": x.get("E_bytes"), "regime": (rec or {}).get("regime", "earlier"),
                             "start_bpb": x.get("start_bpb"), "output_sha256": x.get("output_sha256"),
-                            "submitted": x.get("submitted"), "node": x.get("node"), "fork_ladder": fork_ladder(rec)})
+                            "submitted": x.get("submitted"), "node": x.get("node"), "fork_ladder": fork_ladder(rec),
+                            "phi_position": (rec or {}).get("phi")})
             continue
         if x.get("counted"):
             continue
@@ -859,10 +917,6 @@ def schedule_ends(subs: list[dict], key=lambda s: s["id"]) -> list[dict]:
     return subs
 
 
-def honest_refs(on: list[dict]) -> list[dict]:
-    return [x for x in on if x["reference"] and x.get("schedule_end")]
-
-
 def regime_start_bpb(subs: list[dict], s: str) -> float | None:
     """The current regime's l0 on start `s`: the start's whole-pool bpb its records carry (the median, should they
     differ in the last digits)."""
@@ -879,40 +933,56 @@ def pareto(points: list[tuple[float, float, dict]]) -> list[dict]:
     return out
 
 
+def target_row(on: list[dict], f: float, l_star: float) -> dict:
+    """One target on one start by te_core.frontier.target (coordinator 14:57Z): honest is the least |C| over every
+    submission in `on` that ends a complete schedule and reaches l*, of any class or direction, and W* per (k, r) the
+    least |C|ρ over the same submissions, so W*/honest >= 1 is the effective slowdown; `bound` is te_core's 'upper bound
+    (checkpoint)' where only a mid-schedule checkpoint reaches l*. honest_reference (the reference directions' complete
+    schedules alone, the rule before) and W* over it (`vs_reference`) are context."""
+    t = te_pin("frontier").target(on, l_star, KEYS, reference=lambda x: x["reference"])
+    by = {(x["id"], x["cp"]): x for x in on}
+    of = lambda o: o and by.get((o["id"], o["checkpoint"]))
+    h, ref = of(t["honest_of"]), of(t["honest_reference_of"])
+    row = {"drop": f, "l_star": l_star, "bound": t["bound"], "honest_macs": t["honest"], "honest_id": h and h["id"],
+           "honest_cp": h and h["cp"], "honest_direction": h and h["direction"], "honest_seeds": h and h.get("seeds"),
+           "honest_reference_macs": t["honest_reference"], "honest_reference_id": ref and ref["id"],
+           "honest_reference_cp": ref and ref["cp"], "cells": {}}
+    for key, c in t["cells"].items():
+        w = of(c["of"])
+        row["cells"][key] = {
+            "w_star": c["w_star"], "effective_slowdown": c["effective_slowdown"], "id": w and w["id"], "cp": w and w["cp"],
+            "rho": c["rho"], "direction": w and w["direction"], "counted": w and w.get("counted"),
+            "seeds": w and w.get("seeds"), "phi": w and (w.get("phi") or {}).get(key),
+            "phi_position": w and w.get("phi_position"),
+            "vs_reference": c["w_star"] / t["honest_reference"] if c["w_star"] and t["honest_reference"] else None}
+    return row
+
+
 def start_table(on: list[dict], l0: float | None, c: float) -> dict:
-    """W*, honest and W*/honest per target and (k, r) on one start, and the proxy frontiers, from its submissions."""
-    refs, cov = honest_refs(on), [x for x in on if not x["reference"]]
+    """W*, honest and W*/honest per target and (k, r) on one start (`target_row`), and the proxy frontiers, from its
+    submissions."""
     st = {"start_bpb": l0, "c": c, "targets": [], "submissions": len(on),
           "proxy_frontier_flops": [{"id": x["id"], "cp": x["cp"], "flops": 2 * x["macs"], "bpb": x["val_bpb"]}
                                    for x in pareto([(x["macs"], x["val_bpb"], x) for x in on])],
           "proxy_frontier_E": [{"id": x["id"], "cp": x["cp"], "E_bytes": x["E_bytes"], "bpb": x["val_bpb"]}
                                for x in pareto([(x["E_bytes"] or 0, x["val_bpb"], x) for x in on])]}
-    for f in TARGETS if l0 is not None else ():
-        l_star = l0 * (1 - f)
-        h = honest(refs, l_star)
-        h_id = min((x for x in refs if x["val_bpb"] <= l_star), key=lambda x: x["macs"], default=None)
-        t = {"drop": f, "l_star": l_star, "honest_macs": h, "honest_id": h_id and h_id["id"],
-             "honest_cp": h_id and h_id["cp"], "cells": {}}
-        for key in KEYS:
-            w = w_star(cov, l_star, key)
-            arg = min((x for x in cov if x["val_bpb"] <= l_star), key=lambda x: x["macs"] * x["rho"][key], default=None)
-            t["cells"][key] = {"w_star": w, "effective_slowdown": effective_slowdown(cov, refs, l_star, key),
-                               "id": arg and arg["id"], "cp": arg and arg["cp"], "rho": arg and arg["rho"][key],
-                               "direction": arg and arg["direction"], "counted": arg and arg["counted"]}
-        st["targets"].append(t)
+    st["targets"] = [target_row(on, f, l0 * (1 - f)) for f in (TARGETS if l0 is not None else ())]
     return st
 
 
 def score(write: bool = True) -> dict:
     rows = [json.loads(x) for x in (STATE / "index.jsonl").read_text().splitlines() if x.strip()]
     starts = json.loads((STATE / "starts.json").read_text())
+    readouts = judge_readouts(rows, starts)
     subs = submissions(rows, starts)
     col = STATE / "collect.json"
     rep = {"at": now(), "te_core": te_version(), "regime": regime_name(), "pin": pin_of(),
            "te_core_commit": json.loads(col.read_text()).get("te_core_commit", "") if col.exists() else "",
            "annotation": "the harness's count for witness v2 records, analytic for witness v1 (module docstring)",
            "p_bits": P_BITS, "c_per_forward_token": C_PER_FORWARD_TOKEN, "starts": {}, "earlier": {},
-           "submissions": len(subs)}
+           "submissions": len(subs), "readouts": {"judged": sum(v is not None for v in readouts.values()),
+                                                  "leaks": {i: v for i, v in readouts.items() if v},
+                                                  "unjudged": sorted(i for i, v in readouts.items() if v is None)}}
     cur = [x for x in subs if x["regime"] == "current"]
     for s in STARTS:
         c = block_c(forward_macs_per_token(starts[s]))
@@ -1782,46 +1852,47 @@ def table(subs: list[dict], l0: dict[str, float]) -> dict:
         on = [x for x in subs if x["start"] == s]
         if s not in l0 or not on:
             continue
-        refs, cov = honest_refs(on), [x for x in on if not x["reference"]]
-        rows = []
-        for f in TARGETS:
-            l_star = l0[s] * (1 - f)
-            h = min((x for x in refs if x["val_bpb"] <= l_star), key=lambda x: x["macs"], default=None)
-            cells = {}
-            for key in KEYS:
-                arg = min((x for x in cov if x["val_bpb"] <= l_star), key=lambda x: x["macs"] * x["rho"][key], default=None)
-                cells[key] = {"w_star": w_star(cov, l_star, key), "effective_slowdown": effective_slowdown(cov, refs, l_star, key),
-                              "id": arg and arg["id"], "cp": arg and arg["cp"], "rho": arg and arg["rho"][key],
-                              "direction": arg and arg["direction"], "seeds": arg and arg.get("seeds")}
-            rows.append({"drop": f, "l_star": l_star, "honest_macs": honest(refs, l_star), "honest_id": h and h["id"],
-                         "honest_cp": h and h["cp"], "honest_seeds": h and h.get("seeds"), "cells": cells})
-        out[s] = {"start_bpb": l0[s], "targets": rows, "entries": sorted({x["id"] for x in on})}
+        out[s] = {"start_bpb": l0[s], "targets": [target_row(on, f, l0[s] * (1 - f)) for f in TARGETS],
+                  "entries": sorted({x["id"] for x in on})}
     return out
 
 
+def soft_phi(c: dict) -> bool:
+    """A W* entry whose counted φ is under a tenth of its position φ (prepare.deep_share): an unmerged adapter
+    (`soft_spots`), shown with both (coordinator 14:22Z; the counted one sets the frontier, 13:42Z)."""
+    return c.get("phi") is not None and (c.get("phi_position") or 0) >= SOFT_PHI and c["phi"] < c["phi_position"] / 10
+
+
 def table_md(tab: dict, split: str, seeds: str) -> str:
-    lines = [f"W* and the effective slowdown W*/honest on the {split} set ({regime_name()} records, te_core's ρ on the harness's "
-             f"count; FLOPs = 2 MACs; {seeds})", ""]
+    lines = [(f"W* and the effective slowdown W*/honest on the {split} set ({regime_name()} records, te_core's ρ on the "
+              f"harness's count; FLOPs = 2 MACs; {seeds}). honest and W* read every valid record's complete schedules, "
+              "of any direction (coordinator 14:57Z, te_core.frontier.target), so W*/honest >= 1; 'upper bound' marks a "
+              "target only a mid-schedule checkpoint reaches; the reference directions' honest alone is context."), ""]
     for s, st in tab.items():
         lines += [f"### {s} (start {st['start_bpb']:.4f} bpb)", "",
-                  "| target | l* | honest FLOPs (entry) | k | W* r1 | W* r10 | W* r100 | W*/honest r1 | r10 | r100 | W* entries |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|"]
+                  ("| target | l* | honest FLOPs (entry) | reference-only honest | k | W* r1 | W* r10 | W* r100 "
+                   "| W*/honest r1 | r10 | r100 | W* entries |"), "|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for t in st["targets"]:
-            h = t["honest_macs"]
+            h, hr = t["honest_macs"], t.get("honest_reference_macs")
+            hon = (f"{fmt(2 * h)} ({short(t['honest_id'])}@{t['honest_cp']}, {t.get('honest_direction')})"
+                   + (f", {t['bound']}" if t.get("bound") else "")) if h else "—"
+            ref = f"{fmt(2 * hr)} ({short(t['honest_reference_id'])}@{t['honest_reference_cp']})" if hr else "—"
             for k in K_BITS:
                 cs = [t["cells"][f"{k}/r{r}"] for r in R]
-                ids = ", ".join(sorted({f"{short(c['id'])}@{c['cp']}" for c in cs if c["id"]})) or "—"
-                lines.append(f"| -{100 * t['drop']:g}% | {t['l_star']:.4f} | "
-                             + (f"{fmt(h and 2 * h)} ({short(t['honest_id'])}@{t['honest_cp']})" if h else "—")
-                             + f" | {k} | " + " | ".join(fmt(c["w_star"] and 2 * c["w_star"]) for c in cs) + " | "
+                ids = ", ".join(sorted({f"{short(c['id'])}@{c['cp']}" + (
+                    f" (φ {c['phi']:.3g} counted, {c['phi_position']:.2f} position)" if soft_phi(c) else "")
+                                        for c in cs if c["id"]})) or "—"
+                lines.append(f"| -{100 * t['drop']:g}% | {t['l_star']:.4f} | {hon} | {ref} | {k} | "
+                             + " | ".join(fmt(c["w_star"] and 2 * c["w_star"]) for c in cs) + " | "
                              + " | ".join(fmt(c["effective_slowdown"]) for c in cs) + f" | {ids} |")
         lines.append("")
     return "\n".join(lines) + "\n"
 
 
 def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None:
-    """Per start, bpb against FLOPs: the reference checkpoints at |C|, every other at |C|·ρ for k = 10 kB, 100 kB, 1 MB (r = 1,
-    solid; r = 10, dashed), each with its frontier, and the targets."""
+    """Per start, bpb against FLOPs: the reference checkpoints at |C|, every other at |C|·ρ for k = 10 kB, 100 kB, 1 MB
+    (r = 1), the targets, and the two frontiers W*/honest compares (coordinator 14:57Z), over every record's complete
+    schedules: honest's at |C| (black) and W*'s at |C|·ρ (red; r = 1 solid, r = 10 dashed)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -1835,7 +1906,8 @@ def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None
     color = {d: palette[i % 20] for i, d in enumerate(dirs)}
     for row, s in zip(axes, starts):
         on = [x for x in subs if x["start"] == s]
-        refs, cov = honest_refs(on), [x for x in on if not x["reference"]]
+        refs, cov = [x for x in on if x["reference"]], [x for x in on if not x["reference"]]
+        ends = [x for x in on if x.get("schedule_end")]
         for ax, k in zip(row, K_BITS):
             for f in TARGETS:
                 ax.axhline(l0[s] * (1 - f), color="0.8", lw=0.8, zorder=0)
@@ -1843,8 +1915,10 @@ def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None
             if refs:
                 ax.scatter([2 * x["macs"] for x in refs], [x["val_bpb"] for x in refs], c="k", marker="s", s=18,
                            label="reference |C|")
-                fr = pareto([(x["macs"], x["val_bpb"], x) for x in refs])
-                ax.step([2 * x["macs"] for x in fr], [x["val_bpb"] for x in fr], where="post", c="k", lw=1)
+            fr = pareto([(x["macs"], x["val_bpb"], x) for x in ends])
+            if fr:
+                ax.step([2 * x["macs"] for x in fr], [x["val_bpb"] for x in fr], where="post", c="k", lw=1,
+                        label="honest frontier: every complete schedule at |C|")
             for r, ls in ((1, "-"), (10, "--")):
                 key = f"{k}/r{r}"
                 for d in dirs:
@@ -1852,14 +1926,14 @@ def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None
                     if xs and r == 1:
                         ax.scatter([2 * x["macs"] * x["rho"][key] for x in xs], [x["val_bpb"] for x in xs], color=color[d],
                                    s=14, label=d)
-                fr = pareto([(x["macs"] * x["rho"][key], x["val_bpb"], x) for x in cov])
+                fr = pareto([(x["macs"] * x["rho"][key], x["val_bpb"], x) for x in ends])
                 if fr:
                     ax.step([2 * x["macs"] * x["rho"][key] for x in fr], [x["val_bpb"] for x in fr], where="post",
-                            c="tab:red", ls=ls, lw=1, label=f"covert frontier r{r}")
+                            c="tab:red", ls=ls, lw=1, label=f"W* frontier r{r}: every complete schedule at |C| rho")
             ax.set_xscale("log")
             ax.set_ylim(l0[s] * 0.93, l0[s] * 1.01)
             ax.set_title(f"{s}, k = {k}", fontsize=9)
-            ax.set_xlabel("FLOPs (reference: |C|; covert: |C| rho)", fontsize=8)
+            ax.set_xlabel("FLOPs (reference: |C|; others: |C| rho)", fontsize=8)
             ax.set_ylabel("bpb", fontsize=8)
             ax.tick_params(labelsize=7)
     seen: dict = {}
@@ -1898,42 +1972,64 @@ def rerun_problems(r: dict) -> list[str]:
 
 
 def final_table(write: bool = True) -> dict:
-    """The final-set table and plot from the reruns, each checkpoint priced by te_core from the rerun's run.json and
-    scored on the final set against the final set's start bpb the reruns carry (the median per start), beside the
-    search-set table of the current regime's records."""
+    """The final table (`table`) and its plot: every valid pin record's checkpoints, an entry's final-set values (its
+    reruns, each checkpoint priced by te_core from the rerun's run.json and scored on the final set, seeds averaged)
+    replacing its search values where they exist (coordinator 15:27Z), a search value carried onto the final set's start
+    bpb (the reruns' median per start) at the same drop from its search start. Beside it the reruns alone (`final`) and
+    the search set alone (`search`)."""
     rows = {x["id"]: x for x in (json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip())}
+    starts = json.loads((STATE / "starts.json").read_text())
     res = [json.loads(l) for l in (FINAL / "results.jsonl").read_text().splitlines() if l.strip()] \
         if (FINAL / "results.jsonl").exists() else []
     subs, reruns = [], []
+    judged = readout_leaks({r["run"]: (RUNS / r["run"] / "out" / "run" / "run.json",
+                                       (starts.get(rows[r["id"]]["start"]) or {}).get("tensors"))
+                            for r in res if r.get("kind") == "rerun" and r.get("id") in rows and r.get("run")
+                            and not r.get("superseded")})
     for r in res:
         x = rows.get(r.get("id"))
         if r.get("kind") != "rerun" or not x or r.get("superseded"):
             continue
         bad = rerun_problems(r)
+        leaks = judged.get(r["run"])
+        bad += ["read-out leak: steps " + ", ".join(str(s["step"]) for s in leaks)] if leaks else []
+        bad += ["read-outs unjudged"] if leaks is None and not bad else []
         reruns.append({"id": r["id"], "seed": r.get("seed"), "run": r["run"], "art": r.get("art"), "state": r["state"],
-                       "bpb": (r.get("witness") or {}).get("bpb"), "problems": bad})
+                       "bpb": (r.get("witness") or {}).get("bpb"), "problems": bad, "readout_leaks": leaks})
         if bad:
             continue
         subs += [{"id": x["id"], "run": r["run"], "seed": r.get("seed"), "cp": round(t.get("fraction") or 0, 3),
                   "start": x["start"], "macs": t["macs"], "val_bpb": t["bpb"], "rho": t["rho"], "phi": t["phi"],
                   "depth": t["D"], "reference": is_reference(x), "direction": x["direction"], "counted": True,
-                  "E_bytes": t.get("E_bytes"), "start_bpb": r["witness"]["start_bpb"], "fork_ladder": fork_ladder(x)}
+                  "E_bytes": t.get("E_bytes"), "start_bpb": r["witness"]["start_bpb"], "fork_ladder": fork_ladder(x),
+                  "phi_position": x.get("phi"), "split": "final"}
                  for t in r["ledger"] if t.get("te_kind") == "submission" and t.get("rho") and t.get("valid")]
     schedule_ends(subs, key=lambda s: s["run"])
     l0 = {s: v for s in STARTS if (v := regime_start_bpb(subs, s)) is not None}
     fin = seed_mean(subs)
     search_subs = [x for x in json.loads((STATE / "submissions.json").read_text()) if x.get("regime") == "current"]
     l0_search = {s: v for s in STARTS if (v := regime_start_bpb(search_subs, s)) is not None}
-    rep = {"at": now(), "te_core": te_version(), "regime": regime_name(), "pin": pin_of(), "final": table(fin, l0), "search": table(search_subs, l0_search),
-           "final_starts": l0, "search_starts": l0_search, "reruns": reruns, "entries": sorted({x["id"] for x in fin}),
+    rerun = {x["id"] for x in fin}
+    merged = fin + [x | {"val_bpb": x["val_bpb"] * l0[x["start"]] / l0_search[x["start"]], "search_bpb": x["val_bpb"],
+                         "split": "search"}
+                    for x in search_subs if x["id"] not in rerun and x["start"] in l0 and x["start"] in l0_search]
+    rep = {"at": now(), "te_core": te_version(), "frontier": f"te_core {te_pin('frontier') and te_pin('').VERSION} ({TE_PIN})",
+           "regime": regime_name(), "pin": pin_of(), "table": table(merged, l0), "final": table(fin, l0),
+           "search": table(search_subs, l0_search), "final_starts": l0, "search_starts": l0_search, "reruns": reruns,
+           "entries": sorted({x["id"] for x in fin}),
            "superseded": [{k: r.get(k) for k in ("id", "seed", "run", "superseded")} for r in res if r.get("superseded")]}
     if write:
         FINAL.mkdir(parents=True, exist_ok=True)
         (FINAL / "table.json").write_text(json.dumps(rep, indent=1) + "\n")
         (FINAL / "final_submissions.json").write_text(json.dumps(fin) + "\n")
-        (FINAL / "table.md").write_text(table_md(rep["final"], "final", "seeds averaged per checkpoint") + "\n"
-                                         + table_md(rep["search"], "search", "the search run's one seed"))
-        plot(fin, l0, "final set, seeds averaged", FINAL / "frontier-final.png")
+        (FINAL / "table_submissions.json").write_text(json.dumps(merged) + "\n")
+        (FINAL / "table.md").write_text(
+            "## The final table\n\n" + table_md(rep["table"], "final", "an entry's reruns, seeds averaged per checkpoint, "
+                                                "where it was rerun, else its search value at the same drop") + "\n"
+            + "## The reruns alone\n\n" + table_md(rep["final"], "final", "seeds averaged per checkpoint") + "\n"
+            + "## The search set alone\n\n" + table_md(rep["search"], "search", "the search run's one seed"))
+        plot(merged, l0, "final table: reruns on the final set (seeds averaged), else search values at the same drop",
+             FINAL / "frontier-final.png")
         plot(search_subs, l0_search, "search set, one seed", FINAL / "frontier-search.png")
     return rep
 
