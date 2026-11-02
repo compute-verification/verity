@@ -4,8 +4,9 @@ import Proofs.Flock.Claims.ZK.FrameBeta
 /-!
 # The frames refuse a rank-deficient mask slot (`FrameUnrefused`'s rank fault)
 
-At a `Live` statement the loop serves, on a live history of `refK x` openings whose last coins the frame takes, no
-table's rep's rank check refuses at the opened coins (`Masked.RankBad`, `Masked.Thrown`'s first disjunct). The opening at
+At a `Live` statement the loop serves, on a live history of at most `refK x` openings whose last coins the frame takes,
+no rep past whose `β` round it runs has its rank check refuse at the opened coins (`Masked.RankBad`, `Masked.Thrown`'s
+first disjunct). The opening at
 the rep's inner round 2 (`betaSlot`) finds the frame in the inner proof, past the opening's label, where the rank check
 held (`Ranked.ownReqs_rank`); what it read is the session's:
 
@@ -317,7 +318,7 @@ end Ranked
 namespace Loop
 
 /-- **The coins the loop hands a rep's state are the opened coins**: round `p`'s word `e`, below the round's count. -/
-theorem wordsAt_slot (T : ZKMal.CoinLayer.TableData) (x : Msg) (ops : List (Msg × Msg)) (hl : ops.length = refK x)
+theorem wordsAt_slot (T : ZKMal.CoinLayer.TableData) (x : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
     {s p e : ℕ} (hp : p < s) (hs : s ≤ ops.length)
     (he : e < (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) p).size) :
     (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) p)[e]! =
@@ -401,12 +402,13 @@ namespace LeanRelease
 
 open Loop Ranked
 
-/-- **The frames refuse a rank-deficient mask slot**: at a `Live` statement the loop serves, on a live history of
-`refK x` openings whose last coins the frame takes, table `j`'s rep `r`'s rank check holds at the opened coins. The
-opening at `betaSlot` is the rep's inner round 2, where the frame is past the opening's label and the rank check held
-(`repState_rank`) on the rounds' coins, which are the opened ones (`wordsAt_slot`), and, at rep `1`, after rep `0`'s
-claim points, whose rounds the loop asks for the same counts (`loopNr_rep`). Both read as the session's
-(`frame_points`). -/
+set_option maxHeartbeats 400000 in
+/-- **The frames refuse a rank-deficient mask slot**: at a `Live` statement the loop serves, on a live history of at
+most `refK x` openings, past table `j`'s rep `r`'s `betaSlot`, whose last coins the frame takes, the rep's rank check
+holds at the opened coins. The opening at `betaSlot` is the rep's inner round 2, where the frame is past the opening's
+label and the rank check held (`repState_rank`) on the rounds' coins, which are the opened ones (`wordsAt_slot`), and,
+at rep `1`, after rep `0`'s claim points, whose rounds the loop asks for the same counts (`loopNr_rep`). Both read as
+the session's (`frame_points`). -/
 theorem rank_unrefused (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -415,10 +417,10 @@ theorem rank_unrefused (T : ZKMal.CoinLayer.TableData)
       ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length = refK x)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
     (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
     (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
-    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) :
+    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.betaSlot x j r < ops.length) :
     ¬ Masked.RankBad (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
       (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r := by
   intro hbad
@@ -463,10 +465,15 @@ theorem rank_unrefused (T : ZKMal.CoinLayer.TableData)
   have hs1 : 1 ≤ FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) := by
     unfold FlockComplete.repStartZk; omega
   obtain ⟨s, hs⟩ : ∃ s, s = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + N + 2 := ⟨_, rfl⟩
-  have hb : s < refK x := by omega
+  have hbs : Masked.betaSlot x j r = s := by
+    unfold Masked.betaSlot
+    rw [Masked.repSlot_eq hsx hz, hs, hN]
+    omega
+  rw [hbs] at hb
   have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
   obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
-    (by rw [hlast]; simp [hl]) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
+    (by rw [hlast]; simp only [List.length_cons]; omega) hr (i := s + 2) (by omega)
+    (by simp only [List.length_cons]; omega)
   obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[s]? = some d := ⟨ops[s]'(by omega), List.getElem?_eq_getElem _⟩
   have htk : ops.take (s + 1) = ops.take s ++ [(dm, da)] := by rw [List.take_add_one, hd]; rfl
   have hh : ((m₀, ρ₀) :: ops).take (s + 2) = (m₀, ρ₀) :: (ops.take s ++ [(dm, da)]) := by

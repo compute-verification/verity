@@ -185,6 +185,7 @@ import Proofs.Flock.Claims.ZK.RepFree
 import Proofs.Flock.Claims.ZK.RepReplay
 import Proofs.Flock.Claims.ZK.RepInner
 import Proofs.Flock.Claims.ZK.RepCutFw
+import Proofs.Flock.Claims.ZK.RepRet
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -643,8 +644,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   **`LeanRelease.tablesAdmitUnrefused_dataE`**) and the frames' side `LeanRelease.FrameUnrefused` (at a `Live`
   statement, a live history the frame takes shows no fault), so `FinalRoundEq` at `ofLoop` is theirs and `FinishIs`'
   (**`LeanRelease.finalRoundEq_ofLoop`**).
-* `FrameBeta`: `FrameUnrefused`' `β` fault. At a `Live` statement the loop serves, on a live history of `refK x` openings
-  whose last coins the frame takes, each rep's opening at `betaSlot` is its inner proof's round 2 (the rep's round
+* `FrameBeta`: `FrameUnrefused`' `β` fault. At a `Live` statement the loop serves, on a live history of at most `refK x`
+  openings whose last coins the frame takes, each rep's opening at `betaSlot` among them is its inner proof's round 2 (the rep's round
   position, `Loop.locate_take_sum` with `Loop.repStartZk_eq`, and its schedule so far complete,
   `Count.schedSoFar_size`), whose frame takes only one nonzero `β` (`Loop.answer_beta`), so the opened `β` is nonzero
   (**`LeanRelease.beta_unrefused`**).
@@ -662,8 +663,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   the rounds' answers up to the label, each the round's count (`Ranked.run_head`), so where the requests up to an inner
   proof's round run on, the rank check held at the rounds' coins after the earlier rep's claim points
   (**`Ranked.ownReqs_rank`**).
-* `FrameRankFault`: `FrameUnrefused`' rank fault. At a `Live` statement the loop serves, on a live history of `refK x`
-  openings whose last coins the frame takes, each rep's opening at `betaSlot` finds the frame at its inner proof's round
+* `FrameRankFault`: `FrameUnrefused`' rank fault. At a `Live` statement the loop serves, on a live history of at most
+  `refK x` openings whose last coins the frame takes, each rep's opening at `betaSlot` among them finds the frame at its inner proof's round
   2, where the rank check held on the rounds' coins after the earlier rep's claim points (`Ranked.repState_rank`).
   Those coins are the opened ones (`Loop.wordsAt_slot`), at the algebraic phase's counts (`Ranked.alg_cnt`,
   `Loop.loopNr_rep`), and the frame's claim points on them are the session's (`Ranked.frame_points`), so no rep's rank
@@ -740,6 +741,10 @@ import Proofs.Flock.Claims.ZK.RepCutFw
 * `RepCutFw`: the cut rep returns on its coins alone. Where the firewall's rep returned and the cut's rank check passes,
   the cut rep from any hash, commitments and source returns, with a log of the firewall's size
   (**`CutFree.repCut_of_repFwC`**).
+* `RepRet`: a rep returns on its coins alone. Each phase returns from any source wherever the coins it draws pass its
+  checks (`CutFree.piopCut_ret`, `CutFree.ligeritoCut_ret`, `CutFree.innerCut_ret`, `CutFree.repCut_ret`), so at a
+  `Live` statement, table `k / 2`'s rep `k % 2` returns from `repBase x k` to `repBase x (k + 1)` wherever the coins
+  below round `n`, past its `β` round, show no refusal (**`Masked.repCut_ret`**).
 * `L0PinFrame`: the firewall's scheduled opening, fed the stream's coins, is the cut run. Fed coins one round at a
   time (`Fed.feedR`), a run over `Drive.OpenM` is the cut run over `PS` at those coins (`Fed.feedSim`), so the opening
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies
