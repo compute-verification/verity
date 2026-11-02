@@ -307,3 +307,229 @@ theorem mix_shvzk_hm96 (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C)
 end Mix
 
 end FlockSoundness.ZK.Table
+
+namespace FlockSoundness.ZK
+
+open Game
+
+set_option synthInstance.maxSize 100000
+set_option synthInstance.maxHeartbeats 1000000
+
+section Joint
+
+variable {J : ℕ} {F K Salt B D C : Type} {W Hi VL : Fin J → Type} [Field F] [Field K] [CharP F 2]
+  [AddCommGroup Salt] [AddCommGroup B] [∀ j, AddCommGroup (Hi j)]
+
+/-- What the workers see of every table's randomness. -/
+def famSeen (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (p : ∀ j, (T j).Rand × ((T j).Hid → Salt)) :
+    ∀ j, (T j).Seen :=
+  fun j => (T j).seenOf (p j).1 fun q => (p j).2 (.inl q)
+
+/-- **The tables' switched views at values read from what every table's workers see** (`vc`), with real leaves. -/
+noncomputable def famSw (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
+    (w : ∀ j, W j) (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F)
+    (p : ∀ j, (T j).Rand × ((T j).Hid → Salt)) : ∀ j, (T j).View :=
+  fun j => (T j).toBase ((M j).onVals.swViewR (w j, (T j).constVals (vc (famSeen T p) j)) (w j, (T j).vals) (p j).1
+    (p j).2)
+
+/-- The randomness with the pads trees' hidden leaves ideal: each table's randomness and pads seeds, and level 0's
+hidden salts. -/
+abbrev MixRand (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) : Type :=
+  ∀ j, ((T j).Rand × (Fin 2 × Fin (T j).nPU → B × Salt)) × (Fin (T j).nU → Salt)
+
+/-- What the workers see, on that randomness. -/
+def mixSeen (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (q : MixRand T) : ∀ j, (T j).Seen :=
+  fun j => (T j).seenOf (q j).1.1 (q j).2
+
+/-- **The switched views with the pads trees' hidden leaves ideal.** -/
+noncomputable def famSwMix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
+    (w : ∀ j, W j) (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F) (q : MixRand T) : ∀ j, (T j).View :=
+  fun j => (T j).toBase ((T j).onVals.swViewWith (w j, (T j).constVals (vc (mixSeen T q) j)) (w j, (T j).vals)
+    (q j).1.1 (Sum.elim (fun q' => (M j).H ((M j).onVals.swDig (w j, (T j).constVals (vc (mixSeen T q) j))
+      (w j, (T j).vals) (q j).1.1 (.inl q') + (M j).My ((q j).2 q'), (M j).cs ((q j).2 q')))
+      fun i => (T j).ideal ((q j).1.2 i)))
+
+/-- **The fix map at every table**, at the values read from what the workers see, which it keeps. -/
+noncomputable def famFix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (w : ∀ j, W j)
+    (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F) : MixRand T ≃ MixRand T where
+  toFun q j := (((T j).fixE (w j) (vc (mixSeen T q) j) (q j).1.1, (q j).1.2), (q j).2)
+  invFun q j := ((((T j).fixE (w j) (vc (mixSeen T q) j)).symm (q j).1.1, (q j).1.2), (q j).2)
+  left_inv q := funext fun j => Prod.ext (Prod.ext (((T j).fixE (w j) (vc (mixSeen T q) j)).symm_apply_apply _) rfl) rfl
+  right_inv q := funext fun j => Prod.ext (Prod.ext (((T j).fixE (w j) (vc (mixSeen T q) j)).apply_symm_apply _) rfl) rfl
+
+/-- **With the pads trees' leaves ideal, the switched views are the honest prover's on the fixed randomness**
+(`swViewWith_fix`, `swDig_inl_fix`). -/
+theorem famSwMix_fix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
+    (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) (hpads : ∀ j, (T j).PadsOnto)
+    (hβ : ∀ j r, (T j).β r ≠ 0) (w : ∀ j, W j) (hreg : ∀ j, (T j).sReg (w j) = (T j).pubReg)
+    (hinner : ∀ j, (T j).InnerHolds (w j)) (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F) (q : MixRand T) :
+    famSwMix T M w vc q = fun j => (M j).viewMix (w j) (famFix T w vc q j).1 (famFix T w vc q j).2 := by
+  funext j
+  rw [famSwMix]
+  refine Eq.trans ((T j).swViewWith_fix (hW j) (hpads j) (hβ j) (w j) (hreg j) (hinner j) (vc (mixSeen T q) j)
+    (q j).1.1 _) ?_
+  refine congrArg ((T j).viewWith (w j) _) (funext fun i => ?_)
+  rcases i with q' | i
+  · exact congrArg (fun d => (M j).H (d + (M j).My ((q j).2 q'), (M j).cs ((q j).2 q')))
+      ((T j).swDig_inl_fix (M j) (w j) (vc (mixSeen T q) j) (q j).1.1 q')
+  · rfl
+
+/-- The joint randomness split into what stays (each table's randomness and level 0's hidden salts) and the pads trees'
+hidden salts, indexed by table. -/
+def padsSplit (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (X : Type) :
+    (∀ j, (T j).Rand × ((T j).Hid → X)) ≃
+      (∀ j, (T j).Rand × (Fin (T j).nU → X)) × ((Σ j, Fin 2 × Fin (T j).nPU) → X) where
+  toFun p := (fun j => ((p j).1, fun q => (p j).2 (.inl q)), fun s => (p s.1).2 (.inr s.2))
+  invFun a j := ((a.1 j).1, Sum.elim (a.1 j).2 fun i => a.2 ⟨j, i⟩)
+  left_inv p := funext fun j => Prod.ext rfl (funext fun i => by rcases i with q | i <;> rfl)
+  right_inv _ := rfl
+
+/-- The pads trees' seeds regrouped by table. -/
+def padsJoin (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) :
+    (∀ j, (T j).Rand × (Fin (T j).nU → Salt)) × ((Σ j, Fin 2 × Fin (T j).nPU) → B × Salt) ≃ MixRand T where
+  toFun b j := (((b.1 j).1, fun i => b.2 ⟨j, i⟩), (b.1 j).2)
+  invFun q := (fun j => ((q j).1.1, (q j).2), fun s => (q s.1).1.2 s.2)
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+omit [CharP F 2] [AddCommGroup Salt] [∀ j, AddCommGroup (Hi j)] in
+theorem leaf_common {T : Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)} (M : T.Hm96 C) (My : Salt → B)
+    (cs : Salt → C) (Hh : B × C → D) (hMy : M.My = My) (hcs : M.cs = cs) (hH : M.H = Hh) (d : B) (y : Salt) :
+    M.H (d + M.My y, M.cs y) = Hh (d + My y, cs y) := by
+  rw [hMy, hcs, hH]
+
+omit [CharP F 2] [AddCommGroup Salt] [∀ j, AddCommGroup (Hi j)] in
+theorem ideal_common {T : Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)} (M : T.Hm96 C) (cs : Salt → C)
+    (Hh : B × C → D) (hcs : M.cs = cs) (hH : M.H = Hh) (u : B × Salt) : Hh (u.1, cs u.2) = T.ideal u := by
+  rw [← hcs, ← hH]
+  exact (M.ideal_eq u.1 u.2).symm
+
+variable [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype B]
+  [DecidableEq B] [∀ j, Fintype (Hi j)] [∀ j, DecidableEq (Hi j)]
+
+omit [DecidableEq F] [Fintype K] [DecidableEq K] [DecidableEq Salt] [DecidableEq B] [∀ j, DecidableEq (Hi j)] in
+/-- **The pads trees' hidden leaves go ideal at every table at once**, at `δ₁` per leaf (`ideal_leaves_swap_fintype` on
+all of them): the values read level 0's salts, never the pads trees'. -/
+theorem famSw_pads_swap (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
+    (My : Salt → B) (cs : Salt → C) (Hh : B × C → D) (hMy : ∀ j, (M j).My = My) (hcs : ∀ j, (M j).cs = cs)
+    (hH : ∀ j, (M j).H = Hh) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (w : ∀ j, W j)
+    (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F) (E : (∀ j, (T j).View) → Prop) :
+    prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => E (famSw T M w vc p))
+        ≤ prCoin (fun q : MixRand T => E (famSwMix T M w vc q)) + ((∑ j, 2 * (T j).nPU : ℕ) : ENNReal) * δ₁
+      ∧ prCoin (fun q : MixRand T => E (famSwMix T M w vc q))
+        ≤ prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => E (famSw T M w vc p))
+          + ((∑ j, 2 * (T j).nPU : ℕ) : ENNReal) * δ₁ := by
+  have : Nonempty Salt := ⟨0⟩
+  have : Nonempty (∀ j, (T j).Rand × (Fin (T j).nU → Salt)) := ⟨fun _ => 0⟩
+  let cva : (∀ j, (T j).Rand × (Fin (T j).nU → Salt)) → ∀ j, Fin 2 → Fin (T j).nE → F := fun a =>
+    vc fun k => (T k).seenOf (a k).1 (a k).2
+  let x : (∀ j, (T j).Rand × (Fin (T j).nU → Salt)) → (Σ j, Fin 2 × Fin (T j).nPU) → B := fun a s =>
+    (M s.1).onVals.swDig (w s.1, (T s.1).constVals (cva a s.1)) (w s.1, (T s.1).vals) (a s.1).1 (.inr s.2)
+  let G : (∀ j, (T j).Rand × (Fin (T j).nU → Salt)) → ((Σ j, Fin 2 × Fin (T j).nPU) → D) → Prop := fun a L =>
+    E fun j => (T j).toBase ((T j).onVals.swViewWith (w j, (T j).constVals (cva a j)) (w j, (T j).vals) (a j).1
+      (Sum.elim (fun q' => (M j).H ((M j).onVals.swDig (w j, (T j).constVals (cva a j)) (w j, (T j).vals) (a j).1
+        (.inl q') + (M j).My ((a j).2 q'), (M j).cs ((a j).2 q'))) fun i => L ⟨j, i⟩))
+  have v1 := ideal_leaves_swap_fintype My cs hT1 Hh x G
+  have v2 := real_leaves_swap_fintype My cs hT1 Hh x G
+  have hl : prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => E (famSw T M w vc p))
+      = prCoin (fun b : (∀ j, (T j).Rand × (Fin (T j).nU → Salt)) × ((Σ j, Fin 2 × Fin (T j).nPU) → Salt) =>
+          G b.1 fun s => Hh (x b.1 s + My (b.2 s), cs (b.2 s))) := by
+    rw [← prCoin_congr_equiv (padsSplit T Salt)]
+    congr 1
+    funext p
+    refine congrArg E (funext fun j => ?_)
+    refine congrArg (fun L => (T j).toBase ((T j).onVals.swViewWith _ _ _ L)) (funext fun i => ?_)
+    rcases i with q' | i
+    · rfl
+    · exact leaf_common (M j) My cs Hh (hMy j) (hcs j) (hH j) _ _
+  have hr : prCoin (fun b : (∀ j, (T j).Rand × (Fin (T j).nU → Salt)) × ((Σ j, Fin 2 × Fin (T j).nPU) → B × Salt) =>
+          G b.1 fun s => Hh ((b.2 s).1, cs (b.2 s).2))
+      = prCoin (fun q : MixRand T => E (famSwMix T M w vc q)) := by
+    rw [← prCoin_congr_equiv (padsJoin T)]
+    congr 1
+    funext b
+    refine congrArg E (funext fun j => ?_)
+    refine congrArg (fun L => (T j).toBase ((T j).onVals.swViewWith _ _ _ L)) (funext fun i => ?_)
+    rcases i with q' | i
+    · rfl
+    · exact ideal_common (M j) cs Hh (hcs j) (hH j) _
+  have hc : Fintype.card (Σ j, Fin 2 × Fin (T j).nPU) = ∑ j, 2 * (T j).nPU := by
+    simp only [Fintype.card_sigma, Fintype.card_prod, Fintype.card_fin]
+  rw [hl, ← hr, ← hc]
+  exact ⟨v1, v2⟩
+
+/-- **Lemma B at values read from what every table's workers see, with real leaves**: at `J` tables, at a fixed
+non-degenerate coin vector of each, for witnesses `w` carrying the public region data whose honest pads satisfy the inner
+constraint, and for any values `vc` read from what every table's workers see (`Table.Seen`: the mask slots, level 0's
+hiding and level 0's salts), the tables' switched views and their `S_shvzk` with real leaves on any dummies are within
+`Σ_j 2·|Hid_j|·δ₁` both ways. The pads trees' hidden leaves go ideal first (`famSw_pads_swap`); then the fix map, a
+bijection that keeps what the workers see, makes the switched views the honest prover's (`famSwMix_fix`), whose tables
+are independent, each within `(n_U + |Hid|)·δ₁` of its `S_shvzk` (`mix_shvzk_hm96`, `prCoin_pi_close`). -/
+theorem fam_sw_shvzk_hm96 (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
+    (My : Salt → B) (cs : Salt → C) (Hh : B × C → D) (hMy : ∀ j, (M j).My = My) (hcs : ∀ j, (M j).cs = cs)
+    (hH : ∀ j, (M j).H = Hh) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hrank : ∀ j, (T j).Rank)
+    (hpad : ∀ j, (T j).PadOnto) (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2)
+    (hpads : ∀ j, (T j).PadsOnto) (hβ : ∀ j r, (T j).β r ≠ 0) (w : ∀ j, W j)
+    (hreg : ∀ j, (T j).sReg (w j) = (T j).pubReg) (hinner : ∀ j, (T j).InnerHolds (w j))
+    (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F) (w0 : ∀ j, W j) (E : (∀ j, (T j).View) → Prop) :
+    prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => E (famSw T M w vc p))
+        ≤ prCoin (fun p : ∀ j, (T j).SimRand × ((T j).Hid → Salt) => E fun j => (M j).simR (w0 j) (p j).1 (p j).2)
+          + ∑ j, 2 * Fintype.card (T j).Hid * δ₁
+      ∧ prCoin (fun p : ∀ j, (T j).SimRand × ((T j).Hid → Salt) => E fun j => (M j).simR (w0 j) (p j).1 (p j).2)
+        ≤ prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => E (famSw T M w vc p))
+          + ∑ j, 2 * Fintype.card (T j).Hid * δ₁ := by
+  have : Nonempty Salt := ⟨0⟩
+  have : ∀ j, Nonempty (((T j).Rand × (Fin 2 × Fin (T j).nPU → B × Salt)) × (Fin (T j).nU → Salt)) :=
+    fun _ => ⟨0⟩
+  have : ∀ j, Nonempty ((T j).SimRand × ((T j).Hid → Salt)) := fun _ => ⟨0⟩
+  obtain ⟨a1, a2⟩ := famSw_pads_swap T M My cs Hh hMy hcs hH hT1 w vc E
+  have hb : prCoin (fun q : MixRand T => E (famSwMix T M w vc q))
+      = prCoin (fun q : MixRand T => E fun j => (M j).viewMix (w j) (q j).1 (q j).2) := by
+    rw [← prCoin_congr_equiv (famFix T w vc) fun q => E fun j => (M j).viewMix (w j) (q j).1 (q j).2]
+    congr 1
+    funext q
+    rw [famSwMix_fix T M hW hpads hβ w hreg hinner vc q]
+  have one : ∀ j (E' : (T j).View → Prop),
+      prCoin (fun p : ((T j).Rand × (Fin 2 × Fin (T j).nPU → B × Salt)) × (Fin (T j).nU → Salt) =>
+          E' ((M j).viewMix (w j) p.1 p.2))
+        ≤ prCoin (fun p : (T j).SimRand × ((T j).Hid → Salt) => E' ((M j).simR (w0 j) p.1 p.2))
+          + (((T j).nU : ENNReal) + Fintype.card (T j).Hid) * δ₁
+      ∧ prCoin (fun p : (T j).SimRand × ((T j).Hid → Salt) => E' ((M j).simR (w0 j) p.1 p.2))
+        ≤ prCoin (fun p : ((T j).Rand × (Fin 2 × Fin (T j).nPU → B × Salt)) × (Fin (T j).nU → Salt) =>
+            E' ((M j).viewMix (w j) p.1 p.2)) + (((T j).nU : ENNReal) + Fintype.card (T j).Hid) * δ₁ := by
+    intro j E'
+    have hT1j : Claims.Hm96Hiding (M j).My (M j).cs δ₁ := by
+      rw [hMy j, hcs j]
+      exact hT1
+    exact (T j).mix_shvzk_hm96 (M j) hT1j (hrank j) (hpad j) (hW j) (hpads j) (hβ j) (w j) (hreg j) (hinner j)
+      (w0 j) E'
+  have p1 := prCoin_pi_close
+    (Ω := fun j => ((T j).Rand × (Fin 2 × Fin (T j).nPU → B × Salt)) × (Fin (T j).nU → Salt))
+    (Ω' := fun j => (T j).SimRand × ((T j).Hid → Salt)) (V := fun j => (T j).View)
+    (fun j p => (M j).viewMix (w j) p.1 p.2) (fun j p => (M j).simR (w0 j) p.1 p.2)
+    (fun j => (((T j).nU : ENNReal) + Fintype.card (T j).Hid) * δ₁) (fun j E' => (one j E').1) E
+  have p2 := prCoin_pi_close
+    (Ω := fun j => (T j).SimRand × ((T j).Hid → Salt))
+    (Ω' := fun j => ((T j).Rand × (Fin 2 × Fin (T j).nPU → B × Salt)) × (Fin (T j).nU → Salt))
+    (V := fun j => (T j).View)
+    (fun j p => (M j).simR (w0 j) p.1 p.2) (fun j p => (M j).viewMix (w j) p.1 p.2)
+    (fun j => (((T j).nU : ENNReal) + Fintype.card (T j).Hid) * δ₁) (fun j E' => (one j E').2) E
+  have hsum : ((∑ j, 2 * (T j).nPU : ℕ) : ENNReal) * δ₁ + ∑ j, (((T j).nU : ENNReal) + Fintype.card (T j).Hid) * δ₁
+      = ∑ j, 2 * Fintype.card (T j).Hid * δ₁ := by
+    rw [Nat.cast_sum, Finset.sum_mul, ← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    simp only [Table.Hid, Fintype.card_sum, Fintype.card_prod, Fintype.card_fin]
+    push_cast
+    ring
+  rw [hb] at a1 a2
+  constructor
+  · calc _ ≤ _ := a1
+      _ ≤ _ := add_le_add p1 le_rfl
+      _ = _ := by rw [add_assoc, add_comm (∑ j, _), hsum]
+  · calc _ ≤ _ := p2
+      _ ≤ _ := add_le_add a2 le_rfl
+      _ = _ := by rw [add_assoc, hsum]
+
+end Joint
+
+end FlockSoundness.ZK
