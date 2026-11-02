@@ -161,7 +161,7 @@ serves (`Loop.Serves`: its `Hello` leaves, so the setup's sizes pass `Session.si
 the tables `real` answers being the session loop's own
 (`hRt`, `Count.RealTabs`: `Finish`'s `level0` request) and `L₀`'s round at the inner proof's round 0 being the
 firewall's own at some `final_c'` (`hL0`: what Rust's firewall sends there, `check_self`). The transport's other trusts
-(`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`) and the tables' side are `zk_server_lean_loop`'s. -/
+(`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEqOwn`, `FillRoundEq`) and the tables' side are `zk_server_lean_loop`'s. -/
 theorem Flock.zk_server_lean_ofLoop
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (T : CoinLayer.TableData)
     (vs : (CoinLayer.session Loop.loopNr T).SwVals) (t : ℕ) (ht : 0 < t)
@@ -196,7 +196,7 @@ theorem Flock.zk_server_lean_ofLoop
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH
       wk x w)
-    (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH
+    (hE : LeanRelease.LiveRoundEqOwn (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH
       wk x w)
     (hEf : LeanRelease.FillRoundEq (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH
       wk x w)
