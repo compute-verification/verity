@@ -551,7 +551,7 @@ theorem src_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i 
     (h : insO (staged st x ms s) = some i) :
     ∃ r rec, readX x = some r ∧ ∃ pj, r.partition = some pj ∧
       i.src = some (.files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, rec, none,
-        some (innerFormOf r.innerRaw)⟩) := by
+        some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by
   have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at h; cases h
   obtain ⟨r, p, hr, -, hd⟩ := staged_decode hne
   obtain ⟨-, hpa, -⟩ := readX_spec hr
@@ -606,7 +606,8 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
     f.stmt u' = .ok p := by
   unfold RecCoins.Files.stmt at h ⊢
   revert h
-  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
+  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+      (program := f.program) with
   | error e => intro h; cases h
   | ok q =>
     obtain ⟨spec, sts⟩ := q
@@ -713,13 +714,15 @@ theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   have hload' : RecCoins.Inner.load unit f' = .ok inn := hload
   obtain ⟨specL, stL, hstL, hm, hkl, -⟩ := load_fields hload'
   obtain ⟨f0, spec', st', s'', spec'', st'', hfs0, hstm, hset', hmm, hkk, -⟩ := innerSetup_files hr ha
-  have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw)⟩ := by
+  have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
+      r.innerRaw.program⟩ := by
     rw [filesOf, hpj] at hfs0
     simp only [Option.map_some, Option.some.injEq, RecCoins.Source.files.injEq] at hfs0
     exact hfs0.symm
   subst hf0
   have hstL' : RecCoins.Files.stmt "the inner session"
-      ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw)⟩ =
+      ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
+      r.innerRaw.program⟩ =
         .ok (specL, stL) :=
     stmt_unit (u := unit) (by rw [← hstL, hfs unit]; rfl)
   rw [hstm] at hstL'
