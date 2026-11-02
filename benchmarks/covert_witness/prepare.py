@@ -35,6 +35,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+#: the fixed side's version, in every witness record (README.md)
+VERSION = "2.1"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
 STARTS = ROOT / "starts"
@@ -43,8 +45,12 @@ DEVICE = os.environ.get("CW_DEVICE", "cuda")
 EVAL_CTX = 1024
 #: about 10 GPU-minutes of m's dense AdamW at its measured 1.49e14 FLOP/s (learning_frontier, RTX PRO 6000)
 TRAIN_FLOP_BUDGET = 9e16
-#: the candidate's train.py process, compilation included, on one GPU
-GPU_SECONDS_CAP = 1200.0
+#: the budget is checked on 2x the MACs the harness counts (te_core), which include the elementwise and optimizer work
+#: `train_flops` leaves out: 1.06-1.09x of `train_flops` on the reference island
+HARNESS_FLOP_SLACK = 1.1
+#: the candidate's steps' wall seconds as the harness times them (its own loading, encoding and evaluation excluded), on one
+#: GPU; the harness runs eager and counted, about 2.4x a compiled run's time
+GPU_SECONDS_CAP = 3000.0
 CLASSES = {
     "reference": {"max_e_bytes": None, "formats": None, "top_blocks": None},
     "e1mb": {"max_e_bytes": 1_000_000, "formats": None, "top_blocks": None},
@@ -377,6 +383,14 @@ def seedlog_step(masters: list[torch.Tensor], seed: int, c: float, gen: torch.Ge
         w.add_(torch.randn(w.shape, generator=gen, device=w.device, dtype=torch.float32), alpha=-c)
 
 
+def declare_step(base: bytes = b"", suffixes: tuple[bytes, ...] = ()) -> None:
+    """Declare the weights the training step in progress reads, as encodings from θ the harness credits as a
+    counterexample (te_core/cw.py): a weight read at one value is decode(θ, base)'s (θ's for an empty base), one read at
+    several is decode(decode(θ, base), suffixes[i])'s at its i-th, in the order the step reads them. The rebuild must cost
+    at most c MACs (4096 x the start's forward MACs per token). Encode the base before the suffixes: the first E encoded in
+    each 5% of the run is scored. A no-op outside the harness."""
+
+
 @torch.no_grad()
 def lora_merge(w: torch.Tensor, a: torch.Tensor, b: torch.Tensor, scale: float) -> torch.Tensor:
     """θ's weight plus scale · B @ A, in fp32 on the weight's device without TF32, cast to the weight's dtype."""
@@ -427,7 +441,7 @@ def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) ->
             raise ValueError("E (lora): trailing bytes")
         return out
     names, seed, n = header["names"], header["seed"], header["steps"]
-    coeffs = torch.frombuffer(bytearray(payload), dtype=DTYPES[header["coeff"]]).float().tolist()
+    coeffs = torch.frombuffer(bytearray(payload), dtype=DTYPES[header["coeff"]]).float().tolist() if len(payload) else []
     if len(coeffs) != n:
         raise ValueError("E (seedlog): coefficient count differs from its header")
     masters = [theta[k].to(device).float().clone() for k in names]
