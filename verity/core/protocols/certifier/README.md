@@ -196,7 +196,7 @@ A spec-level reference for network accounting's timing channel:
   record whose ``blocks`` state a server, server time or transfers (`PRIVATE`), an ``ingress`` declaration, a
   registered read or table of no registered parameter, a load (every registered parameter but the scan's state) read
   in other than whole rows of one width, by no unit, at an external port or by a table over part of it, and an external
-  input port whose rows aren't each read exactly once from the scan's state (`ingress_scan.SCAN_STATE`), the host's one
+  input port whose rows aren't each read exactly once from the scan's state (`blocks.SCAN_STATE`), the host's one
   ingress. `pins` gives the verifier's pinned roots of the loads from their certificates alone (`certified`: each
   load's registration on the host's uplink, ingress, in the session's first execution phase, kind ``load``), so the
   interface's ``input_count`` under them and the scan's state's root has no free input;

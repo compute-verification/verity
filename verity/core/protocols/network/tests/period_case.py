@@ -746,7 +746,7 @@ def _holds(reg: dict, doc: dict) -> bool:
 #: the scan's Programs' row in its registration: its `roots` entry's port, or its `registered` entry's value
 PROG = "scan/prog"
 #: the scan's state in a registration: its `roots` entry's port (`stateName`), or its `registered` entry's value, the
-#: value a window circuit registers the scan's state rows as (`stateValue`, `ingress_scan`'s `SCAN_STATE`)
+#: value a window circuit registers the scan's state rows as (`stateValue`, the certifier's `blocks.SCAN_STATE`)
 STATE = "scan/state"
 SCAN_STATE = "verity/certifier/scan-state/v1"
 
