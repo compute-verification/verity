@@ -34,7 +34,7 @@ Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. 
 M0 and upstream Flock.
 
 ~~~text
-bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (68-lane level-0 tree)
+bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (level-0 tree, 68 lanes)
 zerocheck           label flock-zerocheck-v0
   M1                label verity-flock-zk-pads-v0 · bytes pads root (64)
                     squeeze r_skip (6) · squeeze r_outer (m-13)
@@ -779,9 +779,9 @@ proof files (`FinishIs`, `Loop.finishIs`). The frames refusing every coin fault 
 (`frameUnrefused_ofLoop`), and from it, `FinishIs` and the tables admitting unrefused coins, proved at the deployed
 tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`). The other bytes it releases the theorem still reads only through
 named hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`) and
-the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and the tables' side (`Tables`, `Complete`,
-`DummyReg`, `Causal`, `SwCausal`, `TapeOK`) is a premise. Until those are proved, the ZK server is not yet proved
-zero-knowledge.
+the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and of the tables' side `SwCausal` is a premise;
+the rest of it (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`) is proved at the deployed tables
+(`Loop.tables_dataE` and its siblings). Until those are proved, the ZK server is not yet proved zero-knowledge.
 
 The frame's protocol, which the loop steps on its own requests (`Frame.Req`) and `flock-firewall frame` serves on its
 standard input (`tests/test_firewall_frame.py`):
