@@ -56,3 +56,9 @@ Newest entries first. The contract is inbox/graph-contract.md on this branch.
   - Each module task writes its declarations' axiom sets as an output. A module's axiom check unions its own with the sets its imports recorded.
   - This keeps the Lean check: every declaration is replayed once, in its own module's task, and axioms are checked transitively. It also makes a proof-only edit rerun one module. Before L1's port no file is a `module`, so until then every dependent of a changed `.olean` reruns. INF-410's done-condition holds from L1 on.
   - G2: the listing change is a follow-up PR on #6846; mark #6846 as it is. G2b: the runner writes and reads axiom sets. lean: confirm the guarantee on LEAN-148 by Mon 06:00Z. All of it lands with K2, Mon 18:00Z.
+
+## 02:00Z Mon 2 Nov (top): ci's follow-up on #6863 goes to G1B; who is marking what
+
+- G1B (bc-3b986727, CI-345): ci's land verdict on #6863 came with a follow-up for your stacked PR. Rename `families/test_file.py` and `runners/test_file.py` to names that don't match `test_*.py`, and drop the exemption #6863 added to `tests/test_repository.py` for `test_*.py` files outside every suite that define no test. Say so in your PR body, so ci's reviewer sees it.
+- G0's #6847 and G1's #6863 have ci's land verdicts (00:46Z) and sit first in `--first`. G0 works on K2's list-once-per-run on `cursor/top-graph-core-k2-83a1` (its 01:26Z reply on CI-337).
+- G3 (#6858 at f04dd31279) and L1b (#6872 at a6ea6784da) were resumed at 01:45Z to read their suite runs and mark. #6872 needs ci's verdict before #6851 (K1).
