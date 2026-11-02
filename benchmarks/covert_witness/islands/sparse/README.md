@@ -14,7 +14,10 @@ The fixed decoders are `full`, `lora` and `seedlog`, so a mask rides in one of t
 | `lora` | each candidate matrix's rank, greedily by the probe gradient's σ² per byte; with `--regrow F`, F of the bytes at θ and the rest after `--regrow-at` of the steps from a fresh probe, past each matrix's held rank (a learned mask) | LoRA factors, bf16 (a grown matrix's pieces as one pair at scale 1) |
 
 `--targets` picks the candidate matrices (`all`, `out`, `mlp`, `attn`, leaf names) and `--layers top:N` keeps every
-touched tensor in the top N blocks, so the backward stops there. A probe (`--probe N`, 4 batches by default) takes the
+touched tensor in the top N blocks, so the backward stops there. `--embed-rank R` (with `lora`) gives the tied embedding a
+rank-R LoRA, (vocab + d) · R bf16 entries (about 102 kB a rank), placed before the block matrices' allocation, or with -1
+lets it join that allocation; E carries it as one factor pair on `embed`, and training applies it in factored form to the
+lookup and the head (`tie_lora`), so the frozen head's matmul is unchanged. A probe (`--probe N`, 4 batches by default) takes the
 mean gradient at θ, priced in the step log as a forward pass plus the full backward (`extra`). Every record's
 `notes.first_order` holds, for budgets of 10 kB, 100 kB and 1 MB, the share of ‖G‖² each encoding captures: LoRA ranks;
 rows or columns as one-hot factors or with a list index; single entries with an entropy-coded, int32-list or bitmap index
