@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FOLD (note:20261017T0320Z-draft-eps1-fold): the served-GEMM scalar-only dial, measured once for correctness and cost a
+# The served-GEMM scalar-only fold dial, measured once for correctness and cost a
 # round. PROFILE owns the honest knee sweep; this run does not duplicate it. Run from a pouw-kernels checkout with
 # egemm.scalar-dial.patch applied (EG_ROUNDS added to egemm.cu's XF absorb; the egemm_ref.py mirror added to xin_receipts
 # and xin13_receipts). For each R in EG_R_LIST it builds egemm with -DEG_ROUNDS=R (the XOR-in(13,19) absorb of each

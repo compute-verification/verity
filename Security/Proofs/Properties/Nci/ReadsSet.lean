@@ -51,7 +51,7 @@ read by a member and every node calling a composite is shaped as `CompShape` say
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
 open NciCheck.Desc (Piece Seg PS Tgt)
-open Flock.Program (Prog)
+open Flock.Program (Prog GateTable)
 open DescAgree (nodeCount rootOffs)
 
 /-- The member of node `k` of Definition `d`'s body that holds the body's gate `x`, as `gateStep` takes it. -/
@@ -152,7 +152,7 @@ theorem locR_unique {P : Prog} {sc : Flock.Program.Scope} {g : Nat} {ops ops' : 
       exact ih h''
 
 /-- **A gate's operands in `circuitOf`'s circuit are the ones it is located with from the root.** -/
-theorem locR_root {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
+theorem locR_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
     LocR P P.rootScope g c.reads[g]! := by
   obtain ⟨p, sc, hp, -⟩ := circuitOf_gate hc hg
   unfold Flock.Program.Prog.gate at hp
@@ -545,7 +545,7 @@ theorem ref_get (node : Flock.Program.Node) (i m t : Nat) :
 /-- **`RootSet` at a root node calling a primitive**: its positions name exactly the gates its gates read, none of
 them its own, given the node's references in range and resolving below it (`hLow`), its operands' indices in range
 (`hOp`), and every reference read by some member unless it is a batch of none (`hCov`). -/
-theorem rootSet_prim (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hc : circuitOf P = .ok c)
+theorem rootSet_prim (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hc : circuitOf P = .ok c)
     (hl : Desc.rootLaidOut P = true) (hL : Laid P P.root) {k : Nat} (hk : k < nodeCount P)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
     (hp : (P.defs[node.fn]!).prim = true) (hG : (P.defs[node.fn]!).gates = 1)
@@ -3059,7 +3059,7 @@ theorem rootRead_gate (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .o
 /-- **`RootSet` at a root node calling a composite, from `NodeSet` at the root's activation**: the root's activation
 is one resolution reaches, its gates located (`locR_root`), each with `circuitOf`'s operands. -/
 theorem rootSet_comp (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
-    (c : Circuit) (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true) {k : Nat} (hk : k < nodeCount P)
+    (c : GateTable) (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true) {k : Nat} (hk : k < nodeCount P)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
     (hrs : Desc.nodeReads (rootCtx P memo) k = .ok rs) (hN : NodeSet P memo P.root k) :
     ∀ a : Nat, ((∃ w, (Tgt.gate w, (a : Int)) ∈ rootRead P memo node k) ∧ a ∉ nodeGates P k) ↔
@@ -3132,7 +3132,7 @@ theorem good_reached (P : Prog) (hF : RootFacts P) : ∀ sc, Resolve.Good P sc �
 `WidthFacts`, `Desc.walkable`) and resolution staying below the node (`Resolve.start_ok`, `Resolve.resolve_lt`), but
 that every reference of the node is read by a member unless it is a batch of none (`hCov`). -/
 theorem rootSet_prim_of (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
-    (hWF : WidthFacts P) (hwk : Desc.walkable P = true) (c : Circuit) (hc : circuitOf P = .ok c)
+    (hWF : WidthFacts P) (hwk : Desc.walkable P = true) (c : GateTable) (hc : circuitOf P = .ok c)
     (hl : Desc.rootLaidOut P = true) {k : Nat} (hk : k < nodeCount P)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
     (hp : (P.defs[node.fn]!).prim = true) (hrs : Desc.nodeReads (rootCtx P memo) k = .ok rs)

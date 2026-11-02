@@ -1,4 +1,4 @@
-# The L40S (sm_89) as `eps` prices it (README "Devices"): one epoch, the census of EPS1 ADA, and no vector solved for
+# The L40S (sm_89) as `eps` prices it (README "Devices"): one epoch, its measured census, and no vector solved for
 # prices, so the constants only `solve` reads are left out.
 current = "ADA-89"
 epochs = ["ADA-89"]
