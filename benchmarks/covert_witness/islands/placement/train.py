@@ -14,7 +14,10 @@ A regex fully matches a tensor's name without `.weight`; `{top}` and `{top2}` in
 indices. φ is 0 when every changed matrix sits at one (layer, stage) and the other changes are 0-FLOP gains at or after it.
 
 The harness writes the first E encoded in each 5% of the run as a checkpoint (the cap search's encodes take the first),
-so the trainer encodes in the middle of every later 5% of its steps.
+so the trainer encodes in the middle of every later 5% of its steps. The step count is planned from `prepare.train_flops`
+and refitted at step 40 to the harness's own count over steps 10-40 (`hooks.session().macs_so_far()`), which prices a
+LoRA adapter's own matmuls higher (block 0's adapters at 1 MB: 12.5% over the plan, past the budget's 1.1 slack at
+`--budget-fraction 0.98`), and to `--time-cap`.
 
     python launch.py e100kb s100 --note 'norms-all ...' -- --class e100kb --full '.*norm' --norm-lr 3e-3
 """
@@ -32,6 +35,7 @@ import torch
 import torch.nn.functional as F
 
 import prepare
+from te_core import hooks
 
 EOT = prepare.EOT["gpt2"]
 T_START = time.perf_counter()
@@ -192,13 +196,23 @@ def main() -> int:
     while step < n_steps:
         if step in (10, 40) and dev.startswith("cuda"):
             torch.cuda.synchronize()
+        meter = hooks.session()
         if step == 10:
             t10 = time.perf_counter()
-        if step == 40 and a.time_cap:
-            left = a.time_cap - (time.perf_counter() - T_START)
-            fit = max(step + 1, step + int(left / ((time.perf_counter() - t10) / 30)))
+            m10 = meter.macs_so_far() if meter else 0
+        if step == 40:
+            fits = {}
+            if a.time_cap:
+                left = a.time_cap - (time.perf_counter() - T_START)
+                fits[f"time cap {a.time_cap} s"] = step + int(left / ((time.perf_counter() - t10) / 30))
+            if meter:
+                rate = (meter.macs_so_far() - m10) / 30
+                left = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET / 2 - meter.macs_so_far()
+                fits[f"the harness's count, {rate:.3e} MACs a step"] = step + int(left // rate)
+            why, fit = min(fits.items(), key=lambda kv: kv[1], default=("", n_steps))
+            fit = max(step + 1, fit)
             if fit < n_steps:
-                print(json.dumps({"steps": fit, "was": n_steps, "why": f"time cap {a.time_cap} s"}), flush=True)
+                print(json.dumps({"steps": fit, "was": n_steps, "why": why}), flush=True)
                 n_steps = fit
                 marks = {round(n_steps * (k + 0.5) / 20) for k in range(1, 19)}
         frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
