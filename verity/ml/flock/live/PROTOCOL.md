@@ -1109,7 +1109,11 @@ session at K = 4096 (2 reps a session): the inner session's 286 messages (139 ro
 
 The first row holds wherever the inner phase runs `rec_live --firewall --parts` and the outer phase runs through the
 ZK server (`flock-circuit prove --firewall-state`, or the tests' relay; `tests/test_firewall_release.py` and
-`verity/core/service/firewall/tests`, a rule a test). Ending the recursive session at its first stop isn't enough for
+`verity/core/service/firewall/tests`, a rule a test). The rules as `admit` and `Decision.after` run them are proved
+properties (`Properties.Firewall`): only the next statement not yet released is admitted, and only before any stop; a
+statement asked out of its turn is the stop at the next one; the first stop ends the recursive session; proofs leave
+only on time. The first row's count from them is not yet a theorem.
+Ending the recursive session at its first stop isn't enough for
 it. If the worker chose which V* statements come and in what order, each outer statement would be released or never opened at its choice, with at most one
 stopped, and the order in which the challenger's `serve`s are reached would come on top, if the challenger can see it: the
 second row. So the statements and their order are fixed when the recursive session opens, and `admit` serves only the

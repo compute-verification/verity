@@ -61,7 +61,8 @@
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
   "Properties.Flock.Circuit",
   "Properties.Pous.WipeSigned",
-  "Properties.Challenger"
+  "Properties.Challenger",
+  "Properties.Firewall"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -405,7 +406,9 @@
   "Definitions.Pouw.Fp8Atom",
   "Definitions.Pouw.Game.Defs",
   "Definitions.Pouw.Dither",
-  "Definitions.Pouw.Assumptions.ServedWork"
+  "Definitions.Pouw.Assumptions.ServedWork",
+  "Properties.Firewall",
+  "Firewall"
  ],
  "witnesses": {
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
@@ -419,6 +422,14 @@
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
    "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
+  },
+  "Properties.Firewall.admitNext": {
+   "honest": ["Properties.Firewall.admitNext_honest"],
+   "nontrivial": "Properties.Firewall.admitNext_nontrivial"
+  },
+  "Properties.Firewall.afterOnTime": {
+   "honest": ["Properties.Firewall.afterOnTime_honest"],
+   "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
   }
  },
  "unwitnessed": {
@@ -900,6 +911,11 @@
    "imports": ["Mathlib", "Definitions.Flock", "Flock", "Properties.Flock"],
    "except": [],
    "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), never a proof"
+  },
+  "Properties.Firewall": {
+   "imports": ["Firewall"],
+   "except": [],
+   "why": "the record's rules are stated against the release side's own functions (`Firewall.Record`, `Firewall.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
   }
  },
  "reads_exempt": {
@@ -2256,6 +2272,30 @@
    "signature": ["Properties.Evaluator.TC.zero : Properties.Evaluator.TC.Zero"],
    "assumptions": [],
    "type_hash": "d0eca7108f50adac398a16906569bfa75fb2dcccfb86fcf1b546d110f63e1396"
+  },
+  "Properties.Firewall.admitNext": {
+   "owner": "@proofs"
+  },
+  "Properties.Firewall.admitNext_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Firewall.admitNext_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.Firewall.afterOnTime": {
+   "owner": "@proofs"
+  },
+  "Properties.Firewall.afterOnTime_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Firewall.afterOnTime_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.Firewall.outOfTurnStops": {
+   "owner": "@proofs"
+  },
+  "Properties.Firewall.stopEnds": {
+   "owner": "@proofs"
   },
   "Properties.Identity.streamIsFlock": {
    "owner": "@network-accounting",
@@ -4448,6 +4488,22 @@
    },
    "Properties.NetworkPeriod.rowsStateTied": {
     "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.Firewall.admitNext": {
+    "function": "Core.Firewall.admit",
+    "outcome": "accept"
+   },
+   "Properties.Firewall.stopEnds": {
+    "function": ["Core.Firewall.admit", "Core.Firewall.stop"],
+    "outcome": "none"
+   },
+   "Properties.Firewall.outOfTurnStops": {
+    "function": "Core.Firewall.admit",
+    "outcome": "none"
+   },
+   "Properties.Firewall.afterOnTime": {
+    "function": "Core.Firewall.Decision.after",
     "outcome": "accept"
    }
   },
