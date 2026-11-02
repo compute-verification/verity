@@ -28,8 +28,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 TP, K, BLOCK = 8, 256, 128
 NAME = re.compile(r"model\.layers\.(\d+)\.mlp\.(?:experts\.(\d+)|shared_experts)\.down_proj\.weight$")

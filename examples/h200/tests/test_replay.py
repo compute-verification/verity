@@ -13,7 +13,7 @@ import pytest
 
 import cpu_step as S
 import replay as R
-from verity.core.protocols.pouw.circuit import words as PW
+from verity.ml.protocols.pouw.circuit import words as PW
 from verity.core.protocols.sampled_proofs.one_stage.draw import strata_problem
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch

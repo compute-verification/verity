@@ -1,4 +1,4 @@
-// Pearl-C's hashing format -h3, SHA-512 throughout (`verity.core.protocols.pouw.schemes.pearl_c`'s module docstring).  The
+// Pearl-C's hashing format -h3, SHA-512 throughout (`verity.ml.protocols.pouw.schemes.pearl_c`'s module docstring).  The
 // labels' H_l = `pearl_c.s512`, SHA-512 after a 128-byte label block, its first 32 bytes (the labels keep their `pearl-c/h3s/`
 // bytes, `pearl_c.S512_LABELS`); A's row digests (`s512_rows`) and the tile leaf, `sha512/row-seg/v1` over each row and over
 // the tile's messages; the trees `audit.HM96`: frame-v3-sha512 (`verity.ml.commitments.merkle`, hash="sha512") over

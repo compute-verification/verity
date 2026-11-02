@@ -520,7 +520,7 @@ def run(a: argparse.Namespace) -> dict:
     round_log: list[dict] = []
     if live:
         from verity.core.protocols.pouw import window as Wd
-        from verity.core.protocols.pouw.circuit import h1tile as HT
+        from verity.ml.protocols.pouw.circuit import h1tile as HT
         from verity.core.protocols.sampled_proofs import challenger as Ch
         live_salt = cs.salt(registration)
         rounds = cs.rounds

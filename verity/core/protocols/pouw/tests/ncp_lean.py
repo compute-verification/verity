@@ -16,7 +16,7 @@ import json
 import sys
 from pathlib import Path
 
-from verity.core.protocols.pouw.schemes import ncp
+from verity.ml.protocols.pouw.schemes import ncp
 
 PINNED = Path(__file__).with_name("vectors") / "ncp_lean.json"
 K, M, N = 64, 2, 2

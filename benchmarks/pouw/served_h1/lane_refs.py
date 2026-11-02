@@ -27,8 +27,8 @@ from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import h1zy as ZY
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1zy as ZY
 
 R = 32
 PARTLY = (1, 3, 7)     # j of m = 32 r + j: 28, 20 and 4 of a leaf's 32 lanes hold no admitted row

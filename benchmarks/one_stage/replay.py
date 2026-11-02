@@ -1628,7 +1628,7 @@ def served_window(run: Run) -> Iterator[Case]:
     is the service's and the audit took the delivered sessions. Neither took the served draw or the sessions' roots, and
     no verdict of record reports registered reads."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
@@ -1775,7 +1775,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's registration passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
     src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],

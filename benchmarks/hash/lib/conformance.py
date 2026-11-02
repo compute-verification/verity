@@ -35,7 +35,7 @@ sys.path.insert(0, str(ROOT))
 import vclib  # noqa: E402
 from verity.core.protocols.pouw import audit  # noqa: E402
 from verity.core.protocols.pouw import weights as Wt  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity.ml.commitments import RangeIndexedDomain, hm96  # noqa: E402
 from verity.ml.commitments.limits import VerificationLimits  # noqa: E402

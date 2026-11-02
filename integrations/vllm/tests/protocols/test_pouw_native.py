@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.circuit import partition as CP
-from verity.core.protocols.pouw.circuit import reference as CR
+from verity.ml.protocols.pouw.circuit import partition as CP
+from verity.ml.protocols.pouw.circuit import reference as CR
 
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.protocols.pouw import circuit as PC

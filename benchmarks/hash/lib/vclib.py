@@ -150,7 +150,7 @@ def tiles_spec(domain_id: bytes, rows: int, cols: int) -> Spec:
 
 def seeds_spec(domain_id: bytes, row_bits: int) -> Spec:
     """Pearl-C -h3's row digests (sha512/row-seg/v1 of each FP32 row) and row seeds (pearl_c.row_seed)."""
-    from verity.core.protocols.pouw.schemes.pearl_c import S512_LABELS
+    from verity.ml.protocols.pouw.schemes.pearl_c import S512_LABELS
     return Spec(**row_seg_spec(domain_id, row_bits), seed_label=S512_LABELS["seed-A"])
 
 

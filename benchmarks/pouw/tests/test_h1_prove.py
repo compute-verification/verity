@@ -30,8 +30,8 @@ sys.path.insert(0, str(H1))
 import h1unit as U  # noqa: E402
 
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 
 
 def _module(name: str, file: str):
@@ -481,7 +481,7 @@ def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
     row 100), and by default `window_ports`' A and B ports, which credit's registered file reads, with the rest unchanged."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     for shape in (U.Shape(64), U.Shape(128)):
         t = shape.definition()
         bits = {p.name: p.bits for p in shape.ports()}

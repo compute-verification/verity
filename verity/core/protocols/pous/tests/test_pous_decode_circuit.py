@@ -13,7 +13,7 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as EB
-from verity.core.protocols.pous import decode_circuit as D
+from verity.ml.protocols.pous import decode_circuit as D
 from verity.core.protocols.pous.schemes import p2 as P2
 
 RNG = random.Random(13)

@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 
 SERVED = Path(__file__).resolve().parents[1] / "served_h1"
 RC, K = (32, 32), 64

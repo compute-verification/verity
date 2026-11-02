@@ -38,8 +38,8 @@ from test_network_certifier_warden import EOF, Server, drive
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.certifier import egress as EG
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import egress as EG
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import HEADER, id_request

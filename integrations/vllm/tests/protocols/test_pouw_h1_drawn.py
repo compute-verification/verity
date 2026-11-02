@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH

@@ -41,7 +41,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.core.protocols.certifier import ingress_scan as IS, warden as W
+from verity.ml.protocols.certifier import ingress_scan as IS
+from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.pous import wipe_monitoring as WM
 
 #: the monitoring periods' seconds, by name

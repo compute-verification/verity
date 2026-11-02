@@ -1,4 +1,4 @@
-"""`CacheStep_v2` (`verity.core.protocols.certifier.cache_step_v2`) against vLLM's block pool as the replay models it
+"""`CacheStep_v2` (`verity.ml.protocols.certifier.cache_step_v2`) against vLLM's block pool as the replay models it
 (`replay._KV`) over a whole trace, and its difftest vectors.
 
 `drive` replays a trace with its scheduler's pool tapped (not a fork's, not a dry run), and makes the unit's call for
@@ -41,7 +41,7 @@ from typing import Any, Sequence
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import replay as RP  # noqa: E402
 
-from verity.core.protocols.certifier import cache_step_v2 as C2  # noqa: E402
+from verity.ml.protocols.certifier import cache_step_v2 as C2  # noqa: E402
 
 HERE = Path(__file__).parent
 FIXTURES = HERE / "tests" / "fixtures"

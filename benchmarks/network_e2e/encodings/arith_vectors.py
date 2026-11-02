@@ -79,7 +79,7 @@ def _ae() -> Any:
 
 
 def _wc() -> Any:
-    from verity.core.protocols.certifier import window_charge as WC
+    from verity.ml.protocols.certifier import window_charge as WC
     return WC
 
 

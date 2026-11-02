@@ -29,9 +29,9 @@ import random
 import numpy as np
 import pytest
 import torch
-from verity.core.protocols.pouw.circuit import anchors as CA
-from verity.core.protocols.pouw.circuit import plan as CPL
-from verity.core.protocols.pouw.circuit import reference as CR
+from verity.ml.protocols.pouw.circuit import anchors as CA
+from verity.ml.protocols.pouw.circuit import plan as CPL
+from verity.ml.protocols.pouw.circuit import reference as CR
 from verity.core.protocols.pouw.coins import Challenger
 
 from verity_vllm import protocols as PO

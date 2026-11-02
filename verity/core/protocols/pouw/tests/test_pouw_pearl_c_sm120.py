@@ -22,13 +22,13 @@ import test_pouw_pearl_c_u as TU
 from verity.ml.circuits.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16,
                                  HOPPER_E4M3_K32)
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_c_u as U
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES, H100, SM120, SM120_UNPROMOTED, Device, Prices
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_c_u as U
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES, H100, SM120, SM120_UNPROMOTED, Device, Prices
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -152,7 +152,7 @@ def test_the_cap_is_the_records(monkeypatch):
     and `volunteer` gives rows up for it on sm120 alone."""
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover
-    from verity.core.protocols.pouw.schemes import pearl_c4
+    from verity.ml.protocols.pouw.schemes import pearl_c4
 
     s, h = get("pearl-c-sm120-v1"), get("pearl-c-h100-v1")
     assert (s.cap, h.cap, D.CAP, SM120_UNPROMOTED.cap) == (Fraction(1, 1000), Fraction(1, 400), Fraction(1, 400), Fraction(1, 1000))

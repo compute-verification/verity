@@ -43,7 +43,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier.certificate import Direction, PublicKey
-from verity.core.protocols.certifier.ingress_scan import SCAN_STATE
+from verity.ml.protocols.certifier.ingress_scan import SCAN_STATE
 
 #: the record's ``blocks`` keys that would make placement public; a record states none of them
 PRIVATE = ("server", "server_time", "transfers")

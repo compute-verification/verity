@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.core.protocols.certifier import compile_slice as CS, served_tie as ST
+from verity.core.protocols.certifier import compile_slice as CS
+from verity.ml.protocols.certifier import served_tie as ST
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

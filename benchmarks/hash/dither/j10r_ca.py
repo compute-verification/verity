@@ -15,9 +15,9 @@ import numpy as np
 
 import h1v3_ca as V3
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 SOURCE = "benchmarks/pouw/rt_algo_r3/rt_algo_r3_check.py @ 3dc80591df (form J10-R)"
 STEP = 7

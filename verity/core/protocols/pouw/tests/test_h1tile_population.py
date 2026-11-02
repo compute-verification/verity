@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.core.protocols.pouw.circuit import h1tile as Ht
+from verity.ml.protocols.pouw.circuit import h1tile as Ht
 from verity.ml.circuits import ports as P
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG

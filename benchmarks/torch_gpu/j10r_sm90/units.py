@@ -15,7 +15,7 @@ import ctypes
 import numpy as np
 import torch
 
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 T = 32
 #: 0xA5A5A5A5 and 0x5A5A5A5A as s32: a receipt word equals either with probability 2^-32, so over a call of 10^9 words

@@ -2,7 +2,7 @@
 BF16 y = bf16(fp32(s)·fp32(t)·Z) + bias, the unit PoUW's `ncp2.linear` ends each output entry with and a served PoUW
 linear's row (`NcpLinearRow_v1`) ends with too.
 
-Provenance.  PoUW registered both in `verity.core.protocols.pouw.circuit` (`words.PouwI32ToF32Rn`, `ncp2.NcpDequant`: same
+Provenance.  PoUW registered both in `verity.ml.protocols.pouw.circuit` (`words.PouwI32ToF32Rn`, `ncp2.NcpDequant`: same
 ids, signatures, conformance status and bodies), which re-exports them from here.
 """
 from __future__ import annotations

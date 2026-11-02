@@ -50,10 +50,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pearlc_census as K  # noqa: E402
 import run_result  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity.core.protocols.pouw.schemes import get  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.ml.protocols.pouw.schemes import get  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
 
 SCHEME = "pearl-c-h100-v1-h3"
 K_ = 256

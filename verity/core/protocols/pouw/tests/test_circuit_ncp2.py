@@ -1,4 +1,4 @@
-"""`ncp-v2`'s Program (`verity.core.protocols.pouw.circuit.ncp2`) evaluates to the native reference, which is the MVP's own arithmetic on
+"""`ncp-v2`'s Program (`verity.ml.protocols.pouw.circuit.ncp2`) evaluates to the native reference, which is the MVP's own arithmetic on
 the two-level key's noise."""
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ import pytest
 
 import circuit_fixtures as F
 from verity.ml.circuits.evaluation import evaluate
-from verity.core.protocols.pouw.circuit import ncp2
-from verity.core.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.circuit import ncp2
+from verity.ml.protocols.pouw.circuit import reference as R
 from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.pouw.schemes.ncp import assemble, checked_route_u, shift_perm
+from verity.ml.protocols.pouw.schemes.ncp import assemble, checked_route_u, shift_perm
 
 
 def _outputs(shape, call, kind="shift24"):

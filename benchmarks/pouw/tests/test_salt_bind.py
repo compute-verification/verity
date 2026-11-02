@@ -31,8 +31,8 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 from verity.core.protocols.sampled_proofs import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
@@ -158,7 +158,7 @@ def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
 def _pub(priv, advice, t: int) -> bytes:
     """The drawn unit's proof's public file as `verity_flock.circuit.write` lays it out: the header over the circuit the
     verifier pins, then the unit's A row's and B row's b ‖ c."""
-    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.protocols.pouw.circuit import leaves as L
     e, i, j = Wd.tile_at(SC.entries_of(advice), t)
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}

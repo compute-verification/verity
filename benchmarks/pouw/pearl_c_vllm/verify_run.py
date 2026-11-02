@@ -54,7 +54,7 @@ from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocols.pouw import pearl_c as PD
 from verity_config.settings import of
 

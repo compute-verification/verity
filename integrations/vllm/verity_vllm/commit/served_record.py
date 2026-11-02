@@ -136,7 +136,7 @@ class SamplerInputsSource:
 
 class StepInputPort:
     """The committer source that starts every step's stream with the step-input port the certifier's served-rows tie and
-    IO-TIE's ``IoTieRequest`` read (`verity.core.protocols.certifier.served_tie`): the step's input ids, then its positions,
+    IO-TIE's ``IoTieRequest`` read (`verity.ml.protocols.certifier.served_tie`): the step's input ids, then its positions,
     each ``T`` little-endian i64s (IB = PB = 8), zero past the step's N scheduled tokens, ``T`` the engine's token budget
     (``max_num_batched_tokens``). So the ids are the stream's bytes [0, 8T) and the positions [8T, 16T), at fixed leaves of
     the step's tree when 8T is a whole number of chunks (refused otherwise). A pre-hook on the top model takes them from

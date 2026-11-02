@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.core.protocols.pouw import live_reads as LR
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 

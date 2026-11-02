@@ -1,4 +1,4 @@
-"""PoUW's own primitives on bits (`verity.core.protocols.pouw.circuit.boolean`) are their word primitives (`words`) bit for bit: on every input
+"""PoUW's own primitives on bits (`verity.ml.protocols.pouw.circuit.boolean`) are their word primitives (`words`) bit for bit: on every input
 where the input space allows (the bf16 negation, Ẽ over E2M1 × U8), else on each operand's edges (±0, the subnormals' ends,
 every binade's ends, ±inf, NaNs, the rounding and threshold boundaries) and dense seeded random words."""
 from __future__ import annotations
@@ -10,8 +10,8 @@ import pytest
 
 from verity.ml.circuits.evaluation.bits import evaluate_bits, evaluate_words
 from verity.ml.circuits.boolean.forms import Circuit
-from verity.core.protocols.pouw.circuit import boolean as B
-from verity.core.protocols.pouw.circuit import words as W
+from verity.ml.protocols.pouw.circuit import boolean as B
+from verity.ml.protocols.pouw.circuit import words as W
 
 M32, M576 = (1 << 32) - 1, (1 << 576) - 1
 #: every FP32 class's ends: ±0, the subnormals', the normals', ±inf, quiet, signalling and all-ones NaNs
@@ -81,7 +81,7 @@ def test_building_a_tile_check_registers_them():
                                                 W.PouwSqGe, W.PouwBlackwellE4m3Window, W.PouwHopperE4m3Window,
                                                 W.PouwWindowWord, W.PouwBlackwellE4m3SaltDead, W.PouwHopperE4m3SaltDead)
                                                + tuple(w for _d, w in KECCAK)]
-    code = ("import sys, verity.core.protocols.pouw.circuit.pc8\nfrom verity.ml.circuits.defs import REGISTRY\n"
+    code = ("import sys, verity.ml.protocols.pouw.circuit.pc8\nfrom verity.ml.circuits.defs import REGISTRY\n"
             f"missing = [i for i in {ids!r} if i not in REGISTRY]\nsys.exit(','.join(missing) if missing else 0)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
@@ -260,7 +260,7 @@ def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
     from verity.ml.crypto.turboshake import turboshake128
     from verity.ml.circuits.boolean.forms import ONE, Circuit, const_bits
 
-    from verity.core.protocols.pouw.circuit import hashes as H
+    from verity.ml.protocols.pouw.circuit import hashes as H
 
     build = {w.id: d.build for d, w in KECCAK}
 
