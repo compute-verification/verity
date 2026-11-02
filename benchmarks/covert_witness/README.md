@@ -162,6 +162,9 @@ FILE (default `train.py`), and nothing else of the checkout is used.
 `starts.py --size s|m` built the starts once (one GPU); `prep.sh` prepares a node (`data.py`,
 `prepare.register_pythia()`, the starts from the store); `evaluate.py --start NAME --out F` scores a start on the whole
 search pool. `CW_DEVICE=cpu CW_LEASE=none` runs candidate.sh on a CPU for a smoke test.
+`analysis/rescore_v1.py` re-scores the scorer's current records analytically under the training formalism v1
+(note:training-20261102T1817Z-report-training-formalism-v1): Fit, Slowdown's ρ, W*, H and S over a (c, k) grid, the A2
+curve, and the night's withdrawn scores beside them; its docstring lists the approximations.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in
 `/workspace/research/te/sealed` (above); everything else lives under `/workspace/research/scratch/covert-witness`
