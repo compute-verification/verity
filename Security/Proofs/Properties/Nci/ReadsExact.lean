@@ -1650,7 +1650,7 @@ theorem readsOf_spec (P : Prog) (memo : Array Desc.Summary) (reads : Array (Arra
       · exact absurd hy (by intro h; cases h)
       · rename_i hb
         simp only [pure, Except.pure, Except.ok.injEq] at hy
-        exact ⟨rs, ⟨hrs, by simpa using hb⟩, hy.symm⟩) _ #[] r hr
+        exact ⟨rs, ⟨hrs, Bool.eq_false_iff.2 hb⟩, hy.symm⟩) _ #[] r hr
   have hn : ((P.defs[P.root]!).body.nodes.size - 0 + 1 - 1) / 1 = nodeCount P := by
     simp [nodeCount, DescAgree.rootBody]
   rw [List.length_range', hn] at h1

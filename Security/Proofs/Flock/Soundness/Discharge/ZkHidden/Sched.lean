@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
 public import Proofs.Flock.Level3.ArithFacts
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `ZkSchedOK`: `Zk.schedule`'s facts at a statement the `--zk` shape check passes

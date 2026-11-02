@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+import all Init.Data.String.Defs
 
 @[expose] public section
 
