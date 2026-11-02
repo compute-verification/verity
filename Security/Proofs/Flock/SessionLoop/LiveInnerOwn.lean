@@ -22,6 +22,8 @@ loop reads back are the worker's, and there both follow:
   worker that meets `Loop.TakesVals`, for every `vs` meeting `SwCausal`, `Loop.FinalCFixed` and `Loop.RowsOK`, at
   `SessionLoopZKDeployed`'s own premises on the statement, the tables and the loop's inputs (`Loop.realOf`,
   `Claims.Flock.Scope`, the witness, `Loop.Serves`, `Loop.Src`). It takes neither `TakesFinalC` nor `TakesTau`.
+  `LeanRelease.liveInnerOwn_honestVals`: at the honest values and `Loop.valsWk`, every premise over the worker and the
+  values holds.
 -/
 
 namespace Claims.ZKServer
@@ -173,6 +175,31 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (hC : Loop.FinalCFixed vs x w) (hrows : Loop.RowsOK vs x w) :
     LiveInnerOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w := by
   sorry
+
+/-- **At the honest values**: the worker that sends the scheduled rounds with them (`Loop.valsWk`) meets `TakesVals`
+(`Loop.takes_honestVals_ofLoopLink`), and they are causal at the session's causality (`RefSession.swCausal_vals`), fix
+their `final_c` (`Loop.finalCFixed_honestVals`) and hold their rows (`Loop.rowsOK_honestVals`), so
+`liveInnerOwn_withInner` holds there with no premise over the worker or the values. -/
+theorem liveInnerOwn_honestVals
+    (L₁ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit)
+    (hR : Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
+    (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
+    (hc : (CoinLayer.session Loop.loopNr Masked.dataE).Causal) :
+    LiveInnerOwn (CoinLayer.session Loop.loopNr Masked.dataE).honestVals
+      (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real
+      (Loop.valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals
+        (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)) x w :=
+  liveInnerOwn_withInner _ L₁ src real hreal x w hR hSv hsc hSrc (RefSession.swCausal_vals _ hc) _
+    (Loop.takes_honestVals_ofLoopLink _ src real).1 (Loop.finalCFixed_honestVals x w) (Loop.rowsOK_honestVals hR)
 
 end LeanRelease
 
