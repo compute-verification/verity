@@ -293,7 +293,8 @@ def test_reads_holds_each_path_once_and_gives_each_binding_its_whole_read_set_ba
     assert got["bindings"] == {"a": {"groups": "0-1", "registry": True},
                                "b": {"groups": "0,2", "registry": False, "untracked": ["lib.so"]},
                                "c": {"groups": "", "registry": False}}
-    assert cli.expanded({"registries": regs, **json.loads(json.dumps(got))}) == {"registries": regs, "bindings": sets}
+    assert cli.expanded({"registries": regs, "loaded": ["m.py"], **json.loads(json.dumps(got))}) == \
+        {"registries": regs, "loaded": ["m.py"], "bindings": sets}
     assert cli._ranges([0, 1, 2, 3, 7, 9, 10]) == "0-3,7,9-10" and cli._places("0-3,7,9-10") == [0, 1, 2, 3, 7, 9, 10]
 
 
@@ -495,14 +496,16 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
     imported: here all of ``syn``, which `load_registries` enumerates): its own targets' pins files, no other binding's, and
     the package listing every check holds.  With no `cli.READS` all of it is undeclared; once ``--update-reads`` wrote it,
     nothing is, and another binding's run written beside it keeps the first's: each of those runs makes only its own binding's
-    roots, the others' are the catalog's roots record's (`units.plan`'s ``binding``).  A module only one target's check
-    imports, new, is undeclared for that binding alone; a module the registries import anew, for every binding, until it is
-    written."""
+    roots, the others' are the catalog's roots record's (`units.plan`'s ``binding``).  A module the process loaded before its
+    checks, which a check's `inspect` lookup asks for, is undeclared in ``loaded`` alone, the probes every binding's set holds
+    (`cli.READS`): which modules a process loaded depends on how it runs.  A module only one target's check imports, new, is
+    undeclared for that binding alone; a module the registries import anew, for every binding, until it is written."""
     from test_cache import _pin
 
     root = _tree(tmp_path / "t")
     _bindings(root, *UNIT_BINDINGS)
     assert _records_only(root)["stored"] == 5
+    pre = _copied(root, tmp_path / "pre")
     core = _run_units(root, _reads_run("_core_roots"))
     regs, mine = core["reads"]["registries"], core["reads"]["bindings"]["_core_roots"]
     assert {"syn/top.py", "syn/sub.py", "syn/xdef.py", "syn/catalog.py"} <= set(regs["files"]), regs
@@ -516,11 +519,22 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
     assert _roots_made(tmp_path / "t-roots.jsonl") == {"_core_roots", "_model_roots"}
     theirs = model["reads"]["bindings"]["_model_roots"]
     assert _pin("SynOther_v1") in theirs["files"] and _pin("SynTop_v1") not in theirs["files"], theirs
-    written = {k: v for part in ("registries.json", "bindings.json")
+    written = {k: v for part in ("registries.json", "loaded.json", "bindings.json")
                for k, v in json.loads((root / "reads" / part).read_text()).items()}
-    assert cli.expanded(written) == {"registries": regs, "bindings": {"_core_roots": mine, "_model_roots": theirs}}
+    assert cli.expanded(written) == {"registries": regs, "loaded": sorted({*core["reads"]["loaded"], *model["reads"]["loaded"]}),
+                                     "bindings": {"_core_roots": mine, "_model_roots": theirs}}
     paths = [(k, p) for g in written["groups"] for k, ps in g.items() for p in ps]
     assert len(paths) == len(set(paths)) and set(paths) >= {("files", _pin("SynTop_v1")), ("files", _pin("SynOther_v1"))}
+    # a module the process loaded before its checks, whose source `syn.check`'s `inspect` lookup asks for as torch's import
+    # asks for every loaded module's: in a tree with the records alone, `loaded` holds it and the binding's own set is as it was
+    shutil.copytree(root / "reads", pre / "reads")
+    (pre / "synpre").mkdir()
+    (pre / "synpre/__init__.py").write_text("")
+    first = _run_units(pre, _reads_run("_core_roots").replace("rep = cli.run(", "import synpre\nrep = cli.run(", 1))
+    assert first["reads"]["bindings"]["_core_roots"] == mine, first["reads"]["bindings"]
+    assert list(first["undeclared"]) == ["_core_roots"] and set(first["undeclared"]["_core_roots"]) == {"loaded"}, \
+        first["undeclared"]
+    assert "synpre/__init__.py" in first["undeclared"]["_core_roots"]["loaded"], first["undeclared"]
     (root / "synlib").mkdir()
     (root / "synlib/__init__.py").write_text("")
     (root / "synlib/helper.py").write_text("H = 1\n")
