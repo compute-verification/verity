@@ -10,10 +10,13 @@ structure digest and the same `updated` set merge. |C| = Σ steps · MACs of eac
 
 `schedule_updated` turns a schedule of per-step trainable sets into the `updated` set each step reads: a parameter differs
 from θ from the step after the first one that trains it, and stays new whether or not it trains again.
+
+`RunGraph.record()` writes the run in te_core.flops's record form, so te_core.annotate reads a captured run as it reads
+a counted one.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Callable, Iterable, Sequence
 
@@ -24,8 +27,9 @@ __all__ = ["RunGraph", "capture_run", "schedule_updated"]
 
 @dataclass
 class RunGraph:
-    """The run's distinct step graphs, each with its number of steps."""
+    """The run's distinct step graphs, each with its number of steps, and its segments in order (`schedule`)."""
     steps: list[tuple[int, StepGraph]]
+    schedule: list[tuple[int, StepGraph]] = field(default_factory=list)
 
     @property
     def n_steps(self) -> int:
@@ -33,8 +37,13 @@ class RunGraph:
 
     @property
     def macs(self) -> int:
-        """|C| in MACs."""
+        """|C| in GEMM MACs."""
         return sum(n * g.macs for n, g in self.steps)
+
+    @property
+    def c_macs(self) -> int:
+        """|C| as te_core.flops counts it (`StepGraph.c_macs`)."""
+        return sum(n * g.c_macs for n, g in self.steps)
 
     @property
     def tokens(self) -> int:
@@ -50,11 +59,33 @@ class RunGraph:
         """The share of |C| in using GEMMs with at least D upstream (`StepGraph.depth_profile`'s unit)."""
         return Fraction(self.deep_macs(D, unit), self.macs) if self.macs else Fraction(0)
 
+    def record(self) -> dict:
+        """The run as te_core.flops's `Counter.record()`: one step entry per step, in order, each naming its structure.
+        A capture has shapes and no values, so the entries' `weights` and `shapes` (digests of the updated weights a step
+        read) are empty, and `te_core.annotate.annotate(record)` reads everything else."""
+        structures, steps, sid = {}, [], {}
+        for n, g in self.schedule or self.steps:
+            key = (g.digest, g.updated)
+            if key not in sid:
+                sid[key] = f"{g.digest}-{len(sid)}"
+                structures[sid[key]] = g.structure()
+            by: dict[str, int] = {}
+            for m in g.matmuls:
+                by[f"{m.phase}/{m.role}"] = by.get(f"{m.phase}/{m.role}", 0) + m.macs
+            for _ in range(n):
+                steps.append({"step": len(steps), "tokens": g.tokens, "macs": g.c_macs, "matmul_macs": g.macs,
+                              "elementwise_macs": g.elementwise_macs, "approx_macs": g.approx_macs, "by": by,
+                              "struct": sid[key], "weights": {}, "shapes": {}})
+        empty = {"macs": 0, "matmul_macs": 0, "elementwise_macs": 0, "approx_macs": 0}
+        return {"source": "te_core.capture", "totals": {"macs": self.c_macs, "approx_macs": sum(s["approx_macs"] for s in steps)},
+                "setup": {"step": -1, "tokens": 0, **empty}, "steps": steps, "tail": {"step": len(steps), "tokens": 0, **empty},
+                "structures": structures}
+
     def summary(self) -> dict:
-        return {"steps": self.n_steps, "distinct": len(self.steps), "macs": self.macs, "tokens": self.tokens,
-                "roles": {r: self.role_macs(r) for r in ("using", "producing", "neither")},
-                "graphs": [{"steps": n, "digest": g.digest, "name": g.name, "macs": g.macs, "updated": sorted(g.updated),
-                            "trained": sorted(g.trained)} for n, g in self.steps]}
+        return {"steps": self.n_steps, "distinct": len(self.steps), "macs": self.macs, "c_macs": self.c_macs,
+                "tokens": self.tokens, "roles": {r: self.role_macs(r) for r in ("using", "producing", "neither")},
+                "graphs": [{"steps": n, "digest": g.digest, "name": g.name, "macs": g.macs, "c_macs": g.c_macs,
+                            "updated": sorted(g.updated), "trained": sorted(g.trained)} for n, g in self.steps]}
 
 
 def capture_run(segments: Iterable[tuple[int, StepGraph | Callable[[], StepGraph]]]) -> RunGraph:
@@ -62,6 +93,7 @@ def capture_run(segments: Iterable[tuple[int, StepGraph | Callable[[], StepGraph
     by_thunk: dict[int, StepGraph] = {}
     merged: dict[tuple[str, frozenset], list] = {}
     order: list[tuple[str, frozenset]] = []
+    schedule: list[tuple[int, StepGraph]] = []
     for n, g in segments:
         if isinstance(n, bool) or not isinstance(n, int) or n < 0:
             raise ValueError(f"a segment's step count is a count, not {n!r}")
@@ -74,7 +106,9 @@ def capture_run(segments: Iterable[tuple[int, StepGraph | Callable[[], StepGraph
             merged[key] = [0, g]
             order.append(key)
         merged[key][0] += n
-    return RunGraph([(merged[k][0], merged[k][1]) for k in order if merged[k][0]])
+        if n:
+            schedule.append((n, merged[key][1]))
+    return RunGraph([(merged[k][0], merged[k][1]) for k in order if merged[k][0]], schedule)
 
 
 def schedule_updated(trainable: Sequence[Iterable[str]], registered: Iterable[str] = ()) -> list[frozenset]:

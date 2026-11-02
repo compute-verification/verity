@@ -3,16 +3,21 @@
 Every matmul-class node (``mm``, ``addmm``, ``bmm``, ``baddbmm``, ``addbmm``, ``mv``, ``addmv``, ``dot``, ``addr``,
 ``linear``, ``matmul``, ``convolution`` and ``convolution_backward``'s two GEMMs, ``_scaled_mm``, ``_int_mm``) is one
 `Matmul` per GEMM it runs, with dims (batch, m, k, n), MACs = batch·m·k·n, and which token axes index each dim (from
-the varied captures, `trace`). Elementwise products are not MACs here. A matmul-like op outside that list is refused.
+the varied captures, `trace`). A matmul-like op outside that list is refused. `macs` is the GEMMs' MACs. The rest of
+the step's share of |C| is counted by te_core.flops's rule, so `c_macs` matches the harness's count: one MAC per output
+element of each elementwise multiplication (`elementwise_macs`: ``mul``, ``addcmul``, ``addcdiv``, ``lerp``, ``add`` and
+``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at their unfused forms'
+multiplications), and dense linear algebra at n³ per matrix (`approx_macs`).
 
 Terms are the training ontology's (note:training-20261102T0700Z-finding-training-ontology):
 
 - A GEMM's result is **token-indexed** when one of its batch, m or n dims is indexed by a token axis, else
   **parameter-indexed** (a weight-shaped sum over tokens, as dW).
-- Each operand's class is its provenance. Through views, casts, gathers (embedding rows, ``index_select``) and scalings
-  by a constant, an operand that is a parameter is **updated** if its name is in `updated` (it differs from θ when read:
-  the harness passes the set) and **registered** otherwise, as is every buffer. Any other operand is a **gradient** when it
-  is computed from the backward, an **activation** when it is token-indexed, and when it is weight-shaped, **updated** or
+- Each operand's class is its provenance. Through views, casts and scalings by a constant, an operand that is a
+  parameter is **updated** if its name is in `updated` (it differs from θ when read: the harness passes the set) and
+  **registered** otherwise, as is every buffer. Any other operand is a **gradient** when it is computed from the backward,
+  an **activation** when it is token-indexed (an embedding's rows gathered by token ids are, as in te_core.flops), and
+  when it is weight-shaped, **updated** or
   **registered** by the parameters it is computed from (a merged LoRA weight, MeZO's perturbed copy). The GEMM's
   **weight** is its highest operand class in the order updated, registered, gradient, activation, constant.
 - **Using**: a token-indexed result with an updated operand (the forward's and the backward's dX GEMMs against an updated
@@ -32,6 +37,7 @@ writes, every view of it reads that version, and each element of a foreach list 
 from __future__ import annotations
 
 import hashlib
+import json
 import operator
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
@@ -48,11 +54,10 @@ aten = torch.ops.aten
 #: operand classes, highest first: a GEMM's weight is its highest
 CLASSES = ("updated", "registered", "gradient", "activation", "constant")
 _RANK = {c: i for i, c in enumerate(CLASSES)}
-#: ops an operand's provenance walks through to its first argument: views, casts, gathers
+#: ops an operand's provenance walks through to its first argument: views and casts
 _WALK = {"view", "_unsafe_view", "reshape", "t", "transpose", "permute", "expand", "alias", "detach", "clone", "contiguous",
          "_to_copy", "to", "lift_fresh_copy", "lift_fresh", "unsqueeze", "squeeze", "select", "slice", "as_strided",
-         "unflatten", "flatten", "split", "split_with_sizes", "chunk", "unbind", "narrow", "embedding", "index_select",
-         "index", "numpy_T", "mT", "adjoint", "conj", "resolve_conj", "resolve_neg", "type_as", "view_as", "expand_as",
+         "unflatten", "flatten", "split", "split_with_sizes", "chunk", "unbind", "narrow", "numpy_T", "mT", "adjoint", "conj", "resolve_conj", "resolve_neg", "type_as", "view_as", "expand_as",
          "repeat", "squeeze_copy", "unsqueeze_copy", "view_copy", "t_copy", "transpose_copy", "permute_copy",
          "expand_copy", "_reshape_alias"}
 #: elementwise ops walked through when their only tensor argument is the first (a scaling by a Python constant)
@@ -64,6 +69,14 @@ _SHAPE_ONLY = {"ones_like", "zeros_like", "empty_like", "full_like", "new_zeros"
 _GEMM_LIKE = ("mm", "matmul", "conv", "linear", "attention", "einsum", "tensordot", "bilinear", "lstm", "gru", "rnn", "addmv",
               "addr", "dot")
 _NOT_GEMM = {"_record_function_enter_new", "_record_function_exit", "conj_physical", "native_dropout_backward"}
+#: te_core.flops's op sets, which `c_macs` must match op for op
+_ELEMENTWISE = {"mul", "mul_", "addcmul", "addcmul_", "addcdiv", "addcdiv_", "lerp", "lerp_", "_foreach_mul", "_foreach_mul_",
+                "_foreach_addcmul", "_foreach_addcmul_", "_foreach_addcdiv", "_foreach_addcdiv_", "_foreach_lerp",
+                "_foreach_lerp_"}
+_SCALED = {"add", "add_", "sub", "sub_", "_foreach_add", "_foreach_add_", "_foreach_sub", "_foreach_sub_"}
+_FUSED = {"_fused_adam_": 7, "_fused_adamw_": 8, "_fused_sgd_": 2, "_fused_adagrad_": 4}
+_LINALG = {"_linalg_eigh", "linalg_eigh", "_linalg_svd", "linalg_svd", "linalg_qr", "linalg_cholesky_ex", "linalg_inv_ex",
+           "_linalg_solve_ex", "linalg_solve_triangular", "linalg_lu_factor_ex", "cholesky_solve", "triangular_solve"}
 
 
 def _pk(t) -> str:
@@ -169,6 +182,32 @@ def _macs(d: dict) -> int:
     return d["batch"] * d["m"] * d["k"] * d["n"]
 
 
+def _numel(x) -> int:
+    xs = x if isinstance(x, (list, tuple)) else [x]
+    return sum(v.numel() for v in (a.meta.get("val") if isinstance(a, torch.fx.Node) else a for a in xs)
+               if isinstance(v, torch.Tensor))
+
+
+def _other_macs(node) -> tuple[int, str]:
+    """A non-GEMM node's MACs by te_core.flops's rule (module docstring): (MACs, "elementwise" | "approx" | "")."""
+    if node.op != "call_function" or not isinstance(node.target, torch._ops.OpOverload):
+        return 0, ""
+    name, a = _pk(node.target), node.args
+    if name in _ELEMENTWISE or name in _SCALED and node.kwargs.get("alpha", 1) != 1:
+        return _numel(node.meta.get("val")) or _numel(a[0]), "elementwise"
+    if name in _FUSED:
+        return _FUSED[name] * _numel(a[0]), "elementwise"
+    if name in _LINALG:
+        s = _sh(a[0])
+        n = s[-1] if s else 1
+        return (prod(s) // max(n, 1)) * n * n, "approx"
+    return 0, ""
+
+
+def _width(dtype: str) -> int:
+    return getattr(torch, dtype).itemsize * 8
+
+
 @dataclass(frozen=True)
 class Matmul:
     """One GEMM of the step (module docstring)."""
@@ -181,6 +220,7 @@ class Matmul:
     token_dims: dict
     operands: tuple[str, ...]
     params: tuple[str | None, ...]
+    dtypes: tuple[str, ...]
     weight: str
     result: str
     role: str
@@ -194,6 +234,7 @@ class Matmul:
                                            "upstream", "upstream_fwd")}
         d["token_dims"] = {k: list(v) for k, v in self.token_dims.items()}
         d["params"] = list(self.params)
+        d["dtypes"] = list(self.dtypes)
         d["per_token"] = str(self.per_token)
         d["upstream_macs"] = str(self.upstream_macs)
         return d
@@ -407,6 +448,8 @@ class StepGraph:
     trained: frozenset
     graph: Any = field(repr=False)
     digest: str = ""
+    elementwise_macs: int = 0
+    approx_macs: int = 0
     _inputs: Any = field(default=None, repr=False)
 
     # -- building ---------------------------------------------------------------------------------------------------
@@ -569,9 +612,15 @@ class StepGraph:
                     for x in flow.reads.get((n, a), ()):
                         m |= anc[x] | own.get(x, 0)
             up_macs = sum((per_tok[b] for b in _bits(m)), Fraction(0))
+            dtypes = tuple(str(a.meta["val"].dtype).removeprefix("torch.") for a in g.operands if isinstance(a, torch.fx.Node))
             matmuls.append(Matmul(n.name, str(n.target), g.part, phases.get(n, "forward"), _macs(g.dims), dict(g.dims), tdims,
-                                  classes, names, weight, result, role, Fraction(_macs(g.dims), tokens), _popcount(m),
-                                  _popcount(m & fwd_mask), up_macs))
+                                  classes, names, dtypes, weight, result, role, Fraction(_macs(g.dims), tokens),
+                                  _popcount(m), _popcount(m & fwd_mask), up_macs))
+        other = {"elementwise": 0, "approx": 0}
+        for n in nodes:
+            k, kind = _other_macs(n)
+            if kind:
+                other[kind] += k
         plist = []
         seen_names = set()
         for t, (kind, pname, aliases) in attrs.items():
@@ -589,9 +638,9 @@ class StepGraph:
                 crossing.append({"kind": kind, "name": pname, "shape": list(v.shape), "dtype": str(v.dtype).removeprefix("torch.")})
         crossing += [{"kind": "optimizer_state", "name": f"{s['param']}.{s['key']}", "shape": s["shape"], "dtype": s["dtype"]}
                      for s in base.state]
-        sg = cls(name, tokens, dict(zip(axis_names, base.axis_sizes)), matmuls, plist, crossing, upd, trained, gm,
-                 _digest(gm), (base, varied, axis_names))
-        return sg
+        return cls(name, tokens, dict(zip(axis_names, base.axis_sizes)), matmuls, plist, crossing, upd, trained, gm,
+                   digest=_digest(gm), elementwise_macs=other["elementwise"], approx_macs=other["approx"],
+                   _inputs=(base, varied, axis_names))
 
     def with_updated(self, updated) -> "StepGraph":
         """The same graph classified with another `updated` set (no recapture)."""
@@ -601,7 +650,30 @@ class StepGraph:
     # -- totals -----------------------------------------------------------------------------------------------------
     @property
     def macs(self) -> int:
+        """The GEMMs' MACs."""
         return sum(m.macs for m in self.matmuls)
+
+    @property
+    def c_macs(self) -> int:
+        """The step's share of |C| as te_core.flops counts it: GEMMs, elementwise multiplications, linear algebra."""
+        return self.macs + self.elementwise_macs + self.approx_macs
+
+    def structure(self) -> dict:
+        """The step in te_core.flops's record form (`Counter.record()["structures"][sid]`), which te_core.annotate reads:
+        `updated` holds one row [per-token MACs, updated MACs per token upstream, MACs, tokens, weight bits] per using GEMM
+        outside the backward, sorted by (upstream, per-token MACs); `log` counts every GEMM by (phase, role, op, dims)."""
+        rows = []
+        for m in self.matmuls:
+            if m.role != "using" or m.phase == "backward":
+                continue
+            bits = min(_width(d) for c, d in zip(m.operands, m.dtypes) if c == "updated")
+            rows.append([_num(m.per_token), _num(m.upstream_macs), m.macs, self.tokens, bits])
+        log: dict[tuple, list[int]] = {}
+        for m in self.matmuls:
+            e = log.setdefault((m.phase, m.role, m.op, json.dumps(m.dims, sort_keys=True)), [0, 0])
+            e[0] += 1
+            e[1] += m.macs
+        return {"updated": sorted(rows, key=lambda r: (r[1], r[0])), "log": sorted([list(k) + v for k, v in log.items()])}
 
     def role_macs(self, role: str) -> int:
         return sum(m.macs for m in self.matmuls if m.role == role)
@@ -629,6 +701,7 @@ class StepGraph:
     def summary(self) -> dict:
         roles = {r: self.role_macs(r) for r in ("using", "producing", "neither")}
         return {"name": self.name, "digest": self.digest, "tokens": self.tokens, "axes": self.axes, "macs": self.macs,
+                "elementwise_macs": self.elementwise_macs, "approx_macs": self.approx_macs, "c_macs": self.c_macs,
                 "macs_per_token": str(Fraction(self.macs, self.tokens)), "roles": roles, "phases": self.phase_macs(),
                 "depth_max": str(max((m.upstream_macs for m in self.matmuls if m.role == "using"), default=0)),
                 "updated": sorted(self.updated), "trained": sorted(self.trained), "params": self.params,
@@ -646,6 +719,10 @@ def _bits(m: int):
 
 def _popcount(m: int) -> int:
     return bin(m).count("1")
+
+
+def _num(x: Fraction) -> int | float:
+    return int(x) if x.denominator == 1 else float(x)
 
 
 def _digest(gm) -> str:

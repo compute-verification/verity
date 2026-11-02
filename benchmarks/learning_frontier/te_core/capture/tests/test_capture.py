@@ -199,6 +199,29 @@ def test_tied_head_reads_the_embedding():
     assert head[0].params[1] == "emb.weight" and head[0].operands[1] == "updated"
 
 
+def test_embedding_rows_are_activations():
+    """Attention straight on an updated embedding's rows: rows gathered by token ids are token-indexed, so both of its
+    operands are activations and it isn't a using GEMM, as te_core.flops counts it."""
+    class Bare(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.emb = torch.nn.Embedding(V, H)
+            self.head = torch.nn.Linear(H, V, bias=False)
+
+        def forward(self, ids):
+            x = self.emb(ids)
+            b, s, d = x.shape
+            q = x.view(b, s, NH, d // NH).transpose(1, 2)
+            return self.head(F.scaled_dot_product_attention(q, q, q, is_causal=True).transpose(1, 2).reshape(b, s, d))
+
+    model = Bare()
+    g = capture_step(model, torch.optim.AdamW(model.parameters()), lm_loss, lm_batch())
+    fwd = [m for m in g.matmuls if m.phase == "forward"]
+    assert sorted((m.role, m.operands, m.macs) for m in fwd) == [
+        ("neither", ("activation", "activation"), T * S * H), ("neither", ("activation", "activation"), T * S * H),
+        ("using", ("activation", "updated"), T * H * V)]
+
+
 def test_conv_net():
     Bc, C, K, side, O = 2, 3, 8, 8, 4
     model = conv_net(C, K, side, O)
