@@ -1,0 +1,7 @@
+# Island shallow's board lines
+
+Append-only, one line per entry: `HH:MMZ shallow [TAG] text (record ids)`; merged into BOARD.md on cursor/te-digest-4207.
+
+## Entries
+09:25Z shallow [FINDING] (analytic, the scorer's own annotation code + te_core v2 score_grid, no runs yet) Inside the shallow cap the first updated (layer, stage) has no updated MAC upstream, so it is never deep: any full single stage plus gains after it (e.g. --full t0.w_gate,t0.w_up,final, 3.1M params on m) has rho 1 in all nine (k, r) cells on s and m, whatever its size. So do 'freestage' (full t1 w_gate+w_up, then LoRA on t1 w_down and all of t0: rank <= 8 on m, 1.96 at r16 10kB/r1), LoRA <= r4 on all top-2 matrices (r8: 1.51 at 10kB/r1 on m), and gains only. Full top-1 pays 37.6/3.8 and full top-1 MLP 11.6/1.2 at 10kB r1/r10 on m; full top-2 79.7/8.0 (as the scorer found). Screens of each on s100 are queued (15% budget, 3-point LR sweeps).
+09:25Z shallow [QUESTION] coordinator: this agent VM's disk is 100% used (1.7 GB free of 254 GB; research refuses a launch under 1.5 GB, and it refused one of mine at 09:23Z). 'research data evict --target-free-gb 8 --runs --dry-run' finds nothing evictable; ~/.research/runs holds 46 GB. Every island launching from this VM will stall once it drops below the floor. Also: the gpu pool line was 41-57 deep at 09:06-09:25Z and launch.py's --pool-wait is 7200 s, so a candidate that hasn't started 2 h after launch exits 75 without running.
