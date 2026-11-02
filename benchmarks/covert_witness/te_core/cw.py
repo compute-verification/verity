@@ -14,8 +14,8 @@ wraps those four, and nothing else of the program:
 - `submit` writes the submission as before; the submitted E is always scored, and the record says whether the
   submitted model is decode(θ, E) bit for bit.
 
-The held-out sets are unreadable from the program as under `guard.py` (an audit hook refuses every open, listing or stat
-under `prepare.HELD_OUT`), except while the harness's own evaluator runs. Subprocesses go to `guard.log`.
+The held-out sets are unreadable from the program (an audit hook refuses every open, listing or stat under
+`prepare.HELD_OUT`), except while the harness's own evaluator runs. Subprocesses go to `guard.log`.
 """
 from __future__ import annotations
 
