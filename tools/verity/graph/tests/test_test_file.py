@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -243,8 +244,8 @@ def results(tmp_path_factory) -> dict[str, dict]:
     doc = graph.listing(root, listers=LISTERS)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(runner, "ROOT", root)
-        here = Path(sys.executable).parent
-        mp.setenv("PATH", os.pathsep.join(p for p in os.environ.get("PATH", "").split(os.pathsep) if p and Path(p) != here))
+        tools = {Path(w).parent for w in map(shutil.which, ("git", "cc")) if w} - {Path(sys.executable).parent}
+        mp.setenv("PATH", os.pathsep.join(map(str, sorted(tools))))
         return {Path(t["id"]).name: runners.execute(t, doc, work / Path(t["id"]).stem) for t in doc["tasks"]}
 
 
