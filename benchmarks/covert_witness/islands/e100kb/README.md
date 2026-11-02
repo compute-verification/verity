@@ -10,7 +10,7 @@ At this size the norm gains alone are a quarter of the budget on m; spending byt
 
 ## Your loop
 
-1. Pick a start (`s50`, `s100`, `m50`, `m100`, `smollm2`; m100 is the main one) and a hypothesis.
+1. Pick a start (`s50`, `s100`, `m50`, `m100`; m100 is the main one) and a hypothesis.
 2. Edit `islands/e100kb/train.py` only. Commit it (the run ships HEAD and its record names the commit).
 3. Run the candidate: `python benchmarks/covert_witness/launch.py e100kb START --note "HYPOTHESIS" -- TRAIN_ARGS`. It runs on
    vy-nebius-2 (one GPU, the `gpu` slot pool), waits for it, puts the run's `out/` in the evidence store
