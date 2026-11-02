@@ -53,9 +53,9 @@ def test_top_then_full_run():
     assert run.tokens == (n_top + n_full) * B * S
     # step 0 reads θ: nothing is using; the first full step reads only the top block as new
     assert run.steps[0][1].role_macs("using") == 0
-    assert run.steps[2][1].role_macs("using") == g_top.role_macs("using") + (
-        g_full.role_macs("using") - g_full.with_updated(()).role_macs("using")) - g_top.role_macs("using") \
-        or run.steps[2][1].role_macs("using") > 0
+    T, H, I = B * S, 16, 32
+    top_using = 2 * (4 * T * H * H + 2 * T * H * I)   # the top block's forward and dX GEMMs
+    assert run.steps[2][1].role_macs("using") == g_top.role_macs("using") == top_using
     assert run.steps[3][1].role_macs("using") == g_full.role_macs("using")
     assert run.role_macs("producing") == n_top * g_top.role_macs("producing") + n_full * g_full.role_macs("producing")
     want = (n_top - 1) * g_top.deep_macs(1, "matmuls") + run.steps[2][1].deep_macs(1, "matmuls") \
