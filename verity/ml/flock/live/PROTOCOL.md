@@ -621,8 +621,9 @@ The stops the coins decide are the ZK server's own, taken from the public coins 
 Rust's own versions of the first two (`Masking::refuse_outer`, `mask_rank_ok`) still run under the ZK server, as
 cross-checks that record instead of stopping (`Masking::defer`); the last two are also the Lean finish's, whose opening and
 inner proof read the same coins after the frame. A rep any of them refuses where the Lean frame went on is refused
-(`FIREWALL-REFUSED: Rust's masking refused the rep …`, `the Lean finish's opening refused the rep's coins …`, `the Lean
-finish's inner proof refused the rep …`), and the stop that leaves is always the Lean frame's. A device that claims degenerate coins (return
+(`FIREWALL-REFUSED: Rust's masking refused the rep …`, `the Lean finish's opening refused the rep's coins …`) or, at the
+inner proof, failed (`the Lean finish's inner proof refused the rep …`: its inner rounds the finish did not compute stop
+the rep in the frame, §10.4), and the stop that leaves is always the Lean frame's. A device that claims degenerate coins (return
 code 240) is a worker that failed, as above.
 
 Each stops the session where those coins stand, which is where an honest device stops too. A table's proofs leave only
@@ -760,7 +761,9 @@ on the schedule `Drive.reqs` fixes: a rep stream's `Round` carries the device's 
 algebraic phase's scheduled round (`Skeleton.rounds` on the table's level 0), then the opening's (`Drive.openStep`, the
 rep's opening a round at a time in the loop, on the extra claims at the `Commit`'s coins and the rep's salts for levels
 ≥ 1, one copy with the finish's), then the inner proof's, each at the frame's own round (`Frame.innerSched`) on the loop's
-finish's round, which the finish hands the loop before Rust relays it (§10.4); rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
+finish's round, which the finish hands the loop before Rust relays it (§10.4). At an inner round the finish has not
+computed, the loop hands the frame no device round (`Frames.roundStep`): whatever Rust relays fails, the frame's own round
+stands in, and the rep stops. Rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
 frame's release, at the stream's first round after its domain frame (`Frames.round`); anything the frame refuses is
 refused before it reaches the auditor. Once a round's coins open the tree, they are the frame's coins before the prover
 receives them (`Frames.feedOf`, `Frames.coins`), and the session's `Finish` leaves only once every rep's frame answered
@@ -826,6 +829,8 @@ standard input (`tests/test_firewall_frame.py`):
   and the coins. Any other round (a frame more, a value changed) is answered `err WHY` and releases nothing. The session
   loop sends each with the frame's own round in its place (`round N LEN REFLEN`, `Frame.innerSched`: `innerOwn`'s form at
   the finish's `final_c'` and `τ`'s commitment), so a relayed round that differs stops the rep, its own round leaving.
+  At a round the finish has not computed, the loop sends no device round (`LEN` 0) whatever Rust relayed, and the
+  frame's own round, zero words in place of the finish's, leaves as a stopped rep's.
 - **finish**: `ok`, or `stop` for a stopped rep, once every masked phase closed with every pad of the layout used and
   the inner proof's four rounds left.
 
@@ -858,7 +863,11 @@ extra claims' points and the coins), and the finish answers the constraints it r
 holds to the statement's relations, `relations_held`), then each round of its inner proof, which leaves through the
 rep's frame, and last the names of the constraints that fail on the rep's pads (`Finish.namesBytes`, the bucket's
 `constraints_failing_on_pads`). A constraint's value on the pads is its check on the unmasked values and the coins (each
-masked value's pad cancels), so the names tell the prover nothing of the pads. Then, where none fails, the finish gets
+masked value's pad cancels), so the names tell the prover nothing of the pads. Where the finish refuses the request (or
+the ZK server its constraints), the ZK server fails the rep and sends each inner round the finish did not as no device
+round, its squeeze alone at the round's coin count (`ε`, a batching coin a constraint, `β`, the queries): the frame
+fails each and its own round stands in, so the rep stops in the frame and the session stops at its `Finish`, every round
+on schedule. The finish ends at a refusal, so a later rep's requests find none. Then, where none fails, the finish gets
 the rep's request again with every round's coins (`rep J R LEN`) and computes the rep's whole proof file from it, the
 rep's samples and its own salts: where that request's inputs and coins are the ones the `inner` request took, the file
 encodes the proof that request computed (`Finish.Kept`), which is the same proof. The loop's finish serves only that
@@ -973,8 +982,10 @@ a rep's salts instead), and the selftest's `zk_worker_finish` holds each mode to
 The inner proof's rounds that leave are the frame's own: the loop places each at `Frame.innerSched`, the frame's own round
 (`ε`, `β`, its samples and the round's coin count) on the finish's round (`final_c'`, `τ`'s commitment), which the loop's
 finish hands the frame before Rust relays it (`Frames.Sessions.innerRound`), and the frame's check holds the relayed round
-to it byte for byte. `FC_INNER_TAMPER=J` relays table 0 rep 0's inner round `J` with its last value byte flipped, and the
-selftest's `zk_worker_inner` holds each round to that, beside an honest session, which is accepted:
+to it byte for byte; a round the finish has not computed is none the frame takes (`Frames.roundStep`).
+`FC_INNER_TAMPER=J` relays table 0 rep 0's inner round `J` with its last value byte flipped, and `FC_INNER_TAMPER=final-c`
+sends the session's last `inner` request in time with `final_c` plus one, so the finish computes no inner round of that
+rep. The selftest's `zk_worker_inner` holds each mode to that, beside an honest session, which is accepted:
 
 | `FC_INNER_TAMPER` | the relayed round | outcome |
 |---|---|---|
@@ -982,6 +993,7 @@ selftest's `zk_worker_inner` holds each round to that, beside an honest session,
 | `1` | `[ρ, σ]` | the same |
 | `2` | `τ`'s commitment | the same |
 | `3` | `Y` | the same |
+| `final-c` | none: the finish refuses the rep's `inner` request (`its zerocheck c_eval constraint fails`), and the ZK server fails the rep and sends its four inner rounds as no device round | the frame fails each, its own round leaving in its place: `PROVER-STOPPED: the Lean frame stopped table T rep R`; the same |
 
 The selftest's `zk_worker_pads` holds the worker's view to the pads' absence, beside an honest session: under
 `FC_FIREWALL_TAMPER=steer` the worker sets each rep's first masked value to a word of its own, in its round and its proof
